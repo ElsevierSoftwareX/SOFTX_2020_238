@@ -43,6 +43,8 @@
 
 
 #include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -95,31 +97,25 @@ static GstURIType uri_get_type(GType type)
 }
 
 
-/* 1.0:  this becomes static const gchar *const * */
-static gchar **uri_get_protocols(GType type)
+static const gchar *const *uri_get_protocols(GType type)
 {
-	/* 1.0:  this becomes
 	static const gchar *protocols[] = {URI_SCHEME, NULL};
-	*/
-	static gchar *protocols[] = {(gchar *) URI_SCHEME, NULL};
 
 	return protocols;
 }
 
 
-/* 1.0:  this becomes static gchar * */
-static const gchar *uri_get_uri(GstURIHandler *handler)
+static gchar *uri_get_uri(GstURIHandler *handler)
 {
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(handler);
 
-	/* 1.0:  this won't be a memory leak */
 	return g_strdup_printf(URI_SCHEME "://%s:%d", element->group, element->port);
 }
 
 
-/* 1.0:  this gets a GError ** argument */
-static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri, GError **err)
 {
+	/* FIXME:  report errors via GError argument */
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(handler);
 	gchar *scheme = g_uri_parse_scheme(uri);
 	gchar group[strlen(uri)];
@@ -143,10 +139,8 @@ static void uri_handler_init(gpointer g_iface, gpointer iface_data)
 
 	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
 	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
-	/* 1.0:  this is ->get_type */
-	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
-	/* 1.0:  this is ->get_protocols */
-	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+	iface->get_type = GST_DEBUG_FUNCPTR(uri_get_type);
+	iface->get_protocols = GST_DEBUG_FUNCPTR(uri_get_protocols);
 }
 
 
@@ -176,7 +170,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GstGDSFramexmitSrc, gds_framexmitsrc, GstPushSrc, GST_TYPE_PUSH_SRC, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GstGDSFramexmitSrc,
+	gds_framexmitsrc,
+	GST_TYPE_PUSH_SRC,
+	additional_initializations(g_define_type_id)
+);
 
 
 /*
@@ -273,10 +272,13 @@ static void *receive_thread(void *arg)
 		}
 		GST_DEBUG_OBJECT(element, "recieved %d byte buffer (seq. #%u) for [%u s, %u s)", len, sequence, timestamp, timestamp + duration);
 
-		buffer = gst_buffer_new();
-		gst_buffer_set_caps(buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(GST_BASE_SRC(element))));
-		GST_BUFFER_DATA(buffer) = GST_BUFFER_MALLOCDATA(buffer) = (guint8 *) data;
-		GST_BUFFER_SIZE(buffer) = len;
+		buffer = gst_buffer_new_wrapped_full(
+			GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS,
+			data,
+			len,
+			0, len,
+			data, free
+		);
 		GST_BUFFER_TIMESTAMP(buffer) = timestamp * GST_SECOND;
 		GST_BUFFER_DURATION(buffer) = duration * GST_SECOND;
 		GST_BUFFER_OFFSET(buffer) = sequence;
@@ -469,7 +471,7 @@ try_again:
 
 		else if(element->unblocked) {
 			GST_DEBUG_OBJECT(element, "reason: application invoked unlock()");
-			result = GST_FLOW_UNEXPECTED;
+			result = GST_FLOW_EOS;
 			goto done;
 		}
 
@@ -485,7 +487,6 @@ try_again:
 			g_assert(GST_CLOCK_TIME_IS_VALID(t_before));
 
 			*buffer = gst_buffer_new();
-			gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
 			GST_BUFFER_TIMESTAMP(*buffer) = t_before;
 			if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
 				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
@@ -584,7 +585,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 #endif
 
 	default:
-		success = GST_BASE_SRC_CLASS(parent_class)->query(basesrc, query);
+		success = GST_BASE_SRC_CLASS(gds_framexmitsrc_parent_class)->query(basesrc, query);
 		break;
 	}
 
@@ -726,17 +727,7 @@ static void finalize(GObject *object)
 	g_free(element->group);
 	element->group = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gds_framexmitsrc_base_init(gpointer klass)
-{
+	G_OBJECT_CLASS(gds_framexmitsrc_parent_class)->finalize(object);
 }
 
 
@@ -846,7 +837,7 @@ static void gds_framexmitsrc_class_init(GstGDSFramexmitSrcClass *klass)
  */
 
 
-static void gds_framexmitsrc_init(GstGDSFramexmitSrc *element, GstGDSFramexmitSrcClass *klass)
+static void gds_framexmitsrc_init(GstGDSFramexmitSrc *element)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 

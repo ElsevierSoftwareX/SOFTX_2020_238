@@ -83,13 +83,12 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gds_lvshmsink", 0, "gds_lvshmsink element");
-}
-
-
-GST_BOILERPLATE_FULL(GDSLVSHMSink, gds_lvshmsink, GstBaseSink, GST_TYPE_BASE_SINK, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GDSLVSHMSink,
+	gds_lvshmsink,
+	GST_TYPE_BASE_SINK,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gds_lvshmsink", 0, "gds_lvshmsink element")
+);
 
 
 /*
@@ -242,6 +241,7 @@ static gboolean stop(GstBaseSink *sink)
 static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer)
 {
 	GDSLVSHMSink *element = GDS_LVSHMSINK(sink);
+	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
 	int flags = 0;	/* NOWAIT = don't wait */
 	char *dest;
@@ -250,6 +250,8 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer)
 
 	GST_DEBUG_OBJECT(element, "have buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 
+	gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
+
 	dest = lsmp_partition(element)->get_buffer(flags);
 	if(!dest) {
 		GST_ELEMENT_ERROR(element, RESOURCE, WRITE, (NULL), ("unable to obtain shared-memory buffer"));
@@ -257,20 +259,21 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer)
 		goto done;
 	}
 	GST_DEBUG_OBJECT(element, "have shared-memory buffer %p", dest);
-	if(GST_BUFFER_SIZE(buffer) > (guint64) lsmp_partition(element)->getBufferLength()) {
-		GST_ELEMENT_ERROR(element, RESOURCE, WRITE, (NULL), ("frame file (%" G_GUINT64_FORMAT " bytes) too large for shared-memry buffer (%" G_GUINT64_FORMAT " bytes)", GST_BUFFER_SIZE(buffer), (guint64) lsmp_partition(element)->getBufferLength()));
+	if(mapinfo.size > (guint64) lsmp_partition(element)->getBufferLength()) {
+		GST_ELEMENT_ERROR(element, RESOURCE, WRITE, (NULL), ("data (%" G_GUINT64_FORMAT " bytes) too large for shared-memry buffer (%" G_GUINT64_FORMAT " bytes)", mapinfo.size, (guint64) lsmp_partition(element)->getBufferLength()));
 		lsmp_partition(element)->return_buffer();
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	memcpy(dest, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	memset(dest + GST_BUFFER_SIZE(buffer), 0, gst_base_sink_get_blocksize(sink) - GST_BUFFER_SIZE(buffer));
+	memcpy(dest, mapinfo.data, mapinfo.size);
+	memset(dest + mapinfo.size, 0, gst_base_sink_get_blocksize(sink) - mapinfo.size);
 	lsmp_partition(element)->SetID(GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND);
 	GST_DEBUG_OBJECT(element, "shared-memory buffer %p ID set to %" G_GUINT64_FORMAT, dest, GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND);
-	lsmp_partition(element)->release(GST_BUFFER_SIZE(buffer), element->mask, flags);
+	lsmp_partition(element)->release(mapinfo.size, element->mask, flags);
 	GST_DEBUG_OBJECT(element, "shared-memory buffer %p released", dest);
 
 done:
+	gst_buffer_unmap(buffer, &mapinfo);
 	return result;
 }
 
@@ -388,17 +391,7 @@ static void finalize(GObject *object)
 		element->partition = NULL;
 	}
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gds_lvshmsink_base_init(gpointer klass)
-{
+	G_OBJECT_CLASS(gds_lvshmsink_parent_class)->finalize(object);
 }
 
 
@@ -509,7 +502,7 @@ static void gds_lvshmsink_class_init(GDSLVSHMSinkClass *klass)
  */
 
 
-static void gds_lvshmsink_init(GDSLVSHMSink *element, GDSLVSHMSinkClass *klass)
+static void gds_lvshmsink_init(GDSLVSHMSink *element)
 {
 	gst_base_sink_set_blocksize(GST_BASE_SINK(element), DEFAULT_BLOCKSIZE);
 

@@ -47,6 +47,7 @@
 
 
 #include <pthread.h>
+#include <stdio.h>
 #include <string.h>
 
 
@@ -96,31 +97,25 @@ static GstURIType uri_get_type(GType type)
 }
 
 
-/* 1.0:  this becomes static const gchar *const * */
-static gchar **uri_get_protocols(GType type)
+static const gchar *const *uri_get_protocols(GType type)
 {
-	/* 1.0:  this becomes
 	static const gchar *protocols[] = {URI_SCHEME, NULL};
-	*/
-	static gchar *protocols[] = {(gchar *) URI_SCHEME, NULL};
 
 	return protocols;
 }
 
 
-/* 1.0:  this becomes static gchar * */
-static const gchar *uri_get_uri(GstURIHandler *handler)
+static gchar *uri_get_uri(GstURIHandler *handler)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(handler);
 
-	/* 1.0:  this won't be a memory leak */
 	return g_strdup_printf(URI_SCHEME "://%s", element->name);
 }
 
 
-/* 1.0:  this gets a GError ** argument */
-static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri, GError **err)
 {
+	/* FIXME:  report errors via err argument */
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(handler);
 	gchar *scheme = g_uri_parse_scheme(uri);
 	gchar name[strlen(uri)];
@@ -143,10 +138,8 @@ static void uri_handler_init(gpointer g_iface, gpointer iface_data)
 
 	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
 	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
-	/* 1.0:  this is ->get_type */
-	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
-	/* 1.0:  this is ->get_protocols */
-	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+	iface->get_type = GST_DEBUG_FUNCPTR(uri_get_type);
+	iface->get_protocols = GST_DEBUG_FUNCPTR(uri_get_protocols);
 }
 
 
@@ -176,7 +169,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GDSLVSHMSrc, gds_lvshmsrc, GstBaseSrc, GST_TYPE_BASE_SRC, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GDSLVSHMSrc,
+	gds_lvshmsrc,
+	GST_TYPE_BASE_SRC,
+	additional_initializations(g_define_type_id)
+);
 
 
 /*
@@ -326,7 +324,9 @@ static gboolean unlock_stop(GstBaseSrc *basesrc)
 
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
+	GstBaseSrcClass *basesrc_class = GST_BASE_SRC_CLASS(G_OBJECT_GET_CLASS(basesrc));
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(basesrc);
+	GstMapInfo mapinfo;
 	GstClockTime t_before, t_after;
 	int flags = 0;	/* LVSHM_NOWAIT is not set = respect wait time */
 	const char *data;
@@ -347,7 +347,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	if(element->unblocked) {
 		GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-		return GST_FLOW_UNEXPECTED;
+		return GST_FLOW_EOS;
 	}
 
 	element->create_thread = pthread_self();
@@ -373,7 +373,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				 */
 
 				GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-				return GST_FLOW_UNEXPECTED;
+				return GST_FLOW_EOS;
 			} else if(element->wait_time > 0. && (GstClockTimeDiff) (t_after - t_before) >= (GstClockTimeDiff) (element->wait_time * GST_SECOND)) {
 				/*
 				 * assume reason for failure was a timeout.
@@ -393,7 +393,6 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				GST_DEBUG_OBJECT(element, "timeout occured, creating 0-length heartbeat buffer");
 
 				*buffer = gst_buffer_new();
-				gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
 				GST_BUFFER_TIMESTAMP(*buffer) = t_before;
 				if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
 					GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
@@ -416,7 +415,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				 */
 
 				GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
-				return GST_FLOW_UNEXPECTED;
+				return GST_FLOW_EOS;
 			}
 		}
 
@@ -439,24 +438,29 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 * copy into a GstBuffer
 	 */
 
+/*
+ * FIXME:  why was this here?  can't we just push it anyway?
 	if(!length) {
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("received 0-byte shared-memory buffer"));
 		result = GST_FLOW_UNEXPECTED;
 		goto done;
 	}
-	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), offset, length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+*/
+	result = basesrc_class->alloc(basesrc, offset, length, buffer);
 	if(result != GST_FLOW_OK) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result)));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("alloc() returned %d (%s)", result, gst_flow_get_name(result)));
 		goto done;
 	}
-	if(GST_BUFFER_SIZE(*buffer) != length) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer(): requested buffer size %u, got buffer size %u", length, GST_BUFFER_SIZE(*buffer)));
+	gst_buffer_map(*buffer, &mapinfo, GST_MAP_WRITE);
+	if(mapinfo.size != length) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer(): requested buffer size %u, got buffer size %zu", length, mapinfo.size));
+		gst_buffer_unmap(*buffer, &mapinfo);
 		gst_buffer_unref(*buffer);
 		*buffer = NULL;
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	memcpy(GST_BUFFER_DATA(*buffer), data, length);
+	memcpy(mapinfo.data, data, length);
 	GST_BUFFER_TIMESTAMP(*buffer) = timestamp;
 	GST_BUFFER_DURATION(*buffer) = element->assumed_duration * GST_SECOND;	/* FIXME:  we need to know this! */
 	GST_BUFFER_OFFSET(*buffer) = offset;
@@ -465,6 +469,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	element->max_latency = GPSNow() - GST_BUFFER_TIMESTAMP(*buffer);
 	element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
+	gst_buffer_unmap(*buffer, &mapinfo);
 
 	/*
 	 * adjust segment
@@ -517,7 +522,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 #endif
 
 	default:
-		success = GST_BASE_SRC_CLASS(parent_class)->query(basesrc, query);
+		success = GST_BASE_SRC_CLASS(gds_lvshmsrc_parent_class)->query(basesrc, query);
 		break;
 	}
 
@@ -638,17 +643,7 @@ static void finalize(GObject *object)
 		element->partition = NULL;
 	}
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gds_lvshmsrc_base_init(gpointer klass)
-{
+	G_OBJECT_CLASS(gds_lvshmsrc_parent_class)->finalize(object);
 }
 
 
@@ -747,7 +742,7 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
  */
 
 
-static void gds_lvshmsrc_init(GDSLVSHMSrc *element, GDSLVSHMSrcClass *klass)
+static void gds_lvshmsrc_init(GDSLVSHMSrc *element)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 
