@@ -35,6 +35,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -44,6 +45,7 @@
 
 
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstpushsrc.h>
 
 
@@ -59,14 +61,6 @@
 
 #define GST_CAT_DEFAULT gstlal_ndssrc_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
-
-
-/*
- * Parent class.
- */
-
-
-static GstBaseSrcClass *parent_class = NULL;
 
 
 /*
@@ -147,21 +141,12 @@ static GstURIType uri_get_type(GType type)
 }
 
 
-/* 1.0:  this becomes static const gchar *const * */
-static gchar **uri_get_protocols(GType type)
+static const gchar *const *uri_get_protocols(GType type)
 {
-	/* 1.0:  this becomes
 	static const gchar *protocols[] = {
 		URI_SCHEME,
 		URI_SCHEME "1",
 		URI_SCHEME "2",
-		NULL
-	};
-	*/
-	static gchar *protocols[] = {
-		(gchar *) URI_SCHEME,
-		(gchar *) URI_SCHEME "1",
-		(gchar *) URI_SCHEME "2",
 		NULL
 	};
 
@@ -169,8 +154,7 @@ static gchar **uri_get_protocols(GType type)
 }
 
 
-/* 1.0:  this becomes static gchar * */
-static const gchar *uri_get_uri(GstURIHandler *handler)
+static gchar *uri_get_uri(GstURIHandler *handler)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(handler);
 	GString *uri = g_string_new(URI_SCHEME);
@@ -185,14 +169,13 @@ static const gchar *uri_get_uri(GstURIHandler *handler)
 	if(element->channelType != cUnknown)
 		g_string_append_printf(uri, ",%s", g_enum_get_value(g_type_class_peek_static(GSTLAL_TYPE_NDSSRC_CHANTYPE), element->channelType)->value_nick);
 
-	/* 1.0:  this won't be a memory leak */
 	return g_string_free(uri, FALSE);
 }
 
 
-/* 1.0:  this gets a GError ** argument */
-static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri, GError **err)
 {
+	/* FIXME:  report errors via err argument */
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(handler);
 	gchar *scheme = g_uri_parse_scheme(uri);
 	gint version;
@@ -256,10 +239,8 @@ static void uri_handler_init(gpointer g_iface, gpointer iface_data)
 
 	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
 	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
-	/* 1.0:  this is ->get_type */
-	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
-	/* 1.0:  this is ->get_protocols */
-	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+	iface->get_type = GST_DEBUG_FUNCPTR(uri_get_type);
+	iface->get_protocols = GST_DEBUG_FUNCPTR(uri_get_protocols);
 }
 
 
@@ -281,78 +262,68 @@ static void uri_handler_init(gpointer g_iface, gpointer iface_data)
 
 static GstCaps *caps_for_channel(GSTLALNDSSrc* element)
 {
-	GstCaps *caps = NULL;
+	GstCaps *caps = gst_caps_new_simple(
+		"audio/x-raw",
+		"rate", G_TYPE_INT, (int)(element->daq->chan_req_list->rate),
+		"channels", G_TYPE_INT, 1,
+		"layout", G_TYPE_STRING, "interleaved",
+		NULL
+	);
+
+	if(!caps)
+		goto done;
 
 	switch(element->daq->chan_req_list->data_type) {
 	case _16bit_integer:
-		caps = gst_caps_new_simple(
-			"audio/x-raw-int",
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 16,
-			"depth", G_TYPE_INT, 16,
-			"signed", G_TYPE_BOOLEAN, TRUE,
+		gst_caps_set_simple(caps,
+			"format", G_TYPE_STRING, GST_AUDIO_NE(S16),
 			NULL
 		);
 		break;
 
 	case _32bit_integer:
-		caps = gst_caps_new_simple(
-			"audio/x-raw-int",
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 32,
-			"depth", G_TYPE_INT, 32,
-			"signed", G_TYPE_BOOLEAN, TRUE,
+		gst_caps_set_simple(caps,
+			"format", G_TYPE_STRING, GST_AUDIO_NE(S32),
 			NULL
 		);
 		break;
 
 	case _64bit_integer:
-		caps = gst_caps_new_simple(
-			"audio/x-raw-int",
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 64,
-			"depth", G_TYPE_INT, 64,
-			"signed", G_TYPE_BOOLEAN, TRUE,
+		gst_caps_set_simple(caps,
+			"format", G_TYPE_STRING, GST_AUDIO_NE(S64),
 			NULL
 		);
 		break;
 
 	case _32bit_float:
-		caps = gst_caps_new_simple(
-			"audio/x-raw-float",
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 32,
+		gst_caps_set_simple(caps,
+			"format", G_TYPE_STRING, GST_AUDIO_NE(F32),
 			NULL
 		);
 		break;
 
 	case _64bit_double:
-		caps = gst_caps_new_simple(
-			"audio/x-raw-float",
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 64,
+		gst_caps_set_simple(caps,
+			"format", G_TYPE_STRING, GST_AUDIO_NE(F64),
 			NULL
 		);
 		break;
 
-	// TODO: there is one more NDS daq datatype: _32bit_complex.  Should this
-	// be a two-channel audio/x-raw-float?
+	case _32bit_complex:
+		gst_caps_set_simple(caps,
+			"format", G_TYPE_STRING, GST_AUDIO_NE(Z64),
+			NULL
+		);
+		break;
 
 	default:
 		GST_ERROR_OBJECT(element, "unsupported NDS data_type: %d", element->daq->chan_req_list->data_type);
+		gst_caps_unref(caps);
+		caps = NULL;
 		break;
 	}
 
-	if (caps)
-		gst_caps_set_simple(caps,
-			"rate", G_TYPE_INT, (int)(element->daq->chan_req_list->rate),
-			NULL);
-
+done:
 	return caps;
 }
 
@@ -386,21 +357,19 @@ static gboolean push_new_caps(GSTLALNDSSrc* element)
 	GstTagList* taglist;
 	{
 		char* full_channel_name = strdup(element->daq->chan_req_list->name);
-		char* instrument;
 		char* channel_name = strchr(full_channel_name, ':');
 		if (channel_name)
 		{
-			instrument = full_channel_name;
 			*(channel_name++) = '\0';
+			taglist = gst_tag_list_new(
+				GSTLAL_TAG_CHANNEL_NAME, channel_name,
+				GSTLAL_TAG_INSTRUMENT, full_channel_name,
+				NULL);
 		} else {
-			channel_name = full_channel_name;
-			instrument = NULL;
+			taglist = gst_tag_list_new(
+				GSTLAL_TAG_CHANNEL_NAME, full_channel_name,
+				NULL);
 		}
-
-		taglist = gst_tag_list_new_full(
-			GSTLAL_TAG_CHANNEL_NAME, channel_name,
-			GSTLAL_TAG_INSTRUMENT, instrument,
-			NULL);
 
 		free(full_channel_name);
 	}
@@ -716,6 +685,8 @@ static gboolean stop(GstBaseSrc *object)
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
+	GstBaseSrcClass *basesrc_class = GST_BASE_SRC_CLASS(G_OBJECT_GET_CLASS(basesrc));
+	GstMapInfo mapinfo;
 
 	if (!ensure_channelSelected(element))
 	{
@@ -797,17 +768,18 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	}
 
 	{
-		GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+		GstFlowReturn result = basesrc_class->alloc(basesrc, offset, data_length, buffer);
 		if (result != GST_FLOW_OK)
 			return result;
 	}
 
-	memcpy((char*)GST_BUFFER_DATA(*buffer), daq_get_block_data(element->daq) + element->daq->chan_req_list->offset, data_length);
+	gst_buffer_map(*buffer, &mapinfo, GST_MAP_WRITE);
+	memcpy(mapinfo.data, daq_get_block_data(element->daq) + element->daq->chan_req_list->offset, data_length);
+	gst_buffer_unmap(*buffer, &mapinfo);
 
 	// TODO: Ask John Zweizig how to get timestamp and duration of block; this
 	// struct is part of an obsolete interface according to Doxygen documentation
-	basesrc->offset += nsamples;
-	GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
+	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + nsamples;
 	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * daq_get_block_gps(element->daq) + daq_get_block_gpsn(element->daq);
 	GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
 
@@ -854,23 +826,32 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment* segment)
 
 
 /*
- * check_get_range()
- */
-
-
-static gboolean check_get_range(GstBaseSrc *basesrc)
-{
-	return TRUE;
-}
-
-
-/*
  * ============================================================================
  *
  *								Type Support
  *
  * ============================================================================
  */
+
+
+static void additional_initializations(GType type)
+{
+	static const GInterfaceInfo uri_handler_info = {
+		uri_handler_init,
+		NULL,
+		NULL
+	};
+	g_type_add_interface_static(type, GST_TYPE_URI_HANDLER, &uri_handler_info);
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "ndssrc", 0, "ndssrc element");
+}
+
+
+G_DEFINE_TYPE_WITH_CODE(
+	GSTLALNDSSrc,
+	gstlal_ndssrc,
+	GST_TYPE_BASE_SRC,
+	additional_initializations(g_define_type_id)
+);
 
 
 /*
@@ -887,19 +868,7 @@ static void finalize(GObject *object)
 	g_free(element->channelName);
 	element->channelName = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
- */
-
-
-static void base_init(gpointer class)
-{
+	G_OBJECT_CLASS(gstlal_ndssrc_parent_class)->finalize(object);
 }
 
 
@@ -910,14 +879,13 @@ static void base_init(gpointer class)
  */
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gstlal_ndssrc_class_init(GSTLALNDSSrcClass *gstlal_ndssrc_class)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(class);
-	GSTLALNDSSrcClass *gstlal_ndssrc_class = GSTLAL_NDSSRC_CLASS(class);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(gstlal_ndssrc_class);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(gstlal_ndssrc_class);
+	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(gstlal_ndssrc_class);
 
-	parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
+	gstlal_ndssrc_parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -938,18 +906,11 @@ static void class_init(gpointer class, gpointer class_data)
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
-				"audio/x-raw-float, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) [1, 2], " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64}; " \
-				"audio/x-raw-int, " \
+				"audio/x-raw, " \
 				"rate = (int) [1, MAX], " \
 				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {16, 32, 64}, " \
-				"depth = (int) {16, 32, 64}, " \
-				"signed = (boolean) true"
+				"format = (string) {" GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) "}, " \
+				"layout = (string) interleaved"
 			)
 		)
 	);
@@ -1034,7 +995,6 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
 	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
-	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 
 	/*
 	 * matches patterns like
@@ -1059,10 +1019,9 @@ static void class_init(gpointer class, gpointer class_data)
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gstlal_ndssrc_init(GSTLALNDSSrc *element)
 {
-	GstBaseSrc *basesrc = GST_BASE_SRC(object);
-	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
+	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 
 	gst_pad_use_fixed_caps(GST_BASE_SRC_PAD(basesrc));
 
@@ -1082,34 +1041,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 
 /*
- * gstlal_framesrc_get_type().
+ * plugin entry point
  */
-
-
-GType gstlal_ndssrc_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALNDSSrcClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALNDSSrc),
-			.instance_init = instance_init,
-		};
-		static const GInterfaceInfo uri_handler_info = {
-			uri_handler_init,
-			NULL,
-			NULL
-		};
-		type = g_type_register_static(GST_TYPE_BASE_SRC, "GSTLALNDSSrc", &info, 0);
-		g_type_add_interface_static(type, GST_TYPE_URI_HANDLER, &uri_handler_info);
-		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "ndssrc", 0, "ndssrc element");
-	}
-
-	return type;
-}
 
 
 static gboolean plugin_init(GstPlugin *plugin)
@@ -1127,4 +1060,4 @@ static gboolean plugin_init(GstPlugin *plugin)
 }
 
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "nds", "LIGO Network Data Server (NDS) v1/v2 elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, nds, "LIGO Network Data Server (NDS) v1/v2 elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
