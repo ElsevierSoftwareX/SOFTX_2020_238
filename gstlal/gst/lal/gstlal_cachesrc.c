@@ -285,11 +285,12 @@ G_DEFINE_TYPE_WITH_CODE(GstLALCacheSrc, gstlal_cachesrc, GST_TYPE_BASE_SRC, addi
 
 static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, guint64 offset, size_t size, GstBuffer **buf)
 {
+	GstBaseSrcClass *basesrc_class = GST_BASE_SRC_CLASS(G_OBJECT_GET_CLASS(basesrc));
 	GstMapInfo mapinfo;
 	size_t read_offset;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	*buf = gst_buffer_new_allocate(NULL, size, NULL);
+	basesrc_class->alloc(basesrc, offset, size, buf);
 	if(!buf) {
 		result = GST_FLOW_ERROR;
 		goto done;
