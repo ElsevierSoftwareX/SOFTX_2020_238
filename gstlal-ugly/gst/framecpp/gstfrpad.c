@@ -134,31 +134,25 @@ GType gst_frpad_type_get_type(void)
  */
 
 
-static gint get_bitrate(GstFrPad *pad)
-{
-	GstCaps *caps = gst_pad_get_current_caps(GST_PAD(pad));
-	GstAudioInfo info;
-	gboolean success = caps != NULL;
-
-	if(success) {
-		success &= gst_audio_info_from_caps(&info, caps);
-		gst_caps_unref(caps);
-	}
-
-	return success ? GST_AUDIO_INFO_BPF(&info) * 8 * GST_AUDIO_INFO_RATE(&info) : -1;
-}
-
-
 static void update_tag_list(GstFrPad *pad)
 {
+	GstPad *gstpad = GST_PAD(pad);
+	GstCaps *caps = gst_pad_get_current_caps(gstpad);
+	GstAudioInfo info;
 	GstTagList *new_tags;
-	gint bitrate;
+
+	if(caps) {
+		gst_audio_info_from_caps(&info, caps);
+		/* release our reference to the object, but leave the
+		 * pointer set to we can test its value later */
+		gst_caps_unref(caps);
+	}
 
 	GST_OBJECT_LOCK(pad);
 
 	new_tags = gst_tag_list_new(
 		GST_TAG_CODEC, "RAW",
-		GST_TAG_TITLE, GST_PAD_NAME(GST_PAD_CAST(pad)),
+		GST_TAG_TITLE, GST_PAD_NAME(gstpad),
 		GSTLAL_TAG_INSTRUMENT, pad->instrument && g_strcmp0(pad->instrument, "") ? pad->instrument : " ",
 		GSTLAL_TAG_CHANNEL_NAME, pad->channel_name && g_strcmp0(pad->channel_name, "") ? pad->channel_name : " ",
 		/*GST_TAG_GEO_LOCATION_NAME, observatory,
@@ -166,7 +160,6 @@ static void update_tag_list(GstFrPad *pad)
 		GSTLAL_TAG_UNITS, pad->units && g_strcmp0(pad->units, "") ? pad->units : " ",
 		NULL
 	);
-	bitrate = get_bitrate(pad);
 
 	if(!new_tags) {
 		GST_OBJECT_UNLOCK(pad);
@@ -175,11 +168,11 @@ static void update_tag_list(GstFrPad *pad)
 		return;
 	}
 
+	if(caps)
+		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, GST_AUDIO_INFO_BPF(&info) * 8 * GST_AUDIO_INFO_RATE(&info), NULL);
+
 	if(pad->pad_type == GST_FRPAD_TYPE_FRADCDATA)
 		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_BIAS, pad->bias, GSTLAL_TAG_SLOPE, pad->slope, GSTLAL_TAG_PHASE, pad->phase, GSTLAL_TAG_DATAVALID, pad->datavalid, NULL);
-
-	if(bitrate >= 0)
-		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
 
 	gst_tag_list_free(pad->tags);
 	pad->tags = new_tags;
