@@ -86,7 +86,7 @@
 
 static void typefind(GstTypeFind *find, gpointer data)
 {
-	guint8 *header = gst_type_find_peek(find, 0, 40);
+	const guint8 *header = gst_type_find_peek(find, 0, 40);
 
 	if(!header)
 		GST_DEBUG("unable to retrieve 40 byte header");
@@ -103,7 +103,7 @@ static void typefind(GstTypeFind *find, gpointer data)
 
 static gboolean register_typefind(GstPlugin *plugin)
 {
-	static gchar *extensions[] = {"gwf", NULL};
+	static const gchar extensions[] = "gwf";
 
 	return gst_type_find_register(
 		plugin,
