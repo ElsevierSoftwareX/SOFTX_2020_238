@@ -346,7 +346,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		if(length - offset < block_length)
 			block_length = length - offset;
 
-		srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_META | GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_MEMORY, offset * element->unit_size, block_length * element->unit_size);
+		srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS, offset * element->unit_size, block_length * element->unit_size);
 		if(G_UNLIKELY(!srcbuf)) {
 			GST_ERROR_OBJECT(element, "failure creating sub-buffer");
 			result = GST_FLOW_ERROR;
