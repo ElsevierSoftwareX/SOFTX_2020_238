@@ -507,6 +507,8 @@ static void finalize(GObject *object)
 {
 	GstFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(object);
 
+	(void) element;	/* silence unused variable warning */
+
 	G_OBJECT_CLASS(framecpp_igwdparse_parent_class)->finalize(object);
 }
 
