@@ -770,7 +770,7 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 			 * non-gaps
 			 */
 
-			if(distinct_gaps && GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) != GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
+			if(distinct_gaps && (GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) != GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP)))
 				break;
 
 			/*
