@@ -238,6 +238,8 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 	result = gst_audioadapter_get_list_samples(adapter, samples);
 	if(result) {
 		/* correct timestamp and duration of first buffer */
+		/* FIXME:  if GstAudioAdapter knew the sample rate it could
+		this itself */
 		GstBuffer *origbuf = GST_BUFFER(g_queue_peek_head(adapter->queue));
 		gint64 delta = _framecpp_muxqueue_t_start(queue) - GST_BUFFER_TIMESTAMP(origbuf);
 		result->data = gst_buffer_make_writable(GST_BUFFER(result->data));
