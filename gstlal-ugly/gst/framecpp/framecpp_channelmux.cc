@@ -690,13 +690,13 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 
 /*
- * get informed of a sink pad's caps
+ * get informed of a sink pad's caps.  this is called with the
+ * FrameCPPMuxCollectPads lock held.
  */
 
 
 static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 {
-	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(parent);
 	FrameCPPMuxCollectPadsData *data = framecpp_muxcollectpads_get_data(pad);
 	framecpp_channelmux_appdata *appdata = get_appdata(data);
 	GstAudioInfo info;
@@ -760,7 +760,6 @@ static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 
 	if(success) {
 		GObject *queue;
-		GST_OBJECT_LOCK(mux->collect);
 		queue = G_OBJECT(data->queue);
 		FRAMECPP_MUXQUEUE_LOCK(data->queue);
 		/* FIXME:  flush queue on format change */
@@ -770,7 +769,6 @@ static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 		appdata->unit_size = GST_AUDIO_INFO_BPF(&info);
 		g_object_set(queue, "rate", appdata->rate, "unit-size", appdata->unit_size, NULL);
 		FRAMECPP_MUXQUEUE_UNLOCK(data->queue);
-		GST_OBJECT_UNLOCK(mux->collect);
 	}
 
 	return success;
