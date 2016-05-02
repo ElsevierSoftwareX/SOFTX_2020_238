@@ -798,9 +798,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 	case GST_EVENT_CAPS:
 		/* consume these */
-		gst_event_unref(event);
-		return success;
-		break;
+		goto done;
 
 	default:
 		break;
@@ -811,6 +809,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	gst_iterator_foreach(iter, forward_sink_event, event);
 	gst_iterator_free(iter);
 
+done:
 	gst_event_unref(event);
 	return success;
 }
