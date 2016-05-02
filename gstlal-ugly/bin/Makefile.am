@@ -31,4 +31,5 @@ dist_bin_SCRIPTS = \
 	gstlal_cohfar_plot_stats \
 	gstlal_postcohspiir_inspiral_online \
 	gstlal_postcohspiir_inspiral_lvalert_background_plotter \
-	gstlal_postcohspiir_inspiral_offline
+	gstlal_postcohspiir_inspiral_offline \
+	gstlal_postcohspiir_inspiral_extract_zerolag

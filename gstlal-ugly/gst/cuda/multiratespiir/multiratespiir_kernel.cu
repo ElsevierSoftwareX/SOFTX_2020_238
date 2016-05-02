@@ -671,6 +671,8 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 	 */
 
 	/* make sure lower depth mem is large enough to store queue data. */
+	//printf("%d, num_in %d, mem_len %d, filt_len %d\n", i, num_inchunk, SPSTATEDOWN(i)->mem_len, SPSTATEDOWN(i)->filt_len);
+
 	g_assert (num_inchunk <= SPSTATEDOWN(i)->mem_len - SPSTATEDOWN(i)->filt_len + 1 );
 
 	pos_inqueue = SPSTATE(i)->d_queue; 
@@ -687,7 +689,7 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 	grid.x = out_processed % block.x == 0 ? out_processed/block.x : (int)out_processed/block.x + 1;
 
 	uint share_mem_sz = (2 * block.x + 4 * SPSTATEDOWN(i)->sinc_len) * sizeof (float);
-	GST_LOG ("downsample: threads %d, blocks %d, amplifier %f, share_mem_sz %d", block.x, grid.x, SPSTATEDOWN(i)->amplifier, share_mem_sz);
+	GST_LOG ("downsample: depth %d, out_processed %d, threads %d, blocks %d, amplifier %f, share_mem_sz %d", i, out_processed, block.x, grid.x, SPSTATEDOWN(i)->amplifier, share_mem_sz);
 
 	downsample2x <<<grid, block, share_mem_sz, stream>>> (SPSTATEDOWN(i)->amplifier,
 							2, 

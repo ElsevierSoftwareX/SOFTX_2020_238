@@ -480,8 +480,22 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 	int eff_len = 0;
 
 	int j, k;
+
+	/* initialization */
+	for (i = 0; i < ndepth; ++i) {
+		spstate[i]->num_filters		= 0;
+		spstate[i]->num_templates	= 0;
+		spstate[i]->delay_max	= 0;
+		spstate[i]->d_a1 = NULL;
+		spstate[i]->d_b0 = NULL;
+		spstate[i]->d_d = NULL;
+		spstate[i]->d_y = NULL;
+	}
+
+	/* read values from given xml */
 	for (i = 0; i < ndepth; ++i)
 	{
+		if ((gint)d_array[i].ndim > 0) {
 		num_filters		= (gint)d_array[i].dim[0];
 		num_templates	= (gint)d_array[i].dim[1];
 		eff_len = num_filters * num_templates;
@@ -490,7 +504,7 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		spiir_state_workspace_realloc_int (&tmp_d, &d_len, eff_len);
 
 		// spstate[i]->d_d = (long*)inxns[i].data;
-		//printf("%d - d_dim: (%d, %d) a_dim: (%d, %d) b_dim: (%d, %d)\n", i, d_array[i].dim[0], d_array[i].dim[1],
+		// printf("%d - d_dim: (%d, %d) a_dim: (%d, %d) b_dim: (%d, %d)\n", i, d_array[i].dim[0], d_array[i].dim[1],
 		//		a_array[i].dim[0], a_array[i].dim[1], b_array[i].dim[0], b_array[i].dim[1]);
 
 		//printf("eff_len %d\n", eff_len);
@@ -529,6 +543,7 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		//printf("2st a: (%.3f + %.3fi) 2st b: (%.3f + %.3fi) 2st d: %d\n", tmp_a1[1].re, tmp_a1[1].im,
 			//	tmp_b0[1].re, tmp_b0[1].im, tmp_d[1]);
 		CUDA_CHECK(cudaPeekAtLastError());
+		}
 	}
 	
 	free(inxns);
