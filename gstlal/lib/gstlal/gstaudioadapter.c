@@ -440,11 +440,13 @@ done:
  * depending on how the number of samples requested aligns with #GstBuffer
  * boundaries).
  *
- * All metadata from the original #GstBuffer objects is preserved,
- * including the #GstBufferFlags, etc..
+ * The #GstBufferFlags on each buffer are preserved, and the offsets are
+ * set and/or adjusted appropriated, but the timestamps and durations are
+ * undefined.
  *
  * Returns: #GList of #GstBuffers.  Calling code owns a reference to each
- * #GstBuffer in the list;  call gst_buffer_unref() on each when done.
+ * #GstBuffer in the list --- call gst_buffer_unref() on each when done ---
+ * but they are not necessarily writable, the references might be shared.
  */
 
 
@@ -466,7 +468,7 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 		GstBuffer *newbuf;
 		n = MIN(samples, n);
 
-		newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_META, adapter->skip * adapter->unit_size, n * adapter->unit_size);
+		newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS, adapter->skip * adapter->unit_size, n * adapter->unit_size);
 
 		GST_BUFFER_OFFSET(newbuf) = GST_BUFFER_OFFSET(buf) + adapter->skip;
 		GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf) + n;
@@ -482,7 +484,7 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 		buf = GST_BUFFER(head->data);
 		n = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 		if(samples < n) {
-			GstBuffer *newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_META, 0, samples * adapter->unit_size);
+			GstBuffer *newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS, 0, samples * adapter->unit_size);
 			GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf) + samples;
 
 			result = g_list_append(result, newbuf);
