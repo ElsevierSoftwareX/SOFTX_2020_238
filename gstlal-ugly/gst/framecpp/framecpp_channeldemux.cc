@@ -184,7 +184,7 @@ static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect,
 	caps = gst_caps_new_simple("audio/x-raw",
 		"rate", G_TYPE_INT, *rate,
 		"channels", G_TYPE_INT, 1,
-		"layout", G_TYPE_STRING, "itnerleaved",
+		"layout", G_TYPE_STRING, "interleaved",
 		NULL
 	);
 
@@ -538,6 +538,9 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
 	if(success && pad_state->need_tags) {
 		GstTagList *tag_list;
 		g_object_get(pad, "tags", &tag_list, NULL);
+		/* FIXME:  I don't understand why we haven't received a
+		 * writable copy.  isn't this a memory leak? */
+		tag_list = gst_tag_list_make_writable(tag_list);
 		gst_tag_list_insert(tag_list, element->tag_list, GST_TAG_MERGE_KEEP);
 		GST_LOG_OBJECT(pad, "push new %" GST_PTR_FORMAT, tag_list);
 		gst_pad_push_event(pad, gst_event_new_tag(tag_list));
@@ -565,10 +568,28 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	g_assert(pad_state != NULL);
 
 	/*
-	 * retrieve caps
+	 * update the source pad's caps if needed.  this is done before
+	 * other events to allow the tag list to get updated if needed.
 	 */
 
 	caps = FrVect_get_caps(vect, &rate, &unit_size);
+	current_caps = gst_pad_get_current_caps(pad);
+	if(current_caps && gst_caps_is_equal(caps, current_caps)) {
+		/* nothing to do */
+		gst_caps_unref(current_caps);
+		gst_caps_unref(caps);
+	} else {
+		GST_LOG_OBJECT(pad, "new caps: %" GST_PTR_FORMAT, caps);
+		gst_pad_push_event(pad, gst_event_new_caps(caps));
+		if(current_caps)
+			gst_caps_unref(current_caps);
+	}
+
+	/*
+	 * do other pending events.  FIXME:  check for errors?
+	 */
+
+	src_pad_do_pending_events(element, pad);
 
 	/*
 	 * convert FrVect to GstBuffer
@@ -576,26 +597,6 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 
 	buffer = FrVect_to_GstBuffer(vect, timestamp, pad_state->next_out_offset, rate);
 	g_assert(buffer != NULL);
-
-	/*
-	 * update the source pad's caps if needed.  this is done before
-	 * other events to allow the tag list to get updated if needed.
-	 */
-
-	current_caps = gst_pad_get_current_caps(pad);
-	if(gst_caps_is_equal(caps, current_caps))
-		gst_caps_unref(caps);
-	else {
-		GST_LOG_OBJECT(pad, "new caps: %" GST_PTR_FORMAT, caps);
-		gst_pad_push_event(pad, gst_event_new_caps(caps));
-	}
-	gst_caps_unref(current_caps);
-
-	/*
-	 * do other pending events.  FIXME:  check for errors?
-	 */
-
-	src_pad_do_pending_events(element, pad);
 
 	/*
 	 * clip buffer to configured segment
@@ -793,6 +794,12 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		 * and reported, or is checking for it debugging-like?
 		 */
 		g_assert(GST_ELEMENT(element)->numsrcpads > 0);
+		break;
+
+	case GST_EVENT_CAPS:
+		/* consume these */
+		gst_event_unref(event);
+		return success;
 		break;
 
 	default:
