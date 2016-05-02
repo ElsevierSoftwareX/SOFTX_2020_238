@@ -460,14 +460,14 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 */
 
 
-		g_mutex_lock(element->iir_matrix_lock);
+		g_mutex_lock(&element->iir_matrix_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			if(element->delay)
 			        gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, iir_channels(element), NULL);
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		}
-		g_mutex_unlock(element->iir_matrix_lock);
+		g_mutex_unlock(&element->iir_matrix_lock);
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -525,13 +525,13 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 * can generate 1 sample, not 0)
 		 */
 
-		g_mutex_lock(element->iir_matrix_lock);
+		g_mutex_lock(&element->iir_matrix_lock);
 		while(!element->delay || !element->a1 || !element->b0)
-			g_cond_wait(element->iir_matrix_available, element->iir_matrix_lock);
+			g_cond_wait(&element->iir_matrix_available, &element->iir_matrix_lock);
 
          	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
 		dmin = 0;
-		g_mutex_unlock(element->iir_matrix_lock);
+		g_mutex_unlock(&element->iir_matrix_lock);
 
 		*othersize = size / unit_size + get_available_samples(element);
 
@@ -622,9 +622,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * FIXME:  add a way to get out of this loop
 	 */
 
-	g_mutex_lock(element->iir_matrix_lock);
+	g_mutex_lock(&element->iir_matrix_lock);
 	while(!element->delay || !element->a1 || !element->b0)
-		g_cond_wait(element->iir_matrix_available, element->iir_matrix_lock);
+		g_cond_wait(&element->iir_matrix_available, &element->iir_matrix_lock);
 
 	g_assert(element->b0->size1 == element->delay->size1);
 	g_assert(element->a1->size1 == element->delay->size1);
@@ -715,7 +715,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * done
 	 */
 
-	g_mutex_unlock(element->iir_matrix_lock);
+	g_mutex_unlock(&element->iir_matrix_lock);
 	return result;
 }
 
@@ -742,7 +742,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	switch (prop_id) {
 	case ARG_IIR_A1:
-		g_mutex_lock(element->iir_matrix_lock);
+		g_mutex_lock(&element->iir_matrix_lock);
 		if(element->a1)
 		        gsl_matrix_complex_free(element->a1);
 
@@ -752,12 +752,12 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * signal change of IIR coeffs
 		 */
 
-		g_cond_broadcast(element->iir_matrix_available);
-		g_mutex_unlock(element->iir_matrix_lock);
+		g_cond_broadcast(&element->iir_matrix_available);
+		g_mutex_unlock(&element->iir_matrix_lock);
 		break;
 
 	case ARG_IIR_B0:
-		g_mutex_lock(element->iir_matrix_lock);
+		g_mutex_lock(&element->iir_matrix_lock);
 		if(element->b0)
 		        gsl_matrix_complex_free(element->b0);
 
@@ -767,15 +767,15 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * signal change of IIR coeffs
 		 */
 
-		g_cond_broadcast(element->iir_matrix_available);
-		g_mutex_unlock(element->iir_matrix_lock);
+		g_cond_broadcast(&element->iir_matrix_available);
+		g_mutex_unlock(&element->iir_matrix_lock);
 		break;
 
 	case ARG_IIR_DELAY: {
 		int dmin, dmax;
 		int dmin_new, dmax_new;
 
-		g_mutex_lock(element->iir_matrix_lock);
+		g_mutex_lock(&element->iir_matrix_lock);
 		if(element->delay) {
 			gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
 			dmin = 0;
@@ -794,8 +794,8 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * signal change of IIR delays
 		 */
 
-		g_cond_broadcast(element->iir_matrix_available);
-		g_mutex_unlock(element->iir_matrix_lock);
+		g_cond_broadcast(&element->iir_matrix_available);
+		g_mutex_unlock(&element->iir_matrix_lock);
 		break;
 	}
 
@@ -821,27 +821,27 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	switch (prop_id) {
 	case ARG_IIR_A1:
-		g_mutex_lock(element->iir_matrix_lock);
+		g_mutex_lock(&element->iir_matrix_lock);
 		if(element->a1)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->a1));
 		/* FIXME:  else? */
-		g_mutex_unlock(element->iir_matrix_lock);
+		g_mutex_unlock(&element->iir_matrix_lock);
 		break;
 
 	case ARG_IIR_B0:
-		g_mutex_lock(element->iir_matrix_lock);
+		g_mutex_lock(&element->iir_matrix_lock);
 		if(element->b0)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->b0));
 		/* FIXME:  else? */
-		g_mutex_unlock(element->iir_matrix_lock);
+		g_mutex_unlock(&element->iir_matrix_lock);
 		break;
 
 	case ARG_IIR_DELAY:
-		g_mutex_lock(element->iir_matrix_lock);
+		g_mutex_lock(&element->iir_matrix_lock);
 		if(element->delay)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_int(element->delay));
 		/* FIXME:  else? */
-		g_mutex_unlock(element->iir_matrix_lock);
+		g_mutex_unlock(&element->iir_matrix_lock);
 		break;
 
 	default:
@@ -862,10 +862,8 @@ static void finalize(GObject *object)
 {
 	GSTLALIIRBank *element = GSTLAL_IIRBANK(object);
 
-	g_mutex_free(element->iir_matrix_lock);
-	element->iir_matrix_lock = NULL;
-	g_cond_free(element->iir_matrix_available);
-	element->iir_matrix_available = NULL;
+	g_mutex_clear(&element->iir_matrix_lock);
+	g_cond_clear(&element->iir_matrix_available);
 	if(element->a1) {
 		gsl_matrix_complex_free(element->a1);
 		element->a1 = NULL;
@@ -1016,8 +1014,8 @@ static void gstlal_iirbank_class_init(GSTLALIIRBankClass *klass)
 static void gstlal_iirbank_init(GSTLALIIRBank *filter)
 {
 	filter->adapter = gst_adapter_new();
-	filter->iir_matrix_lock = g_mutex_new();
-	filter->iir_matrix_available = g_cond_new();
+	g_mutex_init(&filter->iir_matrix_lock);
+	g_cond_init(&filter->iir_matrix_available);
 	filter->a1 = NULL;
 	filter->b0 = NULL;
 	filter->delay = NULL;
