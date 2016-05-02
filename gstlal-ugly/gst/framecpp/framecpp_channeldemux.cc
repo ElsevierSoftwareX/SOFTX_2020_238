@@ -54,7 +54,7 @@
  */
 
 
-#include <framecpp/Common/MemoryBuffer.hh>
+#include <framecpp/Common/BaseMemoryBuffer.hh>
 #include <framecpp/Common/Verify.hh>
 #include <framecpp/FrameH.hh>
 #include <framecpp/FrAdcData.hh>
@@ -858,7 +858,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			 * system as the variables go out of scope.
 			 */
 
-			FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
+			FrameCPP::Common::ReadOnlyMemoryBuffer *ibuf(new FrameCPP::Common::ReadOnlyMemoryBuffer);
 			ibuf->pubsetbuf((char *) mapinfo.data, mapinfo.size);
 			FrameCPP::IFrameStream ifs(ibuf);
 
@@ -879,7 +879,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			*/
 		}
 
-		FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));
+		FrameCPP::Common::ReadOnlyMemoryBuffer *ibuf(new FrameCPP::Common::ReadOnlyMemoryBuffer);
 		ibuf->pubsetbuf((char *) mapinfo.data, mapinfo.size);
 		FrameCPP::IFrameStream ifs(ibuf);
 
