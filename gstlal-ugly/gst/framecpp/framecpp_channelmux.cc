@@ -794,6 +794,9 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		GstCaps *caps;
 		gst_event_parse_caps(event, &caps);
 		sink_setcaps(pad, parent, caps);
+		/* do not formward */
+		gst_event_unref(event);
+		goto done;
 		break;
 
 	case GST_EVENT_TAG: {
