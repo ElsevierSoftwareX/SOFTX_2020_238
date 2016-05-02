@@ -189,7 +189,7 @@ static GValue *g_value_scale_int(const GValue *src, GValue *dst, double factor)
 		guint i;
 		g_value_init(dst, GST_TYPE_LIST);
 		for(i = 0; i < gst_value_list_get_size(src); i++) {
-			GValue x = {0};
+			GValue x = G_VALUE_INIT;
 			if(!g_value_scale_int(gst_value_list_get_value(src, i), &x, factor)) {
 				g_value_unset(dst);
 				return NULL;
@@ -219,7 +219,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			GstStructure *str = gst_caps_get_structure(caps, n);
 			const gchar *format = gst_structure_get_string(str, "format");
-			GValue channels = {0};
+			GValue channels = G_VALUE_INIT;
 
 			if(!format) {
 				GST_DEBUG_OBJECT(trans, "unrecognized caps %" GST_PTR_FORMAT, caps);

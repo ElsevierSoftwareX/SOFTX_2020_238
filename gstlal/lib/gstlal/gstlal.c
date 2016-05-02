@@ -141,7 +141,7 @@ gint *gstlal_ints_from_g_value_array(GValueArray *va, gint *dest, gint *n)
 GValueArray *gstlal_g_value_array_from_ints(const gint *src, gint n)
 {
 	GValueArray *va;
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	gint i;
 	g_value_init(&v, G_TYPE_INT);
 
@@ -208,7 +208,7 @@ guint64 *gstlal_uint64s_from_g_value_array(GValueArray *va, guint64 *dest, gint 
 GValueArray *gstlal_g_value_array_from_uint64s(const guint64 *src, gint n)
 {
 	GValueArray *va;
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	gint i;
 	g_value_init(&v, G_TYPE_UINT64);
 
@@ -275,7 +275,7 @@ gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest, gint 
 GValueArray *gstlal_g_value_array_from_doubles(const gdouble *src, gint n)
 {
 	GValueArray *va;
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	gint i;
 	g_value_init(&v, G_TYPE_DOUBLE);
 
@@ -482,7 +482,7 @@ gsl_matrix_int *gstlal_gsl_matrix_int_from_g_value_array(GValueArray *va)
 GValueArray *gstlal_g_value_array_from_gsl_matrix_int(const gsl_matrix_int *matrix)
 {
 	GValueArray *va;
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	guint i;
 	g_value_init(&v, G_TYPE_VALUE_ARRAY);
 
@@ -618,7 +618,7 @@ gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va)
 GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *matrix)
 {
 	GValueArray *va;
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	guint i;
 	g_value_init(&v, G_TYPE_VALUE_ARRAY);
 
@@ -647,7 +647,7 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *
 GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *matrix)
 {
 	GValueArray *va;
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	guint i;
 	g_value_init(&v, G_TYPE_VALUE_ARRAY);
 
@@ -735,7 +735,7 @@ gsl_matrix_complex *gstlal_gsl_matrix_complex_from_g_value_array(GValueArray *va
 GValueArray *gstlal_g_value_array_from_gsl_matrix_complex(const gsl_matrix_complex *matrix)
 {
 	GValueArray *va;
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	guint i;
 	g_value_init(&v, G_TYPE_VALUE_ARRAY);
 

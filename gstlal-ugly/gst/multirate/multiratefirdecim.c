@@ -295,7 +295,7 @@ gst_multirate_fir_decim_transform_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps)
 {
   GstCaps *othercaps = gst_caps_copy (caps);
-  GValue v = {0};
+  GValue v = G_VALUE_INIT;
   g_value_init (&v, GST_TYPE_INT_RANGE);
   gst_value_set_int_range (&v, 1, G_MAXINT);
   gst_caps_set_value (othercaps, "rate", &v);

@@ -248,7 +248,7 @@ sink_getcaps(GstPad *pad)
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
 		GstCaps *result;
-		GValue value = {0,};
+		GValue value = G_VALUE_INIT;
 		g_value_init(&value, G_TYPE_INT);
 		GstStructure *peercaps_struct = gst_caps_steal_structure(peercaps, 0);
 		gst_structure_set_name(peercaps_struct, (const gchar *) "audio/x-raw-complex");
@@ -296,7 +296,7 @@ src_getcaps(GstPad *pad)
 			peercaps = gst_pad_peer_get_caps(otherpad);
 			if(peercaps) {
 				GstCaps *result;
-				GValue value = {0,};
+				GValue value = G_VALUE_INIT;
 				g_value_init(&value, G_TYPE_INT);
 				GstStructure *peercaps_struct = gst_caps_steal_structure(peercaps, 0);
 				gst_structure_set_name(peercaps_struct, (const gchar *) "audio/x-raw-float");
@@ -351,7 +351,7 @@ setcaps(GstPad *pad, GstCaps *caps)
 	/* create the caps appropriate for src and sink pads */
 	if(gst_pad_get_direction(pad) == GST_PAD_SINK) {
 		gint width;
-		GValue value = {0,};
+		GValue value = G_VALUE_INIT;
 		g_value_init(&value, G_TYPE_INT);
 		GstStructure *srccaps_struct = gst_caps_steal_structure(srccaps, 0);
 		gst_structure_get_int(srccaps_struct, "width", &width);
@@ -362,7 +362,7 @@ setcaps(GstPad *pad, GstCaps *caps)
 	}
 	else {
 		gint width;
-		GValue value = {0,};
+		GValue value = G_VALUE_INIT;
 		g_value_init(&value, G_TYPE_INT);
 		GstStructure *sinkcaps_struct = gst_caps_steal_structure(sinkcaps, 0);
 		gst_structure_get_int(sinkcaps_struct, "width", &width);
@@ -702,7 +702,7 @@ forward_event(GSTLALTimeSliceChiSquare *element, GstEvent *event, gboolean flush
 	gboolean ret;
 	GstIterator *it = NULL;
 	GstIteratorResult ires;
-	GValue vret = {0};
+	GValue vret = G_VALUE_INIT;
 	EventData data;
 
 	GST_LOG_OBJECT(element, "Forwarding event %p (%s)", event, GST_EVENT_TYPE_NAME(event));

@@ -173,7 +173,7 @@ static void update_instruments(GstFrameCPPChannelMux *mux)
 	g_hash_table_remove_all(mux->instruments);
 
 	while(TRUE) {
-		GValue item = {0,};
+		GValue item = G_VALUE_INIT;
 		gchar *instrument = NULL;
 		switch(gst_iterator_next(it, &item)) {
 		case GST_ITERATOR_OK:
@@ -603,7 +603,7 @@ static gboolean forward_src_event_func(const GValue *item, GValue *ret, gpointer
 static gboolean forward_src_event(GstFrameCPPChannelMux *mux, GstEvent *event, gboolean flush)
 {
 	GstIterator *it;
-	GValue vret = {0};
+	GValue vret = G_VALUE_INIT;
 	EventData data = {
 		event,
 		flush

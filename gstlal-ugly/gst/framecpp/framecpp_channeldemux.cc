@@ -961,11 +961,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			g_value_array_free(element->frame_history);
 			element->frame_history = g_value_array_new(0);
 			for(FrameCPP::FrameH::history_iterator current = frame->RefHistory().begin(), last = frame->RefHistory().end(); current != last; current++) {
-#ifndef G_VALUE_INIT
-				GValue value = {0};	/* FIXME:  remove when we can rely on glib >= 2.30 */
-#else
 				GValue value = G_VALUE_INIT;
-#endif
 				gchar *str;
 				GstLALFrHistory *history = gstlal_frhistory_new((*current)->GetName().c_str());
 				gstlal_frhistory_set_timestamp(history, (*current)->GetTime() * GST_SECOND);
@@ -1334,7 +1330,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	case ARG_CHANNEL_LIST: {
 		GValueArray *channel_list = g_value_array_new(0);
-		GValue channel_name = {0};
+		GValue channel_name = G_VALUE_INIT;
 		GHashTableIter iter;
 		gchar *key, *ignored;
 

@@ -707,7 +707,7 @@ static gboolean forward_event_func(GstPad * pad, GValue * ret, GstEvent * event)
 static gboolean forward_event(GSTLALMultiplier * multiplier, GstEvent * event)
 {
 	GstIterator *it = NULL;
-	GValue vret = {0};
+	GValue vret = G_VALUE_INIT;
 
 	GST_LOG_OBJECT(multiplier, "forwarding event %p (%s)", event, GST_EVENT_TYPE_NAME(event));
 
