@@ -45,6 +45,7 @@ extern "C" {
 }
 #endif
 
+#define NTHREAD_LIMIT 1024
 #if 0
 // deprecated: we have cuda_debug.h for gpu debug now
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
@@ -498,6 +499,12 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		if ((gint)d_array[i].ndim > 0) {
 		num_filters		= (gint)d_array[i].dim[0];
 		num_templates	= (gint)d_array[i].dim[1];
+		/* should not surpass GPU hard limit */
+		if (num_filters > NTHREAD_LIMIT) {
+		  fprintf(stderr, "%s has number of filters %d, over NTHREAD_LIMIT", filename, num_filters);
+		  exit(0);
+		}
+
 		eff_len = num_filters * num_templates;
 		spiir_state_workspace_realloc_complex (&tmp_a1, &a1_len, eff_len);
 		spiir_state_workspace_realloc_complex (&tmp_b0, &b0_len, eff_len);
