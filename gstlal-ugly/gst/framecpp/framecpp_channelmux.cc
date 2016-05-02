@@ -581,8 +581,11 @@ typedef struct {
 } EventData;
 
 
-static gboolean forward_src_event_func(GstPad *pad, GValue *ret, EventData *data)
+static gboolean forward_src_event_func(const GValue *item, GValue *ret, gpointer user_data)
 {
+	GstPad *pad = GST_PAD_CAST(g_value_get_object(item));
+	EventData *data = (EventData *) user_data;
+
 	gst_event_ref(data->event);
 	if(!gst_pad_push_event(pad, data->event)) {
 		/* quick hack to unflush the pads. ideally we need  a way
@@ -612,7 +615,7 @@ static gboolean forward_src_event(GstFrameCPPChannelMux *mux, GstEvent *event, g
 
 	it = gst_element_iterate_sink_pads(GST_ELEMENT(mux));
 	while(TRUE) {
-		switch(gst_iterator_fold(it, (GstIteratorFoldFunction) forward_src_event_func, &vret, &data)) {
+		switch(gst_iterator_fold(it, forward_src_event_func, &vret, &data)) {
 		case GST_ITERATOR_RESYNC:
 			gst_iterator_resync(it);
 			g_value_set_boolean(&vret, TRUE);
