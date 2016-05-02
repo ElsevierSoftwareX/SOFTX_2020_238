@@ -462,7 +462,8 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 	if(g_queue_is_empty(adapter->queue) || !samples)
 		goto done;
 
-	buf = GST_BUFFER((head = g_queue_peek_head_link(adapter->queue))->data);
+	head = g_queue_peek_head_link(adapter->queue);
+	buf = GST_BUFFER(head->data);
 	n = samples_remaining(buf, adapter->skip);
 	if(adapter->skip || samples < n) {
 		GstBuffer *newbuf;
