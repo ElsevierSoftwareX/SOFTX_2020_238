@@ -264,10 +264,10 @@ static void *receive_thread(void *arg)
 		if(len < 0) {
 			free(data);
 			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameRecv.receive() failed"));
-			g_mutex_lock(element->buffer_lock);
+			g_mutex_lock(&element->buffer_lock);
 			element->recv_status = GST_FLOW_ERROR;
-			g_cond_signal(element->received_buffer);
-			g_mutex_unlock(element->buffer_lock);
+			g_cond_signal(&element->received_buffer);
+			g_mutex_unlock(&element->buffer_lock);
 			break;
 		}
 		GST_DEBUG_OBJECT(element, "recieved %d byte buffer (seq. #%u) for [%u s, %u s)", len, sequence, timestamp, timestamp + duration);
@@ -284,14 +284,14 @@ static void *receive_thread(void *arg)
 		GST_BUFFER_OFFSET(buffer) = sequence;
 		GST_BUFFER_OFFSET_END(buffer) = sequence + 1;
 
-		g_mutex_lock(element->buffer_lock);
+		g_mutex_lock(&element->buffer_lock);
 		if(element->buffer) {
 			GST_WARNING_OBJECT(element, "receive thread overrun, dropping %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(element->buffer));
 			gst_buffer_unref(element->buffer);
 		}
 		element->buffer = buffer;
-		g_cond_signal(element->received_buffer);
-		g_mutex_unlock(element->buffer_lock);
+		g_cond_signal(&element->received_buffer);
+		g_mutex_unlock(&element->buffer_lock);
 	}
 
 	return NULL;
@@ -361,12 +361,12 @@ static gboolean stop(GstBaseSrc *object)
 
 	success &= pthread_cancel(element->recv_thread) == 0;
 	success &= pthread_join(element->recv_thread, NULL) == 0;
-	g_mutex_lock(element->buffer_lock);
+	g_mutex_lock(&element->buffer_lock);
 	if(element->buffer) {
 		gst_buffer_unref(element->buffer);
 		element->buffer = NULL;
 	}
-	g_mutex_unlock(element->buffer_lock);
+	g_mutex_unlock(&element->buffer_lock);
 
 	FRAMERCV(element)->close();
 	delete FRAMERCV(element);
@@ -389,10 +389,10 @@ static gboolean unlock(GstBaseSrc *basesrc)
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(basesrc);
 	gboolean success = TRUE;
 
-	g_mutex_lock(element->buffer_lock);
+	g_mutex_lock(&element->buffer_lock);
 	element->unblocked = TRUE;
-	g_cond_signal(element->received_buffer);
-	g_mutex_unlock(element->buffer_lock);
+	g_cond_signal(&element->received_buffer);
+	g_mutex_unlock(&element->buffer_lock);
 
 	return success;
 }
@@ -408,9 +408,9 @@ static gboolean unlock_stop(GstBaseSrc *basesrc)
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(basesrc);
 	gboolean success = TRUE;
 
-	g_mutex_lock(element->buffer_lock);
+	g_mutex_lock(&element->buffer_lock);
 	element->unblocked = FALSE;
-	g_mutex_unlock(element->buffer_lock);
+	g_mutex_unlock(&element->buffer_lock);
 
 	return success;
 }
@@ -433,20 +433,20 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 */
 
 try_again:
-	g_mutex_lock(element->buffer_lock);
+	g_mutex_lock(&element->buffer_lock);
 	timeout = FALSE;
 	t_before = GST_CLOCK_TIME_NONE;
 	while(!element->buffer && !element->unblocked && !timeout && element->recv_status == GST_FLOW_OK) {
-		GTimeVal timeout_time;
-		g_get_current_time(&timeout_time);
-		g_time_val_add(&timeout_time, element->wait_time * G_USEC_PER_SEC);
 		t_before = GPSNow();
 		GST_DEBUG_OBJECT(element, "waiting for data at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(t_before));
-		timeout = !g_cond_timed_wait(element->received_buffer, element->buffer_lock, element->wait_time < 0 ? NULL : &timeout_time);
+		if(element->wait_time >= 0)
+			timeout = !g_cond_wait_until(&element->received_buffer, &element->buffer_lock, g_get_monotonic_time() + element->wait_time * G_TIME_SPAN_SECOND);
+		else
+			g_cond_wait(&element->received_buffer, &element->buffer_lock);
 	}
 	*buffer = element->buffer;
 	element->buffer = NULL;
-	g_mutex_unlock(element->buffer_lock);
+	g_mutex_unlock(&element->buffer_lock);
 
 	/*
 	 * if no data, try to guess cause
@@ -718,10 +718,8 @@ static void finalize(GObject *object)
 		gst_buffer_unref(element->buffer);
 		element->buffer = NULL;
 	}
-	g_mutex_free(element->buffer_lock);
-	element->buffer_lock = NULL;
-	g_cond_free(element->received_buffer);
-	element->received_buffer = NULL;
+	g_mutex_clear(&element->buffer_lock);
+	g_cond_clear(&element->received_buffer);
 	g_free(element->iface);
 	element->iface = NULL;
 	g_free(element->group);
@@ -849,8 +847,8 @@ static void gds_framexmitsrc_init(GstGDSFramexmitSrc *element)
 	 */
 
 	element->buffer = NULL;
-	element->buffer_lock = g_mutex_new();
-	element->received_buffer = g_cond_new();
+	g_mutex_init(&element->buffer_lock);
+	g_cond_init(&element->received_buffer);
 	element->unblocked = FALSE;
 
 	/*

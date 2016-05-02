@@ -292,10 +292,10 @@ static gboolean unlock(GstBaseSrc *basesrc)
 
 	element->unblocked = TRUE;
 
-	if(!g_mutex_trylock(element->create_thread_lock))
+	if(!g_mutex_trylock(&element->create_thread_lock))
 		success = !pthread_kill(element->create_thread, SIGALRM);
 	else
-		g_mutex_unlock(element->create_thread_lock);
+		g_mutex_unlock(&element->create_thread_lock);
 
 	return success;
 }
@@ -352,11 +352,11 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	element->create_thread = pthread_self();
 	while(1) {
-		g_mutex_lock(element->create_thread_lock);
+		g_mutex_lock(&element->create_thread_lock);
 		t_before = GPSNow();
 		data = lsmp_partition(element)->get_buffer(flags);
 		t_after = GPSNow();
-		g_mutex_unlock(element->create_thread_lock);
+		g_mutex_unlock(&element->create_thread_lock);
 		if(!data) {
 			/*
 			 * data retrieval failed.  guess cause.
@@ -635,8 +635,7 @@ static void finalize(GObject *object)
 
 	g_free(element->name);
 	element->name = NULL;
-	g_mutex_free(element->create_thread_lock);
-	element->create_thread_lock = NULL;
+	g_mutex_clear(&element->create_thread_lock);
 	if(element->partition) {
 		GST_WARNING_OBJECT(element, "parent class failed to invoke stop() method.  doing shared-memory de-access in finalize() instead.");
 		delete lsmp_partition(element);
@@ -756,6 +755,6 @@ static void gds_lvshmsrc_init(GDSLVSHMSrc *element)
 	element->name = NULL;
 	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 	element->unblocked = FALSE;
-	element->create_thread_lock = g_mutex_new();
+	g_mutex_init(&element->create_thread_lock);
 	element->partition = NULL;
 }
