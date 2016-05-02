@@ -246,11 +246,10 @@ static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 {
 	gboolean res = FALSE;
 
-	switch (GST_QUERY_TYPE (query))
-	{
-		default:
-			res = gst_pad_query_default (pad, parent, query);
-			break;
+	switch(GST_QUERY_TYPE(query)) {
+	default:
+		res = gst_pad_query_default (pad, parent, query);
+		break;
 	}
 	return res;
 }
@@ -263,13 +262,12 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	drop = GSTLAL_DROP (parent);
 	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
 
-	switch (GST_EVENT_TYPE (event))
-	{	
-		default:
-			/* just forward the rest for now */
-			GST_DEBUG_OBJECT(drop, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
-			gst_pad_event_default(pad, parent, event);
-			break;
+	switch(GST_EVENT_TYPE(event)) {
+	default:
+		/* just forward the rest for now */
+		GST_DEBUG_OBJECT(drop, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
+		gst_pad_event_default(pad, parent, event);
+		break;
 	}
 
 	return result;
@@ -281,16 +279,16 @@ static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
 	gboolean res = TRUE;
 	GstCaps *filter, *caps;
 
-	switch (GST_QUERY_TYPE (query)) 
-	{
-		case GST_QUERY_CAPS:
-			gst_query_parse_caps (query, &filter);
-			caps = getcaps (pad, filter);
-			gst_query_set_caps_result (query, caps);
-			gst_caps_unref (caps);
-			break;
-		default:
-			break;
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_CAPS:
+		gst_query_parse_caps (query, &filter);
+		caps = getcaps (pad, filter);
+		gst_query_set_caps_result (query, caps);
+		gst_caps_unref (caps);
+		break;
+
+	default:
+		break;
 	}
 
 	if (G_LIKELY (query))
@@ -310,15 +308,15 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
 
-	switch (GST_EVENT_TYPE (event))
-	{
-		case GST_EVENT_CAPS:
-			gst_event_parse_caps(event, &caps);
-			res = setcaps(drop, pad, caps);
-			gst_event_unref(event);
-			event = NULL;
-		default:
-			break;
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_CAPS:
+		gst_event_parse_caps(event, &caps);
+		res = setcaps(drop, pad, caps);
+		gst_event_unref(event);
+		event = NULL;
+
+	default:
+		break;
 	}
 
 	if (G_LIKELY (event))
