@@ -176,14 +176,14 @@ gboolean framecpp_muxqueue_push(FrameCPPMuxQueue *queue, GstBuffer *buf)
 			g_signal_emit(queue, signals[SIGNAL_WAITING], 0);
 			FRAMECPP_MUXQUEUE_LOCK(queue);
 		} else
-			g_cond_wait(queue->activity, FRAMECPP_MUXQUEUE_GETLOCK(queue));
+			g_cond_wait(&queue->activity, FRAMECPP_MUXQUEUE_GETLOCK(queue));
 	}
 	if(queue->flushing) {
 		gst_buffer_unref(buf);
 		/*success = FALSE;*/	/* FIXME:  is it? */
 	} else {
 		gst_audioadapter_push(adapter, buf);
-		g_cond_broadcast(queue->activity);
+		g_cond_broadcast(&queue->activity);
 	}
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 
@@ -195,7 +195,7 @@ void framecpp_muxqueue_flush(FrameCPPMuxQueue *queue, GstClockTime time)
 {
 	FRAMECPP_MUXQUEUE_LOCK(queue);
 	gst_audioadapter_flush_samples(GST_AUDIOADAPTER(queue), gst_util_uint64_scale_int_round(time, queue->rate, GST_SECOND));
-	g_cond_broadcast(queue->activity);
+	g_cond_broadcast(&queue->activity);
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 }
 
@@ -204,7 +204,7 @@ void framecpp_muxqueue_clear(FrameCPPMuxQueue *queue)
 {
 	FRAMECPP_MUXQUEUE_LOCK(queue);
 	gst_audioadapter_clear(GST_AUDIOADAPTER(queue));
-	g_cond_broadcast(queue->activity);
+	g_cond_broadcast(&queue->activity);
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 }
 
@@ -213,7 +213,7 @@ void framecpp_muxqueue_set_flushing(FrameCPPMuxQueue *queue, gboolean flushing)
 {
 	FRAMECPP_MUXQUEUE_LOCK(queue);
 	queue->flushing = flushing;
-	g_cond_broadcast(queue->activity);
+	g_cond_broadcast(&queue->activity);
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
 }
 
@@ -291,7 +291,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_MAX_SIZE_TIME:
 		queue->max_size_time = g_value_get_uint64(value);
 		FRAMECPP_MUXQUEUE_LOCK(queue);
-		g_cond_broadcast(queue->activity);
+		g_cond_broadcast(&queue->activity);
 		FRAMECPP_MUXQUEUE_UNLOCK(queue);
 		break;
 
@@ -334,10 +334,8 @@ static void finalize(GObject *object)
 {
 	FrameCPPMuxQueue *queue = FRAMECPP_MUXQUEUE(object);
 
-	g_mutex_free(queue->lock);
-	queue->lock = NULL;
-	g_cond_free(queue->activity);
-	queue->activity = NULL;
+	g_mutex_clear(&queue->lock);
+	g_cond_clear(&queue->activity);
 
 	G_OBJECT_CLASS(framecpp_muxqueue_parent_class)->finalize(object);
 }
@@ -394,7 +392,7 @@ static void framecpp_muxqueue_class_init(FrameCPPMuxQueueClass *klass)
 
 static void framecpp_muxqueue_init(FrameCPPMuxQueue *queue)
 {
-	queue->lock = g_mutex_new();
-	queue->activity = g_cond_new();
+	g_mutex_init(&queue->lock);
+	g_cond_init(&queue->activity);
 	queue->flushing = FALSE;
 }
