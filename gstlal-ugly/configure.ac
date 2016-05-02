@@ -300,7 +300,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_FRAMECPP_VERSION], [2.5.1])
+AC_SUBST([MIN_FRAMECPP_VERSION], [2.5.0])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
