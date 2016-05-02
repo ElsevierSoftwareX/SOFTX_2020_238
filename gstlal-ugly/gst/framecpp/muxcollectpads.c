@@ -787,7 +787,13 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 			 * merge the two buffers
 			 */
 
+			{
+			GstClockTime end_time = GST_BUFFER_TIMESTAMP(next_buf) + GST_BUFFER_DURATION(next_buf);
+			guint64 offset_end = GST_BUFFER_OFFSET_END(next_buf);
 			this_buf = this->data = gst_buffer_append(this_buf, next_buf);
+			GST_BUFFER_DURATION(this_buf) = end_time - GST_BUFFER_TIMESTAMP(this_buf);
+			GST_BUFFER_OFFSET_END(this_buf) = offset_end;
+			}
 		}
 	}
 
