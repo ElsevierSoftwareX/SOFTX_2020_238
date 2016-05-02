@@ -1071,7 +1071,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 			sinkbuf = NULL;
 		} else {
 			GST_DEBUG_OBJECT(element, "creating sub-buffer from samples [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", start, start + length);
-			srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_META | GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_MEMORY, start * element->unit_size, length * element->unit_size);
+			srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS, start * element->unit_size, length * element->unit_size);
 			if(!srcbuf) {
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
 				result = GST_FLOW_ERROR;
