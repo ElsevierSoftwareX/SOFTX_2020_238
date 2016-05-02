@@ -218,14 +218,14 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 * equal the number of weights
 		 */
 
-		g_mutex_lock(element->weights_lock);
+		g_mutex_lock(&element->weights_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			if(element->weights)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, element->channels, NULL);
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		}
-		g_mutex_unlock(element->weights_lock);
+		g_mutex_unlock(&element->weights_lock);
 		break;
 
 	case GST_PAD_SINK:
@@ -271,13 +271,13 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * if applicable, check that the number of channels is valid
 	 */
 
-	g_mutex_lock(element->weights_lock);
+	g_mutex_lock(&element->weights_lock);
 	if(!element->weights)
 		element->channels = GST_AUDIO_INFO_CHANNELS(&info);
 	else if(GST_AUDIO_INFO_CHANNELS(&info) != element->channels) {
 		/* FIXME:  perhaps emit a "channel-count-changed" signal? */
 		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, element->channels, incaps);
-		g_mutex_unlock(element->weights_lock);
+		g_mutex_unlock(&element->weights_lock);
 		return FALSE;
 	}
 
@@ -307,7 +307,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 	g_free(element->weights_native);
 	element->weights_native = NULL;
-	g_mutex_unlock(element->weights_lock);
+	g_mutex_unlock(&element->weights_lock);
 
 	return TRUE;
 }
@@ -333,13 +333,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not 0s.
 		 */
 
-		g_mutex_lock(element->weights_lock);
+		g_mutex_lock(&element->weights_lock);
 		if(element->weights && !element->weights_native) {
 			element->weights_native = element->make_weights_native_func(element);
 			g_assert(element->weights_native != NULL);
 		}
 		result = element->sumsquares_func(element, inbuf, outbuf);
-		g_mutex_unlock(element->weights_lock);
+		g_mutex_unlock(&element->weights_lock);
 	} else {
 		/*
 		 * input is 0s.
@@ -388,7 +388,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	switch (prop_id) {
 	case ARG_WEIGHTS: {
 		gint channels;
-		g_mutex_lock(element->weights_lock);
+		g_mutex_lock(&element->weights_lock);
 
 		/*
 		 * record the old number of channels, and extract the
@@ -418,7 +418,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 			gst_base_transform_reconfigure_sink(GST_BASE_TRANSFORM(object));
 		}
 
-		g_mutex_unlock(element->weights_lock);
+		g_mutex_unlock(&element->weights_lock);
 		break;
 	}
 
@@ -439,12 +439,12 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	switch (prop_id) {
 	case ARG_WEIGHTS:
-		g_mutex_lock(element->weights_lock);
+		g_mutex_lock(&element->weights_lock);
 		if(element->weights)
 			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->weights, element->channels));
 		else
 			g_value_take_boxed(value, g_value_array_new(0));
-		g_mutex_unlock(element->weights_lock);
+		g_mutex_unlock(&element->weights_lock);
 		break;
 
 	default:
@@ -465,8 +465,7 @@ static void finalize(GObject *object)
 {
 	GSTLALSumSquares *element = GSTLAL_SUMSQUARES(object);
 
-	g_mutex_free(element->weights_lock);
-	element->weights_lock = NULL;
+	g_mutex_clear(&element->weights_lock);
 	g_free(element->weights);
 	element->weights = NULL;
 	g_free(element->weights_native);
@@ -565,7 +564,7 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 static void gstlal_sumsquares_init(GSTLALSumSquares *filter)
 {
 	filter->channels = 0;
-	filter->weights_lock = g_mutex_new();
+	g_mutex_init(&filter->weights_lock);
 	filter->weights = NULL;
 	filter->weights_native = NULL;
 	filter->make_weights_native_func = NULL;

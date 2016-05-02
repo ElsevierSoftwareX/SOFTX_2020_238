@@ -141,19 +141,17 @@ G_DEFINE_TYPE_WITH_CODE(
 
 static enum gstlal_matrixmixer_media_type get_media_type(GstCaps *caps)
 {
-	GstAudioInfo info;
-
 	/* NOTE this assumes only a single relevant caps structure */
 	GstStructure *str = gst_caps_get_structure(caps, 0);
 	const gchar *name = gst_structure_get_string(str, "format");
 
-	if (!strcmp(name, GST_AUDIO_NE(F32)))
+	if(!strcmp(name, GST_AUDIO_NE(F32)))
 		return GSTLAL_MATRIXMIXER_FLOAT;
-	if (!strcmp(name, GST_AUDIO_NE(F64)))
+	if(!strcmp(name, GST_AUDIO_NE(F64)))
 		return GSTLAL_MATRIXMIXER_DOUBLE;
-	if (!strcmp(name, GST_AUDIO_NE(Z64)))
+	if(!strcmp(name, GST_AUDIO_NE(Z64)))
 		return GSTLAL_MATRIXMIXER_COMPLEX_FLOAT;
-	if (!strcmp(name, GST_AUDIO_NE(Z128)))
+	if(!strcmp(name, GST_AUDIO_NE(Z128)))
 		return GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE;
 
 	return GSTLAL_MATRIXMIXER_NONE;
@@ -333,14 +331,14 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 * number of rows in the matrix
 		 */
 
-		g_mutex_lock(element->mixmatrix_lock);
+		g_mutex_lock(&element->mixmatrix_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			if(element->mixmatrix_d)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, num_input_channels(element), NULL);
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		}
-		g_mutex_unlock(element->mixmatrix_lock);
+		g_mutex_unlock(&element->mixmatrix_lock);
 		break;
 
 	case GST_PAD_SINK:
@@ -351,7 +349,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 * number of columns in the matrix
 		 */
 
-		g_mutex_lock(element->mixmatrix_lock);
+		g_mutex_lock(&element->mixmatrix_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++)
 			if(element->mixmatrix_d) {
 				GstCaps *caps_nth = gst_caps_copy_nth(caps, n);
@@ -360,7 +358,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 			}
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
-		g_mutex_unlock(element->mixmatrix_lock);
+		g_mutex_unlock(&element->mixmatrix_lock);
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -397,14 +395,14 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	else {
 		guint old_datatype = element->data_type;
 
-		g_mutex_lock(element->mixmatrix_lock);
+		g_mutex_lock(&element->mixmatrix_lock);
 		element->data_type = data_type;
 		if(element->mixmatrix_d && (in_channels != num_input_channels(element) || out_channels != num_output_channels(element, element->data_type))) {
 			GST_WARNING_OBJECT(element, "caps %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT " not accepted, wrong channel counts:  (%d in, %d out) != (%d in, %d out)", incaps, outcaps, in_channels, out_channels, num_input_channels(element), num_output_channels(element, element->data_type));
 			element->data_type = old_datatype;
 			success = FALSE;
 		}
-		g_mutex_unlock(element->mixmatrix_lock);
+		g_mutex_unlock(&element->mixmatrix_lock);
 	}
 
 	return success;
@@ -425,10 +423,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
 	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 
-	g_mutex_lock(element->mixmatrix_lock);
+	g_mutex_lock(&element->mixmatrix_lock);
 	while(!element->mixmatrix_d) {
 		GST_DEBUG_OBJECT(element, "mix matrix not available, waiting ...");
-		g_cond_wait(element->mixmatrix_available, element->mixmatrix_lock);
+		g_cond_wait(&element->mixmatrix_available, &element->mixmatrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
 			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for mix matrix");
 			result = GST_FLOW_FLUSHING;
@@ -460,7 +458,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 done:
 	gst_buffer_unmap(outbuf, &out_info);
-	g_mutex_unlock(element->mixmatrix_lock);
+	g_mutex_unlock(&element->mixmatrix_lock);
 	return result;
 }
 
@@ -494,7 +492,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	case ARG_MATRIX: {
 		gint in_channels = 0;
 		gint out_channels = 0;
-		g_mutex_lock(element->mixmatrix_lock);
+		g_mutex_lock(&element->mixmatrix_lock);
 		if(element->mixmatrix_d) {
 			if(element->data_type) {
 				in_channels = num_input_channels(element);
@@ -529,8 +527,8 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		if(element->data_type && num_output_channels(element, element->data_type) != out_channels)
 			gst_base_transform_reconfigure_src(GST_BASE_TRANSFORM(object));
 
-		g_cond_broadcast(element->mixmatrix_available);
-		g_mutex_unlock(element->mixmatrix_lock);
+		g_cond_broadcast(&element->mixmatrix_available);
+		g_mutex_unlock(&element->mixmatrix_lock);
 		break;
 	}
 
@@ -556,11 +554,11 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	switch (prop_id) {
 	case ARG_MATRIX:
-		g_mutex_lock(element->mixmatrix_lock);
+		g_mutex_lock(&element->mixmatrix_lock);
 		if(element->mixmatrix_d)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->mixmatrix_d));
 		/* FIXME:  else? */
-		g_mutex_unlock(element->mixmatrix_lock);
+		g_mutex_unlock(&element->mixmatrix_lock);
 		break;
 
 	default:
@@ -587,9 +585,9 @@ static void dispose(GObject *object)
 	 * state should be NULL causing those threads to bail out
 	 */
 
-	g_mutex_lock(element->mixmatrix_lock);
-	g_cond_broadcast(element->mixmatrix_available);
-	g_mutex_unlock(element->mixmatrix_lock);
+	g_mutex_lock(&element->mixmatrix_lock);
+	g_cond_broadcast(&element->mixmatrix_available);
+	g_mutex_unlock(&element->mixmatrix_lock);
 
 	G_OBJECT_CLASS(gstlal_matrixmixer_parent_class)->dispose(object);
 }
@@ -608,10 +606,8 @@ static void finalize(GObject *object)
 	 * free resources
 	 */
 
-	g_mutex_free(element->mixmatrix_lock);
-	element->mixmatrix_lock = NULL;
-	g_cond_free(element->mixmatrix_available);
-	element->mixmatrix_available = NULL;
+	g_mutex_clear(&element->mixmatrix_lock);
+	g_cond_clear(&element->mixmatrix_available);
 	mixmatrix_free(element);
 
 	G_OBJECT_CLASS(gstlal_matrixmixer_parent_class)->finalize(object);
@@ -709,8 +705,8 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 static void gstlal_matrixmixer_init(GSTLALMatrixMixer *filter)
 {
 	filter->data_type = GSTLAL_MATRIXMIXER_NONE;
-	filter->mixmatrix_lock = g_mutex_new();
-	filter->mixmatrix_available = g_cond_new();
+	g_mutex_init(&filter->mixmatrix_lock);
+	g_cond_init(&filter->mixmatrix_available);
 	filter->mixmatrix_d = NULL;
 	filter->mixmatrix_s = NULL;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);

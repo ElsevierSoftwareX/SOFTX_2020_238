@@ -415,10 +415,10 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	 * wait for autocorrelation matrix
 	 */
 
-	g_mutex_lock(element->autocorrelation_lock);
+	g_mutex_lock(&element->autocorrelation_lock);
 	while(!element->autocorrelation_matrix) {
 		GST_DEBUG_OBJECT(element, "autocorrelation matrix not available, waiting ...");
-		g_cond_wait(element->autocorrelation_available, element->autocorrelation_lock);
+		g_cond_wait(&element->autocorrelation_available, &element->autocorrelation_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
 			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for autocorrelation matrix");
 			success = FALSE;
@@ -458,7 +458,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	}
 
 done:
-	g_mutex_unlock(element->autocorrelation_lock);
+	g_mutex_unlock(&element->autocorrelation_lock);
 	return success;
 }
 
@@ -556,12 +556,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * wait for autocorrelation matrix
 	 */
 
-	g_mutex_lock(element->autocorrelation_lock);
+	g_mutex_lock(&element->autocorrelation_lock);
 	while(!element->autocorrelation_matrix) {
 		GST_DEBUG_OBJECT(element, "autocorrelation matrix not available, waiting ...");
-		g_cond_wait(element->autocorrelation_available, element->autocorrelation_lock);
+		g_cond_wait(&element->autocorrelation_available, &element->autocorrelation_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
-			g_mutex_unlock(element->autocorrelation_lock);
+			g_mutex_unlock(&element->autocorrelation_lock);
 			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for autocorrelation matrix");
 			result = GST_FLOW_FLUSHING;
 			goto done;
@@ -575,7 +575,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	if(!element->autocorrelation_norm) {
 		element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, element->autocorrelation_mask_matrix);
 		if(!element->autocorrelation_norm) {
-			g_mutex_unlock(element->autocorrelation_lock);
+			g_mutex_unlock(&element->autocorrelation_lock);
 			GST_DEBUG_OBJECT(element, "failed to compute autocorrelation norms");
 			result = GST_FLOW_ERROR;
 			goto done;
@@ -680,24 +680,24 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		GST_DEBUG_OBJECT(element, "output is %u samples followed by %u sample gap", output_length - gap_length, gap_length);
 
-		g_mutex_unlock(element->autocorrelation_lock);
+		g_mutex_unlock(&element->autocorrelation_lock);
 		if(result != GST_FLOW_OK)
 			goto done;
-		g_mutex_lock(element->autocorrelation_lock);
+		g_mutex_lock(&element->autocorrelation_lock);
 		samples = filter(element, buf);
 		g_assert_cmpuint(output_length - gap_length, ==, samples);
 
 		GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buf));
-		g_mutex_unlock(element->autocorrelation_lock);
+		g_mutex_unlock(&element->autocorrelation_lock);
 		result = gst_pad_push(srcpad, buf);
 		if(result != GST_FLOW_OK)
 			goto done;
-		g_mutex_lock(element->autocorrelation_lock);
+		g_mutex_lock(&element->autocorrelation_lock);
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
 		set_metadata(element, outbuf, gap_length, TRUE);
 	}
-	g_mutex_unlock(element->autocorrelation_lock);
+	g_mutex_unlock(&element->autocorrelation_lock);
 
 	/*
 	 * done
@@ -733,7 +733,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	switch (prop_id) {
 	case ARG_AUTOCORRELATION_MATRIX: {
 		unsigned channels;
-		g_mutex_lock(element->autocorrelation_lock);
+		g_mutex_lock(&element->autocorrelation_lock);
 		if(element->autocorrelation_matrix) {
 			channels = autocorrelation_channels(element);
 			gsl_matrix_complex_free(element->autocorrelation_matrix);
@@ -774,13 +774,13 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * signal availability of new autocorrelation vectors
 		 */
 
-		g_cond_broadcast(element->autocorrelation_available);
-		g_mutex_unlock(element->autocorrelation_lock);
+		g_cond_broadcast(&element->autocorrelation_available);
+		g_mutex_unlock(&element->autocorrelation_lock);
 		break;
 	}
 
 	case ARG_AUTOCORRELATION_MASK_MATRIX:
-		g_mutex_lock(element->autocorrelation_lock);
+		g_mutex_lock(&element->autocorrelation_lock);
 
 		if(element->autocorrelation_mask_matrix)
 			gsl_matrix_int_free(element->autocorrelation_mask_matrix);
@@ -795,17 +795,17 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 			element->autocorrelation_norm = NULL;
 		}
 
-		g_mutex_unlock(element->autocorrelation_lock);
+		g_mutex_unlock(&element->autocorrelation_lock);
 		break;
 
 	case ARG_LATENCY: {
 		gint64 latency = g_value_get_int64(value);
-		g_mutex_lock(element->autocorrelation_lock);
+		g_mutex_lock(&element->autocorrelation_lock);
 		if(element->autocorrelation_matrix && -latency >= (gint) autocorrelation_length(element))
 			GST_ERROR_OBJECT(object, "invalid latency %" G_GINT64_FORMAT ", must be in (%u, 0]", latency, -(gint) autocorrelation_length(element));
 		else
 			element->latency = latency;
-		g_mutex_unlock(element->autocorrelation_lock);
+		g_mutex_unlock(&element->autocorrelation_lock);
 		break;
 	}
 
@@ -835,19 +835,19 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	switch (prop_id) {
 	case ARG_AUTOCORRELATION_MATRIX:
-		g_mutex_lock(element->autocorrelation_lock);
+		g_mutex_lock(&element->autocorrelation_lock);
 		if(element->autocorrelation_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->autocorrelation_matrix));
 		/* FIXME:  else? */
-		g_mutex_unlock(element->autocorrelation_lock);
+		g_mutex_unlock(&element->autocorrelation_lock);
 		break;
 
 	case ARG_AUTOCORRELATION_MASK_MATRIX:
-		g_mutex_lock(element->autocorrelation_lock);
+		g_mutex_lock(&element->autocorrelation_lock);
 		if(element->autocorrelation_mask_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_int(element->autocorrelation_mask_matrix));
 		/* FIXME:  else? */
-		g_mutex_unlock(element->autocorrelation_lock);
+		g_mutex_unlock(&element->autocorrelation_lock);
 		break;
 
 	case ARG_LATENCY:
@@ -882,9 +882,9 @@ static void dispose(GObject *object)
 	 * element state should be NULL causing those threads to bail out
 	 */
 
-	g_mutex_lock(element->autocorrelation_lock);
-	g_cond_broadcast(element->autocorrelation_available);
-	g_mutex_unlock(element->autocorrelation_lock);
+	g_mutex_lock(&element->autocorrelation_lock);
+	g_cond_broadcast(&element->autocorrelation_available);
+	g_mutex_unlock(&element->autocorrelation_lock);
 
 	G_OBJECT_CLASS(gstlal_autochisq_parent_class)->dispose(object);
 }
@@ -903,10 +903,8 @@ static void finalize(GObject *object)
 	 * free resources
 	 */
 
-	g_mutex_free(element->autocorrelation_lock);
-	element->autocorrelation_lock = NULL;
-	g_cond_free(element->autocorrelation_available);
-	element->autocorrelation_available = NULL;
+	g_mutex_clear(&element->autocorrelation_lock);
+	g_cond_clear(&element->autocorrelation_available);
 	if(element->autocorrelation_matrix) {
 		gsl_matrix_complex_free(element->autocorrelation_matrix);
 		element->autocorrelation_matrix = NULL;
@@ -1058,8 +1056,8 @@ static void gstlal_autochisq_init(GSTLALAutoChiSq *filter)
 {
 	filter->latency = DEFAULT_LATENCY;
 	filter->adapter = NULL;
-	filter->autocorrelation_lock = g_mutex_new();
-	filter->autocorrelation_available = g_cond_new();
+	g_mutex_init(&filter->autocorrelation_lock);
+	g_cond_init(&filter->autocorrelation_available);
 	filter->autocorrelation_matrix = NULL;
 	filter->autocorrelation_mask_matrix = NULL;
 	filter->autocorrelation_norm = NULL;

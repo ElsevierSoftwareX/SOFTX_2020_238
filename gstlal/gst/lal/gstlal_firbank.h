@@ -81,8 +81,8 @@ struct _GSTLALFIRBank {
 	 */
 
 	gboolean time_domain;
-	GMutex *fir_matrix_lock;
-	GCond *fir_matrix_available;
+	GMutex fir_matrix_lock;
+	GCond fir_matrix_available;
 	gsl_matrix *fir_matrix;
 	gint64 latency;
 	gint block_stride;	/* for frequency-domain mode */

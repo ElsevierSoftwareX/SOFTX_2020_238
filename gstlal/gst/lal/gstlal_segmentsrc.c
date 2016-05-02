@@ -380,10 +380,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            g_mutex_lock(element->segment_matrix_lock);
+            g_mutex_lock(&element->segment_matrix_lock);
             gstlal_segment_list_free(element->seglist);
             element->seglist = gstlal_segment_list_from_g_value_array(g_value_get_boxed(value));
-            g_mutex_unlock(element->segment_matrix_lock);
+            g_mutex_unlock(&element->segment_matrix_lock);
             break;
         case ARG_INVERT_OUTPUT:
             element->invert_output = g_value_get_boolean(value);
@@ -411,11 +411,11 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            g_mutex_lock(element->segment_matrix_lock);
+            g_mutex_lock(&element->segment_matrix_lock);
             if(element->seglist)
                 g_value_take_boxed(value, g_value_array_from_gstlal_segment_list(element->seglist));
             /* FIXME:  else? */
-            g_mutex_unlock(element->segment_matrix_lock);
+            g_mutex_unlock(&element->segment_matrix_lock);
             break;
         case ARG_INVERT_OUTPUT:
             g_value_set_boolean(value, element->invert_output);
@@ -445,8 +445,7 @@ static void finalize(GObject *object)
 
     gstlal_segment_list_free(element->seglist);
     element->seglist = NULL;
-    g_mutex_free(element->segment_matrix_lock);
-    element->segment_matrix_lock = NULL;
+    g_mutex_clear(&element->segment_matrix_lock);
 
     /*
      * chain to parent class' finalize() method
@@ -558,6 +557,6 @@ static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src)
     segment_src->seglist = NULL;
     segment_src->rate = 0;
     segment_src->offset = 0;
-    segment_src->segment_matrix_lock = g_mutex_new();
+    g_mutex_init(&segment_src->segment_matrix_lock);
     gst_base_src_set_format(GST_BASE_SRC(segment_src), GST_FORMAT_TIME);
 }

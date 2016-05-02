@@ -314,9 +314,9 @@ static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, Gs
 	 * wait loop
 	 */
 
-	g_mutex_lock(element->control_lock);
+	g_mutex_lock(&element->control_lock);
 	element->t_sink_head = tmax;
-	g_cond_broadcast(element->control_queue_head_changed);
+	g_cond_broadcast(&element->control_queue_head_changed);
 	while(1) {
 		guint i;
 
@@ -351,9 +351,9 @@ static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, Gs
 		 */
 
 		GST_DEBUG_OBJECT(element, "waiting for control to advance to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmax));
-		g_cond_wait(element->control_queue_head_changed, element->control_lock);
+		g_cond_wait(&element->control_queue_head_changed, &element->control_lock);
 	}
-	g_mutex_unlock(element->control_lock);
+	g_mutex_unlock(&element->control_lock);
 }
 
 
@@ -670,10 +670,10 @@ static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
-		g_mutex_lock(gate->control_lock);
+		g_mutex_lock(&gate->control_lock);
 		gate->control_sample_func = control_sample_func;
 		gate->control_rate = rate;
-		g_mutex_unlock(gate->control_lock);
+		g_mutex_unlock(&gate->control_lock);
 	} else
 		GST_ERROR_OBJECT(gate, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
 
@@ -713,10 +713,10 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 	 * wait until this buffer is needed
 	 */
 
-	g_mutex_lock(element->control_lock);
+	g_mutex_lock(&element->control_lock);
 	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_sink_head) || !element->control_segments->len)) {
 		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(sinkbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_sink_head);
-		g_cond_wait(element->control_queue_head_changed, element->control_lock);
+		g_cond_wait(&element->control_queue_head_changed, &element->control_lock);
 	}
 
 	/*
@@ -725,7 +725,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 
 	if(element->sink_eos) {
 		GST_DEBUG_OBJECT(pad, "sink is at end-of-stream, discarding buffer");
-		g_mutex_unlock(element->control_lock);
+		g_mutex_unlock(&element->control_lock);
 		goto done;
 	}
 
@@ -753,8 +753,8 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 		}
 	}
 	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-	g_cond_broadcast(element->control_queue_head_changed);
-	g_mutex_unlock(element->control_lock);
+	g_cond_broadcast(&element->control_queue_head_changed);
+	g_mutex_unlock(&element->control_lock);
 
 	/*
 	 * done
@@ -781,18 +781,18 @@ static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_SEGMENT:
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing control queue");
-		g_mutex_lock(element->control_lock);
+		g_mutex_lock(&element->control_lock);
 		element->control_eos = FALSE;
 		control_flush(element);
-		g_mutex_unlock(element->control_lock);
+		g_mutex_unlock(&element->control_lock);
 		break;
 
 	case GST_EVENT_EOS:
 		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag");
-		g_mutex_lock(element->control_lock);
+		g_mutex_lock(&element->control_lock);
 		element->control_eos = TRUE;
-		g_cond_broadcast(element->control_queue_head_changed);
-		g_mutex_unlock(element->control_lock);
+		g_cond_broadcast(&element->control_queue_head_changed);
+		g_mutex_unlock(&element->control_lock);
 		break;
 
 	case GST_EVENT_CAPS:
@@ -1031,13 +1031,13 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 		 * find the next interval of continuous control state
 		 */
 
-		g_mutex_lock(element->control_lock);
+		g_mutex_lock(&element->control_lock);
 		state = control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) start - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) start + element->attack_length, element->rate));
 		for(length = 1; start + length < sinkbuf_length; length++) {
 			if(state != control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) + element->attack_length, element->rate)))
 				break;
 		}
-		g_mutex_unlock(element->control_lock);
+		g_mutex_unlock(&element->control_lock);
 
 		/*
 		 * if the output state has changed, tell the world about it
@@ -1150,21 +1150,21 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_SEGMENT:
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag");
-		g_mutex_lock(element->control_lock);
+		g_mutex_lock(&element->control_lock);
 		element->t_sink_head = GST_CLOCK_TIME_NONE;
 		element->sink_eos = FALSE;
 		element->last_state = -1;	/* force signal on initial state */
 		element->need_discont = TRUE;
-		g_mutex_unlock(element->control_lock);
+		g_mutex_unlock(&element->control_lock);
 		break;
 
 	case GST_EVENT_EOS:
 		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag and flushing control queue");
-		g_mutex_lock(element->control_lock);
+		g_mutex_lock(&element->control_lock);
 		element->sink_eos = TRUE;
 		control_flush(element);
-		g_cond_broadcast(element->control_queue_head_changed);
-		g_mutex_unlock(element->control_lock);
+		g_cond_broadcast(&element->control_queue_head_changed);
+		g_mutex_unlock(&element->control_lock);
 		break;
 
 	case GST_EVENT_CAPS:
@@ -1295,12 +1295,10 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
-	g_mutex_free(element->control_lock);
-	element->control_lock = NULL;
+	g_mutex_clear(&element->control_lock);
 	g_array_unref(element->control_segments);
 	element->control_segments = NULL;
-	g_cond_free(element->control_queue_head_changed);
-	element->control_queue_head_changed = NULL;
+	g_cond_clear(&element->control_queue_head_changed);
 
 	G_OBJECT_CLASS(gstlal_gate_parent_class)->finalize(object);
 }
@@ -1535,12 +1533,12 @@ static void gstlal_gate_init(GSTLALGate *element)
 	element->srcpad = pad;
 
 	/* internal data */
-	element->control_lock = g_mutex_new();
+	g_mutex_init(&element->control_lock);
 	element->control_eos = FALSE;
 	element->sink_eos = FALSE;
 	element->t_sink_head = GST_CLOCK_TIME_NONE;
 	element->control_segments = g_array_new(FALSE, FALSE, sizeof(struct control_segment));
-	element->control_queue_head_changed = g_cond_new();
+	g_cond_init(&element->control_queue_head_changed);
 	element->control_sample_func = NULL;
 	element->last_state = -1;	/* force signal on initial state */
 	element->rate = 0;

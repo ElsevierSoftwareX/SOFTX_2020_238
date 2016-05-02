@@ -29,7 +29,7 @@ typedef struct _GSTLALSegmentSrcClass GSTLALSegmentSrcClass;
 struct _GSTLALSegmentSrc {
     GstBaseSrc			element;
 
-    GMutex			*segment_matrix_lock;
+    GMutex			segment_matrix_lock;
     struct gstlal_segment_list	*seglist;
     gboolean			invert_output;
     gint			rate;

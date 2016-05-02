@@ -94,8 +94,8 @@ struct _GSTLALAutoChiSq {
 	 * autocorrelation info
 	 */
 
-	GMutex *autocorrelation_lock;
-	GCond *autocorrelation_available;
+	GMutex autocorrelation_lock;
+	GCond autocorrelation_available;
 	gsl_matrix_complex *autocorrelation_matrix;
 	gsl_matrix_int *autocorrelation_mask_matrix;
 	gsl_vector *autocorrelation_norm;

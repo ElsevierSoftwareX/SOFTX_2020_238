@@ -1250,14 +1250,14 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 * equal the number of FIR filters.
 		 */
 
-		g_mutex_lock(element->fir_matrix_lock);
+		g_mutex_lock(&element->fir_matrix_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			if(element->fir_matrix)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, fir_channels(element), NULL);
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		}
-		g_mutex_unlock(element->fir_matrix_lock);
+		g_mutex_unlock(&element->fir_matrix_lock);
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -1295,10 +1295,10 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	 * wait for FIR matrix
 	 */
 
-	g_mutex_lock(element->fir_matrix_lock);
+	g_mutex_lock(&element->fir_matrix_lock);
 	while(!element->fir_matrix) {
 		GST_DEBUG_OBJECT(element, "fir matrix not available, waiting ...");
-		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
+		g_cond_wait(&element->fir_matrix_available, &element->fir_matrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
 			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for fir matrix");
 			success = FALSE;
@@ -1336,7 +1336,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	}
 
 done:
-	g_mutex_unlock(element->fir_matrix_lock);
+	g_mutex_unlock(&element->fir_matrix_lock);
 	return success;
 }
 
@@ -1446,13 +1446,13 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 		 * least make sure the adapter's contents are wiped
 		 */
 
-		g_mutex_lock(element->fir_matrix_lock);
+		g_mutex_lock(&element->fir_matrix_lock);
 		if(element->fir_matrix) {
 			if(flush_history(element) != GST_FLOW_OK)
 				GST_WARNING_OBJECT(element, "unable to process internal history, some data at end of stream has been discarded");
 		} else
 			gst_audioadapter_clear(element->adapter);
-		g_mutex_unlock(element->fir_matrix_lock);
+		g_mutex_unlock(&element->fir_matrix_lock);
 		break;
 
 	default:
@@ -1487,10 +1487,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * wait for FIR matrix
 	 */
 
-	g_mutex_lock(element->fir_matrix_lock);
+	g_mutex_lock(&element->fir_matrix_lock);
 	while(G_UNLIKELY(!element->fir_matrix)) {
 		GST_DEBUG_OBJECT(element, "fir matrix not available, waiting ...");
-		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
+		g_cond_wait(&element->fir_matrix_available, &element->fir_matrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
 			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for fir matrix");
 			result = GST_FLOW_FLUSHING;
@@ -1646,7 +1646,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 done:
-	g_mutex_unlock(element->fir_matrix_lock);
+	g_mutex_unlock(&element->fir_matrix_lock);
 	return result;
 }
 
@@ -1682,7 +1682,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	switch (prop_id) {
 	case ARG_TIME_DOMAIN: {
 		gboolean time_domain;
-		g_mutex_lock(element->fir_matrix_lock);
+		g_mutex_lock(&element->fir_matrix_lock);
 		time_domain = g_value_get_boolean(value);
 		if(element->time_domain != time_domain)
 			/*
@@ -1691,13 +1691,13 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 			free_workspace(element);
 		element->time_domain = time_domain;
-		g_mutex_unlock(element->fir_matrix_lock);
+		g_mutex_unlock(&element->fir_matrix_lock);
 		break;
 	}
 
 	case ARG_BLOCK_STRIDE: {
 		gint block_stride;
-		g_mutex_lock(element->fir_matrix_lock);
+		g_mutex_lock(&element->fir_matrix_lock);
 		block_stride = g_value_get_int(value);
 		if(block_stride != element->block_stride && !element->time_domain)
 			/*
@@ -1706,13 +1706,13 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 			free_workspace(element);
 		element->block_stride = block_stride;
-		g_mutex_unlock(element->fir_matrix_lock);
+		g_mutex_unlock(&element->fir_matrix_lock);
 		break;
 	}
 
 	case ARG_FIR_MATRIX: {
 		unsigned channels;
-		g_mutex_lock(element->fir_matrix_lock);
+		g_mutex_lock(&element->fir_matrix_lock);
 		if(element->fir_matrix) {
 			channels = fir_channels(element);
 			gsl_matrix_free(element->fir_matrix);
@@ -1740,8 +1740,8 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * signal availability of new time-domain filters
 		 */
 
-		g_cond_broadcast(element->fir_matrix_available);
-		g_mutex_unlock(element->fir_matrix_lock);
+		g_cond_broadcast(&element->fir_matrix_available);
+		g_mutex_unlock(&element->fir_matrix_lock);
 		break;
 	}
 
@@ -1779,10 +1779,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 
 	case ARG_FIR_MATRIX:
-		g_mutex_lock(element->fir_matrix_lock);
+		g_mutex_lock(&element->fir_matrix_lock);
 		if(element->fir_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->fir_matrix));
-		g_mutex_unlock(element->fir_matrix_lock);
+		g_mutex_unlock(&element->fir_matrix_lock);
 		break;
 
 	case ARG_LATENCY:
@@ -1813,9 +1813,9 @@ static void dispose(GObject *object)
 	 * state should be NULL causing those threads to bail out
 	 */
 
-	g_mutex_lock(element->fir_matrix_lock);
-	g_cond_broadcast(element->fir_matrix_available);
-	g_mutex_unlock(element->fir_matrix_lock);
+	g_mutex_lock(&element->fir_matrix_lock);
+	g_cond_broadcast(&element->fir_matrix_available);
+	g_mutex_unlock(&element->fir_matrix_lock);
 
 	G_OBJECT_CLASS(gstlal_firbank_parent_class)->dispose(object);
 }
@@ -1834,10 +1834,8 @@ static void finalize(GObject *object)
 	 * free resources
 	 */
 
-	g_mutex_free(element->fir_matrix_lock);
-	element->fir_matrix_lock = NULL;
-	g_cond_free(element->fir_matrix_available);
-	element->fir_matrix_available = NULL;
+	g_mutex_clear(&element->fir_matrix_lock);
+	g_cond_clear(&element->fir_matrix_available);
 	if(element->fir_matrix) {
 		gsl_matrix_free(element->fir_matrix);
 		element->fir_matrix = NULL;
@@ -1999,8 +1997,8 @@ static void gstlal_firbank_init(GSTLALFIRBank *filter)
 	filter->latency = 0;
 	filter->adapter = NULL;
 	filter->time_domain = FALSE;
-	filter->fir_matrix_lock = g_mutex_new();
-	filter->fir_matrix_available = g_cond_new();
+	g_mutex_init(&filter->fir_matrix_lock);
+	g_cond_init(&filter->fir_matrix_available);
 	filter->fir_matrix = NULL;
 	memset(&filter->workspace, 0, sizeof(filter->workspace));
 	filter->last_new_segment = NULL;
