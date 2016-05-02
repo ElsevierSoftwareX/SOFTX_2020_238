@@ -370,9 +370,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		result = GST_FLOW_OK;
 	} else {
 		/* drop part of buffer, pass the rest */
-		GstBuffer *srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_META | GST_BUFFER_COPY_MEMORY, dropsize, gst_buffer_get_size(sinkbuf) - dropsize);
+		GstBuffer *srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS, dropsize, gst_buffer_get_size(sinkbuf) - dropsize);
 		GstClockTime toff = gst_util_uint64_scale_int_round(element->drop_samples, GST_SECOND, element->rate);
-		gst_buffer_copy_into(srcbuf, sinkbuf, GST_BUFFER_COPY_METADATA, dropsize, gst_buffer_get_size(sinkbuf) - dropsize);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + element->drop_samples;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_END(sinkbuf);
 		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + toff;
