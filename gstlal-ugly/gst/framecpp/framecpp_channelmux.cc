@@ -920,6 +920,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 		goto could_not_create_appdata;
 	get_appdata(data)->nDims = 1;
 	get_appdata(data)->dims = new FrameCPP::Dimension[get_appdata(data)->nDims];
+	gst_object_ref(pad);	/* we need to return a reference */
 	if(!gst_element_add_pad(element, GST_PAD(pad)))
 		goto could_not_add_to_element;
 	GST_OBJECT_UNLOCK(mux->collect);
@@ -956,7 +957,6 @@ static void release_pad(GstElement *element, GstPad *pad)
 
 	GST_OBJECT_LOCK(mux->collect);
 	framecpp_muxcollectpads_remove_pad(mux->collect, pad);
-	gst_element_remove_pad(element, pad);
 	GST_OBJECT_UNLOCK(mux->collect);
 
 	mux->need_tag_list = TRUE;

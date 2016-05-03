@@ -867,11 +867,8 @@ static void dispose(GObject *object)
 {
 	FrameCPPMuxCollectPads *collectpads = FRAMECPP_MUXCOLLECTPADS(object);
 
-/* FIXME:  this segfaults.  why?
 	while(collectpads->pad_list)
 		framecpp_muxcollectpads_remove_pad(collectpads, ((FrameCPPMuxCollectPadsData *) collectpads->pad_list->data)->pad);
-*/
-	collectpads->pad_list = NULL;
 
 	G_OBJECT_CLASS(framecpp_muxcollectpads_parent_class)->dispose(object);
 }
