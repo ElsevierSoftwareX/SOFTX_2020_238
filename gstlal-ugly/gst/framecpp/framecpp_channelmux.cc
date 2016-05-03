@@ -1165,7 +1165,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 
 /*
- * Instance finalize function.  See ???
+ * Instance finalize function.
  */
 
 
