@@ -68,7 +68,7 @@ G_BEGIN_DECLS
 typedef struct _FrameCPPMuxCollectPadsClass FrameCPPMuxCollectPadsClass;
 typedef struct _FrameCPPMuxCollectPads FrameCPPMuxCollectPads;
 typedef struct _FrameCPPMuxCollectPadsData FrameCPPMuxCollectPadsData;
-typedef void (*FrameCPPMuxCollectPadsDataDestroyNotify) (FrameCPPMuxCollectPadsData *);
+typedef void (*FrameCPPMuxCollectPadsDataDestroyNotify) (gpointer);
 
 
 struct _FrameCPPMuxCollectPadsClass {

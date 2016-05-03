@@ -212,10 +212,10 @@ typedef struct _framecpp_channelmux_appdata {
 } framecpp_channelmux_appdata;
 
 
-static void framecpp_channelmux_appdata_free(framecpp_channelmux_appdata *appdata)
+static void framecpp_channelmux_appdata_free(gpointer appdata)
 {
 	if(appdata)
-		delete[] appdata->dims;
+		delete[] ((framecpp_channelmux_appdata *) appdata)->dims;
 	g_free(appdata);
 }
 
@@ -911,7 +911,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	 */
 
 	GST_OBJECT_LOCK(mux->collect);
-	data = framecpp_muxcollectpads_add_pad(mux->collect, GST_PAD(pad), (FrameCPPMuxCollectPadsDataDestroyNotify) GST_DEBUG_FUNCPTR(framecpp_channelmux_appdata_free));
+	data = framecpp_muxcollectpads_add_pad(mux->collect, GST_PAD(pad), GST_DEBUG_FUNCPTR(framecpp_channelmux_appdata_free));
 	if(!data)
 		goto could_not_add_to_collectpads;
 	framecpp_muxcollectpads_set_event_function(data, GST_DEBUG_FUNCPTR(sink_event));

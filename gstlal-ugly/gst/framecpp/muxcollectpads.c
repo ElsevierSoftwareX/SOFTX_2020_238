@@ -506,7 +506,7 @@ gboolean framecpp_muxcollectpads_remove_pad(FrameCPPMuxCollectPads *collectpads,
 	GST_OBJECT_LOCK(pad);
 	data = gst_pad_get_element_private(pad);
 	if(data->destroy_notify)
-		data->destroy_notify(data);
+		data->destroy_notify(data->appdata);
 	gst_pad_set_element_private(pad, NULL);
 	GST_OBJECT_UNLOCK(pad);
 	if(!collectpads->started)
