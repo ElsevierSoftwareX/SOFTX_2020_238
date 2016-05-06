@@ -103,14 +103,13 @@ PKG_PROG_PKG_CONFIG()
 #
 
 
-AM_PATH_PYTHON([2.6],,)
+MIN_PYTHON_VERSION="2.7"
+AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
 # hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
 # Debian and SL6.  FIXME:  find a way to do this properly
 PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
-# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
-# AX_PYTHON_DEVEL!?
-PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
+AC_SUBST([MIN_PYTHON_VERSION])
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
 AC_SUBST([pkgpyexecdir], ["\${pyexecdir}/gstlal"])
@@ -149,9 +148,9 @@ AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
 #
 
 
-AC_SUBST([GSTREAMER_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.32])
-PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
+AC_SUBST([GSTREAMER_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_VERSION], [1.2.4])
+PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-controller-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
 AC_SUBST([plugindir], [${libdir}/gstreamer-${GSTREAMER_RELEASE}])
@@ -180,8 +179,8 @@ AM_CONDITIONAL([COND_GSTBASEPARSE], [test "x${HAVE_GSTBASEPARSE}" == "xyes"])
 #
 
 
-AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_AUDIO_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE} >= ${MIN_GSTREAMER_AUDIO_VERSION}])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
@@ -192,9 +191,18 @@ AC_SUBST([gstreamer_audio_LIBS])
 #
 
 
-PKG_CHECK_MODULES([pygobject], [pygobject-2.0])
-AC_SUBST([pygobject_CFLAGS])
-AC_SUBST([pygobject_LIBS])
+GOBJECT_INTROSPECTION_CHECK([1.30.0])
+AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
+AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
+AS_IF([test "x$found_introspection" = "xyes"], [
+	AC_SUBST([girdir], ["\${datadir}/gir-1.0"])
+	AC_SUBST([typelibdir], ["\${libdir}/girepository-1.0"])
+	AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gobject introspection typelib search path, you might need to add the directory
+
+	$typelibdir
+
+to your GI_TYPELIB_PATH environment variable.])
+])
 
 
 #
@@ -218,7 +226,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.15.0])
+AC_SUBST([MIN_LAL_VERSION], [6.15.2])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
@@ -231,7 +239,7 @@ AC_SUBST([LAL_LIBS])
 
 
 AC_SUBST([MIN_GLUE_VERSION], [1.49])
-AC_SUBST([MIN_PYLAL_VERSION], [0.8.0])
+AC_SUBST([MIN_PYLAL_VERSION], [0.9.0])
 AX_PYTHON_GLUE()
 AX_PYTHON_PYLAL()
 
@@ -241,7 +249,7 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.10.3])
+AC_SUBST([MIN_GSTLAL_VERSION], [0.10.4])
 AC_SUBST([MIN_GSTLALUGLY_VERSION], [0.9.2])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
