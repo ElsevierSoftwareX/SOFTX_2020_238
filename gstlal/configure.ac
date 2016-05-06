@@ -115,7 +115,7 @@ AC_SUBST([MIN_GTK_DOC_VERSION])
 #
 
 
-MIN_PYTHON_VERSION="2.6"
+MIN_PYTHON_VERSION="2.7"
 AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
 # hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
