@@ -55,7 +55,146 @@ static const char gst_lalwings_doc[] =
 #include <math.h>  /* to use round() */
 
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 #include "gstlal_wings.h"
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Transform
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * Where data processing takes place.
+ */
+static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
+{
+    GstLalwings *elem = GST_LALWINGS(trans);
+    guint64 b0, b1, c0, c1;
+    gboolean inv = elem->inverse;
+
+    /* Short notation */ 
+    if (elem->timestamp) {
+        b0 = GST_BUFFER_TIMESTAMP(buf);
+        b1 = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+        c0 = elem->initial_timestamp;
+        c1 = elem->final_timestamp;
+    }
+    else {
+        b0 = GST_BUFFER_OFFSET(buf);
+        b1 = GST_BUFFER_OFFSET_END(buf);
+        c0 = elem->initial_offset;
+        c1 = elem->final_offset;
+    }        
+
+    /*                  c0-------c1                   c0-------c1
+     *    b0xxxxxxb1                      or                        b0xxxxxxb1
+     */
+    if (c0 >= b1 || c1 <= b0) { /* buffer completely outside the region */
+        if (inv) /* keep */
+            return GST_FLOW_OK;
+        /* discard */
+        gst_buffer_unref(buf);
+        return GST_BASE_TRANSFORM_FLOW_DROPPED;
+    }
+
+    /*                  c0-------c1
+     *                     b0xb1
+     */
+    if (c0 <= b0 && b1 <= c1) {  /* buffer completely inside the region */
+        if (!inv) /* keep */
+            return GST_FLOW_OK;
+        /* discard */
+        gst_buffer_unref(buf);
+        return GST_BASE_TRANSFORM_FLOW_DROPPED;
+    }
+
+    /*                  c0-------c1
+     *              b0xxxxxxb1
+     */
+    if (b0 <= c0 && b1 <= c1) {
+        guint64 num = c0 - b0;
+        guint64 den = b1 - b0;
+        guint64 byte_offset = gst_util_uint64_scale_int_round (gst_buffer_get_size (buf), num, den);
+	guint64 offsets = gst_util_uint64_scale_int_round (GST_BUFFER_OFFSET_END (buf) - GST_BUFFER_OFFSET (buf), num, den);
+        GstClockTime duration = gst_util_uint64_scale_int_round (GST_BUFFER_DURATION (buf), num, den);
+        if (inv) { /* keep 1st part */
+            gst_buffer_resize (buf, 0, byte_offset);
+            GST_BUFFER_DURATION (buf) = duration;
+            GST_BUFFER_OFFSET_END (buf) = GST_BUFFER_OFFSET (buf) + offsets;
+        }
+        else {	/* keep 2nd part */
+            gst_buffer_resize (buf, byte_offset, gst_buffer_get_size (buf));
+            GST_BUFFER_TIMESTAMP (buf) += GST_BUFFER_DURATION (buf) - duration;
+            GST_BUFFER_DURATION (buf) = duration;
+            GST_BUFFER_OFFSET (buf) = GST_BUFFER_OFFSET_END (buf) - offsets;
+        }
+        return GST_FLOW_OK;
+    }
+
+    /*                  c0-------c1
+     *                       b0xxxxxxb1
+     */
+    if (c0 <= b0 && c1 <= b1) {
+        guint64 num = c1 - b0;
+        guint64 den = b1 - b0;
+        guint64 byte_offset = gst_util_uint64_scale_int_round (gst_buffer_get_size (buf), num, den);
+	guint64 offsets = gst_util_uint64_scale_int_round (GST_BUFFER_OFFSET_END (buf) - GST_BUFFER_OFFSET (buf), num, den);
+        GstClockTime duration = gst_util_uint64_scale_int_round (GST_BUFFER_DURATION (buf), num, den);
+        if (!inv) { /* keep 1st part */
+            gst_buffer_resize (buf, 0, byte_offset);
+            GST_BUFFER_DURATION (buf) = duration;
+            GST_BUFFER_OFFSET_END (buf) = GST_BUFFER_OFFSET (buf) + offsets;
+        }
+        else {	/* keep 2nd part */
+            gst_buffer_resize (buf, byte_offset, gst_buffer_get_size (buf));
+            GST_BUFFER_TIMESTAMP (buf) += GST_BUFFER_DURATION (buf) - duration;
+            GST_BUFFER_DURATION (buf) = duration;
+            GST_BUFFER_OFFSET (buf) = GST_BUFFER_OFFSET_END (buf) - offsets;
+        }
+        return GST_FLOW_OK;
+    }
+
+    /*                  c0-------c1
+     *              b0xxxxxxxxxxxxxxxb1
+     */
+    gsize start_byte_offset = gst_util_uint64_scale_int_round (gst_buffer_get_size (buf), c0 - b0, b1 - b0);
+    gsize end_byte_offset = gst_util_uint64_scale_int_round (gst_buffer_get_size (buf), c1 - b0, b1 - b0);
+
+    if (!inv) {	/* keep middle part of buffer */
+        gst_buffer_resize (buf, start_byte_offset, end_byte_offset - start_byte_offset);
+        GST_BUFFER_TIMESTAMP (buf) += gst_util_uint64_scale_int_round (GST_BUFFER_DURATION (buf), c0 - b0, b1 - b0);
+        GST_BUFFER_DURATION (buf) = gst_util_uint64_scale_int_round (GST_BUFFER_DURATION (buf), c1 - c0, b1 - b0);
+        /* FIXME: offsets */
+        return GST_FLOW_OK;
+    }
+
+    /* push 1st part and keep last part for calling code */
+    GstBuffer *new = gst_buffer_copy_region (buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_MEMORY | GST_BUFFER_COPY_TIMESTAMPS, 0, start_byte_offset);
+    GST_BUFFER_DURATION (new) = gst_util_uint64_scale_int_round (GST_BUFFER_DURATION (buf), c0 - b0, b1 - b0);
+    GST_BUFFER_OFFSET_END (new) = GST_BUFFER_OFFSET (buf) + gst_util_uint64_scale_int_round (GST_BUFFER_OFFSET_END (buf) - GST_BUFFER_OFFSET (buf), c0 - b0, b1 - b0);
+    GstFlowReturn ret = gst_pad_push(GST_BASE_TRANSFORM_SRC_PAD(trans), new);
+    if (ret != GST_FLOW_OK)
+        return ret;
+
+    gst_buffer_resize (buf, end_byte_offset, gst_buffer_get_size (buf) - end_byte_offset);
+    GST_BUFFER_TIMESTAMP (buf) += gst_util_uint64_scale_int_round (GST_BUFFER_DURATION (buf), c1 - b0, b1 - b0);
+    GST_BUFFER_OFFSET (buf) += gst_util_uint64_scale_int_round (GST_BUFFER_OFFSET_END (buf) - GST_BUFFER_OFFSET (buf), c1 - b0, b1 - b0);
+    return GST_FLOW_OK;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Properties
+ *
+ * ============================================================================
+ */
 
 
 enum {
@@ -67,175 +206,6 @@ enum {
     PROP_INVERSE,
     PROP_TIMESTAMP
 };
-
-
-static void set_property(GObject *object, guint prop_id,
-                         const GValue *value, GParamSpec *pspec);
-static void get_property(GObject *object, guint prop_id,
-                         GValue *value, GParamSpec *pspec);
-
-static GstFlowReturn chain(GstPad *pad, GstBuffer *buf);
-
-
-/*
- * ============================================================================
- *
- *                                Type Support
- *
- * ============================================================================
- */
-
-GST_DEBUG_CATEGORY_STATIC(gst_lalwings_debug);  // define category (statically)
-#define GST_CAT_DEFAULT gst_lalwings_debug      // set as default
-
-static void additional_initializations(GType type)
-{
-    GST_DEBUG_CATEGORY_INIT(gst_lalwings_debug, "lal_wings", 0,
-                            "gstlal wings element");
-}
-
-GST_BOILERPLATE_FULL(GstLalwings, gst_lalwings, GstElement,
-                     GST_TYPE_ELEMENT, additional_initializations);
-
-// See http://library.gnome.org/devel/gstreamer/unstable/gstreamer-GstInfo.html
-
-/*
- * Base init function.
- *
- * Element description and pads description.
- */
-static void gst_lalwings_base_init(gpointer g_class)
-{
-    GstElementClass *gstelement_class = GST_ELEMENT_CLASS(g_class);
-
-    /* Element description. */
-    gst_element_class_set_details_simple(
-        gstelement_class,
-        "Trim data",
-        "Filter-like",
-        gst_lalwings_doc,
-        "Madeline Wade <madeline.wade@ligo.org>");
-
-    /* Pad description. */
-    gst_element_class_add_pad_template(
-        gstelement_class,
-        gst_pad_template_new(
-            "sink",
-            GST_PAD_SINK,
-            GST_PAD_ALWAYS,
-            gst_caps_from_string("ANY")));
-
-    gst_element_class_add_pad_template(
-        gstelement_class,
-        gst_pad_template_new(
-            "src",
-            GST_PAD_SRC,
-            GST_PAD_ALWAYS,
-            gst_caps_from_string("ANY")));
-}
-
-
-/*
- * Class init function.
- *
- * Specify properties ("arguments").
- */
-static void gst_lalwings_class_init(GstLalwingsClass *klass)
-{
-    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-
-    gobject_class->set_property = set_property;
-    gobject_class->get_property = get_property;
-
-    /* Specify properties. See:
-     * http://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-class-install-property
-     * and the collection of g_param_spec_*() at
-     * http://developer.gnome.org/gobject/unstable/gobject-Standard-Parameter-and-Value-Types.html
-     */
-    g_object_class_install_property(
-        gobject_class, PROP_INITIAL_OFFSET,
-        g_param_spec_uint64(
-            "initial-offset", "initial offset.",
-            "Only let data with offset bigger than this value pass.",
-            0, G_MAXUINT64, 0,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-    g_object_class_install_property(
-        gobject_class, PROP_FINAL_OFFSET,
-        g_param_spec_uint64(
-            "final-offset", "final offset.",
-            "Only let data with offset smaller than this value pass",
-            0, G_MAXUINT64, 0,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-    
-    g_object_class_install_property(
-        gobject_class, PROP_INITIAL_TIMESTAMP,
-        g_param_spec_uint64(
-            "initial-timestamp", "initial timestamp.",
-            "Only let data with timestamp bigger than this value pass",
-            0, G_MAXUINT64, 0,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-    g_object_class_install_property(
-        gobject_class, PROP_FINAL_TIMESTAMP,
-        g_param_spec_uint64(
-            "final-timestamp", "final timestamp.",
-            "Only let data with timestamp smaller than this value pass",
-            0, G_MAXUINT64, 0,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-    g_object_class_install_property(
-        gobject_class, PROP_INVERSE,
-        g_param_spec_boolean(
-            "inverse", "inverse.",
-            "If set only data *outside* the region will pass.",
-            FALSE,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-    g_object_class_install_property(
-        gobject_class, PROP_TIMESTAMP,
-        g_param_spec_boolean(
-            "timestamp", "timestamp.",
-            "If set use timestamps to determine data boundaries.",
-            FALSE,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-}
-
-
-/*
- * Instance init function.
- *
- * Initialize instance. Give default values.
- */
-static void gst_lalwings_init(GstLalwings *elem, GstLalwingsClass *g_class)
-{
-    //gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(elem), TRUE);
-    gst_element_create_all_pads(GST_ELEMENT(elem));
-
-    /* Pad through which data comes in to the element (sink pad) */
-    elem->sinkpad = gst_element_get_static_pad(GST_ELEMENT(elem), "sink");
-    gst_pad_set_chain_function(elem->sinkpad, chain);
-
-    /* Pad through which data goes out of the element (src pad) */
-    elem->srcpad = gst_element_get_static_pad(GST_ELEMENT(elem), "src");
-
-    /* Properties initial value */
-    elem->initial_offset = 0;
-    elem->final_offset = 0;
-    elem->initial_timestamp = 0;
-    elem->final_timestamp = 0;
-    elem->inverse = FALSE;
-    elem->timestamp = FALSE;
-}
-
-
-/*
- * ============================================================================
- *
- *                                 Properties
- *
- * ============================================================================
- */
 
 
 static void set_property(GObject *object, guint prop_id,
@@ -303,172 +273,135 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 /*
  * ============================================================================
  *
- *                                Chain
+ *                                Type Support
  *
  * ============================================================================
  */
 
 
+#define GST_CAT_DEFAULT gst_lalwings_debug      // set as default
+GST_DEBUG_CATEGORY_STATIC(gst_lalwings_debug);  // define category (statically)
+
+
+G_DEFINE_TYPE_WITH_CODE(
+    GstLalwings,
+    gst_lalwings,
+    GST_TYPE_BASE_TRANSFORM,
+    GST_DEBUG_CATEGORY_INIT(gst_lalwings_debug, "lal_wings", 0,
+                            "gstlal wings element")
+ );
+
+
+// See http://library.gnome.org/devel/gstreamer/unstable/gstreamer-GstInfo.html
+
 /*
- * Auxiliary function used in chain(). Push a subbuffer into pad,
- * constructed from buffer template, that spans from the fractions of
- * the original buffer specified in f0, f1.
+ * Class init function.
  *
- * f0, f1: fractions of the original buffer that are going to be
- * sent. For example, if sending the middle half, f0=0.25, f1=0.75.
- *
- * If gap==TRUE, send subbuffer as a gap.
- *
- * As with gst_pad_push(), in all cases, success or failure, the caller
- * loses its reference to "template" after calling this function.
+ * Specify properties ("arguments").
  */
-static GstFlowReturn push_subbuf(GstPad *pad, GstBuffer *template,
-                                 gdouble f0, gdouble f1, gboolean gap)
+static void gst_lalwings_class_init(GstLalwingsClass *klass)
 {
-    GstFlowReturn result = GST_FLOW_OK;
-    GstBuffer *buf;
+    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+    GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
+    GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
-    if (f1-f0 < 1e-14) {  /* if negative interval, or really small... */
-        gst_buffer_unref(template);
-        return GST_FLOW_OK;  /* don't bother with them! */
-    }
+    /* Element description. */
+    gst_element_class_set_details_simple(
+        gstelement_class,
+        "Trim data",
+        "Filter-like",
+        gst_lalwings_doc,
+        "Madeline Wade <madeline.wade@ligo.org>");
 
-    guint size = GST_BUFFER_SIZE(template);
-    guint64 s0 = GST_BUFFER_OFFSET(template);      /* first sample */
-    guint64 s1 = GST_BUFFER_OFFSET_END(template);  /* last sample + 1 */
-    GstClockTime t = GST_BUFFER_TIMESTAMP(template);
-    GstClockTime dt = GST_BUFFER_DURATION(template);
+    gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+    gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 
-    if (gap) {
-        result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE,
-                                      0, GST_PAD_CAPS(pad), &buf);
-    }
-    else {
-        buf = gst_buffer_create_sub(template, (guint) round(f0 * size),
-                                    (guint) round((f1-f0) * size));
-        result = (buf != NULL) ? GST_FLOW_OK : GST_FLOW_ERROR;
-    }
+    transform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
 
-    if (result != GST_FLOW_OK) {
-        GST_ERROR("gst_pad_alloc_buffer() failed allocating buffer");
-        gst_buffer_unref(template);
-        return result;
-    }
+    /* Pad description. */
+    gst_element_class_add_pad_template(
+        gstelement_class,
+        gst_pad_template_new(
+            GST_BASE_TRANSFORM_SINK_NAME,
+            GST_PAD_SINK,
+            GST_PAD_ALWAYS,
+            gst_caps_from_string("ANY")));
 
-    gst_buffer_copy_metadata(buf, template,
-                             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
-    if (gap)
-        GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+    gst_element_class_add_pad_template(
+        gstelement_class,
+        gst_pad_template_new(
+            GST_BASE_TRANSFORM_SRC_NAME,
+            GST_PAD_SRC,
+            GST_PAD_ALWAYS,
+            gst_caps_from_string("ANY")));
 
-    GST_BUFFER_OFFSET(buf)     = s0 + (guint64) round(f0 * (s1 - s0));
-    GST_BUFFER_OFFSET_END(buf) = s0 + (guint64) round(f1 * (s1 - s0));
-    if (GST_BUFFER_TIMESTAMP_IS_VALID(template)) {
-        GST_BUFFER_TIMESTAMP(buf) = t + (GstClockTime) round(f0 * dt);
-        GST_BUFFER_DURATION(buf) = (GstClockTime) round((f1 - f0) * dt);
-    }
-    else {
-        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
-        GST_BUFFER_DURATION(buf) = GST_CLOCK_TIME_NONE;
-    }
-
-    result = gst_pad_push(pad, buf);
-    if (result != GST_FLOW_OK) {
-        GST_ERROR("gst_pad_push() failed pushing gap buffer");
-        gst_buffer_unref(template);
-        return result;
-    }
-
-    /* Unref the template buffer, because an element should either
-     * unref the buffer or push it out on a src pad using gst_pad_push()
+    /* Specify properties. See:
+     * http://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-class-install-property
+     * and the collection of g_param_spec_*() at
+     * http://developer.gnome.org/gobject/unstable/gobject-Standard-Parameter-and-Value-Types.html
      */
-    gst_buffer_unref(template);
+    g_object_class_install_property(
+        gobject_class, PROP_INITIAL_OFFSET,
+        g_param_spec_uint64(
+            "initial-offset", "initial offset.",
+            "Only let data with offset bigger than this value pass.",
+            0, G_MAXUINT64, 0,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-    return GST_FLOW_OK;
+    g_object_class_install_property(
+        gobject_class, PROP_FINAL_OFFSET,
+        g_param_spec_uint64(
+            "final-offset", "final offset.",
+            "Only let data with offset smaller than this value pass",
+            0, G_MAXUINT64, 0,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+    
+    g_object_class_install_property(
+        gobject_class, PROP_INITIAL_TIMESTAMP,
+        g_param_spec_uint64(
+            "initial-timestamp", "initial timestamp.",
+            "Only let data with timestamp bigger than this value pass",
+            0, G_MAXUINT64, 0,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_FINAL_TIMESTAMP,
+        g_param_spec_uint64(
+            "final-timestamp", "final timestamp.",
+            "Only let data with timestamp smaller than this value pass",
+            0, G_MAXUINT64, 0,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_INVERSE,
+        g_param_spec_boolean(
+            "inverse", "inverse.",
+            "If set only data *outside* the region will pass.",
+            FALSE,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_TIMESTAMP,
+        g_param_spec_boolean(
+            "timestamp", "timestamp.",
+            "If set use timestamps to determine data boundaries.",
+            FALSE,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
 /*
- * Where data processing takes place.
+ * Instance init function.
  *
- * http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/chapter-building-chainfn.html
+ * Initialize instance. Give default values.
  */
-static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
+static void gst_lalwings_init(GstLalwings *elem)
 {
-    GstLalwings *elem = GST_LALWINGS(GST_OBJECT_PARENT(pad));
-    guint64 b0, b1, c0, c1;
-    gboolean inv = elem->inverse;
-    gboolean ts = elem->timestamp;
-
-    /* Short notation */ 
-    if (ts) {
-        b0 = GST_BUFFER_TIMESTAMP(buf);
-        b1 = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
-        c0 = elem->initial_timestamp;
-        c1 = elem->final_timestamp;
-    }
-    else {
-        b0 = GST_BUFFER_OFFSET(buf);
-        b1 = GST_BUFFER_OFFSET_END(buf);
-        c0 = elem->initial_offset;
-        c1 = elem->final_offset;
-    }        
-
-    /*                  c0-------c1                   c0-------c1
-     *    b0xxxxxxb1                      or                        b0xxxxxxb1
-     */
-    if (b1 < c0 || c1 < b0)  /* buffer out of the region we cut */
-        return push_subbuf(elem->srcpad, buf, 0.0, 1.0, TRUE ^ inv);
-
-    /*                  c0-------c1
-     *                     b0xb1
-     */
-    if (c0 <= b0 && b1 <= c1)  /* buffer completely inside the region we cut */
-        return push_subbuf(elem->srcpad, buf, 0.0, 1.0, FALSE ^ inv);
-
-    /*                  c0-------c1
-     *              b0xxxxxxb1
-     */
-    if (b0 <= c0 && b1 <= c1) {
-        gdouble f = (c0 - b0) / (gdouble) (b1 - b0);
-        gst_buffer_ref(buf);
-        /* because we will unref() it twice by calling push_subbuf() */
-
-        if (push_subbuf(elem->srcpad, buf, 0.0, f, TRUE ^ inv) != GST_FLOW_OK)
-            return GST_FLOW_ERROR;
-
-        return push_subbuf(elem->srcpad, buf, f, 1.0, FALSE ^ inv);
-    }
-
-    /*                  c0-------c1
-     *                       b0xxxxxxb1
-     */
-    if (c0 <= b0 && c1 <= b1) {
-        gdouble f = (c1 - b0) / (gdouble) (b1 - b0);
-        gst_buffer_ref(buf);
-        /* because we will unref() it twice by calling push_subbuf() */
-
-        if (push_subbuf(elem->srcpad, buf, 0.0, f, FALSE ^ inv) != GST_FLOW_OK)
-            return GST_FLOW_ERROR;
-
-        return push_subbuf(elem->srcpad, buf, f, 1.0, TRUE ^ inv);
-    }
-
-    /*                  c0-------c1
-     *              b0xxxxxxxxxxxxxxxb1
-     */
-    gdouble f0 = (c0 - b0) / (gdouble) (b1 - b0);
-    gdouble f1 = (c1 - b0) / (gdouble) (b1 - b0);
-
-    gst_buffer_ref(buf);
-    /* because we will unref() it *3 times* by calling push_subbuf() */
-
-    if (push_subbuf(elem->srcpad, buf, 0.0, f0, TRUE ^ inv) != GST_FLOW_OK)
-        return GST_FLOW_ERROR;
-
-    gst_buffer_ref(buf);  /* still one to go */
-
-    if (push_subbuf(elem->srcpad, buf, f0, f1, FALSE ^ inv) != GST_FLOW_OK)
-        return GST_FLOW_ERROR;
-
-    return push_subbuf(elem->srcpad, buf, f1, 1.0, TRUE ^ inv);
+    /* Properties initial value */
+    elem->initial_offset = 0;
+    elem->final_offset = 0;
+    elem->initial_timestamp = 0;
+    elem->final_timestamp = 0;
+    elem->inverse = FALSE;
+    elem->timestamp = FALSE;
 }

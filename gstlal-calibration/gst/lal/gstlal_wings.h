@@ -20,15 +20,14 @@
 #ifndef __GST_LALWINGS_H__
 #define __GST_LALWINGS_H__
 
-#include <stdio.h>
-
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 
 G_BEGIN_DECLS
 
 /* Definition of structure storing data for this element. */
 typedef struct _GstLalwings {
-    GstElement parent;
+    GstBaseTransform parent;
 
     GstPad *sinkpad, *srcpad;
 
@@ -38,7 +37,7 @@ typedef struct _GstLalwings {
 
 /* Standard definition defining a class for this element. */
 typedef struct _GstLalwingsClass {
-    GstElementClass parent_class;
+    GstBaseTransformClass parent_class;
 } GstLalwingsClass;
 
 /* Standard macros for defining types for this element.  */
