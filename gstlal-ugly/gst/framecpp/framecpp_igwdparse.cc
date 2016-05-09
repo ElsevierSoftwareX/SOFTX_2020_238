@@ -254,6 +254,7 @@ static gboolean start(GstBaseParse *parse)
 	 * everything else will be reset when the header is parsed
 	 */
 
+	element->filesize = SIZEOF_FRHEADER;
 	element->offset = 0;
 
 	return TRUE;
@@ -272,21 +273,18 @@ static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 	gboolean framed;
 	gboolean success = TRUE;
 
+	/*
+	 * pass-through if input is already framed
+	 */
+
 	s = gst_caps_get_structure(caps, 0);
 	success &= gst_structure_get_boolean(s, "framed", &framed);
 
 	if(success) {
 		gst_pad_push_event(srcpad, gst_event_new_caps(gst_pad_get_pad_template_caps(srcpad)));
-
-		/*
-		 * pass-through if input is already framed
-		 */
-
 		gst_base_parse_set_passthrough(parse, framed);
-	}
-
-	if(!success)
-		GST_ERROR_OBJECT(srcpad, "unable to accept sink caps %" GST_PTR_FORMAT, caps);
+	} else
+		GST_ERROR_OBJECT(parse, "unable to accept sink caps %" GST_PTR_FORMAT, caps);
 
 	return success;
 }
@@ -307,7 +305,7 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 	*skipsize = 0;
 
-	do {
+	while(element->filesize <= mapinfo.size) {
 		if(element->offset == 0) {
 			/*
 			 * parse header.  see table 5 of LIGO-T970130.
@@ -375,8 +373,14 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 * parse table 6, update file size
 			 */
 
+			g_assert_cmpuint(mapinfo.size, >=, element->offset + element->sizeof_table_6);
 			parse_table_6(element, mapinfo.data + element->offset, &structure_length, &klass);
 			element->filesize = element->offset + structure_length;
+
+			if(element->filesize > mapinfo.size) {
+				GST_DEBUG_OBJECT(element, "need more data to complete %u byte structure at offset %zu", (guint) structure_length, element->offset);
+				break;
+			}
 
 			/*
 			 * what to do?
@@ -384,104 +388,95 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 			if(klass == FRSH_KLASS && (element->eof_klass == 0 || element->frameh_klass == 0)) {
 				/*
-				 * found frsh structure and we do not yet know the
-				 * class numbers we want.  if it's complete, see if
-				 * it tells us the class numbers then advance to
-				 * next structure
+				 * found frsh structure and we do not yet
+				 * know the class numbers we want.  see if
+				 * it tells us the class numbers then
+				 * advance to next structure
 				 */
 
-				if(element->filesize <= mapinfo.size) {
-					GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) structure_length, element->offset);
-					parse_table_7(element, mapinfo.data + element->offset, structure_length, &element->eof_klass, &element->frameh_klass);
-					element->offset += structure_length;
-					element->filesize += element->sizeof_table_6;
-				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte FrSH structure at offset %zu, need %zu more bytes", (guint) structure_length, element->offset, element->filesize - mapinfo.size);
+				GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) structure_length, element->offset);
+				parse_table_7(element, mapinfo.data + element->offset, structure_length, &element->eof_klass, &element->frameh_klass);
+				element->offset = element->filesize;
+				element->filesize += element->sizeof_table_6;
 			} else if(klass == element->frameh_klass) {
 				/*
-				 * found frame header structure.  if it's complete,
-				 * extract start time and duration then advance to
+				 * found frame header structure.  extract
+				 * start time and duration then advance to
 				 * next structure
 				 */
 
-				if(element->filesize <= mapinfo.size) {
-					GstClockTime start_time, stop_time;
-					GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) structure_length, element->offset);
-					parse_table_9(element, mapinfo.data + element->offset, structure_length, &start_time, &stop_time);
+				GstClockTime start_time, stop_time;
+				GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) structure_length, element->offset);
+				parse_table_9(element, mapinfo.data + element->offset, structure_length, &start_time, &stop_time);
 
-					element->file_start_time = MIN(element->file_start_time, start_time);
-					element->file_stop_time = MAX(element->file_stop_time, stop_time);
+				element->file_start_time = MIN(element->file_start_time, start_time);
+				element->file_stop_time = MAX(element->file_stop_time, stop_time);
 
-					element->offset += structure_length;
-					element->filesize += element->sizeof_table_6;
-				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %zu more bytes", (guint) structure_length, element->offset, element->filesize - mapinfo.size);
+				element->offset = element->filesize;
+				element->filesize += element->sizeof_table_6;
 			} else if(klass == element->eof_klass) {
 				/*
-				 * found end-of-file structure.  if it's complete
-				 * then the file is complete
+				 * found end-of-file structure.  the file
+				 * is complete
 				 */
 
-				if(element->filesize <= mapinfo.size) {
-					GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %zu byte frame file", (guint) structure_length, element->offset, element->filesize);
+				GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %zu byte frame file", (guint) structure_length, element->offset, element->filesize);
 
-					/*
-					 * the base class sets offset and
-					 * offset end to the byte offsets
-					 * spanned by this file.  we are
-					 * responsible for the timestamp
-					 * and duration
-					 */
+				/*
+				 * the base class sets offset and offset
+				 * end to the byte offsets spanned by this
+				 * file.  we are responsible for the
+				 * timestamp and duration
+				 */
 
-					GST_BUFFER_TIMESTAMP(frame->buffer) = element->file_start_time;
-					GST_BUFFER_DURATION(frame->buffer) = element->file_stop_time - element->file_start_time;
+				GST_BUFFER_TIMESTAMP(frame->buffer) = element->file_start_time;
+				GST_BUFFER_DURATION(frame->buffer) = element->file_stop_time - element->file_start_time;
 
-					/*
-					 * mark this frame file's timestamp
-					 * in the bytestream.  the start of
-					 * a file is equivalent to the
-					 * concept of a "key frame"
-					 */
+				/*
+				 * mark this frame file's timestamp in the
+				 * bytestream.  the start of a file is
+				 * equivalent to the concept of a "key
+				 * frame"
+				 */
 
-					gst_base_parse_add_index_entry(parse, GST_BUFFER_OFFSET(frame->buffer), GST_BUFFER_TIMESTAMP(frame->buffer), TRUE, FALSE);
+				gst_base_parse_add_index_entry(parse, GST_BUFFER_OFFSET(frame->buffer), GST_BUFFER_TIMESTAMP(frame->buffer), TRUE, FALSE);
 
-					/*
-					 * in practice, a collection of
-					 * frame files will all be the same
-					 * duration, so once we've measured
-					 * the duration of one we've got a
-					 * good guess for the mean frame
-					 * rate
-					 */
+				/*
+				 * in practice, a collection of frame files
+				 * will all be the same duration, so once
+				 * we've measured the duration of one we've
+				 * got a good guess for the mean frame rate
+				 */
 
-					gst_base_parse_set_frame_rate(parse, GST_SECOND, GST_BUFFER_DURATION(frame->buffer), 0, 0);
+				gst_base_parse_set_frame_rate(parse, GST_SECOND, GST_BUFFER_DURATION(frame->buffer), 0, 0);
 
-					/*
-					 * done
-					 */
+				/*
+				 * done.  need to unmap buffer before
+				 * calling _finish_frame()
+				 */
 
-					GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(frame->buffer));
-					result = gst_base_parse_finish_frame(parse, frame, element->filesize);
+				GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(frame->buffer));
+				gst_buffer_unmap(frame->buffer, &mapinfo);
+				result = gst_base_parse_finish_frame(parse, frame, element->filesize);
 
-					/*
-					 * reset for next file, and exit loop
-					 */
+				/*
+				 * reset for next file, and exit loop
+				 */
 
-					element->offset = 0;
-					break;
-				} else
-					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %zu more bytes", (guint) structure_length, element->offset, element->filesize - mapinfo.size);
+				element->filesize = SIZEOF_FRHEADER;
+				element->offset = 0;
+				return result;
 			} else {
 				/*
 				 * found something else.  skip to next structure
 				 */
 
-				GST_DEBUG_OBJECT(element, "found %u byte structure at offset %zu", (guint) structure_length, element->offset);
-				element->offset += structure_length;
+				GST_DEBUG_OBJECT(element, "found uninteresting %u byte structure at offset %zu", (guint) structure_length, element->offset);
+				element->offset = element->filesize;
 				element->filesize += element->sizeof_table_6;
 			}
 		}
-	} while(element->filesize <= mapinfo.size);
+	}
 
 	gst_buffer_unmap(frame->buffer, &mapinfo);
 
