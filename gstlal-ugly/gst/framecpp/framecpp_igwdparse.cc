@@ -346,7 +346,7 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			element->sizeof_table_6 = element->sizeof_int_8 + element->sizeof_int_2 + element->sizeof_int_4;
 
 			/*
-			 * reset the class numbers
+			 * reset the class numbers to impossible values
 			 */
 
 			element->eof_klass = 0;
@@ -366,6 +366,8 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			element->offset = SIZEOF_FRHEADER;
 			element->filesize = element->offset + element->sizeof_table_6;
 		} else {
+			/* FIXME:  add checksumming to allow resync on incomplete/partial files */
+
 			guint64 structure_length;
 			guint16 klass;
 
@@ -390,37 +392,30 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				/*
 				 * found frsh structure and we do not yet
 				 * know the class numbers we want.  see if
-				 * it tells us the class numbers then
-				 * advance to next structure
+				 * it tells us the class numbers
 				 */
 
-				GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) structure_length, element->offset);
+				GST_DEBUG_OBJECT(element, "found %u byte FrSH structure at offset %zu", (guint) structure_length, element->offset);
 				parse_table_7(element, mapinfo.data + element->offset, structure_length, &element->eof_klass, &element->frameh_klass);
-				element->offset = element->filesize;
-				element->filesize += element->sizeof_table_6;
 			} else if(klass == element->frameh_klass) {
 				/*
 				 * found frame header structure.  extract
-				 * start time and duration then advance to
-				 * next structure
+				 * start time and duration
 				 */
 
 				GstClockTime start_time, stop_time;
-				GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) structure_length, element->offset);
+				GST_DEBUG_OBJECT(element, "found %u byte " FRAMEH_NAME " structure at offset %zu", (guint) structure_length, element->offset);
 				parse_table_9(element, mapinfo.data + element->offset, structure_length, &start_time, &stop_time);
 
 				element->file_start_time = MIN(element->file_start_time, start_time);
 				element->file_stop_time = MAX(element->file_stop_time, stop_time);
-
-				element->offset = element->filesize;
-				element->filesize += element->sizeof_table_6;
 			} else if(klass == element->eof_klass) {
 				/*
 				 * found end-of-file structure.  the file
 				 * is complete
 				 */
 
-				GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %zu byte frame file", (guint) structure_length, element->offset, element->filesize);
+				GST_DEBUG_OBJECT(element, "found %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %zu byte frame file", (guint) structure_length, element->offset, element->filesize);
 
 				/*
 				 * the base class sets offset and offset
@@ -431,12 +426,14 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 				GST_BUFFER_TIMESTAMP(frame->buffer) = element->file_start_time;
 				GST_BUFFER_DURATION(frame->buffer) = element->file_stop_time - element->file_start_time;
+				GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(frame->buffer));
 
 				/*
 				 * mark this frame file's timestamp in the
 				 * bytestream.  the start of a file is
 				 * equivalent to the concept of a "key
-				 * frame"
+				 * frame" as it is only possible to seek to
+				 * file boundaries
 				 */
 
 				gst_base_parse_add_index_entry(parse, GST_BUFFER_OFFSET(frame->buffer), GST_BUFFER_TIMESTAMP(frame->buffer), TRUE, FALSE);
@@ -455,7 +452,6 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				 * calling _finish_frame()
 				 */
 
-				GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(frame->buffer));
 				gst_buffer_unmap(frame->buffer, &mapinfo);
 				result = gst_base_parse_finish_frame(parse, frame, element->filesize);
 
@@ -468,13 +464,18 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				return result;
 			} else {
 				/*
-				 * found something else.  skip to next structure
+				 * found something else
 				 */
 
 				GST_DEBUG_OBJECT(element, "found uninteresting %u byte structure at offset %zu", (guint) structure_length, element->offset);
-				element->offset = element->filesize;
-				element->filesize += element->sizeof_table_6;
 			}
+
+			/*
+			 * advance to next structure
+			 */
+
+			element->offset = element->filesize;
+			element->filesize += element->sizeof_table_6;
 		}
 	}
 
@@ -562,10 +563,11 @@ static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
 
 /*
  * instance_init()
+ *
+ * see also start() override
  */
 
 
 static void framecpp_igwdparse_init(GstFrameCPPIGWDParse *element)
 {
-	/* see start() override */
 }
