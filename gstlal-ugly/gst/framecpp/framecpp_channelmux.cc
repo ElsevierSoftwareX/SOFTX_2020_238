@@ -460,7 +460,12 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+		if(!gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE)) {
+			GST_ELEMENT_ERROR(mux, RESOURCE, WRITE, (NULL), ("buffer cannot be mapped for write"));
+			gst_buffer_unref(outbuf);
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
 		memcpy(mapinfo.data, &(obuf->str()[0]), mapinfo.size);
 		if(mux->need_discont) {
 			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);

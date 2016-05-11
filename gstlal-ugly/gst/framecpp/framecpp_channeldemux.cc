@@ -828,7 +828,10 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 	GstPad *srcpad = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	gst_buffer_map(inbuf, &mapinfo, GST_MAP_READ);
+	if(!gst_buffer_map(inbuf, &mapinfo, GST_MAP_READ)) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("buffer cannot be mapped for read"));
+		return GST_FLOW_ERROR;
+	}
 
 	/*
 	 * special case:  0-length input buffers are treated as heart

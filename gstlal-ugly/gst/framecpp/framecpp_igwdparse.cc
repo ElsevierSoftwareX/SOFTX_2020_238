@@ -301,7 +301,10 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	gst_buffer_map(frame->buffer, &mapinfo, GST_MAP_READ);
+	if(!gst_buffer_map(frame->buffer, &mapinfo, GST_MAP_READ)) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("buffer cannot be mapped for read"));
+		return GST_FLOW_ERROR;
+	}
 
 	*skipsize = 0;
 
