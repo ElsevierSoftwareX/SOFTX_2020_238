@@ -130,7 +130,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
+		if(!gst_element_register(plugin, element->name, GST_RANK_SECONDARY, element->type))
 			return FALSE;
 
 	/*
