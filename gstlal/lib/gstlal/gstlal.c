@@ -889,7 +889,7 @@ REAL8TimeSeries *gstlal_buffer_map_REAL8TimeSeries(GstBuffer *buf, GstCaps *caps
 	 */
 
 	XLALFree(series->data->data);
-	if(!gst_buffer_map(buf, info, GST_MAP_READ | GST_MAP_WRITE)) {
+	if(!gst_buffer_map(buf, info, GST_MAP_READWRITE)) {
 		GST_ERROR("buffer map failed");
 		XLALDestroyREAL8TimeSeries(series);
 		series = NULL;
