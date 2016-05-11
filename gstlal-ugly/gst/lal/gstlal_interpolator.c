@@ -200,9 +200,10 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 		 * The first kernel is a delta function by definition, so just
  		 * copy the input 
 		 */
-		if (kernel_offset == 0)
+		// AEP- disable the copy conditional, always perform the convolution.
+		/*if (kernel_offset == 0)
 			copy_input(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
-		else
+		else*/
 			convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
 	}
 	return;
