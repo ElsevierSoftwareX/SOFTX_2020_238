@@ -77,8 +77,14 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
-/* FIXME:  uncomment when we can rely on >= 1.6 */
-/*#include <gst/allocators/gstfdmemory.h>*/
+#ifdef HAVE_GSTREAMER_1_6
+#include <gst/allocators/gstfdmemory.h>
+#else
+/* FIXME:  remove when we can rely on having 1.6 */
+#include "gstfdmemory.h"
+#include "gstfdmemory.c"
+#undef GST_CAT_DEFAULT
+#endif
 
 
 #include <lal/XLALError.h>
@@ -87,22 +93,6 @@
 
 #include <gstlal/gstlal_debug.h>
 #include <gstlal_cachesrc.h>
-
-
-/*
- * ============================================================================
- *
- *                     Pull in gst_fd_allocator from 1.6
- *
- *                 FIXME:  remove when we can rely on >= 1.6
- *
- * ============================================================================
- */
-
-
-#include "gstfdmemory.h"
-#include "gstfdmemory.c"
-#undef GST_CAT_DEFAULT
 
 
 /*
