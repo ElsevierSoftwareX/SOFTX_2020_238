@@ -134,16 +134,15 @@ static gboolean plugin_init(GstPlugin *plugin)
 {
 	struct {
 		const gchar *name;
-		GstRank rank;
 		GType type;
 	} *element, elements[] = {
-		{"framecpp_channeldemux", GST_RANK_SECONDARY, FRAMECPP_CHANNELDEMUX_TYPE},
-		{"framecpp_channelmux", GST_RANK_SECONDARY, FRAMECPP_CHANNELMUX_TYPE},
-		{"framecpp_filesink", GST_RANK_SECONDARY, FRAMECPP_FILESINK_TYPE},
+		{"framecpp_channeldemux", FRAMECPP_CHANNELDEMUX_TYPE},
+		{"framecpp_channelmux", FRAMECPP_CHANNELMUX_TYPE},
+		{"framecpp_filesink", FRAMECPP_FILESINK_TYPE},
 #if HAVE_GST_BASEPARSE
-		{"framecpp_igwdparse", GST_RANK_SECONDARY, FRAMECPP_IGWDPARSE_TYPE},
+		{"framecpp_igwdparse", FRAMECPP_IGWDPARSE_TYPE},
 #endif
-		{NULL, 0, 0},
+		{NULL, 0},
 	};
 
 	/*
@@ -157,7 +156,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, element->rank, element->type))
+		if(!gst_element_register(plugin, element->name, GST_RANK_SECONDARY, element->type))
 			return FALSE;
 
 	/*
