@@ -307,6 +307,7 @@ static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 	GST_BUFFER_OFFSET_END(*buf) = offset + size;
 
 done:
+	close(fd);
 	return result;
 }
 
@@ -319,13 +320,18 @@ static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 
 	*buf = gst_buffer_new();
 	if(!*buf) {
+		close(fd);
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
+	/* takes ownership of fd, but only on success.  allocator closes
+	 * file when GstMemory is deallocated, but if this operation fails
+	 * we must do it ourselves. */
 	memory = gst_fd_allocator_alloc(element->fdallocator, fd, size, GST_MEMORY_FLAG_READONLY | GST_FD_MEMORY_FLAG_KEEP_MAPPED | GST_FD_MEMORY_FLAG_MAP_PRIVATE);
 	if(!memory) {
-		/*GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, strerror(errno)));*/
+		GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("gst_fd_allocator_alloc('%s') failed", path));
 		gst_buffer_unref(*buf);
+		close(fd);
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -605,11 +611,11 @@ next:
 		goto done;
 	}
 
+	/* these functions take ownership of fd;  we do not close */
 	if(element->use_mmap)
 		result = mmap_buffer(basesrc, path, fd, offset, statinfo.st_size, buf);
 	else
 		result = read_buffer(basesrc, path, fd, offset, statinfo.st_size, buf);
-	close(fd);
 	if(result != GST_FLOW_OK)
 		goto done;
 
