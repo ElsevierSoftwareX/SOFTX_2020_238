@@ -136,11 +136,11 @@ def parse_command_line():
 options, filename = parse_command_line()
 
 def assign_approximant(mchirp, approximants = options.approximant):
-	for appx in approximants:
-		if mchirp >= appx[0] and mchirp < appx[1]:
-			return appx[2]
+	for lo, hi, appx in approximants:
+		if lo <= mchirp < hi:
+			return appx
 	raise ValueError("Valid approximant not given for this chirp mass")
-	
+
 
 output_cache_file = open(options.output_cache, "w")
 bank_count = 0
