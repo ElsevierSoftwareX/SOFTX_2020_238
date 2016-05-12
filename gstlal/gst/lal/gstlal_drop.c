@@ -436,7 +436,10 @@ static void finalize(GObject *object)
  */
 
 
-#define CAPS GST_AUDIO_CAPS_MAKE(GSTLAL_AUDIO_FORMATS_ALL)
+#define CAPS \
+	GST_AUDIO_CAPS_MAKE(GSTLAL_AUDIO_FORMATS_ALL) ", " \
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0"
 
 
 static void class_init(gpointer class, gpointer class_data)

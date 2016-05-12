@@ -833,7 +833,8 @@ static void finalize(GObject * object)
 	"rate = " GST_AUDIO_RATE_RANGE ", " \
 	"channels = (int) 1, " \
 	"format = (string) " GST_AUDIO_NE(F64) ", " \
-	"layout = (string) interleaved"
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0"
 
 
 static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)

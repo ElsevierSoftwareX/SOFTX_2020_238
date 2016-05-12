@@ -1313,9 +1313,9 @@ static void finalize(GObject *object)
 	"audio/x-raw, " \
 	"rate = " GST_AUDIO_RATE_RANGE ", " \
 	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-	"channel-mask = (bitmask) 0, " \
+	"format = (string) { S8, " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
 	"layout = (string) interleaved, " \
-	"format = (string) { S8, " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}"
+	"channel-mask = (bitmask) 0"
 
 
 static void gstlal_gate_class_init(GSTLALGateClass *klass)
@@ -1351,9 +1351,9 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 				"audio/x-raw, " \
 				"rate = " GST_AUDIO_RATE_RANGE ", " \
 				"channels = (int) 1, " \
-				"channel-mask = (bitmask) 0, " \
+				"format = (string) { S8, " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
 				"layout = (string) interleaved, " \
-				"format = (string) { S8, " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}"
+				"channel-mask = (bitmask) 0"
 			)
 		)
 	);

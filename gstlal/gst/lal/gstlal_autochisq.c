@@ -284,7 +284,9 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		GST_AUDIO_CAPS_MAKE("Z128")
+		GST_AUDIO_CAPS_MAKE("Z128") ", " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -294,7 +296,9 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		GST_AUDIO_CAPS_MAKE("F64")
+		GST_AUDIO_CAPS_MAKE("F64") ", " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 

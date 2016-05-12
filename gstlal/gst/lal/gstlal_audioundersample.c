@@ -185,7 +185,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -199,7 +200,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
-		"layout = (string) interleaved"
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 

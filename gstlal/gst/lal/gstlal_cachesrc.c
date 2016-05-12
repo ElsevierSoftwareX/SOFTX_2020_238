@@ -951,10 +951,7 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_from_string(
-				"application/x-igwd-frame, " \
-				"framed = (boolean) true"
-			)
+			GST_CAPS_ANY
 		)
 	);
 

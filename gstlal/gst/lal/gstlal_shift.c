@@ -423,7 +423,8 @@ static void finalize(GObject *object)
 	"rate = " GST_AUDIO_RATE_RANGE ", " \
 	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 	"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
-	"layout = (string) interleaved"
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0"
 
 
 static void class_init(gpointer class, gpointer class_data)

@@ -403,9 +403,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"sink",
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
-			gst_caps_from_string(
-				"ANY"
-			)
+			GST_CAPS_ANY
 		)
 	);
 	gst_element_class_add_pad_template(
@@ -414,9 +412,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_from_string(
-				"ANY"
-			)
+			GST_CAPS_ANY
 		)
 	);
 
