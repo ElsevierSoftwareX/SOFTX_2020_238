@@ -192,8 +192,6 @@ static void parse_table_7(GstFrameCPPIGWDParse *element, const guint8 *data, gui
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, structure_length - element->sizeof_table_6);
 	const gchar *name;
 
-	g_assert_cmpuint(structure_length, >=, element->sizeof_table_6);	/* FIXME:  + sizeof table 7 */
-
 	name = fr_get_string(element, &reader);
 	if(!strcmp(name, FRENDOFFILE_NAME)) {
 		*eof_klass = fr_get_int_2u(element, &reader);
@@ -209,8 +207,6 @@ static void parse_table_9(GstFrameCPPIGWDParse *element, const guint8 *data, gui
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, structure_length - element->sizeof_table_6);
 	const gchar *name;
-
-	g_assert_cmpuint(structure_length, >=, element->sizeof_table_6);	/* FIXME:  + sizeof table 9 */
 
 	name = fr_get_string(element, &reader);
 	gst_byte_reader_skip_unchecked(&reader, 3 * element->sizeof_int_4);	/* run, frame, dataQuality */
