@@ -850,6 +850,10 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 	GST_LOG_OBJECT(element, "begin IGWD file decode");
 
 	try {
+		FrameCPP::Common::ReadOnlyMemoryBuffer *ibuf(new FrameCPP::Common::ReadOnlyMemoryBuffer);
+		ibuf->pubsetbuf((char *) mapinfo.data, mapinfo.size);
+		FrameCPP::IFrameStream ifs(ibuf);
+
 		if(element->do_file_checksum) {
 			/*
 			 * File Checksum verification
@@ -868,7 +872,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 
 			verifier.BufferSize(mapinfo.size);
 			verifier.UseMemoryMappedIO(false);
-			verifier.CheckDataValid(false);	/* FIXME:  what's this? */
+			verifier.CheckDataValid(false);
 			verifier.Expandability(false);
 			verifier.MustHaveEOFChecksum(true);
 			verifier.Strict(false);
@@ -880,10 +884,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 				throw std::runtime_error(verifier.ErrorInfo());
 			*/
 		}
-
-		FrameCPP::Common::ReadOnlyMemoryBuffer *ibuf(new FrameCPP::Common::ReadOnlyMemoryBuffer);
-		ibuf->pubsetbuf((char *) mapinfo.data, mapinfo.size);
-		FrameCPP::IFrameStream ifs(ibuf);
 
 		/*
 		 * update element properties
