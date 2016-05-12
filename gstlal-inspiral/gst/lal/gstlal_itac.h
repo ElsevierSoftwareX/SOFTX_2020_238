@@ -87,7 +87,7 @@ typedef struct {
 	gsl_matrix_int *autocorrelation_mask;
 	gsl_vector *autocorrelation_norm;
 	
-	GMutex *bank_lock;
+	GMutex bank_lock;
 } GSTLALItac;
 
 

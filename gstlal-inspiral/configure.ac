@@ -116,7 +116,7 @@ AC_SUBST([MIN_DOXYGEN_VERSION])
 #
 
 
-MIN_PYTHON_VERSION="2.6"
+MIN_PYTHON_VERSION="2.7"
 AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
 # hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
@@ -164,8 +164,8 @@ AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
 #
 
 
-AC_SUBST([GSTREAMER_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-controller-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
@@ -177,38 +177,14 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\|gstlal_\|GstLAL_\|GSTLAL_\).*"])
 
-# Check for availability of GstBaseParse class (starting in 0.10.33)
-CFLAGS_saved="$CFLAGS"
-CFLAGS="$gstreamer_CFLAGS"
-AC_COMPILE_IFELSE(
-	[AC_LANG_PROGRAM([#include <gst/base/gstbaseparse.h>])],
-	[HAVE_GSTBASEPARSE=yes
-	AC_DEFINE([HAVE_GST_BASEPARSE], [1], [Define if GstBaseParse class is available.])],
-	[HAVE_GSTBASEPARSE=no]
-)
-CFLAGS="$CFLAGS_saved"
-AM_CONDITIONAL([COND_GSTBASEPARSE], [test "x${HAVE_GSTBASEPARSE}" == "xyes"])
-
-
-#
-# Check for GStreamer Video Library
-#
-
-
-AC_SUBST([GSTREAMER_VIDEO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.32])
-PKG_CHECK_MODULES([gstreamer_video], [gstreamer-video-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}])
-AC_SUBST([gstreamer_video_CFLAGS])
-AC_SUBST([gstreamer_video_LIBS])
-
 
 #
 # Check for GStreamer Audio Library
 #
 
 
-AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_AUDIO_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE} >= ${MIN_GSTREAMER_AUDIO_VERSION}])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
