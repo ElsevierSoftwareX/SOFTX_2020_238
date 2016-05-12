@@ -190,10 +190,10 @@ static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect,
 
 	switch(vect->GetType()) {
 	case FrameCPP::FrVect::FR_VECT_C:
-		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(S8), NULL);
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, "S8", NULL);
 		break;
 	case FrameCPP::FrVect::FR_VECT_1U:
-		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(U8), NULL);
+		gst_caps_set_simple(caps, "format", G_TYPE_STRING, "U8", NULL);
 		break;
 	case FrameCPP::FrVect::FR_VECT_2S:
 		gst_caps_set_simple(caps, "format", G_TYPE_STRING, GST_AUDIO_NE(S16), NULL);
