@@ -325,7 +325,7 @@ static void gst_lalwings_class_init(GstLalwingsClass *klass)
             GST_BASE_TRANSFORM_SINK_NAME,
             GST_PAD_SINK,
             GST_PAD_ALWAYS,
-            gst_caps_from_string("ANY")));
+            GST_CAPS_ANY));
 
     gst_element_class_add_pad_template(
         gstelement_class,
@@ -333,7 +333,7 @@ static void gst_lalwings_class_init(GstLalwingsClass *klass)
             GST_BASE_TRANSFORM_SRC_NAME,
             GST_PAD_SRC,
             GST_PAD_ALWAYS,
-            gst_caps_from_string("ANY")));
+            GST_CAPS_ANY));
 
     /* Specify properties. See:
      * http://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-class-install-property
