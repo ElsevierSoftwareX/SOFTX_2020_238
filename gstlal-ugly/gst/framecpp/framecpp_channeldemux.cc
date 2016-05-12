@@ -424,6 +424,7 @@ static GstPad *add_src_pad(GstFrameCPPChannelDemux *element, const char *name)
 
 	srcpad = gst_frpad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "%s"), name);
 	g_assert(srcpad != NULL);
+	gst_pad_use_fixed_caps(GST_PAD(srcpad));
 
 	/*
 	 * connect signal handlers
@@ -1616,6 +1617,7 @@ static void framecpp_channeldemux_init(GstFrameCPPChannelDemux *element)
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
+	gst_pad_use_fixed_caps(pad);
 	gst_object_unref(pad);
 
 	/* internal data */

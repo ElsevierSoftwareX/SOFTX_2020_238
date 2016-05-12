@@ -1375,6 +1375,7 @@ static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux)
 	mux->srcpad = gst_element_get_static_pad(GST_ELEMENT(mux), "src");
 	/*gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(src_query));*/ /* FIXME:  implement */
 	gst_pad_set_event_function(mux->srcpad, GST_DEBUG_FUNCPTR(src_event));
+	gst_pad_use_fixed_caps(mux->srcpad);
 
 	/* configure collect pads.  max-size-time will get set when our
 	 * properties are initialized */
