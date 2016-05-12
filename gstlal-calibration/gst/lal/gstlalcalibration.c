@@ -50,6 +50,7 @@
 
 
 #include <gstlal/gstlal_tags.h>
+#include <gstlal_add_constant.h>
 #include <gstlal_wings.h>
 
 
@@ -68,6 +69,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
+		{"lal_add_constant", GSTLAL_ADD_CONSTANT_TYPE},
 		{"lal_wings", GST_TYPE_LALWINGS},
 		{NULL, 0},
 	};
