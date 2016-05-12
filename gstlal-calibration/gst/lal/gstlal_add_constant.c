@@ -109,17 +109,18 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	GSTLALAddConstant *element = GSTLAL_ADD_CONSTANT(trans);
 	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
-	size_t len;
-	size_t i;
+	gdouble value = element->value;
+	gdouble *addr, *end;
 
 	GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 
 	gst_buffer_map(buf, &mapinfo, GST_MAP_READWRITE);
 
 	g_assert(mapinfo.size % sizeof(gdouble) == 0);
-	len = mapinfo.size / sizeof(gdouble);
-	for(i = 0; i < len; i++)
-		((gdouble *) mapinfo.data)[i] += element->value;
+	addr = (gdouble *) mapinfo.data;
+	end = (gdouble *) (mapinfo.data + mapinfo.size);
+	while(addr < end)
+		*addr++ += value;
 
 	gst_buffer_unmap(buf, &mapinfo);
 
