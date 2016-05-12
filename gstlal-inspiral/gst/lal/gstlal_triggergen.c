@@ -42,8 +42,25 @@
 #include <lal/LALStdlib.h>
 
 
+/*
+ * ============================================================================
+ *
+ *                           GStreamer Boiler Plate
+ *
+ * ============================================================================
+ */
+
+
 #define GST_CAT_DEFAULT gstlal_triggergen_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+G_DEFINE_TYPE_WITH_CODE(
+	GSTLALTriggerGen,
+	gstlal_triggergen,
+	GST_TYPE_ELEMENT,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_triggergen", 0, "lal_triggergen element")
+);
 
 
 /*
@@ -266,9 +283,9 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static gboolean src_event(GstPad *pad, GstEvent *event)
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(GST_PAD_PARENT(pad));
+	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(parent);
 	gboolean success;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -367,9 +384,9 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 }
 
 
-static gboolean snr_event(GstPad *pad, GstEvent *event)
+static gboolean snr_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(GST_PAD_PARENT(pad));
+	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(parent);
 	gboolean success;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -408,7 +425,7 @@ static gboolean snr_event(GstPad *pad, GstEvent *event)
 		break;
 	}
 
-	return element->collect_event(pad, event);
+	return element->collect_event(pad, parent, event);
 }
 
 
@@ -490,9 +507,9 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		 * reset the last inspiral event information
 		 */
 
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		memcpy(element->last_event, element->bank, element->num_templates * sizeof(*element->last_event));
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 
 		element->segment_pending = FALSE;
 	}
@@ -577,7 +594,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		SnglInspiralTable *head = NULL;
 		guint nevents = 0;
 
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		length = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
 		if(GST_BUFFER_TIMESTAMP(snrbuf) > GST_BUFFER_TIMESTAMP(chisqbuf)) {
 			t0 = GST_BUFFER_TIMESTAMP(snrbuf);
@@ -631,7 +648,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 				chisqdata++;
 			}
 		}
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 
 		if(nevents) {
 			SnglInspiralTable *dest;
@@ -714,7 +731,7 @@ error:
 eos:
 	GST_DEBUG_OBJECT(element->srcpad, "pushing EOS event");
 	gst_pad_push_event(element->srcpad, gst_event_new_eos());
-	return GST_FLOW_UNEXPECTED;
+	return GST_FLOW_EOS;
 }
 
 
@@ -746,9 +763,9 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_BANK_FILENAME:
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		setup_bankfile_input(element, g_value_dup_string(value));
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 
 	case ARG_MAX_GAP:
@@ -756,7 +773,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_SIGMASQ: {
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		if(element->bank) {
 			gint length;
 			double *sigmasq = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &length);
@@ -771,7 +788,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			g_free(sigmasq);
 		} else
 			GST_WARNING_OBJECT(element, "must set template bank before setting sigmasq");
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 	}
 
@@ -794,9 +811,9 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 
 	case ARG_BANK_FILENAME:
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		g_value_set_string(value, element->bank_filename);
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 
 	case ARG_MAX_GAP:
@@ -804,7 +821,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 
 	case ARG_SIGMASQ: {
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		if(element->bank) {
 			double sigmasq[element->num_templates];
 			gint i;
@@ -815,7 +832,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 			GST_WARNING_OBJECT(element, "no template bank");
 			g_value_take_boxed(value, g_value_array_new(0));
 		}
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 	}
 
@@ -836,20 +853,16 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
  */
 
 
-static GstElementClass *parent_class = NULL;
-
-
 static void finalize(GObject *object)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
-	g_mutex_free(element->bank_lock);
-	element->bank_lock = NULL;
+	g_mutex_clear(&element->bank_lock);
 	free_bankfile(element);
 	g_free(element->instrument);
 	element->instrument = NULL;
 	g_free(element->channel_name);
 	element->channel_name = NULL;
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_triggergen_parent_class)->finalize(object);
 }
 
 
@@ -883,13 +896,14 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 		break;
 	}
 
-	return parent_class->change_state(element, transition);
+	return GST_ELEMENT_CLASS(gstlal_triggergen_parent_class)->change_state(element, transition);
 }
 
 
-static void base_init(gpointer g_class)
+static void gstlal_triggergen_class_init(GSTLALTriggerGenClass *klass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -904,6 +918,11 @@ static void base_init(gpointer g_class)
 		"The maximum possible trigger rate is (1/max_gap) Hz per template.\n", \
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
 	);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+	element_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 
 	gst_element_class_add_pad_template(
 		element_class,
@@ -948,19 +967,6 @@ static void base_init(gpointer g_class)
 			)
 		)
 	);
-}
-
-
-static void class_init(gpointer klass, gpointer class_data)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-	gstelement_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1015,9 +1021,8 @@ static void class_init(gpointer klass, gpointer class_data)
 }
 
 
-static void instance_init(GTypeInstance *object, gpointer klass)
+static void gstlal_triggergen_init(GSTLALTriggerGen *element)
 {
-	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -1055,7 +1060,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->srcpad = pad;
 
 	/* internal data */
-	element->bank_lock = g_mutex_new();
+	g_mutex_init(&element->bank_lock);
 	element->rate = 0;
 	element->bank_filename = NULL;
 	element->instrument = NULL;
@@ -1066,24 +1071,4 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->max_gap = DEFAULT_MAX_GAP;
 	element->last_event = NULL;
 	element->last_time = NULL;
-}
-
-
-GType gstlal_triggergen_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALTriggerGenClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALTriggerGen),
-			.instance_init = instance_init,
-		};
-		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_triggergen", 0, "lal_triggergen element");
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALTriggerGen", &info, 0);
-	}
-
-	return type;
 }
