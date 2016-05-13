@@ -464,32 +464,32 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
 
   switch (GST_AUDIO_INFO_FORMAT(&(element->audio_info))) {
     case GST_AUDIO_FORMAT_U8 :
-       printsample = printsample_uint8;
-       break;
+      printsample = printsample_uint8;
+      break;
     case GST_AUDIO_FORMAT_U16 :
-       printsample = printsample_uint16;
-       break;
+      printsample = printsample_uint16;
+      break;
     case GST_AUDIO_FORMAT_U32 :
-       printsample = printsample_uint32;
-       break;
+      printsample = printsample_uint32;
+      break;
     case GST_AUDIO_FORMAT_S8 :
-       printsample = printsample_int8;
-       break;
+      printsample = printsample_int8;
+      break;
     case GST_AUDIO_FORMAT_S16 :
-       printsample = printsample_int16;
-       break;
+      printsample = printsample_int16;
+      break;
     case GST_AUDIO_FORMAT_S32 :
-       printsample = printsample_int32;
-       break;
+      printsample = printsample_int32;
+      break;
     case GST_AUDIO_FORMAT_F32 :
-       printsample = printsample_float;
-       break;
+      printsample = printsample_float;
+      break;
     case GST_AUDIO_FORMAT_F64 :
-       printsample = printsample_double;
-       break;
+      printsample = printsample_double;
+      break;
     default:
-       success = FALSE;
-       break;
+      success = FALSE;
+      break;
   }
 
   if(success) {
