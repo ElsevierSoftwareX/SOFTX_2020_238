@@ -123,10 +123,15 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-G_DEFINE_TYPE(
+#define GST_CAT_DEFAULT gstlal_autochisq_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALToggleComplex,
 	gstlal_togglecomplex,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_togglecomplex", 0, "lal_togglecomplex element")
 );
 
 
