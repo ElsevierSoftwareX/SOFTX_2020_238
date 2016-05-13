@@ -477,10 +477,7 @@ static void finalize(GObject *object)
 
 
 #define CAPS \
-	"audio/x-raw, " \
-	"rate = " GST_AUDIO_RATE_RANGE ", " \
-	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-	"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
+	GST_AUDIO_CAPS_MAKE(GSTLAL_AUDIO_FORMATS_ALL) ", " \
 	"layout = (string) interleaved, " \
 	"channel-mask = (bitmask) 0"
 
