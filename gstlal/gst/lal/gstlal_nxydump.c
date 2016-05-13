@@ -458,35 +458,36 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
    * Parse the format
    */
 
-  switch (GST_AUDIO_INFO_FORMAT(&(element->audio_info))) {
-    case GST_AUDIO_FORMAT_U8 :
-      printsample = printsample_uint8;
-      break;
-    case GST_AUDIO_FORMAT_U16 :
-      printsample = printsample_uint16;
-      break;
-    case GST_AUDIO_FORMAT_U32 :
-      printsample = printsample_uint32;
-      break;
-    case GST_AUDIO_FORMAT_S8 :
-      printsample = printsample_int8;
-      break;
-    case GST_AUDIO_FORMAT_S16 :
-      printsample = printsample_int16;
-      break;
-    case GST_AUDIO_FORMAT_S32 :
-      printsample = printsample_int32;
-      break;
-    case GST_AUDIO_FORMAT_F32 :
-      printsample = printsample_float;
-      break;
-    case GST_AUDIO_FORMAT_F64 :
-      printsample = printsample_double;
-      break;
-    default:
-      success = FALSE;
-      break;
-  }
+  if(success)
+    switch(GST_AUDIO_INFO_FORMAT(&element->audio_info)) {
+      case GST_AUDIO_FORMAT_U8 :
+        printsample = printsample_uint8;
+        break;
+      case GST_AUDIO_FORMAT_U16 :
+        printsample = printsample_uint16;
+        break;
+      case GST_AUDIO_FORMAT_U32 :
+        printsample = printsample_uint32;
+        break;
+      case GST_AUDIO_FORMAT_S8 :
+        printsample = printsample_int8;
+        break;
+      case GST_AUDIO_FORMAT_S16 :
+        printsample = printsample_int16;
+        break;
+      case GST_AUDIO_FORMAT_S32 :
+        printsample = printsample_int32;
+        break;
+      case GST_AUDIO_FORMAT_F32 :
+        printsample = printsample_float;
+        break;
+      case GST_AUDIO_FORMAT_F64 :
+        printsample = printsample_double;
+        break;
+      default:
+        success = FALSE;
+        break;
+    }
 
   if(success) {
     element->unit_size = GST_AUDIO_INFO_BPF(&element->audio_info);
