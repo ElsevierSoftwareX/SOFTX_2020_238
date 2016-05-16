@@ -20,6 +20,10 @@ from gstlal import pipeparts
 import gst
 import numpy
 
+#
+# Functions for making sure no channels are missing from the frames
+#
+
 def gate_strain_for_output_frames(pipeline, head, control):
 	controltee = pipeparts.mktee(pipeline, control)
 	control = mkaudiorate(pipeline, mkqueue(pipeline, controltee))
@@ -32,6 +36,10 @@ def gate_other_with_strain(pipeline, other, strain):
 	other = mkaudiorate(pipeline, other)
 	return other
 
+#
+# Shortcut functions for common element combos/properties
+#
+
 def mkqueue(pipeline, head):
 	return pipeparts.mkqueue(pipeline, head, max_size_time = 0, max_size_buffers = 0, max_size_bytes = 0)
 	
@@ -43,48 +51,15 @@ def mkaudiorate(pipeline, head):
 def mkreblock(pipeline, head):
 	return pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
 
-def write_graph(demux, pipeline, name):
-	pipeparts.write_dump_dot(pipeline, "%s.%s" % (name, "PLAYING"), verbose = True)
-
-def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
-	head = mkqueue(pipeline, None)
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_pad("sink"))
-	head = mkreblock(pipeline, head)
-	return head
-
-def caps_and_progress(pipeline, head, caps, progress_name):
-	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
-	return head
-
-def caps_and_progress_and_resample(pipeline, head, caps, progress_name, new_caps):
-	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
-	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
-	head = mkaudiorate(pipeline, head)
-	return head
-
-def caps_and_progress_and_upsample(pipeline, head, caps, progress_name, new_caps):
-	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
+def mkupsample(pipeline, head, new_caps):
 	head = pipeparts.mkgeneric(pipeline, head, "lal_constant_upsample")
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
 	head = mkaudiorate(pipeline, head)
-	head = pipeparts.mktee(pipeline, head)
+	#head = pipeparts.mktee(pipeline, head)
 	return head
 
-def resample(pipeline, head, caps):
+def mkresample(pipeline, head, caps):
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	#head = mkaudiorate(pipeline, head)
-	return head
-
-def undersample(pipeline, head, caps):
-	head = pipeparts.mkaudioundersample(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	#head = mkaudiorate(pipeline, head)
 	return head
@@ -112,20 +87,55 @@ def mkadder(pipeline, srcs, caps, sync = True):
 	elem = pipeparts.mkcapsfilter(pipeline, elem, caps)
 	return elem
 
+#
+# Write a pipeline graph function
+#
+
+def write_graph(demux, pipeline, name):
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (name, "PLAYING"), verbose = True)
+
+#
+# Common element combo functions
+#
+
+def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
+	head = mkqueue(pipeline, None)
+	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_pad("sink"))
+	head = mkreblock(pipeline, head)
+	return head
+
+def caps_and_progress(pipeline, head, caps, progress_name):
+	head = pipeparts.mkaudioconvert(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, head, caps)
+	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
+	return head
+
+
+#
+# Function to make a list of heads to pass to, i.e. the multiplier or adder
+#
+
 def list_srcs(pipeline, *args):
 	out = []
 	for src in args:
 		out.append(mkqueue(pipeline, src))
 	return tuple(out)
 
+#
+# Calibration factor related functions
+#
+
 def average_calib_factors(pipeline, head, var, expected, N, caps, hold_time, Nav):
+	# Find median of calibration factors array and smooth out medians with an average over Nav samples
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_check_calib_factors", variance = var, default = expected, wait_time_to_new_expected = hold_time, median_array_size = N)
+	head = mkaudiorate(pipeline, head)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothcalibfactors", max_value = expected + var, min_value = expected-var, default_val = expected, max_size = N)
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
 	return head
 
 def merge_into_complex(pipeline, real, imag, real_caps, complex_caps):
+	# Merge real and imag into one complex channel with complex caps
 	head = mkinterleave(pipeline, list_srcs(pipeline, real, imag), real_caps)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float")
@@ -135,6 +145,7 @@ def merge_into_complex(pipeline, real, imag, real_caps, complex_caps):
 	return head
 
 def split_into_real(pipeline, complex, real_caps, complex_caps):
+	# split complex channel with complex caps into two channels (real and imag) with real caps
 	elem = pipeparts.mkcapsfilter(pipeline, complex, complex_caps)
 	elem = pipeparts.mktogglecomplex(pipeline, elem)
 	elem = pipeparts.mkcapsfilter(pipeline, elem, "audio/x-raw-float, channels=2")
@@ -149,18 +160,23 @@ def split_into_real(pipeline, complex, real_caps, complex_caps):
 	return real, imag
 
 def demodulate(pipeline, head, sr, freq, orig_caps, new_caps, integration_samples, td):
+	# demodulate input at a given frequency freq
 	headtee = pipeparts.mktee(pipeline, head)
 	deltat = 1.0/float(sr)
 	cos = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, headtee), "lal_numpy_fx_transform", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
 	sin = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, headtee), "lal_numpy_fx_transform", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
 
 	headR = mkmultiplier(pipeline, (mkqueue(pipeline, headtee), cos), orig_caps)
-	headR = resample(pipeline, headR, new_caps)
+	headR = mkresample(pipeline, headR, new_caps)
 	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
+	headR = pipeparts.mkaudioconvert(pipeline, headR)
+	headR = pipeparts.mkcapsfilter(pipeline, headR, new_caps)
 
 	headI = mkmultiplier(pipeline, (mkqueue(pipeline, headtee), sin), orig_caps)
-	headI = resample(pipeline, headI, new_caps)
+	headI = mkresample(pipeline, headI, new_caps)
 	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
+	headI = pipeparts.mkaudioconvert(pipeline, headI)
+	headI = pipeparts.mkcapsfilter(pipeline, headI, new_caps)
 
 	return headR, headI
 
@@ -181,30 +197,32 @@ def filter_at_line(pipeline, chanR, chanI, WR, WI, caps):
 	outI = mkadder(pipeline, list_srcs(pipeline, chanR_WI, chanI_WR), caps)
 	return outR, outI
 
-def compute_pcalfp_over_derrfp(pipeline, derrfpR, derrfpI, pcalfpR, pcalfpI, caps):
+def complex_division(pipeline, bR, bI, aR, aI, caps):
+	# Perform complex division of a/b and output the real and imaginary parts of the quotient
 
-	pcalfpRtee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pcalfpR, caps))
-	pcalfpItee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pcalfpI, caps))
-	derrfpRtee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, derrfpR, caps))
-	derrfpItee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, derrfpI, caps))
-	derrfp2 = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, derrfpRtee, exponent=2.0), pipeparts.mkpow(pipeline, derrfpItee, exponent=2.0)), caps))
+	aRtee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, aR, caps))
+	aItee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, aI, caps))
+	bRtee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, bR, caps))
+	bItee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, bI, caps))
+	b2 = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, bRtee, exponent=2.0), pipeparts.mkpow(pipeline, bItee, exponent=2.0)), caps))
 
-	cR1 = mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, pcalfpItee), caps)
-	cR2 = mkmultiplier(pipeline, list_srcs(pipeline, derrfpRtee, pcalfpRtee), caps)
-	cR = mkmultiplier(pipeline, list_srcs(pipeline, mkadder(pipeline, list_srcs(pipeline, cR1, cR2), caps), pipeparts.mkpow(pipeline, derrfp2, exponent=-1.0)), caps)
-	cI1 = mkmultiplier(pipeline, list_srcs(pipeline, derrfpRtee, pcalfpItee), caps)
-	cI2 = mkmultiplier(pipeline, list_srcs(pipeline, derrfpItee, pcalfpRtee), caps)
-	cI = mkmultiplier(pipeline, list_srcs(pipeline, mkadder(pipeline, list_srcs(pipeline, cI1, pipeparts.mkaudioamplify(pipeline, cI2, -1.0)), caps), pipeparts.mkpow(pipeline, derrfp2, exponent=-1.0)), caps)
+	cR1 = mkmultiplier(pipeline, list_srcs(pipeline, bItee, aItee), caps)
+	cR2 = mkmultiplier(pipeline, list_srcs(pipeline, bRtee, aRtee), caps)
+	cR = mkmultiplier(pipeline, list_srcs(pipeline, mkadder(pipeline, list_srcs(pipeline, cR1, cR2), caps), pipeparts.mkpow(pipeline, b2, exponent=-1.0)), caps)
+	cI1 = mkmultiplier(pipeline, list_srcs(pipeline, bRtee, aItee), caps)
+	cI2 = mkmultiplier(pipeline, list_srcs(pipeline, bItee, aRtee), caps)
+	cI = mkmultiplier(pipeline, list_srcs(pipeline, mkadder(pipeline, list_srcs(pipeline, cI1, pipeparts.mkaudioamplify(pipeline, cI2, -1.0)), caps), pipeparts.mkpow(pipeline, b2, exponent=-1.0)), caps)
 	return cR, cI
 
 def compute_gamma(pipeline, excR, excI, ctrlR, ctrlI, olgR, olgI, WR, WI, real_caps):
+	# deprecated function for computing the old "gamma" factor
 
 	ctrlR, ctrlI = filter_at_line(pipeline, ctrlR, ctrlI, WR, WI, real_caps)
 
 	ctrlR = pipeparts.mktee(pipeline, ctrlR)
 	ctrlI = pipeparts.mktee(pipeline, ctrlI)
 
-	exc_over_ctrlR, exc_over_ctrlI = compute_pcalfp_over_derrfp(pipeline, ctrlR, ctrlI, excR, excI, real_caps)
+	exc_over_ctrlR, exc_over_ctrlI = complex_division(pipeline, ctrlR, ctrlI, excR, excI, real_caps)
 	exc_over_ctrlR = pipeparts.mkaudioconvert(pipeline, exc_over_ctrlR)
 	exc_over_ctrlR = pipeparts.mkcapsfilter(pipeline, exc_over_ctrlR, real_caps)
 
@@ -227,6 +245,7 @@ def compute_gamma(pipeline, excR, excI, ctrlR, ctrlI, olgR, olgI, WR, WI, real_c
 	return gammaR, gammaI
 	
 def multiply_complex_channel_complex_number(pipeline, channelR, channelI, numberR, numberI, caps):
+	# multiply the real and imaginary channels by a complex number
 	channelR = pipeparts.mktee(pipeline, channelR)
 	channelI = pipeparts.mktee(pipeline, channelI)
 	outR = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, channelR, numberR), pipeparts.mkaudioamplify(pipeline, channelI, -1.0 * numberI)), caps)
@@ -235,10 +254,10 @@ def multiply_complex_channel_complex_number(pipeline, channelR, channelI, number
 
 def compute_kappatst_from_filters_file(pipeline, derrfxR, derrfxI, excfxR, excfxI, pcalfp_derrfpR, pcalfp_derrfpI,  ktstfacR, ktstfacI, real_caps, complex_caps):
 
-	derrfx_over_excfxR, derrfx_over_excfxI = compute_pcalfp_over_derrfp(pipeline, excfxR, excfxI, derrfxR, derrfxI, real_caps)
+	derrfx_over_excfxR, derrfx_over_excfxI = complex_division(pipeline, excfxR, excfxI, derrfxR, derrfxI, real_caps)
 	pcalfp_over_derrfp = merge_into_complex(pipeline, pcalfp_derrfpR, pcalfp_derrfpI, real_caps, complex_caps)
 
-	# 	     
+	# 		
 	# \kappa_TST = ktstfac * (derrfx/excfx) * (pcalfp/derrfp)
 	# ktstfac = -(1/A0fx) * (C0fp/(1+G0fp)) * ((1+G0fx)/C0fx)
 	#
@@ -251,12 +270,12 @@ def compute_kappatst_from_filters_file(pipeline, derrfxR, derrfxI, excfxR, excfx
 
 def compute_kappatst(pipeline, derrfxR, derrfxI, excfxR, excfxI, pcalfp_derrfpR, pcalfp_derrfpI,  ktstfacR, ktstfacI, real_caps, complex_caps):
 
-	derrfx_over_excfxR, derrfx_over_excfxI = compute_pcalfp_over_derrfp(pipeline, excfxR, excfxI, derrfxR, derrfxI, real_caps)
+	derrfx_over_excfxR, derrfx_over_excfxI = complex_division(pipeline, excfxR, excfxI, derrfxR, derrfxI, real_caps)
 	derrfx_over_excfx = merge_into_complex(pipeline, derrfx_over_excfxR, derrfx_over_excfxI, real_caps, complex_caps)
 	pcalfp_over_derrfp = merge_into_complex(pipeline, pcalfp_derrfpR, pcalfp_derrfpI, real_caps, complex_caps)
 	ktstfac = merge_into_complex(pipeline, ktstfacR, ktstfacI, real_caps, complex_caps)
 
-	# 	     
+	# 		
 	# \kappa_TST = ktstfac * (derrfx/excfx) * (pcalfp/derrfp)
 	# ktstfac = -(1/A0fx) * (C0fp/(1+G0fp)) * ((1+G0fx)/C0fx)
 	#
@@ -390,3 +409,17 @@ def compute_fcc(pipeline, SR, SI, fpcal, caps):
 	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), pipeparts.mkpow(pipeline, SI, exponent=-1.0)), caps)
 	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal)
 	return fcc
+
+def average_and_check_range(pipeline, real, imag, variance_real, variance_imag, hold_time, expected_value_real, expected_value_imag, median_array_size, median_smoothing_samples, caps):
+
+	# Produce a channel that says whether lal_check_calib_factors will compute a good value or not.  Use this in the statevector bit for this \kappa
+	realInRange = pipeparts.mkgeneric(pipeline, mkaudiorate(pipeline, mkqueue(pipeline, real)), "lal_smoothcalibfactors", max_value = expected_value_real + variance_real, min_value = expected_value_real - variance_real, default_val = expected_value_real, statevector = True, max_size = median_array_size)
+	imagInRange = pipeparts.mkgeneric(pipeline, mkaudiorate(pipeline, mkqueue(pipeline, real)), "lal_smoothcalibfactors", max_value = expected_value_imag + variance_imag, min_value = expected_value_imag - variance_imag, default_val = expected_value_imag, statevector = True, max_size = median_array_size)
+
+	realOut = average_calib_factors(pipeline, mkqueue(pipeline, real), variance_real, expected_value_real, median_array_size, caps, hold_time, median_smoothing_samples)
+	imagOut = average_calib_factors(pipeline, mkqueue(pipeline, imag), variance_imag, expected_value_imag, median_array_size, caps, hold_time, median_smoothing_samples)
+
+	realOuttee = pipeparts.mktee(pipeline, realOut)
+	imagOuttee = pipeparts.mktee(pipeline, imagOut)
+
+	return realInRange, imagInRange, realOuttee, imagOuttee
