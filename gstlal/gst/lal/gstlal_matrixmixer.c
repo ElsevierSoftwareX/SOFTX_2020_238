@@ -97,6 +97,7 @@
 
 
 #include <gstlal/gstlal.h>
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal_matrixmixer.h>
 
 
@@ -299,7 +300,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	success &= gst_audio_info_from_caps(&info, caps);
+	success &= gstlal_audio_info_from_caps(&info, caps);
 
 	if(success)
 		*size = GST_AUDIO_INFO_BPF(&info);
@@ -385,9 +386,9 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	gint out_channels;
 	gboolean success = data_type != GSTLAL_MATRIXMIXER_NONE;
 
-	success &= gst_audio_info_from_caps(&info, incaps);
+	success &= gstlal_audio_info_from_caps(&info, incaps);
 	in_channels = GST_AUDIO_INFO_CHANNELS(&info);
-	success &= gst_audio_info_from_caps(&info, outcaps);
+	success &= gstlal_audio_info_from_caps(&info, outcaps);
 	out_channels = GST_AUDIO_INFO_CHANNELS(&info);
 
 	if(!success)

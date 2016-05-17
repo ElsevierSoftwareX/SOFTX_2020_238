@@ -53,6 +53,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal_bitvectorgen.h>
 
 
@@ -252,7 +253,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	success &= gst_audio_info_from_caps(&info, caps);
+	success &= gstlal_audio_info_from_caps(&info, caps);
 
 	if(success)
 		*size = GST_AUDIO_INFO_BPF(&info);
@@ -337,9 +338,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * parse the input caps
 	 */
 
-	success &= gst_audio_info_from_caps(&info, incaps);
+	success &= gstlal_audio_info_from_caps(&info, incaps);
 	if(success) {
-		const gchar *name = GST_AUDIO_INFO_NAME(&info);
 		rate = GST_AUDIO_INFO_RATE(&info);
 		switch(GST_AUDIO_INFO_FORMAT(&info)) {
 		case GST_AUDIO_FORMAT_S8:
@@ -366,16 +366,14 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		case GST_AUDIO_FORMAT_F64:
 			get_input_func = get_input_float64;
 			break;
+		case GST_AUDIO_FORMAT_Z64:
+			get_input_func = get_input_complex64;
+			break;
+		case GST_AUDIO_FORMAT_Z128:
+			get_input_func = get_input_complex128;
+			break;
 		default:
-			/*
-			 * Handle the complex types which are "special" formats
-			 */
-			if(!strncmp(name, "Z64", 3))
-				get_input_func = get_input_complex64;
-			else if(!strncmp(name, "Z128", 4))
-				get_input_func = get_input_complex128;
-			else
-				success = FALSE;
+			success = FALSE;
 			break;
 		}
 	}

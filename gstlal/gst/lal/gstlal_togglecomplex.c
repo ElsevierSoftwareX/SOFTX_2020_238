@@ -145,25 +145,6 @@ G_DEFINE_TYPE_WITH_CODE(
 
 
 /*
- * get_unit_size()
- */
-
-
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
-{
-	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
-
-	if(success)
-		*size = GST_AUDIO_INFO_BPF(&info);
-	else
-		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
-
-	return success;
-}
-
-
-/*
  * transform_caps()
  */
 
@@ -307,7 +288,6 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 

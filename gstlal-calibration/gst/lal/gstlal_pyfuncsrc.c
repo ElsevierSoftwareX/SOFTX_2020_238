@@ -40,6 +40,7 @@
 #include <Python.h>
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal_pyfuncsrc.h>
 
@@ -260,7 +261,7 @@ static gboolean set_caps(GstBaseSrc *basesrc, GstCaps *caps)
 {
 	GstLALPyFuncSrc *element = GSTLAL_PYFUNCSRC(basesrc);
 
-	return gst_audio_info_from_caps(&element->audioinfo, caps);
+	return gstlal_audio_info_from_caps(&element->audioinfo, caps);
 }
 
 

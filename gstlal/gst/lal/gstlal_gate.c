@@ -71,6 +71,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal_gate.h>
 
@@ -618,51 +619,51 @@ static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 {
 	gdouble (*control_sample_func)(const gpointer, guint64) = NULL;
 	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
-	gint rate = GST_AUDIO_INFO_RATE(&info);
-	GstAudioFormat format = GST_AUDIO_INFO_FORMAT(&info); 
-	const gchar *name = GST_AUDIO_INFO_NAME(&info);
+	gboolean success = gstlal_audio_info_from_caps(&info, caps);
+	gint rate;
 
 	/*
 	 * parse the format
 	 */
 
-	switch(format) {
-	case GST_AUDIO_FORMAT_U8:
-		control_sample_func = control_sample_uint8;
-		break;
-	case GST_AUDIO_FORMAT_U16:
-		control_sample_func = control_sample_uint16;
-		break;
-	case GST_AUDIO_FORMAT_U32:
-		control_sample_func = control_sample_uint32;
-		break;
-	case GST_AUDIO_FORMAT_S8:
-		control_sample_func = control_sample_int8;
-		break;
-	case GST_AUDIO_FORMAT_S16:
-		control_sample_func = control_sample_int16;
-		break;
-	case GST_AUDIO_FORMAT_S32:
-		control_sample_func = control_sample_int32;
-		break;
-	case GST_AUDIO_FORMAT_F32:
-		control_sample_func = control_sample_float32;
-		break;
-	case GST_AUDIO_FORMAT_F64:
-		control_sample_func = control_sample_float64;
-		break;
-	default:
-		/*
-		 * Handle the complex types which are "special" formats
-		 */
-		if(!strncmp(name, "Z64", 3))
+	if(success) {
+		rate = GST_AUDIO_INFO_RATE(&info);
+
+		switch(GST_AUDIO_INFO_FORMAT(&info)) {
+		case GST_AUDIO_FORMAT_U8:
+			control_sample_func = control_sample_uint8;
+			break;
+		case GST_AUDIO_FORMAT_U16:
+			control_sample_func = control_sample_uint16;
+			break;
+		case GST_AUDIO_FORMAT_U32:
+			control_sample_func = control_sample_uint32;
+			break;
+		case GST_AUDIO_FORMAT_S8:
+			control_sample_func = control_sample_int8;
+			break;
+		case GST_AUDIO_FORMAT_S16:
+			control_sample_func = control_sample_int16;
+			break;
+		case GST_AUDIO_FORMAT_S32:
+			control_sample_func = control_sample_int32;
+			break;
+		case GST_AUDIO_FORMAT_F32:
+			control_sample_func = control_sample_float32;
+			break;
+		case GST_AUDIO_FORMAT_F64:
+			control_sample_func = control_sample_float64;
+			break;
+		case GST_AUDIO_FORMAT_Z64:
 			control_sample_func = control_sample_complex64;
-		else if(!strncmp(name, "Z128", 4))
+			break;
+		case GST_AUDIO_FORMAT_Z128:
 			control_sample_func = control_sample_complex128;
-		else
+			break;
+		default:
 			success = FALSE;
-		break;
+			break;
+		}
 	}
 
 	/*
@@ -887,17 +888,22 @@ static GstCaps *getcaps(GSTLALGate *gate, GstPad *pad, GstCaps *filter)
 static gboolean setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 {
 	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
-	gint rate = GST_AUDIO_INFO_RATE(&info);
-	gint width = GST_AUDIO_INFO_WIDTH(&info);
-	gint channels = GST_AUDIO_INFO_CHANNELS(&info);
+	gboolean success = gstlal_audio_info_from_caps(&info, caps);
+	gint rate;
+	gint width;
+	gint channels;
 
 	/*
 	 * try setting caps on downstream element
 	 */
 
-	if(success)
+	if(success) {
+		rate = GST_AUDIO_INFO_RATE(&info);
+		width = GST_AUDIO_INFO_WIDTH(&info);
+		channels = GST_AUDIO_INFO_CHANNELS(&info);
+
 		success = gst_pad_set_caps(gate->srcpad, caps);
+	}
 
 	/*
 	 * update the element metadata
