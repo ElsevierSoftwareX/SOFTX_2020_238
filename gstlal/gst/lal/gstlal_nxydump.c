@@ -71,6 +71,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal_nxydump.h>
 
 
@@ -102,11 +103,13 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 /*
  * the maximum number of characters it takes to print the value for one
  * channel including delimeter, sign characters, etc.;  double-precision
- * floats in "%.16g" format can be upto 23 characters, plus 1 tab character
- * between columns.  all other data types require fewer characters
+ * floats in "%.16g" format can be upto 23 characters;  double-precision
+ * complex floats are two of those plus a "+I";  also there is 1 tab
+ * character between columns.  all other data types require fewer
+ * characters
  */
 
-#define MAX_CHARS_PER_COLUMN (23 + 1)
+#define MAX_CHARS_PER_COLUMN (2*23 + 2 + 1)
 
 /*
  * newline is "CRLF"
@@ -154,6 +157,22 @@ static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 length,
 /**
  * Print the samples from a buffer of channel data into a buffer of text.
  */
+
+
+static int printsample_double_complex(char *location, const void **sample)
+{
+  double re = *(*(const double **) sample)++;
+  double im = *(*(const double **) sample)++;
+  return sprintf(location, "\t%.16g+I%.16g", re, im);
+}
+
+
+static int printsample_float_complex(char *location, const void **sample)
+{
+  float re = *(*(const float **) sample)++;
+  float im = *(*(const float **) sample)++;
+  return sprintf(location, "\t%.8g+I%.8g", (double) re, (double) im);
+}
 
 
 static int printsample_double(char *location, const void **sample)
@@ -287,7 +306,7 @@ static GstStaticPadTemplate sink_factory =
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS(
-        GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", S8, " GST_AUDIO_NE(S16) ", "  GST_AUDIO_NE(S32) ", U8, " GST_AUDIO_NE(U16) ", "  GST_AUDIO_NE(U32) "}") ", " \
+        GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", S8, " GST_AUDIO_NE(S16) ", "  GST_AUDIO_NE(S32) ", U8, " GST_AUDIO_NE(U16) ", "  GST_AUDIO_NE(U32) "}") ", " \
 	"layout = (string) interleaved, " \
 	"channel-mask = (bitmask) 0")
     );
@@ -342,7 +361,7 @@ static gboolean get_unit_size(GstBaseTransform * trans, GstCaps * caps,
     *size = 1;
   } else {
     GstAudioInfo info;
-    success = gst_audio_info_from_caps(&info, caps);
+    success = gstlal_audio_info_from_caps(&info, caps);
 
     if(success)
       *size = GST_AUDIO_INFO_BPF(&info);
@@ -450,7 +469,7 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
 {
   GstTSVEnc *element = GST_TSVENC(trans);
   int (*printsample) (char *, const void **);
-  gboolean success = gst_audio_info_from_caps(&element->audio_info, incaps);
+  gboolean success = gstlal_audio_info_from_caps(&element->audio_info, incaps);
 
   element->printsample = NULL;  /* in case it doesn't get set */
 
@@ -483,6 +502,12 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
         break;
       case GST_AUDIO_FORMAT_F64 :
         printsample = printsample_double;
+        break;
+      case GST_AUDIO_FORMAT_Z64 :
+        printsample = printsample_float_complex;
+        break;
+      case GST_AUDIO_FORMAT_Z128 :
+        printsample = printsample_double_complex;
         break;
       default:
         success = FALSE;
