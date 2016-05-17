@@ -49,6 +49,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 
 
@@ -84,18 +85,11 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_smoothcalibfactors", 0, "lal_smoothcalibfactors element");
-}
-
-
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALSmoothCalibFactors,
 	gstlal_smoothcalibfactors,
-	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_smoothcalibfactors", 0, "lal_smoothcalibfactors element")
 );
 
 
@@ -175,10 +169,10 @@ static DTYPE running_median_## DTYPE(GSTLALSmoothCalibFactors *element, DTYPE *s
 	
 
 #define DEFINE_SMOOTH_FACTORS_FUNC(DTYPE) \
-static GstFlowReturn smooth_factors_## DTYPE(GSTLALSmoothCalibFactors *element, GstBuffer *inbuf, GstBuffer *outbuf) { \
-	DTYPE *src = (DTYPE *) GST_BUFFER_DATA(inbuf); \
-	DTYPE *dst = (DTYPE *) GST_BUFFER_DATA(outbuf); \
-	DTYPE *dst_end = dst + (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)); \
+static GstFlowReturn smooth_factors_## DTYPE(GSTLALSmoothCalibFactors *element, GstMapInfo *inmap, GstMapInfo *outmap, gint n) { \
+	DTYPE *src = (DTYPE *) inmap->data; \
+	DTYPE *dst = (DTYPE *) outmap->data; \
+	DTYPE *dst_end = dst + n; \
 	for(; dst < dst_end; dst++) { \
 		DTYPE *src_end = src + element->channels; \
 		for(; src < src_end; src++) { \
@@ -226,19 +220,13 @@ DEFINE_SMOOTH_FACTORS_FUNC(float);
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstStructure *str;
-	gint channels;
-	gint width;
-	gboolean success = TRUE;
-
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
-	success &= gst_structure_get_int(str, "width", &width);
+	GstAudioInfo info;
+	gboolean success = gst_audio_info_from_caps(&info, caps);
 
 	if(success)
-		*size = width / 8 * channels;
+		*size = GST_AUDIO_INFO_BPF(&info);
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
@@ -290,57 +278,44 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALSmoothCalibFactors *element = GSTLAL_SMOOTHCALIBFACTORS(trans);
-	GstStructure *s;
-	gint channels, width;
+	GstAudioInfo info;
 	gboolean success = TRUE;
 
 	/*
 	 * parse the caps
 	 */
 
-	s = gst_caps_get_structure(incaps, 0);
-	if(!gst_structure_get_int(s, "channels", &channels)) {
-		GST_ERROR_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
-		success = FALSE;
-	}
-	if(success) {
-		element->channels = channels;
-	}
-
-	if(!gst_structure_get_int(s, "width", &width)) {
-		GST_ERROR_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
-		return FALSE;
-	}
-
-	/*
-	 * if applicable, check that the number of channels is valid
-	 */
-
-	if(channels != element->channels) {
-		/* FIXME:  perhaps emit a "channel-count-changed" signal? */
-		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, element->channels, incaps);
-		return FALSE;
-	}
+	success = gst_audio_info_from_caps(&info, incaps);
+	if(!success)
+		GST_ERROR_OBJECT(element, "unable to parse %" GST_PTR_FORMAT, incaps);
 
 	/*
 	 * set the median and smoothing functions
 	 */
 
-	switch(width) {
-	case 32:
-		element->smooth_factors_func = smooth_factors_float;
-		break;
+	if(success) {
+		switch(GST_AUDIO_INFO_FORMAT(&info)) {
+		case GST_AUDIO_FORMAT_F32:
+			element->smooth_factors_func = smooth_factors_float;
+			break;
 
-	case 64:
-		element->smooth_factors_func = smooth_factors_double;
-		break;
+		case GST_AUDIO_FORMAT_F64:
+			element->smooth_factors_func = smooth_factors_double;
+			break;
 
-	default:
-		g_assert_not_reached();
-		break;
+		default:
+			GST_ERROR_OBJECT(element, "unsupported foramt %" GST_PTR_FORMAT, incaps);
+			success = FALSE;
+			break;
+		}
 	}
 
-	return TRUE;
+	if(success) {
+		/* FIXME:  perhaps emit a "channel-count-changed" signal? */
+		element->channels = GST_AUDIO_INFO_CHANNELS(&info);
+	}
+
+	return success;
 }
 
 
@@ -352,27 +327,36 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	GSTLALSmoothCalibFactors *element = GSTLAL_SMOOTHCALIBFACTORS(trans);
+	GstMapInfo outmap;
 	GstFlowReturn result;
 
 	g_assert(element->smooth_factors_func != NULL);
 
 	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
+	gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
+
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
 		 * input is not 0s.
 		 */
 
-		result = element->smooth_factors_func(element, inbuf, outbuf);
+		GstMapInfo inmap;
+
+		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
+		result = element->smooth_factors_func(element, &inmap, &outmap, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
+		gst_buffer_unmap(inbuf, &inmap);
 	} else {
 		/*
 		 * input is 0s.
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		memset(outmap.data, 0, outmap.size);
 		result = GST_FLOW_OK;
 	}
+
+	gst_buffer_unmap(outbuf, &outmap);
 
 	/*
 	 * done
@@ -480,17 +464,7 @@ static void finalize(GObject *object)
         g_free(element->fifo_array);
         element->fifo_array = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gstlal_smoothcalibfactors_base_init(gpointer klass)
-{
+	G_OBJECT_CLASS(gstlal_smoothcalibfactors_parent_class)->finalize(object);
 }
 
 
@@ -504,11 +478,9 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64}"
+		GST_AUDIO_CAPS_MAKE("{ " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }") ", " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -518,11 +490,12 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
+		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) {32, 64}"
+		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -616,7 +589,7 @@ static void gstlal_smoothcalibfactors_class_init(GSTLALSmoothCalibFactorsClass *
  */
 
 
-static void gstlal_smoothcalibfactors_init(GSTLALSmoothCalibFactors *filter, GSTLALSmoothCalibFactorsClass *klass)
+static void gstlal_smoothcalibfactors_init(GSTLALSmoothCalibFactors *filter)
 {
 	filter->channels = 0;
 	filter->med_array_size = 0;

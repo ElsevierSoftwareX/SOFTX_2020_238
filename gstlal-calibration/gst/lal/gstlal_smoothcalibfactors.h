@@ -67,7 +67,7 @@ struct _GSTLALSmoothCalibFactors {
 	double *fifo_array;
 	double max_value, min_value, current_median_val, default_out;
 
-	GstFlowReturn (*smooth_factors_func)(GSTLALSmoothCalibFactors *, GstBuffer *, GstBuffer *);;
+	GstFlowReturn (*smooth_factors_func)(GSTLALSmoothCalibFactors *, GstMapInfo *, GstMapInfo *, gint);;
 };
 
 
