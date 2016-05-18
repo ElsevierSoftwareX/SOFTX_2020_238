@@ -31,6 +31,7 @@ G_BEGIN_DECLS
 
 enum gst_adder_mixmode_t {
   GST_ADDER_MIXMODE_SUM = 1,
+  GST_ADDER_MIXMODE_PROD,
 };
 
 #define GST_ADDER_MIXMODE_TYPE (gst_adder_mixmode_get_type())

@@ -161,6 +161,7 @@ GType gst_adder_mixmode_get_type(void)
   if (!type) {
     static GEnumValue values[] = {
       {GST_ADDER_MIXMODE_SUM, "Sum", "sum"},
+      {GST_ADDER_MIXMODE_PROD, "Product", "product"},
       {0, NULL, NULL}
     };
     type = g_enum_register_static("GST_ADDER_MIXMODE", values);
@@ -1288,6 +1289,107 @@ static void addfunc(GstAdder *adder, GstAdderPad *pad, gpointer dst, gpointer sr
   }
 }
 
+/* FIXME:  these can all be done with orc */
+#define MAKE_ADDER_MUL_FUNC(name, type) static void adder_mul_ ## name (type * dst, type * src, guint count) { while(count--) *dst++ *= *src++; }
+#define MAKE_ADDER_MUL_VOLUME_FUNC(name, type) static void adder_mul_volume_ ## name (type * dst, type * src, type vol, guint count) { while(count--) *dst++ *= vol * *src++; }
+MAKE_ADDER_MUL_FUNC(u8, guint8)
+MAKE_ADDER_MUL_FUNC(s8, gint8)
+MAKE_ADDER_MUL_FUNC(u16, guint16)
+MAKE_ADDER_MUL_FUNC(s16, gint16)
+MAKE_ADDER_MUL_FUNC(u32, guint32)
+MAKE_ADDER_MUL_FUNC(s32, gint32)
+MAKE_ADDER_MUL_FUNC(f32, gfloat)
+MAKE_ADDER_MUL_FUNC(f64, gdouble)
+MAKE_ADDER_MUL_FUNC(z64, complex float)
+MAKE_ADDER_MUL_FUNC(z128, complex double)
+MAKE_ADDER_MUL_VOLUME_FUNC(u8, guint8)
+MAKE_ADDER_MUL_VOLUME_FUNC(s8, gint8)
+MAKE_ADDER_MUL_VOLUME_FUNC(u16, guint16)
+MAKE_ADDER_MUL_VOLUME_FUNC(s16, gint16)
+MAKE_ADDER_MUL_VOLUME_FUNC(u32, guint32)
+MAKE_ADDER_MUL_VOLUME_FUNC(s32, gint32)
+MAKE_ADDER_MUL_VOLUME_FUNC(f32, gfloat)
+MAKE_ADDER_MUL_VOLUME_FUNC(f64, gdouble)
+MAKE_ADDER_MUL_VOLUME_FUNC(z64, complex float)
+MAKE_ADDER_MUL_VOLUME_FUNC(z128, complex double)
+
+static void mulfunc(GstAdder *adder, GstAdderPad *pad, gpointer dst, gpointer src, guint count)
+{
+  if (pad->volume == 1.0) {
+    switch (adder->info.finfo->format) {
+      case GST_AUDIO_FORMAT_U8:
+        adder_mul_u8 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_S8:
+        adder_mul_s8 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_U16:
+        adder_mul_u16 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_S16:
+        adder_mul_s16 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_U32:
+        adder_mul_u32 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_S32:
+        adder_mul_s32 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_F32:
+        adder_mul_f32 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_F64:
+        adder_mul_f64 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_Z64:
+        adder_mul_z64 (dst, src, count);
+        break;
+      case GST_AUDIO_FORMAT_Z128:
+        adder_mul_z128 (dst, src, count);
+        break;
+      default:
+        g_assert_not_reached ();
+        break;
+    }
+  } else {
+    switch (adder->info.finfo->format) {
+      case GST_AUDIO_FORMAT_U8:
+        adder_mul_volume_u8 (dst, src, pad->volume_i8, count);
+        break;
+      case GST_AUDIO_FORMAT_S8:
+        adder_mul_volume_s8 (dst, src, pad->volume_i8, count);
+        break;
+      case GST_AUDIO_FORMAT_U16:
+        adder_mul_volume_u16 (dst, src, pad->volume_i16, count);
+        break;
+      case GST_AUDIO_FORMAT_S16:
+        adder_mul_volume_s16 (dst, src, pad->volume_i16, count);
+        break;
+      case GST_AUDIO_FORMAT_U32:
+        adder_mul_volume_u32 (dst, src, pad->volume_i32, count);
+        break;
+      case GST_AUDIO_FORMAT_S32:
+        adder_mul_volume_s32 (dst, src, pad->volume_i32, count);
+        break;
+      case GST_AUDIO_FORMAT_F32:
+        adder_mul_volume_f32 (dst, src, pad->volume, count);
+        break;
+      case GST_AUDIO_FORMAT_F64:
+        adder_mul_volume_f64 (dst, src, pad->volume, count);
+        break;
+      case GST_AUDIO_FORMAT_Z64:
+        adder_mul_volume_z64 (dst, src, pad->volume, count);
+        break;
+      case GST_AUDIO_FORMAT_Z128:
+        adder_mul_volume_z128 (dst, src, pad->volume, count);
+        break;
+      default:
+        g_assert_not_reached ();
+        break;
+    }
+  }
+}
+
 struct partial_buffer_info {
   GstBuffer *inbuf;
   GstAdderPad *pad;
@@ -1334,8 +1436,8 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   GSList *collected;
   GstBuffer *outbuf = NULL;
   GSList *partial_nongap_buffers = NULL;
+  GSList *partial_gap_buffers = NULL;
   GstBuffer *full_gap_buffer = NULL;
-  gboolean have_gap_buffers = FALSE;
   GstFlowReturn ret;
   guint64 outlength;
   GstClockTime t_start, t_end;
@@ -1526,15 +1628,19 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
     }
 
     /* keep one of the full gap buffers to reuse as output incase we don't
-     * get anything else, record whether or not we saw any gap buffers at
-     * all, add all full non-gap buffers together, and collect a list of
-     * the partial non-gap buffers to add into the result later. */
+     * get anything else, add all full non-gap buffers together, and
+     * collect a list of the partial gap and non-gap buffers to process
+     * later after we are sure to have an output buffer */
     if (GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP)) {	/* is it a gap? */
-      have_gap_buffers = TRUE;
-      if (offset == 0 && inlength == outlength && !full_gap_buffer)	/* does it span the full output interval?  and we haven't yet seen one that does? */
-        full_gap_buffer = inbuf;
-      else	/* we don't need this buffer */
-        gst_buffer_unref (inbuf);
+      if (offset == 0 && inlength == outlength) {	/* does it span the full output interval? */
+        if (!full_gap_buffer) {	/* and we haven't yet seen one that does? */
+          full_gap_buffer = inbuf;
+        } else {	/* we don't need this buffer */
+          gst_buffer_unref (inbuf);
+        }
+      } else {	/* doesn't span full interval, save for later */
+        partial_gap_buffers = g_slist_prepend (partial_gap_buffers, partial_buffer_info_make (inbuf, pad));
+      }
     } else if (offset == 0 && inlength == outlength) {	/* not a gap, does it span the full output interval? */
       if (!outbuf) {	/* if we don't have a buffer to hold the output yet, this one's it */
         GstMapInfo outmap;
@@ -1547,7 +1653,14 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
         GstMapInfo outmap;
         gst_buffer_map (inbuf, &inmap, GST_MAP_READ);
         gst_buffer_map (outbuf, &outmap, GST_MAP_READWRITE);
-        addfunc (adder, pad, outmap.data, inmap.data, inmap.size / bps);
+        switch (adder->mixmode) {
+        case GST_ADDER_MIXMODE_SUM:
+          addfunc (adder, pad, outmap.data, inmap.data, inmap.size / bps);
+          break;
+        case GST_ADDER_MIXMODE_PROD:
+          mulfunc (adder, pad, outmap.data, inmap.data, inmap.size / bps);
+          break;
+        }
         gst_buffer_unmap (outbuf, &outmap);
         gst_buffer_unmap (inbuf, &inmap);
         gst_buffer_unref (inbuf);
@@ -1584,7 +1697,14 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       gst_buffer_map (inbuf, &inmap, GST_MAP_READ);
       g_assert (offset * bpf + inmap.size <= outmap.size || inmap.size == 0);
       GST_OBJECT_LOCK (pad);
-      addfunc (adder, pad, outmap.data + offset * bpf, inmap.data, inmap.size / bps);
+      switch (adder->mixmode) {
+      case GST_ADDER_MIXMODE_SUM:
+        addfunc (adder, pad, outmap.data + offset * bpf, inmap.data, inmap.size / bps);
+        break;
+      case GST_ADDER_MIXMODE_PROD:
+        mulfunc (adder, pad, outmap.data + offset * bpf, inmap.data, inmap.size / bps);
+        break;
+      }
       GST_OBJECT_UNLOCK (pad);
       gst_buffer_unmap (inbuf, &inmap);
       partial_buffer_info_free((struct partial_buffer_info *) (partial_nongap_buffers->data));
@@ -1594,10 +1714,39 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   }
 
   /* if we don't have an output buffer yet, then if there's a full gap
-   * buffer it becomes our output, otherwise we're at EOS */
+   * buffer it becomes our output, otherwise we're at EOS.  in all cases,
+   * if the mix mode is "product" then gap intervals cause the output to be
+   * 0'ed. */
   if (outbuf) {
     if (full_gap_buffer) {
       gst_buffer_unref (full_gap_buffer);
+      g_slist_free_full (partial_gap_buffers, (GDestroyNotify) partial_buffer_info_free);
+      /* FIXME:  no-op fast paths should be introduced throughout so that
+       * if a full_gap_buffer is identified and we're in product mode no
+       * more math gets done */
+      if (adder->mixmode == GST_ADDER_MIXMODE_PROD) {
+        GstMapInfo outmap;
+        gst_buffer_map (outbuf, &outmap, GST_MAP_WRITE);
+        gst_audio_format_fill_silence (adder->info.finfo, outmap.data, outmap.size);
+        gst_buffer_unmap (outbuf, &outmap);
+      }
+    } else if (partial_gap_buffers) {
+      if (adder->mixmode == GST_ADDER_MIXMODE_PROD) {
+        GstMapInfo outmap;
+        gst_buffer_map (outbuf, &outmap, GST_MAP_WRITE);
+        while (partial_gap_buffers) {
+          GstBuffer *inbuf = ((struct partial_buffer_info *) partial_gap_buffers->data)->inbuf;
+          guint offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, rate, GST_SECOND) - earliest_output_offset : 0;
+          gsize insize = gst_buffer_get_size(inbuf);
+          g_assert (offset * bpf + insize <= outmap.size || insize == 0);
+          gst_audio_format_fill_silence (adder->info.finfo, outmap.data + offset * bpf, insize / bps);
+          partial_buffer_info_free((struct partial_buffer_info *) (partial_gap_buffers->data));
+          partial_gap_buffers = g_slist_remove (partial_gap_buffers, partial_gap_buffers->data);
+        }
+        gst_buffer_unmap (outbuf, &outmap);
+      } else {
+        g_slist_free_full (partial_gap_buffers, (GDestroyNotify) partial_buffer_info_free);
+      }
     }
   } else if (full_gap_buffer) {
     outbuf = full_gap_buffer;
