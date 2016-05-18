@@ -10,7 +10,6 @@ libgstlalugly_la_SOURCES = \
 	#gstlal_specgram.h gstlal_specgram.c \
 	#gstlal_interpolator.h gstlal_interpolator.c \
 	#gstlal_mean.h gstlal_mean.c \
-	#gstlal_multiplier.h gstlal_multiplier.c \
 	#gstlal_pad.h gstlal_pad.c \
 	#gstlal_trim.h gstlal_trim.c
 
