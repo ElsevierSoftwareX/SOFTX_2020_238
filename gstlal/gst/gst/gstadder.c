@@ -1513,7 +1513,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
         gst_buffer_map (outbuf, &outmap, GST_MAP_READWRITE);
         volfunc (adder, pad, outmap.data, outmap.size / bps);
         gst_buffer_unmap (outbuf, &outmap);
-      } else {	/* add this buffer to the output buffer */
+      } else {	/* otherwise add this buffer to the output buffer */
         GstMapInfo inmap;
         GstMapInfo outmap;
         gst_buffer_map (inbuf, &inmap, GST_MAP_READ);
@@ -1523,14 +1523,14 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
         gst_buffer_unmap (inbuf, &inmap);
         gst_buffer_unref (inbuf);
       }
-    } else	/* not a gap, doesn't span the full output interval, process it later */
+    } else {	/* not a gap, doesn't span the full output interval, process it later */
       partial_nongap_buffers = g_slist_prepend (partial_nongap_buffers, partial_buffer_info_make (inbuf, pad));
+    }
     GST_OBJECT_UNLOCK (pad);
   }
 
   /* now add partial non-gap buffers */
   if (partial_nongap_buffers) {
-    GstMapInfo inmap;
     GstMapInfo outmap;
     if (!outbuf) {
       /* this code path should only be possible if the input included a gap
@@ -1548,6 +1548,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       gst_buffer_map (outbuf, &outmap, GST_MAP_READWRITE);
     }
     while (partial_nongap_buffers) {
+      GstMapInfo inmap;
       GstBuffer *inbuf = ((struct partial_buffer_info *) partial_nongap_buffers->data)->inbuf;
       GstAdderPad *pad = ((struct partial_buffer_info *) partial_nongap_buffers->data)->pad;
       guint offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, rate, GST_SECOND) - earliest_output_offset : 0;
@@ -1566,17 +1567,19 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   /* if we don't have an output buffer yet, then if there's a full gap
    * buffer it becomes our output, otherwise we're at EOS */
   if (outbuf) {
-    if (full_gap_buffer)
+    if (full_gap_buffer) {
       gst_buffer_unref (full_gap_buffer);
-  } else if (full_gap_buffer)
+    }
+  } else if (full_gap_buffer) {
     outbuf = full_gap_buffer;
-  else if (have_gap_buffers) {
+  } else if (partial_gap_buffers) {
     /* the condition of having only partial gap buffers and nothing else is
      * not possible.  getting here implies a bug in the code that
      * determines the times spanned by the available input buffers */
     g_assert_not_reached();
-  } else
+  } else {
     goto eos;
+  }
 
   /* do other pending events, e.g., tags */
   if (G_UNLIKELY (adder->pending_events)) {
