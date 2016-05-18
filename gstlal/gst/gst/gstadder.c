@@ -1507,7 +1507,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       if (!outbuf) {	/* if we don't have a buffer to hold the output yet, this one's it */
         GstMapInfo outmap;
         outbuf = gst_buffer_make_writable (inbuf);
-        gst_buffer_map (outbuf, &outmap, GST_MAP_WRITE);
+        gst_buffer_map (outbuf, &outmap, GST_MAP_READWRITE);
         volfunc (adder, pad, outmap.data, outmap.size / bps);
         gst_buffer_unmap (outbuf, &outmap);
       } else {	/* add this buffer to the output buffer */
