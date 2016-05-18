@@ -54,6 +54,7 @@
 #include <string.h>             /* strcmp */
 #include "gstadderorc.h"
 #include <gstlal/gstlalcollectpads.h>
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
 
 #define GST_CAT_DEFAULT gst_adder_debug
@@ -165,11 +166,11 @@ enum
 
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN
 #define CAPS \
-  GST_AUDIO_CAPS_MAKE ("{ S32LE, U32LE, S16LE, U16LE, S8, U8, F32LE, F64LE }") \
+  GST_AUDIO_CAPS_MAKE ("{ S32LE, U32LE, S16LE, U16LE, S8, U8, F32LE, F64LE, Z64LE, Z128LE }") \
   ", layout = (string) { interleaved, non-interleaved }"
 #else
 #define CAPS \
-  GST_AUDIO_CAPS_MAKE ("{ S32BE, U32BE, S16BE, U16BE, S8, U8, F32BE, F64BE }") \
+  GST_AUDIO_CAPS_MAKE ("{ S32BE, U32BE, S16BE, U16BE, S8, U8, F32BE, F64BE, Z64BE, Z128BE }") \
   ", layout = (string) { interleaved, non-interleaved }"
 #endif
 
@@ -335,7 +336,7 @@ gst_adder_setcaps (GstAdder * adder, GstPad * pad, GstCaps * caps)
 {
   GstAudioInfo info;
 
-  if (!gst_audio_info_from_caps (&info, caps))
+  if (!gstlal_audio_info_from_caps (&info, caps))
     goto invalid_format;
 
   GST_OBJECT_LOCK (adder);
@@ -1166,6 +1167,12 @@ static void volfunc(GstAdder *adder, GstAdderPad *pad, gpointer dst, guint count
       case GST_AUDIO_FORMAT_F64:
         adder_orc_volume_f64 (dst, pad->volume, count);
         break;
+      case GST_AUDIO_FORMAT_Z64:
+        adder_orc_volume_f32 (dst, pad->volume, count * 2);
+        break;
+      case GST_AUDIO_FORMAT_Z128:
+        adder_orc_volume_f64 (dst, pad->volume, count * 2);
+        break;
       default:
         g_assert_not_reached ();
         break;
@@ -1201,6 +1208,12 @@ static void addfunc(GstAdder *adder, GstAdderPad *pad, gpointer dst, gpointer sr
       case GST_AUDIO_FORMAT_F64:
         adder_orc_add_f64 (dst, src, count);
         break;
+      case GST_AUDIO_FORMAT_Z64:
+        adder_orc_add_f32 (dst, src, count * 2);
+        break;
+      case GST_AUDIO_FORMAT_Z128:
+        adder_orc_add_f64 (dst, src, count * 2);
+        break;
       default:
         g_assert_not_reached ();
         break;
@@ -1230,6 +1243,12 @@ static void addfunc(GstAdder *adder, GstAdderPad *pad, gpointer dst, gpointer sr
         break;
       case GST_AUDIO_FORMAT_F64:
         adder_orc_add_volume_f64 (dst, src, pad->volume, count);
+        break;
+      case GST_AUDIO_FORMAT_Z64:
+        adder_orc_add_volume_f32 (dst, src, pad->volume, count * 2);
+        break;
+      case GST_AUDIO_FORMAT_Z128:
+        adder_orc_add_volume_f64 (dst, src, pad->volume, count * 2);
         break;
       default:
         g_assert_not_reached ();
