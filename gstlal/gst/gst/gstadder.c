@@ -920,7 +920,7 @@ gst_adder_class_init (GstAdderClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_SYNCHRONOUS,
       g_param_spec_boolean ("sync", "Synchronous",
-          "Align the time stamps of input streams. ",
+          "Align the time stamps of input streams.",
           FALSE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
@@ -959,7 +959,9 @@ gst_adder_init (GstAdder * adder)
   gst_audio_info_init (&adder->info);
   adder->padcount = 0;
 
+  /* default properties */
   adder->filter_caps = NULL;
+  adder->synchronous = FALSE;
 
   /* keep track of the sinkpads requested */
   adder->collect = gst_collect_pads_new ();
