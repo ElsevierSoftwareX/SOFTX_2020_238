@@ -155,11 +155,25 @@ gst_adder_pad_init (GstAdderPad * pad)
   pad->mute = DEFAULT_PAD_MUTE;
 }
 
+GType gst_adder_mixmode_get_type(void)
+{
+  static GType type = 0;
+  if (!type) {
+    static GEnumValue values[] = {
+      {GST_ADDER_MIXMODE_SUM, "Sum", "sum"},
+      {0, NULL, NULL}
+    };
+    type = g_enum_register_static("GST_ADDER_MIXMODE", values);
+  }
+  return type;
+}
+
 enum
 {
   PROP_0,
   PROP_FILTER_CAPS,
-  PROP_SYNCHRONOUS
+  PROP_SYNCHRONOUS,
+  PROP_MIXMODE
 };
 
 /* elementfactory information */
@@ -923,6 +937,12 @@ gst_adder_class_init (GstAdderClass * klass)
           "Align the time stamps of input streams.",
           FALSE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_MIXMODE,
+      g_param_spec_enum ("mix-mode", "Mix mode",
+          "Algorithm for mixing the input streams.",
+          GST_ADDER_MIXMODE_TYPE,
+          GST_ADDER_MIXMODE_SUM,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&gst_adder_src_template));
@@ -962,6 +982,7 @@ gst_adder_init (GstAdder * adder)
   /* default properties */
   adder->filter_caps = NULL;
   adder->synchronous = FALSE;
+  adder->mixmode = GST_ADDER_MIXMODE_SUM;
 
   /* keep track of the sinkpads requested */
   adder->collect = gst_collect_pads_new ();
@@ -1029,6 +1050,9 @@ gst_adder_set_property (GObject * object, guint prop_id,
        * collect pad's offset_offsets as invalid to force a resync */
       adder->synchronous = g_value_get_boolean (value);
       break;
+    case PROP_MIXMODE:
+      adder->mixmode = g_value_get_enum (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1041,19 +1065,24 @@ gst_adder_get_property (GObject * object, guint prop_id, GValue * value,
 {
   GstAdder *adder = GST_ADDER (object);
 
+  GST_OBJECT_LOCK (adder);
+
   switch (prop_id) {
     case PROP_FILTER_CAPS:
-      GST_OBJECT_LOCK (adder);
       gst_value_set_caps (value, adder->filter_caps);
-      GST_OBJECT_UNLOCK (adder);
       break;
     case PROP_SYNCHRONOUS:
       g_value_set_boolean (value, adder->synchronous);
+      break;
+    case PROP_MIXMODE:
+      g_value_set_enum (value, adder->mixmode);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
+
+  GST_OBJECT_UNLOCK (adder);
 }
 
 
