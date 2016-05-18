@@ -1259,20 +1259,20 @@ static void addfunc(GstAdder *adder, GstAdderPad *pad, gpointer dst, gpointer sr
   }
 }
 
-struct partial_nongap_info {
+struct partial_buffer_info {
   GstBuffer *inbuf;
   GstAdderPad *pad;
 };
 
-static struct partial_nongap_info *partial_nongap_info_make(GstBuffer *inbuf, GstAdderPad *pad)
+static struct partial_buffer_info *partial_buffer_info_make(GstBuffer *inbuf, GstAdderPad *pad)
 {
-  struct partial_nongap_info *info = g_new(struct partial_nongap_info, 1);
+  struct partial_buffer_info *info = g_new(struct partial_buffer_info, 1);
   info->inbuf = inbuf;
   info->pad = pad;
   return info;
 }
 
-static void partial_nongap_info_free(struct partial_nongap_info *info)
+static void partial_buffer_info_free(struct partial_buffer_info *info)
 {
   if(info) {
     gst_buffer_unref (info->inbuf);
@@ -1523,7 +1523,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
         gst_buffer_unref (inbuf);
       }
     } else	/* not a gap, doesn't span the full output interval, process it later */
-      partial_nongap_buffers = g_slist_prepend (partial_nongap_buffers, partial_nongap_info_make (inbuf, pad));
+      partial_nongap_buffers = g_slist_prepend (partial_nongap_buffers, partial_buffer_info_make (inbuf, pad));
     GST_OBJECT_UNLOCK (pad);
   }
 
@@ -1538,7 +1538,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       /* get a buffer of zeros */
       outbuf = gst_buffer_new_allocate (NULL, outlength * bpf, NULL);
       if (!outbuf) {
-        g_slist_free_full (partial_nongap_buffers, (GDestroyNotify) partial_nongap_info_free);
+        g_slist_free_full (partial_nongap_buffers, (GDestroyNotify) partial_buffer_info_free);
 	goto no_buffer;
       }
       gst_buffer_map (outbuf, &outmap, GST_MAP_WRITE);
@@ -1547,8 +1547,8 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       gst_buffer_map (outbuf, &outmap, GST_MAP_WRITE);
     }
     while (partial_nongap_buffers) {
-      GstBuffer *inbuf = ((struct partial_nongap_info *) partial_nongap_buffers->data)->inbuf;
-      GstAdderPad *pad = ((struct partial_nongap_info *) partial_nongap_buffers->data)->pad;
+      GstBuffer *inbuf = ((struct partial_buffer_info *) partial_nongap_buffers->data)->inbuf;
+      GstAdderPad *pad = ((struct partial_buffer_info *) partial_nongap_buffers->data)->pad;
       guint offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, rate, GST_SECOND) - earliest_output_offset : 0;
       gst_buffer_map (inbuf, &inmap, GST_MAP_READ);
       g_assert (offset * bpf + inmap.size <= outmap.size || inmap.size == 0);
@@ -1556,7 +1556,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       addfunc (adder, pad, outmap.data + offset * bpf, inmap.data, inmap.size / bps);
       GST_OBJECT_UNLOCK (pad);
       gst_buffer_unmap (inbuf, &inmap);
-      partial_nongap_info_free((struct partial_nongap_info *) (partial_nongap_buffers->data));
+      partial_buffer_info_free((struct partial_buffer_info *) (partial_nongap_buffers->data));
       partial_nongap_buffers = g_slist_remove (partial_nongap_buffers, partial_nongap_buffers->data);
     }
     gst_buffer_unmap (outbuf, &outmap);
