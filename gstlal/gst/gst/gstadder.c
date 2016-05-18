@@ -1268,6 +1268,7 @@ static struct partial_buffer_info *partial_buffer_info_make(GstBuffer *inbuf, Gs
 {
   struct partial_buffer_info *info = g_new(struct partial_buffer_info, 1);
   info->inbuf = inbuf;
+  gst_object_ref (pad);
   info->pad = pad;
   return info;
 }
@@ -1276,7 +1277,7 @@ static void partial_buffer_info_free(struct partial_buffer_info *info)
 {
   if(info) {
     gst_buffer_unref (info->inbuf);
-    GST_OBJECT_UNLOCK (info->pad);
+    gst_object_unref (info->pad);
   }
   g_free(info);
 }
