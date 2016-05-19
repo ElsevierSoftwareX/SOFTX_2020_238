@@ -475,13 +475,18 @@ def mktee(pipeline, src):
 	return mkgeneric(pipeline, src, "tee")
 
 
-## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline with useful default properties
-def mkadder(pipeline, srcs, sync = True, **properties):
-	elem = mkgeneric(pipeline, None, "lal_adder", sync = sync, **properties)
+## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline configured for synchronous "sum" mode mixing.
+def mkadder(pipeline, srcs, sync = True, mix_mode = "sum", **properties):
+	elem = mkgeneric(pipeline, None, "lal_adder", sync = sync, mix_mode = mix_mode, **properties)
 	if srcs is not None:
 		for src in srcs:
 			src.link(elem)
 	return elem
+
+
+## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline configured for synchronous "product" mode mixing.
+def mkmultiplier(pipeline, srcs, sync = True, mix_mode = "product", **properties):
+	return mkadder(pipeline, srcs, sync = sync, mix_mode = mix_mode, **properties)
 
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-queue.html">queue</a> element to a pipeline with useful default properties
