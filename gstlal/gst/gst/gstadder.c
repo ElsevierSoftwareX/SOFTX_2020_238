@@ -1516,7 +1516,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
         GstMapInfo inmap;
         GstMapInfo outmap;
         gst_buffer_map (inbuf, &inmap, GST_MAP_READ);
-        gst_buffer_map (outbuf, &outmap, GST_MAP_WRITE);
+        gst_buffer_map (outbuf, &outmap, GST_MAP_READWRITE);
         addfunc (adder, pad, outmap.data, inmap.data, inmap.size / bps);
         gst_buffer_unmap (outbuf, &outmap);
         gst_buffer_unmap (inbuf, &inmap);
@@ -1541,10 +1541,10 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
         g_slist_free_full (partial_nongap_buffers, (GDestroyNotify) partial_buffer_info_free);
 	goto no_buffer;
       }
-      gst_buffer_map (outbuf, &outmap, GST_MAP_WRITE);
+      gst_buffer_map (outbuf, &outmap, GST_MAP_READWRITE);
       gst_audio_format_fill_silence (adder->info.finfo, outmap.data, outmap.size);
     } else {
-      gst_buffer_map (outbuf, &outmap, GST_MAP_WRITE);
+      gst_buffer_map (outbuf, &outmap, GST_MAP_READWRITE);
     }
     while (partial_nongap_buffers) {
       GstBuffer *inbuf = ((struct partial_buffer_info *) partial_nongap_buffers->data)->inbuf;
