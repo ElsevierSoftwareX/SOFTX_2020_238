@@ -185,9 +185,20 @@ static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect,
 		"rate", G_TYPE_INT, *rate,
 		"channels", G_TYPE_INT, 1,
 		"layout", G_TYPE_STRING, "interleaved",
-		"channel-mask", GST_TYPE_BITMASK, 0,
 		NULL
 	);
+
+	/*
+	 * Set channel-mask separately, would prefer this to
+	 * be in the gst_caps_new_simple() function above, e.g.
+	 * "channel-mask", GST_TYPE_BITMASK, 0,
+	 * However, when we do this we end up with "channel-mask"
+	 * set to a value which is actually a pointer (bug?).
+	 */
+	GValue channel_mask = G_VALUE_INIT;
+	g_value_init(&channel_mask, GST_TYPE_BITMASK);
+	gst_value_set_bitmask(&channel_mask, 0x0);
+	gst_caps_set_value (caps, "channel-mask", &channel_mask);
 
 	switch(vect->GetType()) {
 	case FrameCPP::FrVect::FR_VECT_C:
