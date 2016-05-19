@@ -559,8 +559,12 @@ static int add_simulation_series(REAL8TimeSeries *h, const GSTLALSimulation *ele
 static gboolean event(GstBaseTransform *trans, GstEvent *event)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(trans);
+	GstObject *parent = GST_OBJECT_CAST (trans);
+	gboolean res = FALSE;
 
-	if(GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_TAG:
+	  {
 		GstTagList *taglist;
 		gchar *instrument = NULL, *channel_name = NULL, *units = NULL;
 
@@ -605,13 +609,15 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 			g_object_notify(G_OBJECT(element), "channel-name");
 			g_object_notify(G_OBJECT(element), "units");
 		}
+	  }
+	  res = gst_pad_event_default (trans->sinkpad, parent, event);
+	  break;
+	default:
+	  res = gst_pad_event_default (trans->sinkpad, parent, event);
+	  break;
 	}
 
-	/*
-	 * done.  forward all events
-	 */
-
-	return TRUE;
+	return res;
 }
 
 
@@ -670,7 +676,10 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 
 	caps = gst_pad_get_current_caps(GST_BASE_TRANSFORM_SINK_PAD(trans));
 	h = gstlal_buffer_map_REAL8TimeSeries(buf, caps, &info, element->instrument, element->channel_name, element->units);
-	gst_caps_unref(caps);
+	/*
+	 * PB: cannot get element to work when unref caps.
+	 * 	gst_caps_unref(caps);
+	 */
 	if(!h) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure wrapping buffer in REAL8TimeSeries"));
 		result = GST_FLOW_ERROR;
@@ -940,4 +949,7 @@ static void gstlal_simulation_init(GSTLALSimulation *element)
 	element->simulation_series = NULL;
 
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
+
+	GST_PAD_SET_PROXY_CAPS (GST_BASE_TRANSFORM_SINK_PAD(element));
+	GST_PAD_SET_PROXY_CAPS (GST_BASE_TRANSFORM_SRC_PAD(element));
 }
