@@ -34,11 +34,11 @@
 #define IFO_LEN 2
 #define MAX_COMBOS 4
 
-#define LOGSNR_CMIN	0.6 // center of the first bin
-#define LOGSNR_CMAX	2.49 // center of the last bin
-#define LOGSNR_NBIN	190 // step is 0.01
-#define LOGCHISQ_CMIN	-0.5
-#define LOGCHISQ_CMAX	2.49
+#define LOGSNR_CMIN	0.54 // center of the first bin
+#define LOGSNR_CMAX	3.0 // center of the last bin
+#define LOGSNR_NBIN	300 // step is 0.01
+#define LOGCHISQ_CMIN	-1.2
+#define LOGCHISQ_CMAX	4.0
 #define LOGCHISQ_NBIN	300
 
 extern char *IFO_COMBO_MAP[];
