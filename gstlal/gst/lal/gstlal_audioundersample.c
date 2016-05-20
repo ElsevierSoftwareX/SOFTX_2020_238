@@ -307,6 +307,12 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		return GST_CAPS_NONE;
 	}
 
+	if(filter) {
+		GstCaps *intersection = gst_caps_intersect(caps, filter);
+		gst_caps_unref(caps);
+		caps = intersection;
+	}
+
 	return caps;
 }
 
