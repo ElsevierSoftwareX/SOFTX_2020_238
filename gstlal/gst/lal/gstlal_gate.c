@@ -889,21 +889,13 @@ static gboolean setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 {
 	GstAudioInfo info;
 	gboolean success = gstlal_audio_info_from_caps(&info, caps);
-	gint rate;
-	gint width;
-	gint channels;
 
 	/*
 	 * try setting caps on downstream element
 	 */
 
-	if(success) {
-		rate = GST_AUDIO_INFO_RATE(&info);
-		width = GST_AUDIO_INFO_WIDTH(&info);
-		channels = GST_AUDIO_INFO_CHANNELS(&info);
-
+	if(success)
 		success = gst_pad_set_caps(gate->srcpad, caps);
-	}
 
 	/*
 	 * update the element metadata
@@ -911,8 +903,8 @@ static gboolean setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 
 	if(success) {
 		gint old_rate = gate->rate;
-		gate->rate = rate;
-		gate->unit_size = width / 8 * channels;
+		gate->rate = GST_AUDIO_INFO_RATE(&info);
+		gate->unit_size = GST_AUDIO_INFO_BPF(&info);
 		if(gate->rate != old_rate)
 			g_signal_emit(G_OBJECT(gate), signals[SIGNAL_RATE_CHANGED], 0, gate->rate, NULL);
 	}

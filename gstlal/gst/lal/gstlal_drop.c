@@ -98,7 +98,7 @@ static gboolean setcaps (GSTLALDrop *drop, GstPad *pad, GstCaps *caps)
 
 	if(success) {
 		drop->rate = GST_AUDIO_INFO_RATE(&info);
-		drop->unit_size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
+		drop->unit_size = GST_AUDIO_INFO_BPF(&info);
 	} else
 		GST_ERROR_OBJECT(drop, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
 

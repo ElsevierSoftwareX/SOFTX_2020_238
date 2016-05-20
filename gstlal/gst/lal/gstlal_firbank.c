@@ -1374,7 +1374,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		}
 		if(format_changed) {
 			gst_audioadapter_clear(element->adapter);
-			g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8 * 1, NULL);	/* input has 1 channel */
+			g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_BPF(&(element->audio_info)), NULL);
 			element->t0 = GST_CLOCK_TIME_NONE;	/* force discont */
 		}
 	} else
