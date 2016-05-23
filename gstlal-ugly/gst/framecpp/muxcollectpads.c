@@ -33,6 +33,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 #include <gstlal/gstlal_debug.h>
@@ -69,6 +70,7 @@ G_DEFINE_TYPE(FrameCPPMuxCollectPads, framecpp_muxcollectpads, GST_TYPE_OBJECT);
 
 
 #define DEFAULT_MAX_SIZE_TIME GST_SECOND
+#define DEFAULT_CLIP_TO_SEGMENTS TRUE
 
 
 /*
@@ -102,7 +104,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buffer)
 {
 	FrameCPPMuxCollectPadsData *data = gst_pad_get_element_private(pad);
 	FrameCPPMuxCollectPads *collectpads = data->collect;
-	GstFlowReturn result;
+	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert(GST_IS_FRAMECPP_MUXCOLLECTPADS(collectpads));
 
@@ -112,7 +114,14 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buffer)
 		result = GST_FLOW_EOS;
 	} else {
 		GST_DEBUG_OBJECT(pad, "received buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
-		result = framecpp_muxqueue_push(data->queue, buffer) ? GST_FLOW_OK : GST_FLOW_ERROR;
+		if(collectpads->clip_to_segments) {
+			gint rate, bpf;
+			GST_DEBUG_OBJECT(pad, "clipping to [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", collectpads->segment.start, collectpads->segment.stop);
+			g_object_get(data->queue, "rate", &rate, "size", &bpf, NULL);
+			buffer = gst_audio_buffer_clip(buffer, &collectpads->segment, rate, bpf);
+		}
+		if(buffer)
+			result = framecpp_muxqueue_push(data->queue, buffer) ? GST_FLOW_OK : GST_FLOW_ERROR;
 	}
 
 	return result;
@@ -811,7 +820,8 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 
 
 enum property {
-	ARG_MAX_SIZE_TIME = 1
+	ARG_MAX_SIZE_TIME = 1,
+	ARG_CLIP_TO_SEGMENTS
 };
 
 
@@ -834,6 +844,10 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 		break;
 	}
 
+	case ARG_CLIP_TO_SEGMENTS:
+		collectpads->clip_to_segments = g_value_get_boolean(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -853,6 +867,9 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 	case ARG_MAX_SIZE_TIME:
 		g_value_set_uint64(value, collectpads->max_size_time);
 		break;
+
+	case ARG_CLIP_TO_SEGMENTS:
+		g_value_set_boolean(value, collectpads->clip_to_segments);
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -901,6 +918,17 @@ static void framecpp_muxcollectpads_class_init(FrameCPPMuxCollectPadsClass *klas
 			"Maximum enqueued time",
 			"Maximum time in nanoseconds to be buffered on each input queue.",
 			0, G_MAXUINT64, DEFAULT_MAX_SIZE_TIME,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_CLIP_TO_SEGMENTS,
+		g_param_spec_boolean(
+			"clip-to-segments",
+			"Clip to segments",
+			"Clip each stream to its segment.",
+			DEFAULT_CLIP_TO_SEGMENTS,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);

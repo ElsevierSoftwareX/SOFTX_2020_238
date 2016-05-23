@@ -95,6 +95,7 @@ struct _FrameCPPMuxCollectPads {
 
 	/*< private >*/
 	GstClockTime max_size_time;
+	gboolean clip_to_segments;
 
 	gboolean started;
 	GstClockTime min_t_start;
