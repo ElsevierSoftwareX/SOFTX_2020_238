@@ -356,9 +356,9 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 				switch(frpad->pad_type) {
 				case GST_FRPAD_TYPE_FRADCDATA: {
-					FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, 0.0, timeOffset, frpad->datavalid, frpad->phase);
+					FrameCPP::FrAdcData adc_data(GST_PAD_NAME(frpad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, 0.0, timeOffset, frpad->datavalid, frpad->phase);
 					adc_data.AppendComment(frpad->comment);
-					GST_LOG_OBJECT(data->pad, "appending FrAdcData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					GST_LOG_OBJECT(frpad, "appending FrAdcData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
 					if(!frame->GetRawData()) {
 						FrameCPP::FrameH::rawData_type rawData(new FrameCPP::FrameH::rawData_type::element_type);
 						frame->SetRawData(rawData);
@@ -370,16 +370,16 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 				case GST_FRPAD_TYPE_FRPROCDATA: {
 					/* FIXME:  history */
-					FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, timeOffset, (double) GST_CLOCK_DIFF(frame_t_start, frame_t_end) / GST_SECOND - timeOffset, 0.0, 0.0, appdata->rate / 2.0, 0.0);
-					GST_LOG_OBJECT(data->pad, "appending FrProcData spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)), GST_TIME_SECONDS_ARGS(frame_t_end));
+					FrameCPP::FrProcData proc_data(GST_PAD_NAME(frpad), frpad->comment, 1, 0, timeOffset, (double) GST_CLOCK_DIFF(frame_t_start, frame_t_end) / GST_SECOND - timeOffset, 0.0, 0.0, appdata->rate / 2.0, 0.0);
+					GST_LOG_OBJECT(frpad, "appending FrProcData spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)), GST_TIME_SECONDS_ARGS(frame_t_end));
 					frame->RefProcData().append(proc_data);
 					container = &(frame->RefProcData().back()->RefData());
 					break;
 				}
 
 				case GST_FRPAD_TYPE_FRSIMDATA: {
-					FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, timeOffset);
-					GST_LOG_OBJECT(data->pad, "appending FrSimData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					FrameCPP::FrSimData sim_data(GST_PAD_NAME(frpad), frpad->comment, appdata->rate, 0.0, 0.0, timeOffset);
+					GST_LOG_OBJECT(frpad, "appending FrSimData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
 					frame->RefSimData().append(sim_data);
 					container = &(frame->RefSimData().back()->RefData());
 					break;
@@ -427,11 +427,11 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					 * build FrVect, append to channel
 					 */
 
-					GST_LOG_OBJECT(data->pad, "appending FrVect [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_t_start), GST_TIME_SECONDS_ARGS(buffer_t_end));
+					GST_LOG_OBJECT(frpad, "appending FrVect [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_t_start), GST_TIME_SECONDS_ARGS(buffer_t_end));
 					appdata->dims[0].SetNx(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer));
 					appdata->dims[0].SetStartX((double) GST_CLOCK_DIFF(frame_t_start, buffer_t_start) / GST_SECOND - timeOffset);
 					gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
-					container->append(FrameCPP::FrVect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, mapinfo.data, frpad->units));
+					container->append(FrameCPP::FrVect(GST_PAD_NAME(frpad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, mapinfo.data, frpad->units));
 					gst_buffer_unmap(buffer, &mapinfo);
 					gst_buffer_unref(buffer);
 				}
