@@ -781,15 +781,13 @@ static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 	}
 
 	if(success) {
-		GObject *queue;
-		queue = G_OBJECT(data->queue);
 		FRAMECPP_MUXQUEUE_LOCK(data->queue);
 		/* FIXME:  flush queue on format change */
 		appdata->type = type;
 		appdata->dims[0].SetDx(1.0 / (double) GST_AUDIO_INFO_RATE(&info));
 		appdata->rate = GST_AUDIO_INFO_RATE(&info);
 		appdata->unit_size = GST_AUDIO_INFO_BPF(&info);
-		g_object_set(queue, "rate", appdata->rate, "unit-size", appdata->unit_size, NULL);
+		g_object_set(G_OBJECT(data->queue), "rate", appdata->rate, "unit-size", appdata->unit_size, NULL);
 		FRAMECPP_MUXQUEUE_UNLOCK(data->queue);
 	}
 
