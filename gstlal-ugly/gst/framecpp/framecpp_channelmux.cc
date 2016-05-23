@@ -74,6 +74,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_frhistory.h>
 #include <gstlal/gstlal_tags.h>
@@ -731,7 +732,7 @@ static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 	 * parse caps
 	 */
 
-	success &= gst_audio_info_from_caps(&info, caps);
+	success &= gstlal_audio_info_from_caps(&info, caps);
 	if(success) {
 		const gchar *name = GST_AUDIO_INFO_NAME(&info);
 		switch(GST_AUDIO_INFO_FORMAT(&info)) {
@@ -766,18 +767,15 @@ static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 		case GST_AUDIO_FORMAT_F64:
 			type = FrameCPP::FrVect::FR_VECT_8R;
 			break;
+		case GST_AUDIO_FORMAT_Z64:
+			type = FrameCPP::FrVect::FR_VECT_8C;
+			break;
+		case GST_AUDIO_FORMAT_Z128:
+			type = FrameCPP::FrVect::FR_VECT_16C;
+			break;
 		default:
-			/*
-			 * Handle the complex types which are "special" formats
-			 */
-			if(!strncmp(name, "Z64", 3))
-				type = FrameCPP::FrVect::FR_VECT_8C;
-			else if(!strncmp(name, "Z128", 4))
-				type = FrameCPP::FrVect::FR_VECT_16C;
-			else {
-				GST_ERROR_OBJECT(pad, "unsupported format %" GST_PTR_FORMAT, caps);
-				success = FALSE;
-			}
+			GST_ERROR_OBJECT(pad, "unsupported format %" GST_PTR_FORMAT, caps);
+			success = FALSE;
 			break;
 		}
 	}
