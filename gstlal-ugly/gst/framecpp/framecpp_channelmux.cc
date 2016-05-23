@@ -371,9 +371,21 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 				}
 
 				case GST_FRPAD_TYPE_FRPROCDATA: {
-					/* FIXME:  history */
 					FrameCPP::FrProcData proc_data(GST_PAD_NAME(frpad), frpad->comment, 1, 0, timeOffset, (double) GST_CLOCK_DIFF(frame_t_start, frame_t_end) / GST_SECOND - timeOffset, 0.0, 0.0, appdata->rate / 2.0, 0.0);
 					GST_LOG_OBJECT(frpad, "appending FrProcData spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)), GST_TIME_SECONDS_ARGS(frame_t_end));
+
+					/*
+					 * add channel-level FrHistory objects
+					 */
+
+					for(i = 0; i < frpad->history->n_values; i++) {
+						GstLALFrHistory *history = GSTLAL_FRHISTORY(g_value_get_boxed(g_value_array_get_nth(frpad->history, i)));
+						gchar *str = gstlal_frhistory_to_string(history);
+						GST_LOG_OBJECT(frpad, "FrHistory: %s", str);
+						g_free(str);
+						proc_data.RefHistory().append(FrameCPP::FrHistory(gstlal_frhistory_get_name(history), gstlal_frhistory_get_timestamp(history) / GST_SECOND, gstlal_frhistory_get_comment(history)));
+					}
+
 					frame->RefProcData().append(proc_data);
 					container = &(frame->RefProcData().back()->RefData());
 					break;
