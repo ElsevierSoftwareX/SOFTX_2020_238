@@ -47,7 +47,6 @@ Immediate development tasks in no particular order
 * complete the removal of deprecated data input and conditioning code from lloidparts.py
 * block diagonal matrix support to reduce number of threads
 * fix known gstreamer bugs:
-  * small gaps crash resampler,
   * audiofirfilter has "timestamp" bugs (?),
   * funnel won't work in time-ordered mode,
 * fix known gstlal bugs:
@@ -83,3 +82,5 @@ Completed tasks
 * create matrix mixer unit test with non-identity mix matrix
 * send a pipeline to reviewers demoing the use of the whitener with music or other streams
 * explain to Florent how to implement a whitener test using a different spectrum
+* gstreamer bugs:
+  * small gaps crash resampler,
