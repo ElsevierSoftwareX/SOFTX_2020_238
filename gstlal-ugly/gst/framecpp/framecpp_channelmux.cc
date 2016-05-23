@@ -359,6 +359,8 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					FrameCPP::FrAdcData adc_data(GST_PAD_NAME(frpad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, 0.0, timeOffset, frpad->datavalid, frpad->phase);
 					adc_data.AppendComment(frpad->comment);
 					GST_LOG_OBJECT(frpad, "appending FrAdcData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					if(frpad->history->n_values)
+						GST_WARNING_OBJECT(frpad, "ignoring FrHistory on this pad: not valid for FrAdcData");
 					if(!frame->GetRawData()) {
 						FrameCPP::FrameH::rawData_type rawData(new FrameCPP::FrameH::rawData_type::element_type);
 						frame->SetRawData(rawData);
@@ -380,6 +382,8 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 				case GST_FRPAD_TYPE_FRSIMDATA: {
 					FrameCPP::FrSimData sim_data(GST_PAD_NAME(frpad), frpad->comment, appdata->rate, 0.0, 0.0, timeOffset);
 					GST_LOG_OBJECT(frpad, "appending FrSimData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					if(frpad->history->n_values)
+						GST_WARNING_OBJECT(frpad, "ignoring FrHistory on this pad: not valid for FrSimData");
 					frame->RefSimData().append(sim_data);
 					container = &(frame->RefSimData().back()->RefData());
 					break;
