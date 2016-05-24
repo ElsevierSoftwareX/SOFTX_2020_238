@@ -611,7 +611,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 
 /*
- * setcaps()
+ * control_setcaps()
  */
 
 
@@ -620,15 +620,12 @@ static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 	gdouble (*control_sample_func)(const gpointer, guint64) = NULL;
 	GstAudioInfo info;
 	gboolean success = gstlal_audio_info_from_caps(&info, caps);
-	gint rate;
 
 	/*
 	 * parse the format
 	 */
 
 	if(success) {
-		rate = GST_AUDIO_INFO_RATE(&info);
-
 		switch(GST_AUDIO_INFO_FORMAT(&info)) {
 		case GST_AUDIO_FORMAT_U8:
 			control_sample_func = control_sample_uint8;
@@ -673,7 +670,7 @@ static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
 	if(success) {
 		g_mutex_lock(&gate->control_lock);
 		gate->control_sample_func = control_sample_func;
-		gate->control_rate = rate;
+		gate->control_rate = GST_AUDIO_INFO_RATE(&info);
 		g_mutex_unlock(&gate->control_lock);
 	} else
 		GST_ERROR_OBJECT(gate, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
@@ -776,7 +773,6 @@ done:
 static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALGate *element = GSTLAL_GATE(parent);
-	GstCaps *caps;
 	gboolean res = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -796,9 +792,12 @@ static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		g_mutex_unlock(&element->control_lock);
 		break;
 
-	case GST_EVENT_CAPS:
+	case GST_EVENT_CAPS: {
+		GstCaps *caps;
 		gst_event_parse_caps(event, &caps);
 		res = control_setcaps(element, pad, caps);
+		break;
+	}
 
 	default:
 		break;
