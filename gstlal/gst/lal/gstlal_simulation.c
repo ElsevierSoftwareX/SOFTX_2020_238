@@ -559,12 +559,11 @@ static int add_simulation_series(REAL8TimeSeries *h, const GSTLALSimulation *ele
 static gboolean event(GstBaseTransform *trans, GstEvent *event)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(trans);
-	GstObject *parent = GST_OBJECT_CAST (trans);
-	gboolean res = FALSE;
+	GstObject *parent = GST_OBJECT(trans);
+	gboolean success = FALSE;
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_TAG:
-	  {
+	case GST_EVENT_TAG: {
 		GstTagList *taglist;
 		gchar *instrument = NULL, *channel_name = NULL, *units = NULL;
 
@@ -609,15 +608,16 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 			g_object_notify(G_OBJECT(element), "channel-name");
 			g_object_notify(G_OBJECT(element), "units");
 		}
-	  }
-	  res = gst_pad_event_default (trans->sinkpad, parent, event);
-	  break;
-	default:
-	  res = gst_pad_event_default (trans->sinkpad, parent, event);
-	  break;
+		success = gst_pad_event_default(trans->sinkpad, parent, event);
+		break;
 	}
 
-	return res;
+	default:
+		success = gst_pad_event_default(trans->sinkpad, parent, event);
+		break;
+	}
+
+	return success;
 }
 
 
