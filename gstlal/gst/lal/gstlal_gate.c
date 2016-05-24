@@ -822,101 +822,6 @@ static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 
 /*
- * getcaps()
- */
-
-
-static GstCaps *getcaps(GSTLALGate *gate, GstPad *pad, GstCaps *filter)
-{
-	GstCaps *result, *peercaps, *current_caps, *filter_caps;
-
-	/* take filter */
-	filter_caps = filter ? gst_caps_ref(filter) : NULL;
-
-	/* 
-	 * If the filter caps are empty (but not NULL), there is nothing we can
-	 * do, there will be no intersection
-	 */
-
-	if(filter_caps && gst_caps_is_empty (filter_caps)) {
-		GST_WARNING_OBJECT (pad, "Empty filter caps");
-		return filter_caps;
-	}
-
-	/* get the downstream possible caps */
-	peercaps = gst_pad_peer_query_caps(gate->srcpad, filter_caps);
-
-	/* get the allowed caps on this sinkpad */
-	current_caps = gst_pad_get_pad_template_caps(pad);
-	if(!current_caps)
-		current_caps = gst_caps_new_any();
-
-	if(peercaps) {
-		/* if the peer has caps, intersect */
-		GST_DEBUG_OBJECT(gate, "intersecting peer and our caps");
-		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
-		/* neither peercaps nor current_caps are needed any more */
-		gst_caps_unref(peercaps);
-		gst_caps_unref(current_caps);
-	} else {
-		/* the peer has no caps (or there is no peer), just use the allowed caps
-		 * of this sinkpad. */
-		/* restrict with filter-caps if any */
-		if(filter_caps) {
-			GST_DEBUG_OBJECT(gate, "no peer caps, using filtered caps");
-			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
-			/* current_caps are not needed any more */
-			gst_caps_unref(current_caps);
-		} else {
-			GST_DEBUG_OBJECT(gate, "no peer caps, using our caps");
-			result = current_caps;
-		}
-	}
-
-	result = gst_caps_make_writable (result);
-
-	if(filter_caps)
-		gst_caps_unref(filter_caps);
-
-	GST_LOG_OBJECT (gate, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
-
-	return result;
-}
-
-
-static gboolean setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
-{
-	GstAudioInfo info;
-	gboolean success = gstlal_audio_info_from_caps(&info, caps);
-
-	/*
-	 * try setting caps on downstream element
-	 */
-
-	if(success)
-		success = gst_pad_set_caps(gate->srcpad, caps);
-
-	/*
-	 * update the element metadata
-	 */
-
-	if(success) {
-		gint old_rate = gate->rate;
-		gate->rate = GST_AUDIO_INFO_RATE(&info);
-		gate->unit_size = GST_AUDIO_INFO_BPF(&info);
-		if(gate->rate != old_rate)
-			g_signal_emit(G_OBJECT(gate), signals[SIGNAL_RATE_CHANGED], 0, gate->rate, NULL);
-	}
-
-	/*
-	 * done
-	 */
-
-	return success;
-}
-
-
-/*
  * chain()
  */
 
@@ -1141,8 +1046,7 @@ done:
 static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALGate *element = GSTLAL_GATE(parent);
-	GstCaps *caps;
-	gboolean res = TRUE;
+	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_STREAM_START:
@@ -1164,10 +1068,20 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		g_mutex_unlock(&element->control_lock);
 		break;
 
-	case GST_EVENT_CAPS:
+	case GST_EVENT_CAPS: {
+		GstCaps *caps;
+		GstAudioInfo info;
 		gst_event_parse_caps(event, &caps);
-		res = setcaps(element, pad, caps);
+		success = gstlal_audio_info_from_caps(&info, caps);
+		if(success) {
+			gint old_rate = element->rate;
+			element->rate = GST_AUDIO_INFO_RATE(&info);
+			element->unit_size = GST_AUDIO_INFO_BPF(&info);
+			if(element->rate != old_rate)
+				g_signal_emit(parent, signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
+		}
 		break;
+	}
 
 	default:
 		break;
@@ -1177,39 +1091,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	 * sink events are forwarded to src pad
 	 */
 
-	return (res && gst_pad_event_default(pad, parent, event));
-}
-
-
-/*
- * query()
- */
-
-
-static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
-{
-	GSTLALGate *gate = GSTLAL_GATE(parent);
-	gboolean res = TRUE;
-	GstCaps *filter, *caps;
-
-	switch (GST_QUERY_TYPE (query)) 
-	{
-		case GST_QUERY_CAPS:
-			gst_query_parse_caps (query, &filter);
-			caps = getcaps(gate, pad, filter);
-			gst_query_set_caps_result (query, caps);
-			gst_caps_unref (caps);
-			break;
-		default:
-			break;
-	}
-
-	if (G_LIKELY (query))
-		return gst_pad_query_default (pad, parent, query);
-	else
-		return res;
-
-  return res;
+	return success && gst_pad_event_default(pad, parent, event);
 }
 
 
@@ -1223,48 +1105,28 @@ static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
 
 
 /*
- * event()
+ * src_event()
  *
- * push event on control and sink pads.  the default event handler just
- * picks one of the two at random, but we should send it to both.
+ * proxy through to the sink pad
  */
 
 
 static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GSTLALGate *gate = GSTLAL_GATE(parent);
-	gboolean result = TRUE;
-	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
-
-	switch (GST_EVENT_TYPE (event))
-	{	
-		default:
-			/* just forward the rest for now */
-			GST_DEBUG_OBJECT(gate, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
-			gst_pad_event_default(pad, parent, event);
-			break;
-	}
-
-	return result;
+	return gst_pad_push_event(GSTLAL_GATE(parent)->sinkpad, event);
 }
 
 
 /*
- * query()
+ * src_query()
+ *
+ * proxy through to the sink pad
  */
 
 
 static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 {
-	gboolean res = FALSE;
-
-	switch (GST_QUERY_TYPE (query))
-	{
-		default:
-			res = gst_pad_query_default (pad, parent, query);
-			break;
-	}
-	return res;
+	return gst_pad_query(GSTLAL_GATE(parent)->sinkpad, query);
 }
 
 
@@ -1517,7 +1379,9 @@ static void gstlal_gate_init(GSTLALGate *element)
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(sink_chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 
 	/* src pad */
