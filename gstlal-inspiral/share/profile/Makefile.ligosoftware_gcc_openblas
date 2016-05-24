@@ -318,7 +318,7 @@ $(TARDIR) :
 	mkdir -p $(TARDIR)
 
 $(TARDIR)/$(OPENBLAS).tar.gz : $(TARDIR)
-	wget --no-check-certificate http://github.com/xianyi/OpenBLAS/archive/$(ATLAS).tar.gz --directory-prefix=$(TARDIR) -nc
+	wget --no-check-certificate http://github.com/xianyi/OpenBLAS/archive/$(OPENBLAS).tar.gz --directory-prefix=$(TARDIR) -nc
 
 $(TARDIR)/$(DOXYGEN).src.tar.gz : $(TARDIR)
 	wget --no-check-certificate ftp://ftp.stack.nl/pub/users/dimitri/$(DOXYGEN).src.tar.gz --directory-prefix=$(TARDIR) -nc
