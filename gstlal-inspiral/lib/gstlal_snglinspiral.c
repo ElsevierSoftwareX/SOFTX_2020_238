@@ -111,16 +111,17 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 {
 	/* FIXME check errors */
 
-	GstBuffer *srcbuf = NULL;
-	GstCaps *caps = GST_PAD_CAPS(pad);
-	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, sizeof(*bankarray) * input->num_events, caps, &srcbuf);
+	GstBuffer *srcbuf = gst_buffer_new_allocate(NULL, sizeof(*bankarray) * input->num_events, NULL);
 	guint channel;
 	double complex maxdata_channel = 0;
+	GstMapInfo info;
 
-	if (result != GST_FLOW_OK) {
-		GST_ERROR_OBJECT(pad, "Could not allocate sngl-inspiral buffer %d", result);
+	if (!srcbuf) {
+		GST_ERROR_OBJECT(pad, "Could not allocate sngl-inspiral buffer");
 		return srcbuf;
 		}
+
+	gst_buffer_map(srcbuf, &info, GST_MAP_WRITE);
 
 	if (input->num_events == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
@@ -135,7 +136,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 
 	/* FIXME do error checking */
 	if (input->num_events) {
-		SnglInspiralTable *output = (SnglInspiralTable *) GST_BUFFER_DATA(srcbuf);
+		SnglInspiralTable *output = (SnglInspiralTable *) info.data;
 		for(channel = 0; channel < input->channels; channel++) {
 	
 			switch (input->type)
@@ -181,8 +182,9 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				output++;
 			}
 		}
-		g_assert_cmpuint(output - (SnglInspiralTable *) GST_BUFFER_DATA(srcbuf), ==, input->num_events);
+		g_assert_cmpuint(output - (SnglInspiralTable *) info.data, ==, input->num_events);
 	}
 
+	gst_buffer_unmap(srcbuf, &info);
 	return srcbuf;
 }
