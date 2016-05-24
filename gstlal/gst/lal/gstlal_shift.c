@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2009,2011  Kipp Cannon
  * Copyright (C) 2014 Chad Hanna
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -135,7 +135,7 @@ static GstCaps *getcaps(GSTLALShift *shift, GstPad * pad, GstCaps * filter)
 
 	filter_caps = filter ? gst_caps_ref(filter) : NULL;
 
-	/* 
+	/*
 	 * If the filter caps are empty (but not NULL), there is nothing we can
 	 * do, there will be no intersection
 	 */
@@ -248,7 +248,6 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	}
 
 	return gst_pad_event_default(pad, parent, event);
-
 }
 
 
@@ -286,7 +285,7 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	 * sink events are forwarded to src pad
 	 */
 
-	if (newevent)
+	if(newevent)
 		return gst_pad_push_event(shift->sinkpad, newevent);
 	else
 		return gst_pad_push_event(shift->sinkpad, event);
