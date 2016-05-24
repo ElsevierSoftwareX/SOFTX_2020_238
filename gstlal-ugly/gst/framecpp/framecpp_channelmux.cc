@@ -734,7 +734,6 @@ static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 
 	success &= gstlal_audio_info_from_caps(&info, caps);
 	if(success) {
-		const gchar *name = GST_AUDIO_INFO_NAME(&info);
 		switch(GST_AUDIO_INFO_FORMAT(&info)) {
 		case GST_AUDIO_FORMAT_S8:
 			type = FrameCPP::FrVect::FR_VECT_C;
