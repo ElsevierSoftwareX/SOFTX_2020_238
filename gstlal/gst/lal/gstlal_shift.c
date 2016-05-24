@@ -55,60 +55,17 @@
 /*
  * ============================================================================
  *
- *                                 Properties
+ *                                Boilerplate
  *
  * ============================================================================
  */
 
 
-enum property {
-	ARG_SHIFT = 1
-};
-
-
-static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
-{
-	GSTLALShift *element = GSTLAL_SHIFT(object);
-	gint64 newshift = 0;
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_SHIFT:
-		newshift = g_value_get_int64(value);
-		if (newshift != element->shift) {
-			element->shift = newshift;
-			element->have_discont = TRUE;
-		}
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
-{
-	GSTLALShift *element = GSTLAL_SHIFT(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_SHIFT:
-		g_value_set_int64(value, element->shift);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
+G_DEFINE_TYPE(
+	GSTLALShift,
+	gstlal_shift,
+	GST_TYPE_ELEMENT
+);
 
 
 /*
@@ -378,22 +335,69 @@ done:
 /*
  * ============================================================================
  *
- *                                Type Support
+ *                             GObject Overrides
  *
  * ============================================================================
  */
 
 
 /*
- * Parent class.
+ * properties
  */
 
 
-static GstElementClass *gstlal_shift_parent_class = NULL;
+enum property {
+	ARG_SHIFT = 1
+};
+
+
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALShift *element = GSTLAL_SHIFT(object);
+	gint64 newshift = 0;
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_SHIFT:
+		newshift = g_value_get_int64(value);
+		if (newshift != element->shift) {
+			element->shift = newshift;
+			element->have_discont = TRUE;
+		}
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALShift *element = GSTLAL_SHIFT(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_SHIFT:
+		g_value_set_int64(value, element->shift);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
 
 
 /*
- * Instance finalize function.  See ???
+ * finalize()
  */
 
 
@@ -411,9 +415,7 @@ static void finalize(GObject *object)
 
 
 /*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ * gstlal_shift_class_init()
  */
 
 
@@ -423,12 +425,10 @@ static void finalize(GObject *object)
 	"channel-mask = (bitmask) 0"
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gstlal_shift_class_init(GSTLALShiftClass *klass)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-
-	gstlal_shift_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -477,15 +477,12 @@ static void class_init(gpointer class, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * gstlal_shift_init()
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gstlal_shift_init(GSTLALShift *element)
 {
-	GSTLALShift *element = GSTLAL_SHIFT(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -506,27 +503,4 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->shift = 0;
 	element->have_discont = FALSE;
-}
-
-
-/*
- * gstlal_shift_get_type().
- */
-
-
-GType gstlal_shift_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALShiftClass),
-			.class_init = class_init,
-			.instance_size = sizeof(GSTLALShift),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALShift", &info, 0);
-	}
-
-	return type;
 }
