@@ -287,7 +287,7 @@ $(DEP_INSTALL_DIR)/lib/libgsl.so : $(INSTALL_FILES_DIR)/$(GSL)/config.log
 $(INSTALL_FILES_DIR)/$(GSL)/config.log : $(DEP_INSTALL_DIR)/lib/liborc-0.4.so
 	tar -xzf $(TARDIR)/$(GSL).tar.gz -C $(INSTALL_FILES_DIR)
 	cd $(INSTALL_FILES_DIR)/$(GSL) && \
-		./configure --prefix=$(DEP_INSTALL_DIR) LDFLAGS="-L$(DEP_INSTALL_DIR)/lib" GSL_CBLAS_LIB='-latlas -lsatlas'
+		./configure --prefix=$(DEP_INSTALL_DIR) LDFLAGS="-L$(DEP_INSTALL_DIR)/lib" GSL_CBLAS_LIB='-lopenblas -lcblas'
 
 $(DEP_INSTALL_DIR)/lib/liborc-0.4.so : $(INSTALL_FILES_DIR)/$(ORC)/config.log
 	cd $(INSTALL_FILES_DIR)/$(ORC) && make -j32 && make install -j32
