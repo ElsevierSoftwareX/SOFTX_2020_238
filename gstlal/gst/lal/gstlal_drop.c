@@ -68,6 +68,22 @@
 /*
  * ============================================================================
  *
+ *                                Boilerplate
+ *
+ * ============================================================================
+ */
+
+
+G_DEFINE_TYPE(
+	GSTLALDrop,
+	gstlal_drop,
+	GST_TYPE_ELEMENT
+);
+
+
+/*
+ * ============================================================================
+ *
  *                                 Utility functions
  *
  * ============================================================================
@@ -406,14 +422,6 @@ done:
 
 
 /*
- * Parent class.
- */
-
-
-static GstElementClass *gstlal_drop_parent_class = NULL;
-
-
-/*
  * Instance finalize function.  See ???
  */
 
@@ -442,10 +450,10 @@ static void finalize(GObject *object)
 	"channel-mask = (bitmask) 0"
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gstlal_drop_class_init(GSTLALDropClass *klass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -454,8 +462,6 @@ static void class_init(gpointer class, gpointer class_data)
 		"Drop samples from the start of a stream",
 		"Kipp Cannon <kipp.cannon@ligo.org>"
 	);
-
-	gstlal_drop_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -495,15 +501,12 @@ static void class_init(gpointer class, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * gstlal_drop_init()
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gstlal_drop_init(GSTLALDrop *element)
 {
-	GSTLALDrop *element = GSTLAL_DROP(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -525,27 +528,4 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->rate = 0;
 	element->unit_size = 0;
 	element->need_discont = TRUE;
-}
-
-
-/*
- * gstlal_drop_get_type().
- */
-
-
-GType gstlal_drop_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALDropClass),
-			.class_init = class_init,
-			.instance_size = sizeof(GSTLALDrop),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALDrop", &info, 0);
-	}
-
-	return type;
 }
