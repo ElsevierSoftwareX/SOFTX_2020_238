@@ -776,7 +776,7 @@ static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	gboolean res = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_SEGMENT:
+	case GST_EVENT_STREAM_START:
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing control queue");
 		g_mutex_lock(&element->control_lock);
 		element->control_eos = FALSE;
@@ -1145,7 +1145,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	gboolean res = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_SEGMENT:
+	case GST_EVENT_STREAM_START:
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag");
 		g_mutex_lock(&element->control_lock);
 		element->t_sink_head = GST_CLOCK_TIME_NONE;
