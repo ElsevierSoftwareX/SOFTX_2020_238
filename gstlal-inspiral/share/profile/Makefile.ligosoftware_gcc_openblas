@@ -5,7 +5,7 @@ DEP_INSTALL_DIR:=${DEPENDENCIES_PATH}
 INSTALL_DIR:=${LAL_PATH}
 PATCH_DIR:=${PWD}/patches
 
-OPENBLAS=v0.2.18
+OPENBLAS=0.2.18
 DOXYGEN=doxygen-1.8.9.1
 GLUE=glue-1.49.1
 GSL=gsl-1.15
@@ -298,18 +298,18 @@ $(INSTALL_FILES_DIR)/$(ORC)/config.log : $(DEP_INSTALL_DIR)/lib/libopenblas.so
 	cd $(INSTALL_FILES_DIR)/$(ORC) && \
 		./configure --prefix=$(DEP_INSTALL_DIR)
 
-$(DEP_INSTALL_DIR)/lib/libopenblas.so : $(INSTALL_FILES_DIR)/$(OPENBLAS)/libopenblas.a
-	cd $(INSTALL_FILES_DIR)/$(OPENBLAS) && make PREFIX=$(DEP_INSTALL_DIR) install
+$(DEP_INSTALL_DIR)/lib/libopenblas.so : $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS)/libopenblas.a
+	cd $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS) && make PREFIX=$(DEP_INSTALL_DIR) install
 
-$(INSTALL_FILES_DIR)/$(OPENBLAS)/libopenblas.a : TAR.txt
-	tar -xzf $(TARDIR)/$(OPENBLAS).tar.gz -C $(INSTALL_FILES_DIR)
-	cd $(INSTALL_FILES_DIR)/$(OPENBLAS) && make
+$(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS)/libopenblas.a : TAR.txt
+	tar -xzf $(TARDIR)/v$(OPENBLAS).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS) && make
 
 #
 # Download all of the software
 #
 
-TAR.txt : $(TARDIR)/$(OPENBLAS).tar.gz $(TARDIR)/$(DOXYGEN).src.tar.gz $(TARDIR)/$(ORC).tar.gz $(TARDIR)/$(GSL).tar.gz $(TARDIR)/$(GSTREAMER).tar.gz $(TARDIR)/$(GSTPLUGINSBASE).tar.gz $(TARDIR)/$(GSTPLUGINSGOOD).tar.gz $(TARDIR)/$(GSTPYTHON).tar.gz $(TARDIR)/$(OPROFILE).tar.gz $(TARDIR)/$(LIBFRAME).tar.gz $(TARDIR)/$(METAIO).tar.gz $(TARDIR)/$(GLUE).tar.gz $(TARDIR)/$(GSTLAL).tar.gz $(TARDIR)/$(GSTLALCALIBRATION).tar.gz $(TARDIR)/$(GSTLALINSPIRAL).tar.gz $(TARDIR)/$(GSTLALUGLY).tar.gz $(TARDIR)/$(PYLAL).tar.gz $(TARDIR)/$(LAL).tar.gz $(TARDIR)/$(LALAPPS).tar.gz $(TARDIR)/$(LALBURST).tar.gz $(TARDIR)/$(LALDETCHAR).tar.gz $(TARDIR)/$(LALFRAME).tar.gz $(TARDIR)/$(LALINFERENCE).tar.gz $(TARDIR)/$(LALINSPIRAL).tar.gz $(TARDIR)/$(LALMETAIO).tar.gz $(TARDIR)/$(LALPULSAR).tar.gz $(TARDIR)/$(LALSIMULATION).tar.gz $(TARDIR)/$(LALSTOCHASTIC).tar.gz $(TARDIR)/$(LALXML).tar.gz $(TARDIR)/$(SWIG).tar.gz $(TARDIR)/$(LDASTOOLS).tar.gz 
+TAR.txt : $(TARDIR)/v$(OPENBLAS).tar.gz $(TARDIR)/$(DOXYGEN).src.tar.gz $(TARDIR)/$(ORC).tar.gz $(TARDIR)/$(GSL).tar.gz $(TARDIR)/$(GSTREAMER).tar.gz $(TARDIR)/$(GSTPLUGINSBASE).tar.gz $(TARDIR)/$(GSTPLUGINSGOOD).tar.gz $(TARDIR)/$(GSTPYTHON).tar.gz $(TARDIR)/$(OPROFILE).tar.gz $(TARDIR)/$(LIBFRAME).tar.gz $(TARDIR)/$(METAIO).tar.gz $(TARDIR)/$(GLUE).tar.gz $(TARDIR)/$(GSTLAL).tar.gz $(TARDIR)/$(GSTLALCALIBRATION).tar.gz $(TARDIR)/$(GSTLALINSPIRAL).tar.gz $(TARDIR)/$(GSTLALUGLY).tar.gz $(TARDIR)/$(PYLAL).tar.gz $(TARDIR)/$(LAL).tar.gz $(TARDIR)/$(LALAPPS).tar.gz $(TARDIR)/$(LALBURST).tar.gz $(TARDIR)/$(LALDETCHAR).tar.gz $(TARDIR)/$(LALFRAME).tar.gz $(TARDIR)/$(LALINFERENCE).tar.gz $(TARDIR)/$(LALINSPIRAL).tar.gz $(TARDIR)/$(LALMETAIO).tar.gz $(TARDIR)/$(LALPULSAR).tar.gz $(TARDIR)/$(LALSIMULATION).tar.gz $(TARDIR)/$(LALSTOCHASTIC).tar.gz $(TARDIR)/$(LALXML).tar.gz $(TARDIR)/$(SWIG).tar.gz $(TARDIR)/$(LDASTOOLS).tar.gz 
 	echo $^ > $@
 
 $(TARDIR) :
@@ -318,7 +318,7 @@ $(TARDIR) :
 	mkdir -p $(TARDIR)
 
 $(TARDIR)/$(OPENBLAS).tar.gz : $(TARDIR)
-	wget --no-check-certificate http://github.com/xianyi/OpenBLAS/archive/$(OPENBLAS).tar.gz --directory-prefix=$(TARDIR) -nc
+	wget --no-check-certificate http://github.com/xianyi/OpenBLAS/archive/v$(OPENBLAS).tar.gz --directory-prefix=$(TARDIR) -nc
 
 $(TARDIR)/$(DOXYGEN).src.tar.gz : $(TARDIR)
 	wget --no-check-certificate ftp://ftp.stack.nl/pub/users/dimitri/$(DOXYGEN).src.tar.gz --directory-prefix=$(TARDIR) -nc
