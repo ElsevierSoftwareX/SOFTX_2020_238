@@ -941,13 +941,12 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 
 static void gstlal_simulation_init(GSTLALSimulation *element)
 {
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
+
 	element->xml_location = NULL;
 	element->injection_document = NULL;
 	element->instrument = NULL;
 	element->channel_name = NULL;
 	element->units = NULL;
 	element->simulation_series = NULL;
-
-	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
-
 }
