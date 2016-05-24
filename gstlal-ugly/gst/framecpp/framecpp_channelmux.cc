@@ -706,6 +706,225 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 
 /*
+ * src_query()
+ */
+
+
+static void src_query_start_stop(GstFrameCPPChannelMux *mux, GstClockTime *start, GstClockTime *stop)
+{
+	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(mux->collect);
+	if(mux->collect->segment.format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(mux->collect->segment.start) && GST_CLOCK_TIME_IS_VALID(mux->collect->segment.stop)) {
+		*start = mux->collect->segment.start;
+		*stop = mux->collect->segment.stop;
+	} else {
+		*start = 0;
+		*stop = GST_CLOCK_TIME_NONE;
+	}
+	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(mux->collect);
+}
+
+
+static gboolean src_query_get_position(GstFrameCPPChannelMux *mux, GstClockTime *pos)
+{
+	GstIterator *it = gst_element_iterate_sink_pads(GST_ELEMENT_CAST(mux));
+	gboolean success = TRUE;
+	*pos = -1;	/* max */
+
+	/*
+	 * report the minimum of the positions reported by all upstream
+	 * peers
+	 */
+
+	while(TRUE) {
+		GValue item = G_VALUE_INIT;
+		GstIteratorResult ires = gst_iterator_next(it, &item);
+
+		switch(ires) {
+		case GST_ITERATOR_OK: {
+			GstPad *pad = GST_PAD(g_value_get_object(&item));
+			GstClockTime this_pos;
+			success = gst_pad_query_position(pad, GST_FORMAT_TIME, (gint64 *) &this_pos);
+			g_value_reset(&item);
+			if(!success)
+				goto done;
+			if(this_pos < *pos)
+				*pos = this_pos;
+			break;
+		}
+
+		case GST_ITERATOR_RESYNC:
+			gst_iterator_resync(it);
+			*pos = -1;	/* max */
+			break;
+
+		default:
+			success = FALSE;
+done:
+		case GST_ITERATOR_DONE:
+			gst_iterator_free(it);
+			g_value_reset(&item);
+			return success;
+		}
+	}
+}
+
+
+
+static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+{
+	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(parent);
+	GstClockTime frame_file_duration = mux->frame_duration * mux->frames_per_file;
+	gboolean success = TRUE;
+
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_POSITION: {
+		GstFormat format;
+		GstClockTime pos;
+		gst_query_parse_position(query, &format, NULL);
+		if(format != GST_FORMAT_TIME) {
+			GST_ERROR_OBJECT(mux, "position query format %d not supported", format);
+			success = FALSE;
+			break;
+		}
+		success = src_query_get_position(mux, &pos);
+		if(!success)
+			break;
+		GST_DEBUG_OBJECT(mux, "query:  position = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(pos));
+		gst_query_set_position(query, format, pos);
+		break;
+	}
+
+	case GST_QUERY_DURATION:
+		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(mux->collect);
+		if(GST_CLOCK_TIME_IS_VALID(mux->collect->segment.start) && GST_CLOCK_TIME_IS_VALID(mux->collect->segment.stop))
+			gst_query_set_duration(query, mux->collect->segment.format, mux->collect->segment.stop - mux->collect->segment.start);
+		else
+			gst_query_set_duration(query, GST_FORMAT_TIME, GST_CLOCK_TIME_NONE);
+		FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(mux->collect);
+		break;
+
+	case GST_QUERY_LATENCY:
+		/* FIXME:  this isn't right, need to combine with latency
+		 * of upstream peers, and need to set live to true if
+		 * appropriate */
+		gst_query_set_latency(query, FALSE, 0, frame_file_duration);
+		break;
+
+	case GST_QUERY_SEEKING: {
+		GstClockTime start, stop;
+		src_query_start_stop(mux, &start, &stop);
+		gst_query_set_seeking(query, GST_FORMAT_TIME, TRUE, start, stop);
+		break;
+	}
+
+	case GST_QUERY_SEGMENT:
+		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(mux->collect);
+		gst_query_set_segment(query, mux->collect->segment.rate, mux->collect->segment.format, mux->collect->segment.start, mux->collect->segment.stop);
+		FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(mux->collect);
+		break;
+
+	case GST_QUERY_CONVERT: {
+		GstClockTime start, stop;
+		GstFormat src_format, dst_format;
+		gint64 src_value, dst_value;
+		gst_query_parse_convert(query, &src_format, &src_value, &dst_format, NULL);
+		src_query_start_stop(mux, &start, &stop);
+		/* convert all formats to time */
+		switch(src_format) {
+		case GST_FORMAT_TIME:
+			if(GST_CLOCK_TIME_IS_VALID(src_value) && (GstClockTime) src_value < start)
+				src_value = start;
+			break;
+
+		case GST_FORMAT_BUFFERS:
+			if(src_value != -1) {
+				/* 1 file per buffer */
+				src_value = start + src_value * frame_file_duration;
+				/* clip to start of that file */
+				if(src_value % frame_file_duration) {
+					src_value -= src_value % frame_file_duration;
+					if((GstClockTime) src_value < start)
+						src_value = start;
+				}
+			}
+			break;
+
+		default:
+			GST_ERROR_OBJECT(mux, "convert query source format not supported");
+			success = FALSE;
+			break;
+		}
+		if(!success)
+			break;
+		/* convert time to dstination format */
+		switch(dst_format) {
+		case GST_FORMAT_TIME:
+			dst_value = src_value;
+			break;
+
+		case GST_FORMAT_BUFFERS:
+			if(src_value == -1)
+				dst_value = -1;
+			else {
+				/* NOTE:  must leave as two separate
+				 * statements to deny compiler the option
+				 * of re-arranging the algebra.  we rely on
+				 * integer arithmetic's rounding rules to
+				 * give us the correct result */
+				dst_value = src_value / frame_file_duration;
+				dst_value -= start / frame_file_duration;
+			}
+			break;
+
+		default:
+			GST_ERROR_OBJECT(mux, "convert query destination format not supported");
+			success = FALSE;
+			break;
+		}
+		if(!success)
+			break;
+		gst_query_set_convert(query, src_format, src_value, dst_format, dst_value);
+		break;
+	}
+
+	case GST_QUERY_FORMATS:
+		gst_query_set_formats(query, 2, GST_FORMAT_TIME, GST_FORMAT_BUFFERS);
+		break;
+
+	case GST_QUERY_SCHEDULING:
+		/* element is, in principle, seekable but sequential access
+		 * is recommended.  only push mode is supported (I think) */
+		gst_query_set_scheduling(query, (GstSchedulingFlags) (GST_SCHEDULING_FLAG_SEEKABLE | GST_SCHEDULING_FLAG_SEQUENTIAL), 1, -1, 0);
+		gst_query_add_scheduling_mode(query, GST_PAD_MODE_PUSH);
+		break;
+
+	/* nonsensical queries */
+	case GST_QUERY_BUFFERING:
+	case GST_QUERY_JITTER:
+	case GST_QUERY_URI:
+		GST_ERROR_OBJECT(pad, "unhandled query");
+		success = FALSE;
+		break;
+
+	/* hope the default handler can do these */
+	case GST_QUERY_ALLOCATION:
+	case GST_QUERY_ACCEPT_CAPS:
+	case GST_QUERY_CAPS:
+	case GST_QUERY_CONTEXT:
+	case GST_QUERY_DRAIN:
+	case GST_QUERY_RATE:
+	default:
+		success = gst_pad_query_default(pad, parent, query);
+		break;
+	}
+
+	if(!success)
+		GST_ERROR_OBJECT(mux, "query failed");
+	return success;
+}
+
+
+/*
  * ============================================================================
  *
  *                                 Sink Pads
@@ -1385,7 +1604,7 @@ static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux)
 
 	/* configure src pad */
 	mux->srcpad = gst_element_get_static_pad(GST_ELEMENT(mux), "src");
-	/*gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(src_query));*/ /* FIXME:  implement */
+	gst_pad_set_query_function(mux->srcpad, GST_DEBUG_FUNCPTR(src_query));
 	gst_pad_set_event_function(mux->srcpad, GST_DEBUG_FUNCPTR(src_event));
 	gst_pad_use_fixed_caps(mux->srcpad);
 
