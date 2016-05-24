@@ -950,6 +950,4 @@ static void gstlal_simulation_init(GSTLALSimulation *element)
 
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 
-	GST_PAD_SET_PROXY_CAPS (GST_BASE_TRANSFORM_SINK_PAD(element));
-	GST_PAD_SET_PROXY_CAPS (GST_BASE_TRANSFORM_SRC_PAD(element));
 }
