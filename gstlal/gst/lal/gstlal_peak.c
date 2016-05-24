@@ -342,6 +342,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			res = setcaps(peak, pad, caps);
 			gst_event_unref(event);
 			event = NULL;
+			break;
 		default:
 			break;
 	}
