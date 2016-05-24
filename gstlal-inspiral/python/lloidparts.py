@@ -74,14 +74,11 @@ import sys
 import warnings
 
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require('0.10')
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 
 from glue import iterutils
@@ -160,7 +157,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	#
 
 	snk = pipeparts.mkadder(pipeline, None)
-	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
+	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw, rate=%d" % rate)
 
 	#
 	# Add a peak finder on the control signal sample number
@@ -307,7 +304,7 @@ class Handler(simplehandler.Handler):
 		@param bus A reference to the pipeline's bus
 		@param message A reference to the incoming message
 		"""
-		if message.type == gst.MESSAGE_ELEMENT:
+		if message.type == Gst.MessageType.ELEMENT:
 			if message.structure.get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
 				# NOTE: epoch is used for the timestamp, this
@@ -326,7 +323,7 @@ class Handler(simplehandler.Handler):
 				# bunch of masses.  which ones?
 				self.dataclass.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
 				return True
-		elif message.type == gst.MESSAGE_APPLICATION:
+		elif message.type == Gst.MessageType.APPLICATION:
 			if message.structure.get_name() == "CHECKPOINT":
 				# FIXME make a custom parser for CHECKPOINT messages?
 				timestamp = message.structure["timestamp"]
@@ -338,7 +335,7 @@ class Handler(simplehandler.Handler):
 				# gotten a valid timestamp
 				self.checkpoint(timestamp)
 				return True
-		elif message.type == gst.MESSAGE_EOS:
+		elif message.type == Gst.MessageType.EOS:
 			with self.dataclass.lock:
 				# FIXME:  how to choose correct timestamp?
 				try:
@@ -689,7 +686,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		# FIXME:  the capsfilter shouldn't be needed, the adder
 		# should intersect it's downstream peer's format with the
 		# sink format
-		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
+		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw, rate=%d" % max(bank.get_rates()))
 		elem = pipeparts.mknofakedisconts(pipeline, elem)	# FIXME:  remove when resampler is patched
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
@@ -712,11 +709,11 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 		src = pipeparts.mkgate(
 			pipeline,
-			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 12 * block_duration),
+			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * Gst.SECOND + 12 * block_duration),
 			threshold = 1e-100,
 			attack_length = gate_attack_length,
 			hold_length = gate_hold_length,
-			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 12 * block_duration)
+			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * Gst.SECOND + 12 * block_duration)
 		)
 		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 	else:
@@ -802,7 +799,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * gst.SECOND),
+			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * Gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc,
@@ -868,7 +865,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 
 			branch_heads[rate] = pipeparts.mkadder(pipeline, (pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration) for head in heads))
 			# FIXME capsfilter shouldn't be needed remove when adder is fixed
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw-float, rate=%d" % rate)
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw, rate=%d" % rate)
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_snr_adder" % (logname, rate))
 		else:
 			#
@@ -886,7 +883,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# Note quality = 1 requires that the template slices
 			# are padded such that the Nyquist frequency is 1.5
 			# times the highest frequency of the time slice
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw-float, rate=%d" % next_rate[rate])
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw, rate=%d" % next_rate[rate])
 			branch_heads[rate] = pipeparts.mknofakedisconts(pipeline, branch_heads[rate])	# FIXME:  remove when resampler is patched
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_to_%d_snr_resampler" % (logname, rate, next_rate[rate]))
 
@@ -946,7 +943,7 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duratio
 	# create timeslicechisq element and add chifacs as a property
 	#
 
-	chisq = gst.element_factory_make("lal_timeslicechisq")
+	chisq = Gst.ElementFactory.make("lal_timeslicechisq", None)
 	pipeline.add(chisq)
 
 	#
@@ -992,7 +989,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = gst.SECOND, reconstruction_segment_list = None):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = Gst.SECOND, reconstruction_segment_list = None):
 	"""!
 	The multiple instrument, multiple bank LLOID algorithm
 	"""
