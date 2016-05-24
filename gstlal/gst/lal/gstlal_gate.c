@@ -1023,7 +1023,7 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 {
-	return gst_pad_query(GSTLAL_GATE(parent)->sinkpad, query);
+	return gst_pad_peer_query(GSTLAL_GATE(parent)->sinkpad, query);
 }
 
 
