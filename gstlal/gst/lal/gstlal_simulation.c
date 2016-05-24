@@ -630,7 +630,6 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(trans);
 	GstFlowReturn result = GST_FLOW_OK;
-	GstCaps *caps;
 	GstMapInfo info;
 	REAL8TimeSeries *h;
 
@@ -672,14 +671,11 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 
 	/*
 	 * Wrap buffer in a LAL REAL8TimeSeries.
+	 * gstlal_buffer_map_REAL8TimeSeries() consumes the reference
+	 * returned by gst_pad_get_current_caps().
 	 */
 
-	caps = gst_pad_get_current_caps(GST_BASE_TRANSFORM_SINK_PAD(trans));
-	h = gstlal_buffer_map_REAL8TimeSeries(buf, caps, &info, element->instrument, element->channel_name, element->units);
-	/*
-	 * PB: cannot get element to work when unref caps.
-	 * 	gst_caps_unref(caps);
-	 */
+	h = gstlal_buffer_map_REAL8TimeSeries(buf, gst_pad_get_current_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)), &info, element->instrument, element->channel_name, element->units);
 	if(!h) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure wrapping buffer in REAL8TimeSeries"));
 		result = GST_FLOW_ERROR;
