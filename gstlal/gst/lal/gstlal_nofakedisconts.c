@@ -168,14 +168,14 @@ static gboolean srcsetcaps(GSTLALNoFakeDisconts *discont, GstPad *pad, GstCaps *
  * ============================================================================
  */
 
+
 static gboolean src_query(GstPad *pad, GstObject * parent, GstQuery * query)
 {
 	gboolean ret;
 	GSTLALNoFakeDisconts *discont = GSTLAL_NOFAKEDISCONTS(parent);
 
-	switch (GST_QUERY_TYPE(query)) {
-	case GST_QUERY_CAPS:
-	{
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_CAPS: {
 		GstCaps *temp, *caps, *filt, *tcaps = NULL;
 		/* Get the other pads caps */
 		caps = gst_pad_get_current_caps(discont->sinkpad);
@@ -201,10 +201,12 @@ static gboolean src_query(GstPad *pad, GstObject * parent, GstQuery * query)
 		ret = TRUE;
 		break;
 	}
+
 	default:
 		ret = gst_pad_query_default(pad, parent, query);
 		break;
 	}
+
 	return ret;
 }
 
@@ -215,8 +217,7 @@ static gboolean sink_query(GstPad *pad, GstObject * parent, GstQuery * query)
 	GSTLALNoFakeDisconts *discont = GSTLAL_NOFAKEDISCONTS(parent);
 
 	switch (GST_QUERY_TYPE(query)) {
-	case GST_QUERY_CAPS:
-	{
+	case GST_QUERY_CAPS: {
 		GstCaps *temp, *caps, *filt, *tcaps;
 
 		caps = gst_pad_get_allowed_caps (discont->srcpad);
@@ -245,10 +246,12 @@ static gboolean sink_query(GstPad *pad, GstObject * parent, GstQuery * query)
 		ret = TRUE;
 		break;
 	}
+
 	default:
 		ret = gst_pad_query_default(pad, parent, query);
 		break;
 	}
+
 	return ret;
 }
 
@@ -267,12 +270,15 @@ static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		result = srcsetcaps(discont, pad, caps);
 		gst_event_unref(event);
 		event = NULL;
+		break;
+
 	default:
 		/* just forward the rest for now */
 		GST_DEBUG_OBJECT(discont, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
 		gst_pad_event_default(pad, parent, event);
 		break;
 	}
+
 	return result;
 }
 
@@ -292,11 +298,13 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		gst_event_unref(event);
 		event = NULL;
 		break;
+
 	default:
 		GST_DEBUG_OBJECT(discont, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
 		res = gst_pad_event_default(pad, parent, event);
 		break;
 	}
+
 	return res;	
 }
 
@@ -453,8 +461,8 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (src_query));
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (src_event));
+	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(src_query));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(src_event));
 	element->srcpad = pad;
 
 	/* internal data */
