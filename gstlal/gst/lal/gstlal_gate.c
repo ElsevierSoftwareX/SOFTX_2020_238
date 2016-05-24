@@ -586,8 +586,6 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 	GstFlowReturn result = GST_FLOW_OK;
 	GstMapInfo info;
 
-	gst_buffer_map(sinkbuf, &info, GST_MAP_READ);
-
 	/*
 	 * check validity of timestamp and offsets
 	 */
@@ -624,6 +622,8 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 	 * above threshold, FALSE = below threshold.
 	 */
 
+	gst_buffer_map(sinkbuf, &info, GST_MAP_READ);
+
 	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(sinkbuf)) {
 		control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(sinkbuf) + GST_BUFFER_DURATION(sinkbuf), FALSE);
 	} else {
@@ -646,12 +646,13 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 	g_cond_broadcast(&element->control_queue_head_changed);
 	g_mutex_unlock(&element->control_lock);
 
+	gst_buffer_unmap(sinkbuf, &info);
+
 	/*
 	 * done
 	 */
 
 done:
-	gst_buffer_unmap(sinkbuf, &info);
 	gst_buffer_unref(sinkbuf);
 	return result;
 }
