@@ -28,7 +28,7 @@
  * Cannon, J.  Creighton, B. Sathyaprakash.
  *
  * Completed Actions:
- * - removed 64-bit support for control stream:  not possibleto specify 
+ * - removed 64-bit support for control stream:  not possibleto specify
  * threshold to that precision
  * - Why not signal control_queue_head_changed on receipt of NEW_SEGMENT? not needed.
  *
@@ -490,114 +490,6 @@ static void start(GSTLALGate *element, guint64 timestamp, void *data)
 static void stop(GSTLALGate *element, guint64 timestamp, void *data)
 {
 	/* FIXME:  do something? */
-}
-
-
-/*
- * ============================================================================
- *
- *                                 Properties
- *
- * ============================================================================
- */
-
-
-enum property {
-	ARG_EMIT_SIGNALS = 1,
-	ARG_DEFAULT_STATE,
-	ARG_THRESHOLD,
-	ARG_ATTACK_LENGTH,
-	ARG_HOLD_LENGTH,
-	ARG_LEAKY,
-	ARG_INVERT
-};
-
-
-static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
-{
-	GSTLALGate *element = GSTLAL_GATE(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_EMIT_SIGNALS:
-		element->emit_signals = g_value_get_boolean(value);
-		break;
-
-	case ARG_DEFAULT_STATE:
-		element->default_state = g_value_get_boolean(value);
-		break;
-
-	case ARG_THRESHOLD:
-		element->threshold = g_value_get_double(value);
-		break;
-
-	case ARG_ATTACK_LENGTH:
-		element->attack_length = g_value_get_int64(value);
-		break;
-
-	case ARG_HOLD_LENGTH:
-		element->hold_length = g_value_get_int64(value);
-		break;
-
-	case ARG_LEAKY:
-		element->leaky = g_value_get_boolean(value);
-		break;
-
-	case ARG_INVERT:
-		element->invert_control = g_value_get_boolean(value);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
-{
-	GSTLALGate *element = GSTLAL_GATE(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_EMIT_SIGNALS:
-		g_value_set_boolean(value, element->emit_signals);
-		break;
-
-	case ARG_DEFAULT_STATE:
-		g_value_set_boolean(value, element->default_state);
-		break;
-
-	case ARG_THRESHOLD:
-		g_value_set_double(value, element->threshold);
-		break;
-
-	case ARG_ATTACK_LENGTH:
-		g_value_set_int64(value, element->attack_length);
-		break;
-
-	case ARG_HOLD_LENGTH:
-		g_value_set_int64(value, element->hold_length);
-		break;
-
-	case ARG_LEAKY:
-		g_value_set_boolean(value, element->leaky);
-		break;
-	
-	case ARG_INVERT:
-		g_value_set_boolean(value, element->invert_control);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -1137,6 +1029,110 @@ static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
  *
  * ============================================================================
  */
+
+
+/*
+ * properties
+ */
+
+
+enum property {
+	ARG_EMIT_SIGNALS = 1,
+	ARG_DEFAULT_STATE,
+	ARG_THRESHOLD,
+	ARG_ATTACK_LENGTH,
+	ARG_HOLD_LENGTH,
+	ARG_LEAKY,
+	ARG_INVERT
+};
+
+
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALGate *element = GSTLAL_GATE(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_EMIT_SIGNALS:
+		element->emit_signals = g_value_get_boolean(value);
+		break;
+
+	case ARG_DEFAULT_STATE:
+		element->default_state = g_value_get_boolean(value);
+		break;
+
+	case ARG_THRESHOLD:
+		element->threshold = g_value_get_double(value);
+		break;
+
+	case ARG_ATTACK_LENGTH:
+		element->attack_length = g_value_get_int64(value);
+		break;
+
+	case ARG_HOLD_LENGTH:
+		element->hold_length = g_value_get_int64(value);
+		break;
+
+	case ARG_LEAKY:
+		element->leaky = g_value_get_boolean(value);
+		break;
+
+	case ARG_INVERT:
+		element->invert_control = g_value_get_boolean(value);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALGate *element = GSTLAL_GATE(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_EMIT_SIGNALS:
+		g_value_set_boolean(value, element->emit_signals);
+		break;
+
+	case ARG_DEFAULT_STATE:
+		g_value_set_boolean(value, element->default_state);
+		break;
+
+	case ARG_THRESHOLD:
+		g_value_set_double(value, element->threshold);
+		break;
+
+	case ARG_ATTACK_LENGTH:
+		g_value_set_int64(value, element->attack_length);
+		break;
+
+	case ARG_HOLD_LENGTH:
+		g_value_set_int64(value, element->hold_length);
+		break;
+
+	case ARG_LEAKY:
+		g_value_set_boolean(value, element->leaky);
+		break;
+
+	case ARG_INVERT:
+		g_value_set_boolean(value, element->invert_control);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
 
 
 /*
