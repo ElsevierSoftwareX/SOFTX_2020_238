@@ -79,6 +79,22 @@
 /*
  * ========================================================================
  *
+ *                                Boilerplate
+ *
+ * ========================================================================
+ */
+
+
+G_DEFINE_TYPE(
+	GSTLALNoFakeDisconts,
+	gstlal_nofakedisconts,
+	GST_TYPE_ELEMENT
+);
+
+
+/*
+ * ========================================================================
+ *
  *                                 Properties
  *
  * ========================================================================
@@ -357,14 +373,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf)
 
 
 /*
- * Parent class.
- */
-
-
-static GstElementClass *parent_class = NULL;
-
-
-/*
  * Instance finalize function.  See ???
  */
 
@@ -378,7 +386,7 @@ static void finalize(GObject *object)
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_nofakedisconts_parent_class)->finalize(object);
 }
 
 
@@ -387,7 +395,7 @@ static void finalize(GObject *object)
  */
 
 
-static void class_init(gpointer klass, gpointer class_data)
+static void gstlal_nofakedisconts_class_init(GSTLALNoFakeDiscontsClass *klass)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
@@ -399,8 +407,6 @@ static void class_init(gpointer klass, gpointer class_data)
 		"Fix incorrectly-set discontinuity flags",
 		"Kipp Cannon <kipp.cannon@ligo.org>"
 	);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -445,9 +451,8 @@ static void class_init(gpointer klass, gpointer class_data)
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer klass)
+static void gstlal_nofakedisconts_init(GSTLALNoFakeDisconts *element)
 {
-	GSTLALNoFakeDisconts *element = GSTLAL_NOFAKEDISCONTS(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -469,27 +474,4 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->next_offset = GST_BUFFER_OFFSET_NONE;
 	element->next_timestamp = GST_CLOCK_TIME_NONE;
 	element->silent = DEFAULT_SILENT;
-}
-
-
-/*
- * gstlal_nofakedisconts_get_type().
- */
-
-
-GType gstlal_nofakedisconts_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALNoFakeDiscontsClass),
-			.class_init = class_init,
-			.instance_size = sizeof(GSTLALNoFakeDisconts),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALNoFakeDisconts", &info, 0);
-	}
-
-	return type;
 }
