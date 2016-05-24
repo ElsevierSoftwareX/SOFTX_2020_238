@@ -983,7 +983,12 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	 * sink events are forwarded to src pad
 	 */
 
-	return success && gst_pad_event_default(pad, parent, event);
+	if(!success)
+		gst_event_unref(event);
+	else
+		success = gst_pad_event_default(pad, parent, event);
+
+	return success;
 }
 
 
