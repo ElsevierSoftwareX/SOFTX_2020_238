@@ -84,120 +84,6 @@ G_DEFINE_TYPE(
 /*
  * ============================================================================
  *
- *                                 Utility functions
- *
- * ============================================================================
- */
-
-
-static gboolean setcaps (GSTLALDrop *drop, GstPad *pad, GstCaps *caps)
-{
-	GstAudioInfo info;
-	gboolean success = TRUE;
-
-	/*
-	 * parse caps
-	 */
-
-	success &= gst_audio_info_from_caps(&info, caps);
-
-	/*
-	 * try setting caps on downstream element
-	 */
-
-	if(success)
-		success = gst_pad_set_caps(drop->srcpad, caps);
-
-	/*
-	 * update the element metadata
-	 */
-
-	if(success) {
-		drop->rate = GST_AUDIO_INFO_RATE(&info);
-		drop->unit_size = GST_AUDIO_INFO_BPF(&info);
-	} else
-		GST_ERROR_OBJECT(drop, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
-
-	/*
-	 * done
-	 */
-
-	return success;
-
-}
-
-
-/*
- * getcaps()
- */
-
-
-static GstCaps *getcaps (GstPad * pad, GstCaps * filter)
-{
-	GSTLALDrop *drop;
-	GstCaps *result, *peercaps, *current_caps, *filter_caps;
-	drop = GSTLAL_DROP(GST_PAD_PARENT (pad));
-
-	/* take filter */
-	filter_caps = filter ? gst_caps_ref(filter) : NULL;
-
-	/* 
-	 * If the filter caps are empty (but not NULL), there is nothing we can
-	 * do, there will be no intersection
-	 */
-	if (filter_caps && gst_caps_is_empty (filter_caps)) {
-		GST_WARNING_OBJECT (pad, "Empty filter caps");
-		return filter_caps;
-	}
-
-	/* get the downstream possible caps */
-	peercaps = gst_pad_peer_query_caps(drop->srcpad, filter_caps);
-
-	/* get the allowed caps on this sinkpad */
-	current_caps = gst_pad_get_pad_template_caps(pad);
-	if (!current_caps)
-			current_caps = gst_caps_new_any();
-
-	if (peercaps) {
-		/* if the peer has caps, intersect */
-		GST_DEBUG_OBJECT(drop, "intersecting peer and our caps");
-		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
-		/* neither peercaps nor current_caps are needed any more */
-		gst_caps_unref(peercaps);
-		gst_caps_unref(current_caps);
-	}
-	else {
-		/* the peer has no caps (or there is no peer), just use the allowed caps
-		* of this sinkpad. */
-		/* restrict with filter-caps if any */
-		if (filter_caps) {
-			GST_DEBUG_OBJECT(drop, "no peer caps, using filtered caps");
-			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
-			/* current_caps are not needed any more */
-			gst_caps_unref(current_caps);
-		}
-		else {
-			GST_DEBUG_OBJECT(drop, "no peer caps, using our caps");
-			result = current_caps;
-		}
-	}
-
-	result = gst_caps_make_writable (result);
-
-	if (filter_caps)
-		gst_caps_unref (filter_caps);
-
-	GST_LOG_OBJECT (drop, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
-
-	return result;
-}
-
-
-
-
-/*
- * ============================================================================
- *
  *                                 Properties
  *
  * ============================================================================
@@ -258,87 +144,36 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
-{
-	gboolean res = FALSE;
-
-	switch(GST_QUERY_TYPE(query)) {
-	default:
-		res = gst_pad_query_default (pad, parent, query);
-		break;
-	}
-	return res;
-}
-
-
-static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALDrop *drop;
-	gboolean result = TRUE;
-	drop = GSTLAL_DROP (parent);
-	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
-
-	switch(GST_EVENT_TYPE(event)) {
-	default:
-		/* just forward the rest for now */
-		GST_DEBUG_OBJECT(drop, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
-		gst_pad_event_default(pad, parent, event);
-		break;
-	}
-
-	return result;
-}
-
-
-static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
-{
-	gboolean res = TRUE;
-	GstCaps *filter, *caps;
-
-	switch(GST_QUERY_TYPE(query)) {
-	case GST_QUERY_CAPS:
-		gst_query_parse_caps (query, &filter);
-		caps = getcaps (pad, filter);
-		gst_query_set_caps_result (query, caps);
-		gst_caps_unref (caps);
-		break;
-
-	default:
-		break;
-	}
-
-	if (G_LIKELY (query))
-		return gst_pad_query_default (pad, parent, query);
-	else
-		return res;
-
-  return res;
-}
-
-
 static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALDrop *drop = GSTLAL_DROP(parent);
-	gboolean res = TRUE;
-	GstCaps *caps;
+	gboolean success = TRUE;
 
 	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_CAPS:
+	case GST_EVENT_CAPS: {
+		GstCaps *caps;
+		GstAudioInfo info;
 		gst_event_parse_caps(event, &caps);
-		res = setcaps(drop, pad, caps);
-		gst_event_unref(event);
-		event = NULL;
+		success = gst_audio_info_from_caps(&info, caps);
+		if(success) {
+			drop->rate = GST_AUDIO_INFO_RATE(&info);
+			drop->unit_size = GST_AUDIO_INFO_BPF(&info);
+		}
+		break;
+	}
 
 	default:
 		break;
 	}
 
-	if (G_LIKELY (event))
-		return gst_pad_event_default(pad, parent, event);
+	if(!success)
+		gst_event_unref(event);
 	else
-		return res;
+		success = gst_pad_event_default(pad, parent, event);
+
+	return success;
 }
 
 
@@ -513,15 +348,18 @@ static void gstlal_drop_init(GSTLALDrop *element)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (src_query));
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (src_event));
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->srcpad = pad;
 
 	/* internal data */
