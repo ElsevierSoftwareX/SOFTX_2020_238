@@ -135,7 +135,7 @@ from gstlal import datasource
 #
 # }
 # @enddot
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -233,7 +233,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	#
 
 	if veto_segments is not None:
-		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, seekevent=seekevent, invert_output=True)
+		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, invert_output=True)
 
 	#
 	# optional gate on whitened h(t) amplitude.  attack and hold are
