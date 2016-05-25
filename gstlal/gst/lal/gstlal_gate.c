@@ -777,6 +777,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 
 		GST_DEBUG_OBJECT(element->srcpad, "pushing reused zero-length buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
 		sinkbuf = NULL;
 		goto done;
 	} else if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
@@ -816,6 +818,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 
 		GST_DEBUG_OBJECT(element->srcpad, "pushing reused gap buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
 		sinkbuf = NULL;
 		goto done;
 	}
@@ -881,7 +885,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 			}
 
 			/*
-			 * set flags, caps, offset, and timestamps.
+			 * set offset, and timestamps
 			 */
 
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
