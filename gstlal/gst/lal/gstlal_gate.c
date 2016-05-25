@@ -288,6 +288,18 @@ static void control_flush(GSTLALGate *element)
 }
 
 
+static void control_flush_upto(GSTLALGate *element, GstClockTime t)
+{
+	guint i;
+
+	for(i = 0; i < element->control_segments->len && control_get_tstop(element, i) <= t; i++);
+	if(i) {
+		GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
+		g_array_remove_range(element->control_segments, 0, i);
+	}
+}
+
+
 /*
  * wait for the control segments to span the interval needed to decide the
  * state of [timestamp,timestamp+duration).  must be called with the
@@ -319,17 +331,13 @@ static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, Gs
 	element->t_sink_head = tmax;
 	g_cond_broadcast(&element->control_queue_head_changed);
 	while(1) {
-		guint i;
-
 		/*
-		 * flush old segments.
+		 * flush old segments.  do this in the loop so that we can
+		 * clear out newly received yet useless buffers as they
+		 * arrive
 		 */
 
-		for(i = 0; i < element->control_segments->len && control_get_tstop(element, i) <= tmin; i++);
-		if(i) {
-			GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
-			g_array_remove_range(element->control_segments, 0, i);
-		}
+		control_flush_upto(element, tmin);
 
 		/*
 		 * has head advanced far enough, or are we at EOS?
