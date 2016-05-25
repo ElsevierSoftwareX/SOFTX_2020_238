@@ -9,7 +9,7 @@ CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-co
 #
 
 # The detectors to analyze
-IFOS = H1 L1 
+IFOS = H1 L1
 # The GPS start time for analysis3 (O1C)
 START = 968543943
 # The GPS end time for analysis3 (O1C)
@@ -63,6 +63,7 @@ H1_BANK_CACHE:=$(ZERO_LAG_DIR)/H1_split_bank.cache
 L1_BANK_CACHE:=$(ZERO_LAG_DIR)/L1_split_bank.cache
 PSD_CACHE:=$(ZERO_LAG_DIR)/psd.cache
 MARG:=$(ZERO_LAG_DIR)/marginalized_likelihood.xml.gz
+POSTMARG:=$(ZERO_LAG_DIR)/post_marginalized_likelihood.xml.gz
 BANK_CACHE_FILES:=$(H1_BANK_CACHE) $(L1_BANK_CACHE)
 
 #
@@ -86,7 +87,9 @@ $(WEBDIR) : $(MAKEFILE_LIST)
 dag : $(PRIOR_CACHE) $(SVD_CACHE) $(DIST_STATS_CACHE) $(ZERO_LAG_DB) $(SEGMENTS) $(VETOES) $(FRAME_CACHE) $(TISI) plots $(WEBDIR) $(INJECTIONS) $(L1_BANK_CACHE) $(H1_BANK_CACHE) $(PSD_CACHE) $(MARG)
 	cp $(H1_BANK_CACHE) .
 	cp $(L1_BANK_CACHE) .
-	/home/gstlalcbc/local/src/gstlal/gstlal-inspiral/bin/gstlal_inspiral_inj_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache $(FRAME_CACHE) --frame-segments-file $(SEGMENTS) --vetoes $(VETOES) --frame-segments-name datasegments  --control-peak-time $(PEAK) --fir-stride 1 --web-dir $(WEBDIR) --time-slide-file $(TISI) $(INJECTION_LIST) $(CHANNEL_NAMES) --ht-gate-threshold 50 $(CONDOR_COMMANDS) --singles-threshold 6.0 --prior-cache $(PRIOR_CACHE) --svd-bank-cache $(SVD_CACHE) --dist-stats-cache $(DIST_STATS_CACHE) --non-injection-db $(ZERO_LAG_DB) --bank-cache $(BANK_CACHE_STRING) --psd-cache $(PSD_CACHE) --marginalized-likelihood-file $(MARG) --request-cpu 4 --request-memory 7GB
+	cp $(MARG) .
+	cp $(POSTMARG) .
+	/home/gstlalcbc/local/src/gstlal/gstlal-inspiral/bin/gstlal_inspiral_inj_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache $(FRAME_CACHE) --frame-segments-file $(SEGMENTS) --vetoes $(VETOES) --frame-segments-name datasegments  --control-peak-time $(PEAK) --fir-stride 1 --web-dir $(WEBDIR) --time-slide-file $(TISI) $(INJECTION_LIST) $(CHANNEL_NAMES) --ht-gate-threshold 50 $(CONDOR_COMMANDS) --singles-threshold 6.0 --prior-cache $(PRIOR_CACHE) --svd-bank-cache $(SVD_CACHE) --dist-stats-cache $(DIST_STATS_CACHE) --non-injection-db $(ZERO_LAG_DB) --bank-cache $(BANK_CACHE_STRING) --psd-cache $(PSD_CACHE) --marginalized-likelihood-file marginalized_likelihood.xml.gz --request-cpu 4 --request-memory 7GB
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
 
 clean:
