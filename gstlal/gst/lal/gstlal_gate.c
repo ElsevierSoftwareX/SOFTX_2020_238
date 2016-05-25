@@ -580,7 +580,7 @@ static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
  */
 
 
-static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
+static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *controlbuf)
 {
 	GSTLALGate *element = GSTLAL_GATE(parent);
 	GstFlowReturn result = GST_FLOW_OK;
@@ -590,20 +590,20 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 	 * check validity of timestamp and offsets
 	 */
 
-	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
-		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
+	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(controlbuf) && GST_BUFFER_DURATION_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_END_IS_VALID(controlbuf))) {
+		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(controlbuf)));
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	GST_DEBUG_OBJECT(pad, "have buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	GST_DEBUG_OBJECT(pad, "have buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, controlbuf, GST_BUFFER_BOUNDARIES_ARGS(controlbuf));
 
 	/*
 	 * wait until this buffer is needed
 	 */
 
 	g_mutex_lock(&element->control_lock);
-	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_sink_head) || !element->control_segments->len)) {
-		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(sinkbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_sink_head);
+	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_TIMESTAMP(controlbuf) < element->t_sink_head) || !element->control_segments->len)) {
+		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(controlbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_TIMESTAMP(controlbuf) >= element->t_sink_head);
 		g_cond_wait(&element->control_queue_head_changed, &element->control_lock);
 	}
 
@@ -622,15 +622,15 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 	 * above threshold, FALSE = below threshold.
 	 */
 
-	gst_buffer_map(sinkbuf, &info, GST_MAP_READ);
+	gst_buffer_map(controlbuf, &info, GST_MAP_READ);
 
-	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(sinkbuf)) {
-		control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(sinkbuf) + GST_BUFFER_DURATION(sinkbuf), FALSE);
+	if(GST_BUFFER_FLAG_IS_SET(controlbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(controlbuf)) {
+		control_add_segment(element, GST_BUFFER_TIMESTAMP(controlbuf), GST_BUFFER_TIMESTAMP(controlbuf) + GST_BUFFER_DURATION(controlbuf), FALSE);
 	} else {
-		guint buffer_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+		guint buffer_length = GST_BUFFER_OFFSET_END(controlbuf) - GST_BUFFER_OFFSET(controlbuf);
 		guint segment_start;
 		guint segment_length;
-		g_assert_cmpuint(GST_BUFFER_OFFSET_END(sinkbuf), >, GST_BUFFER_OFFSET(sinkbuf));
+		g_assert_cmpuint(GST_BUFFER_OFFSET_END(controlbuf), >, GST_BUFFER_OFFSET(controlbuf));
 
 		for(segment_start = 0; segment_start < buffer_length; segment_start += segment_length) {
 			/* state for this segment */
@@ -639,21 +639,21 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 				if(state != (element->control_sample_func(info.data, segment_start + segment_length) >= element->threshold))
 					/* state has changed */
 					break;
-			control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start + segment_length, buffer_length), state);
+			control_add_segment(element, GST_BUFFER_TIMESTAMP(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start + segment_length, buffer_length), state);
 		}
 	}
-	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(controlbuf));
 	g_cond_broadcast(&element->control_queue_head_changed);
 	g_mutex_unlock(&element->control_lock);
 
-	gst_buffer_unmap(sinkbuf, &info);
+	gst_buffer_unmap(controlbuf, &info);
 
 	/*
 	 * done
 	 */
 
 done:
-	gst_buffer_unref(sinkbuf);
+	gst_buffer_unref(controlbuf);
 	return result;
 }
 
