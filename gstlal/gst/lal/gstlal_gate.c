@@ -938,7 +938,9 @@ done:
 	 * srcbuf */
 	if(sinkbuf)
 		gst_buffer_unref(sinkbuf);
-	return result;
+
+	/* only one of two outcomes:  OK or ERROR */
+	return result == GST_FLOW_OK ? result : GST_FLOW_ERROR;
 }
 
 
