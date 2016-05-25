@@ -139,7 +139,7 @@ from pylal.datatypes import LIGOTimeGPS
 # @enddot
 #
 #
-def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstruction_segment_list = None, seekevent = None, control_peak_samples = None):
+def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstruction_segment_list = None, control_peak_samples = None):
 	"""!
 	This function implements a portion of a gstreamer graph to provide a
 	control signal for deciding when to reconstruct physical SNRS
@@ -149,7 +149,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	@param verbose Make verbose
 	@param suffix Log name for verbosity
 	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
-	@param seekevent A seek event such as what would be created by seek_event_for_gps()
 	@param control_peak_samples If nonzero, this would do peakfinding on the control signal with the window specified by this parameter.  The peak finding would give a single sample of "on" state at the peak.   This will cause far less CPU to be used if you only want to reconstruct SNR around the peak of the control signal. 
 	"""
 	#
@@ -175,7 +174,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	# output some other way.
 
 	if reconstruction_segment_list is not None:
-		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, seekevent = seekevent, invert_output = False)
+		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, invert_output = False)
 
 	#
 	# verbosity and a tee
@@ -1013,7 +1012,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates())
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		assert psd_fft_length % 4 == 0, "psd_fft_length (= %g) must be multiple of 4" % psd_fft_length
-		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = psd_fft_length / 4, width = 32)
+		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = psd_fft_length / 4, width = 32)
 
 	#
 	# build gate control branches
@@ -1024,7 +1023,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			if instrument != "H2":
-				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, reconstruction_segment_list = reconstruction_segment_list, seekevent = detectors.seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, reconstruction_segment_list = reconstruction_segment_list, control_peak_samples = control_peak_time * max(bank.get_rates()))
 				#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 
 	else:
