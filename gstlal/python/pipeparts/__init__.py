@@ -712,7 +712,7 @@ def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = Fals
 	src = mktheoraenc(pipeline, src, border = 2, quality = 48, quick = False)
 	src = mkoggmux(pipeline, src)
 	if audiosrc is not None:
-		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=F32%s, depth=24" % BYTE_ORDER)).link(src)
+		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=S24%s" % BYTE_ORDER)).link(src)
 	if verbose:
 		src = mkprogressreport(pipeline, src, filename)
 	mkfilesink(pipeline, src, filename)
