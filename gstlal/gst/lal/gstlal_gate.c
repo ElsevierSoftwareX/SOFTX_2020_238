@@ -1050,6 +1050,56 @@ static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 /*
  * ============================================================================
  *
+ *                            GstElement Overrides
+ *
+ * ============================================================================
+ */
+
+
+static GstStateChangeReturn change_state(GstElement *base, GstStateChange transition)
+{
+	GSTLALGate *element = GSTLAL_GATE(base);
+	GstStateChangeReturn result = GST_STATE_CHANGE_SUCCESS;
+
+	/*
+	 * do upwards transitions before parent class
+	 */
+
+	/* nothing */
+
+	/*
+	 * now do parent class
+	 */
+
+	result = GST_ELEMENT_CLASS(gstlal_gate_parent_class)->change_state(base, transition);
+	if(result == GST_STATE_CHANGE_FAILURE)
+		return result;
+
+	/*
+	 * do downwards transitions after parent class
+	 */
+
+	switch(transition) {
+	case GST_STATE_CHANGE_PAUSED_TO_READY:
+		g_mutex_lock(&element->control_lock);
+		element->sink_eos = TRUE;
+		element->control_eos = TRUE;
+		control_flush(element);
+		g_cond_broadcast(&element->control_queue_head_changed);
+		g_mutex_unlock(&element->control_lock);
+		break;
+
+	default:
+		break;
+	}
+
+	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
  *                              GObject Methods
  *
  * ============================================================================
@@ -1203,6 +1253,8 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	element_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 
 	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
 	klass->start = GST_DEBUG_FUNCPTR(start);
