@@ -304,7 +304,7 @@ class Handler(simplehandler.Handler):
 		@param message A reference to the incoming message
 		"""
 		if message.type == Gst.MessageType.ELEMENT:
-			if message.structure.get_name() == "spectrum":
+			if message.get_structure().get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
 				# NOTE: epoch is used for the timestamp, this
 				# is the middle of the most recent FFT interval
@@ -323,9 +323,9 @@ class Handler(simplehandler.Handler):
 				self.dataclass.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
 				return True
 		elif message.type == Gst.MessageType.APPLICATION:
-			if message.structure.get_name() == "CHECKPOINT":
+			if message.get_structure().get_name() == "CHECKPOINT":
 				# FIXME make a custom parser for CHECKPOINT messages?
-				timestamp = message.structure["timestamp"]
+				timestamp = message.get_structure()["timestamp"]
 				# FIXME:  the function that makes these
 				# messages uses a default value of None,
 				# and in principle could be called with

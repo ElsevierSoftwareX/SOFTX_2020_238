@@ -114,7 +114,7 @@ class Handler(simplehandler.Handler):
 		self.cache = tempcache()
 
 	def do_on_message(self, bus, message):
-		if message.type == Gst.MessageType.ELEMENT and message.structure.get_name() == "GstMultiFileSink":
+		if message.type == Gst.MessageType.ELEMENT and message.get_structure().get_name() == "GstMultiFileSink":
 			self.cache.append(pipeparts.framecpp_filesink_cache_entry_from_mfs_message(message))
 			return True
 		return False
