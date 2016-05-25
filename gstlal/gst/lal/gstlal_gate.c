@@ -1004,20 +1004,26 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 /*
  * src_event()
  *
- * proxy through to the sink pad
+ * upstream events should be forwarded through both the sink and control
+ * pads.
  */
 
 
 static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	return gst_pad_push_event(GSTLAL_GATE(parent)->sinkpad, event);
+	gboolean success = TRUE;
+	/* each push_event() consumes one reference, so we need an extra */
+	gst_event_ref(event);
+	success &= gst_pad_push_event(GSTLAL_GATE(parent)->controlpad, event);
+	success &= gst_pad_push_event(GSTLAL_GATE(parent)->sinkpad, event);
+	return success;
 }
 
 
 /*
  * src_query()
  *
- * proxy through to the sink pad
+ * queries are referred to the sink pad's peer for the answer
  */
 
 
