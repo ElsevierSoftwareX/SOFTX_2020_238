@@ -584,7 +584,6 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *co
 {
 	GSTLALGate *element = GSTLAL_GATE(parent);
 	GstFlowReturn result = GST_FLOW_OK;
-	GstMapInfo info;
 
 	/*
 	 * check validity of timestamp and offsets
@@ -622,16 +621,17 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *co
 	 * above threshold, FALSE = below threshold.
 	 */
 
-	gst_buffer_map(controlbuf, &info, GST_MAP_READ);
 
 	if(GST_BUFFER_FLAG_IS_SET(controlbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(controlbuf)) {
 		control_add_segment(element, GST_BUFFER_TIMESTAMP(controlbuf), GST_BUFFER_TIMESTAMP(controlbuf) + GST_BUFFER_DURATION(controlbuf), FALSE);
 	} else {
+		GstMapInfo info;
 		guint buffer_length = GST_BUFFER_OFFSET_END(controlbuf) - GST_BUFFER_OFFSET(controlbuf);
 		guint segment_start;
 		guint segment_length;
 		g_assert_cmpuint(GST_BUFFER_OFFSET_END(controlbuf), >, GST_BUFFER_OFFSET(controlbuf));
 
+		gst_buffer_map(controlbuf, &info, GST_MAP_READ);
 		for(segment_start = 0; segment_start < buffer_length; segment_start += segment_length) {
 			/* state for this segment */
 			gboolean state = element->control_sample_func(info.data, segment_start) >= element->threshold;
@@ -641,12 +641,11 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *co
 					break;
 			control_add_segment(element, GST_BUFFER_TIMESTAMP(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start + segment_length, buffer_length), state);
 		}
+		gst_buffer_unmap(controlbuf, &info);
 	}
 	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(controlbuf));
 	g_cond_broadcast(&element->control_queue_head_changed);
 	g_mutex_unlock(&element->control_lock);
-
-	gst_buffer_unmap(controlbuf, &info);
 
 	/*
 	 * done
