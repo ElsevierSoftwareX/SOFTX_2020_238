@@ -55,7 +55,7 @@ def resample_test_01a(pipeline, name):
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % out_rate)
-	#head = pipeparts.mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
 
@@ -98,13 +98,13 @@ def resample_test_01b(pipeline, name):
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % out_rate)
-	#head = pipeparts.mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % in_rate)
-	#head = pipeparts.mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % out_rate)
-	#head = pipeparts.mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % in_rate)
-	#head = pipeparts.mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
 
