@@ -123,15 +123,16 @@ static PyObject *eval(GstLALPyFuncSrc *element, GstClockTime t)
 
 static GstCaps *get_caps_filter(GstLALPyFuncSrc *element)
 {
-	GstCaps *filter;
+	GstCaps *filter = NULL;
 	const gchar *format;
 	gint channels;
 	PyObject *val;
 	gboolean success = TRUE;
 
+	/* evaluate at t = 0 */
 	val = eval(element, 0);
 	if(!val)
-		return NULL;
+		goto done;
 
 	if(PyFloat_Check(val)) {
 		/* result is a scalar float */
@@ -147,12 +148,14 @@ static GstCaps *get_caps_filter(GstLALPyFuncSrc *element)
 
 		channels = PySequence_Length(val);
 
-		if(PyFloat_Check(elem))
+		if(PyFloat_Check(elem)) {
+			/* elements are floats */
 			format = GST_AUDIO_NE(F64);
-		else if(PyComplex_Check(elem))
+		} else if(PyComplex_Check(elem)) {
+			/* elements are complex */
 			format = GST_AUDIO_NE(Z128);
-		else {
-			/* unsupported type */
+		} else {
+			/* unsupported element type */
 			success = FALSE;
 		}
 
@@ -166,11 +169,10 @@ static GstCaps *get_caps_filter(GstLALPyFuncSrc *element)
 
 	if(success) {
 		filter = gst_caps_new_simple("audio/x-raw", "format", G_TYPE_STRING, format, "channels", G_TYPE_INT, channels, NULL);
-	} else {
+	} else
 		GST_ELEMENT_ERROR(element, STREAM, FORMAT, (NULL), ("expression \"%s\" returned unsupported type", element->expression));
-		filter = NULL;
-	}
 
+done:
 	return filter;
 }
 
@@ -178,7 +180,8 @@ static GstCaps *get_caps_filter(GstLALPyFuncSrc *element)
 /*
  * unpack()
  *
- * unpack the Python object into the the given memory location
+ * unpack the Python object into the the given memory location.  takes
+ * ownership of val.
  */
 
 
@@ -207,6 +210,8 @@ static gboolean unpack(void *dst, gboolean is_real, gint channels, PyObject *val
 		PyErr_Print();
 		success = FALSE;
 	}
+
+	Py_DECREF(val);
 	return success;
 }
 
@@ -300,17 +305,11 @@ static GstFlowReturn fill(GstBaseSrc *basesrc, guint64 offset, guint size, GstBu
 	for(i = 0; i < len; i++) {
 		GstClockTime t = element->segment.start + gst_util_uint64_scale_int_round(element->offset + i, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audioinfo));
 		PyObject *val = eval(element, t);
-		if(!val) {
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-		if(!unpack(data, is_real, channels, val)) {
-			Py_DECREF(val);
+		if(!val || !unpack(data, is_real, channels, val)) {
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
 		data += GST_AUDIO_INFO_BPF(&element->audioinfo);
-		Py_DECREF(val);
 	}
 
 	GST_BUFFER_OFFSET(buf) = element->offset;
@@ -385,7 +384,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	if(success)
 		GST_DEBUG_OBJECT(element, "result: %" GST_PTR_FORMAT, query);
 	else
-		GST_ERROR_OBJECT(element, "query failed");
+		GST_WARNING_OBJECT(element, "query failed");
 	return success;
 }
 
@@ -419,6 +418,8 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 		Py_XDECREF(element->code);
 		element->code = (PyCodeObject *) Py_CompileString(element->expression, "lal_pyfuncsrc", Py_eval_input);
+		if(!element->code)
+			PyErr_Print();
 
 		gst_pad_mark_reconfigure(GST_BASE_SRC_PAD(GST_BASE_SRC(object)));
 
@@ -527,6 +528,7 @@ static void gstlal_pyfuncsrc_class_init(GstLALPyFuncSrcClass *klass)
 /* FIXME:  WTF? */
 	dlopen("libpython2.7.so", RTLD_LAZY | RTLD_GLOBAL);
 	Py_Initialize();
+	PyEval_InitThreads();
 }
 
 

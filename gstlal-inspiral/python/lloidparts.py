@@ -74,14 +74,11 @@ import sys
 import warnings
 
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require('0.10')
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 
 from glue import iterutils
@@ -142,7 +139,7 @@ from pylal.datatypes import LIGOTimeGPS
 # @enddot
 #
 #
-def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstruction_segment_list = None, seekevent = None, control_peak_samples = None):
+def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstruction_segment_list = None, control_peak_samples = None):
 	"""!
 	This function implements a portion of a gstreamer graph to provide a
 	control signal for deciding when to reconstruct physical SNRS
@@ -152,7 +149,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	@param verbose Make verbose
 	@param suffix Log name for verbosity
 	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
-	@param seekevent A seek event such as what would be created by seek_event_for_gps()
 	@param control_peak_samples If nonzero, this would do peakfinding on the control signal with the window specified by this parameter.  The peak finding would give a single sample of "on" state at the peak.   This will cause far less CPU to be used if you only want to reconstruct SNR around the peak of the control signal. 
 	"""
 	#
@@ -160,7 +156,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	#
 
 	snk = pipeparts.mkadder(pipeline, None)
-	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
+	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw, rate=%d" % rate)
 
 	#
 	# Add a peak finder on the control signal sample number
@@ -178,7 +174,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	# output some other way.
 
 	if reconstruction_segment_list is not None:
-		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, seekevent = seekevent, invert_output = False)
+		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, invert_output = False)
 
 	#
 	# verbosity and a tee
@@ -307,8 +303,8 @@ class Handler(simplehandler.Handler):
 		@param bus A reference to the pipeline's bus
 		@param message A reference to the incoming message
 		"""
-		if message.type == gst.MESSAGE_ELEMENT:
-			if message.structure.get_name() == "spectrum":
+		if message.type == Gst.MessageType.ELEMENT:
+			if message.get_structure().get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
 				# NOTE: epoch is used for the timestamp, this
 				# is the middle of the most recent FFT interval
@@ -326,10 +322,10 @@ class Handler(simplehandler.Handler):
 				# bunch of masses.  which ones?
 				self.dataclass.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
 				return True
-		elif message.type == gst.MESSAGE_APPLICATION:
-			if message.structure.get_name() == "CHECKPOINT":
+		elif message.type == Gst.MessageType.APPLICATION:
+			if message.get_structure().get_name() == "CHECKPOINT":
 				# FIXME make a custom parser for CHECKPOINT messages?
-				timestamp = message.structure["timestamp"]
+				timestamp = message.get_structure()["timestamp"]
 				# FIXME:  the function that makes these
 				# messages uses a default value of None,
 				# and in principle could be called with
@@ -338,7 +334,7 @@ class Handler(simplehandler.Handler):
 				# gotten a valid timestamp
 				self.checkpoint(timestamp)
 				return True
-		elif message.type == gst.MESSAGE_EOS:
+		elif message.type == Gst.MessageType.EOS:
 			with self.dataclass.lock:
 				# FIXME:  how to choose correct timestamp?
 				try:
@@ -689,7 +685,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		# FIXME:  the capsfilter shouldn't be needed, the adder
 		# should intersect it's downstream peer's format with the
 		# sink format
-		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
+		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw, rate=%d" % max(bank.get_rates()))
 		elem = pipeparts.mknofakedisconts(pipeline, elem)	# FIXME:  remove when resampler is patched
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
@@ -712,11 +708,11 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 		src = pipeparts.mkgate(
 			pipeline,
-			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 12 * block_duration),
+			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * Gst.SECOND + 12 * block_duration),
 			threshold = 1e-100,
 			attack_length = gate_attack_length,
 			hold_length = gate_hold_length,
-			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 12 * block_duration)
+			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * Gst.SECOND + 12 * block_duration)
 		)
 		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 	else:
@@ -802,7 +798,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * gst.SECOND),
+			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * Gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc,
@@ -868,7 +864,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 
 			branch_heads[rate] = pipeparts.mkadder(pipeline, (pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration) for head in heads))
 			# FIXME capsfilter shouldn't be needed remove when adder is fixed
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw-float, rate=%d" % rate)
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw, rate=%d" % rate)
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_snr_adder" % (logname, rate))
 		else:
 			#
@@ -886,7 +882,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# Note quality = 1 requires that the template slices
 			# are padded such that the Nyquist frequency is 1.5
 			# times the highest frequency of the time slice
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw-float, rate=%d" % next_rate[rate])
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw, rate=%d" % next_rate[rate])
 			branch_heads[rate] = pipeparts.mknofakedisconts(pipeline, branch_heads[rate])	# FIXME:  remove when resampler is patched
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_to_%d_snr_resampler" % (logname, rate, next_rate[rate]))
 
@@ -913,7 +909,6 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 
 	snr, = branch_heads.values()	# make sure we've summed down to one stream
 	return pipeparts.mktogglecomplex(pipeline, snr)
-	#return pipeparts.mkcapsfilter(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % output_rate)), "audio/x-raw-complex, rate=%d" % output_rate)
 
 
 def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duration):
@@ -946,7 +941,7 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duratio
 	# create timeslicechisq element and add chifacs as a property
 	#
 
-	chisq = gst.element_factory_make("lal_timeslicechisq")
+	chisq = Gst.ElementFactory.make("lal_timeslicechisq", None)
 	pipeline.add(chisq)
 
 	#
@@ -992,7 +987,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = gst.SECOND, reconstruction_segment_list = None):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = Gst.SECOND, reconstruction_segment_list = None):
 	"""!
 	The multiple instrument, multiple bank LLOID algorithm
 	"""
@@ -1016,7 +1011,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates())
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		assert psd_fft_length % 4 == 0, "psd_fft_length (= %g) must be multiple of 4" % psd_fft_length
-		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = psd_fft_length / 4, width = 32)
+		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = psd_fft_length / 4, width = 32)
 
 	#
 	# build gate control branches
@@ -1027,7 +1022,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			if instrument != "H2":
-				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, reconstruction_segment_list = reconstruction_segment_list, seekevent = detectors.seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, reconstruction_segment_list = reconstruction_segment_list, control_peak_samples = control_peak_time * max(bank.get_rates()))
 				#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 
 	else:

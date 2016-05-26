@@ -182,16 +182,14 @@ import math
 import subprocess
 from collections import namedtuple
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require("0.10")
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 import lal
+from lal import LIGOTimeGPS
 
 from glue.lal import CacheEntry
 from glue import segments
@@ -200,7 +198,6 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
-from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
 from gstlal import bottle
 from gstlal import datasource
@@ -498,7 +495,7 @@ class OneTimeSignalHandler(object):
 			try:
 				#FIXME how do I choose a timestamp?
 				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
-				if not self.pipeline.send_event(gst.event_new_eos()):
+				if not self.pipeline.send_event(Gst.event_new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
 			except Exception as e:
 				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
@@ -635,8 +632,8 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	if options.verbose:
 		print >>sys.stderr, "assembling pipeline ...",
 
-	pipeline = gst.Pipeline("gstlal_inspiral")
-	mainloop = gobject.MainLoop()
+	pipeline = Gst.Pipeline(name="gstlal_inspiral")
+	mainloop = GObject.MainLoop()
 		
 	triggersrc = lloidparts.mkLLOIDmulti(
 		pipeline,
@@ -723,7 +720,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	if options.verbose:
 		print >>sys.stderr, "attaching appsinks to pipeline ...",
 	appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
-	appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
+	appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
 	if options.verbose:
 		print >>sys.stderr, "attached %d, done" % len(appsinks)
 
@@ -759,7 +756,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 
 	if options.verbose:
 		print >>sys.stderr, "setting pipeline state to playing ..."
-	if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+	if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline did not enter playing state")
 
 	if options.write_pipeline is not None:
@@ -806,7 +803,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	#
 
 
-	if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
+	if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline could not be set to NULL")
 	del handler.pipeline
 	del output.pipeline

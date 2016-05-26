@@ -552,15 +552,20 @@ static int add_simulation_series(REAL8TimeSeries *h, const GSTLALSimulation *ele
 
 
 /*
- * sink event()
+ * sink_event()
  */
 
 
-static gboolean event(GstBaseTransform *trans, GstEvent *event)
+static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(trans);
 
-	if(GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
+	/*
+	 * extract metadata from tags
+	 */
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_TAG: {
 		GstTagList *taglist;
 		gchar *instrument = NULL, *channel_name = NULL, *units = NULL;
 
@@ -605,13 +610,14 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 			g_object_notify(G_OBJECT(element), "channel-name");
 			g_object_notify(G_OBJECT(element), "units");
 		}
+		break;
 	}
 
-	/*
-	 * done.  forward all events
-	 */
+	default:
+		break;
+	}
 
-	return TRUE;
+	return GST_BASE_TRANSFORM_CLASS(gstlal_simulation_parent_class)->sink_event(trans, event);
 }
 
 
@@ -624,7 +630,6 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(trans);
 	GstFlowReturn result = GST_FLOW_OK;
-	GstCaps *caps;
 	GstMapInfo info;
 	REAL8TimeSeries *h;
 
@@ -666,11 +671,11 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 
 	/*
 	 * Wrap buffer in a LAL REAL8TimeSeries.
+	 * gstlal_buffer_map_REAL8TimeSeries() consumes the reference
+	 * returned by gst_pad_get_current_caps().
 	 */
 
-	caps = gst_pad_get_current_caps(GST_BASE_TRANSFORM_SINK_PAD(trans));
-	h = gstlal_buffer_map_REAL8TimeSeries(buf, caps, &info, element->instrument, element->channel_name, element->units);
-	gst_caps_unref(caps);
+	h = gstlal_buffer_map_REAL8TimeSeries(buf, gst_pad_get_current_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)), &info, element->instrument, element->channel_name, element->units);
 	if(!h) {
 		GST_ELEMENT_ERROR(element, LIBRARY, FAILED, (NULL), ("failure wrapping buffer in REAL8TimeSeries"));
 		result = GST_FLOW_ERROR;
@@ -847,7 +852,7 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	transform_class->sink_event = GST_DEBUG_FUNCPTR(event);
+	transform_class->sink_event = GST_DEBUG_FUNCPTR(sink_event);
 	transform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
 
 	gst_element_class_set_details_simple(
@@ -932,12 +937,12 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 
 static void gstlal_simulation_init(GSTLALSimulation *element)
 {
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
+
 	element->xml_location = NULL;
 	element->injection_document = NULL;
 	element->instrument = NULL;
 	element->channel_name = NULL;
 	element->units = NULL;
 	element->simulation_series = NULL;
-
-	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }

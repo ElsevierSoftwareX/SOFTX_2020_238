@@ -5,7 +5,7 @@ DEP_INSTALL_DIR:=${DEPENDENCIES_PATH}
 INSTALL_DIR:=${LAL_PATH}
 PATCH_DIR:=${PWD}/patches
 
-ATLAS=atlas3.10.2
+OPENBLAS=0.2.18
 DOXYGEN=doxygen-1.8.9.1
 GLUE=glue-1.49.1
 GSL=gsl-1.15
@@ -46,18 +46,18 @@ env.sh:
 	echo 'LAL_PATH=${PWD}/opt' >> $@
 	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
 	echo 'INSTALL_FILES_PATH=${PWD}/install' >> $@
-	echo 'export CFLAGS="-fPIC -O3 -march=native -latlas"' >> $@
+	echo 'export CFLAGS="-fPIC -O3 -march=native"' >> $@
 	echo '# These are environment variables that do get exported' >> $@
-	echo 'export LDFLAGS="-L$${DEPENDENCIES_PATH}/lib"' >> $@
 	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
 	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
+	echo 'export LDFLAGS="-L${PWD}/lib:${PWD}/lib64"' >> $@
 	echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.6/site-packages:$${LAL_PATH}/lib64/python2.6/site-packages:$${DEPENDENCIES_PATH}/lib/python2.6/site-packages:$${DEPENDENCIES_PATH}/lib64/python2.6/site-packages' >> $@
 	echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-0.10:$${LAL_PATH}/lib64/gstreamer-0.10:$${DEPENDENCIES_PATH}/lib/gstreamer-0.10:$${DEPENDENCIES_PATH}/lib64/gstreamer-0.10' >> $@
 	echo 'GST_REGISTRY=$${LAL_PATH}/registry.$$(uname -m).bin' >> $@
 	echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH GST_REGISTRY LAL_PATH DEPENDENCIES_PATH INSTALL_FILES_PATH' >> $@
 
 clean :
-	rm -rvf $(INSTALL_FILES_DIR) $(ATLAS_BUILD_DIR) $(DEP_INSTALL_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TARDIR)
+	rm -rvf $(INSTALL_FILES_DIR) $(DEP_INSTALL_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TARDIR)
 	rm -rvf dep opt
 	rm -rf *.txt
 
@@ -279,7 +279,7 @@ $(INSTALL_FILES_DIR)/$(GSTREAMER)/config.log : $(DEP_INSTALL_DIR)/lib/pkgconfig/
 ## FIXME Hack to make gsl default to atlas for blas
 $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig : $(DEP_INSTALL_DIR)/lib/libgsl.so
 	cp $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc $@ 
-		sed 's/-lgslcblas/-latlas -lsatlas/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
+		sed 's/-lgslcblas/-lopenblas/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
 
 $(DEP_INSTALL_DIR)/lib/libgsl.so : $(INSTALL_FILES_DIR)/$(GSL)/config.log
 	cd $(INSTALL_FILES_DIR)/$(GSL) && make -j32 && make install -j32
@@ -287,38 +287,38 @@ $(DEP_INSTALL_DIR)/lib/libgsl.so : $(INSTALL_FILES_DIR)/$(GSL)/config.log
 $(INSTALL_FILES_DIR)/$(GSL)/config.log : $(DEP_INSTALL_DIR)/lib/liborc-0.4.so
 	tar -xzf $(TARDIR)/$(GSL).tar.gz -C $(INSTALL_FILES_DIR)
 	cd $(INSTALL_FILES_DIR)/$(GSL) && \
-		./configure --prefix=$(DEP_INSTALL_DIR) LDFLAGS="-L$(DEP_INSTALL_DIR)/lib" GSL_CBLAS_LIB='-latlas -lsatlas'
+		./configure --prefix=$(DEP_INSTALL_DIR) LDFLAGS="-L$(DEP_INSTALL_DIR)/lib" GSL_CBLAS_LIB='-lopenblas -lcblas'
 
 $(DEP_INSTALL_DIR)/lib/liborc-0.4.so : $(INSTALL_FILES_DIR)/$(ORC)/config.log
 	cd $(INSTALL_FILES_DIR)/$(ORC) && make -j32 && make install -j32
 
-$(INSTALL_FILES_DIR)/$(ORC)/config.log : $(DEP_INSTALL_DIR)/lib/libsatlas.so
+$(INSTALL_FILES_DIR)/$(ORC)/config.log : $(DEP_INSTALL_DIR)/lib/libopenblas.so
 	tar -xzf $(TARDIR)/$(ORC).tar.gz -C $(INSTALL_FILES_DIR)
 	cd $(INSTALL_FILES_DIR)/$(ORC) && \
 	cd $(INSTALL_FILES_DIR)/$(ORC) && \
 		./configure --prefix=$(DEP_INSTALL_DIR)
 
-$(DEP_INSTALL_DIR)/lib/libsatlas.so : $(ATLAS_BUILD_DIR)/Makefile
-	cd $(ATLAS_BUILD_DIR) && make && make time > make_time.txt && make install  
+$(DEP_INSTALL_DIR)/lib/libopenblas.so : $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS)/libopenblas.a
+	cd $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS) && make PREFIX=$(DEP_INSTALL_DIR) NUM_THREADS=32768 install
 
-$(ATLAS_BUILD_DIR)/Makefile : TAR.txt
-	tar -xjf $(TARDIR)/$(ATLAS).tar.bz2 -C $(INSTALL_FILES_DIR)
-	cd $(ATLAS_BUILD_DIR) && $(INSTALL_FILES_DIR)/ATLAS/configure --nof77 --shared --prefix=$(DEP_INSTALL_DIR) 
+$(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS)/libopenblas.a : TAR.txt
+	tar -xzf $(TARDIR)/v$(OPENBLAS).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS) && make
 
 #
 # Download all of the software
 #
 
-TAR.txt : $(TARDIR)/$(ATLAS).tar.bz2 $(TARDIR)/$(DOXYGEN).src.tar.gz $(TARDIR)/$(ORC).tar.gz $(TARDIR)/$(GSL).tar.gz $(TARDIR)/$(GSTREAMER).tar.gz $(TARDIR)/$(GSTPLUGINSBASE).tar.gz $(TARDIR)/$(GSTPLUGINSGOOD).tar.gz $(TARDIR)/$(GSTPYTHON).tar.gz $(TARDIR)/$(OPROFILE).tar.gz $(TARDIR)/$(LIBFRAME).tar.gz $(TARDIR)/$(METAIO).tar.gz $(TARDIR)/$(GLUE).tar.gz $(TARDIR)/$(GSTLAL).tar.gz $(TARDIR)/$(GSTLALCALIBRATION).tar.gz $(TARDIR)/$(GSTLALINSPIRAL).tar.gz $(TARDIR)/$(GSTLALUGLY).tar.gz $(TARDIR)/$(PYLAL).tar.gz $(TARDIR)/$(LAL).tar.gz $(TARDIR)/$(LALAPPS).tar.gz $(TARDIR)/$(LALBURST).tar.gz $(TARDIR)/$(LALDETCHAR).tar.gz $(TARDIR)/$(LALFRAME).tar.gz $(TARDIR)/$(LALINFERENCE).tar.gz $(TARDIR)/$(LALINSPIRAL).tar.gz $(TARDIR)/$(LALMETAIO).tar.gz $(TARDIR)/$(LALPULSAR).tar.gz $(TARDIR)/$(LALSIMULATION).tar.gz $(TARDIR)/$(LALSTOCHASTIC).tar.gz $(TARDIR)/$(LALXML).tar.gz $(TARDIR)/$(SWIG).tar.gz $(TARDIR)/$(LDASTOOLS).tar.gz 
+TAR.txt : $(TARDIR)/v$(OPENBLAS).tar.gz $(TARDIR)/$(DOXYGEN).src.tar.gz $(TARDIR)/$(ORC).tar.gz $(TARDIR)/$(GSL).tar.gz $(TARDIR)/$(GSTREAMER).tar.gz $(TARDIR)/$(GSTPLUGINSBASE).tar.gz $(TARDIR)/$(GSTPLUGINSGOOD).tar.gz $(TARDIR)/$(GSTPYTHON).tar.gz $(TARDIR)/$(OPROFILE).tar.gz $(TARDIR)/$(LIBFRAME).tar.gz $(TARDIR)/$(METAIO).tar.gz $(TARDIR)/$(GLUE).tar.gz $(TARDIR)/$(GSTLAL).tar.gz $(TARDIR)/$(GSTLALCALIBRATION).tar.gz $(TARDIR)/$(GSTLALINSPIRAL).tar.gz $(TARDIR)/$(GSTLALUGLY).tar.gz $(TARDIR)/$(PYLAL).tar.gz $(TARDIR)/$(LAL).tar.gz $(TARDIR)/$(LALAPPS).tar.gz $(TARDIR)/$(LALBURST).tar.gz $(TARDIR)/$(LALDETCHAR).tar.gz $(TARDIR)/$(LALFRAME).tar.gz $(TARDIR)/$(LALINFERENCE).tar.gz $(TARDIR)/$(LALINSPIRAL).tar.gz $(TARDIR)/$(LALMETAIO).tar.gz $(TARDIR)/$(LALPULSAR).tar.gz $(TARDIR)/$(LALSIMULATION).tar.gz $(TARDIR)/$(LALSTOCHASTIC).tar.gz $(TARDIR)/$(LALXML).tar.gz $(TARDIR)/$(SWIG).tar.gz $(TARDIR)/$(LDASTOOLS).tar.gz 
 	echo $^ > $@
 
 $(TARDIR) :
-	mkdir -p $(INSTALL_FILES_DIR) $(ATLAS_BUILD_DIR) $(DEP_INSTALL_DIR) $(INSTALL_DIR) $(PATCH_DIR)
+	mkdir -p $(INSTALL_FILES_DIR) $(DEP_INSTALL_DIR) $(INSTALL_DIR) $(PATCH_DIR)
 	wget --no-check-certificate http://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/profile/patches/gstreamer-bison.patch --directory-prefix=$(PATCH_DIR) -nc
 	mkdir -p $(TARDIR)
 
-$(TARDIR)/$(ATLAS).tar.bz2 : $(TARDIR)
-	wget --no-check-certificate http://downloads.sourceforge.net/project/math-atlas/Stable/3.10.2/$(ATLAS).tar.bz2 --directory-prefix=$(TARDIR) -nc
+$(TARDIR)/v$(OPENBLAS).tar.gz : $(TARDIR)
+	wget --no-check-certificate http://github.com/xianyi/OpenBLAS/archive/v$(OPENBLAS).tar.gz --directory-prefix=$(TARDIR) -nc
 
 $(TARDIR)/$(DOXYGEN).src.tar.gz : $(TARDIR)
 	wget --no-check-certificate ftp://ftp.stack.nl/pub/users/dimitri/$(DOXYGEN).src.tar.gz --directory-prefix=$(TARDIR) -nc

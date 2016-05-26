@@ -855,7 +855,7 @@ REAL8TimeSeries *gstlal_buffer_map_REAL8TimeSeries(GstBuffer *buf, GstCaps *caps
 		goto done;
 	}
 	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate) || !gst_structure_get_int(structure, "channels", &channels)) {
+	if(!structure || !gst_structure_get_int(structure, "rate", &rate) || !gst_structure_get_int(structure, "channels", &channels)) {
 		GST_ERROR("cannot extract rate and/or channels from caps");
 		goto done;
 	}

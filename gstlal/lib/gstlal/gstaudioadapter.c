@@ -201,6 +201,9 @@ void gst_audioadapter_clear(GstAudioAdapter *adapter)
  * #GstBuffer's contents it must gst_buffer_ref() it before calling this
  * function.  The #GstBuffer's timestamp, duration, offset and offset end
  * must all be valid.
+ *
+ * Gap buffers need not have any data in them, but the size of all others
+ * must equal (offset end - offset) * unit size.
  */
 
 
@@ -210,6 +213,9 @@ void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf)
 	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(buf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(buf));
+	g_assert_cmpuint(GST_BUFFER_OFFSET(buf), <=, GST_BUFFER_OFFSET_END(buf));
+	if(!GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP))
+		g_assert_cmpuint((GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf)) * adapter->unit_size, ==, gst_buffer_get_size(buf));
 	g_queue_push_tail(adapter->queue, buf);
 	adapter->size += GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 	g_object_notify(G_OBJECT(adapter), "size");

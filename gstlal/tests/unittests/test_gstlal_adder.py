@@ -110,8 +110,7 @@ class TestGstLALAdder(unittest.TestCase):
                                          num_buffers = self.num_of_buffers, 
                                          name= "InputA")
 	capsfilt_a = pipeparts.mkcapsfilter(self.pipeline, src_a, 
-        "audio/x-raw, width={0}, rate={1}".format(self.bits_per_sample, 
-                                                        self.sample_rate))
+        "audio/x-raw, rate={1}".format(self.sample_rate))
         tee_a = pipeparts.mktee(self.pipeline, capsfilt_a)
         if(self.quiet==False): 
             pipeparts.mknxydumpsink(self.pipeline, pipeparts.mkqueue(self.pipeline, 
@@ -125,8 +124,7 @@ class TestGstLALAdder(unittest.TestCase):
                                          name= "InputB", 
                                          timestamp_offset= self.timestamp_offs_B)
 	capsfilt_b = pipeparts.mkcapsfilter(self.pipeline, src_b,
-        "audio/x-raw, width={0}, rate={1}".format(self.bits_per_sample, 
-                                                        self.sample_rate))
+        "audio/x-raw, rate={1}".format(self.sample_rate))
         tee_b = pipeparts.mktee(self.pipeline, capsfilt_b)
         if(self.quiet==False):               
             pipeparts.mknxydumpsink(self.pipeline, pipeparts.mkqueue(self.pipeline, 

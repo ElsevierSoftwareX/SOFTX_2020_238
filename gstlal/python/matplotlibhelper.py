@@ -24,6 +24,12 @@ __author__ = "Leo Singer <leo.singer@ligo.org>"
 __all__ = ("padtemplate", "figure", "render", "BaseMatplotlibTransform")
 
 
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject
+from gi.repository import Gst
+GObject.threads_init()
+Gst.init(None)
 from gstlal.pipeutil import *
 from gstlal import pipeio
 

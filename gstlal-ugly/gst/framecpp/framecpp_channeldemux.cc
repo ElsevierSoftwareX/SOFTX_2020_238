@@ -185,7 +185,7 @@ static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect,
 		"rate", G_TYPE_INT, *rate,
 		"channels", G_TYPE_INT, 1,
 		"layout", G_TYPE_STRING, "interleaved",
-		"channel-mask", GST_TYPE_BITMASK, 0,
+		"channel-mask", GST_TYPE_BITMASK, G_GUINT64_CONSTANT(0),
 		NULL
 	);
 

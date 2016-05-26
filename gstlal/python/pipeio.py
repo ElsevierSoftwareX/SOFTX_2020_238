@@ -181,7 +181,7 @@ def parse_spectrum_message(message):
 	Parse a "spectrum" message from the lal_whiten element, return a
 	LAL REAL8FrequencySeries containing the strain spectral density.
 	"""
-	s = message.structure
+	s = message.get_structure()
 	return laltypes.REAL8FrequencySeries(
 		name = s["instrument"] if s.has_field("instrument") else "",
 		epoch = laltypes.LIGOTimeGPS(0, message.timestamp),

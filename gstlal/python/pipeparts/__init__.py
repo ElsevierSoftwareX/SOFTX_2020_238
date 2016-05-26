@@ -252,15 +252,15 @@ def framecpp_filesink_cache_entry_from_mfs_message(message):
 	describing the file being written by the multifilesink element.
 	"""
 	# extract the segment spanned by the file from the message directly
-	start = LIGOTimeGPS(0, message.structure["timestamp"])
-	end = start + LIGOTimeGPS(0, message.structure["duration"])
+	start = LIGOTimeGPS(0, message.get_structure()["timestamp"])
+	end = start + LIGOTimeGPS(0, message.get_structure()["duration"])
 
 	# retrieve the framecpp_filesink bin (for instrument/observatory
 	# and frame file type)
 	parent = message.src.get_parent()
 
 	# construct and return a CacheEntry object
-	return lal.CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.structure["filename"]))
+	return lal.CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.get_structure()["filename"]))
 
 
 #
@@ -321,8 +321,8 @@ def mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = Non
 	elem = mkgeneric(pipeline, None, "framecpp_channelmux", **properties)
 	if channel_src_map is not None:
 		for channel, src in channel_src_map.items():
-			for srcpad in src.src_pads():
-				if srcpad.link(elem.get_static_pad(channel)) == Gst.PAD_LINK_OK:
+			for srcpad in src.srcpads:
+				if srcpad.link(elem.get_request_pad(channel)) == Gst.PadLinkReturn.OK:
 					break
 	if units is not None:
 		framecpp_channeldemux_set_units(elem, units)
@@ -475,13 +475,18 @@ def mktee(pipeline, src):
 	return mkgeneric(pipeline, src, "tee")
 
 
-## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline with useful default properties
-def mkadder(pipeline, srcs, sync = True, **properties):
-	elem = mkgeneric(pipeline, None, "lal_adder", sync = sync, **properties)
+## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline configured for synchronous "sum" mode mixing.
+def mkadder(pipeline, srcs, sync = True, mix_mode = "sum", **properties):
+	elem = mkgeneric(pipeline, None, "lal_adder", sync = sync, mix_mode = mix_mode, **properties)
 	if srcs is not None:
 		for src in srcs:
 			src.link(elem)
 	return elem
+
+
+## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline configured for synchronous "product" mode mixing.
+def mkmultiplier(pipeline, srcs, sync = True, mix_mode = "product", **properties):
+	return mkadder(pipeline, srcs, sync = sync, mix_mode = mix_mode, **properties)
 
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-queue.html">queue</a> element to a pipeline with useful default properties
@@ -707,7 +712,7 @@ def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = Fals
 	src = mktheoraenc(pipeline, src, border = 2, quality = 48, quick = False)
 	src = mkoggmux(pipeline, src)
 	if audiosrc is not None:
-		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=F32%s, depth=24" % BYTE_ORDER)).link(src)
+		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=S24%s" % BYTE_ORDER)).link(src)
 	if verbose:
 		src = mkprogressreport(pipeline, src, filename)
 	mkfilesink(pipeline, src, filename)
@@ -760,7 +765,8 @@ class AppSync(object):
 		for elem in appsinks:
 			if elem in self.appsinks:
 				raise ValueError("duplicate appsinks %s" % repr(elem))
-			elem.connect("new-buffer", self.appsink_handler, False)
+			elem.connect("new-preroll", self.appsink_handler, False)
+			elem.connect("new-sample", self.appsink_handler, False)
 			elem.connect("eos", self.appsink_handler, True)
 			self.appsinks[elem] = None
 
@@ -768,7 +774,8 @@ class AppSync(object):
 		# NOTE that max buffers must be 1 for this to work
 		assert "max_buffers" not in properties
 		elem = mkappsink(pipeline, src, max_buffers = 1, drop = drop, **properties)
-		elem.connect("new-buffer", self.appsink_handler, False)
+		elem.connect("new-preroll", self.appsink_handler, False)
+		elem.connect("new-sample", self.appsink_handler, False)
 		elem.connect("eos", self.appsink_handler, True)
 		self.appsinks[elem] = None
 		return elem
@@ -844,7 +851,7 @@ def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
 
 	for sink in appsinks:
 		appsink_dump_dot = AppsinkDumpDot(pipeline, len(appsinks), basename = basename, verbose = verbose)
-		appsink_dump_dot.handler_id = sink.connect_after("new-buffer", appsink_dump_dot.execute)
+		appsink_dump_dot.handler_id = sink.connect_after("new-preroll", appsink_dump_dot.execute)
 
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz = 1):
@@ -1022,6 +1029,6 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	"""
 	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
 		raise ValueError("cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set")
-	Gst.DEBUG_BIN_TO_DOT_FILE(pipeline, Gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+	Gst.debug_bin_to_dot_file(pipeline, Gst.DebugGraphDetails.ALL, filestem)
 	if verbose:
 		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
