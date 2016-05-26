@@ -20,11 +20,11 @@ import sys
 import re
 import gzip
 from glue import segments
+from glue.lal import LIGOTimeGPS
 from glue.ligolw import ligolw
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
-from lal import LIGOTimeGPS
 from optparse import OptionParser
 
 def parse_command_line():

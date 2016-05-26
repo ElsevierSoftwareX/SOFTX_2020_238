@@ -94,8 +94,8 @@ from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
 import lal
-from lal import LIGOTimeGPS
 from pylal import series as lalseries
+from pylal.datatypes import LIGOTimeGPS
 
 
 #
@@ -502,7 +502,7 @@ class Handler(simplehandler.Handler):
 		"""
 		# FIXME Type casts should be removed when we switch to swig bindings
 		current_gps_time = float(lal.GPSTimeNow())
-		seglist_to_drop = segments.segmentlist([segments.segment(segments.NegInfinity, current_gps_time - self.segment_history_duration)])
+		seglist_to_drop = segments.segmentlist([segments.segment(segments.NegInfinity, LIGOTimeGPS(current_gps_time - self.segment_history_duration))])
 		for segtype, seglistdict in self.cumulative_seglistdicts.items():
 			seglistdict.extend(self.seglistdicts[segtype])
 			seglistdict.coalesce()

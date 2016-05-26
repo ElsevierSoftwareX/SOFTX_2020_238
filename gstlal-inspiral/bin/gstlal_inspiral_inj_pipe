@@ -75,7 +75,7 @@ import itertools, glob
 # import the modules we need to build the pipeline
 from glue import iterutils
 from glue import pipeline
-from glue import lal as gluelal
+from glue import lal
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
@@ -88,7 +88,7 @@ from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 from pylal import series as lalseries
 import numpy
-from lal import LIGOTimeGPS
+from pylal.datatypes import LIGOTimeGPS
 from gstlal import datasource
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -110,7 +110,7 @@ def sim_tag_from_inj_file(injections):
 
 def get_max_length(bank_cache, verbose = False):
 	max_time = 0
-	cache = gluelal.Cache.fromfilenames([bank_cache.values()[0]])
+	cache = lal.Cache.fromfilenames([bank_cache.values()[0]])
 	for f in cache.pfnlist():
 		xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
 		sngls = lsctables.SnglInspiralTable.get_table(xmldoc)
@@ -154,7 +154,7 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 def create_svd_bank_strings(svd_bank_cache, instruments = None):
 	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
 	svd_nodes = {}
-	for filename in sorted([gluelal.CacheEntry(f).path for f in open(svd_bank_cache)], cmp = lambda x,y: cmp(int(os.path.basename(x).split("-")[1].split("_")[0]), int(os.path.basename(y).split("-")[1].split("_")[0]))):
+	for filename in sorted([lal.CacheEntry(f).path for f in open(svd_bank_cache)], cmp = lambda x,y: cmp(int(os.path.basename(x).split("-")[1].split("_")[0]), int(os.path.basename(y).split("-")[1].split("_")[0]))):
 		svd_nodes.setdefault(os.path.basename(filename).split("-")[0], []).append(filename)
 	outstrings = []
 	for i in range(len(svd_nodes.values()[0])):
@@ -174,7 +174,7 @@ def svd_bank_cache_maker(svd_bank_strings, counter, injection = False):
 	parsed_svd_bank_strings = [inspiral.parse_svdbank_string(single_svd_bank_string) for single_svd_bank_string in svd_bank_strings]
 	for svd_bank_parsed_dict in parsed_svd_bank_strings:
 		for url in svd_bank_parsed_dict.itervalues():
-			svd_cache_entries.append(gluelal.CacheEntry.from_T050017(url))
+			svd_cache_entries.append(lal.CacheEntry.from_T050017(url))
 
 	return [svd_cache_entry.url for svd_cache_entry in svd_cache_entries] 
 
@@ -566,7 +566,7 @@ segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, b
 
 psd_files = {}
 for line in open(options.psd_cache):
-	ce = gluelal.CacheEntry(line)
+	ce = lal.CacheEntry(line)
 	psd_files[(frozenset(lsctables.instrument_set_from_ifos(ce.observatory)), ce.segment)] = ce.path
 
 #	
@@ -583,11 +583,11 @@ lloid_output = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
 
 #keyed by chunk. Has to have all hte dist stats plus the prior files plus the SNR pdf
 lloid_diststats = {}
-for filename in [gluelal.CacheEntry(f).path for f in open(options.dist_stats_cache)]:
+for filename in [lal.CacheEntry(f).path for f in open(options.dist_stats_cache)]:
 	lloid_diststats.setdefault(os.path.basename(filename).split("-")[1].split("_")[0], []).append(filename)
 for tmpbin in lloid_diststats:
-	lloid_diststats[tmpbin].extend([gluelal.CacheEntry(f).path for f in open(options.prior_cache) if "%s_CREATE_PRIOR_DIST_STATS" % tmpbin in f])
-	lloid_diststats[tmpbin].extend([gluelal.CacheEntry(f).path for f in open(options.prior_cache) if "SNR_PDFS_CREATE_PRIOR_DIST_STATS" in f])
+	lloid_diststats[tmpbin].extend([lal.CacheEntry(f).path for f in open(options.prior_cache) if "%s_CREATE_PRIOR_DIST_STATS" % tmpbin in f])
+	lloid_diststats[tmpbin].extend([lal.CacheEntry(f).path for f in open(options.prior_cache) if "SNR_PDFS_CREATE_PRIOR_DIST_STATS" in f])
 
 #
 # Setup likelihood jobs, clustering and merging

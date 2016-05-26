@@ -61,6 +61,7 @@ from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
 
+from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 
 __author__ = "Madeline Wade <madeline.wade@ligo.org>"

@@ -98,9 +98,9 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import time_slide as ligolw_time_slide
 import lal
-from lal import LIGOTimeGPS
 from pylal import rate
 from pylal.datatypes import LALUnit
+from pylal.datatypes import LIGOTimeGPS
 from pylal.datatypes import REAL8FrequencySeries
 
 from gstlal import bottle
@@ -869,6 +869,11 @@ class Data(object):
 				psddict = {}
 				for instrument in self.seglistdicts["triggersegments"]:
 					elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
+					# FIXME:  remove
+					# LIGOTimeGPS type cast
+					# when we port to swig
+					# version of
+					# REAL8FrequencySeries
 					psddict[instrument] = REAL8FrequencySeries(
 						name = "PSD",
 						epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),

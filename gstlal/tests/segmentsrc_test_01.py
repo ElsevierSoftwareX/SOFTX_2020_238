@@ -26,9 +26,9 @@
 
 import numpy
 from glue import segments
+from lal import LIGOTimeGPS
 from gstlal import pipeio
 from gstlal import pipeparts
-from lal import LIGOTimeGPS
 
 import test_common
 import cmp_nxydumps

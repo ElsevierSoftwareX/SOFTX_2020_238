@@ -17,7 +17,6 @@ from pylal import datatypes as laltypes
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import pipeio
-from lal import LIGOTimeGPS
 
 #
 # =============================================================================
@@ -188,7 +187,7 @@ class GTK_Main:
 		window.show_all()
 
 		self.psd_file_name = 'G1-GEO_PLAYER_PSD-SUS-CHN11_DQ.xml.gz'
-		self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
+		self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = laltypes.LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
 
 
 	def start_stop(self, w):

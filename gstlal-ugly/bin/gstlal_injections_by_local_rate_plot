@@ -19,6 +19,7 @@
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw import ligolw
+from glue.lal import LIGOTimeGPS as GPS
 import sys
 import matplotlib
 matplotlib.use('Agg')
