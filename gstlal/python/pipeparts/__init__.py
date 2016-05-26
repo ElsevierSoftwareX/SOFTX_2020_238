@@ -1029,6 +1029,6 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	"""
 	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
 		raise ValueError("cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set")
-	Gst.DEBUG_BIN_TO_DOT_FILE(pipeline, Gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+	Gst.debug_bin_to_dot_file(pipeline, Gst.DebugGraphDetails.ALL, filestem)
 	if verbose:
 		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
