@@ -252,15 +252,15 @@ def framecpp_filesink_cache_entry_from_mfs_message(message):
 	describing the file being written by the multifilesink element.
 	"""
 	# extract the segment spanned by the file from the message directly
-	start = LIGOTimeGPS(0, message.structure["timestamp"])
-	end = start + LIGOTimeGPS(0, message.structure["duration"])
+	start = LIGOTimeGPS(0, message.get_structure()["timestamp"])
+	end = start + LIGOTimeGPS(0, message.get_structure()["duration"])
 
 	# retrieve the framecpp_filesink bin (for instrument/observatory
 	# and frame file type)
 	parent = message.src.get_parent()
 
 	# construct and return a CacheEntry object
-	return lal.CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.structure["filename"]))
+	return lal.CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.get_structure()["filename"]))
 
 
 #
@@ -292,7 +292,7 @@ def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output
 
 
 ## Adds a <a href="@gstlalgtkdoc/GstLALCacheSrc.html">lal_cachesrc</a> element to a pipeline with useful default properties
-def mklalcachesrc(pipeline, location, use_mmap = True, **properties):
+def mklalcachesrc(pipeline, location, use_mmap = False, **properties):
 	return mkgeneric(pipeline, None, "lal_cachesrc", location = location, use_mmap = use_mmap, **properties)
 
 
@@ -321,8 +321,8 @@ def mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = Non
 	elem = mkgeneric(pipeline, None, "framecpp_channelmux", **properties)
 	if channel_src_map is not None:
 		for channel, src in channel_src_map.items():
-			for srcpad in src.src_pads():
-				if srcpad.link(elem.get_static_pad(channel)) == Gst.PAD_LINK_OK:
+			for srcpad in src.srcpads:
+				if srcpad.link(elem.get_request_pad(channel)) == Gst.PadLinkReturn.OK:
 					break
 	if units is not None:
 		framecpp_channeldemux_set_units(elem, units)
