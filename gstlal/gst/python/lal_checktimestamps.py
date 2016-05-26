@@ -105,7 +105,7 @@ class lal_checktimestamps(GstBase.BaseTransform):
 			GObject.TYPE_BOOLEAN,
 			"silent",
 			"Only report errors.",
-			False,
+			True,
 			GObject.ParamFlags.READWRITE
 		),
 		"timestamp-fuzz": (
@@ -160,7 +160,7 @@ class lal_checktimestamps(GstBase.BaseTransform):
 	def __init__(self):
 		super(lal_checktimestamps, self).__init__()
 		self.set_passthrough(True)
-		self.silent = False
+		self.silent = True
 		self.timestamp_fuzz = 1
 
 
