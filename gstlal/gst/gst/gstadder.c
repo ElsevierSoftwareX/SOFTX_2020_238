@@ -361,6 +361,8 @@ gst_adder_setcaps (GstAdder * adder, GstPad * pad, GstCaps * caps)
    * that, upstream needs to deal with it. */
   if (adder->current_caps != NULL) {
     if (gst_audio_info_is_equal (&info, &adder->info)) {
+      gstlal_collect_pads_set_unit_size (pad, GST_AUDIO_INFO_BPF (&adder->info));
+      gstlal_collect_pads_set_rate (pad, GST_AUDIO_INFO_RATE (&adder->info));
       GST_OBJECT_UNLOCK (adder);
       return TRUE;
     } else {
@@ -376,6 +378,8 @@ gst_adder_setcaps (GstAdder * adder, GstPad * pad, GstCaps * caps)
   adder->current_caps = gst_caps_ref (caps);
 
   memcpy (&adder->info, &info, sizeof (info));
+  gstlal_collect_pads_set_unit_size (pad, GST_AUDIO_INFO_BPF (&adder->info));
+  gstlal_collect_pads_set_rate (pad, GST_AUDIO_INFO_RATE (&adder->info));
   GST_OBJECT_UNLOCK (adder);
   /* send caps event later, after stream-start event */
 
