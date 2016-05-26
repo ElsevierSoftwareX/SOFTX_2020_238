@@ -279,7 +279,7 @@ $(INSTALL_FILES_DIR)/$(GSTREAMER)/config.log : $(DEP_INSTALL_DIR)/lib/pkgconfig/
 ## FIXME Hack to make gsl default to atlas for blas
 $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig : $(DEP_INSTALL_DIR)/lib/libgsl.so
 	cp $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc $@ 
-		sed 's/-lgslcblas/-lopenblas.a/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
+		sed 's/-lgslcblas/-lopenblas/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
 
 $(DEP_INSTALL_DIR)/lib/libgsl.so : $(INSTALL_FILES_DIR)/$(GSL)/config.log
 	cd $(INSTALL_FILES_DIR)/$(GSL) && make -j32 && make install -j32
@@ -299,7 +299,7 @@ $(INSTALL_FILES_DIR)/$(ORC)/config.log : $(DEP_INSTALL_DIR)/lib/libopenblas.so
 		./configure --prefix=$(DEP_INSTALL_DIR)
 
 $(DEP_INSTALL_DIR)/lib/libopenblas.so : $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS)/libopenblas.a
-	cd $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS) && make PREFIX=$(DEP_INSTALL_DIR) install
+	cd $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS) && make PREFIX=$(DEP_INSTALL_DIR) NUM_THREADS=32768 install
 
 $(INSTALL_FILES_DIR)/OpenBLAS-$(OPENBLAS)/libopenblas.a : TAR.txt
 	tar -xzf $(TARDIR)/v$(OPENBLAS).tar.gz -C $(INSTALL_FILES_DIR)
