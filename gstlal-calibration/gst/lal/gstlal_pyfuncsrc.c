@@ -528,6 +528,7 @@ static void gstlal_pyfuncsrc_class_init(GstLALPyFuncSrcClass *klass)
 /* FIXME:  WTF? */
 	dlopen("libpython2.7.so", RTLD_LAZY | RTLD_GLOBAL);
 	Py_Initialize();
+	PyEval_InitThreads();
 }
 
 
