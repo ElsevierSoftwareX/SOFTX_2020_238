@@ -69,6 +69,7 @@ __date__ = "FIXME"
 #
 #
 
+
 def printable_timestamp(timestamp):
 	"""!
 	A function to nicely format a timestamp for printing
@@ -86,8 +87,8 @@ def gst_buffer_flag_is_set(buf, flags):
 
 class lal_checktimestamps(GstBase.BaseTransform):
 	"""!
-	A class representing a gstreamer element that will verify that the
-	timestamps agree with incoming buffers based on tracking the buffer offsets.
+	Gstreamer element that will verify that the timestamps agree with
+	incoming buffers based on tracking the buffer offsets.
 	"""
 	__gstmetadata__ = (
 		"Timestamp Checker Pass-Through Element",
@@ -96,25 +97,25 @@ class lal_checktimestamps(GstBase.BaseTransform):
 		__author__
 	)
 
-	#silent = GObject.Property(type = bool, default = False, nick = "silent", blurb = "Only report errors.", flags = GObject.PARAM_READWRITE | GObject.PARAM_CONSTRUCT)
-	#timestamp_fuzz = GObject.Property(type = long, minimum = 0, maximum = 1000000, default = 1, nick = "timestamp fuzz", blurb = "Number of nanoseconds of timestamp<-->offset discrepancy to accept before reporting it.  Timestamp<-->offset discrepancies of 1/2 a sample or more are always reported.", flags = GObject.PARAM_READWRITE | GObject.PARAM_CONSTRUCT)
+	#silent = GObject.Property(type = GObject.TYPE_BOOLEAN, default = False, nick = "silent", blurb = "Only report errors.", flags = GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT)
+	#timestamp_fuzz = GObject.Property(type = GObject.TYPE_INT64, minimum = 0, maximum = GObject.G_MAXINT64, default = 1, nick = "timestamp fuzz", blurb = "Number of nanoseconds of timestamp<-->offset discrepancy to accept before reporting it.  Timestamp<-->offset discrepancies of 1/2 a sample or more are always reported.", flags = GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT)
 
-	#__gproperties__ = {
-	#	"timestamp-fuzz": (
-	#		GObject.TYPE_UINT64,
-	#		"timestamp fuzz",
-	#		"Number of nanoseconds of timestamp<-->offset discrepancy to accept before reporting it.  Timestamp<-->offset discrepancies of 1/2 a sample or more are always reported.",
-	#		0, GObject.G_MAXUINT64, 1,
-	#		GObject.PARAM_READWRITE | GObject.PARAM_CONSTRUCT
-	#	),
-	#	"silent": (
-	#		GObject.TYPE_BOOLEAN,
-	#		"silent",
-	#		"Only report errors.",
-	#		False,
-	#		GObject.PARAM_READWRITE | GObject.PARAM_CONSTRUCT
-	#	)
-	#}
+	__gproperties__ = {
+		"silent": (
+			GObject.TYPE_BOOLEAN,
+			"silent",
+			"Only report errors.",
+			False,
+			GObject.ParamFlags.READWRITE
+		),
+		"timestamp-fuzz": (
+			GObject.TYPE_INT64,
+			"timestamp fuzz",
+			"Number of nanoseconds of timestamp<-->offset discrepancy to accept before reporting it.  Timestamp<-->offset discrepancies of 1/2 a sample or more are always reported.",
+			0, GObject.G_MAXINT64, 1,
+			GObject.ParamFlags.READWRITE
+		)
+	}
 
 	__gsttemplates__ = (
 		Gst.PadTemplate.new("sink",
@@ -163,18 +164,21 @@ class lal_checktimestamps(GstBase.BaseTransform):
 		self.timestamp_fuzz = 1
 
 
-	#def do_set_property(self, prop, val):
-	#	if prop.name == "timestamp-fuzz":
-	#		self.timestamp_fuzz = val
-	#	elif prop.name == "silent":
-	#		self.silent = val
+	def do_set_property(self, prop, val):
+		if prop.name == "silent":
+			self.silent = val
+		elif prop.name == "timestamp-fuzz":
+			self.timestamp_fuzz = val
+		else:
+			raise AttributeError(prop.name)
 
 
-	#def do_get_property(self, prop):
-	#	if prop.name == "timestamp-fuzz":
-	#		return self.timestamp_fuzz
-	#	elif prop.name == "silent":
-	#		return self.silent
+	def do_get_property(self, prop):
+		if prop.name == "silent":
+			return self.silent
+		if prop.name == "timestamp-fuzz":
+			return self.timestamp_fuzz
+		raise AttributeError(prop.name)
 
 
 	def do_set_caps(self, incaps, outcaps):
