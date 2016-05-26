@@ -116,12 +116,17 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
+/*
+ * sink_event()
+ */
+
+
 static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
 	gboolean success = TRUE;
 
-	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
+	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME(event));
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_CAPS: {
