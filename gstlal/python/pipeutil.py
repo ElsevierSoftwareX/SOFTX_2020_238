@@ -26,7 +26,7 @@ elements and pipelines.
 __author__       = "Leo Singer <leo.singer@ligo.org>"
 __organization__ = ["LIGO", "California Institute of Technology"]
 __copyright__    = "Copyright 2010, Leo Singer"
-__all__          = ["gobject", "gst", "gstlal_element_register", "mkelem", "mkelems_in_bin", "splice"]
+__all__          = ["gstlal_element_register", "mkelem", "mkelems_in_bin", "splice"]
 
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
