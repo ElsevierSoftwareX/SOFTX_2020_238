@@ -712,7 +712,7 @@ def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = Fals
 	src = mktheoraenc(pipeline, src, border = 2, quality = 48, quick = False)
 	src = mkoggmux(pipeline, src)
 	if audiosrc is not None:
-		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=F32%s, depth=24" % BYTE_ORDER)).link(src)
+		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=S24%s" % BYTE_ORDER)).link(src)
 	if verbose:
 		src = mkprogressreport(pipeline, src, filename)
 	mkfilesink(pipeline, src, filename)
@@ -765,7 +765,8 @@ class AppSync(object):
 		for elem in appsinks:
 			if elem in self.appsinks:
 				raise ValueError("duplicate appsinks %s" % repr(elem))
-			elem.connect("new-buffer", self.appsink_handler, False)
+			elem.connect("new-preroll", self.appsink_handler, False)
+			elem.connect("new-sample", self.appsink_handler, False)
 			elem.connect("eos", self.appsink_handler, True)
 			self.appsinks[elem] = None
 
@@ -773,7 +774,8 @@ class AppSync(object):
 		# NOTE that max buffers must be 1 for this to work
 		assert "max_buffers" not in properties
 		elem = mkappsink(pipeline, src, max_buffers = 1, drop = drop, **properties)
-		elem.connect("new-buffer", self.appsink_handler, False)
+		elem.connect("new-preroll", self.appsink_handler, False)
+		elem.connect("new-sample", self.appsink_handler, False)
 		elem.connect("eos", self.appsink_handler, True)
 		self.appsinks[elem] = None
 		return elem
@@ -849,7 +851,7 @@ def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
 
 	for sink in appsinks:
 		appsink_dump_dot = AppsinkDumpDot(pipeline, len(appsinks), basename = basename, verbose = verbose)
-		appsink_dump_dot.handler_id = sink.connect_after("new-buffer", appsink_dump_dot.execute)
+		appsink_dump_dot.handler_id = sink.connect_after("new-preroll", appsink_dump_dot.execute)
 
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz = 1):

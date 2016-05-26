@@ -71,14 +71,11 @@ import httplib
 import tempfile
 import shutil
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require('0.10')
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 try:
 	from ligo import gracedb
@@ -126,9 +123,9 @@ lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
 def message_new_checkpoint(src, timestamp = None):
-	s = gst.Structure("CHECKPOINT")
+	s = Gst.Structure.new_empty("CHECKPOINT")
 	s.set_value("timestamp", timestamp)
-	return gst.message_new_application(src, s)
+	return Gst.Message.new_application(src, s)
 
 
 def channel_dict_from_channel_list(channel_list, channel_dict = {"H1" : "LSC-STRAIN", "H2" : "LSC-STRAIN", "L1" : "LSC-STRAIN", "V1" : "LSC-STRAIN"}):

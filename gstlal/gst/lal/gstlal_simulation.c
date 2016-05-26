@@ -552,15 +552,17 @@ static int add_simulation_series(REAL8TimeSeries *h, const GSTLALSimulation *ele
 
 
 /*
- * sink event()
+ * sink_event()
  */
 
 
-static gboolean event(GstBaseTransform *trans, GstEvent *event)
+static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(trans);
-	GstObject *parent = GST_OBJECT(trans);
-	gboolean success = FALSE;
+
+	/*
+	 * extract metadata from tags
+	 */
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_TAG: {
@@ -608,16 +610,14 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 			g_object_notify(G_OBJECT(element), "channel-name");
 			g_object_notify(G_OBJECT(element), "units");
 		}
-		success = gst_pad_event_default(trans->sinkpad, parent, event);
 		break;
 	}
 
 	default:
-		success = gst_pad_event_default(trans->sinkpad, parent, event);
 		break;
 	}
 
-	return success;
+	return GST_BASE_TRANSFORM_CLASS(gstlal_simulation_parent_class)->sink_event(trans, event);
 }
 
 
@@ -852,7 +852,7 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	transform_class->sink_event = GST_DEBUG_FUNCPTR(event);
+	transform_class->sink_event = GST_DEBUG_FUNCPTR(sink_event);
 	transform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
 
 	gst_element_class_set_details_simple(

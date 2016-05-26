@@ -28,7 +28,7 @@
  * Cannon, J.  Creighton, B. Sathyaprakash.
  *
  * Completed Actions:
- * - removed 64-bit support for control stream:  not possibleto specify 
+ * - removed 64-bit support for control stream:  not possibleto specify
  * threshold to that precision
  * - Why not signal control_queue_head_changed on receipt of NEW_SEGMENT? not needed.
  *
@@ -288,6 +288,18 @@ static void control_flush(GSTLALGate *element)
 }
 
 
+static void control_flush_upto(GSTLALGate *element, GstClockTime t)
+{
+	guint i;
+
+	for(i = 0; i < element->control_segments->len && control_get_tstop(element, i) <= t; i++);
+	if(i) {
+		GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
+		g_array_remove_range(element->control_segments, 0, i);
+	}
+}
+
+
 /*
  * wait for the control segments to span the interval needed to decide the
  * state of [timestamp,timestamp+duration).  must be called with the
@@ -319,17 +331,13 @@ static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, Gs
 	element->t_sink_head = tmax;
 	g_cond_broadcast(&element->control_queue_head_changed);
 	while(1) {
-		guint i;
-
 		/*
-		 * flush old segments.
+		 * flush old segments.  do this in the loop so that we can
+		 * clear out newly received yet useless buffers as they
+		 * arrive
 		 */
 
-		for(i = 0; i < element->control_segments->len && control_get_tstop(element, i) <= tmin; i++);
-		if(i) {
-			GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
-			g_array_remove_range(element->control_segments, 0, i);
-		}
+		control_flush_upto(element, tmin);
 
 		/*
 		 * has head advanced far enough, or are we at EOS?
@@ -496,114 +504,6 @@ static void stop(GSTLALGate *element, guint64 timestamp, void *data)
 /*
  * ============================================================================
  *
- *                                 Properties
- *
- * ============================================================================
- */
-
-
-enum property {
-	ARG_EMIT_SIGNALS = 1,
-	ARG_DEFAULT_STATE,
-	ARG_THRESHOLD,
-	ARG_ATTACK_LENGTH,
-	ARG_HOLD_LENGTH,
-	ARG_LEAKY,
-	ARG_INVERT
-};
-
-
-static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
-{
-	GSTLALGate *element = GSTLAL_GATE(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_EMIT_SIGNALS:
-		element->emit_signals = g_value_get_boolean(value);
-		break;
-
-	case ARG_DEFAULT_STATE:
-		element->default_state = g_value_get_boolean(value);
-		break;
-
-	case ARG_THRESHOLD:
-		element->threshold = g_value_get_double(value);
-		break;
-
-	case ARG_ATTACK_LENGTH:
-		element->attack_length = g_value_get_int64(value);
-		break;
-
-	case ARG_HOLD_LENGTH:
-		element->hold_length = g_value_get_int64(value);
-		break;
-
-	case ARG_LEAKY:
-		element->leaky = g_value_get_boolean(value);
-		break;
-
-	case ARG_INVERT:
-		element->invert_control = g_value_get_boolean(value);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
-{
-	GSTLALGate *element = GSTLAL_GATE(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_EMIT_SIGNALS:
-		g_value_set_boolean(value, element->emit_signals);
-		break;
-
-	case ARG_DEFAULT_STATE:
-		g_value_set_boolean(value, element->default_state);
-		break;
-
-	case ARG_THRESHOLD:
-		g_value_set_double(value, element->threshold);
-		break;
-
-	case ARG_ATTACK_LENGTH:
-		g_value_set_int64(value, element->attack_length);
-		break;
-
-	case ARG_HOLD_LENGTH:
-		g_value_set_int64(value, element->hold_length);
-		break;
-
-	case ARG_LEAKY:
-		g_value_set_boolean(value, element->leaky);
-		break;
-	
-	case ARG_INVERT:
-		g_value_set_boolean(value, element->invert_control);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-/*
- * ============================================================================
- *
  *                                Control Pad
  *
  * ============================================================================
@@ -688,32 +588,29 @@ static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
  */
 
 
-static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
+static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *controlbuf)
 {
 	GSTLALGate *element = GSTLAL_GATE(parent);
 	GstFlowReturn result = GST_FLOW_OK;
-	GstMapInfo info;
-
-	gst_buffer_map(sinkbuf, &info, GST_MAP_READ);
 
 	/*
 	 * check validity of timestamp and offsets
 	 */
 
-	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
-		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
+	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(controlbuf) && GST_BUFFER_DURATION_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_END_IS_VALID(controlbuf))) {
+		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(controlbuf)));
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	GST_DEBUG_OBJECT(pad, "have buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	GST_DEBUG_OBJECT(pad, "have buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, controlbuf, GST_BUFFER_BOUNDARIES_ARGS(controlbuf));
 
 	/*
 	 * wait until this buffer is needed
 	 */
 
 	g_mutex_lock(&element->control_lock);
-	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_sink_head) || !element->control_segments->len)) {
-		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(sinkbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_sink_head);
+	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_TIMESTAMP(controlbuf) < element->t_sink_head) || !element->control_segments->len)) {
+		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(controlbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_TIMESTAMP(controlbuf) >= element->t_sink_head);
 		g_cond_wait(&element->control_queue_head_changed, &element->control_lock);
 	}
 
@@ -732,14 +629,17 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 	 * above threshold, FALSE = below threshold.
 	 */
 
-	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(sinkbuf)) {
-		control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(sinkbuf) + GST_BUFFER_DURATION(sinkbuf), FALSE);
+
+	if(GST_BUFFER_FLAG_IS_SET(controlbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(controlbuf)) {
+		control_add_segment(element, GST_BUFFER_TIMESTAMP(controlbuf), GST_BUFFER_TIMESTAMP(controlbuf) + GST_BUFFER_DURATION(controlbuf), FALSE);
 	} else {
-		guint buffer_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+		GstMapInfo info;
+		guint buffer_length = GST_BUFFER_OFFSET_END(controlbuf) - GST_BUFFER_OFFSET(controlbuf);
 		guint segment_start;
 		guint segment_length;
-		g_assert_cmpuint(GST_BUFFER_OFFSET_END(sinkbuf), >, GST_BUFFER_OFFSET(sinkbuf));
+		g_assert_cmpuint(GST_BUFFER_OFFSET_END(controlbuf), >, GST_BUFFER_OFFSET(controlbuf));
 
+		gst_buffer_map(controlbuf, &info, GST_MAP_READ);
 		for(segment_start = 0; segment_start < buffer_length; segment_start += segment_length) {
 			/* state for this segment */
 			gboolean state = element->control_sample_func(info.data, segment_start) >= element->threshold;
@@ -747,10 +647,11 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 				if(state != (element->control_sample_func(info.data, segment_start + segment_length) >= element->threshold))
 					/* state has changed */
 					break;
-			control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start + segment_length, buffer_length), state);
+			control_add_segment(element, GST_BUFFER_TIMESTAMP(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start + segment_length, buffer_length), state);
 		}
+		gst_buffer_unmap(controlbuf, &info);
 	}
-	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(controlbuf));
 	g_cond_broadcast(&element->control_queue_head_changed);
 	g_mutex_unlock(&element->control_lock);
 
@@ -759,8 +660,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *si
 	 */
 
 done:
-	gst_buffer_unmap(sinkbuf, &info);
-	gst_buffer_unref(sinkbuf);
+	gst_buffer_unref(controlbuf);
 	return result;
 }
 
@@ -877,6 +777,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 
 		GST_DEBUG_OBJECT(element->srcpad, "pushing reused zero-length buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
 		sinkbuf = NULL;
 		goto done;
 	} else if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
@@ -916,6 +818,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 
 		GST_DEBUG_OBJECT(element->srcpad, "pushing reused gap buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
 		sinkbuf = NULL;
 		goto done;
 	}
@@ -981,7 +885,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 			}
 
 			/*
-			 * set flags, caps, offset, and timestamps.
+			 * set offset, and timestamps
 			 */
 
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
@@ -1034,7 +938,9 @@ done:
 	 * srcbuf */
 	if(sinkbuf)
 		gst_buffer_unref(sinkbuf);
-	return result;
+
+	/* only one of two outcomes:  OK or ERROR */
+	return result == GST_FLOW_OK ? result : GST_FLOW_ERROR;
 }
 
 
@@ -1091,7 +997,12 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	 * sink events are forwarded to src pad
 	 */
 
-	return success && gst_pad_event_default(pad, parent, event);
+	if(!success)
+		gst_event_unref(event);
+	else
+		success = gst_pad_event_default(pad, parent, event);
+
+	return success;
 }
 
 
@@ -1107,26 +1018,82 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 /*
  * src_event()
  *
- * proxy through to the sink pad
+ * upstream events should be forwarded through both the sink and control
+ * pads.
  */
 
 
 static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	return gst_pad_push_event(GSTLAL_GATE(parent)->sinkpad, event);
+	gboolean success = TRUE;
+	/* each push_event() consumes one reference, so we need an extra */
+	gst_event_ref(event);
+	success &= gst_pad_push_event(GSTLAL_GATE(parent)->controlpad, event);
+	success &= gst_pad_push_event(GSTLAL_GATE(parent)->sinkpad, event);
+	return success;
 }
 
 
 /*
  * src_query()
  *
- * proxy through to the sink pad
+ * queries are referred to the sink pad's peer for the answer
  */
 
 
 static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
 {
-	return gst_pad_query(GSTLAL_GATE(parent)->sinkpad, query);
+	return gst_pad_peer_query(GSTLAL_GATE(parent)->sinkpad, query);
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                            GstElement Overrides
+ *
+ * ============================================================================
+ */
+
+
+static GstStateChangeReturn change_state(GstElement *base, GstStateChange transition)
+{
+	GSTLALGate *element = GSTLAL_GATE(base);
+	GstStateChangeReturn result = GST_STATE_CHANGE_SUCCESS;
+
+	/*
+	 * do upwards transitions before parent class
+	 */
+
+	/* nothing */
+
+	/*
+	 * now do parent class
+	 */
+
+	result = GST_ELEMENT_CLASS(gstlal_gate_parent_class)->change_state(base, transition);
+	if(result == GST_STATE_CHANGE_FAILURE)
+		return result;
+
+	/*
+	 * do downwards transitions after parent class
+	 */
+
+	switch(transition) {
+	case GST_STATE_CHANGE_PAUSED_TO_READY:
+		g_mutex_lock(&element->control_lock);
+		element->sink_eos = TRUE;
+		element->control_eos = TRUE;
+		control_flush(element);
+		g_cond_broadcast(&element->control_queue_head_changed);
+		g_mutex_unlock(&element->control_lock);
+		break;
+
+	default:
+		break;
+	}
+
+	return result;
 }
 
 
@@ -1137,6 +1104,110 @@ static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
  *
  * ============================================================================
  */
+
+
+/*
+ * properties
+ */
+
+
+enum property {
+	ARG_EMIT_SIGNALS = 1,
+	ARG_DEFAULT_STATE,
+	ARG_THRESHOLD,
+	ARG_ATTACK_LENGTH,
+	ARG_HOLD_LENGTH,
+	ARG_LEAKY,
+	ARG_INVERT
+};
+
+
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALGate *element = GSTLAL_GATE(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_EMIT_SIGNALS:
+		element->emit_signals = g_value_get_boolean(value);
+		break;
+
+	case ARG_DEFAULT_STATE:
+		element->default_state = g_value_get_boolean(value);
+		break;
+
+	case ARG_THRESHOLD:
+		element->threshold = g_value_get_double(value);
+		break;
+
+	case ARG_ATTACK_LENGTH:
+		element->attack_length = g_value_get_int64(value);
+		break;
+
+	case ARG_HOLD_LENGTH:
+		element->hold_length = g_value_get_int64(value);
+		break;
+
+	case ARG_LEAKY:
+		element->leaky = g_value_get_boolean(value);
+		break;
+
+	case ARG_INVERT:
+		element->invert_control = g_value_get_boolean(value);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALGate *element = GSTLAL_GATE(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_EMIT_SIGNALS:
+		g_value_set_boolean(value, element->emit_signals);
+		break;
+
+	case ARG_DEFAULT_STATE:
+		g_value_set_boolean(value, element->default_state);
+		break;
+
+	case ARG_THRESHOLD:
+		g_value_set_double(value, element->threshold);
+		break;
+
+	case ARG_ATTACK_LENGTH:
+		g_value_set_int64(value, element->attack_length);
+		break;
+
+	case ARG_HOLD_LENGTH:
+		g_value_set_int64(value, element->hold_length);
+		break;
+
+	case ARG_LEAKY:
+		g_value_set_boolean(value, element->leaky);
+		break;
+
+	case ARG_INVERT:
+		g_value_set_boolean(value, element->invert_control);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
 
 
 /*
@@ -1182,6 +1253,8 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	element_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 
 	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
 	klass->start = GST_DEBUG_FUNCPTR(start);
