@@ -183,7 +183,8 @@ class lal_checktimestamps(GstBase.BaseTransform):
 
 	def do_set_caps(self, incaps, outcaps):
 		info = GstAudio.AudioInfo()
-		info.from_caps(incaps)
+		if not info.from_caps(incaps):
+			return False
 		self.unit_size = info.bpf
 		self.units_per_second = info.rate
 		return True
@@ -251,7 +252,7 @@ class lal_checktimestamps(GstBase.BaseTransform):
 		if gst_buffer_flag_is_set(buf, Gst.BufferFlags.GAP):
 			allowed_sizes.append(0)
 		if buf.get_size() not in allowed_sizes:
-			print >>sys.stderr, "%s: got buffer size %d, buffer length %d corresponds to size %d" % (self.get_property("name"), buf.size, length, length * self.unit_size)
+			print >>sys.stderr, "%s: got buffer size %d, buffer length %d corresponds to size %d" % (self.get_property("name"), buf.get_size(), length, length * self.unit_size)
 
 		#
 		# reset for next buffer
