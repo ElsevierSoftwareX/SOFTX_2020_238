@@ -189,6 +189,7 @@ GObject.threads_init()
 Gst.init(None)
 
 import lal
+from lal import LIGOTimeGPS
 
 from glue.lal import CacheEntry
 from glue import segments
@@ -197,7 +198,6 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
-from pylal.datatypes import LIGOTimeGPS
 from pylal import series as lalseries
 from gstlal import bottle
 from gstlal import datasource
