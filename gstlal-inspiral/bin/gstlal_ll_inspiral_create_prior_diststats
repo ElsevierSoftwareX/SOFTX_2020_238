@@ -52,7 +52,8 @@ from glue.text_progress_bar import ProgressBar
 from pylal import rate, snglcoinc 
 from glue import segments
 from glue import iterutils
-from glue.lal import LIGOTimeGPS, CacheEntry
+from glue.lal import CacheEntry
+from lal import LIGOTimeGPS
 import numpy
 from optparse import OptionParser
 

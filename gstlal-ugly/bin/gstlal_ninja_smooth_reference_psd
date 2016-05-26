@@ -31,7 +31,6 @@ from glue.ligolw import param
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
-from pylal.datatypes import LIGOTimeGPS
 from gstlal.pipeutil import gst
 from gstlal import reference_psd
 

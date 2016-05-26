@@ -58,7 +58,7 @@ from glue import segments
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
-from glue import lal
+from glue.lal import CacheEntry
 from pylal import db_thinca_rings
 from pylal import git_version
 from pylal import SimBurstUtils

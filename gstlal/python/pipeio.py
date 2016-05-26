@@ -41,6 +41,7 @@ GObject.threads_init()
 Gst.init(None)
 
 
+from lal import LIGOTimeGPS
 from pylal import datatypes as laltypes
 
 
@@ -184,7 +185,7 @@ def parse_spectrum_message(message):
 	s = message.get_structure()
 	return laltypes.REAL8FrequencySeries(
 		name = s["instrument"] if s.has_field("instrument") else "",
-		epoch = laltypes.LIGOTimeGPS(0, message.timestamp),
+		epoch = LIGOTimeGPS(0, message.timestamp),
 		f0 = 0.0,
 		deltaF = s["delta-f"],
 		sampleUnits = laltypes.LALUnit(s["sample-units"].strip()),
