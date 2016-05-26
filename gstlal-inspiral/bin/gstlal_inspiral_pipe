@@ -75,7 +75,7 @@ import itertools
 # import the modules we need to build the pipeline
 from glue import iterutils
 from glue import pipeline
-from glue.lal import Cache, CacheEntry
+from glue import lal
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
@@ -88,6 +88,7 @@ from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 from pylal import series as lalseries
 import numpy
+from pylal.datatypes import LIGOTimeGPS
 from gstlal import datasource
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -109,7 +110,7 @@ def sim_tag_from_inj_file(injections):
 
 def get_max_length(bank_cache, verbose = False):
 	max_time = 0
-	cache = Cache.fromfilenames([bank_cache.values()[0]])
+	cache = lal.Cache.fromfilenames([bank_cache.values()[0]])
 	for f in cache.pfnlist():
 		xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
 		sngls = lsctables.SnglInspiralTable.get_table(xmldoc)
@@ -229,7 +230,7 @@ def svd_bank_cache_maker(svd_bank_strings, counter, injection = False):
 	parsed_svd_bank_strings = [inspiral.parse_svdbank_string(single_svd_bank_string) for single_svd_bank_string in svd_bank_strings]
 	for svd_bank_parsed_dict in parsed_svd_bank_strings:
 		for url in svd_bank_parsed_dict.itervalues():
-			svd_cache_entries.append(CacheEntry.from_T050017(url))
+			svd_cache_entries.append(lal.CacheEntry.from_T050017(url))
 
 	return [svd_cache_entry.url for svd_cache_entry in svd_cache_entries] 
 

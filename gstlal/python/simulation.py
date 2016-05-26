@@ -22,7 +22,7 @@ from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
-from lal import LIGOTimeGPS
+from pylal.datatypes import LIGOTimeGPS
 
 
 ## @file

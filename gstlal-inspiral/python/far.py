@@ -1432,9 +1432,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# compute nominal SNRs
 		#
+		# FIXME:  remove LIGOTimeGPS type cast when sim is ported
+		# to swig bindings
+		#
 
 		cosi2 = math.cos(sim.inclination)**2.
-		gmst = lal.GreenwichMeanSiderealTime(sim.get_time_geocent())
+		gmst = lal.GreenwichMeanSiderealTime(lal.LIGOTimeGPS(0, sim.get_time_geocent().ns()))
 		snr_0 = {}
 		for instrument, DH in horizon_distance.items():
 			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(str(instrument)).response, sim.longitude, sim.latitude, sim.polarization, gmst)

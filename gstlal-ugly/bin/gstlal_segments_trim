@@ -24,7 +24,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
-from lal import LIGOTimeGPS
+from pylal.datatypes import LIGOTimeGPS
 from optparse import OptionParser
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):

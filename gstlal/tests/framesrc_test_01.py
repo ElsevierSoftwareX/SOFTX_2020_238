@@ -25,7 +25,7 @@
 
 
 from gstlal import pipeparts
-from lal import LIGOTimeGPS
+from pylal.datatypes import LIGOTimeGPS
 import test_common
 
 

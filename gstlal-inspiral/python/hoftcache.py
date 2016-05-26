@@ -161,7 +161,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = Gst.SECOND * 64)
 
 	# seek the pipeline
-	pipeline_seek_for_gps(pipeline, gw_data_source_info.seg[0], gw_data_source_info.seg[1])
+	datasource.pipeline_seek_for_gps(pipeline, gw_data_source_info.seg[0], gw_data_source_info.seg[1])
 
 
 	return src

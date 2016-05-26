@@ -33,7 +33,8 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from gstlal import far
-import lal
+from lal import GPSTimeNow, GPSToUTC
+from pylal.datatypes import LIGOTimeGPS
 
 #
 # =============================================================================
@@ -69,9 +70,9 @@ def plot_segments_history(seglistdicts, segments_to_plot = ['trigger buffers', '
 	# If t_max is specified, cut the segments so they end at t_max,
 	# otherwise set it to the current time
 	if t_max is None:
-		t_max = float(lal.GPSTimeNow())
+		t_max = float(GPSTimeNow())
 	else:
-		seglist_to_drop = segments.segmentlist([segments.segment(lal.LIGOTimeGPS(t_max),segments.PosInfinity)])
+		seglist_to_drop = segments.segmentlist([segments.segment(LIGOTimeGPS(t_max),segments.PosInfinity)])
 		for seglistdict in seglistdicts.values():
 			for seglist in seglistdict.values():
 				seglist -= seglist_to_drop
@@ -83,7 +84,7 @@ def plot_segments_history(seglistdicts, segments_to_plot = ['trigger buffers', '
 	y_tick_labels = []
 	color_list = []
 	color_dict = {'H1': numpy.array((1.0, 0.0, 0.0)), 'L1':  numpy.array((0.0, 0.8, 0.0)), 'V1':  numpy.array((1.0, 0.0, 1.0)), 'H1L1': numpy.array((.5, .5, .5))}
-	x_format = tkr.FuncFormatter(lambda x, pos: datetime.datetime(*lal.GPSToUTC(int(x))[:7]).strftime('%Y-%m-%d, %H:%M:%S UTC'))
+	x_format = tkr.FuncFormatter(lambda x, pos: datetime.datetime(*GPSToUTC(int(x))[:7]).strftime('%Y-%m-%d, %H:%M:%S UTC'))
 	x_ticks = numpy.arange(t_min,t_max+labelspacing, labelspacing)
 
 	for j, segtype in enumerate(segments_to_plot):
