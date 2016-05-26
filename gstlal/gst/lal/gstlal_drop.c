@@ -84,9 +84,131 @@ G_DEFINE_TYPE(
 /*
  * ============================================================================
  *
- *                                 Properties
+ *                                    Pads
  *
  * ============================================================================
+ */
+
+
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALDrop *drop = GSTLAL_DROP(parent);
+	gboolean success = TRUE;
+
+	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_CAPS: {
+		GstCaps *caps;
+		GstAudioInfo info;
+		gst_event_parse_caps(event, &caps);
+		success = gst_audio_info_from_caps(&info, caps);
+		if(success) {
+			drop->rate = GST_AUDIO_INFO_RATE(&info);
+			drop->unit_size = GST_AUDIO_INFO_BPF(&info);
+		}
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	if(!success)
+		gst_event_unref(event);
+	else
+		success = gst_pad_event_default(pad, parent, event);
+
+	return success;
+}
+
+
+/*
+ * chain()
+ */
+
+
+static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
+{
+	GSTLALDrop *element = GSTLAL_DROP(parent);
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * check validity of timestamp and offsets
+	 */
+
+	if(!(
+		GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) &&
+		GST_BUFFER_DURATION_IS_VALID(sinkbuf) &&
+		GST_BUFFER_OFFSET_IS_VALID(sinkbuf) &&
+		GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf) &&
+		(GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf)) * element->unit_size == gst_buffer_get_size(sinkbuf)
+	)) {
+		gst_buffer_unref(sinkbuf);
+		GST_ELEMENT_ERROR(element, STREAM, FORMAT, (NULL), ("buffer has invalid timestamp and/or offset, or has sample count/size mismatch"));
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/*
+	 * process buffer
+	 */
+
+	if(element->drop_samples <= 0) {
+		/* pass entire buffer */
+		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
+			sinkbuf = gst_buffer_make_writable(sinkbuf);
+			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
+		}
+		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element, "gst_pad_push() failed: %s", gst_flow_get_name(result));
+		element->need_discont = FALSE;
+		result = GST_FLOW_OK;
+	} else if(gst_buffer_get_size(sinkbuf) <= element->drop_samples * element->unit_size) {
+		/* drop entire buffer */
+		gst_buffer_unref(sinkbuf);
+		element->drop_samples -= GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+		element->need_discont = TRUE;
+	} else {
+		/* drop part of buffer, pass the rest */
+		GstClockTime toff = gst_util_uint64_scale_int_round(element->drop_samples, GST_SECOND, element->rate);
+		sinkbuf = gst_buffer_make_writable(sinkbuf);
+		gst_buffer_resize(sinkbuf, element->drop_samples * element->unit_size, -1);
+		GST_BUFFER_OFFSET(sinkbuf) += element->drop_samples;
+		GST_BUFFER_TIMESTAMP(sinkbuf) += toff;
+		GST_BUFFER_DURATION(sinkbuf) -= toff;
+		GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
+
+		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element, "gst_pad_push() failed: %s", gst_flow_get_name(result));
+		/* never come back */
+		element->drop_samples = 0;
+		element->need_discont = FALSE;
+		result = GST_FLOW_OK;
+	}
+
+	/*
+	 * done
+	 */
+
+done:
+	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                             GObject Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * Properties
  */
 
 
@@ -136,128 +258,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 
 /*
- * ============================================================================
- *
- *                                    Pads
- *
- * ============================================================================
- */
-
-
-static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALDrop *drop = GSTLAL_DROP(parent);
-	gboolean success = TRUE;
-
-	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
-
-	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_CAPS: {
-		GstCaps *caps;
-		GstAudioInfo info;
-		gst_event_parse_caps(event, &caps);
-		success = gst_audio_info_from_caps(&info, caps);
-		if(success) {
-			drop->rate = GST_AUDIO_INFO_RATE(&info);
-			drop->unit_size = GST_AUDIO_INFO_BPF(&info);
-		}
-		break;
-	}
-
-	default:
-		break;
-	}
-
-	if(!success)
-		gst_event_unref(event);
-	else
-		success = gst_pad_event_default(pad, parent, event);
-
-	return success;
-}
-
-
-/*
- * chain()
- */
-
-
-static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
-{
-	GSTLALDrop *element = GSTLAL_DROP(parent);
-	GstFlowReturn result = GST_FLOW_OK;
-	guint dropsize = (guint) element->drop_samples*element->unit_size;
-
-	/*
-	 * check validity of timestamp and offsets
-	 */
-
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		gst_buffer_unref(sinkbuf);
-		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
-
-	/*
-	 * process buffer
-	 */
-
-	if(dropsize <= 0) {
-		/* pass entire buffer */
-		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
-			sinkbuf = gst_buffer_make_writable(sinkbuf);
-			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
-		}
-		result = gst_pad_push(element->srcpad, sinkbuf);
-		if(G_UNLIKELY(result != GST_FLOW_OK))
-			GST_WARNING_OBJECT(element, "gst_pad_push() failed: %s", gst_flow_get_name(result));
-		element->need_discont = FALSE;
-	} else if(gst_buffer_get_size(sinkbuf) <= dropsize) {
-		/* drop entire buffer */
-		gst_buffer_unref(sinkbuf);
-		element->drop_samples -= (GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf));
-		element->need_discont = TRUE;
-		result = GST_FLOW_OK;
-	} else {
-		/* drop part of buffer, pass the rest */
-		GstBuffer *srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_MEMORY | GST_BUFFER_COPY_TIMESTAMPS, dropsize, gst_buffer_get_size(sinkbuf) - dropsize);
-		GstClockTime toff = gst_util_uint64_scale_int_round(element->drop_samples, GST_SECOND, element->rate);
-		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + element->drop_samples;
-		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_END(sinkbuf);
-		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + toff;
-		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(sinkbuf) - toff;
-		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-
-		result = gst_pad_push(element->srcpad, srcbuf);
-		if(G_UNLIKELY(result != GST_FLOW_OK))
-			GST_WARNING_OBJECT(element, "gst_pad_push() failed: %s", gst_flow_get_name(result));
-		/* never come back */
-		element->drop_samples = 0;
-		element->need_discont = FALSE;
-		gst_buffer_unref(sinkbuf);
-	}
-
-	/*
-	 * done
-	 */
-
-done:
-	return result;
-}
-
-
-/*
- * ============================================================================
- *
- *                                Type Support
- *
- * ============================================================================
- */
-
-
-/*
- * Instance finalize function.  See ???
+ * finalize()
  */
 
 
