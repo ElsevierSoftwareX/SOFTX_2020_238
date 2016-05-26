@@ -54,6 +54,7 @@
 #include <gstlal_pyfuncsrc.h>
 #include <gstlal_wings.h>
 #include <gstlal_smoothcalibfactors.h>
+#include <gstlal_constantupsample.h>
 
 
 /*
@@ -75,6 +76,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_pyfuncsrc", GSTLAL_PYFUNCSRC_TYPE},
 		{"lal_wings", GST_TYPE_LALWINGS},
 		{"lal_smoothcalibfactors", GSTLAL_SMOOTHCALIBFACTORS_TYPE},
+		{"lal_constantupsample", GSTLAL_CONSTANTUPSAMPLE_TYPE},
 		{NULL, 0},
 	};
 
