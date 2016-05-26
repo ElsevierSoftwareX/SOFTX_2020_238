@@ -183,11 +183,28 @@ class lal_checktimestamps(GstBase.BaseTransform):
 
 	def do_set_caps(self, incaps, outcaps):
 		info = GstAudio.AudioInfo()
-		if not info.from_caps(incaps):
+		if info.from_caps(incaps):
+			self.unit_size = info.bpf
+			self.units_per_second = info.rate
+			return True
+		s = incaps.get_structure(0)
+		if not s or s.get_name() != "audio/x-raw":
 			return False
-		self.unit_size = info.bpf
-		self.units_per_second = info.rate
-		return True
+		success, chnls = s.get_int("channels")
+		if success:
+			success, rate = s.get_int("rate")
+		if not success:
+			return False
+		fmt = s.get_string("format")
+		if fmt == "Z64LE":
+			self.unit_size = 8 * chnls
+			self.units_per_second = rate
+			return True
+		elif fmt == "Z128LE":
+			self.unit_size = 16 * chnls
+			self.units_per_second = rate
+			return True
+		return False
 
 
 	def do_start(self):
