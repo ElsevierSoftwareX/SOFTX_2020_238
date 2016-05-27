@@ -82,6 +82,26 @@ def firbank_test_01(pipeline, name, width, time_domain):
 
 
 #
+# does the firbank work with input and outpu streams that have differnt
+# numbers of channels
+#
+
+
+def firbank_test_02(pipeline, name, width, time_domain):
+	# 1 channel goes into firbank
+	head = test_common.test_src(pipeline, buffer_length = 10.0, rate = 16384, width = width, channels = 1, test_duration = 10000.0, wave = 5, verbose = True)
+	# 200 channels come out
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.ones((200, 1)), time_domain = time_domain)
+	pipeparts.mkfakesink(pipeline, head)
+
+	#
+	# done
+	#
+
+	return pipeline
+
+
+#
 # =============================================================================
 #
 #                                     Main
@@ -101,3 +121,6 @@ cmp_nxydumps.compare("firbank_test_01a_in.dump", "firbank_test_01a_out.dump", fl
 cmp_nxydumps.compare("firbank_test_01b_in.dump", "firbank_test_01b_out.dump", flags = flags)
 cmp_nxydumps.compare("firbank_test_01c_in.dump", "firbank_test_01c_out.dump", flags = flags, sample_fuzz = 1e-6)
 cmp_nxydumps.compare("firbank_test_01d_in.dump", "firbank_test_01d_out.dump", flags = flags, sample_fuzz = 1e-6)
+
+
+test_common.build_and_run(firbank_test_02, "firbank_test_02a", width = 64, time_domain = True)
