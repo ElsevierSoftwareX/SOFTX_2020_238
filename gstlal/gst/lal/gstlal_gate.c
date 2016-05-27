@@ -637,7 +637,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *co
 		guint buffer_length = GST_BUFFER_OFFSET_END(controlbuf) - GST_BUFFER_OFFSET(controlbuf);
 		guint segment_start;
 		guint segment_length;
-		g_assert_cmpuint(GST_BUFFER_OFFSET_END(controlbuf), >, GST_BUFFER_OFFSET(controlbuf));
+		g_assert_cmpuint(GST_BUFFER_OFFSET_END(controlbuf), >=, GST_BUFFER_OFFSET(controlbuf));
 
 		gst_buffer_map(controlbuf, &info, GST_MAP_READ);
 		for(segment_start = 0; segment_start < buffer_length; segment_start += segment_length) {
