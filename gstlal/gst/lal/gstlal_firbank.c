@@ -1004,7 +1004,7 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_leng
 	if(!output_length)
 		return GST_FLOW_OK;
 
-	buf = gst_buffer_new_allocate(NULL, output_length * fir_channels(element) * GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8, NULL);
+	buf = gst_buffer_new_allocate(NULL, output_length * GST_AUDIO_INFO_BPF(&element->audio_info), NULL);
 	if(!buf)
 		return GST_FLOW_ERROR;
 
@@ -1089,7 +1089,7 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 		GstBuffer *buf;
 		GstMapInfo mapinfo;
 
-		buf = gst_buffer_new_allocate(NULL, final_gap_length * fir_channels(element) * GST_AUDIO_INFO_WIDTH(&(element->audio_info)) / 8, NULL);
+		buf = gst_buffer_new_allocate(NULL, final_gap_length * GST_AUDIO_INFO_BPF(&element->audio_info), NULL);
 		if(!buf) {
 			result = GST_FLOW_ERROR;
 			goto done;
