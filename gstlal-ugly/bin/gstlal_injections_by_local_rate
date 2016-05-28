@@ -22,8 +22,8 @@ import numpy
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw import ligolw
-from glue.lal import LIGOTimeGPS as GPS
 from glue.ligolw.utils import process
+from lal import LIGOTimeGPS
 from pylal.antenna import response
 import sys
 
@@ -184,7 +184,7 @@ for src in srcs:
 		row.taper = "TAPER_START"
 
 		# time parameters
-		row.set_time_geocent(GPS(float(t)))
+		row.set_time_geocent(LIGOTimeGPS(float(t)))
 		# shouldn't be needed as injection code recomputes these
 		row.h_end_time = row.h_end_time_ns = row.l_end_time = row.l_end_time_ns = row.v_end_time = row.v_end_time_ns = row.g_end_time = row.g_end_time_ns = row.t_end_time = row.t_end_time_ns = row.end_time_gmst = 0
 

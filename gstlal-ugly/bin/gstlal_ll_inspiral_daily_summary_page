@@ -6,11 +6,11 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw import table
 from glue import segments
-from glue import lal
+from glue.lal import Cache
 from glue import iterutils
 from pylal import rate
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 import lal
+from lal import LIGOTimeGPS
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -24,7 +24,7 @@ class ContentHandler(ligolw.PartialLIGOLWContentHandler):
 lsctables.use_in(ContentHandler)
 
 def glob_trigger_files(path, seg):
-	cache = lal.Cache.from_urls(glob.glob(os.path.join(path, '*-*_LLOID-*.xml.gz')))
+	cache = Cache.from_urls(glob.glob(os.path.join(path, '*-*_LLOID-*.xml.gz')))
 	return cache.sieve(segment = seg)
 
 def now():

@@ -31,12 +31,13 @@ import StringIO
 import base64
 import glob
 import bisect
-from glue import lal, segments
+from glue.lal import Cache
+from glue import segments
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw import lsctables
 
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from lal import LIGOTimeGPS
 
 def to_png_image():
         f = StringIO.StringIO()
@@ -71,7 +72,7 @@ def parse_segment_files_from_cache(segcache):
 			yield name, segment_table_to_state(ligolw_segments.segmenttable_get_by_name(xmldoc, name).coalesce())
 
 def parse_segment_file(path, jobid, seg):
-	segment_cache = lal.Cache.from_urls(glob.glob(os.path.join(path, '*_SEGMENTS-*.xml.gz')))
+	segment_cache = Cache.from_urls(glob.glob(os.path.join(path, '*_SEGMENTS-*.xml.gz')))
 	return segment_cache.sieve(description = jobid, segment = seg)
 
 

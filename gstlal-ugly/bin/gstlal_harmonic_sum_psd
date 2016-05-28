@@ -28,6 +28,7 @@ from glue.ligolw import param
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
+from lal import LIGOTimeGPS
 
 __author__ = "Drew Keppel <drew.keppel@ligo.org>"
 
@@ -106,7 +107,7 @@ for ifo,psd_freqseries in psds.items():
 # create harmonic sum psd frequency series
 harmonic_sum_psd = laltypes.REAL8FrequencySeries(
 		name = 'PSD:array',
-		epoch = laltypes.LIGOTimeGPS(0.),
+		epoch = LIGOTimeGPS(0.),
 		f0 = f[0],
 		deltaF = deltaF,
 		sampleUnits = sampleunits,

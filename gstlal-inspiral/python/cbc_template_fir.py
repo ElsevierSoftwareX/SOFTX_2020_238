@@ -55,6 +55,7 @@ import sys
 
 
 import lal
+from lal import LIGOTimeGPS
 import lalsimulation as lalsim
 
 
@@ -136,7 +137,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 
 	return laltypes.COMPLEX16FrequencySeries(
 		name = "template",
-		epoch = laltypes.LIGOTimeGPS(hplus.epoch.gpsSeconds, hplus.epoch.gpsNanoSeconds),
+		epoch = LIGOTimeGPS(hplus.epoch.gpsSeconds, hplus.epoch.gpsNanoSeconds),
 		f0 = 0.0,
 		deltaF = 1.0 / duration,
 		sampleUnits = laltypes.LALUnit("strain"),
@@ -294,7 +295,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	)
 	fworkspace = laltypes.COMPLEX16FrequencySeries(
 		name = "template",
-		epoch = laltypes.LIGOTimeGPS(0),
+		epoch = LIGOTimeGPS(0),
 		f0 = 0.0,
 		deltaF = 1.0 / working_duration,
 		data = numpy.zeros((working_length//2 + 1,), dtype = "cdouble")
@@ -368,7 +369,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		if approximant in templates.gstlal_IMR_approximants:
 			data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
 			# record the new end times for the waveforms (since we performed the shifts)
-			row.end = laltypes.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
+			row.end = LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
 		else:
 			data *= tukeywindow(data, samps = 32)
 

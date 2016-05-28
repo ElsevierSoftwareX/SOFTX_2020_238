@@ -41,6 +41,7 @@ GObject.threads_init()
 Gst.init(None)
 
 
+import lal
 from pylal import datatypes as laltypes
 
 
@@ -182,14 +183,16 @@ def parse_spectrum_message(message):
 	LAL REAL8FrequencySeries containing the strain spectral density.
 	"""
 	s = message.get_structure()
-	return laltypes.REAL8FrequencySeries(
+	psd = lal.CreateREAL8FrequencySeries(
 		name = s["instrument"] if s.has_field("instrument") else "",
-		epoch = laltypes.LIGOTimeGPS(0, message.timestamp),
+		epoch = lal.LIGOTimeGPS(0, message.timestamp),
 		f0 = 0.0,
 		deltaF = s["delta-f"],
-		sampleUnits = laltypes.LALUnit(s["sample-units"].strip()),
-		data = numpy.array(s["magnitude"])
+		sampleUnits = lal.Unit(s["sample-units"].strip()),
+		length = len(s["magnitude"])
 	)
+	psd.data.data = numpy.array(s["magnitude"])
+	return psd
 
 
 #

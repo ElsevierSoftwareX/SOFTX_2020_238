@@ -48,6 +48,7 @@ matplotlib.rcParams.update({
 
 
 import lal
+from lal import LIGOTimeGPS
 from glue.ligolw import ligolw
 from glue.ligolw import table
 from glue.ligolw import lsctables
@@ -55,7 +56,6 @@ from glue.ligolw import utils as ligolw_utils
 from glue import lal as gluelal
 from gstlal import lvalert_helper
 from ligo.gracedb import rest as gracedb
-from pylal.datatypes import LIGOTimeGPS
 from pylal import rate
 
 

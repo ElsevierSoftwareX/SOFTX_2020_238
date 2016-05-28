@@ -259,7 +259,7 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None, inspiral_spectrum = 
 	# obtain PSD data, set default f_max if not supplied
 	#
 
-	Sn = psd.data
+	Sn = psd.data.data
 	assert len(Sn) > 0
 
 	if f_max is None:

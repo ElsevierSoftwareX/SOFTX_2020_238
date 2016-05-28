@@ -39,10 +39,10 @@ Gst.init(None)
 
 
 from glue import iterutils
-from glue import lal
 from glue import segments
+from glue.lal import CacheEntry
 from gstlal import pipeio
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from lal import LIGOTimeGPS
 
 
 if sys.byteorder == "little":
@@ -248,7 +248,7 @@ def framecpp_filesink_ldas_path_handler(elem, pspec, (outpath, dir_digits)):
 def framecpp_filesink_cache_entry_from_mfs_message(message):
 	"""
 	Translate an element message posted by the multifilesink element
-	inside a framecpp_filesink bin into a lal.CacheEntry object
+	inside a framecpp_filesink bin into a glue.lal.CacheEntry object
 	describing the file being written by the multifilesink element.
 	"""
 	# extract the segment spanned by the file from the message directly
@@ -260,7 +260,7 @@ def framecpp_filesink_cache_entry_from_mfs_message(message):
 	parent = message.src.get_parent()
 
 	# construct and return a CacheEntry object
-	return lal.CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.get_structure()["filename"]))
+	return CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.get_structure()["filename"]))
 
 
 #
