@@ -230,7 +230,7 @@ class lal_checktimestamps(GstBase.BaseTransform):
 				if not self.silent:
 					print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset)
 			elif gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT):
-				print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
+				print >>sys.stderr, "%s: DISCONT buffer:  timestamp = %s, offset = %d;  would have been %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
 
 				#
 				# check for timestamp/offset mismatch
