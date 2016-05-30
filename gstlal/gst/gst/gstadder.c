@@ -1619,7 +1619,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       continue;
     }
 
-    /* sync object properties on stream time */
+    /* sync pad properties on stream time */
     if (GST_CLOCK_TIME_IS_VALID (t_start))
       gst_object_sync_values (GST_OBJECT (pad), gst_segment_to_stream_time (&adder->segment, GST_FORMAT_TIME, t_start));
 
@@ -1686,7 +1686,8 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       outbuf = gst_buffer_new_allocate (NULL, outlength * bpf, NULL);
       if (!outbuf) {
         g_slist_free_full (partial_nongap_buffers, (GDestroyNotify) partial_buffer_info_free);
-	goto no_buffer;
+        g_slist_free_full (partial_gap_buffers, (GDestroyNotify) partial_buffer_info_free);
+        goto no_buffer;
       }
       gst_buffer_map (outbuf, &outmap, GST_MAP_READWRITE);
       gst_audio_format_fill_silence (adder->info.finfo, outmap.data, outmap.size);
@@ -1754,6 +1755,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
     }
   } else if (full_gap_buffer) {
     outbuf = full_gap_buffer;
+    g_slist_free_full (partial_gap_buffers, (GDestroyNotify) partial_buffer_info_free);
   } else if (partial_gap_buffers) {
     /* the condition of having only partial gap buffers and nothing else is
      * not possible.  getting here implies a bug in the code that
