@@ -653,26 +653,26 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 		triggersrcs.append(postcoh)
 	return triggersrcs
 
-def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, detrsp_fname = None, hist_trials = 1, output_prefix = None, output_skymap = 0, snapshot_interval = 14400):
+def mkpostcohspiirOffline(pipeline, detectors, banks, psd, control_time_shift_string = none, psd_fft_length = 8, ht_gate_threshold = none, veto_segments = none, verbose = false, nxydump_segment = none, chisq_type = 'autochisq', track_psd = false, block_duration = gst.second, blind_injections = none, cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh = 5.0, cuda_postcoh_detrsp_fname = none, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cuda_postcohfilesink_output_prefix = none, cuda_postcohfilesink_snapshot_interval = 14400):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
 	#
 
 	if chisq_type not in ['autochisq']:
-		raise ValueError("chisq_type must be either 'autochisq', given %s" % chisq_type)
+		raise valueerror("chisq_type must be either 'autochisq', given %s" % chisq_type)
 
 	#
 	# extract segments from the injection file for selected reconstruction
 	#
 
-	if detectors.injection_filename is not None:
+	if detectors.injection_filename is not none:
 		inj_seg_list = simulation.sim_inspiral_to_segment_list(detectors.injection_filename)
 	else:
-		inj_seg_list = None
+		inj_seg_list = none
 		#
-		# Check to see if we are specifying blind injections now that we know
-		# we don't want real injections. Setting this
+		# check to see if we are specifying blind injections now that we know
+		# we don't want real injections. setting this
 		# detectors.injection_filename will ensure that injections are added
 		# but won't only reconstruct injection segments.
 		#
@@ -694,10 +694,10 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 				sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
-		if veto_segments is not None:		
+		if veto_segments is not none:		
 			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = none, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# construct trigger generators
@@ -707,10 +707,10 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 	for instrument in banks[0].keys():
 		ifos += str(instrument)
 
-	# format of banks :	[{'H1': <H1Bank0>; 'L1': <L1Bank0>..;}
-	#			 {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
+	# format of banks :	[{'h1': <h1bank0>; 'l1': <l1bank0>..;}
+	#			 {'h1': <h1bank1>; 'l1': <l1bank1>..;}
 	#			 ...]
-	# format of bank_dict: {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
+	# format of bank_dict: {'h1': <h1bank1>; 'l1': <l1bank1>..;}
 	bank_count = 0
 	postcoh_count = 0
 
@@ -723,7 +723,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 			autocorrelation_fname += str(bank_list[0])
 			autocorrelation_fname += "," 
 			if len(bank_list) != 1:
-				raise ValueError("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
+				raise valueerror("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
 		autocorrelation_fname = autocorrelation_fname.rstrip(',')
 		print autocorrelation_fname
 		autocorrelation_fname_list.append(autocorrelation_fname)
@@ -732,12 +732,12 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 		hoftdicts[instrument] = pipeparts.mktee(pipeline, hoftdicts[instrument])
 
 	for i_dict, bank_dict in enumerate(banks):
-		postcoh = None
-		head = None
+		postcoh = none
+		head = none
 
 		for instrument, bank_list in bank_dict.items():
 			max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank_list[0])
-			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.second * 10, max_size_buffers=0, max_size_bytes=0)
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
 			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
@@ -750,7 +750,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 			if postcoh is None:
 				# make a queue for postcoh, otherwise it will be in the same thread with the first bank	
 				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = hist_trials, snglsnr_thresh = peak_thresh, output_skymap = output_skymap, stream_id = postcoh_count)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, cohsnr_thresh = cuda_postcoh_cohsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = postcoh_count)
 				postcoh_count += 1
 			else:
 				snr.link_pads(None, postcoh, instrument)
@@ -760,6 +760,6 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, psd_fft_length = 8, h
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
-		head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
+		head = mkpostcohfilesink(pipeline, postcoh, location = cuda_postcohfilesink_output_prefix[i_dict], compression = 1, snapshot_interval = cuda_postcohfilesink_snapshot_interval)
 		triggersrcs.append(head)
 	return triggersrcs

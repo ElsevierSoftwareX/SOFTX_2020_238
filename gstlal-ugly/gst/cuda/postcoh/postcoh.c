@@ -836,7 +836,8 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist,int iifo
 		peak_cur = pklist->peak_pos[ipeak];
 		for (itrial=1; itrial<=hist_trials; itrial++) {
 			background_cur = (itrial - 1)*max_npeak + peak_cur;
-			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*max_npeak + peak_cur])
+//			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*max_npeak + peak_cur])
+			if (sqrt(pklist->cohsnr_bg[background_cur]) > 1.414 + pklist->snglsnr_L[iifo*max_npeak + peak_cur])
 				left_backgrounds++;
 			else
 				pklist->cohsnr_bg[background_cur] = -1;
@@ -858,13 +859,33 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 		pklist= state->peak_list[iifo];
 		npeak = pklist->npeak[0];
 		peak_pos = pklist->peak_pos;
+
+		/*
+		 * select background that satisfy the criteria: cohsnr > triggersnr + coh_thresh
+		 */
+		if (npeak > 0 && state->cur_nifo == state->nifo)
+			left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, iifo, state->hist_trials, state->max_npeak, cohsnr_thresh);
+	
+		}
+		/*
+		 * mark the rest of peak positions to be -1 to identify invalid background
+		 */
+
+		memcpy(tmp_peak_pos, peak_pos, sizeof(int) * npeak);
+		for(ipeak=npeak; ipeak<state->max_npeak; ipeak++)
+		   tmp_peak_pos[ipeak] = -1;
+
+
+		/*
+		 * select zerolag that satisfy the criteria: cohsnr > triggersnr + coh_thresh
+		 */
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			/* if the difference of maximum single snr and coherent snr is ignorable,
 			 * it means that only one detector is in action,
 			 * we abandon this peak
 			 * */
 			peak_cur = peak_pos[ipeak];
-			if (sqrt(pklist->cohsnr[peak_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*(state->max_npeak) + peak_cur]) {
+			if (sqrt(pklist->cohsnr[peak_cur]) > 1.414 + pklist->snglsnr_L[iifo*(state->max_npeak) + peak_cur]) {
 				tmp_peak_pos[final_peaks++] = peak_cur;
 			}
 
@@ -875,10 +896,6 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 		pklist->npeak[0] = npeak;
 		/* mark background triggers which do not pass the test */
 		left_entries += npeak;
-		if (npeak > 0 && state->cur_nifo == state->nifo)
-			left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, iifo, state->hist_trials, state->max_npeak, cohsnr_thresh);
-	
-		}
 	}
 	return left_entries;
 
@@ -1009,14 +1026,14 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 		}
 
 		if (state->cur_nifo == state->nifo) {
+			int *peak_pos = pklist->peak_pos;
 			for(itrial=1; itrial<=hist_trials; itrial++) {
-				for(ipeak=0; ipeak<npeak; ipeak++) {
-					int *peak_pos = pklist->peak_pos;
+				for(ipeak=0; ipeak<state->max_npeak; ipeak++) {
 					peak_cur = peak_pos[ipeak];
 					len_cur = pklist->len_idx[peak_cur];
 					/* check if cohsnr pass the valid test */
 					peak_cur_bg = (itrial - 1)*max_npeak + peak_cur;
-					if (pklist->cohsnr_bg[peak_cur_bg] > 0) {
+					if (peak_cur > 0 && pklist->cohsnr_bg[peak_cur_bg] > 0) {
 					//output->end_time = end_time[ipeak];
 					output->is_background = 1;
 					output->livetime = livetime;

@@ -163,7 +163,7 @@ def parse_command_line():
   parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
   parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
   parser.add_option("--nxydump-segment", metavar = "start:stop", default = None, help = "Set the time interval to dump from nxydump elments (optional).  The default is None, i.e. no dump.")
-  parser.add_option("--output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the triggers (required)")
+  parser.add_option("--cuda-postcohfilesink-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the triggers (required)")
   parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
   parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
   parser.add_option("--iir-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
@@ -189,7 +189,7 @@ def parse_command_line():
   parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
   parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
   parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-  parser.add_option("--snapshot-interval", type = "float", metavar = "seconds", default = 0, help = "How often to snapshot the trigger files.")
+  parser.add_option("--cuda-postcohsilesink-snapshot-interval", type = "float", metavar = "seconds", default = 0, help = "How often to snapshot the trigger files.")
   parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
   parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
   parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
@@ -199,10 +199,14 @@ def parse_command_line():
 	# ranked.  if the name of this option is changed, be sure to update
 	# gstlal_inspiral_calc_likelihood
   parser.add_option("--singles-threshold-record", metavar = "SNRrecord", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
-  parser.add_option("--peak-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
-  parser.add_option("--detrsp-fname", metavar = "filename", help = "detector response filename.")
-  parser.add_option("--hist-trials", metavar = "hist-trials", type = "int", default = 1, help = "histogram trials for background distribution.")
-  parser.add_option("--output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "if output skymap, 1: yes, 0: no")
+
+  # set the postcoh parameters
+  parser.add_option("--cuda-postcoh-snglsnr-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
+  parser.add_option("--cuda-postcoh-cohsnr-thresh", metavar = "SNR", type = "float", default = 1.05, help = "Set the coherent SNR threshold that cohsnr > thresh * triggersnr.")
+  parser.add_option("--cuda-postcoh-detrsp-fname", metavar = "filename", help = "detector response filename.")
+  parser.add_option("--cuda-postcoh-hist-trials", metavar = "hist-trials", type = "int", default = 1, help = "histogram trials for background distribution.")
+  parser.add_option("--cuda-postcoh-output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "if output skymap, 1: yes, 0: no")
+
 
   # gpu acceleartion support
   parser.add_option("--gpu-acc", action = "store_true", help = "gpu acceleration for IIR filtering (optional).")
@@ -446,12 +450,13 @@ if 1==1:
       chisq_type = options.chisq_type,
       track_psd = options.track_psd,
       blind_injections = options.blind_injections,
-      peak_thresh = options.peak_thresh,
-      detrsp_fname = options.detrsp_fname,
-      hist_trials = options.hist_trials,
-      output_prefix = options.output_prefix,
-      output_skymap = options.output_skymap,
-      snapshot_interval = options.snapshot_interval
+      cuda_postcoh_snglsnr_thresh = options.cuda_postcoh_snglsnr_thresh,
+      cuda_postcoh_cohsnr_thresh = options.cuda_postcoh_cohsnr_thresh,
+      cuda_postcoh_detrsp_fname = options.cuda_postcoh_detrsp_fname,
+      cuda_postcoh_hist_trials = options.cuda_postcoh_hist_trials,
+      cuda_postcoh_output_skymap = options.cuda_postcoh_output_skymap,
+      cuda_postcohfilesink_output_prefix = options.cuda_postcohfilesink_output_prefix,
+      cuda_postcohfilesink_snapshot_interval = options.cuda_postcohfilesink_snapshot_interval
  # or "%s-%s_Postcoh-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
     )
 
