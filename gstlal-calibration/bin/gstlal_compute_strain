@@ -102,7 +102,7 @@ parser = OptionParser(description = __doc__)
 #
 
 # These options should be used whether the pipeline runs in full calibration mode or partial calibration mode
-parser.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|lvshm|white]. Required.")
+parser.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|lvshm]. Required.")
 parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO .gwf frame files (optional).  This is required iff --data-source=frames")
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
@@ -409,9 +409,6 @@ if not options.no_dq_vector:
 	channel_list.append((instrument, options.dq_channel_name))
 	headkeys.append("odcstatevector")
 
-print channel_list
-print headkeys
-	
 #
 # Hook up the relevant channels to the demuxer
 #
