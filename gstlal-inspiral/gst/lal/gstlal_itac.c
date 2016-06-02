@@ -258,7 +258,6 @@ static gboolean setcaps(GSTLALItac *element, GstPad *pad, GstCaps *caps)
 	element->maxdata = gstlal_peak_state_new(element->channels, element->peak_type);
 	/* This should be called any time the autocorrelation property is updated */
 	update_peak_info_from_autocorrelation_properties(element);
-	fprintf(stderr, "ITAC setcaps(): %d %d %d\n", element->rate, element->channels, width);
 
 	/*
 	 * done
