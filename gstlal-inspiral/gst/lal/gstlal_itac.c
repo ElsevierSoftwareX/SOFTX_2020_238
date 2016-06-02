@@ -223,93 +223,26 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 }
 
 
-static GstCaps *getcaps(GSTLALItac *itac, GstPad *pad, GstCaps *filter)
-{
-	GstCaps *result, *peercaps, *current_caps, *filter_caps;
-
-	/* take filter */
-	filter_caps = filter ? gst_caps_ref(filter) : NULL;
-
-	/* 
-	 * If the filter caps are empty (but not NULL), there is nothing we can
-	 * do, there will be no intersection
-	 */
-	if (filter_caps && gst_caps_is_empty (filter_caps)) {
-		GST_WARNING_OBJECT (pad, "Empty filter caps");
-		return filter_caps;
-	}
-
-	/* get the downstream possible caps */
-	peercaps = gst_pad_peer_query_caps(itac->srcpad, filter_caps);
-
-	/* get the allowed caps on this sinkpad */
-	current_caps = gst_pad_get_pad_template_caps(pad);
-	if (!current_caps)
-			current_caps = gst_caps_new_any();
-
-	if (peercaps) {
-		/* if the peer has caps, intersect */
-		GST_DEBUG_OBJECT(itac, "intersecting peer and our caps");
-		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
-		/* neither peercaps nor current_caps are needed any more */
-		gst_caps_unref(peercaps);
-		gst_caps_unref(current_caps);
-	}
-	else {
-		/* the peer has no caps (or there is no peer), just use the allowed caps
-		* of this sinkpad. */
-		/* restrict with filter-caps if any */
-		if (filter_caps) {
-			GST_DEBUG_OBJECT(itac, "no peer caps, using filtered caps");
-			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
-			/* current_caps are not needed any more */
-			gst_caps_unref(current_caps);
-		}
-		else {
-			GST_DEBUG_OBJECT(itac, "no peer caps, using our caps");
-			result = current_caps;
-		}
-	}
-
-	result = gst_caps_make_writable (result);
-
-	if (filter_caps)
-		gst_caps_unref (filter_caps);
-
-	GST_LOG_OBJECT (itac, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
-
-	return result;
-}
-
-
-
-
 static gboolean setcaps(GSTLALItac *element, GstPad *pad, GstCaps *caps)
 {
-	GstStructure *structure;
-	gint rate, width, channels;
-	gboolean success = TRUE;
+	gint width;
+	GstAudioInfo info;
 
 	/*
 	 * parse caps
 	 */
 
-	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "channels", &channels))
-		success = FALSE;
+	gboolean success = gst_audio_info_from_caps(&info, caps);
 
 	/*
 	 * update the element metadata
 	 */
 
 	if(success) {
-		element->channels = channels;
-		element->rate = rate;
-		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
+		element->rate = GST_AUDIO_INFO_RATE(&info);
+		element->channels = GST_AUDIO_INFO_CHANNELS(&info);
+		width = GST_AUDIO_INFO_WIDTH(&info);
+		g_object_set(element->adapter, "unit-size", width / 8 * element->channels, NULL);
 		/* FIXME support single precision and get it from caps */
 		if (width == 128) {
 			element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
@@ -321,7 +254,7 @@ static gboolean setcaps(GSTLALItac *element, GstPad *pad, GstCaps *caps)
 			}
 		if (element->maxdata)
 			gstlal_peak_state_free(element->maxdata);
-		element->maxdata = gstlal_peak_state_new(channels, element->peak_type);
+		element->maxdata = gstlal_peak_state_new(element->channels, element->peak_type);
 		/* This should be called any time the autocorrelation property is updated */
 		update_peak_info_from_autocorrelation_properties(element);
 	}
@@ -334,82 +267,22 @@ static gboolean setcaps(GSTLALItac *element, GstPad *pad, GstCaps *caps)
 }
 
 
-static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
-{
-	gboolean res = FALSE;
-
-	switch (GST_QUERY_TYPE (query))
-	{
-		default:
-			res = gst_pad_query_default (pad, parent, query);
-			break;
-	}
-	return res;
-}
-
-
-static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALItac *itac = GSTLAL_ITAC(parent);
-	gboolean result = TRUE;
-	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
-
-	switch (GST_EVENT_TYPE (event))
-	{
-		default:
-			/* just forward the rest for now */
-			GST_DEBUG_OBJECT(itac, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
-			gst_pad_event_default(pad, parent, event);
-			break;
-	}
-
-	return result;
-}
-
-
-static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
-{
-	GSTLALItac *itac = GSTLAL_ITAC(parent);
-	gboolean res = TRUE;
-	GstCaps *filter, *caps;
-
-	switch (GST_QUERY_TYPE (query))
-	{
-		case GST_QUERY_CAPS:
-			gst_query_parse_caps (query, &filter);
-			caps = getcaps(itac, pad, filter);
-			gst_query_set_caps_result (query, caps);
-			gst_caps_unref (caps);
-			break;
-		default:
-			break;
-	}
-
-	if (G_LIKELY (query))
-		return gst_pad_query_default (pad, parent, query);
-	else
-		return res;
-
-  return res;
-}
-
-
 static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALItac *itac = GSTLAL_ITAC(parent);
 	gboolean res = TRUE;
-	GstCaps *caps;
 
 	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
 
 	switch (GST_EVENT_TYPE (event))
 	{
 		case GST_EVENT_CAPS:
+		{
+			GstCaps *caps;
 			gst_event_parse_caps(event, &caps);
 			res = setcaps(itac, pad, caps);
-			gst_event_unref(event);
-			event = NULL;
 			break;
+		}
 		case GST_EVENT_TAG:
 			{
 			GstTagList *taglist;
@@ -434,10 +307,12 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			break;
 		}
 
-	if (G_LIKELY (event))
-		return gst_pad_event_default(pad, parent, event);
+	if(!res)
+		gst_event_unref(event);
 	else
-		return res;
+		res = gst_pad_event_default(pad, parent, event);
+
+	return res;
 }
 
 
@@ -1071,16 +946,19 @@ static void gstlal_itac_init(GSTLALItac *element)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 	gst_pad_use_fixed_caps(pad);
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (src_query));
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (src_event));
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->srcpad = pad;
 
 	{
