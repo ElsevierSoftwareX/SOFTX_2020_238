@@ -225,43 +225,45 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 
 static gboolean setcaps(GSTLALItac *element, GstPad *pad, GstCaps *caps)
 {
-	gint width;
-	GstAudioInfo info;
-
-	/*
-	 * parse caps
-	 */
-
-	gboolean success = gst_audio_info_from_caps(&info, caps);
+	guint width = 0;
+	GstStructure *str = gst_caps_get_structure(caps, 0);
+	const gchar *format = gst_structure_get_string(str, "format");
+	gboolean success = TRUE;
+	gst_structure_get_int(str, "rate", &(element->rate));
+	gst_structure_get_uint(str, "channels", &(element->channels));
 
 	/*
 	 * update the element metadata
 	 */
 
-	if(success) {
-		element->rate = GST_AUDIO_INFO_RATE(&info);
-		element->channels = GST_AUDIO_INFO_CHANNELS(&info);
-		width = GST_AUDIO_INFO_WIDTH(&info);
-		g_object_set(element->adapter, "unit-size", width / 8 * element->channels, NULL);
-		/* FIXME support single precision and get it from caps */
-		if (width == 128) {
-			element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
-			element->chi2 = calloc(element->channels, sizeof(double));
-			}
-		if (width == 64) {
-			element->peak_type = GSTLAL_PEAK_COMPLEX;
-			element->chi2 = calloc(element->channels, sizeof(float));
-			}
-		if (element->maxdata)
-			gstlal_peak_state_free(element->maxdata);
-		element->maxdata = gstlal_peak_state_new(element->channels, element->peak_type);
-		/* This should be called any time the autocorrelation property is updated */
-		update_peak_info_from_autocorrelation_properties(element);
-	}
+
+	if(!strcmp(format, GST_AUDIO_NE(Z64)))
+		width = 64;
+	else if(!strcmp(format, GST_AUDIO_NE(Z128)))
+		width = 128;
+	else
+		GST_ERROR_OBJECT(element, "unsupported format %s", format);
+
+	g_object_set(element->adapter, "unit-size", width / 8 * element->channels, NULL);
+	if (width == 128) {
+		element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+		element->chi2 = calloc(element->channels, sizeof(double));
+		}
+	if (width == 64) {
+		element->peak_type = GSTLAL_PEAK_COMPLEX;
+		element->chi2 = calloc(element->channels, sizeof(float));
+		}
+	if (element->maxdata)
+		gstlal_peak_state_free(element->maxdata);
+	element->maxdata = gstlal_peak_state_new(element->channels, element->peak_type);
+	/* This should be called any time the autocorrelation property is updated */
+	update_peak_info_from_autocorrelation_properties(element);
+	fprintf(stderr, "ITAC setcaps(): %d %d %d\n", element->rate, element->channels, width);
 
 	/*
 	 * done
 	 */
+
 
 	return success;
 }
