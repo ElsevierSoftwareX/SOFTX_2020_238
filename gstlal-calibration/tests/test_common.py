@@ -122,6 +122,7 @@ def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
 		pipeline.seek(1.0, Gst.Format(Gst.Format.TIME), Gst.SeekFlags.FLUSH, Gst.SeekType.SET, segment[0].ns(), Gst.SeekType.SET, segment[1].ns())
 	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter PLAYING state")
+	pipeparts.write_dump_dot(pipeline, "test_%s" % name, verbose = True)
 	mainloop.run()
 
 
