@@ -55,6 +55,7 @@
 #include <gstlal_wings.h>
 #include <gstlal_smoothcalibfactors.h>
 #include <gstlal_constantupsample.h>
+#include <gstlal_logicalundersample.h>
 
 
 /*
@@ -77,6 +78,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_wings", GST_TYPE_LALWINGS},
 		{"lal_smoothcalibfactors", GSTLAL_SMOOTHCALIBFACTORS_TYPE},
 		{"lal_constantupsample", GSTLAL_CONSTANTUPSAMPLE_TYPE},
+		{"lal_logicalundersample", GSTLAL_LOGICALUNDERSAMPLE_TYPE},
 		{NULL, 0},
 	};
 

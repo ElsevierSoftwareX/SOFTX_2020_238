@@ -18,7 +18,7 @@
 #
 # =============================================================================
 #
-#                                   Preamble
+#				   Preamble
 #
 # =============================================================================
 #
@@ -33,7 +33,7 @@ import test_common
 #
 # =============================================================================
 #
-#                                  Pipelines
+#				  Pipelines
 #
 # =============================================================================
 #
@@ -82,41 +82,12 @@ def lal_constantupsample_02(pipeline, name):
 
 	src = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, width=64, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = control_dump_filename)
 	capsfilter1 = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=F64LE, rate=%d" % int(in_rate))
-        tee1 = pipeparts.mktee(pipeline, capsfilter1)
-        pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee1), "%s_in.dump" % name)
-        upsample = pipeparts.mkgeneric(pipeline, tee1, "lal_constantupsample")
-        capsfilter2 = pipeparts.mkcapsfilter(pipeline, upsample, "audio/x-raw, format=F64LE, rate=%d" % int(out_rate))
-        #checktimestamps = pipeparts.mkchecktimestamps(pipeline, capsfilter2)
-        pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, capsfilter2), "%s_out.dump" % name)
-
-	#
-	# done
-	#
-
-	return pipeline
-
-def lal_constantupsample_03(pipeline, name):
-	#
-	# This test reads in a gwf file that has certain bits off to test
-	# the logic of the element
-	# Note: To run this test you must first make a frame cache, which can be done with the
-	# following command:
-	# 	ls *.gwf | lalapps_path2cache > frame.cache
-	#
-
-	out_rate = 10
-	
-	src = pipeparts.mklalcachesrc(pipeline, location = "frame.cache", cache_dsc_regex = "L1")
-	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
-	head = pipeparts.mkqueue(pipeline, None)
-	pipeparts.src_deferred_link(demux, "L1:TEST-CHANNEL", head.get_pad("sink"))
-	head = tee = pipeparts.mktee(pipeline, head)
-	
-	head = pipeparts.mkgeneric(pipeline, tee, "lal_constantupsample", required_on = 0x1, status_out = 0x7)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=F64LE, rate=%d" % int(out_rate))
-	head = pipeparts.mkchecktimestamps(pipeline, head)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
+	tee1 = pipeparts.mktee(pipeline, capsfilter1)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee1), "%s_in.dump" % name)
+	upsample = pipeparts.mkgeneric(pipeline, tee1, "lal_constantupsample")
+	capsfilter2 = pipeparts.mkcapsfilter(pipeline, upsample, "audio/x-raw, format=F64LE, rate=%d" % int(out_rate))
+	#checktimestamps = pipeparts.mkchecktimestamps(pipeline, capsfilter2)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, capsfilter2), "%s_out.dump" % name)
 
 	#
 	# done
@@ -127,7 +98,7 @@ def lal_constantupsample_03(pipeline, name):
 #
 # =============================================================================
 #
-#                                     Main
+#				     Main
 #
 # =============================================================================
 #
@@ -135,4 +106,3 @@ def lal_constantupsample_03(pipeline, name):
 
 #test_common.build_and_run(lal_constantupsample_01, "lal_constantupsample_01")
 test_common.build_and_run(lal_constantupsample_02, "lal_constantupsample_02")
-#test_common.build_and_run(lal_constantupsample_03, "lal_constantupsample_03")
