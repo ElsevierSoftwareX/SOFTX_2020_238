@@ -501,8 +501,9 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		num_templates	= (gint)d_array[i].dim[1];
 		/* should not surpass GPU hard limit */
 		if (num_filters > NTHREAD_LIMIT) {
+			num_filters = NTHREAD_LIMIT;
 		  fprintf(stderr, "%s has number of filters %d, over NTHREAD_LIMIT", filename, num_filters);
-		  exit(0);
+		  //exit(0);
 		}
 
 		eff_len = num_filters * num_templates;

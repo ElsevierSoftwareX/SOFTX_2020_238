@@ -837,8 +837,10 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist,int iifo
 		for (itrial=1; itrial<=hist_trials; itrial++) {
 			background_cur = (itrial - 1)*max_npeak + peak_cur;
 //			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*max_npeak + peak_cur])
-			if (sqrt(pklist->cohsnr_bg[background_cur]) > 1.414 + pklist->snglsnr_L[iifo*max_npeak + peak_cur])
+			if (sqrt(pklist->cohsnr_bg[background_cur]) > 1.414 + pklist->snglsnr_L[iifo*max_npeak + peak_cur]) {
 				left_backgrounds++;
+				GST_LOG("mark back,%d ipeak, %d itrial", ipeak, itrial);
+			}
 			else
 				pklist->cohsnr_bg[background_cur] = -1;
 		}
@@ -848,14 +850,15 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist,int iifo
 
 static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh)
 {
-	int iifo, ipeak, npeak, nifo = state->nifo, final_peaks = 0, tmp_peak_pos[state->max_npeak], peak_cur;
+	int iifo, ipeak, npeak, nifo = state->nifo,  tmp_peak_pos[state->max_npeak], bubbled_peak_pos[state->max_npeak], peak_cur;
+	int final_peaks = 0, bubbled_peaks = 0;
 	PeakList *pklist; 
 	int *peak_pos;
 	int left_entries = 0;
 
-	for(iifo=0; iifo<nifo; iifo++) {
-		if(is_cur_ifo_has_data(state, iifo)) {
+	for(iifo=0; iifo<nifo && is_cur_ifo_has_data(state, iifo); iifo++) {
 		final_peaks = 0;
+		bubbled_peaks = 0;
 		pklist= state->peak_list[iifo];
 		npeak = pklist->npeak[0];
 		peak_pos = pklist->peak_pos;
@@ -866,15 +869,13 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 		if (npeak > 0 && state->cur_nifo == state->nifo)
 			left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, iifo, state->hist_trials, state->max_npeak, cohsnr_thresh);
 	
-		}
 		/*
 		 * mark the rest of peak positions to be -1 to identify invalid background
 		 */
 
-		memcpy(tmp_peak_pos, peak_pos, sizeof(int) * npeak);
-		for(ipeak=npeak; ipeak<state->max_npeak; ipeak++)
+		for(ipeak=0; ipeak<state->max_npeak; ipeak++)
 		   tmp_peak_pos[ipeak] = -1;
-
+		memcpy(tmp_peak_pos, peak_pos, sizeof(int) * npeak);
 
 		/*
 		 * select zerolag that satisfy the criteria: cohsnr > triggersnr + coh_thresh
@@ -887,13 +888,23 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 			peak_cur = peak_pos[ipeak];
 			if (sqrt(pklist->cohsnr[peak_cur]) > 1.414 + pklist->snglsnr_L[iifo*(state->max_npeak) + peak_cur]) {
 				tmp_peak_pos[final_peaks++] = peak_cur;
-			}
+			} else 
+				bubbled_peak_pos[bubbled_peaks++] = peak_cur;
 
 		}
 
+		/*
+		 * bubble out the rest peaks
+		 */
+		for(ipeak=final_peaks; ipeak<npeak; ipeak++)
+			tmp_peak_pos[ipeak] = bubbled_peak_pos[ipeak - final_peaks];
+
+
 		npeak = final_peaks;
-		memcpy(peak_pos, tmp_peak_pos, sizeof(int) * npeak);
+		memcpy(peak_pos, tmp_peak_pos, sizeof(int) * state->max_npeak);
 		pklist->npeak[0] = npeak;
+
+		GST_DEBUG("ifo %d, back entries %d, npeak %d", iifo, left_entries, npeak);
 		/* mark background triggers which do not pass the test */
 		left_entries += npeak;
 	}
@@ -912,6 +923,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	int hist_trials = postcoh->hist_trials;
 
 	int tmplt_idx;
+	int write_entries = 0;
 	
 	GstClockTime ts = GST_BUFFER_TIMESTAMP(outbuf);
 
@@ -919,13 +931,11 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 
 	SnglInspiralTable *sngl_table = postcoh->sngl_table;
 
-	for(iifo=0; iifo<nifo; iifo++) {
-		if (is_cur_ifo_has_data(state, iifo)) {
+	for(iifo=0; iifo<nifo && is_cur_ifo_has_data(state, iifo); iifo++) {
 		PeakList *pklist = state->peak_list[iifo];
 		npeak = pklist->npeak[0];
 		LIGOTimeGPS end_time;
 
-		GST_LOG_OBJECT(postcoh, "write to output, ifo %d, npeak %d", iifo, npeak);
 		int peak_cur, len_cur, peak_cur_bg;
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			XLALINT8NSToGPS(&end_time, ts);
@@ -1001,18 +1011,19 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			} else
 				output->skymap_fname[0] = '\0';
 
-			GST_LOG_OBJECT(postcoh, "ipeak %d, peak_cur %d, len_cur %d, tmplt_idx %d, pix_idx %d \t,"
+			GST_LOG_OBJECT(postcoh, "end_time_L %d, ipeak %d, peak_cur %d, len_cur %d, tmplt_idx %d, pix_idx %d \t,"
 				"snglsnr_L %f, snglsnr_H %f, snglsnr_V %f,"
 			     "coaphase_L %f, coaphase_H %f, coa_phase_V %f,"
 			     "chisq_L %f, chisq_H %f, chisq_V %f,"
 			     "cohsnr %f, nullsnr %f, cmbchisq %f\n",
-			     ipeak, peak_cur, len_cur, output->tmplt_idx, output->pix_idx,
+			     output->end_time_L.gpsSeconds, ipeak, peak_cur, len_cur, output->tmplt_idx, output->pix_idx,
 			     output->snglsnr_L, output->snglsnr_H, output->snglsnr_V,
 			     output->coaphase_L, output->coaphase_H, output->coaphase_V,
 			     output->chisq_L, output->chisq_H, output->chisq_V,
 			     output->cohsnr, output->nullsnr, output->cmbchisq
 			      );
 			output++;
+			write_entries++;
 		}
 
 		if (pklist->d_cohsnr_skymap) {
@@ -1027,13 +1038,13 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 
 		if (state->cur_nifo == state->nifo) {
 			int *peak_pos = pklist->peak_pos;
-			for(itrial=1; itrial<=hist_trials; itrial++) {
-				for(ipeak=0; ipeak<state->max_npeak; ipeak++) {
+			for(ipeak=0; ipeak<state->max_npeak; ipeak++) {
+				for(itrial=1; itrial<=hist_trials; itrial++) {
 					peak_cur = peak_pos[ipeak];
 					len_cur = pklist->len_idx[peak_cur];
 					/* check if cohsnr pass the valid test */
 					peak_cur_bg = (itrial - 1)*max_npeak + peak_cur;
-					if (peak_cur > 0 && pklist->cohsnr_bg[peak_cur_bg] > 0) {
+					if (peak_cur >= 0 && pklist->cohsnr_bg[peak_cur_bg] > 0) {
 					//output->end_time = end_time[ipeak];
 					output->is_background = 1;
 					output->livetime = livetime;
@@ -1060,12 +1071,12 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 					output->fap = 0;
 					output->far = 0;
 					output->skymap_fname[0] ='\0';
-					GST_LOG_OBJECT(postcoh, "ipeak %d, peak_cur %d, len_cur %d, tmplt_idx %d, pix_idx %d,"
+					GST_LOG_OBJECT(postcoh, "ipeak %d, itrial %d, len_cur %d, tmplt_idx %d, pix_idx %d,"
 					"snglsnr_L %f, snglsnr_H %f, snglsnr_V %f,"
 				     "coaphase_L %f, coaphase_H %f, coa_phase_V %f,"
 				     "chisq_L %f, chisq_H %f, chisq_V %f,"
 				     "cohsnr %f, nullsnr %f, cmbchisq %f\n",
-				     ipeak, peak_cur, len_cur, output->tmplt_idx, output->pix_idx,
+				     ipeak, itrial, len_cur, output->tmplt_idx, output->pix_idx,
 				     output->snglsnr_L, output->snglsnr_H, output->snglsnr_V,
 				     output->coaphase_L, output->coaphase_H, output->coaphase_V,
 				     output->chisq_L, output->chisq_H, output->chisq_V,
@@ -1073,13 +1084,15 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 				      );
 	
 					output++;
+					write_entries++;
 					}
 				}
 			}
 		}
+
+		GST_LOG_OBJECT(postcoh, "write to output, ifo %d, npeak %d, %d total entries", iifo, npeak, write_entries);
 	}
 
-	}
 }
 
 static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
@@ -1092,7 +1105,6 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	int left_entries = 0;
 
 	left_entries = cuda_postcoh_rm_invalid_peak(state, postcoh->cohsnr_thresh);
-	GST_LOG_OBJECT(postcoh, "left entries %d", left_entries);
 	int out_size = sizeof(PostcohInspiralTable) * left_entries ;
 
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
@@ -1118,9 +1130,9 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	cuda_postcoh_write_table_to_buf(postcoh, outbuf);
 
 	GST_LOG_OBJECT (srcpad,
-		"Processed of (%d bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
+		"Processed of (%d entries) with timestamp %" GST_TIME_FORMAT ", duration %"
 		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
-		G_GUINT64_FORMAT,  GST_BUFFER_SIZE (outbuf),
+		G_GUINT64_FORMAT,  left_entries,
 		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
 		GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
 		GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));

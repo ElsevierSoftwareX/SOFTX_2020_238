@@ -653,7 +653,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 		triggersrcs.append(postcoh)
 	return triggersrcs
 
-def mkpostcohspiirOffline(pipeline, detectors, banks, psd, control_time_shift_string = none, psd_fft_length = 8, ht_gate_threshold = none, veto_segments = none, verbose = false, nxydump_segment = none, chisq_type = 'autochisq', track_psd = false, block_duration = gst.second, blind_injections = none, cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh = 5.0, cuda_postcoh_detrsp_fname = none, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cuda_postcohfilesink_output_prefix = none, cuda_postcohfilesink_snapshot_interval = 14400):
+def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_string = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh = 5.0, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cuda_postcohfilesink_output_prefix = None, cuda_postcohfilesink_snapshot_interval = 14400):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -666,10 +666,10 @@ def mkpostcohspiirOffline(pipeline, detectors, banks, psd, control_time_shift_st
 	# extract segments from the injection file for selected reconstruction
 	#
 
-	if detectors.injection_filename is not none:
+	if detectors.injection_filename is not None:
 		inj_seg_list = simulation.sim_inspiral_to_segment_list(detectors.injection_filename)
 	else:
-		inj_seg_list = none
+		inj_seg_list = None
 		#
 		# check to see if we are specifying blind injections now that we know
 		# we don't want real injections. setting this
@@ -694,10 +694,10 @@ def mkpostcohspiirOffline(pipeline, detectors, banks, psd, control_time_shift_st
 				sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
-		if veto_segments is not none:		
+		if veto_segments is not None:		
 			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = none, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# construct trigger generators
@@ -731,17 +731,25 @@ def mkpostcohspiirOffline(pipeline, detectors, banks, psd, control_time_shift_st
 	for instrument in banks[0].keys():
 		hoftdicts[instrument] = pipeparts.mktee(pipeline, hoftdicts[instrument])
 
+
+	shift_dict = parse_shift_string(control_time_shift_string)
+
+
 	for i_dict, bank_dict in enumerate(banks):
-		postcoh = none
-		head = none
+		postcoh = None
+		head = None
 
 		for instrument, bank_list in bank_dict.items():
 			max_bank_rate = cbc_template_iir.get_maxrate_from_xml(bank_list[0])
-			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.second * 10, max_size_buffers=0, max_size_bytes=0)
+			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
 			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
-	
+
+			if instrument in shift_dict.keys():
+				head = mktimeshift(pipeline, head, float(shift_dict[instrument]))
+
+
 			head = pipeparts.mkreblock(pipeline, head)
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
 			if verbose:
