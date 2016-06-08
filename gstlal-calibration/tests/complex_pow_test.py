@@ -54,7 +54,7 @@ def complex_pow_01(pipeline, name):
 
 
 	src = pipeparts.mkaudiotestsrc(pipeline, wave = 5, freq = freq, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length), is_live = is_live)
-	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=F%d%s, rate=%d, channels=2, width=%d" % (width, BYTE_ORDER, rate, width))
+	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=F%d%s, rate=%d, channels=2, width=%d, endianness=1234" % (width, BYTE_ORDER, rate, width))
 	mix = numpy.random.random((2, 2)).astype("float64")
 	out = pipeparts.mkmatrixmixer(pipeline, src, matrix=mix)
 	out = pipeparts.mktogglecomplex(pipeline, out)
@@ -75,37 +75,32 @@ def complex_pow_02(pipeline, name):
 	buffer_length = 1.0
 	rate = 2048
 	width = 32
-	channels = 1
 	test_duration = 10.0
 	freq = 0
 	is_live = False
 
 	src = pipeparts.mkaudiotestsrc(pipeline, wave=5, freq=freq, blocksize = 8*int(buffer_length*rate), volume = 1, num_buffers = int(test_duration/buffer_length), is_live = is_live)
-	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=F%d%s, rate=%d, channels=1, width=%d" % (width, BYTE_ORDER, rate, width))
+	src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=F%d%s, rate=%d, channels=1, width=%d, channel-mask=0, endianness=1234" % (width, BYTE_ORDER, rate, width))
 	tee = pipeparts.mktee(pipeline, src)
 	
 	out = pipeparts.mkgeneric(pipeline, None, "interleave")
 	pipeparts.mkqueue(pipeline, tee).link(out)
 	pipeparts.mkqueue(pipeline, tee).link(out)
 
-	out = pipeparts.mkcapsfilter(pipeline, out, "audio/x-raw, format=F%d%s, rate=%d, channels=2, width=%d" % (width, BYTE_ORDER, rate, width))
-	#out = pipeparts.mkqueue(pipeline, out)
+	out = pipeparts.mkaudiorate(pipeline, out)
 	mix = numpy.random.random((2,2)).astype("float64")
 	out = pipeparts.mkmatrixmixer(pipeline, out, matrix=mix)
-	#out = pipeparts.mkpow(pipeline, out)
+	out = pipeparts.mktogglecomplex(pipeline, out)	
 
-	#out = pipeparts.mkcapsfilter(pipeline, out, "audio/x-raw, format=F%d%s, rate=%d, channels=2, width=%d" % (width, BYTE_ORDER, rate, width))
-	#out = pipeparts.mktogglecomplex(pipeline, out)	
-	#out = pipeparts.mktogglecomplex(pipeline, out)
-	#out = pipeparts.mkgeneric(pipeline, out, "complex_pow", exponent=2)
-	#out = pipeparts.mktogglecomplex(pipeline, out)
+	outtee = pipeparts.mktee(pipeline, out)
+	pipeparts.mknxydumpsink(pipeline, outtee, "before_pow_02.dump")
+	out = pipeparts.mkqueue(pipeline, outtee)
 
-	#out = pipeparts.mkqueue(pipeline, out)
-	#mix = numpy.random.random((2,2)).astype("float64")
-	#out = pipeparts.mkmatrixmixer(pipeline, out, matrix=mix)
+	out = pipeparts.mktogglecomplex(pipeline, out)
+	out = pipeparts.mkgeneric(pipeline, out, "complex_pow", exponent=2)
+	out = pipeparts.mktogglecomplex(pipeline, out)
 
-	#pipeparts.mknxydumpsink(pipeline, out, "before_pow_02.dump")
-	pipeparts.mkfakesink(pipeline, out)
+	pipeparts.mknxydumpsink(pipeline, out, "after_pow_02.dump")
 
 	return pipeline
 
