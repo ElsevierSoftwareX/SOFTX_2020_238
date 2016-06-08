@@ -191,9 +191,7 @@ G_DEFINE_TYPE(
  *
  *		     GstBaseTransform Method Overrides
  *
- * ======te = (int) [1, MAX], " \
-        "channels = (int) 1, " \
-        ======================================================================
+ * ============================================================================
  */
 
 
@@ -481,7 +479,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		memset(outmap.data, 0, outmap.size);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, TRUE);
 		if(outmap.size / element->unit_size == 0)
-			element->need_gap == TRUE;
+			element->need_gap = TRUE;
 		gst_buffer_unmap(outbuf, &outmap);
 	}
 
