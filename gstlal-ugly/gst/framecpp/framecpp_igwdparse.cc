@@ -264,7 +264,6 @@ static gboolean start(GstBaseParse *parse)
 
 static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 {
-	GstPad *srcpad = GST_BASE_PARSE_SRC_PAD(parse);
 	GstStructure *s;
 	gboolean framed;
 	gboolean success = TRUE;
@@ -276,10 +275,9 @@ static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 	s = gst_caps_get_structure(caps, 0);
 	success &= gst_structure_get_boolean(s, "framed", &framed);
 
-	if(success) {
-		gst_pad_push_event(srcpad, gst_event_new_caps(gst_pad_get_pad_template_caps(srcpad)));
+	if(success)
 		gst_base_parse_set_passthrough(parse, framed);
-	} else
+	else
 		GST_ERROR_OBJECT(parse, "unable to accept sink caps %" GST_PTR_FORMAT, caps);
 
 	return success;
@@ -569,4 +567,8 @@ static void framecpp_igwdparse_class_init(GstFrameCPPIGWDParseClass *klass)
 
 static void framecpp_igwdparse_init(GstFrameCPPIGWDParse *element)
 {
+	GstPad *srcpad = GST_BASE_PARSE_SRC_PAD(GST_BASE_PARSE(element));
+
+	gst_pad_set_caps(srcpad, gst_pad_get_pad_template_caps(srcpad));
+	gst_pad_use_fixed_caps(srcpad);
 }
