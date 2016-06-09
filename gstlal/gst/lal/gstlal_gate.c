@@ -673,7 +673,7 @@ done:
 static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALGate *element = GSTLAL_GATE(parent);
-	gboolean res = TRUE;
+	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_STREAM_START:
@@ -695,7 +695,7 @@ static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	case GST_EVENT_CAPS: {
 		GstCaps *caps;
 		gst_event_parse_caps(event, &caps);
-		res = control_setcaps(element, pad, caps);
+		success = control_setcaps(element, pad, caps);
 		break;
 	}
 
@@ -708,7 +708,7 @@ static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
 	 */
 
 	gst_event_unref(event);
-	return res;
+	return success;
 }
 
 
