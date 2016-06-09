@@ -985,7 +985,8 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			element->unit_size = GST_AUDIO_INFO_BPF(&info);
 			if(element->rate != old_rate)
 				g_signal_emit(parent, signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
-		}
+		} else
+			GST_ERROR_OBJECT(element, "caps not supported: %" GST_PTR_FORMAT, caps);
 		break;
 	}
 
