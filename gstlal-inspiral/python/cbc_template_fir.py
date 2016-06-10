@@ -47,25 +47,25 @@
 #
 
 
-import math
 import cmath
+import math
 import numpy
 import scipy
 import sys
 
 
-from pylal import datatypes as laltypes
-from pylal import lalfft
-from pylal import spawaveform
 import lal
 import lalsimulation as lalsim
 
 
-from gstlal.reference_psd import interpolate_psd, horizon_distance
+from pylal import datatypes as laltypes
+from pylal import lalfft
+from pylal import spawaveform
 
 
 from gstlal import templates
 from gstlal import chirptime
+from gstlal.reference_psd import interpolate_psd, horizon_distance
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
