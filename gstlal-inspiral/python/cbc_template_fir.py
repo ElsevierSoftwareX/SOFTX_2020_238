@@ -337,7 +337,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 		if psd is not None:
 			lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
-		fseries = templates.add_quadrature_phase(fseries, working_length)
+		fseries = templates.QuadradurePhase.add_quadrature_phase(fseries, working_length)
 
 		#
 		# compute time-domain autocorrelation function

@@ -81,51 +81,6 @@ def gstlal_valid_approximant(appx_str):
 		raise ValueError("Approximant not currently supported by gstlal, but is supported by lalsimulation: %s. Please consider preparing a patch" % appx_str)
 
 
-def add_quadrature_phase(fseries, n):
-	"""
-	From the Fourier transform of a real-valued function of time,
-	compute and return the Fourier transform of the complex-valued
-	function of time whose real component is the original time series
-	and whose imaginary component is the quadrature phase of the real
-	part.  fseries is a LAL COMPLEX16FrequencySeries and n is the
-	number of samples in the original time series.
-	"""
-	#
-	# prepare output frequency series
-	#
-
-	out_fseries = laltypes.COMPLEX16FrequencySeries(
-		name = fseries.name,
-		epoch = fseries.epoch,
-		f0 = fseries.f0,	# caution: only 0 is supported
-		deltaF = fseries.deltaF,
-		sampleUnits = fseries.sampleUnits
-	)
-
-	#
-	# positive frequencies include Nyquist if n is even
-	#
-
-	have_nyquist = not (n % 2)
-
-	#
-	# shuffle frequency bins
-	#
-
-	positive_frequencies = fseries.data
-	positive_frequencies[0] = 0	# set DC to zero
-	if have_nyquist:
-		positive_frequencies[-1] = 0	# set Nyquist to 0
-	zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
-	if have_nyquist:
-		# complex transform never includes positive Nyquist
-		positive_frequencies = positive_frequencies[:-1]
-
-	out_fseries.data = numpy.concatenate((zeros, 2 * positive_frequencies[1:]))
-
-	return out_fseries
-
-
 class QuadraturePhase(object):
 	"""
 	A tool for generating the quadrature phase of a real-valued
@@ -150,6 +105,54 @@ class QuadraturePhase(object):
 		self.revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(n, 1)
 		self.in_fseries = lalfft.prepare_fseries_for_real8tseries(laltypes.REAL8TimeSeries(deltaT = 1.0, data = numpy.zeros((n,), dtype = "double")))
 
+
+	@staticmethod
+	def add_quadrature_phase(fseries, n):
+		"""
+		From the Fourier transform of a real-valued function of
+		time, compute and return the Fourier transform of the
+		complex-valued function of time whose real component is the
+		original time series and whose imaginary component is the
+		quadrature phase of the real part.  fseries is a LAL
+		COMPLEX16FrequencySeries and n is the number of samples in
+		the original time series.
+		"""
+		#
+		# prepare output frequency series
+		#
+
+		out_fseries = laltypes.COMPLEX16FrequencySeries(
+			name = fseries.name,
+			epoch = fseries.epoch,
+			f0 = fseries.f0,	# caution: only 0 is supported
+			deltaF = fseries.deltaF,
+			sampleUnits = fseries.sampleUnits
+		)
+
+		#
+		# positive frequencies include Nyquist if n is even
+		#
+
+		have_nyquist = not (n % 2)
+
+		#
+		# shuffle frequency bins
+		#
+
+		positive_frequencies = fseries.data
+		positive_frequencies[0] = 0	# set DC to zero
+		if have_nyquist:
+			positive_frequencies[-1] = 0	# set Nyquist to 0
+		zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
+		if have_nyquist:
+			# complex transform never includes positive Nyquist
+			positive_frequencies = positive_frequencies[:-1]
+
+		out_fseries.data = numpy.concatenate((zeros, 2 * positive_frequencies[1:]))
+
+		return out_fseries
+
+
 	def __call__(self, tseries):
 		"""
 		Transform the real-valued time series stored in tseries
@@ -169,7 +172,7 @@ class QuadraturePhase(object):
 		#
 
 		tseries = laltypes.COMPLEX16TimeSeries(data = numpy.zeros((self.n,), dtype = "cdouble"))
-		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, add_quadrature_phase(self.in_fseries, self.n), self.revplan)
+		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, self.add_quadrature_phase(self.in_fseries, self.n), self.revplan)
 
 		#
 		# done
