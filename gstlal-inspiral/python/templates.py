@@ -67,10 +67,30 @@ __date__ = "FIXME"
 # =============================================================================
 #
 
-gstlal_FD_approximants = set(('IMRPhenomC', 'SEOBNRv2_ROM_DoubleSpin', 'TaylorF2', 'TaylorF2RedSpin', 'TaylorF2RedSpinTidal'))
-gstlal_TD_approximants = set(('TaylorT1', 'TaylorT2', 'TaylorT3', 'TaylorT4', 'EOBNRv2'))
+
+gstlal_FD_approximants = set((
+	'IMRPhenomC',
+	'SEOBNRv2_ROM_DoubleSpin',
+	'TaylorF2',
+	'TaylorF2RedSpin',
+	'TaylorF2RedSpinTidal'
+))
+gstlal_TD_approximants = set((
+	'EOBNRv2',
+	'TaylorT1',
+	'TaylorT2',
+	'TaylorT3',
+	'TaylorT4'
+))
+gstlal_IMR_approximants = set((
+	'EOBNRv2',
+	'IMRPhenomC',
+	'SEOBNRv2_ROM_DoubleSpin'
+))
 gstlal_approximants = gstlal_FD_approximants | gstlal_TD_approximants
-gstlal_IMR_approximants = set(('IMRPhenomC', 'SEOBNRv2_ROM_DoubleSpin', 'EOBNRv2'))
+
+assert gstlal_IMR_approximants <= gstlal_approximants, "gstlal_IMR_approximants contains values not listed in gstlal_approximants"
+
 
 def gstlal_valid_approximant(appx_str):
 	try:
