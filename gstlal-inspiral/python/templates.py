@@ -39,16 +39,19 @@
 #
 
 
-import numpy
 import math
-
+import numpy
 import sys
+
+
+import lal
+import lalsimulation as lalsim
+
+
 from pylal import datatypes as laltypes
 from pylal import lalfft
 from pylal import spawaveform
-import lalsimulation as lalsim
 from gstlal import chirptime
-from lal import MSUN_SI
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -294,7 +297,7 @@ def time_slices(
 		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 
-		longest_chirp = max(chirptime.imr_time(this_flow, row.mass1*MSUN_SI ,row.mass2*MSUN_SI, row.spin1z, row.spin2z) for row in sngl_inspiral_rows)
+		longest_chirp = max(chirptime.imr_time(this_flow, row.mass1 * lal.MSUN_SI, row.mass2 * lal.MSUN_SI, row.spin1z, row.spin2z) for row in sngl_inspiral_rows)
 
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
