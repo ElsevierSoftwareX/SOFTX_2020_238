@@ -141,8 +141,6 @@ class QuadraturePhase(object):
 
 		positive_frequencies = fseries.data
 		positive_frequencies[0] = 0	# set DC to zero
-		if have_nyquist:
-			positive_frequencies[-1] = 0	# set Nyquist to 0
 		zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
 		if have_nyquist:
 			# complex transform never includes positive Nyquist
