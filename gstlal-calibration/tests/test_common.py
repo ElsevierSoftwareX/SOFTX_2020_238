@@ -65,6 +65,12 @@ def complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, tes
 		head = pipeparts.mkprogressreport(pipeline, head, "src")
 	return head
 
+def int_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, channels = 1, test_duration = 10.0, wave = 5, freq = 0, is_live = False, verbose = True):
+        head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length), is_live = is_live)
+        head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=S%d%s, rate=%d, channels=%d" % (width, BYTE_ORDER, rate, channels))
+        if verbose:
+                head = pipeparts.mkprogressreport(pipeline, head, "src")
+        return head
 
 def test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, channels = 1, test_duration = 10.0, wave = 5, freq = 0, is_live = False, verbose = True):
 	if wave == "ligo":
@@ -88,6 +94,16 @@ def gapped_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, chan
 		control = pipeparts.mkqueue(pipeline, control)
 	return pipeparts.mkgate(pipeline, src, control = control, threshold = gap_threshold)
 
+def gapped_int_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, channels = 1, test_duration = 10.0, wave = 5, freq = 0, gap_frequency = None, gap_threshold = None, control_dump_filename = None, is_live = False, verbose = True):
+        src = int_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, channels = channels, test_duration = test_duration, wave = wave, freq = freq, is_live = is_live, verbose = verbose)
+        if gap_frequency is None:
+                return src
+        control = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 0, freq = gap_frequency, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw, format=F32%s, rate=%d, channels=1" % (BYTE_ORDER, rate))
+        if control_dump_filename is not None:
+                control = pipeparts.mktee(pipeline, control)
+                pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control), control_dump_filename)
+                control = pipeparts.mkqueue(pipeline, control)
+        return pipeparts.mkgate(pipeline, src, control = control, threshold = gap_threshold)
 
 def gapped_complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, test_duration = 10.0, wave = 5, freq = 0, gap_frequency = None, gap_threshold = None, control_dump_filename = None, tags = None, is_live = False, verbose = True):
 	src = complex_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq, is_live = is_live, verbose = verbose)

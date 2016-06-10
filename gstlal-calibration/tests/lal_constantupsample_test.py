@@ -72,12 +72,12 @@ def lal_constantupsample_02(pipeline, name):
 	# This is a simple test to make sure the element treats gaps correctly
 	#
 
-	in_rate = 1		# Hz
-	out_rate = 10		# Hz
+	in_rate = 10		# Hz
+	out_rate = 20		# Hz
 	buffer_length = 1.0	# seconds
 	test_duration = 10.0	# seconds
 	gap_frequency = 0.1	# Hz
-	gap_threshold = 0.1	# Hz
+	gap_threshold = 0.02	# Hz
 	control_dump_filename = "control.dump"
 
 	src = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, width=64, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = control_dump_filename)

@@ -53,9 +53,10 @@ def lal_logicalundersample_01(pipeline, name):
 	# build pipeline
 	#
 
-	src = pipeparts.mkaudiotestsrc(pipeline, num_buffers = int(test_duration / buffer_length))
-	capsfilter1 = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=S32LE, rate=%d" % int(in_rate))
-	tee1 = pipeparts.mktee(pipeline, capsfilter1)
+	src = test_common.int_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, width=32, test_duration = test_duration)
+#	src = pipeparts.mkaudiotestsrc(pipeline, num_buffers = int(test_duration / buffer_length))
+#	capsfilter1 = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=S32LE, rate=%d" % int(in_rate))
+	tee1 = pipeparts.mktee(pipeline, src)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee1), "%s_in.dump" % name)
 	undersample = pipeparts.mkgeneric(pipeline, tee1, "lal_logicalundersample")
 	capsfilter2 = pipeparts.mkcapsfilter(pipeline, undersample, "audio/x-raw, format=U32LE, rate=%d" % int(out_rate))
@@ -76,7 +77,7 @@ def lal_logicalundersample_02(pipeline, name):
 
 	in_rate = 1024    	# Hz
 	out_rate = 512	   	# Hz
-	odd_inputs = 137		# the odd unsigned int's that, when occurring in pairs, should cause an output of "1".
+	odd_inputs = 137	# the odd unsigned int's that, when occurring in pairs, should cause an output of "1".
 	buffer_length = 1.0     # seconds
 	test_duration = 10.0    # seconds
 
@@ -84,7 +85,7 @@ def lal_logicalundersample_02(pipeline, name):
 	# build the pipeline
 	#
 
-	src = pipeparts.mkaudiotestsrc(pipeline, num_buffers = int(test_duration / buffer_length))
+	src = pipeparts.mkaudiotestsrc(pipeline, num_buffers = int(test_duration / buffer_length), wave=5)
 	capsfilter1 = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=S32LE, rate=%d" % int(in_rate))
 	undersample1 = pipeparts.mkgeneric(pipeline, capsfilter1, "lal_logicalundersample", status_out = odd_inputs)
 	capsfilter2 = pipeparts.mkcapsfilter(pipeline, undersample1, "audio/x-raw, format=U32LE, rate=%d" % int(in_rate))
@@ -101,6 +102,32 @@ def lal_logicalundersample_02(pipeline, name):
 
 	return pipeline
 
+def lal_logicalundersample_03(pipeline, name):
+	#
+	# This tests how lal_logicalundersample handles gaps in the input stream (S32 format in the case)
+	#
+
+	in_rate = 8	  	# Hz
+	out_rate = 4	  	# Hz
+	buffer_length = 1.0     # seconds
+	test_duration = 10.0    # seconds
+	gap_frequency = 0.1     # Hz
+	gap_threshold = 0.5    # Hz
+	control_dump_filename = "control.dump"
+
+	src = test_common.gapped_int_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, width=32, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = control_dump_filename)
+	tee = pipeparts.mktee(pipeline, src)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
+	undersample = pipeparts.mkgeneric(pipeline, tee, "lal_logicalundersample")
+	capsfilter = pipeparts.mkcapsfilter(pipeline, undersample, "audio/x-raw, format=U32LE, rate=%d" % int(out_rate))
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, capsfilter), "%s_out.dump" % name)
+
+	#
+	# done
+	#
+
+	return pipeline
+
 #
 # =============================================================================
 #
@@ -110,5 +137,6 @@ def lal_logicalundersample_02(pipeline, name):
 #
 
 
-test_common.build_and_run(lal_logicalundersample_01, "lal_logicalundersample_01")
-#test_common.build_and_run(lal_logicalundersample_02, "lal_logicalundersample_02")
+#test_common.build_and_run(lal_logicalundersample_01, "lal_logicalundersample_01")
+test_common.build_and_run(lal_logicalundersample_02, "lal_logicalundersample_02")
+#test_common.build_and_run(lal_logicalundersample_03, "lal_logicalundersample_03")

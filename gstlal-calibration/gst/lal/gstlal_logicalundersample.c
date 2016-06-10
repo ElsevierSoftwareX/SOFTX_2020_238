@@ -138,11 +138,9 @@ static void set_metadata(GSTLALLogicalUnderSample *element, GstBuffer *buf, guin
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
-	if(gap || element->need_gap) {
+	if(gap)
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
-		if(outsamples > 0)
-			element->need_gap = FALSE;
-	} else
+	else
 		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 }
 
@@ -491,7 +489,6 @@ static gboolean start(GstBaseTransform *trans)
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
 	element->next_out_offset = GST_BUFFER_OFFSET_NONE;
 	element->need_discont = TRUE;
-	element->need_gap = FALSE;
 
 	element->remainder = 0;
 	element->leftover = 0;
@@ -530,7 +527,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 
 		/*
-		 * input is not 0s.
+		 * input is not gap.
 		 */
 
 		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
@@ -540,17 +537,14 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_unmap(outbuf, &outmap);
 		gst_buffer_unmap(inbuf, &inmap);
 	} else {
-
 		/*
-		 * input is 0s.
+		 * input is gap.
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
 		memset(outmap.data, 0, outmap.size);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, TRUE);
-		if(outmap.size / element->unit_size == 0)
-			element->need_gap = TRUE;
 		gst_buffer_unmap(outbuf, &outmap);
 	}
 
