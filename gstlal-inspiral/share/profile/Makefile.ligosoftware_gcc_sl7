@@ -46,11 +46,11 @@ env.sh:
 	echo 'LAL_PATH=${PWD}/opt' >> $@
 	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
 	echo 'INSTALL_FILES_PATH=${PWD}/install' >> $@
-	echo 'export CFLAGS="-fPIC -O3 -march=native"' >> $@
+	echo 'export CFLAGS="-fPIC -O3 -march=native -lsatlas"' >> $@
 	echo '# These are environment variables that do get exported' >> $@
 	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
 	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
-	echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.6/site-packages:$${LAL_PATH}/lib64/python2.6/site-packages:$${DEPENDENCIES_PATH}/lib/python2.6/site-packages:$${DEPENDENCIES_PATH}/lib64/python2.6/site-packages' >> $@
+	echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages:$${DEPENDENCIES_PATH}/lib/python2.7/site-packages:$${DEPENDENCIES_PATH}/lib64/python2.7/site-packages' >> $@
 	echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-0.10:$${LAL_PATH}/lib64/gstreamer-0.10:$${DEPENDENCIES_PATH}/lib/gstreamer-0.10:$${DEPENDENCIES_PATH}/lib64/gstreamer-0.10' >> $@
 	echo 'GST_REGISTRY=$${LAL_PATH}/registry.$$(uname -m).bin' >> $@
 	echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH GST_REGISTRY LAL_PATH DEPENDENCIES_PATH INSTALL_FILES_PATH' >> $@
@@ -118,7 +118,8 @@ $(INSTALL_DIR)/bin/lalapps_psinject : $(INSTALL_FILES_DIR)/$(LALAPPS)/config.log
 $(INSTALL_FILES_DIR)/$(LALAPPS)/config.log : $(INSTALL_DIR)/lib/liblalstochastic.so
 	tar -xzf $(TARDIR)/$(LALAPPS).tar.gz -C $(INSTALL_FILES_DIR)
 	cd $(INSTALL_FILES_DIR)/$(LALAPPS) && \
-		./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR)
+		./configure --enable-gcc-flags=no --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
+#		./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR)
 
 $(INSTALL_DIR)/lib/liblalstochastic.so : $(INSTALL_FILES_DIR)/$(LALSTOCHASTIC)/config.log
 	cd $(INSTALL_FILES_DIR)/$(LALSTOCHASTIC) && make -j32 && make install -j32
@@ -134,8 +135,8 @@ $(INSTALL_DIR)/lib/liblalinference.so : $(INSTALL_FILES_DIR)/$(LALINFERENCE)/con
 $(INSTALL_FILES_DIR)/$(LALINFERENCE)/config.log : $(INSTALL_DIR)/lib/liblalpulsar.so
 	tar -xzf $(TARDIR)/$(LALINFERENCE).tar.gz -C $(INSTALL_FILES_DIR)
 	cd $(INSTALL_FILES_DIR)/$(LALINFERENCE) && \
-		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-#		./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
+		./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
+#		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 
 $(INSTALL_DIR)/lib/liblalpulsar.so : $(INSTALL_FILES_DIR)/$(LALPULSAR)/config.log
 	cd $(INSTALL_FILES_DIR)/$(LALPULSAR) && make -j32 && make install -j32
@@ -143,7 +144,8 @@ $(INSTALL_DIR)/lib/liblalpulsar.so : $(INSTALL_FILES_DIR)/$(LALPULSAR)/config.lo
 $(INSTALL_FILES_DIR)/$(LALPULSAR)/config.log : $(INSTALL_DIR)/lib/liblaldetchar.so 
 	tar -xzf $(TARDIR)/$(LALPULSAR).tar.gz -C $(INSTALL_FILES_DIR)
 	cd $(INSTALL_FILES_DIR)/$(LALPULSAR) && \
-		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+		./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
+#		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 
 $(INSTALL_DIR)/lib/liblaldetchar.so : $(INSTALL_FILES_DIR)/$(LALDETCHAR)/config.log
 	cd $(INSTALL_FILES_DIR)/$(LALDETCHAR) && make -j32 && make install -j32
@@ -278,7 +280,7 @@ $(INSTALL_FILES_DIR)/$(GSTREAMER)/config.log : $(DEP_INSTALL_DIR)/lib/pkgconfig/
 ## FIXME Hack to make gsl default to atlas for blas
 $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig : $(DEP_INSTALL_DIR)/lib/libgsl.so
 	cp $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc $@ 
-		sed 's/-lgslcblas/-latlas -lsatlas/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
+		sed 's/-latlas/-lgslcblas -lsatlas/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
 
 $(DEP_INSTALL_DIR)/lib/libgsl.so : $(INSTALL_FILES_DIR)/$(GSL)/config.log
 	cd $(INSTALL_FILES_DIR)/$(GSL) && make -j32 && make install -j32
