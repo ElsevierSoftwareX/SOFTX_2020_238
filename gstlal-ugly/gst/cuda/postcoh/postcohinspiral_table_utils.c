@@ -122,4 +122,61 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->type_names, *g_string_new("real_8"));
 }
 
+void postcohinspiral_table_set_line(GString *line, PostcohInspiralTable *table, XmlTable *xtable)
+{
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsSeconds, xtable->delimiter->str); // for end_time_ns
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsNanoSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsNanoSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_H.gpsSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_H.gpsNanoSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_V.gpsSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_V.gpsNanoSeconds, xtable->delimiter->str);
+	
+	g_string_append_printf(line, "%d%s", table->is_background, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->livetime, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->ifos, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->pivotal_ifo, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->tmplt_idx, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->pix_idx, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->snglsnr_L, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->snglsnr_H, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->snglsnr_V, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->coaphase_L, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->coaphase_H, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->coaphase_V, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->chisq_L, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->chisq_H, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->chisq_V, xtable->delimiter->str);
+
+	g_string_append_printf(line, "%g%s", table->cohsnr, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->nullsnr, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->cmbchisq, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spearman_pval, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->fap, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->template_duration, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mchirp, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mtotal, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mass1, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mass2, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1x, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1y, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1z, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2x, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2y, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2z, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->ra, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->dec, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->deff_L, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->deff_H, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->deff_V, xtable->delimiter->str);
+	
+	g_string_append(line, "\n");
+	//printf("%s", line->str);
+
+}
+
+
 
