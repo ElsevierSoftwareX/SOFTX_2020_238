@@ -1,4 +1,21 @@
 #! /usr/bin/env python
+#
+# Copyright (C) 2016 Qi Chu
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
 import os
 import numpy as np
 import scipy
@@ -54,7 +71,7 @@ def parse_command_line():
 	parser.add_option("--input-stats-filename", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--zerolag-format", default = "", metavar = "name", help = "format support, single | multi")
 	parser.add_option("--cohsnr", type = "float", help = "if format is single, read the cohsnr")
-	parser.add_option("--combchisq", type = "float", help = "if format is single, read the combined chisq")
+	parser.add_option("--cmbchisq", type = "float", help = "if format is single, read the combined chisq")
 	parser.add_option("--input-zerolag-filename", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--ifos", metavar = "name", help = "set the ifos to plot pdf and cdf")
 	options, tmp = parser.parse_args()
@@ -64,7 +81,7 @@ def parse_command_line():
 	append_missing_options(missing_options, options, "input_stats_filename")
 	if options.zerolag_format == "single":
 		append_missing_options(missing_options, options, "cohsnr")
-		append_missing_options(missing_options, options, "combchisq")
+		append_missing_options(missing_options, options, "cmbchisq")
 
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
@@ -106,7 +123,7 @@ if options.zerolag_format == "multi":
 	log10chisq = np.log10(zerolags.getColumnByName("chisq"))
 else:
 	log10cohsnr = np.log10(options.cohsnr)
-	log10chisq = np.log10(options.combchisq)
+	log10chisq = np.log10(options.cmbchisq)
 
 CM = pyplot.scatter(log10cohsnr, log10chisq, color = 'k', marker = 'o', s = 10, facecolors = 'none')
 pyplot.xlabel('log10(CohSNR)')	
