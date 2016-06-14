@@ -56,6 +56,7 @@
 #include <gstlal_smoothcalibfactors.h>
 #include <gstlal_constantupsample.h>
 #include <gstlal_logicalundersample.h>
+#include <gstlal_demodulate.h>
 
 
 /*
@@ -79,6 +80,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_smoothcalibfactors", GSTLAL_SMOOTHCALIBFACTORS_TYPE},
 		{"lal_constantupsample", GSTLAL_CONSTANTUPSAMPLE_TYPE},
 		{"lal_logicalundersample", GSTLAL_LOGICALUNDERSAMPLE_TYPE},
+		{"lal_demodulate", GSTLAL_DEMODULATE_TYPE},
 		{NULL, 0},
 	};
 
