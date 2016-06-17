@@ -59,8 +59,6 @@ from lal import LIGOTimeGPS
 import lalsimulation as lalsim
 
 
-from pylal import datatypes as laltypes
-from pylal import lalfft
 from pylal import spawaveform
 
 
@@ -135,14 +133,16 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	else:
 		raise ValueError("Unsupported approximant given %s" % approximant)
 
-	return laltypes.COMPLEX16FrequencySeries(
+	fseries = lal.CreateCOMPLEX16FrequencySeries(
 		name = "template",
 		epoch = LIGOTimeGPS(hplus.epoch.gpsSeconds, hplus.epoch.gpsNanoSeconds),
 		f0 = 0.0,
 		deltaF = 1.0 / duration,
-		sampleUnits = laltypes.LALUnit("strain"),
-		data = z
+		sampleUnits = lal.Unit("strain"),
+		length = len(z)
 	)
+	fseries.data.data = z
+	return fseries
 
 def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
 	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
@@ -288,17 +288,17 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	if psd is not None:
 		psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max / 2.0))
 
-	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
-	fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(working_length, 1)
-	tseries = laltypes.COMPLEX16TimeSeries(
-		data = numpy.zeros((working_length,), dtype = "cdouble")
+	revplan = lal.CreateReverseCOMPLEX16FFTPlan(working_length, 1)
+	fwdplan = lal.CreateForwardREAL8FFTPlan(working_length, 1)
+	tseries = lal.CreateCOMPLEX16TimeSeries(
+		length = working_length
 	)
-	fworkspace = laltypes.COMPLEX16FrequencySeries(
+	fworkspace = lal.CreateCOMPLEX16FrequencySeries(
 		name = "template",
 		epoch = LIGOTimeGPS(0),
 		f0 = 0.0,
 		deltaF = 1.0 / working_duration,
-		data = numpy.zeros((working_length//2 + 1,), dtype = "cdouble")
+		length = working_length // 2 + 1
 	)
 
 	# Check parity of autocorrelation length
@@ -337,7 +337,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		#
 
 		if psd is not None:
-			lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
+			lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
 		fseries = templates.QuadradurePhase.add_quadrature_phase(fseries, working_length)
 
 		#
@@ -352,7 +352,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# transform template to time domain
 		#
 
-		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+		lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
 		data = tseries.data
 		epoch_time = fseries.epoch.seconds + fseries.epoch.nanoseconds*1.e-9

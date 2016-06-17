@@ -100,8 +100,6 @@ from glue.ligolw.utils import time_slide as ligolw_time_slide
 import lal
 from lal import LIGOTimeGPS
 from pylal import rate
-from pylal.datatypes import LALUnit
-from pylal.datatypes import REAL8FrequencySeries
 
 from gstlal import bottle
 from gstlal import reference_psd
@@ -869,14 +867,16 @@ class Data(object):
 				psddict = {}
 				for instrument in self.seglistdicts["triggersegments"]:
 					elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
-					psddict[instrument] = REAL8FrequencySeries(
+					data = numpy.array(elem.get_property("mean-psd"))
+					psddict[instrument] = lal.CreateREAL8FrequencySeries(
 						name = "PSD",
 						epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
 						f0 = 0.0,
 						deltaF = elem.get_property("delta-f"),
-						sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
-						data = numpy.array(elem.get_property("mean-psd"))
+						sampleUnits = lal.Unit("s strain^2"),	# FIXME:  don't hard-code this
+						length = len(data)
 					)
+					psddict[instrument].data.data = data
 				fobj = StringIO.StringIO()
 				reference_psd.write_psd_fileobj(fobj, psddict, gz = True, trap_signals = None)
 				common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
