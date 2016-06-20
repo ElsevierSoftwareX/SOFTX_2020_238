@@ -65,25 +65,25 @@ def mkresample(pipeline, head, caps):
 	return head
 
 def mkmultiplier(pipeline, srcs, caps, sync = True):
-	elem = pipeparts.mkgeneric(pipeline, None, "lal_multiplier", sync=sync)
+	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, caps=gst.Caps(caps), mix_mode="product")
 	if srcs is not None:
 		for src in srcs:
-			pipeparts.mkcapsfilter(pipeline, src, caps).link(elem)
+			mkqueue(pipeline, src).link(elem)
 	elem = pipeparts.mkcapsfilter(pipeline, elem, caps)
 	return elem
 
-def mkinterleave(pipeline, srcs, caps):
-	elem = pipeparts.mkgeneric(pipeline, None, "lal_interleave", sync = True)
+def mkinterleave(pipeline, srcs):
+	elem = pipeparts.mkgeneric(pipeline, None, "interleave")
 	if srcs is not None:
 		for src in srcs:
-			pipeparts.mkcapsfilter(pipeline, src, caps).link(elem)
+			pipeparts.mkqueue(pipeline, src).link(elem)
 	return elem
 
 def mkadder(pipeline, srcs, caps, sync = True):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, caps=gst.Caps(caps))
 	if srcs is not None:
 		for src in srcs:
-			pipeparts.mkcapsfilter(pipeline, src, caps).link(elem)
+			mkqueue(pipeline, src).link(elem)
 	elem = pipeparts.mkcapsfilter(pipeline, elem, caps)
 	return elem
 
@@ -134,21 +134,16 @@ def average_calib_factors(pipeline, head, var, expected, N, caps, hold_time, Nav
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
 	return head
 
-def merge_into_complex(pipeline, real, imag, real_caps, complex_caps):
+def merge_into_complex(pipeline, real, imag):
 	# Merge real and imag into one complex channel with complex caps
-	head = mkinterleave(pipeline, list_srcs(pipeline, real, imag), real_caps)
-	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float")
+	head = mkinterleave(pipeline, list_srcs(pipeline, real, imag))
 	head = mkaudiorate(pipeline, head) # This audiorate is necessary! Probaly once lal_interleave gets fixed it won't be
 	head = pipeparts.mktogglecomplex(pipeline,head)
-	head = pipeparts.mkcapsfilter(pipeline, head, complex_caps)
 	return head
 
-def split_into_real(pipeline, complex, real_caps, complex_caps):
+def split_into_real(pipeline, complex_chan, real_caps, complex_caps):
 	# split complex channel with complex caps into two channels (real and imag) with real caps
-	elem = pipeparts.mkcapsfilter(pipeline, complex, complex_caps)
 	elem = pipeparts.mktogglecomplex(pipeline, elem)
-	elem = pipeparts.mkcapsfilter(pipeline, elem, "audio/x-raw-float, channels=2")
 	elem = pipeparts.mkgeneric(pipeline, elem, "deinterleave")
 	real = pipeparts.mkaudioconvert(pipeline, None)
 	pipeparts.src_deferred_link(elem, "src0", real.get_pad("sink"))
@@ -178,236 +173,165 @@ def demodulate(pipeline, head, sr, freq, orig_caps, new_caps, integration_sample
 	headI = pipeparts.mkaudioconvert(pipeline, headI)
 	headI = pipeparts.mkcapsfilter(pipeline, headI, new_caps)
 
-	return headR, headI
+	head = merge_into_complex(pipeline, headR, headI) 
 
-def filter_at_line(pipeline, chanR, chanI, WR, WI, caps):
-	# Apply a filter to a demodulated channel at a specific frequency, where the filter at that frequency is Re[W] = WR and Im[W] = WI
+	return head
+
+def complex_audioamplify(pipeline, chan, WR, WI, caps):
+	# Multiply a complex channel chan by a complex number WR+I WI
 	# Re[out] = -chanI*WI + chanR*WR
 	# Im[out] = chanR*WI + chanI*WR
 
-	chanR = pipeparts.mktee(pipeline, chanR)
-	chanI = pipeparts.mktee(pipeline, chanI)
+	head = pipeparts.mktogglecomplex(pipeline, chan)
+	head = pipeparts.mkmatrixmixer(pipeline, head, matrix=[[WR, WI],[-WI, WR]])
+	head = pipeparts.mktogglecomplex(pipeline, head)
 
-	chanI_WI = pipeparts.mkaudioamplify(pipeline, chanI, -1.0*WI)
-	chanR_WR = pipeparts.mkaudioamplify(pipeline, chanR, WR)
-	chanR_WI = pipeparts.mkaudioamplify(pipeline, chanR, WI)
-	chanI_WR = pipeparts.mkaudioamplify(pipeline, chanI, WR)
+	return head
 
-	outR = mkadder(pipeline, list_srcs(pipeline, chanI_WI, chanR_WR), caps)
-	outI = mkadder(pipeline, list_srcs(pipeline, chanR_WI, chanI_WR), caps)
-	return outR, outI
+def complex_division(pipeline, a, b, caps):
+	# Perform complex division of c = a/b and output the complex quotient c
 
-def complex_division(pipeline, bR, bI, aR, aI, caps):
-	# Perform complex division of a/b and output the real and imaginary parts of the quotient
+	b = pipeparts.mktogglecomplex(pipeline, b)
+	bInv = pipeparts.mkgenric(pipeline, b, "complex_pow", exponent = -1)
+	bInv = pipeparts.mktogglecomplex(pipeline, bInv)
 
-	aRtee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, aR, caps))
-	aItee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, aI, caps))
-	bRtee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, bR, caps))
-	bItee = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, bI, caps))
-	b2 = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, bRtee, exponent=2.0), pipeparts.mkpow(pipeline, bItee, exponent=2.0)), caps))
+	c = mkmultiplier(pipeline, list_srcs(pipeline, a, bInv), caps)
 
-	cR1 = mkmultiplier(pipeline, list_srcs(pipeline, bItee, aItee), caps)
-	cR2 = mkmultiplier(pipeline, list_srcs(pipeline, bRtee, aRtee), caps)
-	cR = mkmultiplier(pipeline, list_srcs(pipeline, mkadder(pipeline, list_srcs(pipeline, cR1, cR2), caps), pipeparts.mkpow(pipeline, b2, exponent=-1.0)), caps)
-	cI1 = mkmultiplier(pipeline, list_srcs(pipeline, bRtee, aItee), caps)
-	cI2 = mkmultiplier(pipeline, list_srcs(pipeline, bItee, aRtee), caps)
-	cI = mkmultiplier(pipeline, list_srcs(pipeline, mkadder(pipeline, list_srcs(pipeline, cI1, pipeparts.mkaudioamplify(pipeline, cI2, -1.0)), caps), pipeparts.mkpow(pipeline, b2, exponent=-1.0)), caps)
-	return cR, cI
+	return c
 
-def compute_gamma(pipeline, excR, excI, ctrlR, ctrlI, olgR, olgI, WR, WI, real_caps):
-	# deprecated function for computing the old "gamma" factor
+def compute_kappatst_from_filters_file(pipeline, derrfesd, tstexcfesd, pcalfdarm, derrfdarm, ktstfacR, ktstfacI, complex_caps):
 
-	ctrlR, ctrlI = filter_at_line(pipeline, ctrlR, ctrlI, WR, WI, real_caps)
-
-	ctrlR = pipeparts.mktee(pipeline, ctrlR)
-	ctrlI = pipeparts.mktee(pipeline, ctrlI)
-
-	exc_over_ctrlR, exc_over_ctrlI = complex_division(pipeline, ctrlR, ctrlI, excR, excI, real_caps)
-	exc_over_ctrlR = pipeparts.mkaudioconvert(pipeline, exc_over_ctrlR)
-	exc_over_ctrlR = pipeparts.mkcapsfilter(pipeline, exc_over_ctrlR, real_caps)
-
-	exc_over_ctrlI = pipeparts.mkaudioconvert(pipeline, exc_over_ctrlI)
-	exc_over_ctrlI = pipeparts.mkcapsfilter(pipeline, exc_over_ctrlI, real_caps)
-
-	exc_over_ctrlR_minus_one = pipeparts.mkgeneric(pipeline, exc_over_ctrlR, "lal_add_constant", constant = -1.0)
-	exc_over_ctrlR_minus_one = pipeparts.mkaudioconvert(pipeline, exc_over_ctrlR_minus_one)
-	exc_over_ctrlR_minus_one = pipeparts.mkcapsfilter(pipeline, exc_over_ctrlR_minus_one, real_caps)
-
-	olginvR = olgR / (olgR*olgR + olgI*olgI)
-	olginvI = -olgI /(olgR*olgR + olgI*olgI)
-
-	gammaR, gammaI = filter_at_line(pipeline, exc_over_ctrlR_minus_one, exc_over_ctrlI, olginvR, olginvI, real_caps)
-	gammaR = pipeparts.mkaudioconvert(pipeline, gammaR)
-	gammaR = pipeparts.mkcapsfilter(pipeline, gammaR, real_caps)
-	gammaI = pipeparts.mkaudioconvert(pipeline, gammaI)
-	gammaI = pipeparts.mkcapsfilter(pipeline, gammaI, real_caps)
-
-	return gammaR, gammaI
-	
-def multiply_complex_channel_complex_number(pipeline, channelR, channelI, numberR, numberI, caps):
-	# multiply the real and imaginary channels by a complex number
-	channelR = pipeparts.mktee(pipeline, channelR)
-	channelI = pipeparts.mktee(pipeline, channelI)
-	outR = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, channelR, numberR), pipeparts.mkaudioamplify(pipeline, channelI, -1.0 * numberI)), caps)
-	outI = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, channelR, numberI), pipeparts.mkaudioamplify(pipeline, channelI, numberR)), caps)
-	return outR, outI
-
-def compute_kappatst_from_filters_file(pipeline, derrfxR, derrfxI, excfxR, excfxI, pcalfp_derrfpR, pcalfp_derrfpI,  ktstfacR, ktstfacI, real_caps, complex_caps):
-
-	derrfx_over_excfxR, derrfx_over_excfxI = complex_division(pipeline, excfxR, excfxI, derrfxR, derrfxI, real_caps)
-	pcalfp_over_derrfp = merge_into_complex(pipeline, pcalfp_derrfpR, pcalfp_derrfpI, real_caps, complex_caps)
-
-	# 		
-	# \kappa_TST = ktstfac * (derrfx/excfx) * (pcalfp/derrfp)
-	# ktstfac = -(1/A0fx) * (C0fp/(1+G0fp)) * ((1+G0fx)/C0fx)
+	#               
+	# \kappa_TST = ktstfac * (derrfesd/tstexcfesd) * (pcalfdarm/derrfdarm)
+	# ktstfac = -(1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
 	#
 
-	part1R, part1I = multiply_complex_channel_complex_number(pipeline, derrfx_over_excfxR, derrfx_over_excfxI, ktstfacR, ktstfacI, real_caps)
-	part1 = merge_into_complex(pipeline, part1R, part1I, real_caps, complex_caps)
-	ktst = mkmultiplier(pipeline, list_srcs(pipeline, part1, pcalfp_over_derrfp), complex_caps)
-	ktstR, ktstI = split_into_real(pipeline, ktst, real_caps, complex_caps)
-	return ktstR, ktstI
+	ktst = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, complex_divison(pipeline, list_srcs(pipeline, derrfesd, tstexcfesd), complex_caps), ktstfacR, ktstfacI), complex_division(pipeline, pcalfdarm, derrfdarm, complex_caps)), complex_caps)
 
-def compute_kappatst(pipeline, derrfxR, derrfxI, excfxR, excfxI, pcalfp_derrfpR, pcalfp_derrfpI,  ktstfacR, ktstfacI, real_caps, complex_caps):
+	return ktst
 
-	derrfx_over_excfxR, derrfx_over_excfxI = complex_division(pipeline, excfxR, excfxI, derrfxR, derrfxI, real_caps)
-	derrfx_over_excfx = merge_into_complex(pipeline, derrfx_over_excfxR, derrfx_over_excfxI, real_caps, complex_caps)
-	pcalfp_over_derrfp = merge_into_complex(pipeline, pcalfp_derrfpR, pcalfp_derrfpI, real_caps, complex_caps)
-	ktstfac = merge_into_complex(pipeline, ktstfacR, ktstfacI, real_caps, complex_caps)
+def compute_kappatst(pipeline, derrfesd, tstexcfesd, pcalfdarm,  derrfdarm, ktstfac, complex_caps):
 
-	# 		
-	# \kappa_TST = ktstfac * (derrfx/excfx) * (pcalfp/derrfp)
-	# ktstfac = -(1/A0fx) * (C0fp/(1+G0fp)) * ((1+G0fx)/C0fx)
+	#               
+	# \kappa_TST = ktstfac * (derrfesd/tstexcfesd) * (pcalfdarm/derrfdarm)
+	# ktstfac = -(1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
 	#
 
-	ktst = mkmultiplier(pipeline, list_srcs(pipeline, ktstfac, derrfx_over_excfx, pcalfp_over_derrfp), complex_caps)
-	ktstR, ktstI = split_into_real(pipeline, ktst, real_caps, complex_caps)
-	return ktstR, ktstI
+	ktst = mkmultiplier(pipeline, list_srcs(pipeline, ktstfac, complex_division(pipeline, derrfesd, tstexcfesd, complex_caps), complex_division(pipeline, pcalfdarm, derrfdarm, complex_caps)), complex_caps)
 
-def compute_kappapu_from_filters_file(pipeline, A0pufxinvR, A0pufxinvI, AfctrlR, AfctrlI, ktstR, ktstI, A0tstfxR, A0tstfxI, real_caps, complex_caps):
+	return ktst
 
-	ktstfacs = -1.0*(A0tstfxR+1j*A0tstfxI)*(A0pufxinvR+1j*A0pufxinvI)
-	ktstfacsR = numpy.real(ktstfacs)
-	ktstfacsI = numpy.imag(ktstfacs)
-
-	ktstA0tstfxR, ktstA0tstfxI = multiply_complex_channel_complex_number(pipeline, ktstR, ktstI, ktstfacsR, ktstfacsI, real_caps)
-	AfxA0pufxinvR, AfxA0pufxinvI = multiply_complex_channel_complex_number(pipeline, AfctrlR, AfctrlI, A0pufxinvR, A0pufxinvI, real_caps)
+def compute_afctrl_from_filters_file(pipeline, derrfpu, excfpu, pcalfdarm, derrfdarm, afctrlfacR, afctrlfacI, complex_caps):
 	
-	# \kappa_pu = (1/A0pufx) * (Afx - ktst * A0tstfx)
-	kpuR = mkadder(pipeline, list_srcs(pipeline, AfxA0pufxinvR, ktstA0tstfxR), real_caps)
-	kpuI = mkadder(pipeline, list_srcs(pipeline, AfxA0pufxinvI, ktstA0tstfxI), real_caps)	
+	#
+	# A(f_ctrl) = -afctrlfac * (derrfpu/excfpu) * (pcalfdarm/derrfdarm)
+	# afctrlfac = C0fpcal/(1+G0fpcal) * (1+G0fctrl)/C0fctrl
+	#
 
-	return kpuR, kpuI
+	afctrl = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, complex_division(pipeline, derrfpu, excfpu, complex_caps), -1.0*afctrlR, -1.0*afctrlI), complex_division(pipeline, pcalfdarm, derrfdarm, complex_caps)), complex_caps)
 
-def compute_kappapu(pipeline, A0pufxinvR, A0pufxinvI, AfctrlR, AfctrlI, ktstR, ktstI, A0tstfxR, A0tstfxI, real_caps, complex_caps):
-	ktst = merge_into_complex(pipeline, pipeparts.mkaudioamplify(pipeline, ktstR, -1.0), pipeparts.mkaudioamplify(pipeline, ktstI, -1.0), real_caps, complex_caps)
-	A0tstfx = merge_into_complex(pipeline, A0tstfxR, A0tstfxI, real_caps, complex_caps)
-	A0pufxinv = merge_into_complex(pipeline, A0pufxinvR, A0pufxinvI, real_caps, complex_caps)
-	Afx = merge_into_complex(pipeline, AfctrlR, AfctrlI, real_caps, complex_caps)
+
+	return afctrl
 	
-	# \kappa_pu = (1/A0pufx) * (Afx - ktst * A0tstfx)
-	kpu = mkmultiplier(pipeline, list_srcs(pipeline, A0pufxinv, mkadder(pipeline, list_srcs(pipeline, Afx, mkmultiplier(pipeline, list_srcs(pipeline, ktst, A0tstfx), complex_caps)), complex_caps)), complex_caps)
-	kpuR, kpuI = split_into_real(pipeline, kpu, real_caps, complex_caps)
 
-	return kpuR, kpuI
+def compute_afctrl(pipeline, derrfpu, excfpu, pcalfdarm, derrfdarm, afctrlfac, complex_caps):
 
-def compute_kappaa_from_filters_file(pipeline, AfxR, AfxI, A0tstfxR, A0tstfxI, A0pufxR, A0pufxI,real_caps, complex_caps):
+	#
+	# A(f_ctrl) = -afctrlfac * (derrfpu/excfpu) * (pcalfdarm/derrfdarm)
+	# afctrlfac = C0fpcal/(1+G0fpcal) * (1+G0fctrl)/C0fctrl
+	#
 
-	#\kappa_a = A0fx / (A0tstfx + A0pufx)
+	afctrl = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, afctrlfac, -1.0, 0.0), complex_division(pipeline, derrfpu, excfpu, complex_caps), complex_division(pipeline, pcalfdarm, derrfdarm, complex_caps)), complex_caps)
 
-	den = 1/(A0tstfxR+A0tstfxI*1j+A0pufxR+A0pufxI*1j)
-	facsR = numpy.real(den)
-	facsI = numpy.imag(den)
-	kaR, kaI = multiply_complex_channel_complex_number(pipeline, AfxR, AfxI, facsR, facsI, real_caps)
-	return kaR, kaI
+	return afctrl
 
-def compute_kappaa(pipeline, AfxR, AfxI, A0tstfxR, A0tstfxI, A0pufxR, A0pufxI,real_caps, complex_caps):
-	Afx = merge_into_complex(pipeline, AfxR, AfxI, real_caps, complex_caps)
+def compute_kappapu_from_filters_file(pipeline, EP3R, EP3I, afctrl, ktst, EP4R, EP4I, complex_caps):
 
-	#\kappa_a = A0fx / (A0tstfx + A0pufx)
+	#
+	# \kappa_pu = EP3 * (afctrl - ktst * EP4)
+	#
 
-	A0tstfx_plus_A0pufxR = mkadder(pipeline, list_srcs(pipeline, A0tstfxR, A0pufxR), real_caps)
-	A0tstfx_plus_A0pufxI = mkadder(pipeline, list_srcs(pipeline, A0tstfxI, A0pufxI), real_caps)
-	A0tstfx_plus_A0pufxR = pipeparts.mktee(pipeline, A0tstfx_plus_A0pufxR)
-	A0tstfx_plus_A0pufxI = pipeparts.mktee(pipeline, A0tstfx_plus_A0pufxI)
-	den2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, A0tstfx_plus_A0pufxR, exponent=2.0), pipeparts.mkpow(pipeline, A0tstfx_plus_A0pufxI, exponent=2.0)), real_caps)
-	den2 = pipeparts.mktee(pipeline, pipeparts.mkpow(pipeline, den2, exponent = -1.0))
-	denR = mkmultiplier(pipeline, list_srcs(pipeline, A0tstfx_plus_A0pufxR, den2), real_caps)
-	denI = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, A0tstfx_plus_A0pufxI, -1.0), den2), real_caps)
+	kpu = complex_audioamplify(pipeline, mkadder(pipeline, list_srcs(pipeline, afctrl, complex_audioamplify(pipeline, ktst, -1.0*EP4R, -1.0*EP4I)), complex_caps), EP3R, EP3I)	
 
-	den = merge_into_complex(pipeline, denR, denI, real_caps, complex_caps)
-	ka = mkmultiplier(pipeline, list_srcs(pipeline, Afx, den), complex_caps)
-	kaR, kaI = split_into_real(pipeline, ka, real_caps, complex_caps)
+	return kpu
+
+def compute_kappapu(pipeline, EP3, afctrl, ktst, EP4,  complex_caps):
 	
-	return kaR, kaI
+	#
+	# \kappa_pu = EP3 * (afctrl - ktst * EP4)
+	#
+
+	kpu = mkmultiplier(pipeline, list_srcs(pipeline, EP3, mkadder(pipeline, list_srcs(pipeline, afctrl, mkmultiplier(pipeline, list_srcs(pipeline, ktst, complex_audioamplify(pipeline, EP4, -1.0, -0.0)), complex_caps)), complex_caps)), complex_caps)
+
+	return kpu
+
+def compute_kappaa_from_filters_file(pipeline, afctrl, EP4R, EP4I, EP5R, EP5I):
+
+	#
+	#\kappa_a = afctrl / (EP4+EP5)
+	#
+
+	facR = (EP4R + EP5R) / ((EP4R + EP5R)**2 + (EP4I + EP5I)**2)
+	facI = -(EP4I + EP5I) / ((EP4R + EP5R)**2 + (EP4I + EP5I)**2)
+
+	ka = complex_audioamplify(pipeline, afctrl, facR, facI) 
+
+	return ka
+
+def compute_kappaa(pipeline, afctrl, EP4, EP5,  complex_caps):
+
+	#
+	#\kappa_a = afctrl / (EP4 + EP5)
+	#
+
+	ka = complex_division(pipeline, afctrl, mkadder(pipeline, list_srcs(pipeline, EP4, EP5), complex_caps), complex_caps)
+
+	return ka
 
 
-def compute_S_from_filters_file(pipeline, CresR, CresI, pcal_derrR, pcal_derrI, ktstR, ktstI, kpuR, kpuI, D0R, D0I, A0tstR, A0tstI, A0puR, A0puI, real_caps, complex_caps):
+def compute_S_from_filters_file(pipeline, EP6R, EP6I, pcalfpcal2, derrfpcal2, EP7R, EP7I, ktst, EP8R, EP8I, kpu, EP9R, EP9I, complex_caps):
 	
-	# S = 1/Cres * ( pcal/derr - D0*(ktst*A0tst + kpu*A0pu) ) ^ (-1)
+	#	
+	# S = 1/EP6 * ( pcalfpcal2/derrfpcal2 - EP7*(ktst*EP8 + kpu*EP9) ) ^ (-1)
+	#
+
+	Sinv = complex_audioamplify(pipeline, mkadder(pipeline, list_srcs(pipeline, complex_division(pipeline, pcalfpcal2, derrfpcal2, complex_caps), complex_audioamplify(pipeline, mkadder(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, ktst, EP8R, EP8I), complex_audioamplify(pipeline, kpu, EP9R, EP9I)), complex_caps), -1.0*EP7R, -1.0*EP7I)), complex_caps), EP6R, EP6I)
+	Sinv = pipeparts.mktogglecomplex(pipeline, Sinv)
+	S = pipeparts.mkgeneric(pipeline, Sinv, "complex_pow", exponent = -1)
+	S = pipeparts.mktogglecomplex(pipeline, S)
 	
-	CresD0A0tst = -1.0*(D0R+1j*D0I)*(A0tstR+1j*A0tstI)*(CresR+1j*CresI)
-	CresD0A0tstR = numpy.real(CresD0A0tst)
-	CresD0A0tstI = numpy.imag(CresD0A0tst)
+	return S
 
-	CresD0A0pu = -1.0*(CresR+1j*CresI)*(D0R+1j*D0I)*(A0puR+1j*A0puI)
-	CresD0A0puR = numpy.real(CresD0A0pu)
-	CresD0A0puI = numpy.imag(CresD0A0pu)
-	
-	ktstfacsR, ktstfacsI = multiply_complex_channel_complex_number(pipeline, ktstR, ktstI, CresD0A0tstR, CresD0A0tstI, real_caps)
-	kpufacsR, kpufacsI = multiply_complex_channel_complex_number(pipeline, kpuR, kpuI, CresD0A0puR, CresD0A0puI, real_caps)
-	pcal_derr_facsR, pcal_derr_facsI = multiply_complex_channel_complex_number(pipeline, pcal_derrR, pcal_derrI, CresR, CresI, real_caps)
-
-	ktstfacs = merge_into_complex(pipeline, ktstfacsR, ktstfacsI, real_caps, complex_caps)
-	kpufacs = merge_into_complex(pipeline, kpufacsR, kpufacsI, real_caps, complex_caps)
-	pcalderrfacs = merge_into_complex(pipeline, pcal_derr_facsR, pcal_derr_facsI, real_caps, complex_caps)
-	Sinv = mkadder(pipeline, list_srcs(pipeline, ktstfacs, kpufacs, pcalderrfacs), complex_caps)
-	SinvR, SinvI = split_into_real(pipeline, Sinv, real_caps, complex_caps)
-	SinvR = pipeparts.mktee(pipeline, SinvR)
-	SinvI = pipeparts.mktee(pipeline, SinvI)
-	Sinv2 = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SinvR, exponent = 2.0), pipeparts.mkpow(pipeline, SinvI, exponent = 2.0)), real_caps))
-	SR = mkmultiplier(pipeline, list_srcs(pipeline, SinvR, pipeparts.mkpow(pipeline, Sinv2, exponent = -1.0)), real_caps)
-	SI = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SinvI, -1.0), pipeparts.mkpow(pipeline, Sinv2, exponent = -1.0)), real_caps)
-	return SR, SI
-
-def compute_S(pipeline, CresR, CresI, pcal_derrR, pcal_derrI, ktstR, ktstI, kpuR, kpuI, D0R, D0I, A0tstR, A0tstI, A0puR, A0puI, real_caps, complex_caps):
-	Cres = merge_into_complex(pipeline, CresR, CresI, real_caps, complex_caps)
-	pcal_derr = merge_into_complex(pipeline, pcal_derrR, pcal_derrI, real_caps, complex_caps)
-	ktst = merge_into_complex(pipeline, ktstR, ktstI, real_caps, complex_caps)
-	kpu = merge_into_complex(pipeline, kpuR, kpuI, real_caps, complex_caps)
-	D0 = merge_into_complex(pipeline, pipeparts.mkaudioamplify(pipeline, D0R, -1.0), pipeparts.mkaudioamplify(pipeline, D0I, -1.0), real_caps, complex_caps)
-	A0tst = merge_into_complex(pipeline, A0tstR, A0tstI, real_caps, complex_caps)
-	A0pu = merge_into_complex(pipeline, A0puR, A0puI, real_caps, complex_caps)
+def compute_S(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpu, EP9, complex_caps):
 
 	#	
-	# S = 1/Cres * ( pcal/derr - D0*(ktst*A0tst + kpu*A0pu) ) ^ (-1)
+	# S = 1/EP6 * ( pcalfpcal2/derrfpcal2 - EP7*(ktst*EP8 + kpu*EP9) ) ^ (-1)
+	#
 
-	Sinv = mkmultiplier(pipeline, list_srcs(pipeline, Cres, mkadder(pipeline, list_srcs(pipeline, pcal_derr, mkmultiplier(pipeline, list_srcs(pipeline, D0, mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, ktst, A0tst), complex_caps), mkmultiplier(pipeline, list_srcs(pipeline, kpu, A0pu), complex_caps)), complex_caps)), complex_caps)), complex_caps)), complex_caps)
-	SinvR, SinvI = split_into_real(pipeline, Sinv, real_caps, complex_caps)
-	SinvR = pipeparts.mktee(pipeline, SinvR)
-	SinvI = pipeparts.mktee(pipeline, SinvI)
+	Sinv = mkmultiplier(pipeline, list_srcs(pipeline, EP6, mkadder(pipeline, list_srcs(pipeline, complex_division(pipeline, pcalfpcal2, derrfpcal2, complex_caps), mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, EP7, -1.0, 0.0), mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, ktst, EP8), complex_caps), mkmultiplier(pipeline, list_srcs(pipeline, kpu, EP9), complex_caps)), complex_caps)), complex_caps)), complex_caps)), complex_caps)
+	Sinv = pipeparts.mktogglecomplex(pipeline, Sinv)
+	S = pipeparts.mkgeneric(pipeline, Sinv, "complex_pow", exponent = -1)
+	S = pipeparts.mktogglecomplex(pipeline, S) 
 
-	Sinv2 = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SinvR, exponent = 2.0), pipeparts.mkpow(pipeline, SinvI, exponent = 2.0)), real_caps))
-	SR = mkmultiplier(pipeline, list_srcs(pipeline, SinvR, pipeparts.mkpow(pipeline, Sinv2, exponent = -1.0)), real_caps)
-	SI = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SinvI, -1.0), pipeparts.mkpow(pipeline, Sinv2, exponent = -1.0)), real_caps)
-
-	return SR, SI
+	return S
 
 def compute_kappac(pipeline, SR, SI, caps):
+
 	#
 	# \kappa_C = |S|^2 / Re[S]
 	#
+
 	SR = pipeparts.mktee(pipeline, SR)
 	S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)), caps)
 	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, SR, exponent=-1.0)), caps)
 	return kc
 
-def compute_fcc(pipeline, SR, SI, fpcal, caps):
+def compute_fcc(pipeline, SR, SI, fpcal2, caps):
 	#
-	# f_cc = - (Re[S]/Im[S]) * fpcal
+	# f_cc = - (Re[S]/Im[S]) * fpcal2
 	#
 	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), pipeparts.mkpow(pipeline, SI, exponent=-1.0)), caps)
-	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal)
+	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal2)
 	return fcc
 
 def average_and_check_range(pipeline, real, imag, variance_real, variance_imag, hold_time, expected_value_real, expected_value_imag, median_array_size, median_smoothing_samples, caps):
