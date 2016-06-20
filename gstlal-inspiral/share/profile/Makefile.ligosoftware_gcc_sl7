@@ -46,7 +46,7 @@ env.sh:
 	echo 'LAL_PATH=${PWD}/opt' >> $@
 	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
 	echo 'INSTALL_FILES_PATH=${PWD}/install' >> $@
-	echo 'export CFLAGS="-fPIC -O3 -march=native -lsatlas"' >> $@
+	echo 'export CFLAGS="-fPIC -O3 -march=native -L$${DEPENDENCIES_PATH}/lib -lsatlas"' >> $@
 	echo '# These are environment variables that do get exported' >> $@
 	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
 	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
@@ -205,7 +205,7 @@ $(INSTALL_FILES_DIR)/$(LAL)/config.log : $(DEP_INSTALL_DIR)/lib/libmetaio.so $(D
 		./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 
 $(DEP_INSTALL_DIR)/lib/libframecpp.so : $(INSTALL_FILES_DIR)/$(LDASTOOLS)/config.log
-	cd $(INSTALL_FILES_DIR)/$(LDASTOOLS) && make && make install 
+	cd $(INSTALL_FILES_DIR)/$(LDASTOOLS) && ./configure --prefix=$(DEP_INSTALL_DIR) --without-doxygen && make && make install 
 
 $(INSTALL_FILES_DIR)/$(LDASTOOLS)/config.log : $(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so
 	tar -xzf $(TARDIR)/$(LDASTOOLS).tar.gz -C $(INSTALL_FILES_DIR)
