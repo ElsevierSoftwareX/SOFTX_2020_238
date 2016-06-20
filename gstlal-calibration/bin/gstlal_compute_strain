@@ -798,9 +798,10 @@ ctrl = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline,
 # enforce caps on the residual branch and hook up progress report if verbose is on
 res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], caps, "res")
 
-# apply the residual chain filter 
+# apply the residual chain filter 	
 res = pipeparts.mkfirbank(pipeline, res, latency = int(reschaindelay), fir_matrix = [reschainfilt[::-1]], time_domain = td)
-res = pipeparts.mkfirbank(pipeline, res, latency = int(resdewhitendelay), fir_matrix = [resdewhiten[::-1]], time_domain = td)
+if not options.no_dewhitening:
+	res = pipeparts.mkfirbank(pipeline, res, latency = int(resdewhitendelay), fir_matrix = [resdewhiten[::-1]], time_domain = td)
 
 # Apply factors to actuation and sensing chains, if applicable
 if options.apply_kappac:
