@@ -158,7 +158,7 @@ static void set_metadata(GSTLALConstantUpSample *element, GstBuffer *buf, guint6
 	"audio/x-raw, " \
 	"rate = (int) [1, MAX], " \
 	"channels = (int) 1, " \
-	"format = (string) " GST_AUDIO_NE(F64) " , " \
+	"format = (string) {"GST_AUDIO_NE(F32)", "GST_AUDIO_NE(F64)", "GST_AUDIO_NE(Z64)", "GST_AUDIO_NE(Z128)"}, " \
 	"layout = (string) interleaved, " \
 	"channel-mask = (bitmask) 0"
 
@@ -202,17 +202,34 @@ G_DEFINE_TYPE(
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstAudioInfo info;
-	gboolean success = TRUE;
+	/*
+	 * It seems that the function gst_audio_info_from_caps() does not work for gstlal's complex formats.
+	 * Therefore, a different method is used below to parse the caps.
+	 */
+	const gchar *format;
+	static char *formats[] = {"F32LE", "F32BE", "F64LE", "F64BE", "Z64LE", "Z64BE", "Z128LE", "Z128BE"};
+	gint sizes[] = {4, 4, 8, 8, 8, 8, 16, 16};
 
-	success &= gst_audio_info_from_caps(&info, caps);
+        GstStructure *str = gst_caps_get_structure(caps, 0);
+        g_assert(str);
 
-	if(success)
-		*size = GST_AUDIO_INFO_BPF(&info);
-	else
-		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
+        if(gst_structure_has_field(str, "format")) {
+                format = gst_structure_get_string(str, "format");
+        } else {
+                GST_ERROR_OBJECT(trans, "No format! Cannot infer unit size.\n");
+                return FALSE;
+        }
+        int test = 0;
+        for(unsigned int i = 0; i < sizeof(formats) / sizeof(*formats); i++) {
+                if(!strcmp(format, formats[i])) {
+                        *size = sizes[i];
+                        test++;
+                }
+        }
+        if(test != 1)
+                GST_WARNING_OBJECT(trans, "unit size not properly set");
 
-	return success;
+        return TRUE;
 }
 
 
@@ -390,6 +407,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 *
 		 * cadence = # of output samples per input sample
 		 */
+
 		*othersize = size * element->cadence;
 		break;
 
