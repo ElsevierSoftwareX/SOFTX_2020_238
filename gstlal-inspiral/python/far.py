@@ -1384,7 +1384,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# so the documentation doesn't promise that it is.
 			yield params, sum(seq[1::2], log_P_horizons)
 
-	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0):
+	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0, coinc_only = True):
 		"""
 		Generator that yields an endless sequence of randomly
 		generated parameter dictionaries drawn from the
@@ -1478,11 +1478,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			instruments = []
 			for (instrument, key), (snr, chi2_over_snr2) in gens.items():
 				snr = snr()
-				if snr < snr_min:
+				if coinc_only and snr < snr_min:
 					continue
 				params[key] = snr, chi2_over_snr2()
 				instruments.append(instrument)
-			if len(instruments) < 2:
+			if coinc_only and len(instruments) < 2:
 				continue
 			params["instruments"] = (frozenset(instruments),)
 			params.horizons = horizon_distance
