@@ -87,7 +87,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 	for instrument, psd in sorted(psds.items()):
 		if psd is None:
 			continue
-		psd_data = psd.data
+		psd_data = psd.data.data
 		f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
 		logging.info("found PSD for %s spanning [%g Hz, %g Hz]" % (instrument, f[0], f[-1]))
 		min_fs.append(f[0])

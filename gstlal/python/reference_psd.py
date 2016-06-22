@@ -47,7 +47,6 @@ Gst.init(None)
 
 from glue.ligolw import utils
 import lal
-from pylal import datatypes as laltypes
 from pylal import series as lalseries
 
 
@@ -350,7 +349,7 @@ def psd_to_fir_kernel(psd):
 	# extract the PSD bins and determine sample rate for kernel
 	#
 
-	data = psd.data / 2
+	data = psd.data.data / 2
 	sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
 
 	#
@@ -408,8 +407,7 @@ def psd_to_linear_phase_whitening_fir_kernel(psd):
 	such that if colored Gaussian random noise with the given PSD is fed
 	into an FIR filter using the kernel the filter's output will
 	be zero-mean unit-variance Gaussian random noise.  The PSD must be
-	provided as a REAL8FrequencySeries object (see
-	pylal.xlal.datatypes.real8frequencyseries).
+	provided as a lal.REAL8FrequencySeries object.
 
 	The phase response of this filter is 0, just like whitening done in
 	the frequency domain.
@@ -430,7 +428,7 @@ def psd_to_linear_phase_whitening_fir_kernel(psd):
 	# extract the PSD bins and determine sample rate for kernel
 	#
 
-	data = psd.data / 2
+	data = psd.data.data / 2
 	sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
 
 	#
@@ -559,7 +557,7 @@ def interpolate_psd(psd, deltaF):
 	#
 
 	#from scipy import fftpack
-	#psd_data = psd.data
+	#psd_data = psd.data.data
 	#x = numpy.zeros((len(psd_data) * 2 - 2,), dtype = "double")
 	#psd_data = numpy.where(psd_data, psd_data, float("inf"))
 	#x[0] = 1 / psd_data[0]**.5
@@ -578,7 +576,7 @@ def interpolate_psd(psd, deltaF):
 	# interpolate PSD with linear interpolator
 	#
 
-	#psd_data = psd.data
+	#psd_data = psd.data.data
 	#f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
 	#interp = interpolate.interp1d(f, psd_data, bounds_error = False)
 	#f = psd.f0 + numpy.arange(round(len(psd_data) * psd.deltaF / deltaF)) * deltaF
@@ -590,7 +588,7 @@ def interpolate_psd(psd, deltaF):
 	# doesn't seem to like the occasional sample being -inf)
 	#
 
-	psd_data = psd.data
+	psd_data = psd.data.data
 	psd_data = numpy.where(psd_data, psd_data, 1e-300)
 	f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
 	interp = interpolate.splrep(f, numpy.log(psd_data), s = 0)
@@ -601,14 +599,17 @@ def interpolate_psd(psd, deltaF):
 	# return result
 	#
 
-	return laltypes.REAL8FrequencySeries(
+	psd = lal.CreateREAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = deltaF,
 		sampleUnits = psd.sampleUnits,
-		data = psd_data
+		length = len(psd_data)
 	)
+	psd.data.data = psd_data
+
+	return psd
 
 
 def movingmedian(psd, window_size):
@@ -616,24 +617,26 @@ def movingmedian(psd, window_size):
 	Assumes that the underlying PSD doesn't have variance, i.e., that there
 	is no median / mean correction factor required
 	"""
-	data = psd.data
-	datacopy = numpy.copy(psd.data)
+	data = psd.data.data
+	datacopy = numpy.copy(data)
 	for i in range(window_size, len(data)-window_size):
 		datacopy[i] = numpy.median(data[i-window_size:i+window_size])
-	return laltypes.REAL8FrequencySeries(
+	psd = lal.CreateREAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = psd.deltaF,
 		sampleUnits = psd.sampleUnits,
-		data = datacopy
+		length = len(datacopy)
 	)
+	psd.data.data = datacopy
+	return psd
 
 
 def polyfit(psd, minsample, maxsample, order, verbose = False):
 	# f / f_min between f_min and f_max, i.e. f[0] here is 1
 	f = numpy.arange(maxsample - minsample) * psd.deltaF + 1
-	data = psd.data[minsample:maxsample]
+	data = psd.data.data[minsample:maxsample]
 
 	logf = numpy.linspace(numpy.log(f[0]), numpy.log(f[-1]), 100000)
 	interp = interpolate.interp1d(numpy.log(f), numpy.log(data))
@@ -644,11 +647,13 @@ def polyfit(psd, minsample, maxsample, order, verbose = False):
 	data = numpy.exp(p(numpy.log(f)))
 	olddata = psd.data
 	olddata[minsample:maxsample] = data
-	return laltypes.REAL8FrequencySeries(
+	psd = lal.CreateREAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = psd.deltaF,
 		sampleUnits = psd.sampleUnits,
-		data = olddata
+		length = len(olddata)
 	)
+	psd.data.data = olddata
+	return psd
