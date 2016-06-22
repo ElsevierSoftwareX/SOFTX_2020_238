@@ -194,12 +194,6 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	return handler.psd
 
 
-def make_psd_xmldoc(psddict, xmldoc = None):
-	import warnings
-	warnings.warn("gstlal.reference_psd.make_psd_xmldoc() is deprecated, use pylal.series.make_psd_xmldoc() instead.", DeprecationWarning)
-	return lalseries.make_psd_xmldoc(psddict, xmldoc = xmldoc)
-
-
 def write_psd_fileobj(fileobj, psddict, gz = False, trap_signals = None):
 	"""
 	Wrapper around make_psd_xmldoc() to write the XML document directly
