@@ -12,7 +12,8 @@ import numpy
 import scipy
 from scipy import pi, exp, cos
 
-from glue.ligolw import utils
+import lal
+from glue.ligolw import utils as ligolw_utils
 from pylal import datatypes as laltypes
 from gstlal import pipeparts
 from gstlal import reference_psd
@@ -76,7 +77,7 @@ def look_and_listen(self):
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%i"%(analysis_rate))
 
 	if self.td_whitening:
-		psds = reference_psd.read_psd_xmldoc(utils.load_filename(self.psd_file_name))
+		psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(self.psd_file_name, contenthandler = lal.series.PSDContentHandler))
 		psd = psds["G1"]
 		psd.data = psd.data[:analysis_rate/psd.deltaF/2+1]
 		psd = reference_psd.interpolate_psd(psd, 1./fft_length)

@@ -19,16 +19,11 @@
 import sys
 import numpy
 import scipy
-from pylal import datatypes as laltypes
 from optparse import OptionParser
 
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-from lal import LIGOTimeGPS
+import lal
+
+from glue.ligolw import utils as ligolw_utils
 
 __author__ = "Drew Keppel <drew.keppel@ligo.org>"
 
@@ -61,7 +56,7 @@ fmaxs = {}
 # loop over input files
 for fname in filenames:
 	# read in psds from file
-	new_psds = reference_psd.read_psd_xmldoc(utils.load_filename(fname, contenthandler = ligolw.LIGOLWContentHandler, verbose = options.verbose))
+	new_psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(fname, contenthandler = lal.series.PSDContentHandler, verbose = options.verbose))
 
 	for ifo,psd_freqseries in new_psds.items():
 		# check that new instruments are not in psds
@@ -105,14 +100,15 @@ for ifo,psd_freqseries in psds.items():
 	invpsd_data[start:end] += windowed_invpsd_freqseries
 
 # create harmonic sum psd frequency series
-harmonic_sum_psd = laltypes.REAL8FrequencySeries(
+harmonic_sum_psd = lal.CreateREAL8FrequencySeries(
 		name = 'PSD:array',
-		epoch = LIGOTimeGPS(0.),
+		epoch = lal.LIGOTimeGPS(0.),
 		f0 = f[0],
 		deltaF = deltaF,
 		sampleUnits = sampleunits,
-		data = invpsd_data**-1.
+		length = len(invpsd_data)
 	)
+harmonic_sum_psd.data.data = invpsd_data**-1.
 psds[''.join(sorted(psds.keys()))] = harmonic_sum_psd
 
 # write harmonic sum psd to file

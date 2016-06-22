@@ -194,12 +194,6 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	return handler.psd
 
 
-def read_psd_xmldoc(xmldoc):
-	import warnings
-	warnings.warn("gstlal.reference_psd.read_psd_xmldoc() is deprecated, use pylal.series.read_psd_xmldoc() instead.", DeprecationWarning)
-	return lalseries.read_psd_xmldoc(xmldoc)
-
-
 def make_psd_xmldoc(psddict, xmldoc = None):
 	import warnings
 	warnings.warn("gstlal.reference_psd.make_psd_xmldoc() is deprecated, use pylal.series.make_psd_xmldoc() instead.", DeprecationWarning)
