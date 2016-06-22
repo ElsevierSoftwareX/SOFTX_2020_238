@@ -154,8 +154,8 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	labels = []
 	sizes = []
 	colours = []
-	for instrument, category in sorted(coinc_param_distributions.instrument_categories.items()):
-		count = coinc_param_distributions.background_rates["instruments"][category,]
+	for instrument in sorted(reduce(lambda a, b: a | b, coinc_param_distributions.binnings["instruments"][0].containers)):
+		count = coinc_param_distributions.background_rates["instruments"][frozenset([instrument]),]
 		if not count:
 			continue
 		labels.append("%s\n(%d)" % (instrument, count))
@@ -169,7 +169,7 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	sizes = []
 	colours = []
 	for instruments in sorted(sorted(instruments) for instruments in coinc_param_distributions.count_above_threshold if instruments is not None):
-		count = coinc_param_distributions.background_rates["instruments"][coinc_param_distributions.instrument_categories.category(instruments),]
+		count = coinc_param_distributions.background_rates["instruments"][frozenset(instruments),]
 		if len(instruments) < 2 or not count:
 			continue
 		labels.append("%s\n(%d)" % (", ".join(instruments), count))

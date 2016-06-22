@@ -738,8 +738,6 @@ class CoincParams(dict):
 class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
 
-	instrument_categories = snglcoinc.InstrumentCategories()
-
 	# range of SNRs covered by this object
 	# FIXME:  must ensure lower boundary matches search threshold
 	snr_min = 4.
@@ -777,7 +775,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	# binnings (filter funcs look-up initialized in .__init__()
 	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 300)))
 	binnings = {
-		"instruments": rate.NDBins((rate.LinearBins(0.5, instrument_categories.max() + 0.5, instrument_categories.max()),)),
+		"instruments": rate.NDBins((snglcoinc.InstrumentBins(),)),
 		"H1_snr_chi": snr_chi_binning,
 		"H2_snr_chi": snr_chi_binning,
 		"H1H2_snr_chi": snr_chi_binning,
@@ -909,7 +907,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# instrument combination
 		#
 
-		params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(event.ifo for event in events),)
+		params["instruments"] = (frozenset(event.ifo for event in events),)
 
 		#
 		# record the horizon distances.  pick one trigger at random
@@ -1049,7 +1047,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# Give .1% of the requested events to this portion of the model
 			new_binarr.array *= 0.001 * number_of_events / new_binarr.array.sum()
 			# add to raw counts
-			getattr(self, ba)["instruments"][self.instrument_categories.category(frozenset([instrument])),] += number_of_events
+			getattr(self, ba)["instruments"][frozenset([instrument]),] += number_of_events
 			binarr += new_binarr
 
 		# Give 99.9% of the requested events to the "glitch model"
@@ -1076,7 +1074,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		if verbose:
 			print >>sys.stderr, "synthesizing background-like instrument combination probabilities ..."
 		coincsynth = snglcoinc.CoincSynthesizer(
-			eventlists = dict((instrument, self.background_rates["instruments"][self.instrument_categories.category([instrument]),]) for instrument in segs),
+			eventlists = dict((instrument, self.background_rates["instruments"][frozenset([instrument]),]) for instrument in segs),
 			segmentlists = segs,
 			delta_t = 0.005
 		)
@@ -1107,7 +1105,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		coincidence_bins = 0.
 		for instruments in coincsynth.all_instrument_combos:
 			predicted_count = coincsynth.rates[frozenset(instruments)] * livetime
-			observed_count = self.zero_lag_rates["instruments"][self.instrument_categories.category(instruments),]
+			observed_count = self.zero_lag_rates["instruments"][frozenset(instruments),]
 			if predicted_count > 0 and observed_count > 0:
 				coincidence_bins += (predicted_count / observed_count)**(1. / (len(instruments) - 1))
 				N += 1
@@ -1123,7 +1121,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# multiply by the number of bins to get the expected
 		# coincidence rates
 		for instruments, count in coincsynth.mean_coinc_count.items():
-			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
+			self.background_rates["instruments"][frozenset(instruments),] = count * coincidence_bins
 
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
@@ -1156,7 +1154,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			P[instruments] /= total
 		# populate binning from probabilities
 		for instruments, p in P.items():
-			self.injection_rates["instruments"][self.instrument_categories.category(instruments),] += n * p
+			self.injection_rates["instruments"][instruments,] += n * p
 
 	def _rebuild_interpolators(self):
 		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators()
@@ -1190,17 +1188,17 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			binnedarray.array += self.zero_lag_rates[key].array
 
 		# be sure the single-instrument categories are zeroed.
-		for category in self.instrument_categories.values():
-			binnedarray[category,] = 0
+		for instrument in reduce(lambda a, b: a | b, binnedarray.bins[0].containers):
+			binnedarray[frozenset([instrument]),] = 0
 
 		# optionally mix denominator into numerator
 		if pdf_dict is self.injection_pdf and self.numerator_accidental_weight:
-			denom = self.background_rates[key].array.copy()
+			denom = self.background_rates[key].copy()
 			if self.zero_lag_in_background:
-				denom += self.zero_lag_rates[key].array
-			for category in self.instrument_categories.values():
-				denom[category,] = 0
-			binnedarray.array += denom * (binnedarray.array.sum() / denom.sum() * self.numerator_accidental_weight)
+				denom.array += self.zero_lag_rates[key].array
+			for instrument in reduce(lambda a, b: a | b, denom.bins[0].containers):
+				denom[frozenset([instrument]),] = 0
+			binnedarray.array += denom.array * (binnedarray.array.sum() / denom.array.sum() * self.numerator_accidental_weight)
 
 		# instrument combos are probabilities, not densities.
 		with numpy.errstate(invalid = "ignore"):
@@ -1308,7 +1306,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		to number of zero-lag coincs observed.  An additional entry
 		with key None stores the total.
 		"""
-		count_above_threshold = dict((frozenset(self.instrument_categories.instruments(int(round(category)))), count) for category, count in zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
+		# FIXME now that we're using a categories-like binning,
+		# this is just literally the zero_lag_rates binned array.
+		# remove and just use zero_lag_rate directly
+		count_above_threshold = dict(zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
 		count_above_threshold[None] = sum(sorted(count_above_threshold.values()))
 		return count_above_threshold
 
@@ -1317,13 +1318,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self.zero_lag_rates["instruments"].array[:] = 0.
 		for instruments, count in count_above_threshold.items():
 			if instruments is not None:
-				self.zero_lag_rates["instruments"][self.instrument_categories.category(instruments),] = count
+				self.zero_lag_rates["instruments"][instruments,] = count
 
 	@property
 	def Pinstrument_noise(self):
 		P = {}
-		for category, p in zip(self.background_pdf["instruments"].bins.centres()[0], self.background_pdf["instruments"].array):
-			instruments = frozenset(self.instrument_categories.instruments(int(round(category))))
+		for instruments, p in zip(self.background_pdf["instruments"].bins.centres()[0], self.background_pdf["instruments"].array):
 			if len(instruments) < 2 or not p:
 				continue
 			P[instruments] = p
@@ -1332,8 +1332,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	@property
 	def Pinstrument_signal(self):
 		P = {}
-		for category, p in zip(self.injection_pdf["instruments"].bins.centres()[0], self.injection_pdf["instruments"].array):
-			instruments = frozenset(self.instrument_categories.instruments(int(round(category))))
+		for instruments, p in zip(self.injection_pdf["instruments"].bins.centres()[0], self.injection_pdf["instruments"].array):
 			if len(instruments) < 2 or not p:
 				continue
 			P[instruments] = p
@@ -1368,7 +1367,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		snr_slope = 0.8 / len(instruments)**3
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
-		base_params = {"instruments": (self.instrument_categories.category(instruments),)}
+		base_params = {"instruments": (frozenset(instruments),)}
 		horizongen = iter(self.horizon_history.randhorizons()).next
 		# P(horizons) = 1/livetime
 		log_P_horizons = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey())
@@ -1485,7 +1484,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				instruments.append(instrument)
 			if len(instruments) < 2:
 				continue
-			params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(instruments),)
+			params["instruments"] = (frozenset(instruments),)
 			params.horizons = horizon_distance
 			yield params, 0.
 
@@ -1958,7 +1957,7 @@ class RankingData(object):
 
 		for instruments, binnedarray in self.background_likelihood_rates.items():
 			if binnedarray.array.any():
-				binnedarray.array *= coinc_params_distributions.background_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),] / binnedarray.array.sum()
+				binnedarray.array *= coinc_params_distributions.background_rates["instruments"][instruments,] / binnedarray.array.sum()
 
 		#
 		# propogate instrument combination priors through to
@@ -1975,7 +1974,7 @@ class RankingData(object):
 
 		for instruments, binnedarray in self.signal_likelihood_rates.items():
 			if binnedarray.array.any():
-				binnedarray.array *= coinc_params_distributions.injection_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),] / binnedarray.array.sum()
+				binnedarray.array *= coinc_params_distributions.injection_rates["instruments"][instruments,] / binnedarray.array.sum()
 
 		#
 		# compute combined rates
