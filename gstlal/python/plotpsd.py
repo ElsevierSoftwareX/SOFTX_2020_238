@@ -40,6 +40,7 @@ from gstlal.plotutil import golden_ratio
 from glue.ligolw import lsctables
 from gstlal.reference_psd import horizon_distance
 
+
 def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
 	"""!
 	Produces a matplotlib figure of PSDs. 
@@ -69,7 +70,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 		mass2 = sngl_inspirals.values()[0].mass2
 		if mass1 < mass2:
 			mass1, mass2 = mass2, mass1
-		end_time = coinc_inspiral.get_end()
+		end_time = coinc_inspiral.end
 		logging.info("%g Msun -- %g Msun event in %s at %.2f GPS" % (mass1, mass2, ", ".join(sorted(sngl_inspirals)), float(end_time)))
 	else:
 		# Use the cannonical BNS binary for horizon distance if an event wasn't given
