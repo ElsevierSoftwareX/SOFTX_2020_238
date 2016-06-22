@@ -65,6 +65,7 @@
 #include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal/gstlal.h>
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal_audioundersample.h>
 
 
@@ -226,7 +227,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	success &= gst_audio_info_from_caps(&info, caps);
+	success &= gstlal_audio_info_from_caps(&info, caps);
 
 	if(success)
 		*size = GST_AUDIO_INFO_BPF(&info);
