@@ -20,8 +20,6 @@ import numpy
 import scipy
 import sys
 from gstlal import reference_psd
-from pylal.xlal import datatypes
-from pylal.xlal.datatypes import lalunit
 from optparse import OptionParser
 from glue.ligolw import ligolw
 from glue.ligolw import array
@@ -30,7 +28,6 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from pylal import series as lalseries
-from pylal import datatypes as laltypes
 
 ## @file
 # A program to fit a PSD to a polynomial
