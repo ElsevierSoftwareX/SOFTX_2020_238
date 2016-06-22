@@ -26,21 +26,14 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
-from pylal import series as lalseries
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-from glue.ligolw import lsctables
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
+import lal
+
+from glue.ligolw import utils as ligolw_utils
 from gstlal import datasource
 from gstlal import multirate_datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw.utils import segments as ligolw_segments
-from pylal import series as lalseries
 
 ## @file gstlal_play
 # This program will play data in a variety of ways; See gstlal_play for help and usage.
@@ -193,7 +186,7 @@ gw_data_source_info = datasource.GWDataSourceInfo(options)
 instrument, = gw_data_source_info.channel_dict
 
 if options.reference_psd is not None:
-	psd = lalseries.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[instrument]
+	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))[instrument]
 else:
 	psd = None
 

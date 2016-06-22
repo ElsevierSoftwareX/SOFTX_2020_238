@@ -33,14 +33,12 @@ from optparse import OptionParser
 import uuid
 
 
+import lal
 from glue.lal import CacheEntry
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
-from pylal import series as lalseries
 from gstlal import svd_bank
 from gstlal.far import ThincaCoincParamsDistributions
+
 
 ## @file gstlal_svd_bank
 # This program will create svd bank files; see gstlal_svd_bank for more information
@@ -89,13 +87,6 @@ from gstlal.far import ThincaCoincParamsDistributions
 # @image html svdtable.png
 #
 # @image html svd.png
-
-
-
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
 
 
 #
@@ -163,7 +154,7 @@ if options.snr_threshold != ThincaCoincParamsDistributions.snr_min:
 # =============================================================================
 #
 
-psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=LIGOLWContentHandler))
+psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=lal.series.PSDContentHandler))
 
 svd_bank.write_bank(
 	options.write_svd_bank,

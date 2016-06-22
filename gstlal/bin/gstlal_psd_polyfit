@@ -19,15 +19,10 @@
 import numpy
 import scipy
 import sys
+import lal
 from gstlal import reference_psd
 from optparse import OptionParser
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-from pylal import series as lalseries
+from glue.ligolw import utils as ligolw_utils
 
 ## @file
 # A program to fit a PSD to a polynomial
@@ -61,7 +56,7 @@ parser.add_option("--high-fit-freq", type = float, default = 6500, help = "Set t
 
 options, filenames = parser.parse_args()
 
-psds = lalseries.read_psd_xmldoc(utils.load_filename(filenames[0], verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(filenames[0], verbose = True, contenthandler = lal.series.PSDContentHandler))
 
 # FIXME Don't assume all psds have same resolution
 psd = psds.values()[0]

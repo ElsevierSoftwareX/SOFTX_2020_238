@@ -45,22 +45,13 @@ import urlparse
 import json
 
 
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
-from glue.ligolw import lsctables
+import lal
+
+
 from glue.ligolw import utils as ligolw_utils
 from gstlal import lvalert_helper
 from gstlal import plotpsd
 from ligo.gracedb import rest as gracedb
-from pylal import series as lal_series
-
-
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
-lsctables.use_in(LIGOLWContentHandler)
 
 
 plotpsd.matplotlib.rcParams.update({
@@ -90,7 +81,7 @@ def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = Fals
 	response = lvalert_helper.get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
 	if response is None:
 		return None
-	return lal_series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, contenthandler = LIGOLWContentHandler)[0])
+	return lal.series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, contenthandler = lal.series.PSDContentHandler)[0])
 
 
 #

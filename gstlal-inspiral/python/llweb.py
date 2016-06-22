@@ -41,6 +41,7 @@
 import sys
 import cgi
 import cgitb
+cgitb.enable()
 import os
 import bisect
 import math
@@ -60,26 +61,15 @@ import time
 import StringIO
 import base64
 import urlparse
-from gstlal import reference_psd
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import lsctables
-from glue.ligolw import param as ligolw_param
-from glue.ligolw import utils as ligolw_utils
-from lal import GPSTimeNow
-from pylal import series as lalseries
-from gstlal import far
-cgitb.enable()
 
+import lal
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from gstlal import far
 from gstlal import plotpsd
 from gstlal import plotfar
 from gstlal import plotsegments
 
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
-lsctables.use_in(LIGOLWContentHandler)
 
 def ceil10(x):
 	return 10**math.ceil(math.log10(x))
@@ -223,7 +213,7 @@ class GstlalWebSummary(object):
 			fname = "%s/%s/%s" % (self.directory, id, datatype)
 			if datatype == "psds":
 				try:
-					self.found[datatype][id] = lalseries.read_psd_xmldoc(ligolw_utils.load_url("%s.xml" % fname, contenthandler = LIGOLWContentHandler)) 
+					self.found[datatype][id] = lal.series.read_psd_xmldoc(ligolw_utils.load_url("%s.xml" % fname, contenthandler = lal.series.PSDContentHandler))
 				except KeyError:
 					self.missed[datatype][id] = {}
 			elif datatype == "likelihood":
@@ -522,7 +512,7 @@ class GstlalWebSummary(object):
 			likelihood, nu, nu = self.found["likelihood"][id]
 			# FIXME dont hardcode IFOs
 			instruments = (u"H1",u"L1")
-			timenow = GPSTimeNow()
+			timenow = lal.GPSTimeNow()
 			horizon_distances = {}
 			for ifo in instruments:
 				horizon_distances[ifo] = likelihood.horizon_history[ifo][timenow]

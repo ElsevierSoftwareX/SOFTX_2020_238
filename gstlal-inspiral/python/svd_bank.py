@@ -43,6 +43,8 @@
 import numpy
 import sys
 
+import lal
+
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import array as ligolw_array
@@ -50,7 +52,6 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import types as ligolw_types
 from glue.ligolw.utils import process as ligolw_process
-from pylal import series
 
 Attributes = ligolw.sax.xmlreader.AttributesImpl
 
@@ -332,7 +333,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one here
 	if write_psd:
-		series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
+		lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
 
 	# add top level LIGO_LW to document
 	xmldoc.appendChild(lw)

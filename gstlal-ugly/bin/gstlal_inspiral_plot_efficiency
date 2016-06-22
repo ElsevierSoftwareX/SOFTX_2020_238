@@ -13,15 +13,11 @@ sqlite3.enable_callback_tracebacks(True)
 import sys
 from optparse import OptionParser
 
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
+import lal
+from glue.ligolw import utils as ligolw_utils
 from pylal import rate
-from pylal import series as lalseries
 from pylal import imr_utils
+
 import matplotlib
 matplotlib.use('Agg')
 goldenratio = 2 / (1 + 5**.5)
@@ -55,7 +51,7 @@ def compute_horizon_interpolator(psd_files, verbose = False):
 	horizons = dict( (s, []) for s in sites)
 	times = dict( (s, []) for s in sites)
 	for f in psd_files:
-		psds = lalseries.read_psd_xmldoc(utils.load_filename(f, verbose = verbose, contenthandler = ligolw.LIGOLWContentHandler))
+		psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(f, verbose = verbose, contenthandler = lal.series.PSDContentHandler))
 		for ifo, psd in psds.items():
 			if psd is not None:
 				times[ifo].append(int(psd.epoch))

@@ -73,28 +73,24 @@ import itertools
 
 ##############################################################################
 # import the modules we need to build the pipeline
+import lal
 from glue import iterutils
 from glue import pipeline
 from glue.lal import Cache, CacheEntry
 from glue import segments
 from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
 from glue.ligolw import lsctables
-from glue.ligolw import param as ligolw_param
 import glue.ligolw.utils as ligolw_utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
-from pylal import series as lalseries
 import numpy
 from gstlal import datasource
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-ligolw_array.use_in(LIGOLWContentHandler)
 lsctables.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
 
 
 #
@@ -837,7 +833,7 @@ if options.reference_psd is None:
 		)
 
 else:
-	ref_psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler)) 
+	ref_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
 
 	# NOTE: compute just the SNR pdf cache here, set other features to 0
 	# NOTE: This will likely result in downstream codes needing to compute

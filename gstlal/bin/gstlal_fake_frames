@@ -16,9 +16,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+import numpy
 from optparse import OptionParser
 import os
-import numpy
 import sys
 
 import gi
@@ -27,22 +27,14 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
+import lal
+
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import simplehandler
 from gstlal import datasource
 from gstlal import multirate_datasource
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
-from pylal.datatypes import LIGOTimeGPS
-from pylal import series as lalseries
-
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
 
 ## @file gstlal_fake_frames
 # This program will make fake data in a variety of ways; see gstlal_fake_frames for help and usage
@@ -275,7 +267,7 @@ if options.shift is not None:
 
 if options.whiten_reference_psd:
 	## If whitening read the PSD
-	wpsd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.whiten_reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))[instrument]
+	wpsd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.whiten_reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))[instrument]
 else:
 	## else set wpsd to None
 	wpsd = None
@@ -296,7 +288,7 @@ else:
 if options.color_psd:
 
 	## read coloring psd file and convert to an FIR filter
-	rpsd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.color_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))[instrument]
+	rpsd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.color_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))[instrument]
 	
 	## Calculate the maximum sample rate
 	max_sample = int(round(1.0 / rpsd.deltaF * options.sample_rate / 2.0)) + 1

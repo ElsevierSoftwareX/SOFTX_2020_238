@@ -47,7 +47,6 @@ Gst.init(None)
 
 from glue.ligolw import utils
 import lal
-from pylal import series as lalseries
 
 
 from gstlal import datasource
@@ -198,7 +197,7 @@ def write_psd_fileobj(fileobj, psddict, gz = False, trap_signals = None):
 	Wrapper around make_psd_xmldoc() to write the XML document directly
 	to a Python file object.
 	"""
-	utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), fileobj, gz = gz, trap_signals = trap_signals)
+	utils.write_fileobj(lal.series.make_psd_xmldoc(psddict), fileobj, gz = gz, trap_signals = trap_signals)
 
 
 def write_psd(filename, psddict, verbose = False, trap_signals = None):
@@ -206,7 +205,7 @@ def write_psd(filename, psddict, verbose = False, trap_signals = None):
 	Wrapper around make_psd_xmldoc() to write the XML document directly
 	to a named file.
 	"""
-	utils.write_filename(lalseries.make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
+	utils.write_filename(lal.series.make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
 
 
 #

@@ -21,13 +21,8 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot
 import numpy
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-from pylal import series as lalseries
+import lal
+from glue.ligolw import utils as ligolw_utils
 from gstlal import reference_psd
 
 ## @file
@@ -53,7 +48,7 @@ outname = sys.argv[1]
 minpsd = []
 
 for fname in sys.argv[2:]:
-	psds = lalseries.read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+	psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(fname, verbose = True, contenthandler = lal.series.PSDContentHandler))
 	for k,v in psds.items():
 		# compute horizon up to 90% of nyquist to avoid roll off
 		h = reference_psd.horizon_distance(v, 1.4, 1.4, 8, 10, len(v.data) * v.deltaF * 0.90)

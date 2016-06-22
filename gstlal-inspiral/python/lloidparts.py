@@ -95,7 +95,6 @@ from gstlal import pipeparts
 from gstlal import simplehandler
 import lal
 from lal import LIGOTimeGPS
-from pylal import series as lalseries
 
 
 #
@@ -550,7 +549,7 @@ class Handler(simplehandler.Handler):
 		return outstr
 
 	def gen_psd_xmldoc(self):
-		xmldoc = lalseries.make_psd_xmldoc(self.psds)
+		xmldoc = lal.series.make_psd_xmldoc(self.psds)
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
