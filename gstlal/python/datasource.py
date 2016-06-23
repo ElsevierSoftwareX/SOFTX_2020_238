@@ -302,9 +302,6 @@ def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.Se
 	start_type, start_time = seek_args_for_gps(gps_start_time)
 	stop_type, stop_time   = seek_args_for_gps(gps_end_time)
 
-	if pipeline.set_state(Gst.State.PAUSED) == Gst.StateChangeReturn.FAILURE:
-		raise RuntimeError("pipeline failed to enter PLAYING state")
-
 	pipeline.seek(1.0, Gst.Format(Gst.Format.TIME), flags, start_type, start_time, stop_type, stop_time)
 
 
