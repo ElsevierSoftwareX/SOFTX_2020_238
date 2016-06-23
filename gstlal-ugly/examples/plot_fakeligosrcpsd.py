@@ -6,7 +6,6 @@ Example gst-python applicaiton for trying out new ideas
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 from gstlal.pipeutil import *
 from gstlal import pipeio
-from pylal import series as lalseries
 import sys
 
 gps_start_time = 956858656
