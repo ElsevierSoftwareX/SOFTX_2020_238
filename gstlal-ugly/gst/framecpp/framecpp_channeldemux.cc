@@ -954,7 +954,9 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			{
 			GstDateTime *date_time = gstlal_datetime_new_from_gps(frame_timestamp);
 			gchar *container_format = g_strdup_printf("IGWD frame file v%d", element->frame_format_version);
-			gst_tag_list_add(element->tag_list, GST_TAG_MERGE_KEEP, GST_TAG_DATE_TIME, date_time, GST_TAG_CONTAINER_FORMAT, container_format, GST_TAG_ENCODER, element->frame_library_name, GST_TAG_ENCODER_VERSION, element->frame_library_version, GST_TAG_ORGANIZATION, element->frame_name, NULL);
+			gst_tag_list_add(element->tag_list, GST_TAG_MERGE_KEEP, GST_TAG_DATE_TIME, date_time, GST_TAG_CONTAINER_FORMAT, container_format, GST_TAG_ENCODER, element->frame_library_name, GST_TAG_ENCODER_VERSION, element->frame_library_version, NULL);
+			if(strlen(element->frame_name))
+				gst_tag_list_add(element->tag_list, GST_TAG_MERGE_KEEP, GST_TAG_ORGANIZATION, element->frame_name, NULL);
 			gst_date_time_unref(date_time);
 			g_free(container_format);
 			}
