@@ -125,6 +125,17 @@ AC_SUBST([MIN_PYTHON_VERSION])
 
 
 #
+# Check for Avahi and DBus Python modules
+#
+# FIXME:  make their abscence fatal by adding ", fatal" to macro argument
+#
+
+
+AX_PYTHON_MODULE(avahi)
+AX_PYTHON_MODULE(dbus)
+
+
+#
 # CFLAGS
 #
 
