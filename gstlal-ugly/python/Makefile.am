@@ -7,6 +7,4 @@ AM_CPPFLAGS = -I$(top_srcdir)/gst/framecpp
 pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
-	gviz_api.py \
-	httpinterface.py \
-	servicediscovery.py 
+	gviz_api.py

@@ -15,6 +15,7 @@ pkgpython_PYTHON = \
 	dagparts.py \
 	datasource.py \
 	elements.py \
+	httpinterface.py \
 	matplotlibhelper.py \
 	misc.py \
 	multirate_datasource.py \
@@ -23,6 +24,7 @@ pkgpython_PYTHON = \
 	plotpsd.py \
 	plotutil.py \
 	reference_psd.py \
+	servicediscovery.py \
 	simplehandler.py \
 	simulation.py
 
