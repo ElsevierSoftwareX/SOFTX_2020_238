@@ -202,7 +202,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, zero_lag_ranking_stats_filename = None, segment_history_duration = 2592000., verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, zero_lag_ranking_stats_filename = None, segment_history_duration = LIGOTimeGPS(2592000), verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
@@ -499,8 +499,7 @@ class Handler(simplehandler.Handler):
 		"""!
 		A method to update the cumulative segment list 
 		"""
-		# FIXME Type casts should be removed when we switch to swig bindings
-		current_gps_time = float(lal.GPSTimeNow())
+		current_gps_time = lal.GPSTimeNow()
 		seglist_to_drop = segments.segmentlist([segments.segment(segments.NegInfinity, current_gps_time - self.segment_history_duration)])
 		for segtype, seglistdict in self.cumulative_seglistdicts.items():
 			seglistdict.extend(self.seglistdicts[segtype])
