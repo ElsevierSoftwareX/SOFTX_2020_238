@@ -17,8 +17,14 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from gstlal import pipeparts
-import gst
 import numpy
+
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject
+from gi.repository import Gst
+GObject.threads_init()
+Gst.init(None)
 
 #
 # Functions for making sure no channels are missing from the frames
@@ -49,7 +55,7 @@ def mkaudiorate(pipeline, head):
 	return head
 
 def mkreblock(pipeline, head):
-	return pipeparts.mkreblock(pipeline, head, block_duration = gst.SECOND)
+	return pipeparts.mkreblock(pipeline, head, block_duration = Gst.SECOND)
 
 def mkupsample(pipeline, head, new_caps):
 	head = pipeparts.mkgeneric(pipeline, head, "lal_constant_upsample")
@@ -65,7 +71,8 @@ def mkresample(pipeline, head, caps):
 	return head
 
 def mkmultiplier(pipeline, srcs, caps, sync = True):
-	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, caps=gst.Caps(caps), mix_mode="product")
+	#elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, caps=Gst.Caps(caps), mix_mode="product")
+	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, mix_mode="product")
 	if srcs is not None:
 		for src in srcs:
 			mkqueue(pipeline, src).link(elem)
@@ -80,7 +87,7 @@ def mkinterleave(pipeline, srcs):
 	return elem
 
 def mkadder(pipeline, srcs, caps, sync = True):
-	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, caps=gst.Caps(caps))
+	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync)
 	if srcs is not None:
 		for src in srcs:
 			mkqueue(pipeline, src).link(elem)
@@ -100,14 +107,15 @@ def write_graph(demux, pipeline, name):
 
 def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
 	head = mkqueue(pipeline, None)
-	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_pad("sink"))
+	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_static_pad("sink"))
 	head = mkreblock(pipeline, head)
 	return head
 
 def caps_and_progress(pipeline, head, caps, progress_name):
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
+	#head = pipeparts.mkprogressreport(pipeline, head, name="progress_src_%s" % progress_name)
+	head = pipeparts.mkprogressreport(pipeline, head, "test")
 	return head
 
 
@@ -125,7 +133,7 @@ def list_srcs(pipeline, *args):
 # Calibration factor related functions
 #
 
-def average_calib_factors(pipeline, head, var, expected, N, caps, hold_time, Nav):
+def average_calib_factors(pipeline, head, var, expected, N, caps, Nav):
 	# Find median of calibration factors array and smooth out medians with an average over Nav samples
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
@@ -143,41 +151,28 @@ def merge_into_complex(pipeline, real, imag):
 
 def split_into_real(pipeline, complex_chan, real_caps, complex_caps):
 	# split complex channel with complex caps into two channels (real and imag) with real caps
-	elem = pipeparts.mktogglecomplex(pipeline, elem)
+	elem = pipeparts.mktogglecomplex(pipeline, complex_chan)
 	elem = pipeparts.mkgeneric(pipeline, elem, "deinterleave")
 	real = pipeparts.mkaudioconvert(pipeline, None)
-	pipeparts.src_deferred_link(elem, "src0", real.get_pad("sink"))
+	pipeparts.src_deferred_link(elem, "src0", real.get_static_pad("sink"))
 	real = pipeparts.mkcapsfilter(pipeline, real, real_caps)
 	
 	imag = pipeparts.mkaudioconvert(pipeline, None)
-	pipeparts.src_deferred_link(elem, "src1", imag.get_pad("sink"))
+	pipeparts.src_deferred_link(elem, "src1", imag.get_static_pad("sink"))
 	imag = pipeparts.mkcapsfilter(pipeline, imag, real_caps)
 	return real, imag
 
 def demodulate(pipeline, head, sr, freq, orig_caps, new_caps, integration_samples, td):
 	# demodulate input at a given frequency freq
-	headtee = pipeparts.mktee(pipeline, head)
-	deltat = 1.0/float(sr)
-	cos = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, headtee), "lal_numpy_fx_transform", expression = "%f * cos(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
-	sin = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, headtee), "lal_numpy_fx_transform", expression = "-1.0 * %f * sin(2.0 * 3.1415926535897931 * %f * t)" % (deltat, freq))
 
-	headR = mkmultiplier(pipeline, (mkqueue(pipeline, headtee), cos), orig_caps)
-	headR = mkresample(pipeline, headR, new_caps)
-	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
-	headR = pipeparts.mkaudioconvert(pipeline, headR)
-	headR = pipeparts.mkcapsfilter(pipeline, headR, new_caps)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=Z128LE")
 
-	headI = mkmultiplier(pipeline, (mkqueue(pipeline, headtee), sin), orig_caps)
-	headI = mkresample(pipeline, headI, new_caps)
-	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
-	headI = pipeparts.mkaudioconvert(pipeline, headI)
-	headI = pipeparts.mkcapsfilter(pipeline, headI, new_caps)
-
-	head = merge_into_complex(pipeline, headR, headI) 
+	#headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
 
 	return head
 
-def complex_audioamplify(pipeline, chan, WR, WI, caps):
+def complex_audioamplify(pipeline, chan, WR, WI):
 	# Multiply a complex channel chan by a complex number WR+I WI
 	# Re[out] = -chanI*WI + chanR*WR
 	# Im[out] = chanR*WI + chanI*WR
@@ -192,7 +187,7 @@ def complex_division(pipeline, a, b, caps):
 	# Perform complex division of c = a/b and output the complex quotient c
 
 	b = pipeparts.mktogglecomplex(pipeline, b)
-	bInv = pipeparts.mkgenric(pipeline, b, "complex_pow", exponent = -1)
+	bInv = pipeparts.mkgeneric(pipeline, b, "complex_pow", exponent = -1)
 	bInv = pipeparts.mktogglecomplex(pipeline, bInv)
 
 	c = mkmultiplier(pipeline, list_srcs(pipeline, a, bInv), caps)
@@ -206,7 +201,7 @@ def compute_kappatst_from_filters_file(pipeline, derrfesd, tstexcfesd, pcalfdarm
 	# ktstfac = -(1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
 	#
 
-	ktst = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, complex_divison(pipeline, list_srcs(pipeline, derrfesd, tstexcfesd), complex_caps), ktstfacR, ktstfacI), complex_division(pipeline, pcalfdarm, derrfdarm, complex_caps)), complex_caps)
+	ktst = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, complex_division(pipeline, derrfesd, tstexcfesd, complex_caps), ktstfacR, ktstfacI), complex_division(pipeline, pcalfdarm, derrfdarm, complex_caps)), complex_caps)
 
 	return ktst
 
@@ -334,14 +329,16 @@ def compute_fcc(pipeline, SR, SI, fpcal2, caps):
 	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal2)
 	return fcc
 
-def average_and_check_range(pipeline, real, imag, variance_real, variance_imag, hold_time, expected_value_real, expected_value_imag, median_array_size, median_smoothing_samples, caps):
+def average_and_check_range(pipeline, factor, variance_real, variance_imag, expected_value_real, expected_value_imag, median_array_size, median_smoothing_samples, caps, complex_caps):
+
+	real, imag = split_into_real(pipeline, factor, caps, complex_caps)
 
 	# Produce a channel that says whether lal_check_calib_factors will compute a good value or not.  Use this in the statevector bit for this \kappa
 	realInRange = pipeparts.mkgeneric(pipeline, mkaudiorate(pipeline, mkqueue(pipeline, real)), "lal_smoothcalibfactors", max_value = expected_value_real + variance_real, min_value = expected_value_real - variance_real, default_val = expected_value_real, statevector = True, max_size = median_array_size)
 	imagInRange = pipeparts.mkgeneric(pipeline, mkaudiorate(pipeline, mkqueue(pipeline, real)), "lal_smoothcalibfactors", max_value = expected_value_imag + variance_imag, min_value = expected_value_imag - variance_imag, default_val = expected_value_imag, statevector = True, max_size = median_array_size)
 
-	realOut = average_calib_factors(pipeline, mkqueue(pipeline, real), variance_real, expected_value_real, median_array_size, caps, hold_time, median_smoothing_samples)
-	imagOut = average_calib_factors(pipeline, mkqueue(pipeline, imag), variance_imag, expected_value_imag, median_array_size, caps, hold_time, median_smoothing_samples)
+	realOut = average_calib_factors(pipeline, mkqueue(pipeline, real), variance_real, expected_value_real, median_array_size, caps, median_smoothing_samples)
+	imagOut = average_calib_factors(pipeline, mkqueue(pipeline, imag), variance_imag, expected_value_imag, median_array_size, caps, median_smoothing_samples)
 
 	realOuttee = pipeparts.mktee(pipeline, realOut)
 	imagOuttee = pipeparts.mktee(pipeline, imagOut)
