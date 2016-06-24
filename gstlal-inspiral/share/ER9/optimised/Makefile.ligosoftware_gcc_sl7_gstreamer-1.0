@@ -1,0 +1,412 @@
+# 
+# Before running, replace albert.einstein with your ligo.org credentials and
+# run make env.sh, then source the resulting environment file and run make
+#
+USER=duncan.meacher
+
+TARDIR:=${PWD}/tarball
+INSTALL_FILES_DIR:=${PWD}/src
+LALSUITE_REPO:=${INSTALL_FILES_DIR}/lalsuite
+GSTLAL_REPO:=${INSTALL_FILES_DIR}/gstlal
+ATLAS_BUILD_DIR:=${PWD}/ATLAS
+DEP_INSTALL_DIR:=${DEPENDENCIES_PATH}
+INSTALL_DIR:=${LAL_PATH}
+PATCH_DIR:=${PWD}/patches
+
+DOXYGEN=doxygen-1.8.9.1
+LALSUITEEXTRA=lalsuite-extra-1.1.0
+LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.5.1
+LDASTOOLSAL=ldas-tools-al-2.5.0
+SWIG=swig-2.0.11
+METAIO=metaio-8.4.0
+LIBFRAME=libframe-8.21
+OPROFILE=oprofile-0.9.9
+GSTPYTHON=gst-python-1.8.2
+GSTPLUGINSGOOD=gst-plugins-good-1.8.2
+GSTPLUGINSBASE=gst-plugins-base-1.8.2
+GSTREAMER=gstreamer-1.8.2
+GSL=gsl-1.16
+ORC=orc-0.4.25
+ATLAS=atlas3.10.2
+
+all : $(INSTALL_DIR)/lib/libgstlalinspiral.so 
+
+env.sh:
+	echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
+	echo 'unset LD_LIBRARY_PATH LIBRARY_PATH' >> $@
+	echo 'LAL_PATH=${PWD}/opt' >> $@
+	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
+	echo 'INSTALL_FILES_PATH=${PWD}/install' >> $@
+	echo '# These are environment variables that do get exported' >> $@
+	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
+	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
+	echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages:$${DEPENDENCIES_PATH}/lib/python2.7/site-packages:$${DEPENDENCIES_PATH}/lib64/python2.7/site-packages' >> $@
+	echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0:$${LAL_PATH}/lib64/gstreamer-1.0:$${DEPENDENCIES_PATH}/lib/gstreamer-1.0:$${DEPENDENCIES_PATH}/lib64/gstreamer-1.0' >> $@
+	echo 'GST_REGISTRY=$${LAL_PATH}/registry.$$(uname -m).bin' >> $@
+	echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH GST_REGISTRY LAL_PATH DEPENDENCIES_PATH INSTALL_FILES_PATH' >> $@
+
+# gstlal-inspiral
+
+$(INSTALL_DIR)/lib/libgstlalinspiral.so : $(GSTLAL_REPO)/gstlal-inspiral/config.log
+	cd $(GSTLAL_REPO)/gstlal-inspiral && make -j32 && make install -j32
+
+$(GSTLAL_REPO)/gstlal-inspiral/config.log : $(INSTALL_DIR)/bin/gstlal_compute_strain
+	cd $(GSTLAL_REPO)/gstlal-inspiral && \
+		./configure --prefix=$(INSTALL_DIR)
+
+# gstlal-calibration
+
+$(INSTALL_DIR)/bin/gstlal_compute_strain : $(GSTLAL_REPO)/gstlal-calibration/config.log
+	cd $(GSTLAL_REPO)/gstlal-calibration && make -j32 && make install -j32
+
+$(GSTLAL_REPO)/gstlal-calibration/config.log : $(INSTALL_DIR)/lib/libgstlalugly.so
+	cd $(GSTLAL_REPO)/gstlal-calibration && \
+		./configure --prefix=$(INSTALL_DIR)
+
+# gstlal-ugly
+
+$(INSTALL_DIR)/lib/libgstlalugly.so : $(GSTLAL_REPO)/gstlal-ugly/config.log
+	cd $(GSTLAL_REPO)/gstlal-ugly && make -j32 && make install -j32
+
+$(GSTLAL_REPO)/gstlal-ugly/config.log : $(INSTALL_DIR)/lib/libgstlal.so
+	cd $(GSTLAL_REPO)/gstlal-ugly && \
+		./configure --prefix=$(INSTALL_DIR)
+
+# gstlal
+
+$(INSTALL_DIR)/lib/libgstlal.so : $(GSTLAL_REPO)/gstlal/config.log
+	cd $(GSTLAL_REPO)/gstlal && make -j32 && make install -j32
+
+$(GSTLAL_REPO)/gstlal/config.log : $(INSTALL_DIR)/bin/doxygen $(INSTALL_DIR)/share/lalsimulation/SEOBNRv2ROM_SS_Phase_ciall.dat
+	cd $(GSTLAL_REPO)/gstlal && \
+		./configure --prefix=$(INSTALL_DIR)
+
+# doxygen
+
+$(INSTALL_DIR)/bin/doxygen : $(INSTALL_FILES_DIR)/$(DOXYGEN)/bin/doxygen
+	cd $(INSTALL_FILES_DIR)/$(DOXYGEN) && \
+	make -j32 && \
+	make install -j32
+
+$(INSTALL_FILES_DIR)/$(DOXYGEN)/bin/doxygen : $(INSTALL_DIR)/share/lalsimulation/SEOBNRv2ROM_SS_Phase_ciall.dat
+	tar -xf $(TARDIR)/$(DOXYGEN).src.tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(DOXYGEN) && \
+		./configure --prefix=$(INSTALL_DIR)
+
+# lalsuite extra
+
+$(INSTALL_DIR)/share/lalsimulation/SEOBNRv2ROM_SS_Phase_ciall.dat : $(INSTALL_FILES_DIR)/$(LALSUITEEXTRA)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LALSUITEEXTRA) && \
+	make -j32 && \
+	make install -j32
+
+$(INSTALL_FILES_DIR)/$(LALSUITEEXTRA)/config.log : $(INSTALL_DIR)/bin/dmtdq_seg_insert $(INSTALL_DIR)/etc/pylal-user-env.sh 
+	tar -xf $(TARDIR)/$(LALSUITEEXTRA).tar.gz -C $(INSTALL_FILES_DIR) && \
+	cd $(INSTALL_FILES_DIR)/$(LALSUITEEXTRA) && \
+	./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# pylal
+
+$(INSTALL_DIR)/etc/pylal-user-env.sh : $(INSTALL_DIR)/bin/lalapps_psinject
+	cd $(LALSUITE_REPO)/pylal && \
+		patch pylal/rate.py < $(PATCH_DIR)/ratepy.patch
+		python setup.py install --prefix=$(INSTALL_DIR)
+
+# glue
+
+$(INSTALL_DIR)/bin/dmtdq_seg_insert : $(INSTALL_DIR)/bin/lalapps_psinject
+	cd $(LALSUITE_REPO)/glue && \
+		python setup.py install --prefix=$(INSTALL_DIR)
+
+# lalapps
+
+$(INSTALL_DIR)/bin/lalapps_psinject : $(LALSUITE_REPO)/lalapps/config.log
+	cd $(LALSUITE_REPO)/lalapps && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalapps/config.log : $(INSTALL_DIR)/lib/liblalstochastic.so
+	cd $(LALSUITE_REPO)/lalapps && \
+		./00boot && ./configure --disable-lalxml --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lalstochastic
+
+$(INSTALL_DIR)/lib/liblalstochastic.so : $(LALSUITE_REPO)/lalstochastic/config.log
+	cd $(LALSUITE_REPO)/lalstochastic && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalstochastic/config.log : $(INSTALL_DIR)/lib/liblalinference.so
+	cd $(LALSUITE_REPO)/lalstochastic && \
+		./00boot && ./configure --disable-lalxml --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lalinference
+
+$(INSTALL_DIR)/lib/liblalinference.so : $(LALSUITE_REPO)/lalinference/config.log
+	cd $(LALSUITE_REPO)/lalinference && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalinference/config.log : $(INSTALL_DIR)/lib/liblalpulsar.so
+	cd $(LALSUITE_REPO)/lalinference && \
+		./00boot && ./configure --disable-lalxml --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lalpulsar
+
+$(INSTALL_DIR)/lib/liblalpulsar.so : $(LALSUITE_REPO)/lalpulsar/config.log
+	cd $(LALSUITE_REPO)/lalpulsar && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalpulsar/config.log : $(INSTALL_DIR)/lib/liblaldetchar.so
+	cd $(LALSUITE_REPO)/lalpulsar && \
+		./00boot && ./configure --disable-lalxml --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# laldetchar
+
+$(INSTALL_DIR)/lib/liblaldetchar.so : $(LALSUITE_REPO)/laldetchar/config.log
+	cd $(LALSUITE_REPO)/laldetchar && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/laldetchar/config.log : $(INSTALL_DIR)/lib/liblalburst.so
+	cd $(LALSUITE_REPO)/laldetchar && \
+		./00boot && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lalburst
+
+$(INSTALL_DIR)/lib/liblalburst.so : $(LALSUITE_REPO)/lalburst/config.log
+	cd $(LALSUITE_REPO)/lalburst && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalburst/config.log : $(INSTALL_DIR)/lib/liblalinspiral.so
+	cd $(LALSUITE_REPO)/lalburst && \
+		./00boot && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lalinspiral
+
+$(INSTALL_DIR)/lib/liblalinspiral.so : $(LALSUITE_REPO)/lalinspiral/config.log
+	cd $(LALSUITE_REPO)/lalinspiral && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalinspiral/config.log : $(INSTALL_DIR)/lib/liblalsimulation.so
+	cd $(LALSUITE_REPO)/lalinspiral && \
+		./00boot && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lalsimulation
+
+$(INSTALL_DIR)/lib/liblalsimulation.so : $(LALSUITE_REPO)/lalsimulation/config.log
+	cd $(LALSUITE_REPO)/lalsimulation && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalsimulation/config.log : $(INSTALL_DIR)/lib/liblalmetaio.so
+	cd $(LALSUITE_REPO)/lalsimulation && \
+		./00boot && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lalmetaio
+
+$(INSTALL_DIR)/lib/liblalmetaio.so : $(LALSUITE_REPO)/lalmetaio/config.log
+	cd $(LALSUITE_REPO)/lalmetaio && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalmetaio/config.log : $(INSTALL_DIR)/lib/liblalframe.so
+	cd $(LALSUITE_REPO)/lalmetaio && \
+		./00boot && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lalframe
+
+$(INSTALL_DIR)/lib/liblalframe.so : $(LALSUITE_REPO)/lalframe/config.log
+	cd $(LALSUITE_REPO)/lalframe && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lalframe/config.log : $(INSTALL_DIR)/lib/liblal.so
+	cd $(LALSUITE_REPO)/lalframe && \
+		./00boot && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# lal
+
+$(INSTALL_DIR)/lib/liblal.so : $(LALSUITE_REPO)/lal/config.log
+	cd $(LALSUITE_REPO)/lal && make -j32 && make install -j32
+
+$(LALSUITE_REPO)/lal/config.log : $(DEP_INSTALL_DIR)/lib/libmetaio.so $(DEP_INSTALL_DIR)/bin/swig $(INSTALL_FILES_DIR)/lalsuite/configure.ac $(DEP_INSTALL_DIR)/lib/libFrame.so $(DEP_INSTALL_DIR)/lib/libframecpp.so $(DEP_INSTALL_DIR)/lib/libldastoolsal.so
+	cd $(LALSUITE_REPO)/lal && \
+		./00boot && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
+
+# ldas-tools-framecpp
+
+$(DEP_INSTALL_DIR)/lib/libframecpp.so : $(INSTALL_FILES_DIR)/$(LDASTOOLSFRAMECPP)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LDASTOOLSFRAMECPP) && \
+		./configure --prefix=$(DEP_INSTALL_DIR) --without-doxygen && make && make install
+
+$(INSTALL_FILES_DIR)/$(LDASTOOLSFRAMECPP)/config.log : $(DEP_INSTALL_DIR)/lib/libldastoolsal.so
+	tar -xf $(TARDIR)/$(LDASTOOLSFRAMECPP).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LDASTOOLSFRAMECPP) && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+# ldas-tools-al
+
+$(DEP_INSTALL_DIR)/lib/libldastoolsal.so : $(INSTALL_FILES_DIR)/$(LDASTOOLSAL)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LDASTOOLSAL) && \
+		./configure --prefix=$(DEP_INSTALL_DIR) --without-doxygen && make && make install
+
+$(INSTALL_FILES_DIR)/$(LDASTOOLSAL)/config.log : $(DEP_INSTALL_DIR)/bin/swig
+	tar -xf $(TARDIR)/$(LDASTOOLSAL).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LDASTOOLSAL) && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+# swig
+
+$(DEP_INSTALL_DIR)/bin/swig : $(INSTALL_FILES_DIR)/$(SWIG)/config.log
+	cd $(INSTALL_FILES_DIR)/$(SWIG) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(SWIG)/config.log : $(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so
+	tar -xf $(TARDIR)/$(SWIG).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(SWIG) && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+# metaio
+
+$(DEP_INSTALL_DIR)/lib/libmetaio.so : $(INSTALL_FILES_DIR)/$(METAIO)/config.log
+	cd $(INSTALL_FILES_DIR)/$(METAIO) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(METAIO)/config.log : $(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so
+	tar -xf $(TARDIR)/$(METAIO).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(METAIO) && \
+		./configure --prefix=$(DEP_INSTALL_DIR) --with-matlab=no
+	# Needed with-matlab option for intel_haswell test
+
+# libframe
+
+$(DEP_INSTALL_DIR)/lib/libFrame.so : $(INSTALL_FILES_DIR)/$(LIBFRAME)/config.log
+	cd $(INSTALL_FILES_DIR)/$(LIBFRAME) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(LIBFRAME)/config.log: $(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so
+	tar -xf $(TARDIR)/$(LIBFRAME).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(LIBFRAME) && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+# oprofile
+
+$(DEP_INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_FILES_DIR)/$(OPROFILE)/config.log
+	cd $(INSTALL_FILES_DIR)/$(OPROFILE) && make -j32 && make install -j32
+
+#$(INSTALL_FILES_DIR)/$(OPROFILE)/config.log : $(DEP_INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
+$(INSTALL_FILES_DIR)/$(OPROFILE)/config.log : $(DEP_INSTALL_DIR)/lib/gstreamer-1.0/libgstannodex.so
+	tar -xf $(TARDIR)/$(OPROFILE).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(OPROFILE)/ && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+# gstreamer plugins
+
+#$(DEP_INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so : $(INSTALL_FILES_DIR)/$(GSTPYTHON)/config.log
+#	cd $(INSTALL_FILES_DIR)/$(GSTPYTHON) && make -j32 && make install -j32
+#
+#$(INSTALL_FILES_DIR)/$(GSTPYTHON)/config.log : $(DEP_INSTALL_DIR)/lib/gstreamer-1.0/libgstannodex.so
+#	tar -xf $(TARDIR)/$(GSTPYTHON).tar.xz -C $(INSTALL_FILES_DIR)
+#	cd $(INSTALL_FILES_DIR)/$(GSTPYTHON) && \
+#		./configure --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/gstreamer-1.0/libgstannodex.so : $(INSTALL_FILES_DIR)/$(GSTPLUGINSGOOD)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GSTPLUGINSGOOD) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(GSTPLUGINSGOOD)/config.log : $(DEP_INSTALL_DIR)/lib/libgstapp-1.0.so
+	tar -xf $(TARDIR)/$(GSTPLUGINSGOOD).tar.xz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GSTPLUGINSGOOD) && \
+		./configure --disable-gst_v4l2 --prefix=$(DEP_INSTALL_DIR)
+
+$(DEP_INSTALL_DIR)/lib/libgstapp-1.0.so : $(INSTALL_FILES_DIR)/$(GSTPLUGINSBASE)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GSTPLUGINSBASE) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(GSTPLUGINSBASE)/config.log : $(DEP_INSTALL_DIR)/lib/libgstreamer-1.0.so
+	tar -xf $(TARDIR)/$(GSTPLUGINSBASE).tar.xz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GSTPLUGINSBASE) && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+# gstreamer
+
+$(DEP_INSTALL_DIR)/lib/libgstreamer-1.0.so : $(INSTALL_FILES_DIR)/$(GSTREAMER)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GSTREAMER) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(GSTREAMER)/config.log : $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
+	tar -xf $(TARDIR)/$(GSTREAMER).tar.xz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GSTREAMER) && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+# GSL
+
+## FIXME Hack to make gsl default to atlas for blas
+$(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig : $(DEP_INSTALL_DIR)/lib/libgsl.so
+	cp $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc $@ 
+		sed 's/-latlas/-lgslcblas -lsatlas/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
+
+$(DEP_INSTALL_DIR)/lib/libgsl.so : $(INSTALL_FILES_DIR)/$(GSL)/config.log
+	cd $(INSTALL_FILES_DIR)/$(GSL) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(GSL)/config.log : $(DEP_INSTALL_DIR)/lib/liborc-0.4.so
+	tar -xf $(TARDIR)/$(GSL).tar.gz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(GSL) && \
+		./configure --prefix=$(DEP_INSTALL_DIR) LDFLAGS="-L$(DEP_INSTALL_DIR)/lib" GSL_CBLAS_LIB='-latlas -lsatlas'
+
+# ORC
+
+$(DEP_INSTALL_DIR)/lib/liborc-0.4.so : $(INSTALL_FILES_DIR)/$(ORC)/config.log
+	cd $(INSTALL_FILES_DIR)/$(ORC) && make -j32 && make install -j32
+
+$(INSTALL_FILES_DIR)/$(ORC)/config.log : $(GSTLAL_REPO)/gstlal/configure.ac TAR.txt
+	tar -xf $(TARDIR)/$(ORC).tar.xz -C $(INSTALL_FILES_DIR)
+	cd $(INSTALL_FILES_DIR)/$(ORC) && \
+		./configure --prefix=$(DEP_INSTALL_DIR)
+
+#
+# Download the software
+#
+
+$(GSTLAL_REPO)/gstlal/configure.ac : $(LALSUITE_REPO)/configure.ac
+	mkdir -p $(GSTLAL_REPO)
+	git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO)
+
+$(LALSUITE_REPO)/configure.ac :
+	mkdir -p $(LALSUITE_REPO)
+	ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER)
+	git clone https://versions.ligo.org/git/lalsuite.git $(LALSUITE_REPO)
+	gsiscp ldas-grid.ligo.caltech.edu:/home/gstlalcbc/patches/ER9/ratepy.patch $(PATCH_DIR)
+
+TAR.txt : $(TARDIR)/$(DOXYGEN).src.tar.gz $(TARDIR)/$(ORC).tar.xz $(TARDIR)/$(GSL).tar.gz $(TARDIR)/$(GSTREAMER).tar.xz $(TARDIR)/$(GSTPLUGINSBASE).tar.xz $(TARDIR)/$(GSTPLUGINSGOOD).tar.xz $(TARDIR)/$(GSTPYTHON).tar.xz $(TARDIR)/$(OPROFILE).tar.gz $(TARDIR)/$(LIBFRAME).tar.gz $(TARDIR)/$(METAIO).tar.gz $(TARDIR)/$(SWIG).tar.gz $(TARDIR)/$(LDASTOOLSAL).tar.gz $(TARDIR)/$(LDASTOOLSFRAMECPP).tar.gz $(TARDIR)/$(LALSUITEEXTRA).tar.gz
+	echo $^ > $@
+
+$(TARDIR)/$(DOXYGEN).src.tar.gz : $(TARDIR)/$(LALSUITEEXTRA).tar.gz
+	wget --no-check-certificate ftp://ftp.stack.nl/pub/users/dimitri/$(DOXYGEN).src.tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LALSUITEEXTRA).tar.gz : $(TARDIR)/$(LDASTOOLSFRAMECPP).tar.gz
+	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(LALSUITEEXTRA).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LDASTOOLSFRAMECPP).tar.gz : $(TARDIR)/$(LDASTOOLSAL).tar.gz
+	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(LDASTOOLSFRAMECPP).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LDASTOOLSAL).tar.gz : $(TARDIR)/$(SWIG).tar.gz
+	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(LDASTOOLSAL).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(SWIG).tar.gz : $(TARDIR)/$(METAIO).tar.gz
+	wget --no-check-certificate http://downloads.sourceforge.net/project/swig/swig/$(SWIG)/$(SWIG).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(METAIO).tar.gz : $(TARDIR)/$(LIBFRAME).tar.gz
+	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(METAIO).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(LIBFRAME).tar.gz : $(TARDIR)/$(OPROFILE).tar.gz
+	wget --no-check-certificate http://lappweb.in2p3.fr/virgo/FrameL/$(LIBFRAME).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(OPROFILE).tar.gz : $(TARDIR)/$(GSTPYTHON).tar.xz
+	wget --no-check-certificate http://prdownloads.sourceforge.net/oprofile/$(OPROFILE).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GSTPYTHON).tar.xz : $(TARDIR)/$(GSTPLUGINSGOOD).tar.xz
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-python/$(GSTPYTHON).tar.xz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GSTPLUGINSGOOD).tar.xz : $(TARDIR)/$(GSTPLUGINSBASE).tar.xz
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-plugins-good/$(GSTPLUGINSGOOD).tar.xz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GSTPLUGINSBASE).tar.xz : $(TARDIR)/$(GSTREAMER).tar.xz
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-plugins-base/$(GSTPLUGINSBASE).tar.xz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GSTREAMER).tar.xz : $(TARDIR)/$(GSL).tar.gz
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gstreamer/$(GSTREAMER).tar.xz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(GSL).tar.gz : $(TARDIR)/$(ORC).tar.xz
+	wget --no-check-certificate http://ftp.gnu.org/gnu/gsl/$(GSL).tar.gz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR)/$(ORC).tar.xz : $(TARDIR)
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/orc/$(ORC).tar.xz --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR) :
+	mkdir -p $(INSTALL_FILES_DIR) $(DEP_INSTALL_DIR) $(INSTALL_DIR) $(PATCH_DIR)
+	wget --no-check-certificate http://ligo-vcs.phys.uwm.edu/cgit/gstlal/plain/gstlal-inspiral/share/profile/patches/gstreamer-bison.patch --directory-prefix=$(PATCH_DIR) -nc
+	mkdir -p $(TARDIR)
+
+clean :
+	rm -rvf $(INSTALL_FILES_DIR) $(DEP_INSTALL_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TARDIR)
+	rm -rvf dep opt
+	rm -rf *.txt
