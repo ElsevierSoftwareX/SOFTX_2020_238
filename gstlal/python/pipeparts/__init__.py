@@ -788,7 +788,7 @@ class AppSync(object):
 			else:
 				self.at_eos.discard(elem)
 				assert self.appsinks[elem] is None
-				self.appsinks[elem] = elem.get_last_buffer().timestamp
+				self.appsinks[elem] = elem.get_last_sample().get_buffer().pts
 
 			# keep looping while we can process buffers
 			while True:
