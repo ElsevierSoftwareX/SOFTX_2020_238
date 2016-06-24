@@ -304,6 +304,13 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 				}
 			break;
 			}
+		case GST_EVENT_EOS: {
+			itac->EOS = TRUE;
+			/* FIXME check this output */
+			res = process(itac);
+			res = gst_pad_event_default(pad, parent, event);
+			break;
+			}
 		default:
 			break;
 		}
@@ -516,6 +523,7 @@ static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
 {
 	GstFlowReturn result = GST_FLOW_OK;
 	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+	GST_BUFFER_DTS(srcbuf) = GST_BUFFER_PTS(srcbuf);
 	result =  gst_pad_push(element->srcpad, srcbuf);
 	return result;
 }
@@ -949,17 +957,19 @@ static void gstlal_itac_init(GSTLALItac *element)
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
-	GST_PAD_SET_PROXY_CAPS(pad);
-	GST_PAD_SET_PROXY_ALLOCATION(pad);
-	GST_PAD_SET_PROXY_SCHEDULING(pad);
+	/* FIXME maybe these are necessary but they prevent buffers from leaving the element */
+	//GST_PAD_SET_PROXY_CAPS(pad);
+	//GST_PAD_SET_PROXY_ALLOCATION(pad);
+	//GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 	gst_pad_use_fixed_caps(pad);
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	GST_PAD_SET_PROXY_CAPS(pad);
-	GST_PAD_SET_PROXY_ALLOCATION(pad);
-	GST_PAD_SET_PROXY_SCHEDULING(pad);
+	/* FIXME maybe these are necessary but they prevent buffers from leaving the element */
+	//GST_PAD_SET_PROXY_CAPS(pad);
+	//GST_PAD_SET_PROXY_ALLOCATION(pad);
+	//GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->srcpad = pad;
 
 	{
