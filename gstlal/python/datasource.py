@@ -302,7 +302,14 @@ def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.Se
 	start_type, start_time = seek_args_for_gps(gps_start_time)
 	stop_type, stop_time   = seek_args_for_gps(gps_end_time)
 
-	pipeline.seek(1.0, Gst.Format(Gst.Format.TIME), flags, start_type, start_time, stop_type, stop_time)
+	# FIXME:  should seek whole pipeline, but can't until we implement
+	# dynamic pipeline building in response to framecpp demuxer adding
+	# source pads.  pipeline sends seek event to sink elements, which
+	# send it up stream but it never makes it to the source elements
+	# because of the disconnected graph
+	#pipeline.seek(1.0, Gst.Format(Gst.Format.TIME), flags, start_type, start_time, stop_type, stop_time)
+	for elem in pipeline.iterate_sources():
+		elem.seek(1.0, Gst.Format(Gst.Format.TIME), flags, start_type, start_time, stop_type, stop_time)
 
 
 class GWDataSourceInfo(object):
