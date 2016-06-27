@@ -352,7 +352,7 @@ $(GSTLAL_REPO)/gstlal/configure.ac : $(LALSUITE_REPO)/configure.ac
 	mkdir -p $(GSTLAL_REPO)
 	git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO)
 
-$(LALSUITE_REPO)/configure.ac :
+$(LALSUITE_REPO)/configure.ac : $(TARDIR)
 	mkdir -p $(LALSUITE_REPO)
 	ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER)
 	git clone https://versions.ligo.org/git/lalsuite.git $(LALSUITE_REPO)
