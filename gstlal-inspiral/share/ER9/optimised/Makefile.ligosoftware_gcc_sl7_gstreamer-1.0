@@ -8,7 +8,7 @@ TARDIR:=${PWD}/tarball
 INSTALL_FILES_DIR:=${PWD}/src
 LALSUITE_REPO:=${INSTALL_FILES_DIR}/lalsuite
 GSTLAL_REPO:=${INSTALL_FILES_DIR}/gstlal
-ATLAS_BUILD_DIR:=${PWD}/ATLAS
+ATLAS_PATH:= YOU_MUST_CHANGE_THIS
 DEP_INSTALL_DIR:=${DEPENDENCIES_PATH}
 INSTALL_DIR:=${LAL_PATH}
 PATCH_DIR:=${PWD}/patches
@@ -29,7 +29,7 @@ GSL=gsl-1.16
 ORC=orc-0.4.25
 ATLAS=atlas3.10.2
 
-all : $(INSTALL_DIR)/lib/libgstlalinspiral.so 
+all : $(INSTALL_DIR)/lib/libgstlalinspiral.so
 
 env.sh:
 	echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
@@ -37,6 +37,8 @@ env.sh:
 	echo 'LAL_PATH=${PWD}/opt' >> $@
 	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
 	echo 'INSTALL_FILES_PATH=${PWD}/install' >> $@
+	echo 'export CFLAGS="-fPIC -O3 -march=native -lsatlas"' >> $@
+	echo 'export LDFLAGS="-L$${ATLAS_PATH}/lib"' >> $@
 	echo '# These are environment variables that do get exported' >> $@
 	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
 	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
