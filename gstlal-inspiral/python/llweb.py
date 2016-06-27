@@ -243,13 +243,14 @@ class GstlalWebSummary(object):
 					self.missed[datatype][id] = numpy.array([])
 
 	def status(self):
+		valid_latency = self.valid_latency()
 		if self.oldest_data() > 1800:
 			return 2, "<em class=red>SOME DATA OLDER THAN %d seconds</em>" % self.oldest_data() 
-		if not self.found["latency_history"]:
+		if not valid_latency:
 			return 1, "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
 		if self.missed["latency_history"]:
 			return 3, "<em class=red>%s NODES ARE NOT REPORTING!</em>" % len(self.missed["latency_history"])
-		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 300]
+		lat = [l for l in valid_latency if l > 300]
 		if lat:
 			return 2, "<em class=red>%s NODES ARE MORE THAN 5 MIN BEHIND!</em>" % len(lat)
 		return 0, "<em class=green>OK</em>"
@@ -261,12 +262,21 @@ class GstlalWebSummary(object):
 		num, txt = self.status()
 		print >>sys.stdout, json.dumps({"nagios_shib_scraper_ver": 0.1, "status_intervals":[{"num_status": num, "txt_status": re.sub('<[^<]+?>', '', txt)}]}, sort_keys=True, indent=4, separators=(',', ': '))
 
+	def valid_latency(self):
+		out = []
+		for l in self.found["latency_history"].values():
+			if l.shape != (1,0):
+				out.append(l[-1,1])
+			else:
+				out.append(float("inf"))
+		return out
+
 	def latency(self):
-		out = [l[-1,1] for l in self.found["latency_history"].values()]
+		out = self.valid_latency()
 		return "%.2f &pm; %.2f" % (numpy.mean(out), numpy.std(out))
 
 	def time_since_last(self):
-		out = [now() - l[-1,0] for l in self.found["latency_history"].values()]
+		out = self.valid_latency()
 		return "%.2f &pm; %.2f" % (numpy.mean(out), numpy.std(out))
 
 	def average_up_time(self):
