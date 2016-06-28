@@ -500,7 +500,7 @@ class CoincsDocument(object):
 			# process rows in the database
 			cursor = self.connection.cursor()
 			if seg is not None:
-				cursor.execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
+				cursor.execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].gpsSeconds, seg[0].gpsNanoSeconds, seg[1].gpsSeconds, seg[1].gpsNanoSeconds, self.search_summary.process_id))
 			cursor.execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
 			cursor.execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
 			cursor.close()
@@ -605,13 +605,21 @@ class Data(object):
 		with self.lock:
 			# retrieve triggers from appsink element
 			buf = elem.emit("pull-sample").get_buffer()
-			events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(buf)
+			result, mapinfo = buf.map(Gst.MapFlags.READ)
+			assert result
+			bufdata = mapinfo.data
+			# FIXME why does bufdata come out as an empty list on some occasions???
+			if bufdata:
+				events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(bufdata)
+			else:
+				events = []
+			buf.unmap(mapinfo)
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_")[0]
 
 			# update search_summary out segment and our
 			# livetime
-			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
+			buf_timestamp = LIGOTimeGPS(0, buf.pts)
 			buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
 			self.coincs_document.add_to_search_summary_outseg(buf_seg)
 			self.seglistdicts["triggersegments"][instrument] |= segments.segmentlist((buf_seg,))
