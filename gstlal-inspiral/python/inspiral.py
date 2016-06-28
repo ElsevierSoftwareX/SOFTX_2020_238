@@ -604,7 +604,7 @@ class Data(object):
 	def appsink_new_buffer(self, elem):
 		with self.lock:
 			# retrieve triggers from appsink element
-			buf = elem.emit("pull-buffer")
+			buf = elem.emit("pull-sample").get_buffer()
 			events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(buf)
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_")[0]
