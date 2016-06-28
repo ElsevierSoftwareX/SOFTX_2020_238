@@ -765,24 +765,26 @@ class AppSync(object):
 		for elem in appsinks:
 			if elem in self.appsinks:
 				raise ValueError("duplicate appsinks %s" % repr(elem))
-			elem.connect("new-preroll", self.appsink_handler, False)
-			elem.connect("new-sample", self.appsink_handler, False)
-			elem.connect("eos", self.appsink_handler, True)
+			elem.connect("new-preroll", self.appsink_handler, False, True)
+			elem.connect("new-sample", self.appsink_handler, False, False)
+			elem.connect("eos", self.appsink_handler, True, False)
 			self.appsinks[elem] = None
 
 	def add_sink(self, pipeline, src, drop = False, **properties):
 		# NOTE that max buffers must be 1 for this to work
 		assert "max_buffers" not in properties
 		elem = mkappsink(pipeline, src, max_buffers = 1, drop = drop, **properties)
-		elem.connect("new-preroll", self.appsink_handler, False)
-		elem.connect("new-sample", self.appsink_handler, False)
-		elem.connect("eos", self.appsink_handler, True)
+		elem.connect("new-preroll", self.appsink_handler, False, True)
+		elem.connect("new-sample", self.appsink_handler, False, False)
+		elem.connect("eos", self.appsink_handler, True, False)
 		self.appsinks[elem] = None
 		return elem
 
-	def appsink_handler(self, elem, eos):
+	def appsink_handler(self, elem, eos, preroll):
 		with self.lock:
 			# update eos status, and retrieve buffer timestamp
+			if preroll:
+				return Gst.FlowReturn.OK
 			if eos:
 				self.at_eos.add(elem)
 			else:
@@ -818,9 +820,11 @@ class AppSync(object):
 				# raised
 				self.appsinks[elem_with_oldest] = None
 				self.appsink_new_buffer(elem_with_oldest)
-			# FIXME while this gets it to run, I don't know why
-			# True is right.
-			return True
+			if not eos:
+				return Gst.FlowReturn.OK
+			else:
+				return Gst.FlowReturn.EOS
+
 
 
 def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
