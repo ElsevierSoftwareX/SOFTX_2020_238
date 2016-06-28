@@ -818,6 +818,9 @@ class AppSync(object):
 				# raised
 				self.appsinks[elem_with_oldest] = None
 				self.appsink_new_buffer(elem_with_oldest)
+			# FIXME while this gets it to run, I don't know why
+			# True is right.
+			return True
 
 
 def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
