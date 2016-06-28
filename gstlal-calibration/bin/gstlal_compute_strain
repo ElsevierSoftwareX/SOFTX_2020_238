@@ -57,23 +57,6 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
-"""
-# This mess is to make gstreamer stop eating our help messages
-if "--help" in sys.argv or "-h" in sys.argv:
-	try:
-		del sys.argv[sys.argv.index("--help")]
-	except ValueError:
-		pass
-	try:
-		del sys.argv[sys.argv.index("-h")]
-	except ValueError:
-		pass
-	import gst
-	sys.argv.append("--help")
-else:
-	import gst
-"""
-
 import lal
 
 from gstlal import pipeparts
@@ -292,8 +275,8 @@ if options.gps_start_time is not None:
 		raise ValueError("--gps-start-time must be < --gps-end-time: %s < %s" % (options.gps_start_time, options.gps_end_time))
 	# segment from gps start and stop time if given
 	seg = segments.segment(start, end)
-	start_time = seg[0]
-	end_time = seg[1]
+	gps_start_time = seg[0]
+	gps_end_time = seg[1]
 elif options.gps_end_time is not None:
 	raise ValueError("must provide both --gps-start-time and --gps-end-time")
 
@@ -319,14 +302,14 @@ hoftsr = options.hoft_sample_rate  # Sample rate for h(t)
 calibstatesr = options.calib_state_sample_rate  # Sample rate for the CALIB_STATE_VECTOR
 odcsr = options.odc_sample_rate # Sample rate of the ODC channel that is read in
 ctrlsr = options.control_sample_rate # Sample rate of the control channel (such as DARM_CTRL or DELTAL_CTRL)
-hoft_caps = "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved" % hoftsr # = 8 bytes, a double
-ctrl_caps = "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved" % ctrlsr # = 8 bytes, a double
-calibstate_caps = "audio/x-raw, format=U32LE, channels=1, layout=interleaved, rate=%d" % calibstatesr
-odc_caps = "audio/x-raw, format=U32LE, channels=1, layout=interleaved, rate=%d" % odcsr
+hoft_caps = "audio/x-raw, format=F64LE, rate=%d" % hoftsr # = 8 bytes, a double
+ctrl_caps = "audio/x-raw, format=F64LE, rate=%d" % ctrlsr # = 8 bytes, a double
+calibstate_caps = "audio/x-raw, format=U32LE, rate=%d" % calibstatesr
+odc_caps = "audio/x-raw, format=U32LE, rate=%d" % odcsr
 # caps strings for the computation kappas
-ref_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved" % options.ref_channels_sr
-compute_calib_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved" % options.compute_factors_sr
-compute_calib_factors_complex_caps = "audio/x-raw, format=Z128LE, rate=%d, channels=1, layout=interleaved" % options.compute_factors_sr
+ref_factors_caps = "audio/x-raw, format=F64LE, rate=%d" % options.ref_channels_sr
+compute_calib_factors_caps = "audio/x-raw, format=F64LE, rate=%d" % options.compute_factors_sr
+compute_calib_factors_complex_caps = "audio/x-raw, format=Z128LE, rate=%d" % options.compute_factors_sr
 
 # Set up smoothing, averaging and integration sample sizes for kappa calulations
 factors_integration_samples = int(options.demod_integration_time) * options.compute_factors_sr
@@ -499,7 +482,7 @@ if not options.verbose:
 if options.data_source == "lvshm": # Data is to be read from shared memory; "low-latency" mode
 	src = pipeparts.mklvshmsrc(pipeline, shm_name = options.shared_memory_partition, assumed_duration = 1)
 elif options.data_source == "frames": # Data is to be read from frame files; "offline" mode
-	src = pipeparts.mklalcachesrc(pipeline, use_mmap = False, location = options.frame_cache, cache_dsc_regex = instrument)
+	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument)
 
 #
 # Hook up the relevant channels to the demuxer
@@ -560,7 +543,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	exc = calibration_parts.caps_and_progress(pipeline, head_dict["exc"], hoft_caps, "exc")
 
 if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
-        tstexccaps = "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved, endianness=1234" % options.tst_exc_sample_rate
+        tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % options.tst_exc_sample_rate
         tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
 
 for key in headkeys:
@@ -742,9 +725,9 @@ if options.partial_calibration:
 
 	# if you need to, dewhiten the TST and PUM/UIM chains
 	if not options.no_whitening:
-		pumuim = calibration_parts.mkresample(pipeline, pumuim, "audio/x-raw, format=F64LE, channels=1, layout=interleaved, rate=%d" % pumuimdewhitensr) 
+		pumuim = calibration_parts.mkresample(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" % pumuimdewhitensr) 
 		pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = td)
-		tst = calibration_parts.mkresample(pipeline, tst, "audio/x-raw, format=F64LE, channels=1, layout=interleaved, rate=%d" % tstdewhitensr) 
+		tst = calibration_parts.mkresample(pipeline, tst, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
 		tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdewhitendelay), fir_matrix = [tstdewhiten[::-1]], time_domain = td)
 
 if options.full_calibration:
@@ -753,7 +736,7 @@ if options.full_calibration:
 	
 	if not options.no_dewhitening:
 		# dewhiten the DARM_CTRL channel
-		ctrl = calibration_parts.mkresample(pipeline, ctrl, "audio/x-raw, format=F64LE, channels=1, layout=interleaved, rate=%d" % ctrldewhitensr)
+		ctrl = calibration_parts.mkresample(pipeline, ctrl, "audio/x-raw, format=F64LE, rate=%d" % ctrldewhitensr)
 		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrldewhitendelay), fir_matrix = [ctrldewhiten[::-1]], time_domain = td)
 	# tee off DARM_CTRL to be filtered with PUM/UIM and TST filters separately
 	ctrltee = pipeparts.mktee(pipeline, ctrl)
@@ -761,18 +744,20 @@ if options.full_calibration:
 	pumuim = calibration_parts.mkqueue(pipeline, ctrltee)
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
-tst = calibration_parts.mkresample(pipeline, tst, "audio/x-raw, format=F64LE, channels=1, layout=interleaved, rate=%d" %  tstchainsr)
+tst = calibration_parts.mkresample(pipeline, tst, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
 # filter TST chain with the TST acutaiton filter
 tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdelay), fir_matrix = [tstfilt[::-1]], time_domain = td)
 # resample the TST actuation chain to the full sample rate
-tst = calibration_parts.mkresample(pipeline, tst, hoft_caps)
+if tstchainsr != pumuimchainsr:
+	tst = calibration_parts.mkresample(pipeline, tst, hoft_caps)
 
 # resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
-pumuim = calibration_parts.mkresample(pipeline, pumuim, "audio/x-raw, format=F64LE, channels=1, layout=interleaved, rate=%d" % pumuimchainsr)
+pumuim = calibration_parts.mkresample(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
 # filter the PUM/UIM chain with the PUM/UIM actuation filter
 pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdelay), fir_matrix = [pumuimfilt[::-1]], time_domain = td)
 # resample the PUM/UIM actuation chain to the full sample rate
-pumuim = calibration_parts.mkresample(pipeline, pumuim, hoft_caps)
+if tstchainsr != pumuimchainsr:
+	pumuim = calibration_parts.mkresample(pipeline, pumuim, hoft_caps)
 
 # apply kappa_tst
 if options.apply_kappatst:
@@ -822,10 +807,15 @@ except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
 	
-straintee = pipeparts.mktee(pipeline, strain)
+if not options.no_dq_vector:
+	straintee = pipeparts.mktee(pipeline, strain)
 # Put the units back to strain before writing to frames
-straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
-strain = pipeparts.mktaginject(pipeline, calibration_parts.mkqueue(pipeline, straintee), straintagstr)
+	straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
+	strain = pipeparts.mktaginject(pipeline, calibration_parts.mkqueue(pipeline, straintee), straintagstr)
+else:
+	straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
+	strain = pipeparts.mktaginject(pipeline, strain, straintagstr)
+	
 
 #
 # GDS-CALIB_STATE_VECTOR BRANCH
@@ -873,7 +863,7 @@ if not options.no_dq_vector:
 
 	htproduced = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, straintee), control = calibration_parts.mkqueue(pipeline, straintee), threshold = 0)
 	htproduced = pipeparts.mkbitvectorgen(pipeline, htproduced, bit_vector = 8, nongap_is_control = True)
-	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw, format=U32LE, channels=1, rate=%d, layout=interleaved" % hoftsr)
+	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, "audio/x-raw, format=U32LE, rate=%d" % hoftsr)
 	htproduced = pipeparts.mkgeneric(pipeline, htproduced, "lal_logicalundersample", required_on = 8, status_out = 8)
 	htproduced = pipeparts.mkcapsfilter(pipeline, htproduced, calibstate_caps)
 
@@ -897,9 +887,9 @@ if not options.no_dq_vector:
 	# KAPPAA-OK BIT BRANCH
 	#
 	if not options.no_kappaa:
-		kaIdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kaItee), "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved" % calibstatesr)
+		kaIdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kaItee), "audio/x-raw, format=F64LE, rate=%d," % calibstatesr)
 		kaIdq = pipeparts.mkgeneric(pipeline, kaIdq, "lal_add_constant", value = -options.expected_kappaa_imag)
-		kaRdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kaRtee), "audio/x-raw, format=F64LE, channels=1, layout=interleaved, rate=%d" % calibstatesr)
+		kaRdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kaRtee), "audio/x-raw, format=F64LE, rate=%d" % calibstatesr)
 		kaRdq = pipeparts.mkgeneric(pipeline, kaRdq, "lal_add_constant", value = -options.expected_kappaa_real)
 		
 		kaok = pipeparts.mkbitvectorgen(pipeline, kaRdq, threshold = options.kappaa_real_ok_var, invert_control = True, bit_vector = 512)
@@ -914,9 +904,9 @@ if not options.no_dq_vector:
 	# KAPPAPU-OK BIT BRANCH
 	#
 	if not options.no_kappapu:
-		kpuIdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kpuItee), "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved" % calibstatesr)
+		kpuIdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kpuItee), "audio/x-raw, format=F64LE, rate=%d" % calibstatesr)
 		kpuIdq = pipeparts.mkgeneric(pipeline, kpuIdq, "lal_add_constant", value = -options.expected_kappapu_imag)
-		kpuRdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kpuRtee), "audio/x-raw, format=F64LE, channels=1, layout=interleaved, rate=%d" % calibstatesr)
+		kpuRdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kpuRtee), "audio/x-raw, format=F64LE, rate=%d" % calibstatesr)
 		kpuRdq = pipeparts.mkgeneric(pipeline, kpuRdq, "lal_add_constant", value = -options.expected_kappapu_real)
 		
 		kpuok = pipeparts.mkbitvectorgen(pipeline, kpuRdq, threshold = options.kappapu_real_ok_var, invert_control = True, bit_vector = 1024)
@@ -931,9 +921,9 @@ if not options.no_dq_vector:
 	# KAPPATST-OK BIT BRANCH
 	#
 	if not options.no_kappatst:
-		ktstIdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, ktstItee), "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved" % calibstatesr)
+		ktstIdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, ktstItee), "audio/x-raw, format=F64LE, rate=%d" % calibstatesr)
 		ktstIdq = pipeparts.mkgeneric(pipeline, ktstIdq, "lal_add_constant", value = -options.expected_kappatst_imag)
-		ktstRdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, ktstRtee), "audio/x-raw, format=F64L5, rate=%d, channels=1, layout=interleaved" % calibstatesr)
+		ktstRdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, ktstRtee), "audio/x-raw, format=F64L5, rate=%d" % calibstatesr)
 		ktstRdq = pipeparts.mkgeneric(pipeline, ktstRdq, "lal_add_constant", value = -options.expected_kappatst_real)
 		
 		ktstok = pipeparts.mkbitvectorgen(pipeline, ktstRdq, threshold = options.kappatst_real_ok_var, invert_control = True, bit_vector = 2048)
@@ -948,7 +938,7 @@ if not options.no_dq_vector:
 	# KAPPAC-OK BIT BRANCH
 	#
 	if not options.no_kappac:
-		kcdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kctee), "audio/x-raw, format=F64LE, rate=%d, layout=interleaved, channels=1" % calibstatesr)
+		kcdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, kctee), "audio/x-raw, format=F64LE, rate=%d" % calibstatesr)
 		kcdq = pipeparts.mkgeneric(pipeline, kcdq, "lal_add_constant", value = -options.expected_kappac)
 		
 		kcok = pipeparts.mkbitvectorgen(pipeline, kcdq, threshold = options.kappac_ok_var, invert_control = True, bit_vector = 4096)
@@ -960,7 +950,7 @@ if not options.no_dq_vector:
 	# FCC-OK BIT BRANCH
 	#
 	if not options.no_fcc:
-		fccdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, fccteedq), "audio/x-raw, format=F64LE, rate=%d, channels=1, layout=interleaved" % calibstatesr)
+		fccdq = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, fccteedq), "audio/x-raw, format=F64LE, rate=%d" % calibstatesr)
 		fccdq = pipeparts.mkgeneric(pipeline, fccdq, "lal_add_constant", value = -options.expected_fcc)
 		
 		fccok = pipeparts.mkbitvectorgen(pipeline, fccdq, threshold = options.fcc_ok_var, invert_control = True, bit_vector = 8192)
@@ -1019,8 +1009,8 @@ if not options.no_dq_vector:
 	calibstatevector = calibration_parts.mkaudiorate(pipeline, calibstatevector)
 
 # Resample the \kappa_a channels at the specified recording sample rate and change them to single precision channels
-compute_kappa_caps = "audio/x-raw, format=F32LE, channels=1, layout=interleaved, rate=%d" % options.compute_factors_sr
-record_kappa_caps = "audio/x-raw, format=F32LE, channels=1, layout=interleaved, rate=%d" % options.record_factors_sr
+compute_kappa_caps = "audio/x-raw, format=F32LE, rate=%d" % options.compute_factors_sr
+record_kappa_caps = "audio/x-raw, format=F32LE, rate=%d" % options.record_factors_sr
 if not options.no_kappaa:
 	
 	kaRout = pipeparts.mkaudioconvert(pipeline, kaRout)
@@ -1065,6 +1055,7 @@ if not options.no_fcc:
 	fccout = pipeparts.mkcapsfilter(pipeline, fccout, compute_kappa_caps)
 	fccout = calibration_parts.mkresample(pipeline, fccout, record_kappa_caps)
 
+"""
 # FIXME: The below should all go once I change how the data probe looks for GPS times
 # Gate the strain channel with all of the channels we want in frames
 if not options.no_dq_vector:
@@ -1119,11 +1110,15 @@ if not options.no_dq_vector and (options.apply_kappatst or options.apply_kappac 
 	calibstatevector = calibration_parts.mkqueue(pipeline, calibstatevectortee)
 	strain = pipeparts.mkfirbank(pipeline, strain, fir_matrix = [[0,1]])
 	strain = calibration_parts.mkaudiorate(pipeline, strain)
+"""
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
 #
 
+pipeparts.mkfakesink(pipeline, strain)
+
+"""
 mux = pipeparts.mkframecppchannelmux(pipeline, None)
 
 if options.frame_duration is not None:
@@ -1219,6 +1214,7 @@ if options.write_to_shm_partition is not None:
 	mux.link(lvshmsink)
 else:
 	pipeparts.mkframecppfilesink(pipeline, mux, frame_type = options.frame_type, path = options.output_path, instrument = instrument) 
+"""
 
 # Run pipeline
 
@@ -1227,12 +1223,12 @@ if options.write_pipeline is not None:
 
 # Seek the pipeline when necessary
 if options.data_source == "frames":
-	datasource.pipeline_seek_for_gps(pipeline, start_time, end_time)
+	datasource.pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time)
 	print >>sys.stderr, "seeking GPS start and stop times ..."
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
-if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.SUCCESS:
+if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 else:
 	print "set to playing successfully"

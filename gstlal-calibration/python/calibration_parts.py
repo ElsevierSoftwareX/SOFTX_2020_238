@@ -60,7 +60,7 @@ def mkreblock(pipeline, head):
 def mkupsample(pipeline, head, new_caps):
 	head = pipeparts.mkgeneric(pipeline, head, "lal_constant_upsample")
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
-	head = mkaudiorate(pipeline, head)
+	#head = mkaudiorate(pipeline, head)
 	#head = pipeparts.mktee(pipeline, head)
 	return head
 
@@ -71,12 +71,10 @@ def mkresample(pipeline, head, caps):
 	return head
 
 def mkmultiplier(pipeline, srcs, caps, sync = True):
-	#elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, caps=Gst.Caps(caps), mix_mode="product")
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, mix_mode="product")
 	if srcs is not None:
 		for src in srcs:
 			mkqueue(pipeline, src).link(elem)
-	elem = pipeparts.mkcapsfilter(pipeline, elem, caps)
 	return elem
 
 def mkinterleave(pipeline, srcs):
@@ -91,7 +89,6 @@ def mkadder(pipeline, srcs, caps, sync = True):
 	if srcs is not None:
 		for src in srcs:
 			mkqueue(pipeline, src).link(elem)
-	elem = pipeparts.mkcapsfilter(pipeline, elem, caps)
 	return elem
 
 #
@@ -114,8 +111,7 @@ def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
 def caps_and_progress(pipeline, head, caps, progress_name):
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-	#head = pipeparts.mkprogressreport(pipeline, head, name="progress_src_%s" % progress_name)
-	head = pipeparts.mkprogressreport(pipeline, head, "test")
+	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 	return head
 
 
@@ -126,7 +122,7 @@ def caps_and_progress(pipeline, head, caps, progress_name):
 def list_srcs(pipeline, *args):
 	out = []
 	for src in args:
-		out.append(mkqueue(pipeline, src))
+		out.append(src)
 	return tuple(out)
 
 #

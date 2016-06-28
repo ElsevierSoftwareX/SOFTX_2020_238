@@ -1,1 +1,1 @@
-SUBDIRS = python lal
+SUBDIRS = lal
