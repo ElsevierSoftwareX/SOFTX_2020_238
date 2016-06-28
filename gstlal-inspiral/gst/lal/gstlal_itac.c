@@ -306,9 +306,8 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			}
 		case GST_EVENT_EOS: {
 			itac->EOS = TRUE;
-			/* FIXME check this output */
 			res = process(itac);
-			res = gst_pad_event_default(pad, parent, event);
+			res &= gst_pad_push_event(itac->srcpad, event);
 			break;
 			}
 		default:
@@ -960,7 +959,7 @@ static void gstlal_itac_init(GSTLALItac *element)
 	/* FIXME maybe these are necessary but they prevent buffers from leaving the element */
 	//GST_PAD_SET_PROXY_CAPS(pad);
 	//GST_PAD_SET_PROXY_ALLOCATION(pad);
-	//GST_PAD_SET_PROXY_SCHEDULING(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 	gst_pad_use_fixed_caps(pad);
 
@@ -969,7 +968,7 @@ static void gstlal_itac_init(GSTLALItac *element)
 	/* FIXME maybe these are necessary but they prevent buffers from leaving the element */
 	//GST_PAD_SET_PROXY_CAPS(pad);
 	//GST_PAD_SET_PROXY_ALLOCATION(pad);
-	//GST_PAD_SET_PROXY_SCHEDULING(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->srcpad = pad;
 
 	{
