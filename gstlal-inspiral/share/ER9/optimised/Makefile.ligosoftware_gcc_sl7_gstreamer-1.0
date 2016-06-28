@@ -37,8 +37,7 @@ env.sh:
 	echo 'LAL_PATH=${PWD}/opt' >> $@
 	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
 	echo 'INSTALL_FILES_PATH=${PWD}/install' >> $@
-	echo 'export CFLAGS="-fPIC -O3 -march=native -lsatlas"' >> $@
-	echo 'export LDFLAGS="-L$${ATLAS_PATH}/lib"' >> $@
+	echo 'export CFLAGS="-fPIC -O3 -march=native -L$${ATLAS_PATH} -lsatlas"' >> $@
 	echo '# These are environment variables that do get exported' >> $@
 	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
 	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
