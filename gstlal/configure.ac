@@ -253,12 +253,17 @@ AC_SUBST([PYGOBJECT_CFLAGS])
 AC_SUBST([PYGOBJECT_LIBS])
 #AM_CHECK_PYTHON_LIBS(, AC_MSG_ERROR([Python libs not found.]))
 
-# the file is
-#
-# /usr/lib/x86_64-linux-gnu/libpython2.7.so.1
-AC_SUBST([PYTHON_LIB_LOC], [/usr/lib/x86_64-linux-gnu])
+# on Debian the file is /usr/lib/x86_64-linux-gnu/libpython2.7.so
+# on SL7 the file is /usr/lib64/libpython2.7.so
+if test -a "/usr/lib/x86_64-linux-gnu/libpython2.7.so" ; then
+	AC_SUBST([PYTHON_LIB_LOC], [/usr/lib/x86_64-linux-gnu])
+elif test -a "/usr/lib64/libpython2.7.so" ; then
+	AC_SUBST([PYTHON_LIB_LOC], [/usr/lib64])
+else
+	AC_MSG_ERROR([libpython2.7.so not found])
+fi
 AC_SUBST([PYTHON_ABI_FLAGS], [])
-AC_SUBST([PYTHON_LIB_SUFFIX], [so.1])
+AC_SUBST([PYTHON_LIB_SUFFIX], [so])
 
 
 #
