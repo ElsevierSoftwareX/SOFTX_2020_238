@@ -81,6 +81,7 @@
 #include <gst/allocators/gstfdmemory.h>
 #else
 /* FIXME:  remove when we can rely on having 1.6 */
+#define HAVE_MMAP
 #include "gstfdmemory.h"
 #include "gstfdmemory.c"
 #undef GST_CAT_DEFAULT
