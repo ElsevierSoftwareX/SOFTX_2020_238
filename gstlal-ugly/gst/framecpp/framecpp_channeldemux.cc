@@ -54,6 +54,7 @@
  */
 
 
+#include <framecpp/FrameCPP.hh>
 #include <framecpp/Common/BaseMemoryBuffer.hh>
 #include <framecpp/Common/Verify.hh>
 #include <framecpp/FrameH.hh>
@@ -63,6 +64,10 @@
 #include <framecpp/FrSimData.hh>
 #include <framecpp/FrVect.hh>
 #include <framecpp/IFrameStream.hh>
+
+#if defined(FRAMECPP_VERSION_NUMBER) && ( FRAMECPP_VERSION_NUMBER >= 205000 )
+#define VERIFY_THROWS_EXCEPTION 1
+#endif /* */
 
 
 /*
@@ -879,10 +884,19 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			verifier.ValidateMetadata(false);
 			verifier.CheckFileChecksumOnly(true);
 
-			/* FIXME:  this no longer compiles
+#if VERIFY_THROWS_EXCEPTION
+			try
+			{
+			  verifier(ifs);
+			}
+			catch( const FrameCPP::Common::VerifyException& E )
+			{
+			  throw std::runtime_error( E.what( ) );
+			}
+#else
 			if(verifier(ifs) != 0)
 				throw std::runtime_error(verifier.ErrorInfo());
-			*/
+#endif /* VERIFY_THROWS_EXCEPTION */
 		}
 
 		/*
