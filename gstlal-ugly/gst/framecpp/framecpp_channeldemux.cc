@@ -463,8 +463,6 @@ static GstPad *add_src_pad(GstFrameCPPChannelDemux *element, const char *name)
 
 /*
  * remove a source pad from element
- *
- * FIXME:  what about EOS, state changes, etc.?  do we have to do that?
  */
 
 /* NOT USED
