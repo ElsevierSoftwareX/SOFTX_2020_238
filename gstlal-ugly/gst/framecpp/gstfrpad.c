@@ -51,6 +51,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_frhistory.h>
 #include <gstlal/gstlal_tags.h>
 #include <gstfrpad.h>
@@ -137,16 +138,9 @@ GType gst_frpad_type_get_type(void)
 static void update_tag_list(GstFrPad *pad)
 {
 	GstPad *gstpad = GST_PAD(pad);
+	/* can't do this with lock held */
 	GstCaps *caps = gst_pad_get_current_caps(gstpad);
-	GstAudioInfo info;
 	GstTagList *new_tags;
-
-	if(caps) {
-		gst_audio_info_from_caps(&info, caps);
-		/* release our reference to the object, but leave the
-		 * pointer set to we can test its value later */
-		gst_caps_unref(caps);
-	}
 
 	GST_OBJECT_LOCK(pad);
 
@@ -168,8 +162,12 @@ static void update_tag_list(GstFrPad *pad)
 		return;
 	}
 
-	if(caps)
+	if(caps) {
+		GstAudioInfo info;
+		gstlal_audio_info_from_caps(&info, caps);
 		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, GST_AUDIO_INFO_BPF(&info) * 8 * GST_AUDIO_INFO_RATE(&info), NULL);
+		gst_caps_unref(caps);
+	}
 
 	if(pad->pad_type == GST_FRPAD_TYPE_FRADCDATA)
 		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_BIAS, pad->bias, GSTLAL_TAG_SLOPE, pad->slope, GSTLAL_TAG_PHASE, pad->phase, GSTLAL_TAG_DATAVALID, pad->datavalid, NULL);
