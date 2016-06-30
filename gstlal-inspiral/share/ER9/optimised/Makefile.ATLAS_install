@@ -1,0 +1,45 @@
+#
+# Makefile to build ATLAS within current directory
+#
+
+TARDIR:=${PWD}/tarball
+INSTALL_FILES_DIR:=${PWD}/src
+ATLAS_BUILD_DIR:=${PWD}/ATLAS
+DEP_INSTALL_DIR:=${DEPENDENCIES_PATH}
+
+ATLAS=atlas3.10.2
+
+all : $(DEP_INSTALL_DIR)/lib/libsatlas.so
+
+env.sh:
+	echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
+	echo 'unset LD_LIBRARY_PATH LIBRARY_PATH' >> $@
+	echo 'LAL_PATH=${PWD}/opt' >> $@
+	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
+	echo 'INSTALL_FILES_PATH=${PWD}/src' >> $@
+	echo 'export CFLAGS="-fPIC -O3 -march=native -L$${DEPENDENCIES_PATH}/lib -lsatlas"' >> $@
+	echo '# These are environment variables that do get exported' >> $@
+	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
+	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
+	echo 'export PATH PKG_CONFIG_PATH LAL_PATH DEPENDENCIES_PATH INSTALL_FILES_PATH' >> $@
+
+$(DEP_INSTALL_DIR)/lib/libsatlas.so : $(ATLAS_BUILD_DIR)/Makefile
+	cd $(ATLAS_BUILD_DIR) && make && make time > make_time.txt && make install
+
+$(ATLAS_BUILD_DIR)/Makefile : $(TARDIR)/$(ATLAS).tar.bz2
+	tar -xjf $(TARDIR)/$(ATLAS).tar.bz2 -C $(INSTALL_FILES_DIR)
+	cd $(ATLAS_BUILD_DIR) && $(INSTALL_FILES_DIR)/ATLAS/configure --nof77 --shared --prefix=$(DEP_INSTALL_DIR)
+
+# Download the software
+
+$(TARDIR)/$(ATLAS).tar.bz2 : $(TARDIR)
+	wget --no-check-certificate http://downloads.sourceforge.net/project/math-atlas/Stable/3.10.2/$(ATLAS).tar.bz2 --directory-prefix=$(TARDIR) -nc
+
+$(TARDIR) :
+	mkdir -p $(INSTALL_FILES_DIR) $(ATLAS_BUILD_DIR) $(DEP_INSTALL_DIR)
+	mkdir -p $(TARDIR)
+
+clean :
+	rm -rvf $(INSTALL_FILES_DIR) $(ATLAS_BUILD_DIR) $(DEP_INSTALL_DIR) $(TARDIR)
+	rm -rvf dep opt
+	rm -rf *.txt
