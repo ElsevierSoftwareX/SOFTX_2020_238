@@ -865,13 +865,10 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			verifier.CheckFileChecksumOnly(true);
 
 #if VERIFY_THROWS_EXCEPTION
-			try
-			{
-			  verifier(ifs);
-			}
-			catch( const FrameCPP::Common::VerifyException& E )
-			{
-			  throw std::runtime_error( E.what( ) );
+			try {
+				verifier(ifs);
+			} catch(const FrameCPP::Common::VerifyException& E) {
+				throw std::runtime_error(E.what());
 			}
 #else
 			if(verifier(ifs) != 0)
