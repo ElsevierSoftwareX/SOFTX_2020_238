@@ -754,25 +754,9 @@ static GstFlowReturn forward_heart_beat(GstFrameCPPChannelDemux *element, GstClo
  */
 
 
-static void forward_sink_event(const GValue *item, gpointer data)
-{
-	GstPad *pad = GST_PAD(g_value_get_object(item));
-	GstEvent *event = GST_EVENT(data);
-	if(gst_pad_is_linked(pad)) {
-		/*
-		 * forward event out this pad.  ignore failures
-		 * FIXME:  should failures be ignored?
-		 */
-		gst_event_ref(event);
-		gst_pad_push_event(pad, event);
-	}
-}
-
-
 static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GstFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(parent);
-	GstIterator *iter;
 	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -803,19 +787,15 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 	case GST_EVENT_CAPS:
 		/* consume these */
+		gst_event_unref(event);
 		goto done;
 
 	default:
 		break;
 	}
 
-	/* FIXME:  what does gst_pad_event_default(pad, event) do?  can I just use that? */
-	iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
-	gst_iterator_foreach(iter, forward_sink_event, event);
-	gst_iterator_free(iter);
-
+	success &= gst_pad_event_default(pad, parent, event);
 done:
-	gst_event_unref(event);
 	return success;
 }
 
