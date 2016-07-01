@@ -4,7 +4,7 @@
 #
 
 # albert.einstein for git checkout
-USER=duncan.meacher
+USER=albert.einstein
 
 # Set directories and paths
 TARDIR:=tarball
@@ -13,7 +13,9 @@ PATCH_DIR:=${PWD}/patches
 INSTALL_FILES_DIR:=src
 GSTLAL_REPO:=${INSTALL_FILES_DIR}/gstlal
 LALSUITE_REPO:=${INSTALL_FILES_DIR}/lalsuite
-ATLAS_PATH:=/home/dmeacher/ATLAS_haswell/dep/lib
+# Give full path to dep/lib directory of ATLAS installation.
+# See Makefile.ATLAS_installation
+ATLAS_PATH:=/home/<username>/ATLAS_haswell/dep/lib
 DEP_INSTALL_DIR:=${DEPENDENCIES_PATH}
 INSTALL_DIR:=${LAL_PATH}
 
@@ -66,9 +68,8 @@ env.sh :
 	echo 'PATH=$${LAL_PATH}/bin:$${DEPENDENCIES_PATH}/bin:$${PATH}' >> $@
 	echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${DEPENDENCIES_PATH}/lib/pkgconfig:$${DEPENDENCIES_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
 	echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages:$${DEPENDENCIES_PATH}/lib/python2.7/site-packages:$${DEPENDENCIES_PATH}/lib64/python2.7/site-packages' >> $@
-	echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0:$${LAL_PATH}/lib64/gstreamer-1.0:$${DEPENDENCIES_PATH}/lib/gstreamer-1.0:$${DEPENDENCIES_PATH}/lib64/gstreamer-1.0' >> $@
-	echo 'GST_REGISTRY=$${LAL_PATH}/registry.$$(uname -m).bin' >> $@
-	echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH GST_REGISTRY LAL_PATH DEPENDENCIES_PATH INSTALL_FILES_PATH' >> $@
+	echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0:$${DEPENDENCIES_PATH}/lib/gstreamer-1.0' >> $@
+	echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH DEPENDENCIES_PATH INSTALL_FILES_PATH' >> $@
 
 #####################
 # Check time stamps #
@@ -301,7 +302,7 @@ logs/gsl.txt : $(LOGS_DIR)/orc.txt $(DEP_INSTALL_DIR)/lib/libgsl.so $(DEP_INSTAL
 ## FIXME Hack to make gsl default to atlas for blas
 $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig : $(DEP_INSTALL_DIR)/lib/libgsl.so
 	cp $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc $@
-		sed 's/-latlas/-lgslcblas -lsatlas/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
+	sed 's/-latlas/-lgslcblas -lsatlas/' $@ > $(DEP_INSTALL_DIR)/lib/pkgconfig/gsl.pc
 
 $(DEP_INSTALL_DIR)/lib/libgsl.so : $(DEP_INSTALL_DIR)/lib/liborc-0.4.so
 	tar -xf $(TARDIR)/$(GSL).tar.gz -C $(INSTALL_FILES_DIR)
