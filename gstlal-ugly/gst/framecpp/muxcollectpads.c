@@ -179,6 +179,14 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 		FrameCPPMuxCollectPadsData *data = collectdatalist->data;
 
 		/*
+		 * check if this pad has already received a segment event
+		 */
+		GstEvent *segment_event = gst_pad_get_sticky_event (data->pad, GST_EVENT_SEGMENT, 0);
+		if(segment_event == NULL)
+			continue;
+		gst_event_unref(segment_event);
+
+		/*
 		 * all pads must have segments
 		 */
 
@@ -265,6 +273,9 @@ static gboolean event(GstPad *pad, GstObject *parent, GstEvent *event)
 		g_assert(segment->format != GST_FORMAT_UNDEFINED);
 		GST_LOG_OBJECT(pad, "new segment [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT ")", segment->start, segment->stop);
 
+		/* store this sticky event for use in update_segments */
+		success &= (gst_pad_store_sticky_event(pad, event) == GST_FLOW_OK);
+
 		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
 		gst_segment_copy_into(segment, &(data->segment));
 		data->eos = FALSE;
@@ -307,7 +318,15 @@ static gboolean event(GstPad *pad, GstObject *parent, GstEvent *event)
 		} else
 			gst_event_unref(event);
 		break;
+	case GST_EVENT_STREAM_START:
+		/* store this sticky event so that it appears before the segment event */
+		success &= (gst_pad_store_sticky_event(pad, event) == GST_FLOW_OK);
 
+		if(event_func)
+			success &= event_func(pad, parent, event);
+		else
+			gst_event_unref(event);
+		break;
 	default:
 		if(event_func)
 			success &= event_func(pad, parent, event);
