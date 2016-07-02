@@ -112,6 +112,7 @@ parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
 parser.add_option("--wings", metavar = "seconds", type = "int", help = "Number of seconds to trim off of the beginning and end of the output. Should only be used if --data-source=frames.")
+parser.add_option("--do-file-checksum", action = "store_true", help = "Set this option to turn on file checksum in the demuxer.")
 parser.add_option("--dq-channel-name", metavar = "name", default = "ODC-MASTER_CHANNEL_OUT_DQ", help = "Set the name of the data quality (or state vector) channel. (Default=ODC-MASTER_CHANNEL_OUT_DQ)")
 parser.add_option("--ifo", metavar = "name", help = "Name of the IFO to be calibrated.")
 parser.add_option("--shared-memory-partition", metavar = "name", help = "Set the name of the shared memory partition to read from.  This is required iff --data-source=lvshm.")
@@ -483,9 +484,9 @@ elif options.data_source == "frames": # Data is to be read from frame files; "of
 #
 
 if options.data_source == "lvshm":
-	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = options.do_file_checksum, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
 elif options.data_source == "frames":
-	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = False, channel_list = map("%s:%s".__mod__, channel_list))
+	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = options.do_file_checksum, skip_bad_files = False, channel_list = map("%s:%s".__mod__, channel_list))
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
@@ -1054,7 +1055,6 @@ def check_complete_frames(pad, info, (output_start, frame_duration, wings_start,
 	buf = info.get_buffer()
 	startts = lal.LIGOTimeGPS(0, buf.pts)
 	duration = lal.LIGOTimeGPS(0, buf.duration)
-	print duration
 	if startts < output_start:
 		return Gst.PadProbeReturn.DROP	
 	if duration != frame_duration:
