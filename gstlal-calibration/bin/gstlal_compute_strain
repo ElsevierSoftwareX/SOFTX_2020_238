@@ -1067,7 +1067,7 @@ if options.data_source == "frames":
 	start = int(options.gps_start_time)
 elif options.data_source == "lvshm":
 	tm = time.gmtime()
-	start = XLALUTCToGPS(tm)
+	start = int(XLALUTCToGPS(tm))
 # start writing frame files that only start after the desired start time + filter latency
 output_start = start + options.filter_settle_time
 
