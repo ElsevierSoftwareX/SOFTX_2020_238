@@ -2,7 +2,7 @@
 
 Name: @PACKAGE_NAME@
 Version: @PACKAGE_VERSION@
-Release: 1.lscsoft
+Release: 1%{?dist}
 Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
