@@ -3,7 +3,7 @@ EXTRA_DIST = \
 	lal_logical_undersampler_test_01.py \
 	test_common.py
 
-TESTS = lal_logical_undersampler_test_01.py
+#TESTS = lal_logical_undersampler_test_01.py
 
 clean-local :
 	rm -f *.dump

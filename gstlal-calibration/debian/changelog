@@ -1,3 +1,9 @@
+gstlal-calibration (0.99-1) unstable; urgency=low
+
+  * First iteration of gstreamer-1.x calibration package
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 01 Jul 2016 00:00:00 -0500
+
 gstlal-calibration (0.5.10-1) unstable; urgency=low
 
   * Update to smoothing routine for factors to use median method

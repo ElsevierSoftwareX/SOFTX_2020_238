@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-calibration],[0.5.10],[gstlal-discuss@ligo.org],[gstlal-calibration])
-AC_COPYRIGHT([Copyright (C) 2008--2015 Madeline Wade])
+AC_INIT([gstlal-calibration],[0.99],[gstlal-discuss@ligo.org],[gstlal-calibration])
+AC_COPYRIGHT([Copyright (C) 2008--2016 Madeline Wade])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -19,7 +19,6 @@ AC_CONFIG_FILES([ \
 	debian/control \
 	debian/Makefile \
 	gst/Makefile \
-	gst/python/Makefile \
 	gst/lal/Makefile \
 	python/Makefile \
 	tests/Makefile \
@@ -230,8 +229,8 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.10.4])
-AC_SUBST([MIN_GSTLALUGLY_VERSION], [0.9.2])
+AC_SUBST([MIN_GSTLAL_VERSION], [0.99])
+AC_SUBST([MIN_GSTLALUGLY_VERSION], [0.99])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
