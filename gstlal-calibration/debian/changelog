@@ -1,3 +1,9 @@
+gstlal-calibration (0.99.0-2) unstable; urgency=low
+
+  * A few updates to the .spec file for dependencies
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Sat, 02 Jul 2016 14:03:00 -0500
+
 gstlal-calibration (0.99-1) unstable; urgency=low
 
   * First iteration of gstreamer-1.x calibration package
