@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+
+"""
+This program will update the instruments binned array objects in a ranking
+statistic parameter distribution data file from the pre-O2 format to the O2
+format.
+
+Usage:
+
+$ paramdists_update_instruments filename [filename ...]
+
+The XML files will be processed and converted IN PLACE (overwritten).  This
+program is relatively untested, so you should keep backup copies in case
+the conversion doesn't work right.
+"""
+
+import sys
+
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from pylal import rate
+from gstlal import far
+
+# take from the git log of the pylal.snglcoinc module
+class InstrumentCagetories(dict):
+	def __init__(self):
+		self.update(dict((instrument, 1 << n) for n, instrument in enumerate(("G1", "H1", "H2", "H1H2+", "H1H2-", "L1", "V1", "E1", "E2", "E3", "E0"))))
+	def instruments(self, category):
+		return frozenset(instrument for instrument, factor in self.items() if category & factor)
+instrument_categories = InstrumentCagetories()
+
+
+for filename in sys.argv[1:]:
+	xmldoc = ligolw_utils.load_filename(filename, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = True)
+
+	for elem in xmldoc.getElements(lambda elem: elem.tagName == ligolw.LIGO_LW.tagName and elem.hasAttribute("Name") and ":instruments:" in elem.Name):
+		name = elem.Name.replace(":pylal_rate_binnedarray", "")
+		print >>sys.stderr, "converting '%s'" % name
+		# build a new BinnedArray populated with the old data
+		new = rate.BinnedArray(far.ThincaCoincParamsDistributions.binnings["instruments"])
+		for i, val in enumerate(rate.BinnedArray.from_xml(elem, name).array):
+			# reconstruct the instruments using the original
+			# rules for mapping index to instruments
+			new[instrument_categories.instruments(i),] = val
+
+		# XML tree surgery
+		elem.parentNode.replaceChild(new.to_xml(name), elem)
+
+	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith(".gz"), verbose = True)
