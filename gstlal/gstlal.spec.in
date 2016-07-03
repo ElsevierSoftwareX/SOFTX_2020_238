@@ -73,7 +73,6 @@ and programs.
 
 
 %build
-. /opt/lscsoft/gst/gstenvironment.sh
 # FIXME:  enable doxygen when we can rely on a platform with a new-enough
 # version.  don't forget to uncomment the documentation entries in the
 # files section
