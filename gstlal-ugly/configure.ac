@@ -73,19 +73,6 @@ AC_SUBST([pkgdatadir],["\${datadir}/gstlal"])
 
 
 #
-# Set the library API info
-#
-#  0.0.0   Original version
-#  1.0.0   0.2.0 release (sngl_burst.h api changed)
-
-
-AC_SUBST([LIBAPI], [1])
-AC_SUBST([LIBREL], [0])
-AC_SUBST([LIBAGE], [0])
-AC_SUBST([LIBVERSION], [${LIBAPI}:${LIBREL}:${LIBAGE}])
-
-
-#
 # Check for programs
 #
 
