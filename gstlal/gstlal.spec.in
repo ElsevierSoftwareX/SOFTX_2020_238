@@ -44,6 +44,7 @@ BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
 BuildRequires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
 BuildRequires: gsl-devel
 BuildRequires: orc >= @MIN_ORC_VERSION@
+BuildRequires: pygobject3-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Kipp Cannon <kipp.cannon@ligo.org>
