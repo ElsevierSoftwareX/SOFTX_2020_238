@@ -71,9 +71,10 @@ AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 # Set the library API info
 #
 #  0.0.0   Original version
+#  1.0.0   API used in 1.0.0
 
 
-AC_SUBST([LIBAPI], [0])
+AC_SUBST([LIBAPI], [1])
 AC_SUBST([LIBREL], [0])
 AC_SUBST([LIBAGE], [0])
 AC_SUBST([LIBVERSION], [${LIBAPI}:${LIBREL}:${LIBAGE}])
