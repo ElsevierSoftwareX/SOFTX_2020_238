@@ -6,7 +6,6 @@ Release: 1%{?dist}
 Summary: GSTLAL Experimental Supplements
 License: GPL
 Group: LSC Software/Data Analysis
-
 Requires: gstlal >= @MIN_GSTLAL_VERSION@
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: glue >= @MIN_GLUE_VERSION@
@@ -28,7 +27,7 @@ Requires: gds-services >= @MIN_GDS_VERSION@
 Requires: cyrus-sasl-lib
 Requires: nds2-client >= @MIN_NDS_VERSION@
 Requires: orc >= @MIN_ORC_VERSION@
-
+Requires: python-gstreamer1
 BuildRequires: doxygen
 BuildRequires: graphviz
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@
@@ -45,7 +44,6 @@ BuildRequires: cyrus-sasl-devel
 BuildRequires: nds2-client-devel >= @MIN_NDS_VERSION@
 BuildRequires: nds2-client-headers >= @MIN_NDS_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
-
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Kipp Cannon <kipp.cannon@ligo.org>

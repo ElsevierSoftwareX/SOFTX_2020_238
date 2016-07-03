@@ -50,6 +50,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-segments (>= @MIN_GLUE_VERSION@),
+ python-gst-1.0,
  python-numpy,
  python-pylal (>= @MIN_PYLAL_VERSION@),
  python-scipy

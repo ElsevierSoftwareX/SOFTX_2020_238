@@ -6,7 +6,6 @@ Release: 1%{?dist}
 Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
-
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: glue-segments >= @MIN_GLUE_VERSION@
@@ -28,7 +27,7 @@ Requires: gsl
 Requires: orc >= @MIN_ORC_VERSION@
 Requires: dbus-python
 Requires: avahi-ui-tools
-
+Requires: python-gstreamer1
 BuildRequires: doxygen
 BuildRequires: graphviz
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
@@ -45,7 +44,6 @@ BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
 BuildRequires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
 BuildRequires: gsl-devel
 BuildRequires: orc >= @MIN_ORC_VERSION@
-
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Kipp Cannon <kipp.cannon@ligo.org>
