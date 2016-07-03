@@ -916,8 +916,10 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			 */
 
 			if(g_strcmp0(frame->GetName().c_str(), element->frame_name)) {
+				GST_OBJECT_LOCK(element);
 				g_free(element->frame_name);
 				element->frame_name = g_strdup(frame->GetName().c_str());
+				GST_OBJECT_UNLOCK(element);
 				g_object_notify(G_OBJECT(element), "frame-name");
 			}
 			if(frame->GetRun() != element->frame_run) {
@@ -954,6 +956,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			 * retrieve frame-level FrHistory objects
 			 */
 
+			GST_OBJECT_LOCK(element);
 			g_value_array_free(element->frame_history);
 			element->frame_history = g_value_array_new(0);
 			for(FrameCPP::FrameH::history_iterator current = frame->RefHistory().begin(), last = frame->RefHistory().end(); current != last; current++) {
@@ -969,6 +972,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 				g_value_take_boxed(&value, history);
 				g_value_array_append(element->frame_history, &value);
 			}
+			GST_OBJECT_UNLOCK(element);
 			g_object_notify(G_OBJECT(element), "frame-history");
 
 			/*
@@ -1003,7 +1007,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 						"comment", (*current)->GetComment().c_str(),
 						"channel-group", (*current)->GetChannelGroup(),
 						"channel-number", (*current)->GetChannelNumber(),
-						"nbits", (*current)->GetNBits(),	/* FIXME:  set depth in caps */
+						"nbits", (*current)->GetNBits(),
 						"bias", (*current)->GetBias(),
 						"slope", (*current)->GetSlope(),
 						"phase", (*current)->GetPhase(),
