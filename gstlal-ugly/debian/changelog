@@ -1,3 +1,9 @@
+gstlal-ugly (0.99.1-1) unstable; urgency=low
+
+  * various packaging fixes
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Mon, 04 Jul 2016 15:42:00 +0900
+
 gstlal-ugly (0.99.0-1) unstable; urgency=low
 
   * first iteration of gstreamer-1.x port
