@@ -317,7 +317,7 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios 
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 
 	x = numpy.linspace(xlo, xhi, 10000)
-	axes.semilogy(x, map(fapfar.fap_from_rank, x), color = "k")
+	axes.semilogy(x, fapfar.fap_from_rank(x), color = "k")
 
 	ylo = fapfar.fap_from_rank(xhi)
 	ylo = 10**math.floor(math.log10(ylo))

@@ -224,6 +224,7 @@ def poisson_p_0(l):
 
 
 @assert_probability
+@numpy.vectorize
 def fap_after_trials(p, m):
 	"""
 	Given the probability, p, that an event occurs, compute the
@@ -378,9 +379,6 @@ def fap_after_trials(p, m):
 		return 1.
 
 	return float(poisson_p_not_0(-x))
-
-
-fap_after_trials_arr = numpy.vectorize(fap_after_trials)
 
 
 def trials_from_faps(p0, p1):
@@ -2312,8 +2310,7 @@ class FAPFAR(object):
 
 	@assert_probability
 	def ccdf_from_rank(self, rank):
-		rank = max(self.minrank, min(self.maxrank, rank))
-		return float(self.ccdf_interpolator(rank))
+		return self.ccdf_interpolator(numpy.clip(rank, self.minrank, self.maxrank))
 
 	@assert_probability
 	def fap_from_rank(self, rank):
@@ -2321,12 +2318,12 @@ class FAPFAR(object):
 		# arXiv:1209.0718
 		return fap_after_trials(self.ccdf_from_rank(rank), self.zero_lag_total_count)
 
+	@numpy.vectorize
 	def rank_from_fap(self, p, tolerance = 1e-6):
 		"""
-		Inverts .fap_from_rank() using a bisection search.  This
-		function is sensitive to numerical noise for probabilities
-		that are close to 1.  The tolerance sets the absolute error
-		of the result.
+		Inverts .fap_from_rank().  This function is sensitive to
+		numerical noise for probabilities that are close to 1.  The
+		tolerance sets the absolute error of the result.
 		"""
 		assert 0. <= p <= 1., "p (%g) is not a valid probability" % p
 		lo, hi = self.minrank, self.maxrank
@@ -2351,9 +2348,10 @@ class FAPFAR(object):
 		assert self.livetime is not None, "cannot compute FAR without livetime"
 		# true-dismissal probability = 1 - single-event false-alarm
 		# probability, the integral in equation (B4)
-		log_tdp = math.log1p(-self.ccdf_from_rank(rank))
+		log_tdp = numpy.log1p(-self.ccdf_from_rank(rank))
 		return self.zero_lag_total_count * -log_tdp / self.livetime
 
+	@numpy.vectorize
 	def rank_from_far(self, rate, tolerance = 1e-6):
 		"""
 		Inverts .far_from_rank() using a bisection search.  The
