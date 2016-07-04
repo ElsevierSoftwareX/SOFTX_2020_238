@@ -28,7 +28,7 @@ Requires: cyrus-sasl-lib
 Requires: nds2-client >= @MIN_NDS_VERSION@
 Requires: orc >= @MIN_ORC_VERSION@
 Requires: python-gstreamer1
-BuildRequires: doxygen
+BuildRequires: doxygen  >= @MIN_DOXYGEN_VERSION@
 BuildRequires: graphviz
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
@@ -74,10 +74,7 @@ plugins and programs.
 
 %build
 . /opt/lscsoft/gst/gstenvironment.sh
-# FIXME:  enable doxygen when we can rely on a platform with a new-enough
-# version.  don't forget to uncomment the documentation entries in the
-# files section
-%configure --without-doxygen
+%configure
 %{__make}
 
 
@@ -118,9 +115,7 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %defattr(-,root,root)
 %{_bindir}/*
 %{_datadir}/gstlal/*
-# commented out until RPM-based reference platform can be relied upon to
-# have a new-enough doxygen installed
-#%{_docdir}/gstlal-*
+%{_docdir}/gstlal-*
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.so
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/python/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal

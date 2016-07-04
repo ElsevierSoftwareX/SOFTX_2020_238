@@ -28,7 +28,7 @@ Requires: orc >= @MIN_ORC_VERSION@
 Requires: dbus-python
 Requires: avahi-ui-tools
 Requires: python-gstreamer1
-BuildRequires: doxygen
+BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
 BuildRequires: graphviz
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
@@ -74,10 +74,7 @@ and programs.
 
 
 %build
-# FIXME:  enable doxygen when we can rely on a platform with a new-enough
-# version.  don't forget to uncomment the documentation entries in the
-# files section
-%configure --without-doxygen
+%configure
 %{__make}
 
 
@@ -119,9 +116,7 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %{_bindir}/*
 %{_datadir}/gstlal
 %{_datadir}/gtk-doc/html/gstlal-*
-# commented out until RPM-based reference platform can be relied upon to
-# have a new-enough doxygen installed
-#%{_docdir}/gstlal-*
+%{_docdir}/gstlal-*
 %{_libdir}/*.so.*
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.so
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/python/*
