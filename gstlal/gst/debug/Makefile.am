@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -I$(top_srcdir)/lib -I$(top_builddir)/lib
 
-plugin_LTLIBRARIES = libgstlaldebug.la
+#plugin_LTLIBRARIES = libgstlaldebug.la
 
 libgstlaldebug_la_SOURCES = \
 	gstlaldebugplugin.c \
