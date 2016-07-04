@@ -24,6 +24,7 @@ Build-Depends:
  libxml2-dev,
  pkg-config,
  python-all-dev (>= @MIN_PYTHON_VERSION@),
+ python-gi-dev,
  python-numpy-dev
 
 Package: gstlal
@@ -54,6 +55,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python (>= @MIN_PYTHON_VERSION@),
  python-avahi,
  python-dbus,
+ python-gi,
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-segments (>= @MIN_GLUE_VERSION@),
  python-gst-1.0,
