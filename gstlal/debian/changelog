@@ -1,8 +1,14 @@
+gstlal (0.99.2-1) unstable; urgency=low
+
+  * more assorted packaging fixes
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Mon, 4 Jul 2016 17:36:00 +0900
+
 gstlal (0.99.1-1) unstable; urgency=low
 
   * attemp to fix a variety of package building problems
 
- -- Kipp Cannon <kipp.cannon@ligo.org>  Mov, 4 Jul 2016 13:52:00 +0900
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Mon, 4 Jul 2016 13:52:00 +0900
 
 gstlal (0.99.0-1) unstable; urgency=low
 
