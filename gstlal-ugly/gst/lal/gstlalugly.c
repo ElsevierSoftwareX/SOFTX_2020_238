@@ -51,11 +51,11 @@
 
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_iirbank.h>
-#include <gstlal_interpolator.h>
+/*#include <gstlal_interpolator.h>
 #include <gstlal_mean.h>
 #include <gstlal_specgram.h>
 #include <gstlal_pad.h>
-#include <gstlal_trim.h>
+#include <gstlal_trim.h>*/
 #include <gstlal_bitvectorgen.h>
 #include <audioratefaker.h>
 
