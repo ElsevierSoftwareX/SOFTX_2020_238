@@ -7,7 +7,7 @@ X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
  fakeroot,
- gobject-introspection-dev (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
+ gobject-introspection (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
  gtk-doc-tools (>= @MIN_GTK_DOC_VERSION@),
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
