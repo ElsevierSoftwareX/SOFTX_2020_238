@@ -1,3 +1,9 @@
+gstlal (0.99.1-1) unstable; urgency=low
+
+  * attemp to fix a variety of package building problems
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Mov, 4 Jul 2016 13:52:00 +0900
+
 gstlal (0.99.0-1) unstable; urgency=low
 
   * first release of port to gstreamer 1.x
