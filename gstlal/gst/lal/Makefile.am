@@ -1,14 +1,16 @@
 AM_CPPFLAGS = -I$(top_srcdir)/lib -I$(top_builddir)/lib
 
+# FIXME: remove gstfdmemory.{c,h} when we can rely on gstreamer 1.6
+EXTRA_DIST = \
+	gstfdmemory.h gstfdmemory.c
+
 plugin_LTLIBRARIES = libgstlal.la
 
-# FIXME: remove gstfdmemory.{c,h} when we can rely on gstreamer 1.6
 libgstlal_la_SOURCES = \
 	gstlal.c \
 	gstlal_audioundersample.h gstlal_audioundersample.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
 	gstlal_cachesrc.h gstlal_cachesrc.c \
-	gstfdmemory.h gstfdmemory.c \
 	gstlal_drop.h gstlal_drop.c \
 	gstlal_firbank.h gstlal_firbank.c \
 	gstlal_gate.h gstlal_gate.c \
