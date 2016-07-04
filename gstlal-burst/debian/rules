@@ -9,6 +9,3 @@ override_dh_auto_install:
 override_dh_auto_test:
 	export PYTHONPATH=$$(pwd)/python; \
 	dh $@
-
-override_dh_shlibdeps:
-	dh "$@" -Xlibgstaudio-0.10.so.0
