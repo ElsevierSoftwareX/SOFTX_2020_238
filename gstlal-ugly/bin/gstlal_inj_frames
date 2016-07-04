@@ -123,7 +123,7 @@ if options.virtualenv_activator is not None:
 # PB: temporary solution for virtual environment (not sure why virtual
 # environment not working)
 # See e.g. http://stackoverflow.com/questions/10095037/why-use-sys-path-appendpath-instead-of-sys-path-insert1-path
-# sys.path.insert(1, '/usr/share/llldd/lib/gracedb-client')
+sys.path.insert(1, '/usr/share/llldd/lib/gracedb-client')
 
 # Now that we have the virtual environment loaded, load up GraceDb
 from ligo.gracedb.rest import GraceDb
@@ -277,7 +277,7 @@ mux = pipeparts.mkprogressreport(pipeline, mux, name = "multiplexer")
 # ALSO note: if they are not exactly correct, the system complains that it cannot write to
 # the shared memory.
 
-pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", shm_name = options.shared_memory_write, num_buffers=options.num_buffers, blocksize=options.blocksize, buffer_mode=2, sync=0, async=0)
+pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", shm_name = options.shared_memory_write, num_buffers=options.num_buffers, blocksize=options.blocksize, buffer_mode=2)
 
 if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
         pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
