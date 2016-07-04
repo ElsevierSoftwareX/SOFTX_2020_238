@@ -6,6 +6,7 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 8),
+ doxygen (>= @MIN_DOXYGEN_VERSION@),
  fakeroot,
  gtk-doc-tools (>= @MIN_GTK_DOC_VERSION@),
  gobject-introspection (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
