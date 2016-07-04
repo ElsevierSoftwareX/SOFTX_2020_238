@@ -73,7 +73,6 @@ plugins and programs.
 
 
 %build
-. /opt/lscsoft/gst/gstenvironment.sh
 %configure
 %{__make}
 
