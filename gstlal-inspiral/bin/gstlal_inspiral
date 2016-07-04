@@ -713,8 +713,14 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	if options.verbose:
 		print >>sys.stderr, "... output document initialized"
 
-	handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, zero_lag_ranking_stats_filename = zero_lag_ranking_stats_file, verbose = options.verbose)
-
+	handler = lloidparts.Handler(mainloop, pipeline,
+		output,
+		instruments = set(detectors.channel_dict),
+		tag = options.job_tag,
+		seglistdict = seglists,
+		zero_lag_ranking_stats_filename = zero_lag_ranking_stats_file,
+		verbose = options.verbose
+	)
 
 	if options.verbose:
 		print >>sys.stderr, "attaching appsinks to pipeline ...",
