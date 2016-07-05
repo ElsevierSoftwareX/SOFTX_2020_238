@@ -50,7 +50,6 @@ import optparse
 import sys
 import time
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject
@@ -302,12 +301,56 @@ def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.Se
 	start_type, start_time = seek_args_for_gps(gps_start_time)
 	stop_type, stop_time   = seek_args_for_gps(gps_end_time)
 
-	# FIXME:  should seek whole pipeline, but can't until we implement
-	# dynamic pipeline building in response to framecpp demuxer adding
-	# source pads.  pipeline sends seek event to sink elements, which
-	# send it up stream but it never makes it to the source elements
-	# because of the disconnected graph
+	# FIXME:  should seek whole pipeline, but there are several
+	# problems preventing us from doing that.
+	#
+	# because the framecpp demuxer has no source pads until decoding
+	# begins, the bottom halves of pipelines start out disconnected
+	# from the top halves of pipelines, which means the seek events
+	# (which are sent to sink elements) don't make it all the way to
+	# the source elements.  dynamic pipeline building will not fix the
+	# problem because the dumxer does not carry the "SINK" flag so even
+	# though it starts with only a sink pad and no source pads it still
+	# won't be sent the seek event.  gstreamer's own demuxers must
+	# somehow have a solution to this problem, but I don't know what it
+	# is.  I notice that many implement the send_event() method
+	# override, and it's possible that's part of the solution.
+	#
+	# seeking the pipeline can only be done in the PAUSED state.  the
+	# GstBaseSrc baseclass seeks itself to 0 when changing to the
+	# paused state, and the preroll is performed before the seek event
+	# we send to the pipeline is processed, so the preroll occurs with
+	# whatever random data a seek to "0" causes source elements to
+	# produce.  for us, when processing GW data, this leads to the
+	# whitener element's initial spectrum estimate being initialized
+	# from that random data, and a non-zero chance of even getting
+	# triggers out of it, all of which is very bad.
+	#
+	# the only way we have at the moment to solve both problems --- to
+	# ensure seek events arrive at source elements and to work around
+	# GstBaseSrc's initial seek to 0 --- is to send seek events
+	# directly to the source elements ourselves before putting the
+	# pipeline into the PAUSED state.  the elements are happy to
+	# receive seek events in the READY state, and GstBaseSrc updtes its
+	# current segment using that seek so that when it transitions to
+	# the PAUSED state and does its intitial seek it seeks to our
+	# requested time, not to 0.
+	#
+	# So:  this function needs to be called with the pipeline in the
+	# READY state in order to guarantee the data stream starts at the
+	# requested start time, and does not get prerolled with random
+	# data.  For safety we include a check of the pipeline's current
+	# state.
+	#
+	# if in the future we find some other solution to these problems
+	# the story might change and the pipeline state required on entry
+	# into this function might change.
+
 	#pipeline.seek(1.0, Gst.Format(Gst.Format.TIME), flags, start_type, start_time, stop_type, stop_time)
+
+	if pipeline.current_state != Gst.State.READY:
+		raise ValueError("pipeline must be in READY state")
+
 	for elem in pipeline.iterate_sources():
 		elem.seek(1.0, Gst.Format(Gst.Format.TIME), flags, start_type, start_time, stop_type, stop_time)
 
