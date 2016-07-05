@@ -290,11 +290,11 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			while(g_hash_table_iter_next(&it, (void **) &instrument, NULL)) {
 				if(!strcmp(instrument, "H1"))
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_H1, gpstime));
-				if(!strcmp(instrument, "H2"))
+				else if(!strcmp(instrument, "H2"))
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_H2, gpstime));
-				if(!strcmp(instrument, "L1"))
+				else if(!strcmp(instrument, "L1"))
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_L1, gpstime));
-				if(!strcmp(instrument, "V1"))
+				else if(!strcmp(instrument, "V1"))
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_V1, gpstime));
 				else
 					GST_WARNING_OBJECT(mux, "not adding FrDetector for unknown instrument '%s'", instrument);
