@@ -644,8 +644,8 @@ def mkfakesink(pipeline, src):
 
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-filesink.html">filesink</a> element to a pipeline with useful default properties
-def mkfilesink(pipeline, src, filename):
-	return mkgeneric(pipeline, src, "filesink", sync = False, async = False, buffer_mode = 2, location = filename)
+def mkfilesink(pipeline, src, filename, sync = False, async = False):
+	return mkgeneric(pipeline, src, "filesink", sync = sync, async = async, buffer_mode = 2, location = filename)
 
 
 ## Adds a <a href="@gstlalgtkdoc/GstTSVEnc.html">lal_nxydump</a> element to a pipeline with useful default properties
@@ -770,8 +770,8 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 # FIXME no specific alias for this url since this library only has one element.
 # DO NOT DOCUMENT OTHER CODES THIS WAY! Use @gstdoc @gstpluginsbasedoc etc.
 ## Adds a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-libs/html/gstreamer-app.html">appsink</a> element to a pipeline with useful default properties
-def mkappsink(pipeline, src, max_buffers = 1, drop = False, **properties):
-	return mkgeneric(pipeline, src, "appsink", sync = False, async = False, emit_signals = True, max_buffers = max_buffers, drop = drop, **properties)
+def mkappsink(pipeline, src, max_buffers = 1, drop = False, sync = False, async = False, **properties):
+	return mkgeneric(pipeline, src, "appsink", sync = sync, async = async, emit_signals = True, max_buffers = max_buffers, drop = drop, **properties)
 
 
 class AppSync(object):
