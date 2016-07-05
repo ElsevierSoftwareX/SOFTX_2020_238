@@ -118,6 +118,7 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %{_datadir}/gtk-doc/html/gstlal-*
 %{_docdir}/gstlal-*
 %{_libdir}/*.so.*
+%{_libdir}/girepository-1.0/*
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.so
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/python/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal

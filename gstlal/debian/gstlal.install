@@ -1,5 +1,6 @@
 usr/bin/*
 usr/lib/*.so.*
+usr/lib/girepository-1.0/*
 usr/lib/gstreamer-*/*.so*
 usr/lib/gstreamer-*/python*/*
 usr/lib/python*/*/gstlal
