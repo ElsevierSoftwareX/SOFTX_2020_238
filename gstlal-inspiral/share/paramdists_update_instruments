@@ -38,7 +38,7 @@ for filename in sys.argv[1:]:
 		print >>sys.stderr, "converting '%s'" % name
 		# build a new BinnedArray populated with the old data
 		new = rate.BinnedArray(far.ThincaCoincParamsDistributions.binnings["instruments"])
-		for i, val in enumerate(rate.BinnedArray.from_xml(elem, name).array):
+		for i, val in enumerate(rate.BinnedArray.from_xml(elem, name).array, 1):
 			# reconstruct the instruments using the original
 			# rules for mapping index to instruments
 			new[instrument_categories.instruments(i),] = val
