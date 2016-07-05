@@ -130,7 +130,6 @@ class Handler(simplehandler.Handler):
 
 
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
-
 	if gw_data_source_info.data_source == "frames":
 		if instrument == "V1":
 			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
@@ -159,9 +158,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkinjections(pipeline, src, gw_data_source_info.injection_filename)
 		# let the injection code run in a different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = Gst.SECOND * 64)
-
-	# seek the pipeline
-	datasource.pipeline_seek_for_gps(pipeline, gw_data_source_info.seg[0], gw_data_source_info.seg[1])
 
 
 	return src
@@ -241,10 +237,12 @@ def cache_hoft(data_source_info, channel_comment = "cached h(t) for inspiral sea
 
 
 	#
-	# run pipeline
+	# seek and run pipeline
 	#
 
-
+	if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+		raise RuntimeError("pipeline did not enter ready state")
+	datasource.pipeline_seek_for_gps(pipeline, *data_source_info.seg)
 	if verbose:
 		print >>sys.stderr, "setting pipeline state to playing ..."
 	if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:

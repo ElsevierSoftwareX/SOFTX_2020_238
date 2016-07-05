@@ -1105,6 +1105,8 @@ if options.write_pipeline is not None:
 
 # Seek the pipeline when necessary
 if options.data_source == "frames":
+	if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+		raise RuntimeError("pipeline failed to enter READY state")
 	datasource.pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time)
 	print >>sys.stderr, "seeking GPS start and stop times ..."
 

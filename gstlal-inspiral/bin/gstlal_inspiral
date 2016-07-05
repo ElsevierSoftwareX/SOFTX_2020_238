@@ -760,9 +760,9 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 
 
 	if options.verbose:
-		print >>sys.stderr, "setting pipeline state to paused ..."
-	if pipeline.set_state(Gst.State.PAUSED) != Gst.StateChangeReturn.SUCCESS:
-		raise RuntimeError("pipeline did not enter paused state")
+		print >>sys.stderr, "setting pipeline state to ready ..."
+	if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+		raise RuntimeError("pipeline did not enter ready state")
 	datasource.pipeline_seek_for_gps(pipeline, *detectors.seg)
 	if options.verbose:
 		print >>sys.stderr, "setting pipeline state to playing ..."
