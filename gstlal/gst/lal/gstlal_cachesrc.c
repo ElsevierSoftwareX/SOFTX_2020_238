@@ -612,11 +612,35 @@ next:
 		goto done;
 	}
 
-	/* these functions take ownership of fd;  we do not close */
+	/* these functions take ownership of fd;  we do not close.
+	 *
+	 * NOTE regarding offset.  the offset passed to us by the base
+	 * class is only meaningful if this element's format, as set by
+	 * gst_base_src_set_format() in the init method, is BYTES.  if we
+	 * can seek by byte count, then the base class will keep a running
+	 * total count of bytes for us and pass the current count to our
+	 * create() method.  we operate with format TIME, so we just get
+	 * passed -1 all the time.  we could keep a count of bytes
+	 * ourselves to populate the buffer offsets, but it's really only
+	 * practical to keep a running total of the count of bytes we've
+	 * pushed, not the true offset from the start of the stream.  we
+	 * don't know the input file sizes so we can't really associate an
+	 * arbitrary file's start time with a byte offset.  we could run
+	 * through the cache at the start and figure out all the file sizes
+	 * but the LAL cache can be large, include many things that will
+	 * never be read at all, and point to fail-over copies of files
+	 * that might live on slow file systems so we don't want to stat
+	 * every entry in it for the fun of it.  we can keep a record of
+	 * the sizes of the objects as we load them, which would allow a
+	 * backwards seek to have the offset updated properly, but forward
+	 * seeks would not be supported.  so we give up.  all buffers get
+	 * pushed down stream with offsets [0, size).
+	 */
+
 	if(element->use_mmap)
-		result = mmap_buffer(basesrc, path, fd, offset, statinfo.st_size, buf);
+		result = mmap_buffer(basesrc, path, fd, 0, statinfo.st_size, buf);
 	else
-		result = read_buffer(basesrc, path, fd, offset, statinfo.st_size, buf);
+		result = read_buffer(basesrc, path, fd, 0, statinfo.st_size, buf);
 	if(result != GST_FLOW_OK)
 		goto done;
 
