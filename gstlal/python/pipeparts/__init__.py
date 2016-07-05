@@ -176,6 +176,27 @@ class framecpp_channeldemux_set_units(object):
 
 
 class framecpp_channeldemux_check_segments(object):
+	"""
+	Utility to watch for missing data.  Pad probes are used to collect
+	the times spanned by buffers, these are compared to a segment list
+	defining the intervals of data the stream is required to have.  If
+	any intervals of data are found to have been skipped or if EOS is
+	seen before the end of the segment list then a ValueError exception
+	is raised.
+
+	There are two ways to use this tool.  To directly install a segment
+	list monitor on a single pad use the .set_probe() class method.
+	For elements with dynamic pads, the class can be allowed to
+	automatically add monitors to pads as the become available by using
+	the element's pad-added signal.  In this case initialize an
+	instance of the class with the element and a dictionary of segment
+	lists mapping source pad name to the segment list to check that
+	pad's output against.
+
+	In both cases a jitter parameter sets the maximum size of a skipped
+	segment that will be ignored (for example, to accomodate round-off
+	error in element timestamp computations).  The default is 1 ns.
+	"""
 	def __init__(self, elem, seglists, jitter = LIGOTimeGPS(0, 1)):
 		self.elem = elem
 		self.probe_handler_ids = {}
@@ -191,27 +212,31 @@ class framecpp_channeldemux_check_segments(object):
 		if name in seglists:
 			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name], self.jitter)
 
-	@staticmethod
-	def set_probe(pad, seglist, jitter = LIGOTimeGPS(0, 1)):
+	@classmethod
+	def set_probe(cls, pad, seglist, jitter = LIGOTimeGPS(0, 1)):
 		# use a copy of the segmentlist so the probe can modify it
-		return pad.add_data_probe(framecpp_channeldemux_check_segments.probe, (segments.segmentlist(seglist), jitter))
+		return pad.add_probe(Gst.PadProbeType.DATA_DOWNSTREAM, cls.probe, (segments.segmentlist(seglist), jitter))
 
 	@staticmethod
-	def probe(pad, obj, (seglist, jitter)):
-		if isinstance(obj, Gst.Buffer):
-			if not obj.flag_is_set(Gst.BUFFER_FLAG_GAP):
+	def probe(pad, probeinfo, (seglist, jitter)):
+		if probeinfo.type & Gst.PadProbeType.BUFFER:
+			obj = probeinfo.get_buffer()
+			if not obj.mini_object.flags & Gst.BufferFlags.GAP:
 				# remove the current buffer from the data
 				# we're expecting to see
-				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.timestamp), LIGOTimeGPS(0, obj.timestamp + obj.duration)))])
+				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.pts), LIGOTimeGPS(0, obj.pts + obj.duration)))])
 				# ignore missing data intervals unless
 				# they're bigger than the jitter
 				iterutils.inplace_filter(lambda seg: abs(seg) > jitter, seglist)
 			# are we still expecting to see something that
 			# precedes the current buffer?
-			preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(0, obj.timestamp)))
+			preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(0, obj.pts)))
 			if seglist.intersects_segment(preceding):
 				raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & segments.segmentlist([preceding])))
-		elif isinstance(obj, Gst.Event) and obj.type == Gst.EVENT_EOS:
+		elif probeinfo.type & Gst.PadProbeType.EVENT_DOWNSTREAM and probeinfo.get_event().type == Gst.EventType.EOS:
+			# ignore missing data intervals unless they're
+			# bigger than the jitter
+			iterutils.inplace_filter(lambda seg: abs(seg) > jitter, seglist)
 			if seglist:
 				raise ValueError("%s: at EOS detected missing data: %s" % (pad.get_name(), seglist))
 		return True
