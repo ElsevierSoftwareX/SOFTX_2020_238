@@ -421,7 +421,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GstFlowReturn result;
 	GstMapInfo out_info;
 
-	gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
+	if(GST_BUFFER_PTS_IS_VALID(inbuf))
+		gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_PTS(inbuf));
+
 	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
 
 	g_mutex_lock(&element->mixmatrix_lock);

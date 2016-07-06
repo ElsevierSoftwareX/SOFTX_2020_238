@@ -1484,7 +1484,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
 
-	gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_TIMESTAMP(inbuf));
+	if(GST_BUFFER_PTS_IS_VALID(inbuf))
+		gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_PTS(inbuf));
 
 	/*
 	 * wait for FIR matrix
