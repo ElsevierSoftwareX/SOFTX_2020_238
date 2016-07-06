@@ -4,7 +4,7 @@
 #
 
 # albert.einstein for git checkout
-USER=duncan.meacher
+USER=albert.einstein
 
 # Set directories and paths
 SRC_DIR:=src
@@ -34,7 +34,7 @@ LALSIMULATION=lalsimulation-1.6.0
 LALMETAIO=lalmetaio-1.2.8
 LALFRAME=lalframe-1.4.1
 LAL=lal-6.16.1
-GDS=gds-2.17.7
+GDS=gds-2.17.8
 LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.5.1
 LDASTOOLSAL=ldas-tools-al-2.5.0
 SWIG=swig-2.0.11
