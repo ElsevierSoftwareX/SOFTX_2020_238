@@ -864,6 +864,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			verifier.ValidateMetadata(false);
 			verifier.CheckFileChecksumOnly(true);
 
+#if 0	/* comment out for ER9:  broken still */
 #if VERIFY_THROWS_EXCEPTION
 			try {
 				verifier(ifs);
@@ -874,6 +875,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			if(verifier(ifs) != 0)
 				throw std::runtime_error(verifier.ErrorInfo());
 #endif /* VERIFY_THROWS_EXCEPTION */
+#endif
 		}
 
 		/*
