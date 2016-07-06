@@ -96,7 +96,7 @@ class PSDHandler(simplehandler.Handler):
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 
 	def do_on_message(self, bus, message):
-		if message.type == Gst.MESSAGE_ELEMENT and message.get_structure().get_name() == "spectrum":
+		if message.type == Gst.MessageType.ELEMENT and message.get_structure().get_name() == "spectrum":
 			self.psd = pipeio.parse_spectrum_message(message)
 			return True
 		return False
