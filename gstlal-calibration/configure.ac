@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-calibration],[0.99.0],[gstlal-discuss@ligo.org],[gstlal-calibration])
+AC_INIT([gstlal-calibration],[0.99.1],[gstlal-discuss@ligo.org],[gstlal-calibration])
 AC_COPYRIGHT([Copyright (C) 2008--2016 Madeline Wade])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -229,8 +229,8 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.99.0])
-AC_SUBST([MIN_GSTLALUGLY_VERSION], [0.99.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [0.99.4])
+AC_SUBST([MIN_GSTLALUGLY_VERSION], [0.99.2])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])

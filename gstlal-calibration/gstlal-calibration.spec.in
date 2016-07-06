@@ -15,8 +15,8 @@ Requires: glue-segments >= @MIN_GLUE_VERSION@
 Requires: python-pylal >= @MIN_PYLAL_VERSION@
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
-Requires: %{gstreamername}-plugins-good >= 1.2.4
-Requires: %{gstreamername}-python >= 0.10.21
+Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
+Requires: python-%{gstreamername}
 Requires: numpy
 Requires: scipy
 Requires: lal >= @MIN_LAL_VERSION@
@@ -44,7 +44,6 @@ This package contains the plugins and shared libraries required to run the gstla
 
 
 %build
-. /opt/lscsoft/gst/gstenvironment.sh
 %configure
 %{__make}
 
@@ -85,11 +84,5 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %files
 %defattr(-,root,root)
 %{_bindir}/*
-%{_libdir}/gstreamer-1.0/python/*
-%{_libdir}/gstreamer-1.0/libgstlalcalibration.a
-%{_libdir}/gstreamer-1.0/libgstlalcalibration.so
-%{_libdir}/gstreamer-1.0/libgstlaldeinterleave.a
-%{_libdir}/gstreamer-1.0/libgstlaldeinterleave.so
-%{_libdir}/gstreamer-1.0/libgstlalinterleave.a
-%{_libdir}/gstreamer-1.0/libgstlalinterleave.so
+%{_libdir}/gstreamer-*/libgstlalcalibration.*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal
