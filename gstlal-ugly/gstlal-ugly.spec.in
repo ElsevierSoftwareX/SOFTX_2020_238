@@ -11,10 +11,11 @@ Requires: python >= @MIN_PYTHON_VERSION@
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: glue-segments >= @MIN_GLUE_VERSION@
 Requires: python-pylal >= @MIN_PYLAL_VERSION@
-Requires: fftw >= 3 %{gstreamername} >= @MIN_GSTREAMER_VERSION@
+Requires: fftw >= 3
+Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
-Requires: %{gstreamername}-plugins-good >= 1.2.4
-Requires: %{gstreamername}-python >= 0.10.21
+Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
+Requires: %{gstreamername}-plugins-bad
 Requires: numpy
 Requires: scipy
 Requires: lal >= @MIN_LAL_VERSION@
@@ -27,7 +28,7 @@ Requires: gds-services >= @MIN_GDS_VERSION@
 Requires: cyrus-sasl-lib
 Requires: nds2-client >= @MIN_NDS_VERSION@
 Requires: orc >= @MIN_ORC_VERSION@
-Requires: python-gstreamer1
+Requires: python-%{gstreamername}
 BuildRequires: doxygen  >= @MIN_DOXYGEN_VERSION@
 BuildRequires: graphviz
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@
@@ -45,7 +46,7 @@ BuildRequires: nds2-client-devel >= @MIN_NDS_VERSION@
 BuildRequires: nds2-client-headers >= @MIN_NDS_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
 Source: @PACKAGE_NAME@-%{version}.tar.gz
-URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
+URL: https://wiki.ligo.org/DASWG/GstLAL
 Packager: Kipp Cannon <kipp.cannon@ligo.org>
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 %description
