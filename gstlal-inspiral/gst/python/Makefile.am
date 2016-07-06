@@ -3,4 +3,4 @@
 pkgpythondir = $(plugindir)/python
 pkgpyexecdir = $(pkgpythondir)
 
-pkgpython_PYTHON = lal_fakeskymapsrc.py lal_faketriggersrc.py lal_skymaprenderer.py
+pkgpython_PYTHON = #lal_fakeskymapsrc.py lal_faketriggersrc.py lal_skymaprenderer.py
