@@ -1155,7 +1155,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			self.injection_rates["instruments"][instruments,] += n * p
 
 	def _rebuild_interpolators(self):
-		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators()
+		keys = set(self.zero_lag_rates)
+		keys.remove("instruments")
+		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators(keys)
 
 		#
 		# the instrument combination "interpolators" are
