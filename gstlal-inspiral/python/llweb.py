@@ -271,12 +271,21 @@ class GstlalWebSummary(object):
 				out.append(float("inf"))
 		return out
 
+	def valid_time_since_last(self):
+		out = []
+		for l in self.found["latency_history"].values():
+			if l.shape != (1,0):
+				out.append(now() - l[-1,0])
+			else:
+				out.append(float("inf"))
+			return out
+
 	def latency(self):
 		out = self.valid_latency()
 		return "%.2f &pm; %.2f" % (numpy.mean(out), numpy.std(out))
 
 	def time_since_last(self):
-		out = self.valid_latency()
+		out = self.valid_time_since_last()
 		return "%.2f &pm; %.2f" % (numpy.mean(out), numpy.std(out))
 
 	def average_up_time(self):
