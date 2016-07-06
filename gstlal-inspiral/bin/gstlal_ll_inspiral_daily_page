@@ -25,8 +25,8 @@
 import sys, os, subprocess, re, time, glob
 from optparse import OptionParser
 from glue.text_progress_bar import ProgressBar
+from pylal.datatypes import LIGOTimeGPS
 import lal
-from lal import LIGOTimeGPS
 from multiprocessing import Pool
 
 def now():
@@ -50,15 +50,12 @@ def process_mass_bin(args):
 	# First do non injections
 	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if pattern.match(xml)])
 	for f in files:
-		# Check for corrupted files
-		if subprocess.call(["gzip", "--test", f]) == 0:
-			subprocess.check_call(["ligolw_sqlite", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--database", "%s" % db, "%s" % f])
-			subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--sql-file", cluster_file,  "%s" % db])
-		else:
-			print >> sys.stderr, "%s corrupted, moving to busted directory and skipping" % f
-			if not os.path.exists(os.path.join(os.path.dirname(f), "busted")):
-				os.mkdir(os.path.join(os.path.dirname(f), "busted"))
-			os.rename(f, os.path.join(os.path.join(os.path.dirname(f), "busted"), "%s" % f))
+		try:
+			subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % db, "%s" % f])
+		except:
+			print >> sys.stderr, "couldn't process %s" % f
+			continue
+		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % db])
 
 	# rename files
 	if os.path.exists(db):
@@ -113,8 +110,8 @@ if __name__ == '__main__':
 		inj_mass_bin_files_to_merge = list(pool.map(process_mass_bin, args))
 
 		# Merge the files of this directory
-		subprocess.check_call(["ligolw_sqlite", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--replace", "--verbose", "--database", "%s" % noninjdball] + mass_bin_files_to_merge)
-		subprocess.check_call(["ligolw_sqlite", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--replace", "--verbose", "--database", "%s" % injdball] + inj_mass_bin_files_to_merge)	
+		subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % noninjdball] + mass_bin_files_to_merge)
+		subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % injdball] + inj_mass_bin_files_to_merge)	
 		noninj_files_to_merge.append(noninjdball)
 		inj_files_to_merge.append(injdball)
 
@@ -129,29 +126,29 @@ if __name__ == '__main__':
 
 	progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files))
 	for f in noninj_files_to_merge + seg_files:
-		subprocess.check_call(["ligolw_sqlite", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--database", "%s" % noninjdb, "%s" % f])
+		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % noninjdb, "%s" % f])
 		# Do not cluster! the online analysis doesn't do a global clustering stage!!
-		subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--sql-file", simplify_file,  "%s" % noninjdb])
+		subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % noninjdb])
 		progressbar.increment()
 	del progressbar
 
 	progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge) + len(seg_files))
 	for f in inj_files_to_merge + seg_files:
-		subprocess.check_call(["ligolw_sqlite", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--database", "%s" % injdb, "%s" % f])
+		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "%s" % f])
 		# Do not cluster! the online analysis doesn't do a global clustering stage!!
-		subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--sql-file", simplify_file,  "%s" % injdb])
+		subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % injdb])
 		progressbar.increment()
 	del progressbar
 
 	# Find injections
 	progressbar = ProgressBar("Find injections", 4)
-	subprocess.check_call(["ligolw_sqlite", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--database", "%s" % injdb, "%s" % options.injection_file])
+	subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "%s" % options.injection_file])
 	progressbar.increment()
-	subprocess.check_call(["ligolw_sqlite", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--database", "%s" % injdb, "--extract", "%s.xml" % injdb])
+	subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "--extract", "%s.xml" % injdb])
 	progressbar.increment()
-	subprocess.check_call(["ligolw_inspinjfind", "--verbose", "%s.xml" % injdb])
+	subprocess.check_call(["ligolw_inspinjfind", "%s.xml" % injdb])
 	progressbar.increment()
-	subprocess.check_call(["ligolw_sqlite", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--database", "%s" % injdb, "--replace", "%s.xml" % injdb])
+	subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "--replace", "%s.xml" % injdb])
 	progressbar.increment()
 
 
@@ -165,10 +162,10 @@ if __name__ == '__main__':
 	#	m = pattern.match(d)
 	#	if m:
 	#		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
-	#subprocess.check_call(["gstlal_inspiral_plot_background", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", "ALL", "--database", noninjdb, "--verbose", "marginalized_likelihood.xml.gz"])
-	subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--likelihood-file", os.path.join(options.directory, "marginalized_likelihood.xml.gz"), "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
+	subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", "ALL", "--database", noninjdb, "--verbose", "marginalized_likelihood.xml.gz"])
+	subprocess.check_call(["gstlal_inspiral_plotsummary", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
 
-	subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--tmp-space", "%s" % os.getenv("TMPDIR"), "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
+	subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
 
 	subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
 
