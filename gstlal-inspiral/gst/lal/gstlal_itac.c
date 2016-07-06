@@ -306,8 +306,8 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			}
 		case GST_EVENT_EOS: {
 			itac->EOS = TRUE;
-			res = process(itac);
-			res &= gst_pad_push_event(itac->srcpad, event);
+			/* ignore failures */
+			process(itac);
 			break;
 			}
 		default:
