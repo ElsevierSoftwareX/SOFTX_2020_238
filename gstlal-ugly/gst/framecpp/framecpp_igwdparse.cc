@@ -421,7 +421,7 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				 * timestamp and duration
 				 */
 
-				GST_BUFFER_TIMESTAMP(frame->buffer) = element->file_start_time;
+				GST_BUFFER_PTS(frame->buffer) = element->file_start_time;
 				GST_BUFFER_DURATION(frame->buffer) = element->file_stop_time - element->file_start_time;
 				GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(frame->buffer));
 
@@ -433,7 +433,7 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				 * file boundaries
 				 */
 
-				gst_base_parse_add_index_entry(parse, GST_BUFFER_OFFSET(frame->buffer), GST_BUFFER_TIMESTAMP(frame->buffer), TRUE, FALSE);
+				gst_base_parse_add_index_entry(parse, GST_BUFFER_OFFSET(frame->buffer), GST_BUFFER_PTS(frame->buffer), TRUE, FALSE);
 
 				/*
 				 * in practice, a collection of frame files

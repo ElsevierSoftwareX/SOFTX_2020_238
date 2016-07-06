@@ -138,7 +138,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	 */
 
 	if(!(
-		GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) &&
+		GST_BUFFER_PTS_IS_VALID(sinkbuf) &&
 		GST_BUFFER_DURATION_IS_VALID(sinkbuf) &&
 		GST_BUFFER_OFFSET_IS_VALID(sinkbuf) &&
 		GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf) &&
@@ -176,7 +176,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		sinkbuf = gst_buffer_make_writable(sinkbuf);
 		gst_buffer_resize(sinkbuf, element->drop_samples * element->unit_size, -1);
 		GST_BUFFER_OFFSET(sinkbuf) += element->drop_samples;
-		GST_BUFFER_TIMESTAMP(sinkbuf) += toff;
+		GST_BUFFER_PTS(sinkbuf) += toff;
 		GST_BUFFER_DURATION(sinkbuf) -= toff;
 		GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
 

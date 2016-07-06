@@ -173,7 +173,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	 * valid metadata, push down stream
 	 */
 
-	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) || GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
+	if(!(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) || GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
 		GST_DEBUG_OBJECT(element, "pushing verbatim");
 		/* consumes reference */
 		result = gst_pad_push(element->srcpad, sinkbuf);
@@ -219,8 +219,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + offset;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + block_length;
-		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset, length);
-		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset + block_length, length) - GST_BUFFER_TIMESTAMP(srcbuf);
+		GST_BUFFER_PTS(srcbuf) = GST_BUFFER_PTS(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset, length);
+		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_PTS(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset + block_length, length) - GST_BUFFER_PTS(srcbuf);
 
 		/*
 		 * only the first subbuffer of a buffer flagged as a

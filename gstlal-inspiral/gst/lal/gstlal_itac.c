@@ -515,7 +515,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static void update_state(GSTLALItac *element, GstBuffer *srcbuf)
 {
 	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
-	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
+	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) + GST_BUFFER_DURATION(srcbuf);
 }
 
 static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
@@ -663,7 +663,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	guint64 maxsize;
 
 	/* do this before accessing any element properties */
-	gst_object_sync_values(parent, GST_BUFFER_TIMESTAMP(sinkbuf));
+	gst_object_sync_values(parent, GST_BUFFER_PTS(sinkbuf));
 
 	/* The max size to copy from an adapter is the typical output size plus the padding */
 	maxsize = output_num_bytes(element) + element->adapter->unit_size * element->maxdata->pad * 2;
@@ -676,7 +676,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	 * check validity of timestamp, offsets, tags, bank array
 	 */
 
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+	if(!GST_BUFFER_PTS_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
 		gst_buffer_unref(sinkbuf);
 		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
 		result = GST_FLOW_ERROR;
@@ -704,7 +704,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);// + output_duration(element);
+		element->next_output_timestamp = GST_BUFFER_PTS(sinkbuf);// + output_duration(element);
 	}
 
 	/* put the incoming buffer into an adapter, handles gaps */

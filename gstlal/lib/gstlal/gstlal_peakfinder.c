@@ -112,7 +112,7 @@ GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *state, GstPad *
         GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
 
         /* set the time stamps */
-        GST_BUFFER_TIMESTAMP(srcbuf) = time;
+        GST_BUFFER_PTS(srcbuf) = time;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	gst_buffer_map(srcbuf, &mapinfo, GST_MAP_WRITE);

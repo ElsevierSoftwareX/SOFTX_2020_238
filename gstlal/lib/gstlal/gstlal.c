@@ -871,7 +871,7 @@ REAL8TimeSeries *gstlal_buffer_map_REAL8TimeSeries(GstBuffer *buf, GstCaps *caps
 	 * size.
 	 */
 
-	XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(buf));
+	XLALINT8NSToGPS(&epoch, GST_BUFFER_PTS(buf));
 
 	/*
 	 * Build a zero-length time series with the correct metadata

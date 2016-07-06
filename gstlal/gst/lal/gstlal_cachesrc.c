@@ -650,9 +650,9 @@ next:
 	 * need to check for nonsensical ->last_index value.
 	 */
 
-	GST_BUFFER_TIMESTAMP(*buf) = cache_entry_start_time(element, element->index);
+	GST_BUFFER_PTS(*buf) = cache_entry_start_time(element, element->index);
 	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
-	if(element->need_discont || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->last_index)) {
+	if(element->need_discont || GST_BUFFER_PTS(*buf) != cache_entry_end_time(element, element->last_index)) {
 		GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}

@@ -44,7 +44,7 @@
 
 #ifndef GST_BUFFER_LIST_BOUNDARIES_FORMAT
 #define GST_BUFFER_LIST_BOUNDARIES_FORMAT ".d[%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ") = offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")"
-#define GST_BUFFER_LIST_BOUNDARIES_ARGS(list) 0, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(GST_BUFFER(g_list_first(list)->data))), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(GST_BUFFER(g_list_last(list)->data)) + GST_BUFFER_DURATION(GST_BUFFER(g_list_last(list)->data))), GST_BUFFER_OFFSET(GST_BUFFER(g_list_first(list)->data)), GST_BUFFER_OFFSET_END(GST_BUFFER(g_list_last(list)->data))
+#define GST_BUFFER_LIST_BOUNDARIES_ARGS(list) 0, GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(GST_BUFFER(g_list_first(list)->data))), GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(GST_BUFFER(g_list_last(list)->data)) + GST_BUFFER_DURATION(GST_BUFFER(g_list_last(list)->data))), GST_BUFFER_OFFSET(GST_BUFFER(g_list_first(list)->data)), GST_BUFFER_OFFSET_END(GST_BUFFER(g_list_last(list)->data))
 #endif /* GST_BUFFER_SLIST_BOUNDARIES_FORMAT */
 
 
@@ -748,9 +748,9 @@ void framecpp_muxcollectpads_buffer_list_boundaries(GList *list, GstClockTime *t
 
 	g_assert(list != NULL);
 
-	*t_start = GST_BUFFER_TIMESTAMP(GST_BUFFER(g_list_first(list)->data));
+	*t_start = GST_BUFFER_PTS(GST_BUFFER(g_list_first(list)->data));
 	last = GST_BUFFER(g_list_last(list)->data);
-	*t_end = GST_BUFFER_TIMESTAMP(last) + GST_BUFFER_DURATION(last);
+	*t_end = GST_BUFFER_PTS(last) + GST_BUFFER_DURATION(last);
 
 	g_assert_cmpuint(*t_start, <=, *t_end);
 }
@@ -773,7 +773,7 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 		 * safety checks
 		 */
 
-		g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(this_buf));
+		g_assert(GST_BUFFER_PTS_IS_VALID(this_buf));
 		g_assert(GST_BUFFER_DURATION_IS_VALID(this_buf));
 
 		while((next = g_list_next(this))) {
@@ -783,14 +783,14 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 			 * safety checks
 			 */
 
-			g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(next_buf));
+			g_assert(GST_BUFFER_PTS_IS_VALID(next_buf));
 			g_assert(GST_BUFFER_DURATION_IS_VALID(next_buf));
 
 			/*
 			 * allow 1 ns of timestamp mismatch
 			 */
 
-			if(llabs(GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(this_buf) + GST_BUFFER_DURATION(this_buf), GST_BUFFER_TIMESTAMP(next_buf))) > 1)
+			if(llabs(GST_CLOCK_DIFF(GST_BUFFER_PTS(this_buf) + GST_BUFFER_DURATION(this_buf), GST_BUFFER_PTS(next_buf))) > 1)
 				break;
 
 			/*
@@ -816,10 +816,10 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 			 */
 
 			{
-			GstClockTime end_time = GST_BUFFER_TIMESTAMP(next_buf) + GST_BUFFER_DURATION(next_buf);
+			GstClockTime end_time = GST_BUFFER_PTS(next_buf) + GST_BUFFER_DURATION(next_buf);
 			guint64 offset_end = GST_BUFFER_OFFSET_END(next_buf);
 			this_buf = this->data = gst_buffer_append(this_buf, next_buf);
-			GST_BUFFER_DURATION(this_buf) = end_time - GST_BUFFER_TIMESTAMP(this_buf);
+			GST_BUFFER_DURATION(this_buf) = end_time - GST_BUFFER_PTS(this_buf);
 			GST_BUFFER_OFFSET_END(this_buf) = offset_end;
 			}
 		}

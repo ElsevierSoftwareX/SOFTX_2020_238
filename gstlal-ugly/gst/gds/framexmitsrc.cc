@@ -279,7 +279,7 @@ static void *receive_thread(void *arg)
 			0, len,
 			data, free
 		);
-		GST_BUFFER_TIMESTAMP(buffer) = timestamp * GST_SECOND;
+		GST_BUFFER_PTS(buffer) = timestamp * GST_SECOND;
 		GST_BUFFER_DURATION(buffer) = duration * GST_SECOND;
 		GST_BUFFER_OFFSET(buffer) = sequence;
 		GST_BUFFER_OFFSET_END(buffer) = sequence + 1;
@@ -487,15 +487,15 @@ try_again:
 			g_assert(GST_CLOCK_TIME_IS_VALID(t_before));
 
 			*buffer = gst_buffer_new();
-			GST_BUFFER_TIMESTAMP(*buffer) = t_before;
+			GST_BUFFER_PTS(*buffer) = t_before;
 			if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
-				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
+				GST_BUFFER_PTS(*buffer) -= element->max_latency;
 			GST_BUFFER_DURATION(*buffer) = 0;
 			GST_BUFFER_OFFSET(*buffer) = GST_BUFFER_OFFSET_NONE;
 			GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
 
-			GST_DEBUG_OBJECT(element, "created 0-length heartbeat buffer with timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
-			if(GST_CLOCK_TIME_IS_VALID(element->next_timestamp) && GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
+			GST_DEBUG_OBJECT(element, "created 0-length heartbeat buffer with timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(*buffer)));
+			if(GST_CLOCK_TIME_IS_VALID(element->next_timestamp) && GST_BUFFER_PTS(*buffer) < element->next_timestamp) {
 				GST_LOG_OBJECT(element, "timestamp reversal.  trying again to wait for data.");
 				gst_buffer_unref(*buffer);
 				*buffer = NULL;
@@ -520,18 +520,18 @@ try_again:
 	 * check for disconts
 	 */
 
-	if(!GST_CLOCK_TIME_IS_VALID(element->next_timestamp) || GST_BUFFER_TIMESTAMP(*buffer) != element->next_timestamp) {
+	if(!GST_CLOCK_TIME_IS_VALID(element->next_timestamp) || GST_BUFFER_PTS(*buffer) != element->next_timestamp) {
 		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
-		GST_WARNING_OBJECT(element, "discontinuity @ %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
+		GST_WARNING_OBJECT(element, "discontinuity @ %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(*buffer)));
 	}
-	element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
+	element->next_timestamp = GST_BUFFER_PTS(*buffer) + GST_BUFFER_DURATION(*buffer);
 
 	/*
 	 * update latency
 	 */
 
 	if(!timeout) {
-		element->max_latency = GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(*buffer), GPSNow());
+		element->max_latency = GST_CLOCK_DIFF(GST_BUFFER_PTS(*buffer), GPSNow());
 		element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
 	}
 	GST_DEBUG_OBJECT(element, "latency = [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(element->min_latency), GST_TIME_SECONDS_ARGS(element->max_latency));
@@ -541,7 +541,7 @@ try_again:
 	 */
 
 	if(element->need_new_segment) {
-		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_TIMESTAMP(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_TIMESTAMP(*buffer));
+		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_PTS(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_PTS(*buffer));
 		element->need_new_segment = FALSE;
 	}
 

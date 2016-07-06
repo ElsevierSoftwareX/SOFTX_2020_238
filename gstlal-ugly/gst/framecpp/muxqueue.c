@@ -81,9 +81,9 @@ static GstClockTime _framecpp_muxqueue_t_start(FrameCPPMuxQueue *queue)
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
 	GstBuffer *buf = GST_BUFFER(g_queue_peek_head(adapter->queue));
 
-	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
+	g_assert(GST_BUFFER_PTS_IS_VALID(buf));
 
-	return GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(adapter->skip, GST_SECOND, queue->rate);
+	return GST_BUFFER_PTS(buf) + gst_util_uint64_scale_int_round(adapter->skip, GST_SECOND, queue->rate);
 }
 
 
@@ -93,10 +93,10 @@ static GstClockTime _framecpp_muxqueue_t_end(FrameCPPMuxQueue *queue)
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(queue);
 	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
 
-	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
+	g_assert(GST_BUFFER_PTS_IS_VALID(buf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
 
-	return GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+	return GST_BUFFER_PTS(buf) + GST_BUFFER_DURATION(buf);
 }
 
 
@@ -155,7 +155,7 @@ gboolean framecpp_muxqueue_push(FrameCPPMuxQueue *queue, GstBuffer *buf)
 	gboolean abswitch = FALSE;
 	gboolean success = TRUE;
 
-	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
+	g_assert(GST_BUFFER_PTS_IS_VALID(buf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
 	g_assert_cmpuint(gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buf), queue->rate, GST_SECOND), ==, GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf));
 
@@ -241,11 +241,11 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 		/* FIXME:  if GstAudioAdapter knew the sample rate it could
 		this itself */
 		GstBuffer *origbuf = GST_BUFFER(g_queue_peek_head(adapter->queue));
-		gint64 delta = _framecpp_muxqueue_t_start(queue) - GST_BUFFER_TIMESTAMP(origbuf);
+		gint64 delta = _framecpp_muxqueue_t_start(queue) - GST_BUFFER_PTS(origbuf);
 		result->data = gst_buffer_make_writable(GST_BUFFER(result->data));
 		g_assert_cmpint(delta, >=, 0);
 		g_assert_cmpuint(delta, <=, GST_BUFFER_DURATION(origbuf));
-		GST_BUFFER_TIMESTAMP(result->data) = GST_BUFFER_TIMESTAMP(origbuf) + delta;
+		GST_BUFFER_PTS(result->data) = GST_BUFFER_PTS(origbuf) + delta;
 		GST_BUFFER_DURATION(result->data) = GST_BUFFER_DURATION(origbuf) - delta;
 	}
 	FRAMECPP_MUXQUEUE_UNLOCK(queue);
@@ -253,7 +253,7 @@ GList *framecpp_muxqueue_get_list(FrameCPPMuxQueue *queue, GstClockTime time)
 	for(head = result; head && g_list_next(head); head = g_list_next(head)) {
 		GstBuffer *this = GST_BUFFER(head->data);
 		GstBuffer *next = GST_BUFFER(g_list_next(head)->data);
-		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(this) + GST_BUFFER_DURATION(this), ==, GST_BUFFER_TIMESTAMP(next));
+		g_assert_cmpuint(GST_BUFFER_PTS(this) + GST_BUFFER_DURATION(this), ==, GST_BUFFER_PTS(next));
 		g_assert_cmpuint(GST_BUFFER_OFFSET_END(this), ==, GST_BUFFER_OFFSET(next));
 	}
 	if(head) {

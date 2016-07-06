@@ -113,25 +113,25 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf)
 	if(element->next_offset != GST_BUFFER_OFFSET_NONE) {
 		gboolean is_discont = GST_BUFFER_IS_DISCONT(buf);
 
-		if(GST_BUFFER_OFFSET(buf) != element->next_offset || GST_BUFFER_TIMESTAMP(buf) != element->next_timestamp) {
+		if(GST_BUFFER_OFFSET(buf) != element->next_offset || GST_BUFFER_PTS(buf) != element->next_timestamp) {
 			if(!is_discont) {
 				buf = gst_buffer_make_writable(buf);
 				GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 				if(!element->silent)
-					fprintf(stderr, "%s: set missing discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
+					fprintf(stderr, "%s: set missing discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(buf)));
 			}
 		} else {
 			if(is_discont) {
 				buf = gst_buffer_make_writable(buf);
 				GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_DISCONT);
 				if(!element->silent)
-					fprintf(stderr, "%s: cleared improper discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
+					fprintf(stderr, "%s: cleared improper discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(buf)));
 			}
 		}
 	}
 
 	element->next_offset = GST_BUFFER_OFFSET_END(buf);
-	element->next_timestamp = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+	element->next_timestamp = GST_BUFFER_PTS(buf) + GST_BUFFER_DURATION(buf);
 
 	result = gst_pad_push(element->srcpad, buf);
 

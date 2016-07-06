@@ -287,7 +287,7 @@ static GstFlowReturn push_subbuf(GstPad *pad, GstBuffer *template,
     guint size = GST_BUFFER_SIZE(template);
     guint64 s0 = GST_BUFFER_OFFSET(template);      /* first sample */
     guint64 s1 = GST_BUFFER_OFFSET_END(template);  /* last sample + 1 */
-    GstClockTime t = GST_BUFFER_TIMESTAMP(template);
+    GstClockTime t = GST_BUFFER_PTS(template);
     GstClockTime dt = GST_BUFFER_DURATION(template);
 
     if (gap) {
@@ -313,12 +313,12 @@ static GstFlowReturn push_subbuf(GstPad *pad, GstBuffer *template,
 
     GST_BUFFER_OFFSET(buf)     = s0 + (guint64) round(f0 * (s1 - s0));
     GST_BUFFER_OFFSET_END(buf) = s0 + (guint64) round(f1 * (s1 - s0));
-    if (GST_BUFFER_TIMESTAMP_IS_VALID(template)) {
-        GST_BUFFER_TIMESTAMP(buf) = t + (GstClockTime) round(f0 * dt);
+    if (GST_BUFFER_PTS_IS_VALID(template)) {
+        GST_BUFFER_PTS(buf) = t + (GstClockTime) round(f0 * dt);
         GST_BUFFER_DURATION(buf) = (GstClockTime) round((f1 - f0) * dt);
     }
     else {
-        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
+        GST_BUFFER_PTS(buf) = GST_CLOCK_TIME_NONE;
         GST_BUFFER_DURATION(buf) = GST_CLOCK_TIME_NONE;
     }
 

@@ -131,7 +131,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
         GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
 
         /* set the time stamps */
-        GST_BUFFER_TIMESTAMP(srcbuf) = time;
+        GST_BUFFER_PTS(srcbuf) = time;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	/* FIXME do error checking */

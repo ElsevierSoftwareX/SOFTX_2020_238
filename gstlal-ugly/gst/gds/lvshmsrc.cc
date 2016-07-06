@@ -393,20 +393,20 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				GST_DEBUG_OBJECT(element, "timeout occured, creating 0-length heartbeat buffer");
 
 				*buffer = gst_buffer_new();
-				GST_BUFFER_TIMESTAMP(*buffer) = t_before;
+				GST_BUFFER_PTS(*buffer) = t_before;
 				if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
-					GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
-				if(GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
+					GST_BUFFER_PTS(*buffer) -= element->max_latency;
+				if(GST_BUFFER_PTS(*buffer) < element->next_timestamp) {
 					GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
 					gst_buffer_unref(*buffer);
 					*buffer = NULL;
 					continue;
 				}
-				GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
+				GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(*buffer)));
 				GST_BUFFER_DURATION(*buffer) = 0;
 				GST_BUFFER_OFFSET(*buffer) = offset;
 				GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
-				element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
+				element->next_timestamp = GST_BUFFER_PTS(*buffer) + GST_BUFFER_DURATION(*buffer);
 				return result;
 			} else {
 				/*
@@ -461,13 +461,13 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		goto done;
 	}
 	memcpy(mapinfo.data, data, length);
-	GST_BUFFER_TIMESTAMP(*buffer) = timestamp;
+	GST_BUFFER_PTS(*buffer) = timestamp;
 	GST_BUFFER_DURATION(*buffer) = element->assumed_duration * GST_SECOND;	/* FIXME:  we need to know this! */
 	GST_BUFFER_OFFSET(*buffer) = offset;
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
-	element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
+	element->next_timestamp = GST_BUFFER_PTS(*buffer) + GST_BUFFER_DURATION(*buffer);
 
-	element->max_latency = GPSNow() - GST_BUFFER_TIMESTAMP(*buffer);
+	element->max_latency = GPSNow() - GST_BUFFER_PTS(*buffer);
 	element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
 	gst_buffer_unmap(*buffer, &mapinfo);
 
@@ -476,7 +476,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 */
 
 	if(element->need_new_segment) {
-		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_TIMESTAMP(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_TIMESTAMP(*buffer));
+		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_PTS(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_PTS(*buffer));
 		element->need_new_segment = FALSE;
 	}
 

@@ -414,7 +414,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 				for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
 					GstBuffer *buffer = GST_BUFFER(buffer_list->data);
-					GstClockTime buffer_t_start = GST_BUFFER_TIMESTAMP(buffer);
+					GstClockTime buffer_t_start = GST_BUFFER_PTS(buffer);
 					GstClockTime buffer_t_end = buffer_t_start + GST_BUFFER_DURATION(buffer);
 
 					/*
@@ -429,7 +429,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					 * information.
 					 */
 
-					g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
+					g_assert(GST_BUFFER_PTS_IS_VALID(buffer));
 					g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
 					g_assert_cmpuint(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer), ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buffer), appdata->rate, GST_SECOND));
 					if(llabs(frame_t_start - buffer_t_start) <= 1)
@@ -488,7 +488,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 			mux->need_discont = FALSE;
 		}
-		GST_BUFFER_TIMESTAMP(outbuf) = gwf_t_start;
+		GST_BUFFER_PTS(outbuf) = gwf_t_start;
 		GST_BUFFER_DURATION(outbuf) = gwf_t_end - gwf_t_start;
 		GST_BUFFER_OFFSET(outbuf) = mux->next_out_offset;
 		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + mapinfo.size;

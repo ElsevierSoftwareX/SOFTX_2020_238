@@ -280,7 +280,7 @@ static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect>
 	 * set timestamp and duration
 	 */
 
-	GST_BUFFER_TIMESTAMP(buffer) = timestamp + (GstClockTime) round(vect->GetDim(0).GetStartX() * GST_SECOND);
+	GST_BUFFER_PTS(buffer) = timestamp + (GstClockTime) round(vect->GetDim(0).GetStartX() * GST_SECOND);
 	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, rate);
 	GST_BUFFER_OFFSET(buffer) = offset;
 	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
@@ -306,21 +306,21 @@ static GstBuffer *my_gst_audio_buffer_clip(GstBuffer *buffer, const GstSegment *
 	g_assert_cmpuint((GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer)) * unit_size, ==, gst_buffer_get_size(buffer));
 
 	if(GST_CLOCK_TIME_IS_VALID(segment->start)) {
-		if(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer) <= (guint64) segment->start) {
+		if(GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer) <= (guint64) segment->start) {
 			gst_buffer_unref(buffer);
 			return NULL;
 		}
-		offset = gst_util_uint64_scale_int_round(MAX(GST_BUFFER_TIMESTAMP(buffer), (guint64) segment->start) - GST_BUFFER_TIMESTAMP(buffer), rate, GST_SECOND);
+		offset = gst_util_uint64_scale_int_round(MAX(GST_BUFFER_PTS(buffer), (guint64) segment->start) - GST_BUFFER_PTS(buffer), rate, GST_SECOND);
 		g_assert_cmpuint(offset, <=, GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer));
 	} else
 		offset = 0;
 
 	if(GST_CLOCK_TIME_IS_VALID(segment->stop)) {
-		if(GST_BUFFER_TIMESTAMP(buffer) >= (guint64) segment->stop) {
+		if(GST_BUFFER_PTS(buffer) >= (guint64) segment->stop) {
 			gst_buffer_unref(buffer);
 			return NULL;
 		}
-		offset_end = gst_util_uint64_scale_int_round(MIN(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), (guint64) segment->stop) - GST_BUFFER_TIMESTAMP(buffer), rate, GST_SECOND);
+		offset_end = gst_util_uint64_scale_int_round(MIN(GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer), (guint64) segment->stop) - GST_BUFFER_PTS(buffer), rate, GST_SECOND);
 		g_assert_cmpuint(offset_end, <=, GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer));
 	} else
 		offset_end = GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer);
@@ -330,7 +330,7 @@ static GstBuffer *my_gst_audio_buffer_clip(GstBuffer *buffer, const GstSegment *
 	if(offset_end - offset != GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer)) {
 		GST_DEBUG("clipping buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT " ...", GST_BUFFER_BOUNDARIES_ARGS(buffer));
 		gst_buffer_resize(buffer, offset * unit_size, (offset_end - offset) * unit_size);
-		GST_BUFFER_TIMESTAMP(buffer) += gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
+		GST_BUFFER_PTS(buffer) += gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
 		GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int_round(offset_end, GST_SECOND, rate) - gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
 		GST_BUFFER_OFFSET_END(buffer) = GST_BUFFER_OFFSET(buffer) + offset_end;
 		GST_BUFFER_OFFSET(buffer) += offset;
@@ -624,9 +624,9 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	 * check for disconts
 	 */
 
-	if(GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && GST_BUFFER_TIMESTAMP(buffer) < pad_state->next_timestamp)
-		GST_WARNING_OBJECT(pad, "time reversal detected:  expected %" GST_TIME_SECONDS_FORMAT ", got %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(pad_state->next_timestamp), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buffer)));
-	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
+	if(GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && GST_BUFFER_PTS(buffer) < pad_state->next_timestamp)
+		GST_WARNING_OBJECT(pad, "time reversal detected:  expected %" GST_TIME_SECONDS_FORMAT ", got %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(pad_state->next_timestamp), GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(buffer)));
+	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_PTS(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
 		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
 		pad_state->need_discont = FALSE;
 	}
@@ -635,7 +635,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element,
 	 * record state for next time
 	 */
 
-	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+	pad_state->next_timestamp = GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer);
 	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
 
 	/*
@@ -677,7 +677,7 @@ static GstFlowReturn push_heart_beat(GstFrameCPPChannelDemux *element, GstPad *p
 	 */
 
 	buffer = gst_buffer_new();
-	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
+	GST_BUFFER_PTS(buffer) = timestamp;
 	GST_BUFFER_DURATION(buffer) = 0;
 	GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_END(buffer) = pad_state->next_out_offset;
 
@@ -685,7 +685,7 @@ static GstFlowReturn push_heart_beat(GstFrameCPPChannelDemux *element, GstPad *p
 	 * check for disconts
 	 */
 
-	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
+	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_PTS(buffer) - pad_state->next_timestamp) > MAX_TIMESTAMP_JITTER)) {
 		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
 		pad_state->need_discont = FALSE;
 	}
@@ -694,7 +694,7 @@ static GstFlowReturn push_heart_beat(GstFrameCPPChannelDemux *element, GstPad *p
 	 * record state for next time
 	 */
 
-	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+	pad_state->next_timestamp = GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer);
 	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
 
 	/*
@@ -824,7 +824,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 	 */
 
 	if(!mapinfo.size) {
-		result = forward_heart_beat(element, GST_BUFFER_TIMESTAMP(inbuf));
+		result = forward_heart_beat(element, GST_BUFFER_PTS(inbuf));
 		goto done;
 	}
 

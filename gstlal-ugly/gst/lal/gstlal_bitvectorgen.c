@@ -473,7 +473,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 
 		if(element->emit_signals && (state != element->last_state))
-			g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, GST_BUFFER_TIMESTAMP(inbuf), NULL);
+			g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, GST_BUFFER_PTS(inbuf), NULL);
 		element->last_state = state;
 	} else {
 		GstMapInfo inmap;
@@ -490,7 +490,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			if(element->emit_signals && state != element->last_state) {
 				/* need to use in_saved because in has been
 				 * incremented */
-				GstClockTime timestamp = GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(in_saved - inmap.data, GST_BUFFER_DURATION(inbuf), inmap.size);
+				GstClockTime timestamp = GST_BUFFER_PTS(inbuf) + gst_util_uint64_scale_int_round(in_saved - inmap.data, GST_BUFFER_DURATION(inbuf), inmap.size);
 				g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
 			}
 			element->last_state = state;

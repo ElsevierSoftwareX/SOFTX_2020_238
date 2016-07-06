@@ -402,13 +402,13 @@ static GstFlowReturn push_gap(GstPad *pad, enum buf_type type)
         GST_BUFFER_OFFSET(buf) = offset - nsamples;
         GST_BUFFER_OFFSET_END(buf) = offset;
         GST_BUFFER_DURATION(buf) = duration;
-        GST_BUFFER_TIMESTAMP(buf) = t - duration;
+        GST_BUFFER_PTS(buf) = t - duration;
     }
     else if (type == TYPE_POST) {
         GST_BUFFER_OFFSET(buf) = offset_end;
         GST_BUFFER_OFFSET_END(buf) = offset_end + nsamples;
         GST_BUFFER_DURATION(buf) = duration;
-        GST_BUFFER_TIMESTAMP(buf) = t + dt;
+        GST_BUFFER_PTS(buf) = t + dt;
     }
 
     /* If we wanted to fill a buffer with something instead of
@@ -497,7 +497,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
     /* Save info from buffer in case it is the first one or the last one */
     elem->saved_offset = GST_BUFFER_OFFSET(buf);
     elem->saved_offset_end = GST_BUFFER_OFFSET_END(buf);
-    elem->saved_timestamp = GST_BUFFER_TIMESTAMP(buf);
+    elem->saved_timestamp = GST_BUFFER_PTS(buf);
     elem->saved_duration = GST_BUFFER_DURATION(buf);
 
     /* Send the pre-pad before the buffer, for the 1st buffer */

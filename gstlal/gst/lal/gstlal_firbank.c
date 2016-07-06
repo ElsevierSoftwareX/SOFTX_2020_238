@@ -274,9 +274,9 @@ static int push_gap(GSTLALFIRBank *element, unsigned samples)
 			return -1;
 		}
 		GST_BUFFER_FLAG_SET(zerobuf, GST_BUFFER_FLAG_GAP);
-		GST_BUFFER_TIMESTAMP(zerobuf) = gst_audioadapter_expected_timestamp(element->adapter);
-		if(!GST_BUFFER_TIMESTAMP_IS_VALID(zerobuf))
-			GST_BUFFER_TIMESTAMP(zerobuf) = 0;
+		GST_BUFFER_PTS(zerobuf) = gst_audioadapter_expected_timestamp(element->adapter);
+		if(!GST_BUFFER_PTS_IS_VALID(zerobuf))
+			GST_BUFFER_PTS(zerobuf) = 0;
 		GST_BUFFER_DURATION(zerobuf) = gst_util_uint64_scale_int_round(samples, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
 		GST_BUFFER_OFFSET(zerobuf) = gst_audioadapter_expected_offset(element->adapter);
 		if(!GST_BUFFER_OFFSET_IS_VALID(zerobuf))
@@ -299,8 +299,8 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)) - GST_BUFFER_PTS(buf);
 	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -1479,7 +1479,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_PTS_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
@@ -1529,7 +1529,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * (re)sync timestamp and offset book-keeping
 		 */
 
-		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+		element->t0 = GST_BUFFER_PTS(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_out_offset = element->offset0 + fir_length(element) - 1 - element->latency;
 
@@ -1539,7 +1539,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->need_discont = TRUE;
 	} else if(!gst_audioadapter_is_empty(element->adapter))
-		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
+		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*

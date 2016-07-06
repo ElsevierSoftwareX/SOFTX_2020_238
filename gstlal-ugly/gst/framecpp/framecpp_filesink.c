@@ -183,11 +183,11 @@ static GstPadProbeReturn probeBufferHandler(GstPad *pad, GstPadProbeInfo *info, 
     g_assert(gst_pad_is_linked(pad));
 
     /* Buffer looks good, else die. */
-    g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
+    g_assert(GST_BUFFER_PTS_IS_VALID(buffer));
     g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
 
     /* Set the element timestamp property */
-    element->timestamp = GST_BUFFER_TIMESTAMP(buffer);
+    element->timestamp = GST_BUFFER_PTS(buffer);
     g_object_notify(G_OBJECT(element), "timestamp");
 
     if (!(element->instrument)) {
@@ -200,8 +200,8 @@ static GstPadProbeReturn probeBufferHandler(GstPad *pad, GstPadProbeInfo *info, 
         goto done;
     }
 
-    timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
-    end_time = gst_util_uint64_scale_ceil(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
+    timestamp = GST_BUFFER_PTS(buffer)/GST_SECOND;
+    end_time = gst_util_uint64_scale_ceil(GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
     duration = end_time - timestamp;
     /* The interval indicated by the filename should "cover" the actual 
     data interval. */

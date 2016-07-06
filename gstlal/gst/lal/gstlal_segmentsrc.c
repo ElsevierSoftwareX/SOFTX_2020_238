@@ -128,8 +128,8 @@ enum property {
 static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer, GstMapInfo *info)
 {
     guint8 *data;
-    GstClockTime start = GST_BUFFER_TIMESTAMP(buffer);
-    GstClockTime stop = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+    GstClockTime start = GST_BUFFER_PTS(buffer);
+    GstClockTime stop = GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer);
     gint i;
 
     data = info->data;
@@ -196,7 +196,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      */
 
     GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + numsamps;
-    GST_BUFFER_TIMESTAMP(*buffer) = start;
+    GST_BUFFER_PTS(*buffer) = start;
     GST_BUFFER_DURATION(*buffer) = stop - start;
 
     /*

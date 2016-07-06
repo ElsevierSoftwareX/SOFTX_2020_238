@@ -187,7 +187,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		/* create a temporary buffer holding the data */
 		tmpbuf = gst_buffer_new_and_alloc(chanc * sizeof(double));
 		memcpy(GST_BUFFER_DATA(tmpbuf), chanv, GST_BUFFER_SIZE(tmpbuf));
-		GST_BUFFER_TIMESTAMP(tmpbuf) = t;
+		GST_BUFFER_PTS(tmpbuf) = t;
 
 		/* join this to the current buffer, if it exists */
 		srcbuf = srcbuf ? gst_buffer_join(srcbuf, tmpbuf) : tmpbuf;
@@ -198,17 +198,17 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	/* set buffer and caps on source pad */
 	if (srcbuf && GST_BUFFER_SIZE(srcbuf)) {
 		if (element->rate == 0) { /* if rate is unset, compute it */
-			GstClockTime dt = t - GST_BUFFER_TIMESTAMP(srcbuf);
+			GstClockTime dt = t - GST_BUFFER_PTS(srcbuf);
 			element->rate = round((nlines - 1) * 1e9 / dt);
 			gst_caps_set_simple(caps, "rate", G_TYPE_INT, element->rate, NULL);
 			gst_pad_set_caps(element->srcpad, caps);
 		}
 		
 		/* recompute timestamps from first time, offsets, and rate */
-		GST_BUFFER_TIMESTAMP(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset, GST_SECOND, element->rate);
+		GST_BUFFER_PTS(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset, GST_SECOND, element->rate);
 		GST_BUFFER_OFFSET(srcbuf) = element->offset;
 		GST_BUFFER_OFFSET_END(srcbuf) = element->offset += nlines;
-		GST_BUFFER_DURATION(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(srcbuf);
+		GST_BUFFER_DURATION(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset, GST_SECOND, element->rate) - GST_BUFFER_PTS(srcbuf);
 
 		if (element->newsegment == TRUE) {
 			/* push newsegment event */

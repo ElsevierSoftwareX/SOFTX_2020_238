@@ -780,15 +780,15 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	// TODO: Ask John Zweizig how to get timestamp and duration of block; this
 	// struct is part of an obsolete interface according to Doxygen documentation
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + nsamples;
-	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * daq_get_block_gps(element->daq) + daq_get_block_gpsn(element->daq);
+	GST_BUFFER_PTS(*buffer) = GST_SECOND * daq_get_block_gps(element->daq) + daq_get_block_gpsn(element->daq);
 	GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
 
 	if (should_push_newsegment)
 	{
 		if (!gst_base_src_new_seamless_segment(basesrc,
-			GST_BUFFER_TIMESTAMP(*buffer),
+			GST_BUFFER_PTS(*buffer),
 			basesrc->segment.stop,
-			GST_BUFFER_TIMESTAMP(*buffer)))
+			GST_BUFFER_PTS(*buffer)))
 		{
 			GST_ERROR_OBJECT(element, "failed to create new segment");
 		}

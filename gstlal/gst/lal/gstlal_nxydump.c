@@ -556,12 +556,12 @@ static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
    * of this buffer, clipped to the buffer edges.
    */
 
-  if(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf)) {
+  if(GST_BUFFER_PTS_IS_VALID(inbuf)) {
     start =
-        timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(inbuf), length,
+        timestamp_to_sample_clipped(GST_BUFFER_PTS(inbuf), length,
         GST_AUDIO_INFO_RATE(&element->audio_info), element->start_time);
     stop =
-        timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(inbuf), length,
+        timestamp_to_sample_clipped(GST_BUFFER_PTS(inbuf), length,
         GST_AUDIO_INFO_RATE(&element->audio_info), element->stop_time);
   } else {
     /* don't know the buffer's start time, go ahead and process
@@ -595,7 +595,7 @@ static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
 
       result =
           print_samples(outbuf,
-                GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start,
+                GST_BUFFER_PTS(inbuf) + gst_util_uint64_scale_int_round(start,
                 GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)),
                 mapinfo.data + start * element->unit_size,
                 element->printsample,

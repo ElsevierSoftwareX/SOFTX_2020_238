@@ -595,13 +595,13 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		guint nevents = 0;
 
 		g_mutex_lock(&element->bank_lock);
-		length = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
-		if(GST_BUFFER_TIMESTAMP(snrbuf) > GST_BUFFER_TIMESTAMP(chisqbuf)) {
-			t0 = GST_BUFFER_TIMESTAMP(snrbuf);
-			chisqdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(snrbuf) - GST_BUFFER_TIMESTAMP(chisqbuf), element->rate, GST_SECOND) * element->num_templates;
+		length = MIN(GST_BUFFER_PTS(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_PTS(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
+		if(GST_BUFFER_PTS(snrbuf) > GST_BUFFER_PTS(chisqbuf)) {
+			t0 = GST_BUFFER_PTS(snrbuf);
+			chisqdata += gst_util_uint64_scale_int_round(GST_BUFFER_PTS(snrbuf) - GST_BUFFER_PTS(chisqbuf), element->rate, GST_SECOND) * element->num_templates;
 		} else {
-			t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
-			snrdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(chisqbuf) - GST_BUFFER_TIMESTAMP(snrbuf), element->rate, GST_SECOND) * element->num_templates;
+			t0 = GST_BUFFER_PTS(chisqbuf);
+			snrdata += gst_util_uint64_scale_int_round(GST_BUFFER_PTS(chisqbuf) - GST_BUFFER_PTS(snrbuf), element->rate, GST_SECOND) * element->num_templates;
 		}
 		length = gst_util_uint64_scale_int_round(length > t0 ? length - t0 : 0, element->rate, GST_SECOND);
 
@@ -700,13 +700,13 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * Push buffer downstream
 	 */
 
-	GST_BUFFER_TIMESTAMP(srcbuf) = MAX(GST_BUFFER_TIMESTAMP(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf));
-	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
-	GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(srcbuf) < GST_BUFFER_TIMESTAMP(srcbuf) ? 0 : GST_BUFFER_DURATION(srcbuf) - GST_BUFFER_TIMESTAMP(srcbuf);
+	GST_BUFFER_PTS(srcbuf) = MAX(GST_BUFFER_PTS(snrbuf), GST_BUFFER_PTS(chisqbuf));
+	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_PTS(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_PTS(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
+	GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(srcbuf) < GST_BUFFER_PTS(srcbuf) ? 0 : GST_BUFFER_DURATION(srcbuf) - GST_BUFFER_PTS(srcbuf);
 
-	if(element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf))
+	if(element->next_output_timestamp != GST_BUFFER_PTS(srcbuf))
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
+	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) + GST_BUFFER_DURATION(srcbuf);
 
 	gst_buffer_unref(snrbuf);
 	gst_buffer_unref(chisqbuf);

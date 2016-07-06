@@ -387,7 +387,7 @@ gst_multirate_fir_interp_push_residue (GstMultirateFirInterp * filter)
   if (G_LIKELY (filter->offset0 != GST_BUFFER_OFFSET_NONE))
     GST_BUFFER_OFFSET (outbuf) = filter->offset0 + filter->samples * filter->upsample_factor;
   if (G_LIKELY (GST_CLOCK_TIME_IS_VALID (filter->t0)))
-    GST_BUFFER_TIMESTAMP (outbuf) = filter->t0 + gst_util_uint64_scale_int_round(filter->samples * filter->upsample_factor, GST_SECOND, filter->outrate);
+    GST_BUFFER_PTS (outbuf) = filter->t0 + gst_util_uint64_scale_int_round(filter->samples * filter->upsample_factor, GST_SECOND, filter->outrate);
   filter->samples += (availsize - minsize) / (sizeof(double) * filter->channels);
   if (G_LIKELY (filter->offset0 != GST_BUFFER_OFFSET_NONE))
     GST_BUFFER_OFFSET_END (outbuf) = filter->offset0 + filter->samples * filter->upsample_factor;
@@ -462,7 +462,7 @@ gst_multirate_fir_interp_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
   /* Store initial timestamp and offset if this is the first buffer. */
   if (G_UNLIKELY (filter->needs_timestamp)) {
-    filter->t0 = GST_BUFFER_TIMESTAMP (inbuf);
+    filter->t0 = GST_BUFFER_PTS (inbuf);
     filter->offset0 = GST_BUFFER_OFFSET (inbuf);
     filter->needs_timestamp = FALSE;
 
@@ -511,7 +511,7 @@ gst_multirate_fir_interp_transform (GstBaseTransform * base, GstBuffer * inbuf,
   if (G_LIKELY (filter->offset0 != GST_BUFFER_OFFSET_NONE))
     GST_BUFFER_OFFSET (outbuf) = filter->offset0 + filter->samples * filter->upsample_factor;
   if (G_LIKELY (GST_CLOCK_TIME_IS_VALID (filter->t0)))
-    GST_BUFFER_TIMESTAMP (outbuf) = filter->t0 + gst_util_uint64_scale_int_round(filter->samples * filter->upsample_factor, GST_SECOND, filter->outrate);
+    GST_BUFFER_PTS (outbuf) = filter->t0 + gst_util_uint64_scale_int_round(filter->samples * filter->upsample_factor, GST_SECOND, filter->outrate);
   filter->samples += (availsize - minsize) / (sizeof(double) * filter->channels);
   if (G_LIKELY (filter->offset0 != GST_BUFFER_OFFSET_NONE))
     GST_BUFFER_OFFSET_END (outbuf) = filter->offset0 + filter->samples * filter->upsample_factor;

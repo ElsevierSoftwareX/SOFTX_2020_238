@@ -317,7 +317,7 @@ static GstBuffer * take_chisq_buffer_set_metadata(GSTLALBLCBCTriggerGen *element
 	guint64 dist;
 	GstClockTime time = gst_adapter_prev_timestamp(element->chisqadapter,&dist);
 	GstBuffer *buf = gst_adapter_take_buffer(element->chisqadapter, bytes);
-	GST_BUFFER_TIMESTAMP(buf) = time + chisq_bytes_to_time(element,dist);
+	GST_BUFFER_PTS(buf) = time + chisq_bytes_to_time(element,dist);
 	GST_BUFFER_DURATION(buf) = chisq_bytes_to_time(element, bytes);
 	return buf;
 }
@@ -333,7 +333,7 @@ static GstBuffer * take_snr_buffer_set_metadata(GSTLALBLCBCTriggerGen *element, 
 	guint64 dist;
 	GstClockTime time = gst_adapter_prev_timestamp(element->snradapter,&dist);
 	GstBuffer *buf = gst_adapter_take_buffer(element->snradapter, bytes);
-	GST_BUFFER_TIMESTAMP(buf) = time + snr_bytes_to_time(element,dist);
+	GST_BUFFER_PTS(buf) = time + snr_bytes_to_time(element,dist);
 	GST_BUFFER_DURATION(buf) = snr_bytes_to_time(element, bytes);
 	return buf;
 }
@@ -407,8 +407,8 @@ static void fix_snr_chisq_timestamps(GSTLALBLCBCTriggerGen *element, GstBuffer *
 	 * with timesamps that preceed the triggers, this fixes the timestamps
 	 */
 
-	GST_BUFFER_TIMESTAMP(snrbuf) += GST_BUFFER_DURATION(snrbuf);
-	GST_BUFFER_TIMESTAMP(chisqbuf) += GST_BUFFER_DURATION(chisqbuf);
+	GST_BUFFER_PTS(snrbuf) += GST_BUFFER_DURATION(snrbuf);
+	GST_BUFFER_PTS(chisqbuf) += GST_BUFFER_DURATION(chisqbuf);
 	return;
 }
 
@@ -475,7 +475,7 @@ static guint bounded_latency(GSTLALBLCBCTriggerGen *element, GstBuffer *snrbuf, 
 	 * const double *rightchisqdata = centerchisqdata + GST_BUFFER_SIZE(chisqbuf);
          */
 
-	guint64 t0 = GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf);
+	guint64 t0 = GST_BUFFER_PTS(snrbuf) + GST_BUFFER_DURATION(snrbuf);
 	guint sample;
 	gint channel;
 	SnglInspiralTable *head = NULL;
@@ -818,13 +818,13 @@ static GstFlowReturn push_buffer(GSTLALBLCBCTriggerGen *element, GstBuffer *srcb
 	 * A verbatim copy of the code used to push buffers
 	 */
 
-	GST_BUFFER_TIMESTAMP(srcbuf) = MAX(GST_BUFFER_TIMESTAMP(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf));
-	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf)) - GST_BUFFER_TIMESTAMP(srcbuf);
+	GST_BUFFER_PTS(srcbuf) = MAX(GST_BUFFER_PTS(snrbuf), GST_BUFFER_PTS(chisqbuf));
+	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_PTS(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_PTS(chisqbuf) + GST_BUFFER_DURATION(chisqbuf)) - GST_BUFFER_PTS(srcbuf);
 
-	if(element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf)) {
+	if(element->next_output_timestamp != GST_BUFFER_PTS(srcbuf)) {
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 	}
-	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
+	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) + GST_BUFFER_DURATION(srcbuf);
 
 	gst_buffer_unref(snrbuf);
 	gst_buffer_unref(chisqbuf);

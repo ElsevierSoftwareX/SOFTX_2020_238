@@ -1147,11 +1147,11 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		 * range of offsets.  we've checked above that time hasn't
 		 * gone backwards on any input buffer so gap can't be
 		 * negative. */
-		offset = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset;
+		offset = gst_util_uint64_scale_int_round(GST_BUFFER_PTS(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset;
 		offsetbytes = (guint64) offset * element->complex_unit_size;
 		inlength = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 		numbytes = inlength * element->complex_unit_size;
-		GST_LOG_OBJECT(element, "channel %p: retrieved %ld sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(inbuf)));
+		GST_LOG_OBJECT(element, "channel %p: retrieved %ld sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS(GST_BUFFER_PTS(inbuf)));
 
 		/* add to snr
 		 *
@@ -1212,7 +1212,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		 * gone backwards on any input buffer so gap can't be
 		 * negative. */
 
-		offset = inbuf ? gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset : 0;
+		offset = inbuf ? gst_util_uint64_scale_int_round(GST_BUFFER_PTS(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset : 0;
 		inlength = inbuf ? GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf) : 0;
 
 		/* FIXME: this double loop could be optimized such that there
@@ -1240,15 +1240,15 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/* set timestamps on the output buffer */
 	element->offset = GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + outlength;
 	GST_BUFFER_OFFSET(outbuf) = earliest_input_offset;
-	GST_BUFFER_TIMESTAMP(outbuf) = output_timestamp_from_offset(element, GST_BUFFER_OFFSET (outbuf));
-	if (GST_BUFFER_OFFSET(outbuf) == 0 || GST_BUFFER_TIMESTAMP(outbuf) != element->timestamp)
+	GST_BUFFER_PTS(outbuf) = output_timestamp_from_offset(element, GST_BUFFER_OFFSET (outbuf));
+	if (GST_BUFFER_OFFSET(outbuf) == 0 || GST_BUFFER_PTS(outbuf) != element->timestamp)
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 	else
 		GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_DISCONT);
 	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + outlength;
 	element->timestamp = output_timestamp_from_offset(element, GST_BUFFER_OFFSET_END(outbuf));
 	element->offset = GST_BUFFER_OFFSET_END(outbuf);
-	GST_BUFFER_DURATION(outbuf) = element->timestamp - GST_BUFFER_TIMESTAMP(outbuf);
+	GST_BUFFER_DURATION(outbuf) = element->timestamp - GST_BUFFER_PTS(outbuf);
 
 	/* push the buffer downstream. */
 	GST_LOG_OBJECT(element, "pushing outbuf %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, outbuf, GST_BUFFER_BOUNDARIES_ARGS(outbuf));

@@ -348,13 +348,13 @@ static GstClockTime compute_t_start(GstLALCollectData *data, GstBuffer *buf)
 {
 	/* FIXME:  could use GST_FRAMES_TO_CLOCK_TIME() but that macro is
 	 * defined in gst-plugins-base */
-	return  GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(((GstCollectData *) data)->pos / data->unit_size, GST_SECOND, data->rate);
+	return  GST_BUFFER_PTS(buf) + gst_util_uint64_scale_int_round(((GstCollectData *) data)->pos / data->unit_size, GST_SECOND, data->rate);
 }
 
 
 static GstClockTime compute_t_end(GstLALCollectData *data, GstBuffer *buf)
 {
-	return GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+	return GST_BUFFER_PTS(buf) + GST_BUFFER_DURATION(buf);
 }
 
 
@@ -410,7 +410,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 			return FALSE;
 		}
 
-		if(!GST_BUFFER_TIMESTAMP_IS_VALID(buf) || !GST_BUFFER_DURATION_IS_VALID(buf)) {
+		if(!GST_BUFFER_PTS_IS_VALID(buf) || !GST_BUFFER_DURATION_IS_VALID(buf)) {
 			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": %" GST_PTR_FORMAT " does not have a valid timestamp and/or duration", ((GstCollectData *) data)->pad, buf);
 			gst_buffer_unref(buf);
 			return FALSE;
@@ -559,7 +559,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	buf = gst_buffer_make_writable(buf);
 	GST_BUFFER_OFFSET(buf) = offset;
 	GST_BUFFER_OFFSET_END(buf) = offset + units;
-	GST_BUFFER_TIMESTAMP(buf) = buf_t_start;
+	GST_BUFFER_PTS(buf) = buf_t_start;
 	/* FIXME:  could use GST_FRAMES_TO_CLOCK_TIME() but that macro is
 	 * defined in gst-plugins-base */
 	GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(units, GST_SECOND, data->rate);

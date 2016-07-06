@@ -253,7 +253,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 	gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
 
 	GST_DEBUG_OBJECT(element, "sending %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
-	if(!FRAMESEND(element)->send((char *) mapinfo.data, mapinfo.size, NULL, TRUE, GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND, GST_BUFFER_DURATION(buffer) / GST_SECOND)) {
+	if(!FRAMESEND(element)->send((char *) mapinfo.data, mapinfo.size, NULL, TRUE, GST_BUFFER_PTS(buffer) / GST_SECOND, GST_BUFFER_DURATION(buffer) / GST_SECOND)) {
 		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameSend.send() failed"));
 		result = GST_FLOW_ERROR;
 	}

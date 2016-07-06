@@ -597,7 +597,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *co
 	 * check validity of timestamp and offsets
 	 */
 
-	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(controlbuf) && GST_BUFFER_DURATION_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_END_IS_VALID(controlbuf))) {
+	if(!(GST_BUFFER_PTS_IS_VALID(controlbuf) && GST_BUFFER_DURATION_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_END_IS_VALID(controlbuf))) {
 		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(controlbuf)));
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -609,8 +609,8 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *co
 	 */
 
 	g_mutex_lock(&element->control_lock);
-	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_TIMESTAMP(controlbuf) < element->t_sink_head) || !element->control_segments->len)) {
-		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(controlbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_TIMESTAMP(controlbuf) >= element->t_sink_head);
+	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_PTS(controlbuf) < element->t_sink_head) || !element->control_segments->len)) {
+		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(controlbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_PTS(controlbuf) >= element->t_sink_head);
 		g_cond_wait(&element->control_queue_head_changed, &element->control_lock);
 	}
 
@@ -631,7 +631,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *co
 
 
 	if(GST_BUFFER_FLAG_IS_SET(controlbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(controlbuf)) {
-		control_add_segment(element, GST_BUFFER_TIMESTAMP(controlbuf), GST_BUFFER_TIMESTAMP(controlbuf) + GST_BUFFER_DURATION(controlbuf), FALSE);
+		control_add_segment(element, GST_BUFFER_PTS(controlbuf), GST_BUFFER_PTS(controlbuf) + GST_BUFFER_DURATION(controlbuf), FALSE);
 	} else {
 		GstMapInfo info;
 		guint buffer_length = GST_BUFFER_OFFSET_END(controlbuf) - GST_BUFFER_OFFSET(controlbuf);
@@ -647,7 +647,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *co
 				if(state != (element->control_sample_func(info.data, segment_start + segment_length) >= element->threshold))
 					/* state has changed */
 					break;
-			control_add_segment(element, GST_BUFFER_TIMESTAMP(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start + segment_length, buffer_length), state);
+			control_add_segment(element, GST_BUFFER_PTS(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start, buffer_length), GST_BUFFER_PTS(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start + segment_length, buffer_length), state);
 		}
 		gst_buffer_unmap(controlbuf, &info);
 	}
@@ -737,7 +737,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 	 * check validity of timestamp and offsets
 	 */
 
-	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
+	if(!(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
 		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -754,7 +754,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 
 	GST_DEBUG_OBJECT(element->sinkpad, "got buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 	g_assert_cmpuint(sinkbuf_length, ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), element->rate, GST_SECOND));
-	control_get_interval(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_DURATION(sinkbuf));
+	control_get_interval(element, GST_BUFFER_PTS(sinkbuf), GST_BUFFER_DURATION(sinkbuf));
 
 	/*
 	 * is input zero size or already a gap?  then push it as is
@@ -787,7 +787,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 		 */
 
 		if(element->emit_signals && FALSE != element->last_state)
-			g_signal_emit(G_OBJECT(element), signals[SIGNAL_STOP], 0, GST_BUFFER_TIMESTAMP(sinkbuf), NULL);
+			g_signal_emit(G_OBJECT(element), signals[SIGNAL_STOP], 0, GST_BUFFER_PTS(sinkbuf), NULL);
 		element->last_state = FALSE;
 
 		if(element->leaky) {
@@ -838,9 +838,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 		 */
 
 		g_mutex_lock(&element->control_lock);
-		state = control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) start - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) start + element->attack_length, element->rate));
+		state = control_get_state(element, timestamp_add_offset(GST_BUFFER_PTS(sinkbuf), (gint64) start - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_PTS(sinkbuf), (gint64) start + element->attack_length, element->rate));
 		for(length = 1; start + length < sinkbuf_length; length++) {
-			if(state != control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) + element->attack_length, element->rate)))
+			if(state != control_get_state(element, timestamp_add_offset(GST_BUFFER_PTS(sinkbuf), (gint64) (start + length) - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_PTS(sinkbuf), (gint64) (start + length) + element->attack_length, element->rate)))
 				break;
 		}
 		g_mutex_unlock(&element->control_lock);
@@ -849,7 +849,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 		 * if the output state has changed, tell the world about it
 		 */
 
-		timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
+		timestamp = GST_BUFFER_PTS(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
 		if(element->emit_signals && state != element->last_state)
 			g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
 		element->last_state = state;
@@ -890,8 +890,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkb
 
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
 			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
-			GST_BUFFER_TIMESTAMP(srcbuf) = timestamp;
-			GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start + length, sinkbuf_length) - GST_BUFFER_TIMESTAMP(srcbuf);
+			GST_BUFFER_PTS(srcbuf) = timestamp;
+			GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_PTS(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start + length, sinkbuf_length) - GST_BUFFER_PTS(srcbuf);
 		}
 
 		/*

@@ -651,7 +651,7 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd, 
 
 	GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_NONE;
 	GST_BUFFER_OFFSET_END(buffer) = GST_BUFFER_OFFSET_NONE;
-	GST_BUFFER_TIMESTAMP(buffer) = XLALGPSToINT8NS(&psd->epoch);
+	GST_BUFFER_PTS(buffer) = XLALGPSToINT8NS(&psd->epoch);
 	GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
 
 	result = gst_pad_push(psd_pad, buffer);
@@ -671,8 +671,8 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 	GST_BUFFER_OFFSET(buf) = element->next_offset_out;
 	element->next_offset_out += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_offset_out;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->sample_rate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->sample_rate) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->sample_rate);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->sample_rate) - GST_BUFFER_PTS(buf);
 	if(element->need_discont) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -1314,9 +1314,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * (re)sync timestamp and offset book-keeping
 		 */
 
-		g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
+		g_assert(GST_BUFFER_PTS_IS_VALID(inbuf));
 		g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
-		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+		element->t0 = GST_BUFFER_PTS(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_offset_out = GST_BUFFER_OFFSET(inbuf);
 
@@ -1333,7 +1333,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		zero_output_history(element);
 	} else if(!gst_audioadapter_is_empty(element->input_queue))
-		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(inbuf), ==, gst_audioadapter_expected_timestamp(element->input_queue));
+		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->input_queue));
 	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*

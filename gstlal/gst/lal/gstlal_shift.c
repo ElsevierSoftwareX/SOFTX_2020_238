@@ -166,7 +166,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	 * check validity of timestamp and offsets
 	 */
 
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+	if(!GST_BUFFER_PTS_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
 		gst_buffer_unref(sinkbuf);
 		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
 		result = GST_FLOW_ERROR;
@@ -174,10 +174,10 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	}
 
 	/* Check for underflow */
-	if (((gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift) >= 0)
-		GST_BUFFER_TIMESTAMP(sinkbuf) = (GstClockTime) ( (gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift );
+	if (((gint64) GST_BUFFER_PTS(sinkbuf) + element->shift) >= 0)
+		GST_BUFFER_PTS(sinkbuf) = (GstClockTime) ( (gint64) GST_BUFFER_PTS(sinkbuf) + element->shift );
 	else
-		g_error("Cannot shift buffer with time stamp %" G_GUINT64_FORMAT " by %" G_GINT64_FORMAT, GST_BUFFER_TIMESTAMP(sinkbuf), element->shift);
+		g_error("Cannot shift buffer with time stamp %" G_GUINT64_FORMAT " by %" G_GINT64_FORMAT, GST_BUFFER_PTS(sinkbuf), element->shift);
 
 	/* Finally apply the discont flag if a new shift was detected */
 	if (element->have_discont) {

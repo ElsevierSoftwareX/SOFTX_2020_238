@@ -362,7 +362,7 @@ static void update_state(GSTLALPeak *element, GstBuffer *srcbuf)
 {
 	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
 	gint samples = GST_BUFFER_OFFSET_END(srcbuf) - GST_BUFFER_OFFSET(srcbuf);
-	GST_BUFFER_TIMESTAMP(srcbuf) = gst_util_uint64_scale_int_round(element->samples_since_last_discont, GST_SECOND, element->rate) + element->timestamp_at_last_discont;
+	GST_BUFFER_PTS(srcbuf) = gst_util_uint64_scale_int_round(element->samples_since_last_discont, GST_SECOND, element->rate) + element->timestamp_at_last_discont;
 	GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int_round(samples, GST_SECOND, element->rate);
 	element->next_output_timestamp = gst_util_uint64_scale_int_round(element->samples_since_last_discont + samples, GST_SECOND, element->rate) + element->timestamp_at_last_discont;;
 	element->samples_since_last_discont += samples;
@@ -391,7 +391,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	 * check validity of timestamp and offsets
 	 */
 
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+	if(!GST_BUFFER_PTS_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
 		gst_buffer_unref(sinkbuf);
 		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
 		result = GST_FLOW_ERROR;
@@ -406,8 +406,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-		element->timestamp_at_last_discont = GST_BUFFER_TIMESTAMP(sinkbuf);
-		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
+		element->timestamp_at_last_discont = GST_BUFFER_PTS(sinkbuf);
+		element->next_output_timestamp = GST_BUFFER_PTS(sinkbuf);
 	}
 
 	/* put the incoming buffer into an adapter, handles gaps */

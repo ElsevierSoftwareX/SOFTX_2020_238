@@ -161,8 +161,8 @@ GType gds_lvshmsink_buffer_mode_get_type(void)
 
 static void get_times(GstBaseSink *sink, GstBuffer *buffer, GstClockTime *start, GstClockTime *end)
 {
-	*start = GST_BUFFER_TIMESTAMP(buffer);
-	*end = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+	*start = GST_BUFFER_PTS(buffer);
+	*end = GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer);
 }
 
 
@@ -267,8 +267,8 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer)
 	}
 	memcpy(dest, mapinfo.data, mapinfo.size);
 	memset(dest + mapinfo.size, 0, gst_base_sink_get_blocksize(sink) - mapinfo.size);
-	lsmp_partition(element)->SetID(GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND);
-	GST_DEBUG_OBJECT(element, "shared-memory buffer %p ID set to %" G_GUINT64_FORMAT, dest, GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND);
+	lsmp_partition(element)->SetID(GST_BUFFER_PTS(buffer) / GST_SECOND);
+	GST_DEBUG_OBJECT(element, "shared-memory buffer %p ID set to %" G_GUINT64_FORMAT, dest, GST_BUFFER_PTS(buffer) / GST_SECOND);
 	lsmp_partition(element)->release(mapinfo.size, element->mask, flags);
 	GST_DEBUG_OBJECT(element, "shared-memory buffer %p released", dest);
 
