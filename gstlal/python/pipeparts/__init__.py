@@ -785,71 +785,83 @@ class AppSync(object):
 		self.appsinks = {}
 		# set of sink elements that are currently at EOS
 		self.at_eos = set()
-		# do equivalent of .add_sink() for each pre-built appsink
-		# element provided at this time
+		# attach handlers to appsink elements provided at this time
 		for elem in appsinks:
-			if elem in self.appsinks:
-				raise ValueError("duplicate appsinks %s" % repr(elem))
-			elem.connect("new-preroll", self.appsink_handler, False, True)
-			elem.connect("new-sample", self.appsink_handler, False, False)
-			elem.connect("eos", self.appsink_handler, True, False)
-			self.appsinks[elem] = None
+			self.attach(elem)
 
 	def add_sink(self, pipeline, src, drop = False, **properties):
-		# NOTE that max buffers must be 1 for this to work
-		assert "max_buffers" not in properties
-		elem = mkappsink(pipeline, src, max_buffers = 1, drop = drop, **properties)
-		elem.connect("new-preroll", self.appsink_handler, False, True)
-		elem.connect("new-sample", self.appsink_handler, False, False)
-		elem.connect("eos", self.appsink_handler, True, False)
-		self.appsinks[elem] = None
-		return elem
+		return self.attach(mkappsink(pipeline, src, drop = drop, **properties))
 
-	def appsink_handler(self, elem, eos, preroll):
+	def attach(self, appsink):
+		"""
+		connect this AppSync's signal handlers to the given appsink
+		element.  the element's max-buffers property will be set to
+		1 (required for AppSync to work).
+		"""
+		if appsink in self.appsinks:
+			raise ValueError("duplicate appsinks %s" % repr(appsink))
+		appsink.set_property("max-buffers", 1)
+		appsink.connect("new-preroll", self.new_preroll_handler)
+		appsink.connect("new-sample", self.new_sample_handler)
+		appsink.connect("eos", self.eos_handler)
+		self.appsinks[appsink] = None
+		return appsink
+
+	def new_preroll_handler(self, elem):
 		with self.lock:
-			# update eos status, and retrieve buffer timestamp
-			if preroll:
-				return Gst.FlowReturn.OK
-			if eos:
-				self.at_eos.add(elem)
-			else:
-				self.at_eos.discard(elem)
-				assert self.appsinks[elem] is None
-				self.appsinks[elem] = elem.get_last_sample().get_buffer().pts
+			# clear eos status
+			self.at_eos.discard(elem)
+			# ignore preroll buffers
+			elem.emit("pull-preroll")
+			return Gst.FlowReturn.OK
 
-			# keep looping while we can process buffers
-			while True:
-				# retrieve the timestamps of all elements that
-				# aren't at eos and all elements at eos that still
-				# have buffers in them
-				timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
-				# nothing to do if all elements are at eos and do
-				# not have buffers
-				if not timestamps:
-					break
-				# find the element with the oldest timestamp.  None
-				# compares as less than everything, so we'll find
-				# any element (that isn't at eos) that doesn't yet
-				# have a buffer (elements at eos and that are
-				# without buffers aren't in the list)
-				timestamp, elem_with_oldest = min(timestamps)
-				# if there's an element without a buffer, do
-				# nothing --- we require all non-eos elements to
-				# have buffers before proceding
-				if timestamp is None:
-					break
-				# clear timestamp and pass element to
-				# handler func.  function call is done last
-				# so that all of our book-keeping has been
-				# taken care of in case an exception gets
-				# raised
-				self.appsinks[elem_with_oldest] = None
-				self.appsink_new_buffer(elem_with_oldest)
-			if not eos:
-				return Gst.FlowReturn.OK
-			else:
+	def new_sample_handler(self, elem):
+		with self.lock:
+			# clear eos status, and retrieve buffer timestamp
+			self.at_eos.discard(elem)
+			assert self.appsinks[elem] is None
+			self.appsinks[elem] = elem.get_last_sample().get_buffer().pts
+			# pull available buffers from appsink elements
+			return self.pull_buffers(elem)
+
+	def eos_handler(self, elem):
+		with self.lock:
+			# set eos status
+			self.at_eos.add(elem)
+			# pull available buffers from appsink elements
+			return self.pull_buffers(elem)
+
+	def pull_buffers(self, elem):
+		"""
+		for internal use.  must be called with lock held.
+		"""
+		# keep looping while we can process buffers
+		while 1:
+			# retrieve the timestamps of all elements that
+			# aren't at eos and all elements at eos that still
+			# have buffers in them
+			timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
+			# if all elements are at eos and none have buffers,
+			# then we're at eos
+			if not timestamps:
 				return Gst.FlowReturn.EOS
-
+			# find the element with the oldest timestamp.  None
+			# compares as less than everything, so we'll find
+			# any element (that isn't at eos) that doesn't yet
+			# have a buffer (elements at eos and that are
+			# without buffers aren't in the list)
+			timestamp, elem_with_oldest = min(timestamps)
+			# if there's an element without a buffer, quit for
+			# now --- we require all non-eos elements to have
+			# buffers before proceding
+			if timestamp is None:
+				return Gst.FlowReturn.OK
+			# clear timestamp and pass element to handler func.
+			# function call is done last so that all of our
+			# book-keeping has been taken care of in case an
+			# exception gets raised
+			self.appsinks[elem_with_oldest] = None
+			self.appsink_new_buffer(elem_with_oldest)
 
 
 class connect_appsink_dump_dot(object):
