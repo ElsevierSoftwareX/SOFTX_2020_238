@@ -35,7 +35,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-scipy,
  lal (>= @MIN_LAL_VERSION@),
  lalmetaio (>= @MIN_LALMETAIO_VERSION@),
- gstlal (>= @MIN_GSTLAL_VERSION@)
+ gstlal (>= @MIN_GSTLAL_VERSION@),
  gstlal-ugly (>= @MIN_GSTLALUGLY_VERSION@)
 Conflicts:
  gstlal-ugly (<< 0.6.0)
