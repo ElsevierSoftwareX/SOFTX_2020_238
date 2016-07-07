@@ -4,14 +4,14 @@
 #
 
 # albert.einstein for git checkout
-USER=albert.einstein
+USER=duncan.meacher
 
 # Set directories and paths
 SRC_DIR:=src
 TAR_DIR:=tarball
 LOGS_DIR:=logs
 PATCH_DIR:=${PWD}/patches
-GSTLAL_REPO:=${SRC_DIR}/gstlal
+GSTLAL_REPO:=git/gstlal
 # Give full path to dep/lib directory of ATLAS installation.
 # See Makefile.ATLAS_install
 # ATLAS_PATH:=/path/to/ATLAS/dep/lib
@@ -90,24 +90,28 @@ logs/gstlal.txt : $(LOGS_DIR)/doxygen.txt $(INSTALL_DIR)/lib/libgstlal.so $(INST
 
 # gstlal-inspiral
 $(INSTALL_DIR)/lib/libgstlalinspiral.so : $(INSTALL_DIR)/bin/gstlal_compute_strain
+	echo gstlal-inspiral 1>&2
 	cd $(GSTLAL_REPO)/gstlal-inspiral && echo | ./00init.sh
 	cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --prefix=$(INSTALL_DIR)
 	cd $(GSTLAL_REPO)/gstlal-inspiral && make -j$(CORES) && make install -j$(CORES)
 
 # gstlal-calibration
 $(INSTALL_DIR)/bin/gstlal_compute_strain : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
+	echo gstlal-calibration 1>&2
 	cd $(GSTLAL_REPO)/gstlal-calibration && echo | ./00init.sh
 	cd $(GSTLAL_REPO)/gstlal-calibration && ./configure --prefix=$(INSTALL_DIR)
 	cd $(GSTLAL_REPO)/gstlal-calibration && make -j$(CORES) && make install -j$(CORES)
 
 # gstlal-ugly
 $(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so : $(INSTALL_DIR)/lib/libgstlal.so
+	echo gstlal-ugly 1>&2
 	cd $(GSTLAL_REPO)/gstlal-ugly && echo | ./00init.sh
 	cd $(GSTLAL_REPO)/gstlal-ugly && ./configure --prefix=$(INSTALL_DIR)
 	cd $(GSTLAL_REPO)/gstlal-ugly && make -j$(CORES) && make install -j$(CORES)
 
 # gstlal
 $(INSTALL_DIR)/lib/libgstlal.so : $(INSTALL_DIR)/bin/doxygen $(INSTALL_DIR)/share/lalsimulation/SEOBNRv2ROM_SS_Phase_ciall.dat $(GSTLAL_REPO)/gstlal/configure.ac
+	echo gstlal 1>&2
 	cd $(GSTLAL_REPO)/gstlal && echo | ./00init.sh
 	cd $(GSTLAL_REPO)/gstlal && ./configure --prefix=$(INSTALL_DIR)
 	cd $(GSTLAL_REPO)/gstlal && make -j$(CORES) && make install -j$(CORES)
@@ -117,6 +121,7 @@ logs/doxygen.txt : $(LOGS_DIR)/lalsuite-extra.txt $(INSTALL_DIR)/bin/doxygen
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/bin/doxygen : $(INSTALL_DIR)/share/lalsimulation/SEOBNRv2ROM_SS_Phase_ciall.dat
+	echo $(DOXYGEN) 1>&2
 	tar -xf $(TAR_DIR)/$(DOXYGEN).src.tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(DOXYGEN) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(DOXYGEN) && make -j$(CORES) && make install -j$(CORES)
@@ -126,6 +131,7 @@ logs/lalsuite-extra.txt : $(LOGS_DIR)/lalsuite.txt $(INSTALL_DIR)/share/lalsimul
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/share/lalsimulation/SEOBNRv2ROM_SS_Phase_ciall.dat : $(INSTALL_DIR)/bin/dmtdq_seg_insert $(INSTALL_DIR)/etc/pylal-user-env.sh
+	echo $(LALSUITEEXTRA) 1>&2
 	tar -xf $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALSUITEEXTRA) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALSUITEEXTRA) && make -j$(CORES) && make install -j$(CORES)
@@ -136,11 +142,13 @@ logs/lalsuite.txt : $(LOGS_DIR)/gds.txt $(INSTALL_DIR)/lib/liblal.so $(INSTALL_D
 
 # pylal
 $(INSTALL_DIR)/etc/pylal-user-env.sh : $(INSTALL_DIR)/bin/dmtdq_seg_insert
+	echo $(PYLAL) 1>&2
 	tar -xzf $(TAR_DIR)/$(PYLAL).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(PYLAL) && python setup.py install --prefix=$(INSTALL_DIR)
 
 # glue
 $(INSTALL_DIR)/bin/dmtdq_seg_insert : $(INSTALL_DIR)/bin/lalapps_psinject
+	echo $(GLUE) 1>&2
 	tar -xzf $(TAR_DIR)/$(GLUE).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GLUE) && python setup.py install --prefix=$(INSTALL_DIR)
 
@@ -148,66 +156,77 @@ $(INSTALL_DIR)/bin/dmtdq_seg_insert : $(INSTALL_DIR)/bin/lalapps_psinject
 ## FIXME --enable-gcc-flags set to no on lalapps configure as work around to avoid warnings stopping install process
 ## Not sure what causes the warnings
 $(INSTALL_DIR)/bin/lalapps_psinject : $(INSTALL_DIR)/lib/liblalstochastic.so
+	echo $(LALAPPS) 1>&2
 	tar -xf $(TAR_DIR)/$(LALAPPS).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALAPPS) && ./configure --enable-gcc-flags=no --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALAPPS) && make -j$(CORES) && make install -j$(CORES)
 
 # lalstochastic
 $(INSTALL_DIR)/lib/liblalstochastic.so : $(INSTALL_DIR)/lib/liblalinference.so
+	echo $(LALSTOCHASTIC) 1>&2
 	tar -xf $(TAR_DIR)/$(LALSTOCHASTIC).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALSTOCHASTIC) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALSTOCHASTIC) && make -j$(CORES) && make install -j$(CORES)
 
 # lalinference
 $(INSTALL_DIR)/lib/liblalinference.so : $(INSTALL_DIR)/lib/liblalpulsar.so
+	echo $(LALINFERENCE) 1>&2
 	tar -xf $(TAR_DIR)/$(LALINFERENCE).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALINFERENCE) && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALINFERENCE) && make -j$(CORES) && make install -j$(CORES)
 
 # lalpulsar
 $(INSTALL_DIR)/lib/liblalpulsar.so : $(INSTALL_DIR)/lib/liblaldetchar.so
+	echo $(LALPULSAR) 1>&2
 	tar -xf $(TAR_DIR)/$(LALPULSAR).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALPULSAR) && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALPULSAR) && make -j$(CORES) && make install -j$(CORES)
 
 # laldetchar
 $(INSTALL_DIR)/lib/liblaldetchar.so : $(INSTALL_DIR)/lib/liblalburst.so
+	echo $(LALDETCHAR) 1>&2
 	tar -xf $(TAR_DIR)/$(LALDETCHAR).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALDETCHAR) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALDETCHAR) && make -j$(CORES) && make install -j$(CORES)
 
 # lalburst
 $(INSTALL_DIR)/lib/liblalburst.so : $(INSTALL_DIR)/lib/liblalinspiral.so
+	echo $(LALBURST) 1>&2
 	tar -xf $(TAR_DIR)/$(LALBURST).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALBURST) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALBURST) && make -j$(CORES) && make install -j$(CORES)
 
 # lalinspiral
 $(INSTALL_DIR)/lib/liblalinspiral.so : $(INSTALL_DIR)/lib/liblalsimulation.so
+	echo $(LALINSPIRAL) 1>&2
 	tar -xf $(TAR_DIR)/$(LALINSPIRAL).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALINSPIRAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALINSPIRAL) && make -j$(CORES) && make install -j$(CORES)
 
 # lalsimulation
 $(INSTALL_DIR)/lib/liblalsimulation.so : $(INSTALL_DIR)/lib/liblalmetaio.so
+	echo $(LALSIMULATION) 1>&2
 	tar -xf $(TAR_DIR)/$(LALSIMULATION).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALSIMULATION) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALSIMULATION) && make -j$(CORES) && make install -j$(CORES)
 
 # lalmetaio
 $(INSTALL_DIR)/lib/liblalmetaio.so : $(INSTALL_DIR)/lib/liblalframe.so
+	echo $(LALMETAIO) 1>&2
 	tar -xf $(TAR_DIR)/$(LALMETAIO).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALMETAIO) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALMETAIO) && make -j$(CORES) && make install -j$(CORES)
 
 # lalframe
 $(INSTALL_DIR)/lib/liblalframe.so : $(INSTALL_DIR)/lib/liblal.so
+	echo $(LALFRAME) 1>&2
 	tar -xf $(TAR_DIR)/$(LALFRAME).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LALFRAME) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LALFRAME) && make -j$(CORES) && make install -j$(CORES)
 
 # lal
 $(INSTALL_DIR)/lib/liblal.so : $(LOGS_DIR)/git.txt $(INSTALL_DIR)/lib/libFrame.so $(INSTALL_DIR)/lib/libmetaio.so $(INSTALL_DIR)/bin/swig $(INSTALL_DIR)/lib/libldastoolsal.so  $(INSTALL_DIR)/lib/libframecpp.so $(INSTALL_DIR)/lib/libwpipe.so
+	echo $(LAL) 1>&2
 	tar -xf $(TAR_DIR)/$(LAL).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LAL) && make -j$(CORES) && make install -j$(CORES)
@@ -217,15 +236,17 @@ logs/gds.txt : $(LOGS_DIR)/ldas-tools-framecpp.txt $(INSTALL_DIR)/lib/libwpipe.s
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/lib/libwpipe.so : $(INSTALL_DIR)/lib/libframecpp.so
+	echo $(GDS) 1>&2
 	tar -xzf $(TAR_DIR)/$(GDS).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GDS) && ./configure --enable-online --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(GDS) && make -j$(CORES) && make install -j$(CORES)
+	cd $(SRC_DIR)/$(GDS) && make && make install
 
 # ldas-tools-framecpp
 logs/ldas-tools-framecpp.txt : $(LOGS_DIR)/ldas-tools-al.txt $(INSTALL_DIR)/lib/libframecpp.so
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/lib/libframecpp.so : $(INSTALL_DIR)/lib/libldastoolsal.so
+	echo $(LDASTOOLSFRAMECPP) 1>&2
 	tar -xf $(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen
 	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && make DESTDIR=/ -j$(CORES) && make install DESTDIR=/ -j$(CORES)
@@ -235,6 +256,7 @@ logs/ldas-tools-al.txt : $(LOGS_DIR)/swig.txt $(INSTALL_DIR)/lib/libldastoolsal.
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/lib/libldastoolsal.so : $(INSTALL_DIR)/bin/swig
+	echo $(LDASTOOLSAL) 1>&2
 	tar -xf $(TAR_DIR)/$(LDASTOOLSAL).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LDASTOOLSAL) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen
 	cd $(SRC_DIR)/$(LDASTOOLSAL) && make -j$(CORES) && make install -j$(CORES)
@@ -244,6 +266,7 @@ logs/swig.txt : $(LOGS_DIR)/metaio.txt $(INSTALL_DIR)/bin/swig
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/bin/swig : $(INSTALL_DIR)/lib/oprofile/libopagent.so
+	echo $(SWIG) 1>&2
 	tar -xf $(TAR_DIR)/$(SWIG).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(SWIG) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(SWIG) && make -j$(CORES) && make install -j$(CORES)
@@ -253,6 +276,7 @@ logs/metaio.txt : $(LOGS_DIR)/libframe.txt $(INSTALL_DIR)/lib/libmetaio.so
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/lib/libmetaio.so : $(INSTALL_DIR)/lib/oprofile/libopagent.so
+	echo $(METAIO) 1>&2
 	tar -xf $(TAR_DIR)/$(METAIO).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(METAIO) && ./configure --prefix=$(INSTALL_DIR) --with-matlab=no
 	cd $(SRC_DIR)/$(METAIO) && make -j$(CORES) && make install -j$(CORES)
@@ -263,6 +287,7 @@ logs/libframe.txt : $(LOGS_DIR)/oprofile.txt $(INSTALL_DIR)/lib/libFrame.so
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/lib/libFrame.so : $(INSTALL_DIR)/lib/oprofile/libopagent.so
+	echo $(LIBFRAME) 1>&2
 	tar -xf $(TAR_DIR)/$(LIBFRAME).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LIBFRAME) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LIBFRAME) && make -j$(CORES) && make install -j$(CORES)
@@ -271,36 +296,43 @@ $(INSTALL_DIR)/lib/libFrame.so : $(INSTALL_DIR)/lib/oprofile/libopagent.so
 logs/oprofile.txt : $(LOGS_DIR)/gstreamer.txt $(INSTALL_DIR)/lib/oprofile/libopagent.so
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-#$(INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
-$(INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
+#$(INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
+$(INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
+	echo $(OPROFILE) 1>&2
 	tar -xf $(TAR_DIR)/$(OPROFILE).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(OPROFILE)/ && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(OPROFILE)/ && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer (all)
-logs/gstreamer.txt : $(LOGS_DIR)/gsl.txt $(INSTALL_DIR)/lib/libgstreamer-1.0.so $(INSTALL_DIR)/lib/libgstapp-1.0.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
+#logs/gstreamer.txt : $(LOGS_DIR)/gsl.txt $(INSTALL_DIR)/lib/libgstreamer-1.0.so $(INSTALL_DIR)/lib/libgstapp-1.0.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
+logs/gstreamer.txt : $(LOGS_DIR)/gsl.txt $(INSTALL_DIR)/lib/libgstreamer-1.0.so $(INSTALL_DIR)/lib/libgstapp-1.0.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 # gstreamer plugin python
-#$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
-#	tar -xf $(TAR_DIR)/$(GSTPYTHON).tar.xz -C $(SRC_DIR)
-#	cd $(SRC_DIR)/$(GSTPYTHON) && ./configure --prefix=$(INSTALL_DIR)
-#	cd $(SRC_DIR)/$(GSTPYTHON) && make -j$(CORES) && make install -j$(CORES)
+$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
+	echo $(GSTPYTHON) 1>&2
+	mkdir -p $(INSTALL_DIR)/lib64/python2.7/site-packages/gi/overrides
+	tar -xf $(TAR_DIR)/$(GSTPYTHON).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(GSTPYTHON) && ./configure --prefix=$(INSTALL_DIR) --exec-prefix=$(INSTALL_DIR) --with-libpython-dir=/usr/lib64 --with-pygi-overrides-dir=$(INSTALL_DIR)/lib64/python2.7/site-packages/gi/overrides
+	cd $(SRC_DIR)/$(GSTPYTHON) && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer plugin good
 $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so : $(INSTALL_DIR)/lib/libgstapp-1.0.so
+	echo $(GSTPLUGINSGOOD) 1>&2
 	tar -xf $(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GSTPLUGINSGOOD) && ./configure --disable-gst_v4l2 --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(GSTPLUGINSGOOD) && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer plugin base
 $(INSTALL_DIR)/lib/libgstapp-1.0.so : $(INSTALL_DIR)/lib/libgstreamer-1.0.so
+	echo $(GSTPLUGINSBASE) 1>&2
 	tar -xf $(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GSTPLUGINSBASE) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(GSTPLUGINSBASE) && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer
 $(INSTALL_DIR)/lib/libgstreamer-1.0.so : $(INSTALL_DIR)/lib/libgsl.so $(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
+	echo $(GSTREAMER) 1>&2
 	tar -xf $(TAR_DIR)/$(GSTREAMER).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GSTREAMER) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(GSTREAMER) && make -j$(CORES) && make install -j$(CORES)
@@ -315,6 +347,7 @@ $(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig : $(INSTALL_DIR)/lib/libgsl.so
 	sed 's/-latlas/-lgslcblas -lsatlas/' $@ > $(INSTALL_DIR)/lib/pkgconfig/gsl.pc
 
 $(INSTALL_DIR)/lib/libgsl.so : $(INSTALL_DIR)/lib/liborc-0.4.so
+	echo $(GSL) 1>&2
 	tar -xf $(TAR_DIR)/$(GSL).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GSL) && ./configure --prefix=$(INSTALL_DIR) LDFLAGS="-L$(INSTALL_DIR)/lib" GSL_CBLAS_LIB='-latlas -lsatlas'
 	cd $(SRC_DIR)/$(GSL) && make -j$(CORES) && make install -j$(CORES)
@@ -324,6 +357,7 @@ logs/orc.txt : $(LOGS_DIR)/fftw.txt $(INSTALL_DIR)/lib/liborc-0.4.so
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(INSTALL_DIR)/lib/liborc-0.4.so : $(INSTALL_DIR)/lib/libfftw3.so
+	echo $(ORC) 1>&2
 	tar -xf $(TAR_DIR)/$(ORC).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(ORC) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(ORC) && make -j$(CORES) && make install -j$(CORES)
@@ -334,6 +368,7 @@ logs/fftw.txt : $(LOGS_DIR)/patch.txt $(INSTALL_DIR)/lib/libfftw3.so
 
 # ./configure, make, make install run twice to install single and double precission libs
 $(INSTALL_DIR)/lib/libfftw3.so : $(LOGS_DIR)/patch.txt
+	echo $(FFTW) 1>&2
 	tar -xzf $(TAR_DIR)/$(FFTW).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(FFTW) && \
 		./configure CFLAGS="-fPIC -O3 -march=native" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --prefix=$(INSTALL_DIR) && \
@@ -346,20 +381,11 @@ $(INSTALL_DIR)/lib/libfftw3.so : $(LOGS_DIR)/patch.txt
 #########################
 
 # patches
-logs/patch.txt : $(LOGS_DIR)/git.txt
+logs/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
-
-# git repos
-logs/git.txt : $(LOGS_DIR)/tar.txt $(GSTLAL_REPO)/gstlal/configure.ac
-	echo $^ | sed -e "s@ @\n@g" > $@
-
-$(GSTLAL_REPO)/gstlal/configure.ac : $(LOGS_DIR)/tar.txt
-	mkdir -p $(GSTLAL_REPO)
-	ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER)
-	git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO)
 
 #tarballs
-logs/tar.txt : $(TAR_DIR)/$(FFTW).tar.gz $(TAR_DIR)/$(ORC).tar.xz $(TAR_DIR)/$(GSL).tar.gz $(TAR_DIR)/$(GSTREAMER).tar.xz $(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz $(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz $(TAR_DIR)/$(GSTPYTHON).tar.xz $(TAR_DIR)/$(OPROFILE).tar.gz $(TAR_DIR)/$(LIBFRAME).tar.gz $(TAR_DIR)/$(METAIO).tar.gz $(TAR_DIR)/$(SWIG).tar.gz $(TAR_DIR)/$(LDASTOOLSAL).tar.gz $(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz $(TAR_DIR)/$(LAL).tar.xz $(TAR_DIR)/$(LALFRAME).tar.xz $(TAR_DIR)/$(LALMETAIO).tar.xz $(TAR_DIR)/$(LALSIMULATION).tar.xz $(TAR_DIR)/$(LALBURST).tar.xz $(TAR_DIR)/$(LALDETCHAR).tar.xz $(TAR_DIR)/$(LALINSPIRAL).tar.xz $(TAR_DIR)/$(LALPULSAR).tar.xz $(TAR_DIR)/$(LALINFERENCE).tar.xz $(TAR_DIR)/$(LALSTOCHASTIC).tar.xz $(TAR_DIR)/$(LALAPPS).tar.xz $(TAR_DIR)/$(GLUE).tar.gz $(TAR_DIR)/$(PYLAL).tar.gz $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz $(TAR_DIR)/$(DOXYGEN).src.tar.gz
+logs/tar.txt : $(LOGS_DIR)/git.txt $(TAR_DIR)/$(FFTW).tar.gz $(TAR_DIR)/$(ORC).tar.xz $(TAR_DIR)/$(GSL).tar.gz $(TAR_DIR)/$(GSTREAMER).tar.xz $(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz $(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz $(TAR_DIR)/$(GSTPYTHON).tar.xz $(TAR_DIR)/$(OPROFILE).tar.gz $(TAR_DIR)/$(LIBFRAME).tar.gz $(TAR_DIR)/$(METAIO).tar.gz $(TAR_DIR)/$(SWIG).tar.gz $(TAR_DIR)/$(LDASTOOLSAL).tar.gz $(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz $(TAR_DIR)/$(LAL).tar.xz $(TAR_DIR)/$(LALFRAME).tar.xz $(TAR_DIR)/$(LALMETAIO).tar.xz $(TAR_DIR)/$(LALSIMULATION).tar.xz $(TAR_DIR)/$(LALBURST).tar.xz $(TAR_DIR)/$(LALDETCHAR).tar.xz $(TAR_DIR)/$(LALINSPIRAL).tar.xz $(TAR_DIR)/$(LALPULSAR).tar.xz $(TAR_DIR)/$(LALINFERENCE).tar.xz $(TAR_DIR)/$(LALSTOCHASTIC).tar.xz $(TAR_DIR)/$(LALAPPS).tar.xz $(TAR_DIR)/$(GLUE).tar.gz $(TAR_DIR)/$(PYLAL).tar.gz $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz $(TAR_DIR)/$(DOXYGEN).src.tar.gz
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(TAR_DIR)/$(DOXYGEN).src.tar.gz : $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz
@@ -446,8 +472,17 @@ $(TAR_DIR)/$(GSL).tar.gz : $(TAR_DIR)/$(ORC).tar.xz
 $(TAR_DIR)/$(ORC).tar.xz : $(TAR_DIR)/$(FFTW).tar.gz
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/orc/$(ORC).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
-$(TAR_DIR)/$(FFTW).tar.gz : $(TAR_DIR)
+$(TAR_DIR)/$(FFTW).tar.gz : $(GSTLAL_REPO)/gstlal/configure.ac
 	wget --no-check-certificate http://www.fftw.org/$(FFTW).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+# git repos
+logs/git.txt : $(GSTLAL_REPO)/gstlal/configure.ac
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(GSTLAL_REPO)/gstlal/configure.ac : $(TAR_DIR)
+	mkdir -p $(GSTLAL_REPO)
+	ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER)
+	git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO)
 
 $(TAR_DIR) :
 	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(LOGS_DIR) $(TAR_DIR)
