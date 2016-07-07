@@ -18,7 +18,6 @@ Build-Depends:
  lalsimulation-dev (>= @MIN_LALSIMULATION_VERSION@),
  libfftw3-dev (>= 3),
  libgsl0-dev (>= 1.9),
- libgstreamer1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
