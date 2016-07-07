@@ -90,6 +90,7 @@ logs/gstlal.txt : $(LOGS_DIR)/doxygen.txt $(INSTALL_DIR)/lib/libgstlal.so $(INST
 # gstlal-inspiral
 $(INSTALL_DIR)/lib/libgstlalinspiral.so : $(INSTALL_DIR)/bin/gstlal_compute_strain
 	tar -xzf $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR)
+	patch $(SRC_DIR)/$(GSTLALINSPIRAL)/bin/gstlal_inspiral_pipe < $(PATCH_DIR)/gzip_test_option.patch
 	cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(GSTLALINSPIRAL) && make -j$(CORES) && make install -j$(CORES)
 	cp $(PATCH_DIR)/gstlal_ll_inspiral_daily_page $(INSTALL_DIR)/bin/gstlal_ll_inspiral_daily_page
@@ -338,7 +339,7 @@ $(INSTALL_DIR)/lib/libfftw3.so : $(LOGS_DIR)/patch.txt
 #########################
 
 # patches
-logs/patch.txt : $(LOGS_DIR)/tar.txt $(PATCH_DIR)/gstreamer-bison.patch $(PATCH_DIR)/audioresample.patch $(PATCH_DIR)/ratepy-O1.patch $(PATCH_DIR)/gstlal_ll_inspiral_daily_page
+logs/patch.txt : $(LOGS_DIR)/tar.txt $(PATCH_DIR)/gstreamer-bison.patch $(PATCH_DIR)/audioresample.patch $(PATCH_DIR)/ratepy-O1.patch $(PATCH_DIR)/gstlal_ll_inspiral_daily_page $(PATCH_DIR)/gzip_test_option.patch
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(PATCH_DIR)/gstreamer-bison.patch :
@@ -352,6 +353,9 @@ $(PATCH_DIR)/ratepy-O1.patch :
 
 $(PATCH_DIR)/gstlal_ll_inspiral_daily_page :
 	cd $(PATCH_DIR) && wget --no-check-certificate https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/bin/gstlal_ll_inspiral_daily_page?id=3fa0e44a01643dbd3309ca8ff6a99bc856099718 -O gstlal_ll_inspiral_daily_page -nc
+
+$(PATCH_DIR)/gzip_test_option.patch :
+	cd $(PATCH_DIR) && wget --no-check-certificate https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ER9/patches/gzip_test_option.patch --directory-prefix=$(PATCH_DIR) -nc
 
 # tarballs
 logs/tar.txt : $(TAR_DIR)/$(FFTW).tar.gz $(TAR_DIR)/$(ORC).tar.gz $(TAR_DIR)/$(GSL).tar.gz $(TAR_DIR)/$(GSTREAMER).tar.gz $(TAR_DIR)/$(GSTPLUGINSBASE).tar.gz $(TAR_DIR)/$(GSTPLUGINSGOOD).tar.gz $(TAR_DIR)/$(GSTPYTHON).tar.gz $(TAR_DIR)/$(OPROFILE).tar.gz $(TAR_DIR)/$(LIBFRAME).tar.gz $(TAR_DIR)/$(METAIO).tar.gz $(TAR_DIR)/$(SWIG).tar.gz $(TAR_DIR)/$(LDASTOOLS).tar.gz $(TAR_DIR)/$(GDS).tar.gz $(TAR_DIR)/$(LAL).tar.gz $(TAR_DIR)/$(LALFRAME).tar.gz $(TAR_DIR)/$(LALMETAIO).tar.gz $(TAR_DIR)/$(LALSIMULATION).tar.gz $(TAR_DIR)/$(LALBURST).tar.gz $(TAR_DIR)/$(LALDETCHAR).tar.gz $(TAR_DIR)/$(LALINSPIRAL).tar.gz $(TAR_DIR)/$(LALPULSAR).tar.gz $(TAR_DIR)/$(LALINFERENCE).tar.gz $(TAR_DIR)/$(LALSTOCHASTIC).tar.gz $(TAR_DIR)/$(LALAPPS).tar.gz $(TAR_DIR)/$(GLUE).tar.gz $(TAR_DIR)/$(PYLAL).tar.gz $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz $(TAR_DIR)/$(DOXYGEN).src.tar.gz $(TAR_DIR)/$(GSTLAL).tar.gz $(TAR_DIR)/$(GSTLALUGLY).tar.gz $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz
