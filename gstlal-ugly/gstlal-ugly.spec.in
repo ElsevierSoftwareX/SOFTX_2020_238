@@ -74,7 +74,7 @@ plugins and programs.
 
 
 %build
-%configure
+%configure --enable-gtk-doc
 %{__make}
 
 
