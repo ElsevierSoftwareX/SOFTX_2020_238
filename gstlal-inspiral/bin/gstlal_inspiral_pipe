@@ -153,15 +153,15 @@ def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
 		for seg in segsdict[ifos]:
 			psd_nodes[(ifos, seg)] = \
 				inspiral_pipe.generic_node(refPSDJob, dag, parent_nodes = parent_nodes,
-					opts = {"gps-start-time":seg[0].seconds,
-						"gps-end-time":seg[1].seconds,
+					opts = {"gps-start-time":int(seg[0]),
+						"gps-end-time":int(seg[1]),
 						"data-source":"frames",
 						"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict, ifos = ifos),
 						"psd-fft-length":options.psd_fft_length,
 						"frame-segments-name": options.frame_segments_name},
 					input_files = {	"frame-cache":options.frame_cache,
 							"frame-segments-file":options.frame_segments_file},
-					output_files = {"write-psd":inspiral_pipe.T050017_filename(ifos, "REFERENCE_PSD", seg[0].seconds, seg[1].seconds, '.xml.gz', path = refPSDJob.output_path)}
+					output_files = {"write-psd":inspiral_pipe.T050017_filename(ifos, "REFERENCE_PSD", int(seg[0]), int(seg[1]), '.xml.gz', path = refPSDJob.output_path)}
 				)
 	return psd_nodes
 
@@ -179,7 +179,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
 				clipright.append(options.overlap / 2)
 				ids.append("%d_%d" % (i, n))
 
-			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%d_SVD' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = svdJob.output_path)
+			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%d_SVD' % (i,), int(seg[0]), int(seg[1]), '.xml.gz', path = svdJob.output_path)
 
 			svd_nodes.setdefault(ifo, []).append(
 				inspiral_pipe.generic_node(svdJob, dag,
@@ -252,8 +252,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
 				# setup output names
-				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
-				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS' % (i + numchunks * chunk_counter,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
+				output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID' % (i + numchunks * chunk_counter,), int(seg[0]), int(seg[1]), '.xml.gz', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
+				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS' % (i + numchunks * chunk_counter,), int(seg[0]), int(seg[1]), '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
 
 				# FIXME do better with svd node parents?
 				# non injection node
@@ -261,8 +261,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						opts = {"psd-fft-length":options.psd_fft_length,
 							"ht-gate-threshold":options.ht_gate_threshold,
 							"frame-segments-name":options.frame_segments_name,
-							"gps-start-time":seg[0].seconds,
-							"gps-end-time":seg[1].seconds,
+							"gps-start-time":int(seg[0]),
+							"gps-end-time":int(seg[1]),
 							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
 							"tmp-space":inspiral_pipe.condor_scratch_space(),
 							"track-psd":"",
@@ -301,16 +301,16 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 				
 					# setup output names	
 					sim_name = sim_tag_from_inj_file(injections)
-					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
-					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), seg[0].seconds, seg[1].seconds, '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
 
 					# setup injection node
 					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
 							opts = {"psd-fft-length":options.psd_fft_length,
 								"ht-gate-threshold":options.ht_gate_threshold,
 								"frame-segments-name":options.frame_segments_name,
-								"gps-start-time":seg[0].seconds,
-								"gps-end-time":seg[1].seconds,
+								"gps-start-time":int(seg[0]),
+								"gps-end-time":int(seg[1]),
 								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
 								"tmp-space":inspiral_pipe.condor_scratch_space(),
 								"track-psd":"",
@@ -390,12 +390,12 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = parents,
 				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1},
-				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
 				parent_nodes = [priornode, snrpdfnode],
 				input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
-				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
+				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 		priornodes.append(priornode)
 		rankpdf_nodes.append(calcranknode)
@@ -807,7 +807,7 @@ if options.reference_psd is None:
 	inspiral_pipe.generic_node(horizonJob, dag,
 		parent_nodes = psd_nodes.values(),
 		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
-		output_files = {"":inspiral_pipe.T050017_filename(instruments, "HORIZON", boundary_seg[0].seconds, boundary_seg[1].seconds, '.png', path = output_dir)}
+		output_files = {"":inspiral_pipe.T050017_filename(instruments, "HORIZON", int(boundary_seg[0]), int(boundary_seg[1]), '.png', path = output_dir)}
 	)
 
 	#
@@ -818,7 +818,7 @@ if options.reference_psd is None:
 		inspiral_pipe.generic_node(medianPSDJob, dag,
 			parent_nodes = psd_nodes.values(),
 			input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
-			output_files = {"output-name": inspiral_pipe.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = medianPSDJob.output_path)}
+			output_files = {"output-name": inspiral_pipe.T050017_filename(instruments, "REFERENCE_PSD", int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = medianPSDJob.output_path)}
 		)
 
 	ref_psd = median_psd_node.output_files["output-name"]
@@ -830,7 +830,7 @@ if options.reference_psd is None:
 			parent_nodes = ref_psd_parent_nodes,
 			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
 			input_files = {"":ref_psd},
-			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
 		)
 
 else:
@@ -843,7 +843,7 @@ else:
 	snrpdfnode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
 			input_files = {"":options.reference_psd},
-			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
 		)
 	ref_psd_parent_nodes = []
 
