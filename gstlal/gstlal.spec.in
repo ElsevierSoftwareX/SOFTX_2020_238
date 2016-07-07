@@ -45,6 +45,7 @@ BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
 BuildRequires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
 BuildRequires: gsl-devel
 BuildRequires: orc >= @MIN_ORC_VERSION@
+# needed for gstpythonplugin.c remove when we remove that plugin from gstlal
 BuildRequires: pygobject3-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://wiki.ligo.org/DASWG/GstLAL
