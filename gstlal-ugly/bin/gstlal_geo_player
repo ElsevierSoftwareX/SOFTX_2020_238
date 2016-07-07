@@ -235,7 +235,7 @@ class GTK_Main:
 			self.button.set_label("Start")
 			err, debug = message.parse_error()
 			print "Error: %s" % err, debug
-		elif t == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
+		elif t == gst.MessageType.ELEMENT and message.structure.get_name() == "spectrum":
 				self.psd = pipeio.parse_spectrum_message(message)
 
 GTK_Main()

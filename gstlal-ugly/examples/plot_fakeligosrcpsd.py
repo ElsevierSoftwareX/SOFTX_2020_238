@@ -31,7 +31,7 @@ class PSDHandler(object):
 			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_ELEMENT:
+		elif message.type == gst.MessageType.ELEMENT:
 			if message.structure.get_name() == "spectrum":
 				self.psd = pipeio.parse_spectrum_message(message)
 
