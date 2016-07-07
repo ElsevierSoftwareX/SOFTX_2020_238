@@ -25,7 +25,6 @@ Requires: ldas-tools-framecpp >= @MIN_FRAMECPP_VERSION@
 Requires: gds-core >= @MIN_GDS_VERSION@
 Requires: gds-crtools >= @MIN_GDS_VERSION@
 Requires: gds-services >= @MIN_GDS_VERSION@
-Requires: cyrus-sasl-lib
 Requires: nds2-client >= @MIN_NDS_VERSION@
 Requires: orc >= @MIN_ORC_VERSION@
 Requires: python-%{gstreamername}
@@ -41,7 +40,6 @@ BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: gsl-devel
 BuildRequires: ldas-tools-framecpp-devel >= @MIN_FRAMECPP_VERSION@
 BuildRequires: gds-devel >= @MIN_GDS_VERSION@
-BuildRequires: cyrus-sasl-devel
 BuildRequires: nds2-client-devel >= @MIN_NDS_VERSION@
 BuildRequires: nds2-client-headers >= @MIN_NDS_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
