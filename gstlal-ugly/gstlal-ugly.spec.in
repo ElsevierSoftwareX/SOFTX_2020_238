@@ -15,7 +15,7 @@ Requires: fftw >= 3
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
-Requires: %{gstreamername}-plugins-bad
+Requires: %{gstreamername}-plugins-bad-free
 Requires: numpy
 Requires: scipy
 Requires: lal >= @MIN_LAL_VERSION@
