@@ -1607,6 +1607,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       offset = 0;
       inlength = gst_buffer_get_size (inbuf) / bpf;
     }
+    g_assert_cmpint ((gint) offset, >=, 0);
     g_assert (offset + inlength <= outlength || inlength == 0);
     GST_LOG_OBJECT (adder, "channel %p: retrieved %lu sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)));
 
