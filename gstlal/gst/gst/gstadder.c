@@ -1444,7 +1444,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   GstBuffer *full_gap_buffer = NULL;
   GstFlowReturn ret;
   guint64 outlength;
-  GstClockTime t_start, t_end;
+  GstClockTime t_end;
   guint64 earliest_output_offset, earliest_output_offset_end;
   gint rate, bps, bpf;
 
@@ -1538,6 +1538,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   /* get the range of offsets in the output stream spanned by the available
    * input buffers */
   if (adder->synchronous) {
+    GstClockTime t_start;
     /* when doing synchronous adding, determine the offsetes for real */
     if (!gstlal_collect_pads_get_earliest_times (adder->collect, &t_start, &t_end)) {
       GST_ELEMENT_ERROR (adder, STREAM, FORMAT, (NULL), ("cannot deduce input timestamp offset information"));
@@ -1561,7 +1562,6 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
      * out later when no pads produce buffers. */
     earliest_output_offset = adder->offset;
     earliest_output_offset_end = earliest_output_offset + gst_collect_pads_available (pads) / bpf;
-    t_start = adder->segment.start + gst_util_uint64_scale_int_round (earliest_output_offset, GST_SECOND, rate);
   }
 
   /* compute the number of samples for which all sink pads can contribute
@@ -1620,8 +1620,8 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
     }
 
     /* sync pad properties on stream time */
-    if (GST_CLOCK_TIME_IS_VALID (t_start))
-      gst_object_sync_values (GST_OBJECT (pad), gst_segment_to_stream_time (&adder->segment, GST_FORMAT_TIME, t_start));
+    if (GST_BUFFER_TIMESTAMP_IS_VALID (inbuf))
+      gst_object_sync_values (GST_OBJECT (pad), gst_segment_to_stream_time (&adder->segment, GST_FORMAT_TIME, GST_BUFFER_TIMESTAMP (inbuf)));
 
     GST_OBJECT_LOCK (pad);
     if (pad->mute || pad->volume < G_MINDOUBLE) {
@@ -1777,7 +1777,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   /* FIXME:  this logic can't run backwards */
   /* set timestamps on the output buffer */
   GST_BUFFER_OFFSET (outbuf) = earliest_output_offset;
-  GST_BUFFER_TIMESTAMP (outbuf) = t_start;
+  GST_BUFFER_TIMESTAMP (outbuf) = adder->segment.start + gst_util_uint64_scale_int_round (earliest_output_offset, GST_SECOND, rate);
   if (GST_BUFFER_OFFSET (outbuf) == 0 || GST_BUFFER_TIMESTAMP (outbuf) != adder->segment.position)
     GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_DISCONT);
   else
