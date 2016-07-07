@@ -852,38 +852,30 @@ class AppSync(object):
 
 
 
-def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
-
+class connect_appsink_dump_dot(object):
 	"""
 	add a signal handler to write a pipeline graph upon receipt of the
 	first trigger buffer.  the caps in the pipeline graph are not fully
 	negotiated until data comes out the end, so this version of the graph
 	shows the final formats on all links
 	"""
+	def __init__(self, pipeline, appsinks, basename, verbose = False):
+		self.pipeline = pipeline
+		self.filestem = "%s.%s" % (basename, "TRIGGERS")
+		self.verbose = verbose
+		# map element to handler ID
+		self.remaining_lock = threading.Lock()
+		self.remaining = {}
+		for sink in appsinks:
+			self.remaining[sink] = sink.connect_after("new-preroll", self.execute)
 
-	class AppsinkDumpDot(object):
-		# data shared by all instances
-		# number of times execute method has been invoked, and a mutex
-		n_lock = threading.Lock()
-		n = 0
-
-		def __init__(self, pipeline, write_after, basename, verbose = False):
-			self.pipeline = pipeline
-			self.handler_id = None
-			self.write_after = write_after
-			self.filestem = "%s.%s" % (basename, "TRIGGERS")
-			self.verbose = verbose
-
-		def execute(self, elem):
-			with self.n_lock:
-				type(self).n += 1
-				if self.n >= self.write_after:
-					write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
-			elem.disconnect(self.handler_id)
-
-	for sink in appsinks:
-		appsink_dump_dot = AppsinkDumpDot(pipeline, len(appsinks), basename = basename, verbose = verbose)
-		appsink_dump_dot.handler_id = sink.connect_after("new-preroll", appsink_dump_dot.execute)
+	def execute(self, elem):
+		with self.remaining_lock:
+			handler_id = self.remaining.pop(elem)
+			if not self.remaining:
+				write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
+		elem.disconnect(handler_id)
+		return Gst.FlowReturn.OK
 
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz = 1):
