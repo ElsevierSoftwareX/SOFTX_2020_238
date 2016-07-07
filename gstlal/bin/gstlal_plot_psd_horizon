@@ -22,6 +22,7 @@ matplotlib.use('Agg')
 from matplotlib import pyplot
 import numpy
 import lal
+import lal.series
 from glue.ligolw import utils as ligolw_utils
 from gstlal import reference_psd
 

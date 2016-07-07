@@ -45,6 +45,7 @@ import numpy
 
 
 import lal
+import lal.series
 
 
 from glue import iterutils

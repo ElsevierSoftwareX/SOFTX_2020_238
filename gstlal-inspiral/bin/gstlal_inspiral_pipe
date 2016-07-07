@@ -74,6 +74,7 @@ import itertools
 ##############################################################################
 # import the modules we need to build the pipeline
 import lal
+import lal.series
 from glue import iterutils
 from glue import pipeline
 from glue.lal import Cache, CacheEntry
