@@ -2,7 +2,7 @@ gstlal-calibration (0.99.1-1) unstable; urgency=low
 
   * More packaging related adjustments
 
- -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 05 Jul 2016 16:22:00 +0900
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 06 Jul 2016 16:22:00 +0900
 
 gstlal-calibration (0.99.0-2) unstable; urgency=low
 
