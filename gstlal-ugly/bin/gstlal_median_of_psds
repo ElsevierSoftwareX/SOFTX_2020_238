@@ -42,7 +42,7 @@ for f in filenames:
 psd_out_dict = dict((ifo, psds[0]) for ifo, psds in psd_dict.items())
 
 for ifo in psd_dict:
-	psd_out_dict[ifo].data = numpy.median(numpy.array([psd.data for psd in psd_dict[ifo]]), axis= 0)
+	psd_out_dict[ifo].data.data = numpy.median(numpy.array([psd.data.data for psd in psd_dict[ifo]]), axis= 0)
 
 # Write it to disk
 reference_psd.write_psd(
