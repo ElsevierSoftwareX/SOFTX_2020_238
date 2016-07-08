@@ -80,7 +80,6 @@ from gstlal import datasource
 #	capsfilter1 [URL="\ref pipeparts.mkcapsfilter()"];
 #	audioresample [URL="\ref pipeparts.mkresample()"];
 #	capsfilter2 [URL="\ref pipeparts.mkcapsfilter()"];
-#	nofakedisconts [URL="\ref pipeparts.mknofakedisconts()"];
 #	reblock [URL="\ref pipeparts.mkreblock()"];
 #	whiten [URL="\ref pipeparts.mkwhiten()"];
 #	audioconvert [URL="\ref pipeparts.mkaudioconvert()"];
@@ -89,17 +88,14 @@ from gstlal import datasource
 #	tee [URL="\ref pipeparts.mktee()"];
 #	audioamplifyr1 [URL="\ref pipeparts.mkaudioamplify()"];
 #	capsfilterr1 [URL="\ref pipeparts.mkcapsfilter()"];
-#	nofakediscontsr1 [URL="\ref pipeparts.mknofakedisconts()"];
 #	htgater1 [URL="\ref datasource.mkhtgate()", label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
 #	tee1 [URL="\ref pipeparts.mktee()"];
 #	audioamplifyr2 [URL="\ref pipeparts.mkaudioamplify()"];
 #	capsfilterr2 [URL="\ref pipeparts.mkcapsfilter()"];
-#	nofakediscontsr2 [URL="\ref pipeparts.mknofakedisconts()"];
 #	htgater2 [URL="\ref datasource.mkhtgate()", label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
 #	tee2 [URL="\ref pipeparts.mktee()"];
 #	audioamplify_rn [URL="\ref pipeparts.mkaudioamplify()"];
 #	capsfilter_rn [URL="\ref pipeparts.mkcapsfilter()"];
-#	nofakedisconts_rn [URL="\ref pipeparts.mknofakedisconts()"];
 #	htgate_rn [URL="\ref datasource.mkhtgate()", style=filled, color=lightgrey, label="htgate() \n [iff ht gate specified]"];
 #	tee [URL="\ref pipeparts.mktee()"];
 #
@@ -107,8 +103,7 @@ from gstlal import datasource
 #
 #	"?" -> capsfilter1 -> audioresample;
 #	audioresample -> capsfilter2;
-#	capsfilter2 -> nofakedisconts;
-#	nofakedisconts -> reblock;
+#	capsfilter2 -> reblock;
 #	reblock -> whiten;
 #	whiten -> audioconvert;
 #	audioconvert -> capsfilter3;
@@ -117,20 +112,17 @@ from gstlal import datasource
 #
 #	tee -> audioamplifyr1 [label="Rate 1"];
 #	audioamplifyr1 -> capsfilterr1;
-#	capsfilterr1 -> nofakediscontsr1;
-#	nofakediscontsr1 -> htgater1;
+#	capsfilterr1 -> htgater1;
 #	htgater1 -> tee1 -> "? 1";
 #
 #	tee -> audioamplifyr2 [label="Rate 2"];
 #	audioamplifyr2 -> capsfilterr2;
-#	capsfilterr2 -> nofakediscontsr2;
-#	nofakediscontsr2 -> htgater2;
+#	capsfilterr2 -> htgater2;
 #	htgater2 -> tee2 -> "? 2";
 #
 #	tee ->  audioamplify_rn [label="Rate N"];
 #	audioamplify_rn -> capsfilter_rn;
-#	capsfilter_rn -> nofakedisconts_rn;
-#	nofakedisconts_rn -> htgate_rn;
+#	capsfilter_rn -> htgate_rn;
 #	htgate_rn -> tee_n -> "? 3";
 #
 # }
@@ -168,7 +160,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	quality = 9
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max(rates))
 	head = pipeparts.mkresample(pipeline, head, quality = quality)
-	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
 
 	#
@@ -288,7 +279,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		else:
 			head[rate] = head[max(rates)]
 		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw, rate=%d" % rate)
-		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate])	# FIXME:  remove when resampler is patched
 		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
 
 		head[rate] = pipeparts.mktee(pipeline, head[rate])

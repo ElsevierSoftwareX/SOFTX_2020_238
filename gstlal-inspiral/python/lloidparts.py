@@ -598,7 +598,6 @@ class Handler(simplehandler.Handler):
 #	lal_checktimestamps4 [URL="\ref pipeparts.mkchecktimestamps()"];
 #	lal_checktimestamps5 [URL="\ref pipeparts.mkchecktimestamps()"];
 #	capsfilter [URL="\ref pipeparts.mkcapsfilter()"];
-#	lal_nofakedisconts [URL="\ref pipeparts.mknofakedisconts()"];
 #	gate [URL="\ref pipeparts.mkgate()"];
 #	"mkcontrolsnksrc()" [URL="\ref mkcontrolsnksrc()"];
 #	lal_sumsquares [URL="\ref pipeparts.mksumsquares()"];
@@ -610,8 +609,7 @@ class Handler(simplehandler.Handler):
 #	queue2 -> lal_checktimestamps3;
 #	lal_checktimestamps3 -> audioresample;
 #	audioresample -> capsfilter;
-#	capsfilter -> lal_nofakedisconts;
-#	lal_nofakedisconts -> lal_checktimestamps4;
+#	capsfilter -> lal_checktimestamps4;
 #	lal_checktimestamps4 -> "mkcontrolsnksrc()"
 #	"mkcontrolsnksrc()" -> queue3;
 #	queue3 -> gate;
@@ -684,7 +682,6 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		# should intersect it's downstream peer's format with the
 		# sink format
 		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw, rate=%d" % max(bank.get_rates()))
-		elem = pipeparts.mknofakedisconts(pipeline, elem)	# FIXME:  remove when resampler is patched
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
 
@@ -881,7 +878,6 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# are padded such that the Nyquist frequency is 1.5
 			# times the highest frequency of the time slice
 			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw, rate=%d" % next_rate[rate])
-			branch_heads[rate] = pipeparts.mknofakedisconts(pipeline, branch_heads[rate])	# FIXME:  remove when resampler is patched
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_to_%d_snr_resampler" % (logname, rate, next_rate[rate]))
 
 		#

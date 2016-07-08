@@ -275,7 +275,6 @@ main (int argc, char *argv[])
     "! audioconvert " /* convert to floating point */
     "! audiochebband lower-frequency=40 upper-frequency=1000 " /* band-pass filter */
     "! audioresample " /* downsample (or upsample) */
-    "! lal_nofakedisconts " /* fix fake discontinuity flags (it's a long story) */
     "! audioconvert " /* convert back to integer */
     "! rtpL16pay name=pay0 pt=97 )" /* payload raw audio */
    );
