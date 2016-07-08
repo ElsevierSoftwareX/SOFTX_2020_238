@@ -167,6 +167,7 @@ class framecpp_channeldemux_set_units(object):
 		"""
 		self.elem = elem
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, units_dict)
+		assert self.pad_added_handler_id > 0
 
 	@staticmethod
 	def pad_added(element, pad, units_dict):
@@ -203,6 +204,7 @@ class framecpp_channeldemux_check_segments(object):
 		# make a copy of the segmentlistdict in case the calling
 		# code modifies it
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, seglists.copy())
+		assert self.pad_added_handler_id > 0
 
 	def pad_added(self, element, pad, seglists):
 		name = pad.get_name()
@@ -210,6 +212,7 @@ class framecpp_channeldemux_check_segments(object):
 			pad.remove_data_probe(self.probe_handler_ids.pop(name))
 		if name in seglists:
 			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name], self.jitter)
+			assert self.probe_handler_ids[name] > 0
 
 	@classmethod
 	def set_probe(cls, pad, seglist, jitter = LIGOTimeGPS(0, 1)):
@@ -800,9 +803,12 @@ class AppSync(object):
 		if appsink in self.appsinks:
 			raise ValueError("duplicate appsinks %s" % repr(appsink))
 		appsink.set_property("max-buffers", 1)
-		appsink.connect("new-preroll", self.new_preroll_handler)
-		appsink.connect("new-sample", self.new_sample_handler)
-		appsink.connect("eos", self.eos_handler)
+		handler_id = appsink.connect("new-preroll", self.new_preroll_handler)
+		assert handler_id > 0
+		handler_id = appsink.connect("new-sample", self.new_sample_handler)
+		assert handler_id > 0
+		handler_id = appsink.connect("eos", self.eos_handler)
+		assert handler_id > 0
 		self.appsinks[appsink] = None
 		return appsink
 
@@ -879,6 +885,7 @@ class connect_appsink_dump_dot(object):
 		self.remaining = {}
 		for sink in appsinks:
 			self.remaining[sink] = sink.connect_after("new-preroll", self.execute)
+			assert self.remaining[sink] > 0
 
 	def execute(self, elem):
 		with self.remaining_lock:
