@@ -47,6 +47,7 @@ Gst.init(None)
 
 from glue.ligolw import utils
 import lal
+import lal.series
 
 
 from gstlal import datasource
