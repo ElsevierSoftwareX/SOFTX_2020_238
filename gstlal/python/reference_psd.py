@@ -176,7 +176,12 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	#
 
 	if verbose:
-		print >>sys.stderr, "putting pipeline into playing state ..."
+		print >>sys.stderr, "putting pipeline into READY state ..."
+	if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+		raise RuntimeError("pipeline failed to enter READY state")
+	datasource.pipeline_seek_for_gps(pipeline, *gw_data_source_info.seg)
+	if verbose:
+		print >>sys.stderr, "putting pipeline into PLAYING state ..."
 	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter PLAYING state")
 	if verbose:
