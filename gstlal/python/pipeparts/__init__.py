@@ -187,8 +187,8 @@ class framecpp_channeldemux_check_segments(object):
 	There are two ways to use this tool.  To directly install a segment
 	list monitor on a single pad use the .set_probe() class method.
 	For elements with dynamic pads, the class can be allowed to
-	automatically add monitors to pads as the become available by using
-	the element's pad-added signal.  In this case initialize an
+	automatically add monitors to pads as they become available by
+	using the element's pad-added signal.  In this case initialize an
 	instance of the class with the element and a dictionary of segment
 	lists mapping source pad name to the segment list to check that
 	pad's output against.
@@ -198,10 +198,9 @@ class framecpp_channeldemux_check_segments(object):
 	error in element timestamp computations).  The default is 1 ns.
 	"""
 	def __init__(self, elem, seglists, jitter = LIGOTimeGPS(0, 1)):
-		self.elem = elem
-		self.probe_handler_ids = {}
 		self.jitter = jitter
-		# keep a copy of the segmentlistdict incase the calling
+		self.probe_handler_ids = {}
+		# make a copy of the segmentlistdict in case the calling
 		# code modifies it
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, seglists.copy())
 
