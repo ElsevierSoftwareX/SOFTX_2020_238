@@ -6,45 +6,45 @@ Release: 1%{?dist}
 Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: python >= @MIN_PYTHON_VERSION@
+Requires: avahi-ui-tools
+Requires: dbus-python
+Requires: fftw >= 3
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: glue-segments >= @MIN_GLUE_VERSION@
-Requires: python-pylal >= @MIN_PYLAL_VERSION@
-Requires: fftw >= 3
 Requires: gobject-introspection >= @MIN_GOBJECT_INTROSPECTION_VERSION@
+Requires: gsl
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
+Requires: %{gstreamername}-plugins-bad-free
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
-Requires: %{gstreamername}-plugins-bad-free
-Requires: numpy
-Requires: scipy
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lal-python >= @MIN_LAL_VERSION@
-Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
-Requires: lalsimulation >= @MIN_LALSIMULATION_VERSION@
 Requires: lalburst >= @MIN_LALBURST_VERSION@
+Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalinspiral >= @MIN_LALINSPIRAL_VERSION@
-Requires: gsl
+Requires: lalsimulation >= @MIN_LALSIMULATION_VERSION@
+Requires: numpy
 Requires: orc >= @MIN_ORC_VERSION@
-Requires: dbus-python
-Requires: avahi-ui-tools
+Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
+Requires: python-pylal >= @MIN_PYLAL_VERSION@
+Requires: scipy
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
-BuildRequires: graphviz
-BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
-BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 BuildRequires: fftw-devel >= 3
+BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
+BuildRequires: graphviz
+BuildRequires: gsl-devel
 BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
-BuildRequires: numpy
 BuildRequires: lal-devel >= @MIN_LAL_VERSION@
 BuildRequires: lal-python >= @MIN_LAL_VERSION@
-BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
-BuildRequires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
 BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
 BuildRequires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
-BuildRequires: gsl-devel
+BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+BuildRequires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
+BuildRequires: numpy
 BuildRequires: orc >= @MIN_ORC_VERSION@
+BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 # needed for gstpythonplugin.c remove when we remove that plugin from gstlal
 BuildRequires: pygobject3-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
@@ -65,7 +65,17 @@ gstlal-based applications.
 %package devel
 Summary: Files and documentation needed for compiling gstlal-based plugins and programs.
 Group: LSC Software/Data Analysis
-Requires: %{name} = %{version} python-devel >= @MIN_PYTHON_VERSION@ fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
+Requires: %{name} = %{version}
+Requires: fftw-devel >= 3
+Requires: gsl-devel
+Requires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
+Requires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
+Requires: lal-devel >= @MIN_LAL_VERSION@
+Requires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+Requires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
+Requires: lalburst-devel >= @MIN_LALBURST_VERSION@
+Requires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
+Requires: python-devel >= @MIN_PYTHON_VERSION@
 %description devel
 This package contains the files needed for building gstlal-based plugins
 and programs.
@@ -76,7 +86,7 @@ and programs.
 
 
 %build
-%configure
+%configure --enable-gtk-doc
 %{__make}
 
 
