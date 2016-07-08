@@ -215,7 +215,7 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	# Smooth the psd
 	#
 
-	psddata = psd.data
+	psddata = psd.data.data
 	avgwindow = int(smoothing_frequency / newdeltaF)
 	psddata = movingmedian(psddata, avgwindow)
 	psddata = movingaverage(psddata, avgwindow)
@@ -234,7 +234,7 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	psddata[kmax:] = float('Inf')
 	psddata[kmin:kmax] /= numpy.cos(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
 
-	psd.data = psddata
+	psd.data.data = psddata
 	
 	#
 	# compute the psd horizon after conditioning and renormalize
@@ -242,8 +242,8 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 
 	horizon_after = horizon_distance(psd, 1.4, 1.4, 8.0, minfs[1], maxfs[0])
 
-	psddata = psd.data
-	psd.data =  psddata * (horizon_after / horizon_before)**2
+	psddata = psd.data.data
+	psd.data.data =  psddata * (horizon_after / horizon_before)**2
 
 	#
 	# done
