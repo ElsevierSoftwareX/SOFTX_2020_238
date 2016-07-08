@@ -678,10 +678,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		src = pipeparts.mktee(pipeline, src)	# comment-out if the tee above is uncommented
 		elem = pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights), max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare" % logname)
-		# FIXME:  the capsfilter shouldn't be needed, the adder
-		# should intersect it's downstream peer's format with the
-		# sink format
-		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw, rate=%d" % max(bank.get_rates()))
+		elem = pipeline, pipeparts.mkresample(pipeline, elem, quality = 9)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
 
@@ -844,8 +841,6 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			#
 
 			branch_heads[rate] = pipeparts.mkadder(pipeline, (pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration) for head in heads))
-			# FIXME capsfilter shouldn't be needed remove when adder is fixed
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw, rate=%d" % rate)
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_snr_adder" % (logname, rate))
 		else:
 			#
@@ -1062,4 +1057,3 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 
 	assert any(triggersrcs.values())
 	return triggersrcs
-
