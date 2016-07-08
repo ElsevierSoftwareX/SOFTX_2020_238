@@ -206,7 +206,6 @@ GST_STATIC_PAD_TEMPLATE ("sink_%u",
 static void gst_adder_child_proxy_init (gpointer g_iface, gpointer iface_data);
 
 #define gst_adder_parent_class parent_class
-#define gst_adder_get_type gstlal_adder_get_type
 G_DEFINE_TYPE_WITH_CODE (GstAdder, gst_adder, GST_TYPE_ELEMENT,
     G_IMPLEMENT_INTERFACE (GST_TYPE_CHILD_PROXY, gst_adder_child_proxy_init));
 
