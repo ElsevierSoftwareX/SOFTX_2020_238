@@ -2725,6 +2725,9 @@ class ServerAdapter(object):
     def run(self, handler): # pragma: no cover
         pass
 
+    def shutdown(self):
+        raise NotImplementedError
+
     def __repr__(self):
         args = ', '.join(['%s=%s'%(k,repr(v)) for k, v in self.options.items()])
         return "%s(%s)" % (self.__class__.__name__, args)
@@ -2771,6 +2774,9 @@ class WSGIRefServer(ServerAdapter):
         self.srv = make_server(self.host, self.port, app, server_cls, handler_cls)
         self.port = self.srv.server_port # update port actual port (0 means random)
         self.srv.serve_forever()
+
+    def shutdown(self):
+        self.srv.shutdown()
 
 
 class CherryPyServer(ServerAdapter):
