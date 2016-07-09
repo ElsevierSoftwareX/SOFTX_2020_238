@@ -34,6 +34,7 @@ Stuff to help add an http control and query interface to a program.
 import socket
 import sys
 import threading
+import time
 
 
 from gstlal import bottle
@@ -117,7 +118,7 @@ class HTTPServers(list):
 			if verbose:
 				print >>sys.stderr, "waiting for http server to start ..."
 			while httpd.port == 0:
-				pass
+				time.sleep(0.25)
 			host = httpd.host if httpd.host != "0.0.0.0" else socket.getfqdn()
 			if verbose:
 				print >>sys.stderr, "started http server on http://%s:%d" % (host, httpd.port)
