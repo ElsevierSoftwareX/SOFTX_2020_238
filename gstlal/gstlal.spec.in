@@ -34,6 +34,7 @@ BuildRequires: fftw-devel >= 3
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 BuildRequires: graphviz
 BuildRequires: gsl-devel
+BuildRequires: gtk-doc >= @MIN_GTK_DOC_VERSION@
 BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: lal-devel >= @MIN_LAL_VERSION@
@@ -126,6 +127,7 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %files
 %defattr(-,root,root)
 %{_bindir}/*
+%{_datadir}/gir-*/*
 %{_datadir}/gstlal
 %{_datadir}/gtk-doc/html/gstlal-*
 %{_docdir}/gstlal-*
