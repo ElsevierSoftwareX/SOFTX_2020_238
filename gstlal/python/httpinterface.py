@@ -91,18 +91,18 @@ class HTTPServers(list):
 	Example:
 
 	>>> # save return value in a variable to prevent garbage collection
-	>>> servers = HTTPServers(12345)
+	>>> servers = HTTPServers(port = 12345)
 	>>> pass	# blah
 	>>> pass	# blah
 	>>> pass	# blah
 	>>> # shutdown servers by deleting object
 	>>> del servers
 
-	Pass 0 for the port number to assign one randomly.  bottle_app
-	should be a Bottle instance.  If bottle_app is None (the default)
-	then the current default Bottle application is used.
+	If port = 0 (the default) a port will be assigned randomly.
+	bottle_app should be a Bottle instance.  If bottle_app is None (the
+	default) then the current default Bottle application is used.
 	"""
-	def __init__(self, port, bottle_app = None, service_name = "gstlal", service_properties = None, verbose = False):
+	def __init__(self, port = 0, bottle_app = None, service_name = "gstlal", service_properties = None, verbose = False):
 		if bottle_app is None:
 			bottle_app = bottle.default_app()
 		self.verbose = verbose
