@@ -120,12 +120,11 @@ class HTTPServers(list):
 				print >>sys.stderr, "waiting for http server to start ..."
 			while httpd.port == 0:
 				time.sleep(0.25)
-			host = httpd.host if httpd.host != "0.0.0.0" else socket.getfqdn()
 			if verbose:
-				print >>sys.stderr, "started http server on http://%s:%d" % (host, httpd.port)
+				print >>sys.stderr, "started http server on http://%s:%d" % (httpd.host, httpd.port)
 			if self.service_publisher is not None:
 				if verbose:
-					print >>sys.stderr, "advertising http server on http://%s:%d as service \"%s\" ..." % (host, httpd.port, service_name),
+					print >>sys.stderr, "advertising http server on http://%s:%d as service \"%s\" ..." % (httpd.host, httpd.port, service_name),
 				try:
 					self.service_publisher.add_service(
 						sname = service_name,
@@ -158,7 +157,7 @@ class HTTPServers(list):
 		while self:
 			httpd, httpd_thread = self.pop()
 			if self.verbose:
-				print >>sys.stderr, "stopping http server on http://%s:%d ..." % (httpd.host if httpd.host != "0.0.0.0" else socket.getfqdn(), httpd.port),
+				print >>sys.stderr, "stopping http server on http://%s:%d ..." % (httpd.host, httpd.port),
 			try:
 				httpd.shutdown()
 			except Exception as e:
