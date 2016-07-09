@@ -125,9 +125,6 @@ class HTTPServers(list):
 				try:
 					self.service_publisher.add_service(
 						sname = service_name,
-						stype = servicediscovery.DEFAULT_PROTO,
-						sdomain = servicediscovery.DEFAULT_DOMAIN,
-						host = host,
 						port = httpd.port,
 						properties = service_properties
 					)

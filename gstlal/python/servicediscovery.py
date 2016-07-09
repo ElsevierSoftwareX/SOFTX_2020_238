@@ -65,7 +65,7 @@ class Publisher(object):
 		server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
 		self.group = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.EntryGroupNew()), avahi.DBUS_INTERFACE_ENTRY_GROUP)
 
-	def add_service(self, sname, stype, sdomain, host, port, properties = None):
+	def add_service(self, sname, port, stype = DEFAULT_PROTO, sdomain = DEFAULT_DOMAIN, host = "", properties = None):
 		if properties is not None:
 			assert not any("=" in key for key in properties)
 		self.group.AddService(
