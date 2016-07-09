@@ -98,8 +98,9 @@ class HTTPServers(list):
 	>>> # shutdown servers by deleting object
 	>>> del servers
 
-	bottle_app should be a Bottle instance.  If bottle_app is None (the
-	default) then the current default Bottle application is used.
+	Pass 0 for the port number to assign one randomly.  bottle_app
+	should be a Bottle instance.  If bottle_app is None (the default)
+	then the current default Bottle application is used.
 	"""
 	def __init__(self, port, bottle_app = None, service_name = "gstlal", service_properties = None, verbose = False):
 		if bottle_app is None:
