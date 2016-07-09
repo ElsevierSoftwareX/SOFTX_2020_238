@@ -114,6 +114,8 @@ class HTTPServers(list):
 			httpd_thread.daemon = True
 			httpd_thread.start()
 			self.append((httpd, httpd_thread))
+			if verbose:
+				print >>sys.stderr, "waiting for http server to start ..."
 			while httpd.port == 0:
 				pass
 			host = httpd.host if httpd.host != "0.0.0.0" else socket.getfqdn()
