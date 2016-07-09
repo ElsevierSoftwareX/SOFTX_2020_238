@@ -2768,8 +2768,9 @@ class WSGIRefServer(ServerAdapter):
                 class server_cls(server_cls):
                     address_family = socket.AF_INET6
 
-        srv = make_server(self.host, self.port, app, server_cls, handler_cls)
-        srv.serve_forever()
+        self.srv = make_server(self.host, self.port, app, server_cls, handler_cls)
+        self.port = self.srv.server_port # update port actual port (0 means random)
+        self.srv.serve_forever()
 
 
 class CherryPyServer(ServerAdapter):
