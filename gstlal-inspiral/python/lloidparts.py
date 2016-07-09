@@ -855,9 +855,13 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 		#
 
 		if rate in next_rate:
-			# Note quality = 1 requires that the template slices
-			# are padded such that the Nyquist frequency is 1.5
-			# times the highest frequency of the time slice
+			# NOTE: quality = 1 requires that the template
+			# slices are padded such that the Nyquist frequency
+			# is 1.5 times the highest frequency of the time
+			# slice.  NOTE: the adder (that comes downstream of
+			# this) isn't quite smart enough to negotiate a
+			# common format among its upstream peers so the
+			# capsfilter is still required.
 			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw, rate=%d" % next_rate[rate])
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_to_%d_snr_resampler" % (logname, rate, next_rate[rate]))
 
