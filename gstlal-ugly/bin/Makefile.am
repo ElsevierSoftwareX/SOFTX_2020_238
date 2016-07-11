@@ -12,6 +12,8 @@ dist_bin_SCRIPTS = \
 	gstlal_mock_data_server \
 	gstlal_injections_by_local_rate \
 	gstlal_injections_by_local_rate_plot \
+	gstlal_inspiral_treebank \
+	gstlal_inspiral_treebank_dag \
 	gstlal_segments_trim \
 	gstlal_glitch_population \
 	gstlal_vetoes_from_burst_inj \
