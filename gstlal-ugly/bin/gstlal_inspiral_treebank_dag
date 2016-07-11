@@ -17,10 +17,6 @@ from gstlal import dagparts as gstlaldagparts
 def parse_command_line():
 
 	parser = argparse.ArgumentParser(description="Template generator via tree.")
-	parser.add_argument("-v", "--verbose", action="store_true", default=False,\
-				    help="Be verbose.")
-	parser.add_argument("-d", "--debug", action="store_true", default=False,\
-				    help="Extra explicit information for debugging and sanity checks.")
 
 	# Options for generating the template bank
 	parser.add_argument("--min-mass1", action="store", type=float,\
@@ -86,25 +82,25 @@ def parse_command_line():
 args = parse_command_line()
 dag = inspiral_pipe.DAG("treebank")
 treeJob = inspiral_pipe.generic_job("gstlal_inspiral_treebank")
-argsdict = vars(args)
+argsdict = dict((key.replace("_","-"), value) for key,value in vars(args).items())
 mass1 = numpy.logspace(numpy.log10(args.min_mass1), numpy.log10(args.max_mass1), numpy.int(args.num_jobs**.5))
 mass2 = numpy.logspace(numpy.log10(args.min_mass2), numpy.log10(args.max_mass2), numpy.int(args.num_jobs**.5))
-del argsdict["num_jobs"]
+del argsdict["num-jobs"]
 pnodes = []
 cnt = 1
 for minmass1,maxmass1 in zip(mass1[:-1],mass1[1:]):
 	for minmass2,maxmass2 in zip(mass2[:-1],mass2[1:]):
-		argsdict["min_mass1"] = minmass1
-		argsdict["max_mass1"] = maxmass1
-		argsdict["min_mass2"] = minmass2
-		argsdict["max_mass2"] = maxmass2
-		argsdict["user_tag"] = cnt
+		argsdict["min-mass1"] = minmass1
+		argsdict["max-mass1"] = maxmass1
+		argsdict["min-mass2"] = minmass2
+		argsdict["max-mass2"] = maxmass2
+		argsdict["user-tag"] = cnt
 		cnt+=1
 
 	#	parser.add_argument("--user-tag", action="store", default="ROCKS",\
 	#				    help="Add tag to output filename")
 
-		pnodes.append(inspiral_pipe.generic_node(treeJob, dag, parent_nodes = [], input_files = {}, output_files = {"":"TREEBANK_%d.xml.gz" % cnt}, opts = argsdict))
+		pnodes.append(inspiral_pipe.generic_node(treeJob, dag, parent_nodes = [], input_files = {}, output_files = {}, opts = argsdict))
 
 #FIXME add a ligolw_add job to the end of the dag
 
