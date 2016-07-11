@@ -1,0 +1,555 @@
+#!/usr/bin/python
+import itertools
+import numpy
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import table
+from glue.ligolw import utils
+from glue.ligolw import ilwd
+from glue.ligolw.utils import process as ligolw_process
+from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
+from gstlal import metric as metric_module
+import os,sys,argparse
+
+# Read command line options
+def parse_command_line():
+
+	parser = argparse.ArgumentParser(description="Template generator via tree.")
+	parser.add_argument("-v", "--verbose", action="store_true", default=False,\
+				    help="Be verbose.")
+	parser.add_argument("-d", "--debug", action="store_true", default=False,\
+				    help="Extra explicit information for debugging and sanity checks.")
+	parser.add_argument("--user-tag", action="store", default="ROCKS",\
+				    help="Add tag to output filename")
+
+	# Options for generating the template bank
+	parser.add_argument("--min-mass1", action="store", type=float,\
+				    default=3.0, help="Minimum mass1 to generate bank.")
+	parser.add_argument("--max-mass1", action="store", type=float,\
+				    default=10.0, help="Maximum mass1 to generate bank.")
+	parser.add_argument("--min-mass2", action="store", type=float,\
+				    default=3.0, help="Minimum mass2 to generate bank.")
+	parser.add_argument("--max-mass2", action="store", type=float,\
+				    default=10.0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-spin1x", action="store", type=float,\
+				    default=0, help="Minimum mass1 to generate bank.")
+	parser.add_argument("--max-spin1x", action="store", type=float,\
+				    default=0, help="Maximum mass1 to generate bank.")
+	parser.add_argument("--min-spin2x", action="store", type=float,\
+				    default=0, help="Minimum mass2 to generate bank.")
+	parser.add_argument("--max-spin2x", action="store", type=float,\
+				    default=0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-spin1y", action="store", type=float,\
+				    default=0, help="Minimum mass1 to generate bank.")
+	parser.add_argument("--max-spin1y", action="store", type=float,\
+				    default=0, help="Maximum mass1 to generate bank.")
+	parser.add_argument("--min-spin2y", action="store", type=float,\
+				    default=0, help="Minimum mass2 to generate bank.")
+	parser.add_argument("--max-spin2y", action="store", type=float,\
+				    default=0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-spin1z", action="store", type=float,\
+			default=0, help="Minimum mass1 to generate bank.")
+	parser.add_argument("--max-spin1z", action="store", type=float,\
+				    default=0, help="Maximum mass1 to generate bank.")
+	parser.add_argument("--min-spin2z", action="store", type=float,\
+				    default=0, help="Minimum mass2 to generate bank.")
+	parser.add_argument("--max-spin2z", action="store", type=float,\
+				    default=0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-match", action="store", type=float,\
+				    default=0.95, help="Minimum match to generate bank.")
+	parser.add_argument("--flow", action="store", type=float,\
+				    default=30.0, help="Low frequency cutoff for overlap calculations.")
+	parser.add_argument("--fhigh", action="store", type=float,\
+				    default=1024.0, help="High frequency cutoff for overlap calculations.")
+	parser.add_argument("--approximant", action="store", type=str,\
+				    default="TaylorF2", help="Specify approximant.")
+	parser.add_argument("--psd-file", action="store",\
+				    default=None, help="Input PSD file.")
+	parser.add_argument("--noise-model", action="store",\
+				    default=None, help="Specify standard noise model.")
+
+	args = parser.parse_args()
+
+	if args.noise_model and args.psd_file:
+		raise ValueError("Cannot specify both --psd-file and --noise-model")
+
+	if not (args.noise_model or args.psd_file):
+		args.psd_file = "test.xml.gz" # FIXME for bw compatibility
+
+	if args.noise_model:
+		raise NotImplementedError("IMPLEMENT NOISE MODELS!!")
+
+	return args
+
+
+class TileCube(object):
+
+	def __init__(self, boundaries, cube, Minv, dl, bounding_box):
+		self.boundaries = boundaries.copy()
+		# The coordinate center, not the center as defined by the metric
+		self.center = numpy.array([c[0] + (c[1] - c[0]) / 2. for c in boundaries])
+		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
+		self.cube = cube
+		self.Minv = Minv
+		self.dl = dl
+		self.cube_coords_center = self.cube_coords(self.center)
+		self.bounding_box = bounding_box
+
+	def cube_coords(self, coords):
+		return numpy.dot(self.Minv, numpy.array(coords) * self.dl) + self.cube.center
+
+	def N(self):
+		return len(self.boundaries)
+
+	def corners(self):
+		for corner in itertools.product(*self.boundaries):
+			yield corner
+
+	def in_cube(self):
+		# FIXME we also have to check the other boundaries vertices!!! That is why this doesn't work yet.
+		for corner in self.corners():
+			if self.cube_coords(corner) in self.cube:
+				return True
+		for corner in self.bounding_box:
+			if corner in self:
+				return True
+		return False
+
+	def split(self, dim):
+		leftbound = self.boundaries.copy()
+		rightbound = self.boundaries.copy()
+		leftbound[dim,1] = self.center[dim]
+		rightbound[dim,0] = self.center[dim]
+		return TileCube(leftbound, self.cube, self.Minv, self.dl, self.bounding_box), TileCube(rightbound, self.cube, self.Minv, self.dl, self.bounding_box)
+
+	def __contains__(self, coords):
+		for i, c in enumerate(coords):
+			# FIXME do something more sane to handle boundaries
+			if not (c >= 1.0 * self.boundaries[i,0] and c <= 1.0 * self.boundaries[i,1]):
+				return False
+		return True
+
+
+class TileNode(object):
+	def __init__(self, tilecube, parent = None):
+		self.tilecube = tilecube
+		self.right = None
+		self.left = None
+		self.parent = parent
+
+	def split(self):
+		size = self.tilecube.deltas
+		splitdim = numpy.argmax(size)
+		maxsize = size[splitdim]
+		if maxsize > 1:# and self.tilecube.in_cube():
+			l, r = self.tilecube.split(splitdim)
+			self.left = TileNode(l, self) 
+			self.right = TileNode(r, self)
+			self.left.split()
+			self.right.split()
+
+	def walk(self, out):
+		if self.right is not None:
+			self.right.walk(out)
+		if self.left is not None:
+			self.left.walk(out)
+
+		if not self.right and not self.left:
+			for corner in self.tilecube.corners():
+				c = self.tilecube.cube_coords(corner)
+				if c in self.tilecube.cube:
+					out.add(tuple(c))
+		return out
+
+
+
+class Tile(object):
+	def __init__(self, coords, Minv, cube, tiles, dl, points_since_last = 0):
+		self.coords = coords
+		self.Minv = Minv
+		self.cube = cube
+		self.tiles = tiles
+		self.dl = dl
+		self.cube_coords = tuple(numpy.dot(self.Minv, numpy.array(self.coords)) + cube.center)
+		self.points_since_last = points_since_last
+
+		if self.cube_coords in cube and self.cube_coords not in tiles:
+			tiles.add(self.cube_coords)
+			self.points_since_last = 0
+			self.tile_neighbors()
+		elif points_since_last < 5:
+			self.points_since_last += 1
+			self.tile_neighbors()
+
+	def tile_neighbors(self):
+		for p in itertools.product((-self.dl, 0, self.dl), repeat = len(self.coords)):
+			Tile(tuple(numpy.array(self.coords)+numpy.array(p)), self.Minv, self.cube, self.tiles, self.dl, self.points_since_last)
+
+
+class HyperCube(object):
+
+	def __init__(self, boundaries, symmetry_func, metric = None):
+		"""
+		Define a hypercube with boundaries given by boundaries, e.g.,
+
+		boundaries = numpy.array([[1., 3.], [2., 12.], [4., 7.]])
+
+		Where the numpy array has the min and max coordinates of each dimension.
+
+		In order to compute the size or volume of the cube you have to
+		provide a metric function which takes coordinates and returns a metric tensor, e.g.,
+
+		metric.metric_tensor(coordinates)
+
+		where coordinates is a 1xN dimensional array where N is the
+		dimension of this HyperCube.
+		"""
+		self.boundaries = boundaries.copy()
+		# The coordinate center, not the center as defined by the metric
+		self.center = numpy.array([c[0] + (c[1] - c[0]) / 2. for c in boundaries])
+		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
+		self.metric = metric
+		self.metric_tensor = self.metric.metric_tensor(self.center, self.deltas)
+		self.size = self._size()
+		self.symmetry_func = symmetry_func
+
+	def N(self):
+		return len(self.boundaries)
+
+	def _size(self):
+		"""
+		Compute the size of the cube according to the metric through
+		the center point for each dimension under the assumption of a constant metric
+		evaluated at the center.
+		"""
+		size = numpy.empty(len(self.center))
+		for i, sides in enumerate(self.boundaries):
+			x = self.center.copy()
+			y = self.center.copy()
+			x[i] = self.boundaries[i,0]
+			y[i] = self.boundaries[i,1]
+			size[i] = metric_module.distance(self.metric_tensor, x, y)
+		return size
+
+	def num_tmps_per_side(self, mismatch):
+		return numpy.ceil(self.size / self.dl(mismatch = mismatch))
+
+
+	def split(self, dim):
+		leftbound = self.boundaries.copy()
+		rightbound = self.boundaries.copy()
+		leftbound[dim,1] = self.center[dim]
+		rightbound[dim,0] = self.center[dim]
+		return HyperCube(leftbound, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.symmetry_func, metric = self.metric)
+
+
+	def tile(self, mismatch, verbose = True):
+		popcount = 0
+
+		# Find the coordinate transformation matrix
+		try:
+			M = numpy.linalg.cholesky(self.metric_tensor)
+			Minv = numpy.linalg.inv(M)
+		except numpy.linalg.LinAlgError:
+			print >>sys.stderr, "tiling failed: %f" % numpy.linalg.det(self.metric_tensor)
+			raise
+
+		if True:
+			# To Stephen with love
+			# From Chad
+			tiles = [self.center]
+			N = self.N()
+			target = numpy.ceil(self.num_templates(mismatch)) + N
+			dl = self.dl(mismatch)
+			cnt = 0
+			rand_coords = numpy.random.rand(1e4, len(self.deltas))
+			for randcoord in rand_coords:
+				randcoord = (randcoord - 0.5) * self.deltas + self.center
+				#randcoord = (numpy.random.rand(len(self.deltas)) - 0.5)*self.deltas + self.center
+				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in tiles]
+				maxdist = max(distances)
+				mindist = min(distances)
+				#print maxdist, mindist, dl
+				assert randcoord in self
+				#if mindist <  dl * N**.5 and mindist > dl:
+				if mindist > dl * N**.5:
+					tiles.append(randcoord)
+				if len(tiles) > target:
+					break
+				#if cnt > 1e4:
+				#	break
+
+		if False:
+			tiles = set()
+			Tile(numpy.zeros(len(self.deltas)), Minv, self, tiles, self.dl(mismatch))
+			tiles = list(tiles)
+
+		
+		# The bounding box has 2*N points to define it each point is
+		# an N length vector.  Figure out the x' coordinates of the
+		# bounding box in and divide by dl to get number of templates
+		bounding_box = numpy.zeros((2*self.N(), self.N()))
+		pvectors = numpy.zeros((self.N(), self.N()))
+		for i, (s,e) in enumerate(self.boundaries):
+			Vs = numpy.zeros(self.N())
+			Ve = numpy.zeros(self.N())
+			Vs[i] = s - self.center[i]
+			Ve[i] = e - self.center[i]
+			Vsp = numpy.dot(M, Vs) / self.dl(mismatch)
+			Vep = numpy.dot(M, Ve) / self.dl(mismatch)
+			Vsp[Vsp<0] = numpy.floor(Vsp[Vsp<0])
+			Vsp[Vsp>0] = numpy.ceil(Vsp[Vsp>0])
+			Vep[Vep<0] = numpy.floor(Vep[Vep<0]) 
+			Vep[Vep>0] = numpy.ceil(Vep[Vep>0])
+			bounding_box[2*i,:] = Vsp
+			bounding_box[2*i+1,:] = Vep
+			pvectors[i,:] = Vep - Vsp
+
+		if False:
+			w, v = numpy.linalg.eig(pvectors)
+			vinv = numpy.linalg.inv(v)
+			print "doing the thing"
+			grid = [numpy.arange(-x/2.-1, x/2.+1, 1. / self.N()**.5) for x in w]
+			points = set()
+			for c in itertools.product(*grid):
+				point = tuple(numpy.round(numpy.dot(numpy.dot(v,numpy.array(c)), vinv)))
+				points.add(point)
+				#for p in itertools.product((-1, 0, 1), repeat = len(self.deltas)):
+				#	points.add(tuple(numpy.array(point) + numpy.array(p)))
+
+			tiles = []
+			for point in points:
+				# check this math
+				norm_coords = numpy.dot(Minv, numpy.array(point) *self.dl(mismatch))
+				primed_coords = norm_coords + self.center
+
+				# FIXME take care of ratty edges
+				if primed_coords in self:
+					tiles.append(primed_coords)
+
+
+
+		if False:
+			tc = TileCube(numpy.array(grid), self, Minv, self.dl(mismatch), bounding_box)
+			tn = TileNode(tc)
+			tn.split()
+			tiles = set()
+			tn.walk(tiles)
+			tiles = list(tiles)
+		if False:
+			grid = []
+			# Rather than finding the bounding box that encloses that encloses this with a rectangular shape, we need to do a coordinate transformation again
+			for (s,e) in zip(numpy.min(bounding_box,0), numpy.max(bounding_box,0)):
+				assert s < e
+				numtmps = 2**numpy.ceil(numpy.log2((numpy.ceil((e-s)) + 1) // 2))
+				grid.append(numpy.arange(-numtmps, numtmps) * self.dl(mismatch))
+				#grid.append(numpy.array((-numtmps, numtmps)))
+			tiles = []
+			for coords in itertools.product(*grid):
+				# check this math
+				norm_coords = numpy.dot(Minv, coords)
+				primed_coords = norm_coords + self.center
+
+				# FIXME take care of ratty edges
+				if primed_coords in self:
+					tiles.append(primed_coords)
+		# Gaurantee at least one
+		if len(tiles) == 0:
+			tiles.append(self.center)
+		if verbose:
+			print "placing %04d tiles" % len(tiles)
+		return list(tiles), popcount
+
+
+	def __contains__(self, coords):
+		size = self.size
+		for i, c in enumerate(coords):
+			# FIXME do something more sane to handle boundaries
+			if not (c >= 1.0 * self.boundaries[i,0] and c <= 1.0 * self.boundaries[i,1]):
+				return False
+		return True
+
+	def __repr__(self):
+		return "boundary: %s\ncoordinate center is: %s" % (self.boundaries, self.center)
+
+	def dl(self, mismatch):
+		# From Owen 1995 (2.15)
+		return 2 * mismatch**.5 / self.N()**.5
+
+	def volume(self, metric_tensor = None):
+		if metric_tensor is None:
+			metric_tensor = self.metric_tensor
+		# FIXME check math
+		return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
+
+	def mass_volume(self):
+		# FIXME this assumes m_1 m_2 are the first coordinates, not necessarily true
+		return numpy.product(self.deltas[0:2])
+
+	def num_templates(self, mismatch):
+		# From Owen 1995 (2.16)
+		return self.volume() / self.dl(mismatch)**self.N()
+
+
+
+class Node(object):
+	def __init__(self, cube, parent = None):
+		# A node is a container for one hypercube. It can have
+		# sub-nodes that split the hypercube.
+		self.cube = cube
+		self.right = None
+		self.left = None
+		self.parent = parent
+
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True):
+		size = self.cube.size
+
+		# Always split on the largest size
+		splitdim = numpy.argmax(size)
+
+		# FIXME, better to use volume or largest side?
+		numtmps = numpy.floor(self.cube.num_templates(mismatch))
+		# Figure out how many templates go on the largest side
+		#numtmps_per_side = self.cube.num_tmps_per_side(mismatch)
+		#numtmps = numpy.max(numtmps_per_side)
+		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates) or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
+			bifurcation += 1
+			left, right = self.cube.split(splitdim)
+			self.left = Node(left, self) 
+			self.right = Node(right, self)
+			if verbose:
+				print "%30s: %04d : %04d" % ("Splitting", numtmps, split_num_templates)
+			self.left.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
+			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
+		else:
+			if verbose:
+				print "%30s: %04d : %04d" % ("Next Level of Splitting",numtmps, split_num_templates)
+			# NOTE uncomment this for a hybrid split1 split3 approach
+			self.split3(mismatch, bifurcation, verbose)
+
+	def split3(self, mismatch, bifurcation = 0, verbose = True):
+		size = self.cube.size
+
+		# Always split on the largest size
+		splitdim = numpy.argmax(size)
+		derr = 2.0 
+
+		if self.parent is not None:
+			d1 = metric_module.distance(self.cube.metric_tensor, self.cube.center, self.parent.cube.center)
+			d2 = metric_module.distance(self.parent.cube.metric_tensor, self.cube.center, self.parent.cube.center)
+			avgd = (d2+d1)/2.
+			deltad = abs(d2-d1)
+			derr = deltad / avgd
+
+		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and derr > 0.05):
+			bifurcation += 1
+			left, right = self.cube.split(splitdim)
+			self.left = Node(left, self)
+			self.right = Node(right, self)
+			if verbose:
+				print "%30s: %0.2f" % ("Splitting", derr)
+			self.left.split3(mismatch = mismatch, bifurcation = bifurcation)
+			self.right.split3(mismatch = mismatch, bifurcation = bifurcation)
+		else:
+			if verbose:
+				print "%30s: %0.2f" % ("Not Splitting", derr)
+
+	def walk(self, out = []):
+		if self.right:
+			self.right.walk()
+		if self.left:
+			self.left.walk()
+
+		if not self.right and not self.left and self.cube.symmetry_func(self.cube.boundaries):
+			out.append(self.cube)
+
+		return out
+
+# Initialize coordinate function
+args = parse_command_line()
+
+x = []
+p = []
+for i, v in enumerate(("mass1", "mass2", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z")):
+	xi = getattr(args, "min_%s" % v)
+	xf = getattr(args, "max_%s" % v)
+	dx = xf-xi
+	if dx !=0:
+		x.append([xi,xf])
+		p.append(i)
+
+def coord_func(coords, positions = p):
+	out = numpy.zeros(8)
+	for i, pi in enumerate(positions):
+		out[pi] = coords[i]
+	return out
+
+def mass_sym(boundaries):
+	# Assumes first two are m_1 m_2
+	# Makes sure the entire hypercube is outside the symmetric region
+	m1 = boundaries[0]
+	m2 = boundaries[1]
+	for corner in itertools.product(m1,m2):
+		if corner[1] < corner[0]:
+			return True
+	return False
+
+
+# Initialize the metric and set the coordinate function
+g_ij = metric_module.Metric(
+	args.psd_file,
+	coord_func = coord_func,
+	duration = 4, # FIXME!!!!!
+	flow = args.flow,
+	fhigh = args.fhigh,
+	approximant = args.approximant)
+
+# Initialize the tree root and then split with a given splitsize
+bank = Node(HyperCube(numpy.array(x), symmetry_func = mass_sym, metric = g_ij))
+
+if args.verbose:
+	print "The bank size according to the center metric: ", bank.cube.size
+	print "The bank boundaries are                     : ", bank.cube.boundaries
+
+# Split according to how many templates you want to place in the hypercube
+mismatch = 1.0 - args.min_match
+bank.split(2 * len(x)**2, mismatch = mismatch, verbose = args.verbose)
+
+# prepare a new XML document for writing template bank
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+tbl = lsctables.New(lsctables.SnglInspiralTable)
+xmldoc.childNodes[-1].appendChild(tbl)
+# FIXME make a real process table
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], {})
+ligolw_process.set_process_end_time(process)
+
+totalpopcount = 0
+#FIXME this is busted, need to use the coord func
+for n, c in enumerate(bank.walk()):
+
+	tiles, temppopcount = c.tile(mismatch = mismatch)
+	totalpopcount = totalpopcount + temppopcount
+
+	for t in tiles:
+		row = SnglInspiralTable()
+		row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z = coord_func(t)
+		if row.mass2 > row.mass1:
+			m1 = row.mass1
+			row.mass1 = row.mass2
+			row.mass2 = m1
+
+		row.event_id = ilwd.ilwdchar('sngl_inspiral:event_id:%d' % len(tbl))
+		row.ifo = "H1" # FIXME
+		tbl.append(row)
+
+
+fout = "TREEBANK_" + args.user_tag + ".xml.gz"
+utils.write_filename(xmldoc, fout,  gz=fout.endswith("gz"))
+
+if args.verbose:
+	print >>sys.stderr, "Number of leaf nodes: ", n
+	print >>sys.stderr, "Number of templates (tiles): ", len(tbl)
+
+if args.debug:
+	print "Popped templates: ", totalpopcount

@@ -1,0 +1,120 @@
+#!/usr/bin/python
+import itertools
+import numpy
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import table
+from glue.ligolw import utils
+from glue.ligolw import ilwd
+from glue.ligolw.utils import process as ligolw_process
+from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
+from gstlal import metric as metric_module
+import os,sys,argparse
+from gstlal import inspiral, inspiral_pipe
+from gstlal import dagparts as gstlaldagparts
+
+# Read command line options
+def parse_command_line():
+
+	parser = argparse.ArgumentParser(description="Template generator via tree.")
+	parser.add_argument("-v", "--verbose", action="store_true", default=False,\
+				    help="Be verbose.")
+	parser.add_argument("-d", "--debug", action="store_true", default=False,\
+				    help="Extra explicit information for debugging and sanity checks.")
+
+	# Options for generating the template bank
+	parser.add_argument("--min-mass1", action="store", type=float,\
+				    default=3.0, help="Minimum mass1 to generate bank.")
+	parser.add_argument("--max-mass1", action="store", type=float,\
+				    default=10.0, help="Maximum mass1 to generate bank.")
+	parser.add_argument("--min-mass2", action="store", type=float,\
+				    default=3.0, help="Minimum mass2 to generate bank.")
+	parser.add_argument("--max-mass2", action="store", type=float,\
+				    default=10.0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-spin1x", action="store", type=float,\
+				    default=0, help="Minimum mass1 to generate bank.")
+	parser.add_argument("--max-spin1x", action="store", type=float,\
+				    default=0, help="Maximum mass1 to generate bank.")
+	parser.add_argument("--min-spin2x", action="store", type=float,\
+				    default=0, help="Minimum mass2 to generate bank.")
+	parser.add_argument("--max-spin2x", action="store", type=float,\
+				    default=0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-spin1y", action="store", type=float,\
+				    default=0, help="Minimum mass1 to generate bank.")
+	parser.add_argument("--max-spin1y", action="store", type=float,\
+				    default=0, help="Maximum mass1 to generate bank.")
+	parser.add_argument("--min-spin2y", action="store", type=float,\
+				    default=0, help="Minimum mass2 to generate bank.")
+	parser.add_argument("--max-spin2y", action="store", type=float,\
+				    default=0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-spin1z", action="store", type=float,\
+			default=0, help="Minimum mass1 to generate bank.")
+	parser.add_argument("--max-spin1z", action="store", type=float,\
+				    default=0, help="Maximum mass1 to generate bank.")
+	parser.add_argument("--min-spin2z", action="store", type=float,\
+				    default=0, help="Minimum mass2 to generate bank.")
+	parser.add_argument("--max-spin2z", action="store", type=float,\
+				    default=0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-match", action="store", type=float,\
+				    default=0.95, help="Minimum match to generate bank.")
+	parser.add_argument("--flow", action="store", type=float,\
+				    default=30.0, help="Low frequency cutoff for overlap calculations.")
+	parser.add_argument("--fhigh", action="store", type=float,\
+				    default=1024.0, help="High frequency cutoff for overlap calculations.")
+	parser.add_argument("--approximant", action="store", type=str,\
+				    default="TaylorF2", help="Specify approximant.")
+	parser.add_argument("--psd-file", action="store",\
+				    default=None, help="Input PSD file.")
+	parser.add_argument("--noise-model", action="store",\
+				    default=None, help="Specify standard noise model.")
+	parser.add_argument("--num-jobs", action="store",\
+				    default=36, help="Specify the number of jobs to run. Default: 36. This is obeyed approximately")
+
+	args = parser.parse_args()
+
+	if args.noise_model and args.psd_file:
+		raise ValueError("Cannot specify both --psd-file and --noise-model")
+
+	if not (args.noise_model or args.psd_file):
+		args.psd_file = "test.xml.gz" # FIXME for bw compatibility
+
+	if args.noise_model:
+		raise NotImplementedError("IMPLEMENT NOISE MODELS!!")
+
+	return args
+
+args = parse_command_line()
+dag = inspiral_pipe.DAG("treebank")
+treeJob = inspiral_pipe.generic_job("gstlal_inspiral_treebank")
+argsdict = vars(args)
+mass1 = numpy.logspace(numpy.log10(args.min_mass1), numpy.log10(args.max_mass1), numpy.int(args.num_jobs**.5))
+mass2 = numpy.logspace(numpy.log10(args.min_mass2), numpy.log10(args.max_mass2), numpy.int(args.num_jobs**.5))
+del argsdict["num_jobs"]
+pnodes = []
+cnt = 1
+for minmass1,maxmass1 in zip(mass1[:-1],mass1[1:]):
+	for minmass2,maxmass2 in zip(mass2[:-1],mass2[1:]):
+		argsdict["min_mass1"] = minmass1
+		argsdict["max_mass1"] = maxmass1
+		argsdict["min_mass2"] = minmass2
+		argsdict["max_mass2"] = maxmass2
+		argsdict["user_tag"] = cnt
+		cnt+=1
+
+	#	parser.add_argument("--user-tag", action="store", default="ROCKS",\
+	#				    help="Add tag to output filename")
+
+		pnodes.append(inspiral_pipe.generic_node(treeJob, dag, parent_nodes = [], input_files = {}, output_files = {"":"TREEBANK_%d.xml.gz" % cnt}, opts = argsdict))
+
+#FIXME add a ligolw_add job to the end of the dag
+
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+dag.write_cache()
+
+		
+
+
+
+
