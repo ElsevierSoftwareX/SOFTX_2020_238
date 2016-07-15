@@ -63,7 +63,7 @@ def parse_command_line():
 				    default=None, help="Input PSD file.")
 	parser.add_argument("--noise-model", action="store",\
 				    default=None, help="Specify standard noise model.")
-	parser.add_argument("--num-jobs", action="store",\
+	parser.add_argument("--num-jobs", action="store",type=int,\
 				    default=36, help="Specify the number of jobs to run. Default: 36. This is obeyed approximately")
 
 	args = parser.parse_args()
