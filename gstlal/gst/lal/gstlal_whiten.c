@@ -408,9 +408,10 @@ static void free_workspace(GSTLALWhiten *element)
 
 static gboolean contains_nan(const COMPLEX16FrequencySeries *fseries)
 {
-	unsigned i;
-	for(i = 0; i < fseries->data->length; i++)
-		if(isnan(fseries->data->data[i]))
+	const COMPLEX16 *data = fseries->data->data;
+	const COMPLEX16 *end = fseries->data->data + fseries->data->length;
+	for(; data < end; data++)
+		if(isnan(creal(*data)) || isnan(cimag(*data)))
 			return TRUE;
 	return FALSE;
 }
