@@ -83,26 +83,22 @@ args = parse_command_line()
 dag = inspiral_pipe.DAG("treebank")
 treeJob = inspiral_pipe.generic_job("gstlal_inspiral_treebank")
 argsdict = dict((key.replace("_","-"), value) for key,value in vars(args).items())
-mass1 = numpy.logspace(numpy.log10(args.min_mass1), numpy.log10(args.max_mass1), numpy.int(args.num_jobs**.5))
-mass2 = numpy.logspace(numpy.log10(args.min_mass2), numpy.log10(args.max_mass2), numpy.int(args.num_jobs**.5))
+mass2 = numpy.logspace(math.log(args.min_mass2, 8/3.), math.log(args.max_mass2, 8/3.), args.num_jobs, base=8/3.)
 del argsdict["num-jobs"]
 pnodes = []
 cnt = 1
-for minmass1,maxmass1 in zip(mass1[:-1],mass1[1:]):
-	for minmass2,maxmass2 in zip(mass2[:-1],mass2[1:]):
-		argsdict["min-mass1"] = minmass1
-		argsdict["max-mass1"] = maxmass1
-		argsdict["min-mass2"] = minmass2
-		argsdict["max-mass2"] = maxmass2
-		argsdict["user-tag"] = cnt
-		cnt+=1
-
-	#	parser.add_argument("--user-tag", action="store", default="ROCKS",\
-	#				    help="Add tag to output filename")
-
-		pnodes.append(inspiral_pipe.generic_node(treeJob, dag, parent_nodes = [], input_files = {}, output_files = {}, opts = argsdict))
+for minmass2,maxmass2 in zip(mass2[:-1],mass2[1:]):
+	argsdict["min-mass2"] = minmass2
+	argsdict["max-mass2"] = maxmass2
+	argsdict["user-tag"] = cnt
+	cnt+=1
+	pnodes.append(inspiral_pipe.generic_node(treeJob, dag, parent_nodes = [], input_files = {}, output_files = {}, opts = argsdict))
 
 #FIXME add a ligolw_add job to the end of the dag
+try:
+	os.mkdir("logs")
+except:
+	pass
 
 dag.write_sub_files()
 dag.write_dag()
