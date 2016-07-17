@@ -1,0 +1,31 @@
+# Template bank parameters
+LOW_FREQUENCY_CUTOFF = 30.0
+HIGH_FREQUENCY_CUTOFF = 1024
+SAMPLE_RATE = 2048
+NUM_SPLIT_TEMPLATES = 180
+OVERLAP = 0
+APPROXIMANT1 = TaylorF2
+APPROXIMANT2 = SEOBNRv2_ROM_DoubleSpin
+BANK_MCHIRP1 = bank_00_ER8_00.xml.gz
+BANK_MCHIRP2 = bank_00_ER8_01.xml.gz
+NUMBANKS = 10,11,12,13,14,15
+
+all : bank.dag
+
+%_split_bank.cache : $(BANK_MCHIRP1) $(BANK_MCHIRP2)
+	mkdir -p $*_split_bank_1
+	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi 20 --output-path $*_split_bank_1 --approximant $(APPROXIMANT1)  --output-cache $@.1 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP1)
+	mkdir -p $*_split_bank_2
+	./gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi 20 --output-path $*_split_bank_2 --approximant $(APPROXIMANT2)  --output-cache $@.2 --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $(BANK_MCHIRP2)
+	cat $@.1 $@.2 > $@
+
+%_bank.dag : %_split_bank.cache harmonicpsd.xml.gz
+	cp $< tmp
+	gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument $* --reference-psd ../../template_bank/harmonicpsd.xml.gz --bank-cache $< --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name $@ --num-banks $(NUMBANKS) --samples-max-256 512 --samples-min 512
+
+bank.dag : H1_bank.dag L1_bank.dag
+	cat $^ > bank.dag
+	rm -f $^
+
+clean :
+	rm -rf *.sub* *.dag* *.cache *.sh logs gstlal_svd_bank* *split_bank*

@@ -1,0 +1,138 @@
+H1_BANK_CACHE = ../bank_fixed/H1_bank.cache
+L1_BANK_CACHE = ../bank_fixed/L1_bank.cache
+
+H1CHANNEL=GDS-CALIB_STRAIN
+L1CHANNEL=GDS-CALIB_STRAIN
+H1INJCHANNEL=GDS-CALIB_STRAIN_INJ
+L1INJCHANNEL=GDS-CALIB_STRAIN_INJ
+
+H1DQCHANNEL=GDS-CALIB_STATE_VECTOR
+L1DQCHANNEL=GDS-CALIB_STATE_VECTOR
+H1INJDQCHANNEL=GDS-CALIB_STATE_VECTOR
+L1INJDQCHANNEL=GDS-CALIB_STATE_VECTOR
+
+H1FRAMEXMIT=224.3.2.1:7096
+L1FRAMEXMIT=224.3.2.2:7097
+H1INJFRAMEXMIT=224.3.2.4:7099
+L1INJFRAMEXMIT=224.3.2.5:7100
+
+WEBDIR=/home/gstlalcbctest/public_html/O1/online/
+INJFILE=/home/gstlalcbctest/observing/1/ER8_O1_bns_injs_aug17-feb10.xml
+
+# NOTE needed to make 10000s duration to get sufficient zero lag triggers - the duty cycle is low...
+H1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-10000")
+H1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
+L1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-10000")
+L1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
+H1PRIORRANGE=60
+L1PRIORRANGE=60
+
+# use --inj-state-vector-on-bits=ifo=387 so that we can look at CBC HW injections and possibly provide feedback
+
+dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.sql ll_simplify.sql
+	gstlal_ll_inspiral_pipe \
+		--bank-cache H1=$(H1_BANK_CACHE),L1=$(L1_BANK_CACHE) \
+		--max-jobs 1000 \
+		--likelihood-cache prior.cache \
+		--zerolag-likelihood-cache zerolag_prior.cache \
+		--channel-name=H1=$(H1CHANNEL) \
+		--channel-name=L1=$(L1CHANNEL) \
+		--inj-channel-name=H1=$(H1INJCHANNEL) \
+		--inj-channel-name=L1=$(L1INJCHANNEL) \
+		--dq-channel-name=L1=$(L1DQCHANNEL) \
+		--dq-channel-name=H1=$(H1DQCHANNEL) \
+		--inj-dq-channel-name=L1=$(L1INJDQCHANNEL) \
+		--inj-dq-channel-name=H1=$(H1INJDQCHANNEL) \
+		--framexmit-addr=H1=$(H1FRAMEXMIT) \
+		--framexmit-addr=L1=$(L1FRAMEXMIT) \
+		--inj-framexmit-addr=H1=$(H1INJFRAMEXMIT) \
+		--inj-framexmit-addr=L1=$(L1INJFRAMEXMIT) \
+		--framexmit-iface=10.14.0.1 \
+		--inj-framexmit-iface=10.14.0.1 \
+		--state-vector-on-bits=H1=451 \
+		--state-vector-on-bits=L1=451 \
+		--inj-state-vector-on-bits=H1=387 \
+		--inj-state-vector-on-bits=L1=387 \
+		--state-vector-off-bits=H1=0 \
+		--state-vector-off-bits=L1=0 \
+		--inj-state-vector-off-bits=H1=0 \
+		--inj-state-vector-off-bits=L1=0 \
+		--gracedb-far-threshold 0.0001 \
+		--inj-gracedb-far-threshold -1 \
+		--control-peak-time 0 \
+		--fir-stride 1 \
+		--psd-fft-length 8 \
+		--marginalized-likelihood-file marginalized_likelihood.xml.gz \
+		--gracedb-group CBC \
+		--gracedb-search HighMass \
+		--inj-gracedb-group CBC \
+		--inj-gracedb-search HighMassInj \
+		--inj-gracedb-service-url https://simdb.cgca.uwm.edu/api/ \
+		--thinca-interval 1 \
+		--ht-gate-threshold 50 \
+		--data-source framexmit \
+		--likelihood-snapshot-interval 14400 \
+		--lvalert-listener-program gstlal_inspiral_lvalert_background_plotter \
+		--lvalert-listener-program gstlal_inspiral_lvalert_psd_plotter \
+		--lvalert-listener-program gstlal_inspiral_lvalert_sngls_plotter \
+		--lvalert-listener-program gstlal_inspiral_lvalert_omegascan \
+		--inj-lvalert-listener-program gstlal_inspiral_lvalert_background_plotter \
+		--inspiral-condor-command '+Online_CBC_SVD_UBER=True' \
+		--inspiral-condor-command 'Requirements=(TARGET.Online_CBC_SVD_UBER=?=True)' \
+		--inspiral-condor-command 'accounting_group = ligo.dev.o1.cbc.em.gstlalonline' \
+		--inspiral-condor-command 'request_cpus = 2' \
+		--inspiral-condor-command 'accounting_group_user = cody.messick' \
+		--non-inspiral-condor-command 'accounting_group = ligo.dev.o1.cbc.em.gstlalonline' \
+		--non-inspiral-condor-command 'accounting_group_user = cody.messick' \
+		--web-dir $(WEBDIR) \
+		--injection-file $(INJFILE) \
+		--state-backup-destination gstlalcbc@pcdev3.phys.uwm.edu:/home/gstlalcbc/observing/1/uber_state_backup
+
+ll_simplify_and_cluster.sql:
+	wget http://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify_and_cluster.sql
+
+ll_simplify.sql:
+	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify.sql
+
+plots:
+	mkdir plots
+	mkdir -p $(WEBDIR)
+
+set-far-thresh :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold 0.0001 \
+		*registry.txt
+
+prior.cache :
+	gstlal_ll_inspiral_create_prior_diststats \
+		--write-likelihood-cache $@ \
+		--write-zerolag-likelihood-cache zerolag_$@ \
+		--segment-and-horizon=H1:$(H1PRIORSTART):$(H1PRIORSTOP):$(H1PRIORRANGE) \
+		--segment-and-horizon=L1:$(L1PRIORSTART):$(L1PRIORSTOP):$(L1PRIORRANGE) \
+		--num-banks $(shell wc -l $(H1_BANK_CACHE) | awk '{print $1}') \
+		--num-templates $(shell wc -l $(H1_BANK_CACHE) | awk '{print $1}')  \
+		--override-background-prior=100 \
+		--background-prefactors 2.0,20.0 \
+		--verbose
+
+marginalized_likelihood.xml.gz : prior.cache
+	gstlal_inspiral_marginalize_likelihood \
+		--output $@ \
+		--verbose \
+		--likelihood-cache $<
+
+reset-likelihood: 0000.liketmp 0001.liketmp 0002.liketmp 0003.liketmp 0004.liketmp 0005.liketmp 0006.liketmp 0007.liketmp 0008.liketmp 0009.liketmp 0010.liketmp 0011.liketmp 0012.liketmp 0013.liketmp 0014.liketmp 0015.liketmp 0016.liketmp 0017.liketmp 0018.liketmp 0019.liketmp 0020.liketmp 0021.liketmp 0022.liketmp 0023.liketmp 0024.liketmp 0025.liketmp 0026.liketmp 0027.liketmp 0028.liketmp 0029.liketmp 0030.liketmp 0031.liketmp 0032.liketmp 0033.liketmp 0034.liketmp 0035.liketmp 0036.liketmp 0037.liketmp 0038.liketmp 0039.liketmp 0040.liketmp 0041.liketmp 0042.liketmp 0043.liketmp 0044.liketmp 0045.liketmp 0046.liketmp 0047.liketmp 0048.liketmp 0049.liketmp 0050.liketmp 0051.liketmp 0052.liketmp 0053.liketmp 0054.liketmp 0055.liketmp 0056.liketmp 0057.liketmp 0058.liketmp 0059.liketmp 0060.liketmp 0061.liketmp 0062.liketmp 0063.liketmp 0064.liketmp 0065.liketmp 0066.liketmp 0067.liketmp 0068.liketmp 0069.liketmp 0070.liketmp 0071.liketmp 0072.liketmp 0073.liketmp 0074.liketmp 0075.liketmp 0076.liketmp 0077.liketmp 0078.liketmp 0079.liketmp 0080.liketmp 0081.liketmp 0082.liketmp 0083.liketmp 0084.liketmp 0085.liketmp 0086.liketmp 0087.liketmp 0088.liketmp 0089.liketmp 0090.liketmp 0091.liketmp 0092.liketmp 0093.liketmp 0094.liketmp 0095.liketmp 0096.liketmp 0097.liketmp 0098.liketmp 0099.liketmp 0100.liketmp 0101.liketmp 0102.liketmp 0103.liketmp 0104.liketmp 0105.liketmp 0106.liketmp 0107.liketmp 0108.liketmp 0109.liketmp 0110.liketmp 
+	ls *[0-9]_prior.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > prior.cache
+	ls *[0-9]_zerolag_prior.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > zerolag_prior.cache
+	gstlal_inspiral_marginalize_likelihood --verbose --output marginalized_likelihood.xml.gz 0*prior.xml.gz
+	rm *.liketmp
+
+%.liketmp :
+	gstlal_inspiral_calc_rank_pdfs $*_prior.xml.gz --ranking-stat-samples 100000 --verbose --output $*_prior.xml.gz
+	gstlal_inspiral_reset_likelihood --background-ranking-file $*_prior.xml.gz --zerolag-ranking-file $*_zerolag_prior.xml.gz --gps-start-time $(H1PRIORSTART) --gps-end-time $(H1PRIORSTOP) --verbose
+	touch $@	
+
+clean :
+	rm -rf gstlal_inspiral gstlal_inspiral_inj gracedb gstlal_inspiral_marginalize_likelihoods_online gstlal_ll_inspiral_get_urls lvalert_listen gstlal_ll_inspiral_calculate_range gstlal_ll_inspiral_save_state
+	rm -rf *.txt lvalert.ini *.gz trigger_pipe.* *.sub logs lvalert*.sh node* *.xml prior.cache
+	rm -rf 0* 1* *.html gstlal_ll_inspiral_daily_page_online *.sqlite toggle.js Images plots
