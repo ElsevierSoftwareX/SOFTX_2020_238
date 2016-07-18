@@ -291,14 +291,20 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	revplan = lal.CreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	fwdplan = lal.CreateForwardREAL8FFTPlan(working_length, 1)
 	tseries = lal.CreateCOMPLEX16TimeSeries(
-		length = working_length
+		name = "timeseries",
+		epoch = LIGOTimeGPS(0.),
+		f0 = 0.,
+		deltaT = 1.0 / sample_rate_max,
+		length = working_length,
+		sampleUnits = lal.Unit("strain")
 	)
 	fworkspace = lal.CreateCOMPLEX16FrequencySeries(
 		name = "template",
 		epoch = LIGOTimeGPS(0),
 		f0 = 0.0,
 		deltaF = 1.0 / working_duration,
-		length = working_length // 2 + 1
+		length = working_length // 2 + 1,
+		sampleUnits = lal.Unit("strain")
 	)
 
 	# Check parity of autocorrelation length
@@ -338,14 +344,14 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 		if psd is not None:
 			lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
-		fseries = templates.QuadradurePhase.add_quadrature_phase(fseries, working_length)
+		fseries = templates.QuadraturePhase.add_quadrature_phase(fseries, working_length)
 
 		#
 		# compute time-domain autocorrelation function
 		#
 
 		if autocorrelation_bank is not None:
-			autocorrelation = templates.normalized_autocorrelation(fseries, revplan).data
+			autocorrelation = templates.normalized_autocorrelation(fseries, revplan).data.data
 			autocorrelation_bank[i, ::-1] = numpy.concatenate((autocorrelation[-(autocorrelation_length // 2):], autocorrelation[:(autocorrelation_length // 2  + 1)]))
 
 		#
@@ -354,8 +360,8 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 		lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
-		data = tseries.data
-		epoch_time = fseries.epoch.seconds + fseries.epoch.nanoseconds*1.e-9
+		data = tseries.data.data
+		epoch_time = fseries.epoch.gpsSeconds + fseries.epoch.gpsNanoSeconds*1.e-9
 		#
 		# extract the portion to be used for filtering
 		#

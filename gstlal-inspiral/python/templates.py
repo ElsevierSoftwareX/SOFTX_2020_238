@@ -209,7 +209,12 @@ def normalized_autocorrelation(fseries, revplan):
 	)
 	fseries.data.data = data * numpy.conj(data)
 	tseries = lal.CreateCOMPLEX16TimeSeries(
-		length = len(data)
+		name = "timeseries",
+		epoch = fseries.epoch,
+		f0 = fseries.f0,
+		deltaT = 1. / (len(data)*fseries.deltaF),
+		length = len(data),
+		sampleUnits = fseries.sampleUnits
 	)
 	tseries.data.data = numpy.empty((len(data),), dtype = "cdouble")
 	lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
