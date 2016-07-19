@@ -213,7 +213,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 			# interpolate and install PSD
 			psd = reference_psd.interpolate_psd(psd, delta_f)
-			elem.set_property("mean-psd", psd.data[:n])
+			elem.set_property("mean-psd", psd.data.data[:n])
 
 		whiten.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
 		whiten.connect_after("notify::delta-f", psd_resolution_changed, psd)
