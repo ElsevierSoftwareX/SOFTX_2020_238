@@ -89,6 +89,9 @@ G_DEFINE_TYPE_WITH_CODE(
 /* FIXME:  get from framecpp */
 /* number of bytes in table 5 in LIGO-T970130 */
 #define SIZEOF_FRHEADER 40
+/* initial character sequence (includes null terminator) */
+#define FRHEADER_IDENT "IGWD"
+#define SIZEOF_FRHEADER_IDENT sizeof(FRHEADER_IDENT)
 /* class of FrSH structure */
 #define FRSH_KLASS 1
 /* name of end-of-file structure */
@@ -238,12 +241,10 @@ static gboolean start(GstBaseParse *parse)
 	/*
 	 * GstBaseParse lobotomizes itself on paused-->ready transitions,
 	 * so this stuff needs to be set here every time
-	 *
-	 * FIXME:  see if this can now be moved to init()
 	 */
 
 	gst_base_parse_set_min_frame_size(parse, SIZEOF_FRHEADER);
-	gst_base_parse_set_syncable(parse, FALSE);
+	gst_base_parse_set_syncable(parse, TRUE);
 	gst_base_parse_set_has_timing_info(parse, TRUE);
 
 	/*
@@ -304,19 +305,34 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 	while(element->filesize <= mapinfo.size) {
 		if(element->offset == 0) {
+			guint8 *start;
+
 			/*
 			 * parse header.  see table 5 of LIGO-T970130.
 			 * note:  we only need the endianness and word
 			 * sizes.
-			 * FIXME:  this doesn't check that the header is
-			 * valid.  adding code to do that could allow the
-			 * parser to be "resyncable" (able to find frame
-			 * files starting at an arbitrary point in a byte
-			 * stream)
 			 * FIXME:  use framecpp to parse / validate header?
 			 */
 
 			g_assert_cmpuint(mapinfo.size, >=, SIZEOF_FRHEADER);
+
+			/*
+			 * check for identifier
+			 */
+
+			GST_DEBUG_OBJECT(element, "searching for \"" FRHEADER_IDENT "\" identifier");
+			start = (guint8 *) memmem(mapinfo.data, SIZEOF_FRHEADER, FRHEADER_IDENT, SIZEOF_FRHEADER_IDENT);
+			if(start != mapinfo.data) {
+				if(start) {
+					GST_DEBUG_OBJECT(element, "found, skipping %zu bytes", start - mapinfo.data);
+					*skipsize = start - mapinfo.data;
+				} else {
+					GST_DEBUG_OBJECT(element, "not found, skipping %zu bytes", SIZEOF_FRHEADER - SIZEOF_FRHEADER_IDENT + 1);
+					*skipsize = SIZEOF_FRHEADER - SIZEOF_FRHEADER_IDENT + 1;
+				}
+				break;
+			}
+			GST_DEBUG_OBJECT(element, "found at offset 0");
 
 			/*
 			 * word sizes and endianness
@@ -325,19 +341,58 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			element->sizeof_int_2 = *(mapinfo.data + 7);
 			element->sizeof_int_4 = *(mapinfo.data + 8);
 			element->sizeof_int_8 = *(mapinfo.data + 9);
-			g_assert_cmpuint(*(mapinfo.data + 11), ==, 8);	/* sizeof(REAL_8) */
 			if(GST_READ_UINT16_LE(mapinfo.data + 12) == 0x1234)
 				element->endianness = G_LITTLE_ENDIAN;
 			else if(GST_READ_UINT16_BE(mapinfo.data + 12) == 0x1234)
 				element->endianness = G_BIG_ENDIAN;
 			else {
-				GST_ERROR_OBJECT(element, "unable to determine endianness");
-				g_assert_not_reached();
+				GST_ERROR_OBJECT(element, "unable to determine endianness, skipping %zu bytes and trying again", SIZEOF_FRHEADER_IDENT);
+				*skipsize = SIZEOF_FRHEADER_IDENT;
+				break;
 			}
+
+			/*
+			 * believe we have found the start of a frame file
+			 */
+
 			GST_DEBUG_OBJECT(element, "parsed header:  endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
 
 			/*
-			 * set the size of the structure in table 6 of LIGO-T970130
+			 * validate remainder of header
+			 */
+
+			if(element->endianness == G_LITTLE_ENDIAN) {
+				if(
+					*(mapinfo.data + 11) != 8 || /* sizeof(REAL_8) */
+					GST_READ_UINT32_LE(mapinfo.data + 14) != 0x12345678 ||
+					GST_READ_UINT64_LE(mapinfo.data + 18) != 0x123456789abcdef ||
+					GST_READ_FLOAT_LE(mapinfo.data + 26) != (float) M_PI ||
+					GST_READ_DOUBLE_LE(mapinfo.data + 30) != M_PI
+				) {
+					GST_DEBUG_OBJECT(element, "header failed validation checks, skipping %zu bytes and trying again", SIZEOF_FRHEADER_IDENT);
+					*skipsize = SIZEOF_FRHEADER_IDENT;
+					break;
+				}
+			} else if(element->endianness == G_BIG_ENDIAN) {
+				if(
+					*(mapinfo.data + 11) != 8 || /* sizeof(REAL_8) */
+					GST_READ_UINT32_BE(mapinfo.data + 14) != 0x12345678 ||
+					GST_READ_UINT64_BE(mapinfo.data + 18) != 0x123456789abcdef ||
+					GST_READ_FLOAT_BE(mapinfo.data + 26) != (float) M_PI ||
+					GST_READ_DOUBLE_BE(mapinfo.data + 30) != M_PI
+				) {
+					GST_DEBUG_OBJECT(element, "header failed validation checks, skipping %zu bytes and trying again", SIZEOF_FRHEADER_IDENT);
+					*skipsize = SIZEOF_FRHEADER_IDENT;
+					break;
+				}
+			} else {
+				/* impossible */
+				g_assert_not_reached();
+			}
+
+			/*
+			 * set the size of the structure in table 6 of
+			 * LIGO-T970130
 			 */
 
 			element->sizeof_table_6 = element->sizeof_int_8 + element->sizeof_int_2 + element->sizeof_int_4;
