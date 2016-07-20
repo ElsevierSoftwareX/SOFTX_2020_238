@@ -290,7 +290,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		f0 = 0.0,
 		deltaF = 1.0 / working_duration,
 		length = working_length // 2 + 1,
-		sampleUnits = lal.Unit("strain")
+		sampleUnits = lal.Unit("strain s")
 	)
 
 	# Check parity of autocorrelation length

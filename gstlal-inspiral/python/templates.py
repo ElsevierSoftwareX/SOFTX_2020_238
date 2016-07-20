@@ -214,7 +214,7 @@ def normalized_autocorrelation(fseries, revplan):
 		f0 = fseries.f0,
 		deltaT = 1. / (len(data)*fseries.deltaF),
 		length = len(data),
-		sampleUnits = fseries.sampleUnits
+		sampleUnits = lal.DimensionlessUnit
 	)
 	tseries.data.data = numpy.empty((len(data),), dtype = "cdouble")
 	lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
