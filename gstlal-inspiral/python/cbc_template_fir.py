@@ -94,55 +94,41 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	 (2) has an IFFT which is duration seconds long and
 	 (3) has an IFFT which is sampled at sample_rate Hz
 	"""
-	if approximant in templates.gstlal_approximants:
-
-		# FIXME use hcross somday?
-		# We don't here because it is not guaranteed to be orthogonal
-		# and we add orthogonal phase later
-
-		hplus,hcross = lalsim.SimInspiralFD(
-			0., # phase
-			1.0 / duration, # sampling interval
-			lal.MSUN_SI * template_bank_row.mass1,
-			lal.MSUN_SI * template_bank_row.mass2,
-			template_bank_row.spin1x,
-			template_bank_row.spin1y,
-			template_bank_row.spin1z,
-			template_bank_row.spin2x,
-			template_bank_row.spin2y,
-			template_bank_row.spin2z,
-			f_low,
-			f_high,
-			0., #FIXME chosen until suitable default value for f_ref is defined
-			1.e6 * lal.PC_SI, # distance
-			0., # redshift
-			0., # inclination
-			0., # tidal deformability lambda 1
-			0., # tidal deformability lambda 2
-			None, # waveform flags
-			None, # Non GR params
-			amporder,
-			order,
-			lalsim.GetApproximantFromString(str(approximant))
-			)
-
-		# NOTE assumes fhigh is the Nyquist frequency!!!
-		z = hplus.data.data
-		assert len(z) == int(round(sample_rate * duration))//2 +1
-
-	else:
+	if approximant not in templates.gstlal_approximants:
 		raise ValueError("Unsupported approximant given %s" % approximant)
 
-	fseries = lal.CreateCOMPLEX16FrequencySeries(
-		name = "template",
-		epoch = LIGOTimeGPS(hplus.epoch.gpsSeconds, hplus.epoch.gpsNanoSeconds),
-		f0 = 0.0,
-		deltaF = 1.0 / duration,
-		sampleUnits = lal.Unit("strain"),
-		length = len(z)
-	)
-	fseries.data.data = z
-	return fseries
+	# FIXME use hcross somday?
+	# We don't here because it is not guaranteed to be orthogonal
+	# and we add orthogonal phase later
+
+	hplus, hcross = lalsim.SimInspiralFD(
+		0., # phase
+		1.0 / duration, # sampling interval
+		lal.MSUN_SI * template_bank_row.mass1,
+		lal.MSUN_SI * template_bank_row.mass2,
+		template_bank_row.spin1x,
+		template_bank_row.spin1y,
+		template_bank_row.spin1z,
+		template_bank_row.spin2x,
+		template_bank_row.spin2y,
+		template_bank_row.spin2z,
+		f_low,
+		f_high,
+		0., #FIXME chosen until suitable default value for f_ref is defined
+		1.e6 * lal.PC_SI, # distance
+		0., # redshift
+		0., # inclination
+		0., # tidal deformability lambda 1
+		0., # tidal deformability lambda 2
+		None, # waveform flags
+		None, # Non GR params
+		amporder,
+		order,
+		lalsim.GetApproximantFromString(str(approximant))
+		)
+	# NOTE assumes fhigh is the Nyquist frequency!!!
+	assert len(hplus.data.data) == int(round(sample_rate * duration))//2 +1
+	return hplus
 
 def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
 	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
