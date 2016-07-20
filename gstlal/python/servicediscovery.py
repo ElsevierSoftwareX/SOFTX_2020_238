@@ -25,7 +25,7 @@
 
 
 import avahi
-import dbus
+import dbus	# FIXME:  port to gobject introspection interface
 import sys
 
 
