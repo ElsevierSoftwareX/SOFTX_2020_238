@@ -563,20 +563,20 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	pcal_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, pcal_at_darm_act_freq_nocorr, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
 
 	# demodulate DARM_ERR at the DARM actuation line frequency
-	derr_at_darm_act_freq_white = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, derrtee), hoftsr, darm_act_line_freq, factors_integration_samples, td)
+	derr_at_darm_act_freq = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, derrtee), hoftsr, darm_act_line_freq, factors_integration_samples, td)
 	if not options.no_dewhitening:
 		# dewhiten DARM_ERR at the DARM actuation line frequency
-		derr_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_darm_act_freq_white, derr_dewhiten_at_darm_act_freq_real, derr_dewhiten_at_darm_act_freq_imag)
+		derr_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_darm_act_freq, derr_dewhiten_at_darm_act_freq_real, derr_dewhiten_at_darm_act_freq_imag)
 
 	# resample and demodulate the TST excitation channel at the ESD actuation line frequency
 	tstexc = calibration_parts.mkresample(pipeline, tstexc, hoft_caps)
 	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, hoftsr, esd_act_line_freq, factors_integration_samples, td)
 
 	# demodulate DARM_ERR at the ESD actuation line frequency
-	derr_at_esd_act_freq_white = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, derrtee), hoftsr, esd_act_line_freq, factors_integration_samples, td)
+	derr_at_esd_act_freq = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, derrtee), hoftsr, esd_act_line_freq, factors_integration_samples, td)
 	if not options.no_dewhitening:
 		# dewhiten DARM_ERR at the ESD actuation line frequency
-		derr_at_esd_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_esd_act_freq_white, derr_dewhiten_at_esd_act_freq_real, derr_dewhiten_at_esd_act_freq_imag)
+		derr_at_esd_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_esd_act_freq, derr_dewhiten_at_esd_act_freq_real, derr_dewhiten_at_esd_act_freq_imag)
 
 	# compute kappa_tst, either using reference factors from the filters file or reading them from EPICS channels
 	if not options.factors_from_filters_file:
