@@ -390,6 +390,8 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				g_assert_not_reached();
 			}
 
+			GST_DEBUG_OBJECT(element, "header passed validation checks");
+
 			/*
 			 * set the size of the structure in table 6 of
 			 * LIGO-T970130
