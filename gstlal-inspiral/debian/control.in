@@ -1,3 +1,4 @@
+# FIXME: remove libgsl0 deps when we can rely on a new-enough debian
 Source: gstlal-inspiral
 Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
 Section: lscsoft
@@ -19,7 +20,7 @@ Build-Depends:
  lalinspiral-python (>= @MIN_LALINSPIRAL_VERSION@),
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  libgirepository1.0-dev (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
- libgsl0-dev (>= 1.9),
+ libgsl-dev (>= 1.9) | libgsl0-dev (>= 1.9),
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  pkg-config,
@@ -38,7 +39,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  lalinspiral-python (>= @MIN_LALINSPIRAL_VERSION@),
  lalmetaio (>= @MIN_LALMETAIO_VERSION@),
  libgirepository-1.0-1 (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
- libgsl0ldbl (>= 1.9),
+ libgsl2 (>= 1.9) | libgsl0ldbl (>= 1.9),
  libgstreamer1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  python (>= @MIN_PYTHON_VERSION@),
@@ -71,7 +72,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  lal-dev (>= @MIN_LAL_VERSION@),
  lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@),
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
- libgsl0-dev (>= 1.9),
+ libgsl-dev (>= 1.9) | libgsl0-dev (>= 1.9),
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  python-all-dev (>= @MIN_PYTHON_VERSION@),
