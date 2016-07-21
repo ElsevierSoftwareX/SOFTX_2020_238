@@ -55,6 +55,7 @@ typedef struct {
 typedef struct {
 	GstBaseParse element;
 
+	gint version;
 	gint endianness;
 	guint sizeof_int_2;
 	guint sizeof_int_4;

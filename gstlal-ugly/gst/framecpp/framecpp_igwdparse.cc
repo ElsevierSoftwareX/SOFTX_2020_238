@@ -182,11 +182,20 @@ static const gchar *fr_get_string(GstFrameCPPIGWDParse *element, GstByteReader *
 }
 
 
-static void parse_table_6(GstFrameCPPIGWDParse *element, const guint8 *data, guint64 *length, guint16 *klass)
+static void parse_table_6_v6(GstFrameCPPIGWDParse *element, const guint8 *data, guint64 *length, guint16 *klass)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data, element->sizeof_table_6);
 	*length = fr_get_int_8u(element, &reader);
 	*klass = fr_get_int_2u(element, &reader);
+}
+
+
+static void parse_table_6_v8(GstFrameCPPIGWDParse *element, const guint8 *data, guint64 *length, guint16 *klass)
+{
+	GstByteReader reader = GST_BYTE_READER_INIT(data, element->sizeof_table_6);
+	*length = fr_get_int_8u(element, &reader);
+	gst_byte_reader_skip_unchecked(&reader, 1);	/* chkType */
+	*klass = gst_byte_reader_get_uint8_unchecked(&reader);
 }
 
 
@@ -338,6 +347,7 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 * word sizes and endianness
 			 */
 
+			element->version = *(mapinfo.data + 5);
 			element->sizeof_int_2 = *(mapinfo.data + 7);
 			element->sizeof_int_4 = *(mapinfo.data + 8);
 			element->sizeof_int_8 = *(mapinfo.data + 9);
@@ -355,7 +365,7 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 * believe we have found the start of a frame file
 			 */
 
-			GST_DEBUG_OBJECT(element, "parsed header:  endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
+			GST_DEBUG_OBJECT(element, "parsed header:  version=%d, endianness=%d, size of INT_2=%d, size of INT_4=%d, size of INT_8=%d", element->version, element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
 
 			/*
 			 * validate remainder of header
@@ -430,7 +440,10 @@ static GstFlowReturn handle_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			 */
 
 			g_assert_cmpuint(mapinfo.size, >=, element->offset + element->sizeof_table_6);
-			parse_table_6(element, mapinfo.data + element->offset, &structure_length, &klass);
+			if(element->version >= 8)
+				parse_table_6_v8(element, mapinfo.data + element->offset, &structure_length, &klass);
+			else
+				parse_table_6_v6(element, mapinfo.data + element->offset, &structure_length, &klass);
 			element->filesize = element->offset + structure_length;
 
 			if(element->filesize > mapinfo.size) {
