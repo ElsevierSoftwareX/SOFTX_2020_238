@@ -160,6 +160,7 @@ G_DEFINE_TYPE_WITH_CODE(
 #define DEFAULT_AVERAGE_SAMPLES 32
 #define DEFAULT_MEDIAN_SAMPLES 9
 #define DEFAULT_PSDMODE GSTLAL_PSDMODE_RUNNING_AVERAGE
+#define DEFAULT_PSD_UNITS "s"
 
 
 /*
@@ -1152,7 +1153,10 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 			}
 
 			g_free(units);
-			element->sample_units = sample_units;
+			if(XLALUnitCompare(&element->sample_units, &sample_units)) {
+				element->sample_units = sample_units;
+				g_object_notify(G_OBJECT(element), "psd-units");
+			}
 		}
 
 		break;
@@ -1394,6 +1398,7 @@ enum property {
 	ARG_DELTA_F,
 	ARG_F_NYQUIST,
 	ARG_MEAN_PSD,
+	ARG_PSD_UNITS,
 	ARG_SIGMA_SQUARED,
 	ARG_SPECTRAL_CORRELATION,
 	ARG_EXPAND_GAPS
@@ -1538,6 +1543,14 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		else
 			g_value_take_boxed(value, g_value_array_new(0));
 		break;
+
+	case ARG_PSD_UNITS: {
+		LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(element->sample_units);
+		char units[LALUnitTextSize];
+		XLALUnitAsString(units, sizeof(units), &psd_units);
+		g_value_set_string(value, units);
+		break;
+	}
 
 	case ARG_SIGMA_SQUARED:
 		if(element->hann_window)
@@ -1786,6 +1799,17 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_PSD_UNITS,
+		g_param_spec_string(
+			"psd-units",
+			"PSD units",
+			"LAL unit string giving units for PSD samples.",
+			DEFAULT_PSD_UNITS,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_SIGMA_SQUARED,
 		g_param_spec_double(
 			"sigma-squared",
@@ -1836,6 +1860,7 @@ static void gstlal_whiten_init(GSTLALWhiten *element)
 	g_signal_connect(G_OBJECT(element), "notify::f-nyquist", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 	g_signal_connect(G_OBJECT(element), "notify::zero-pad", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 	g_signal_connect(G_OBJECT(element), "notify::delta-f", G_CALLBACK(rebuild_workspace_and_reset), NULL);
+	g_signal_connect(G_OBJECT(element), "notify::psd-units", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 
 	element->mean_psd_pad = NULL;
 
