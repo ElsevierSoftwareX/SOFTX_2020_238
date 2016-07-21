@@ -34,6 +34,8 @@ from gi.repository import GObject, Gst, GstAudio
 GObject.threads_init()
 Gst.init(None)
 
+import lal
+
 from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import reference_psd
@@ -207,16 +209,22 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		# whitener.
 		#
 
-		def psd_resolution_changed(elem, pspec, psd):
+		def psd_units_or_resolution_changed(elem, pspec, psd):
+			# make sure units are set, compute scale factor
+			units = lal.Unit(elem.get_property("psd-units"))
+			if units == lal.DimensionlessUnit:
+				return
+			scale = float(psd.sampleUnits / units)
 			# get frequency resolution and number of bins
 			delta_f = elem.get_property("delta-f")
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
-			# interpolate and install PSD
+			# interpolate, rescale, and install PSD
 			psd = reference_psd.interpolate_psd(psd, delta_f)
-			elem.set_property("mean-psd", psd.data.data[:n])
+			elem.set_property("mean-psd", psd.data.data[:n] * scale)
 
-		whiten.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
-		whiten.connect_after("notify::delta-f", psd_resolution_changed, psd)
+		whiten.connect_after("notify::f-nyquist", psd_units_or_resolution_changed, psd)
+		whiten.connect_after("notify::delta-f", psd_units_or_resolution_changed, psd)
+		whiten.connect_after("notify::psd-units", psd_units_or_resolution_changed, psd)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
