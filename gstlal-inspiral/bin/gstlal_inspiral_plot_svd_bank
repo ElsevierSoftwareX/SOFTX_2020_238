@@ -23,11 +23,6 @@ import os
 import sys
 import copy
 
-import pygtk
-pygtk.require('2.0')
-import pygst
-pygst.require('0.10')
-
 from gstlal.svd_bank import read_banks
 import numpy
 import cgi
