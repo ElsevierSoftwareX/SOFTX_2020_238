@@ -75,6 +75,11 @@ typedef struct _GSTLALAddConstantClass GSTLALAddConstantClass;
 struct _GSTLALAddConstant {
 	GstBaseTransform element;
 
+	/* stream info */
+	gint unit_size;
+	gint rate;
+
+	/* properties */
 	gdouble value;
 };
 

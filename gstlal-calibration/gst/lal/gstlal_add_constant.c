@@ -20,7 +20,7 @@
 /*
  * ============================================================================
  *
- *                                  Preamble
+ *				  Preamble
  *
  * ============================================================================
  */
@@ -48,7 +48,7 @@
 /*
  * ============================================================================
  *
- *                           GStreamer Boiler Plate
+ *			   GStreamer Boiler Plate
  *
  * ============================================================================
  */
@@ -71,7 +71,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		GST_AUDIO_CAPS_MAKE(GST_AUDIO_NE(F64)) ", " \
+		GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}") ", " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -83,7 +83,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		GST_AUDIO_CAPS_MAKE(GST_AUDIO_NE(F64)) ", " \
+		GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}") ", " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -93,10 +93,79 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 /*
  * ============================================================================
  *
- *                     GstBaseTransform Method Overrides
+ *		     GstBaseTransform Method Overrides
  *
  * ============================================================================
  */
+
+
+/*
+ * get_unit_size()
+ */
+
+
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
+{
+	GstAudioInfo info;
+	gboolean success = TRUE;
+
+	success &= gst_audio_info_from_caps(&info, caps);
+
+	if(success) {
+		*size = GST_AUDIO_INFO_BPF(&info);
+	} else
+		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
+
+	return success;
+}
+
+
+/*
+ * set_caps()
+ */
+
+
+static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
+{
+	GSTLALAddConstant *element = GSTLAL_ADD_CONSTANT(trans);
+	gint rate_in, rate_out;
+	gsize unit_size;
+
+	/*
+ 	 * parse the caps
+ 	 */
+
+	if(!get_unit_size(trans, incaps, &unit_size)) {
+		GST_DEBUG_OBJECT(element, "function 'get_unit_size' failed");
+		return FALSE;
+	}
+	if(!gst_structure_get_int(gst_caps_get_structure(incaps, 0), "rate", &rate_in)) {
+		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, incaps);
+		return FALSE;
+	}
+	if(!gst_structure_get_int(gst_caps_get_structure(outcaps, 0), "rate", &rate_out)) {
+		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, outcaps);
+		return FALSE;
+	}
+
+	/*
+ 	 * require the output rate to be equal to the input rate
+ 	 */
+
+	if(rate_out != rate_in) {
+		GST_ERROR_OBJECT(element, "output rate is not equal to input rate.  input caps = %" GST_PTR_FORMAT " output caps = %" GST_PTR_FORMAT, incaps, outcaps);
+		return FALSE;
+	}
+
+	/*
+ 	 * record stream parameters
+ 	 */
+
+	element->rate = rate_in;
+	element->unit_size = unit_size;
+
+	return TRUE;
+}
 
 
 /*
@@ -110,17 +179,32 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
 	gdouble value = element->value;
-	gdouble *addr, *end;
 
 	GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 
 	gst_buffer_map(buf, &mapinfo, GST_MAP_READWRITE);
 
-	g_assert(mapinfo.size % sizeof(gdouble) == 0);
-	addr = (gdouble *) mapinfo.data;
-	end = (gdouble *) (mapinfo.data + mapinfo.size);
-	while(addr < end)
-		*addr++ += value;
+	if(element->unit_size == 4) {
+
+		gfloat *addr, *end;
+		g_assert(mapinfo.size % sizeof(gfloat) == 0);
+		addr = (gfloat *) mapinfo.data;
+		end = (gfloat *) (mapinfo.data + mapinfo.size);
+		while(addr < end)
+			*addr++ += value;
+
+	} else if(element->unit_size == 8) {
+
+		gdouble *addr, *end;
+		g_assert(mapinfo.size % sizeof(gdouble) == 0);
+		addr = (gdouble *) mapinfo.data;
+		end = (gdouble *) (mapinfo.data + mapinfo.size);
+		while(addr < end)
+			*addr++ += value;
+
+	} else {
+		g_assert_not_reached();
+	}
 
 	gst_buffer_unmap(buf, &mapinfo);
 
@@ -131,7 +215,7 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 /*
  * ============================================================================
  *
- *                          GObject Method Overrides
+ *			  GObject Method Overrides
  *
  * ============================================================================
  */
@@ -232,6 +316,8 @@ static void gstlal_add_constant_class_init(GSTLALAddConstantClass *klass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	transform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
 }
 
