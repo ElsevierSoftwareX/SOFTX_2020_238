@@ -12,6 +12,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_create_prior_diststats \
 	gstlal_inspiral_iir_bank_pipe \
 	gstlal_inspiral_inj_pipe \
+	gstlal_inspiral_injection_snr \
 	gstlal_inspiral_lvalert_background_plotter \
 	gstlal_inspiral_lvalert_omegascan \
 	gstlal_inspiral_lvalert_psd_plotter \

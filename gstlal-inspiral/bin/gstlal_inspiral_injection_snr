@@ -1,0 +1,164 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015 Ryan Lang
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file gstlal_inspiral_injection_snr
+# The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to run CBC workflows
+#
+# ### Usage:
+# Takes an injection xml and a cache of reference PSDs and calculated expected SNRs. The values
+# will be written to the alpha3 and alpha4 columns in the sim_inspiral table.
+#
+# ### Command line options
+#	+ `--reference-psd-cache[filename]: Set the reference PSD cache file.
+#	+ `--injection-file[filename]: Set the injection xml file.
+#	+ `--flow [float]: Set the low frequency for waveform generation and SNR integral.
+
+"""
+This program calculates expected SNRs given an injection xml and a cache of reference PSDs.
+"""
+
+__author__ = 'Ryan Lang <ryan.lang@ligo.org>'
+
+import math
+import numpy
+
+from optparse import OptionParser
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.lal import CacheEntry
+from glue.lal import Cache
+from glue.ligolw import utils as ligolw_utils
+from lal.series import *
+import lal
+import lalsimulation
+
+import multiprocessing
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("--reference-psd-cache", metavar = "filename", help = "Set the reference psd cache file.")
+	parser.add_option("--injection-file", metavar = "filename", help = "Set the injection xml file.")
+	parser.add_option("--flow", metavar = "value", type = "float", help = "Set the low frequency for waveform generation and SNR integral.")
+
+	options, filenames = parser.parse_args()
+
+	if options.reference_psd_cache is None:
+		raise ValueError("Must specify --reference-psd-cache")
+
+	if options.injection_file is None:
+		raise ValueError("Must specify --injection-file")
+
+	if options.flow is None:
+		raise ValueError("Must specify --flow")
+
+	return options, filenames
+
+def calc_expected_snr(inj):
+
+	cachelist = []
+
+	# Make a segment that is the injection time.
+	geocent_end_time = segments.segment(inj.geocent_end_time+1e-9*inj.geocent_end_time_ns, inj.geocent_end_time+1e-9*inj.geocent_end_time_ns)
+
+	# Determine which PSD files have GPS times covering the injection time.
+	cachelist = Cache(reference_psd_files).sieve(segment=geocent_end_time)
+
+	if len(cachelist) < 1:
+		# We know no PSD covers the injection.
+		return 0.0, 0.0
+	elif len(cachelist) >= 2:
+		# More than one PSD covers the injection time.
+		# Find the one that encompasses the injection the most.
+		def dist_from_center(time0, time1, injtime):
+			#Return the distance of the injection from the center of each segment
+			return numpy.absolute(((time1-time0)/2.0 + 1.0*time0) - injtime)
+
+		seg_start = int(sorted([(dist_from_center(cachelist[index].segment[0], cachelist[index].segment[1], geocent_end_time[0]), cachelist[index].segment[0]) for index in range(len(cachelist))])[0][1])
+		chosenPSD = allPSDs[seg_start]
+	else:
+		# Only one PSD covers the injection time.
+		seg_start = int(cachelist[0].segment[0])
+		chosenPSD = allPSDs[seg_start]
+
+	# FIXME have better scheme for calculating the needed sample_rate
+	sample_rate = 16384.0
+
+	approximant = lalsimulation.GetApproximantFromString(str(inj.waveform))
+	pn_order = lalsimulation.GetOrderFromString(str(inj.waveform))
+
+	h_plus, h_cross = lalsimulation.SimInspiralTD(inj.coa_phase, 1.0 / sample_rate, inj.mass1*lal.MSUN_SI, inj.mass2*lal.MSUN_SI, inj.spin1x, inj.spin1y, inj.spin1z, inj.spin2x, inj.spin2y, inj.spin2z, options.flow, 0.0, inj.distance*1e6*lal.PC_SI, 0.0, inj.inclination, 0.0, 0.0, None, None, inj.amp_order, pn_order, approximant)
+
+	h_plus.epoch += inj.geocent_end_time
+	h_cross.epoch += inj.geocent_end_time
+
+	# Compute strain in detector:
+	detector = lalsimulation.DetectorPrefixToLALDetector('H1')
+	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
+
+	h1snr = lalsimulation.MeasureSNR(h,chosenPSD['H1'],options.flow,-1)
+
+	detector = lalsimulation.DetectorPrefixToLALDetector('L1')
+	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
+
+	l1snr = lalsimulation.MeasureSNR(h,chosenPSD['L1'],options.flow,-1)
+
+	return h1snr, l1snr
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+lsctables.use_in(LIGOLWContentHandler)
+
+###################################
+#
+#           Main
+#
+###################################
+
+options, filenames = parse_command_line()
+
+# First, read in the PSDs
+reference_psd_files = [CacheEntry(line) for line in open(options.reference_psd_cache)]
+
+# Now we need to read in from the sim_inspiral table
+simxmldoc = ligolw_utils.load_filename(options.injection_file, verbose = True, contenthandler = LIGOLWContentHandler)
+sim_inspiral_table = lsctables.SimInspiralTable.get_table(simxmldoc)
+
+# Load all PSDs so that they don't need to be loaded for every injection.
+allPSDs = {}
+for cacheentry in reference_psd_files:
+	seg = cacheentry.segment
+	start = int(seg[0])
+	xmldoc = ligolw_utils.load_url(cacheentry.path, verbose = True, contenthandler = PSDContentHandler)
+	PSDs = read_psd_xmldoc(xmldoc)
+	allPSDs[start] = PSDs
+
+pool = multiprocessing.Pool(8)
+h1snr = []
+l1snr = []
+#print pool.map(calc_expected_snr,[inj for idx, inj in enumerate(sim_inspiral_table)])
+for h1sim, l1sim in pool.map(calc_expected_snr,[inj for idx, inj in enumerate(sim_inspiral_table)]):
+	h1snr.append(h1sim)
+	l1snr.append(l1sim)
+
+for idx, inj in enumerate(sim_inspiral_table):
+	inj.alpha3 = h1snr[idx]
+	inj.alpha4 = l1snr[idx]
+
+ligolw_utils.write_filename(simxmldoc,options.injection_file,verbose = True)

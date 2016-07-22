@@ -495,7 +495,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 
 	return rankpdf_nodes, outnodes
 
-def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, innodes, options, instruments):
+def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, innodes, injsnrnodes, options, instruments):
 
 	if options.vetoes is None:
 		vetoes = []
@@ -576,7 +576,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 			xml_input = injxml
 
 		# merge
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
+		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes + injsnrnodes,
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 			input_files = {"": ([node.input_files[""] for node in chunk_nodes] + vetoes + [options.frame_segments_file, injections])},
 			output_files = {"database":injdb}
@@ -768,6 +768,7 @@ svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", condor_commands = inspiral
 horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu}))
 gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu}))
+gstlalInjSnrJob = inspiral_pipe.generic_job("gstlal_inspiral_injection_snr", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"8GB", "request_cpus":options.request_cpu}))
 createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "request_cpus":"1"}))
 calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
@@ -799,6 +800,15 @@ if options.reference_psd is None:
 
 
 	psd_nodes = psd_node_gen(refPSDJob, dag, [], segsdict, channel_dict, options)
+
+	#
+	# Make the reference PSD cache
+	#
+
+	output_cache_file = open('reference_psd.cache', "w")
+	for node in psd_nodes.values():
+		output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(node.output_files["write-psd"])))
+	output_cache_file.close()
 
 	#
 	# plot the horizon distance
@@ -836,6 +846,10 @@ if options.reference_psd is None:
 else:
 	ref_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
 
+	output_cache_file = open('reference_psd.cache', "w")
+	output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(options.reference_psd)))
+	output_cache_file.close()
+
 	# NOTE: compute just the SNR pdf cache here, set other features to 0
 	# NOTE: This will likely result in downstream codes needing to compute
 	# more SNR PDFS, since in this codepath only an average spectrum is
@@ -867,6 +881,25 @@ inspiral_nodes = inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag,
 lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
 
 #
+# Calculate Expected SNR jobs
+#
+
+injsnrparents = []
+for ifos in segsdict:
+	for seg in segsdict[ifos]:
+		# iterate over the mass space chunks for each segment
+		for j, node in enumerate(inspiral_nodes[(ifos, None)][seg]):
+			for inj in options.injections:
+				injsnrparents.append(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg][j])
+
+injsnrnodes = []
+for inj in options.injections:
+	injsnrnodes.append(inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=injsnrparents,
+		opts = {"flow":options.flow},
+		input_files = {"injection-file":inj, "reference-psd-cache":"reference_psd.cache"}
+	))
+
+#
 # Setup likelihood jobs, clustering and merging
 #
 
@@ -876,7 +909,7 @@ rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankP
 # after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
 #
 
-injdbs, noninjdb, final_sqlite_nodes = finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, outnodes, options, instruments)
+injdbs, noninjdb, final_sqlite_nodes = finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, outnodes, injsnrnodes, options, instruments)
 
 #
 # Compute FAP

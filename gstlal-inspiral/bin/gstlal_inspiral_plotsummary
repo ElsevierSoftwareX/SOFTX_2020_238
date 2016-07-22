@@ -646,16 +646,44 @@ FROM
 					if cnt == 0:
 						f1.write("||%s||%s||MISSED: %d||\n" % ("".join(sorted(self.on_instruments)), "---", len(missed)))
 						def sort_func(row):
-							#FIXME: Don't hardcode IFOs
-							return sorted([row.get_chirp_eff_dist("h1"), row.get_chirp_eff_dist("l1")])[1]
-						tmplt_list = sorted(missed, key=sort_func)
-						for rank, sim in enumerate(tmplt_list[:10], 1):
-							f2.write('|| %d || %s || %f || %f || %f || %f || %f || %f || %f ||\n' % (rank, sim.waveform, sim.time_at_instrument("H1", {"H1": 0.0}), sim.mass1, sim.spin1x, sim.spin1y, sim.spin1z, sim.distance, sim.inclination))
-							f2.write('|| || || %f || %f || %f || %f || %f || %f || %f ||\n' % (sim.time_at_instrument("L1", {"L1": 0.0}), sim.mass2, sim.spin2x, sim.spin2y, sim.spin2z, sorted([sim.get_chirp_eff_dist("h1"), sim.get_chirp_eff_dist("l1")])[1], sim.mchirp))
+							return sorted([row.alpha3, row.alpha4])[1]
+						tmplt_list0 = sorted(missed, key=sort_func, reverse=True)
+						def sort_dec_func(row):
+							return sorted([row.alpha3, row.alpha4])[0]
+						tmplt_list = sorted(tmplt_list0, key=sort_dec_func, reverse=True)
+						for rank, sim in enumerate(tmplt_list[:25], 1):
+							f2.write('|| %d || %s || %f || %f || %f || %f || %f || %f || %f || %f ||\n' % (rank, sim.waveform, sim.time_at_instrument("H1", {"H1": 0.0}), sim.mass1, sim.spin1x, sim.spin1y, sim.spin1z, sim.distance, sim.inclination, sim.alpha3))
+							f2.write('|| || || %f || %f || %f || %f || %f || %f || %f || %f ||\n' % (sim.time_at_instrument("L1", {"L1": 0.0}), sim.mass2, sim.spin2x, sim.spin2y, sim.spin2z, sorted([sim.get_chirp_eff_dist("h1"), sim.get_chirp_eff_dist("l1")])[1], sim.mchirp, sim.alpha4))
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
 				f1.close()
 				f2.close()
+				if legend:
+					axes.legend(legend)
+				axes.set_title(title)
+				yield fig, filename_fragment, False
+
+			for cnt, (title, x_label, x_func, y_label, y_func, filename_fragment) in enumerate((
+				(r"Decisive Characteristic SNR vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"Decisive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_mchirp"),
+				(r"Decisive Characteristic SNR vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"Decisive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_mtotal"),
+				(r"Decisive Characteristic SNR vs.\ Eta (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"Decisive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_eta"),
+				(r"Decisive Characteristic SNR vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"Decisive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_chi"),
+				(r"Decisive Characteristic SNR vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"Decisivive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_t")
+			)):
+				fig, axes = create_plot(x_label, y_label)
+				legend = []
+				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
+					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
+					if max([sim.alpha3 for sim in sims]) > 20:
+						axes.semilogy([x_func(sim) for sim in sims], [y_func(sim) for sim in sims], c="cornflowerblue", marker=".", linestyle="None")
+					else:
+						axes.plot([x_func(sim) for sim in sims], [y_func(sim) for sim in sims], c="cornflowerblue", marker=".", linestyle="None")
+				if missed:
+					legend.append("Missed")
+					if max([sim.alpha3 for sim in sims]) > 20:
+						axes.semilogy([x_func(sim) for sim in missed], [y_func(sim) for sim in missed], "k.")
+					else:
+						axes.plot([x_func(sim) for sim in missed], [y_func(sim) for sim in missed], "k.")
 				if legend:
 					axes.legend(legend)
 				axes.set_title(title)
@@ -834,6 +862,24 @@ FROM
 			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.chi for sim, sngl, far in pairs], [sngl.chi for sim, sngl, far in pairs], "kx")
 			yield fig, "chi_acc_scatter_%s_%s" % (waveform, instrument), False
+
+			if instrument == 'H1':
+				fig, axes = create_plot(r"Injected H1 SNR", r"Recovered H1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
+				if max([sim.alpha3 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha3 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha3 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
+
+			if instrument == 'L1':
+				fig, axes = create_plot(r"Injected L1 SNR", r"Recovered L1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
+				if max([sim.alpha4 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha4 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha4 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
 #
 # =============================================================================
