@@ -56,31 +56,6 @@ except ImportError:
 #
 
 
-def my_ipv4_address():
-	#
-	# this is sort of ridiculous.  we open a udp socket to google's dns
-	# server and check the ip address through which the connection was
-	# made.  this only works if we have a functioning connection to the
-	# public internet.  it also only works if the interface through
-	# which outbound connections go is the one you want, e.g.,
-	# on cluster head nodes this will not be the ip address facing the
-	# private network, which is probably the one you really want.
-	#
-
-	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	try:
-		s.connect(("8.8.8.8", 53))
-	except socket.error:
-		# didn't work.  hope the machine name is in a name server
-		# that knows the right answer (otherwise we'll get whatever
-		# is in /etc/hosts)
-		return socket.gethostbyname(socket.getfqdn())
-	else:
-		return s.getsockname()[0]
-	finally:
-		s.close()
-
-
 class HTTPServers(list):
 	"""
 	Utility to start, advertise, track and shutdown http servers on all
