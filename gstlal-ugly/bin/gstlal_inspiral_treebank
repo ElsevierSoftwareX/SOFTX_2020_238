@@ -254,12 +254,12 @@ class HyperCube(object):
 			print >>sys.stderr, "tiling failed: %f" % numpy.linalg.det(self.metric_tensor)
 			raise
 
-		if True:
+		if False:
 			# To Stephen with love
 			# From Chad
 			tiles = [self.center]
 			N = self.N()
-			target = numpy.ceil(self.num_templates(mismatch)) + N
+			target = numpy.ceil(self.num_templates(mismatch))
 			dl = self.dl(mismatch)
 			cnt = 0
 			rand_coords = numpy.random.rand(1e4, len(self.deltas))
@@ -336,7 +336,7 @@ class HyperCube(object):
 			tiles = set()
 			tn.walk(tiles)
 			tiles = list(tiles)
-		if False:
+		if True:
 			grid = []
 			# Rather than finding the bounding box that encloses that encloses this with a rectangular shape, we need to do a coordinate transformation again
 			for (s,e) in zip(numpy.min(bounding_box,0), numpy.max(bounding_box,0)):
@@ -513,7 +513,7 @@ if args.verbose:
 
 # Split according to how many templates you want to place in the hypercube
 mismatch = 1.0 - args.min_match
-bank.split(2 * len(x)**2, mismatch = mismatch, verbose = args.verbose)
+bank.split(10, mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
