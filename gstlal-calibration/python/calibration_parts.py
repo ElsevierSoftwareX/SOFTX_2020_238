@@ -48,6 +48,12 @@ def gate_other_with_strain(pipeline, other, strain):
 
 def mkqueue(pipeline, head):
 	return pipeparts.mkqueue(pipeline, head, max_size_time = 0, max_size_buffers = 0, max_size_bytes = 0)
+
+def mkcomplexqueue(pipeline, head):
+	head = pipeparts.mktogglecomplex(pipeline, head)
+	head = mkqueue(pipeline, head)
+	head = pipeparts.mktogglecomplex(pipeline, head)
+	return head
 	
 def mkaudiorate(pipeline, head):
 	head = pipeparts.mkaudiorate(pipeline, head, skip_to_first = True, silent = False)
@@ -70,11 +76,14 @@ def mkresample(pipeline, head, caps):
 	#head = mkaudiorate(pipeline, head)
 	return head
 
-def mkmultiplier(pipeline, srcs, sync = True):
+def mkmultiplier(pipeline, srcs, sync = True, Complex = False):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, mix_mode="product")
 	if srcs is not None:
 		for src in srcs:
-			mkqueue(pipeline, src).link(elem)
+			if not Complex:
+				mkqueue(pipeline, src).link(elem)
+			else:
+				mkcomplexqueue(pipeline, src).link(elem)
 	return elem
 
 def mkinterleave(pipeline, srcs):
@@ -85,11 +94,14 @@ def mkinterleave(pipeline, srcs):
 	elem = pipeparts.mkaudiorate(pipeline, elem)
 	return elem
 
-def mkadder(pipeline, srcs, sync = True):
+def mkadder(pipeline, srcs, sync = True, Complex = False):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync)
 	if srcs is not None:
 		for src in srcs:
-			mkqueue(pipeline, src).link(elem)
+			if not Complex:
+				mkqueue(pipeline, src).link(elem)
+			else:
+				mkcomplexqueue(pipeline, src).link(elem)
 	return elem
 
 #
@@ -244,8 +256,9 @@ def complex_division(pipeline, a, b):
 	b = pipeparts.mktogglecomplex(pipeline, b)
 	#bInv = b
 	bInv = pipeparts.mkgeneric(pipeline, b, "complex_pow", exponent = -1)
+	bInv = pipeparts.mkcapsfilter(pipeline, bInv, "audio/x-raw, format=F64LE, rate=16384, channels=2")
 	bInv = pipeparts.mktogglecomplex(pipeline, bInv)
-	b = pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw, format=Z128LE, rate=16384, channels=1, width=128, endianness=1234")
+	#bInv = pipeparts.mkcapsfilter(pipeline, bInv, "audio/x-raw, format=Z128LE, rate=16384")
 
 	c = mkmultiplier(pipeline, list_srcs(pipeline, a, bInv))
 

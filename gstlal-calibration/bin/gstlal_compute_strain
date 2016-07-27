@@ -485,8 +485,10 @@ elif options.data_source == "frames": # Data is to be read from frame files; "of
 
 if options.data_source == "lvshm":
 	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = options.do_file_checksum, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+
 elif options.data_source == "frames":
 	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = options.do_file_checksum, skip_bad_files = False, channel_list = map("%s:%s".__mod__, channel_list))
+
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if options.write_pipeline is not None:
 	demux.connect("no-more-pads", write_graph)	
@@ -590,8 +592,9 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	ktstR, ktstI = calibration_parts.split_into_real(pipeline, calibration_parts.mkqueue(pipeline, ktsttee), hoft_caps) 
 	smooth_ktstR = calibration_parts.smooth_kappas(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, factors_average_samples, median_smoothing_samples)
 	smooth_ktstI = calibration_parts.smooth_kappas(pipeline, ktstI, options.kappatst_imag_ok_var, options.expected_kappatst_imag, factors_average_samples, median_smoothing_samples)
-	pipeparts.mkfakesink(pipeline, smooth_ktstR)
-	pipeparts.mkfakesink(pipeline, smooth_ktstI)
+	if options.no_kappatst:
+		pipeparts.mkfakesink(pipeline, smooth_ktstR)
+		pipeparts.mkfakesink(pipeline, smooth_ktstI)
 
 	# FIXME: Need to figure out if this tee after smoothing is sorted out
 	if not options.no_kappatst:

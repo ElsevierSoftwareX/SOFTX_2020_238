@@ -60,6 +60,7 @@
 
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_debug.h>
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal_smoothcalibfactors.h>
 
 
@@ -223,7 +224,7 @@ DEFINE_SMOOTH_FACTORS_FUNC(float);
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
+	gboolean success = gstlal_audio_info_from_caps(&info, caps);
 
 	if(success)
 		*size = GST_AUDIO_INFO_BPF(&info);
@@ -238,8 +239,8 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
  * transform_caps()
  */
 
-/*
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
 	GSTLALSmoothCalibFactors *element = GSTLAL_SMOOTHCALIBFACTORS(trans);
 	guint n;
@@ -265,9 +266,13 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		gst_caps_unref(caps);
 		return GST_CAPS_NONE;
 	}
-
+        if(filter) {
+                GstCaps *intersection = gst_caps_intersect(caps, filter);
+                gst_caps_unref(caps);
+                caps = intersection;
+        }
 	return caps;
-}*/
+}
 
 
 /*
@@ -285,7 +290,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * parse the caps
 	 */
 
-	success = gst_audio_info_from_caps(&info, incaps);
+	success = gstlal_audio_info_from_caps(&info, incaps);
 	if(!success)
 		GST_ERROR_OBJECT(element, "unable to parse %" GST_PTR_FORMAT, incaps);
 
@@ -519,9 +524,9 @@ static void gstlal_smoothcalibfactors_class_init(GSTLALSmoothCalibFactorsClass *
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	//transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
