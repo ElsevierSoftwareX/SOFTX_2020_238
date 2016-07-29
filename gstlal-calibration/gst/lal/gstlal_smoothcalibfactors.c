@@ -27,7 +27,7 @@
 /*
  * ============================================================================
  *
- *                                  Preamble
+ *				  Preamble
  *
  * ============================================================================
  */
@@ -67,7 +67,7 @@
 /*
  * ============================================================================
  *
- *                                 Parameters
+ *				 Parameters
  *
  * ============================================================================
  */
@@ -76,10 +76,40 @@
 /*
  * ============================================================================
  *
- *                           GStreamer Boiler Plate
+ *			   GStreamer Boiler Plate
  *
  * ============================================================================
  */
+
+
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SINK_NAME,
+	GST_PAD_SINK,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+                "audio/x-raw, " \
+                "rate = (int) [1, MAX], " \
+                "channels = (int) 1, " \
+                "format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
+                "layout = (string) interleaved, " \
+                "channel-mask = (bitmask) 0"
+	)
+);
+
+
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SRC_NAME,
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
+	)
+);
 
 
 #define GST_CAT_DEFAULT gstlal_smoothcalibfactors_debug
@@ -97,7 +127,7 @@ G_DEFINE_TYPE_WITH_CODE(
 /*
  * ============================================================================
  *
- *                                 Utilities
+ *				 Utilities
  *
  * ============================================================================
  */
@@ -210,7 +240,7 @@ DEFINE_SMOOTH_FACTORS_FUNC(float);
 /*
  * ============================================================================
  *
- *                     GstBaseTransform Method Overrides
+ *		     GstBaseTransform Method Overrides
  *
  * ============================================================================
  */
@@ -245,6 +275,9 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	GSTLALSmoothCalibFactors *element = GSTLAL_SMOOTHCALIBFACTORS(trans);
 	guint n;
 
+	if(!element->channels)
+		element->channels = 1;
+
 	caps = gst_caps_copy(caps);
 
 	switch(direction) {
@@ -266,11 +299,11 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		gst_caps_unref(caps);
 		return GST_CAPS_NONE;
 	}
-        if(filter) {
-                GstCaps *intersection = gst_caps_intersect(caps, filter);
-                gst_caps_unref(caps);
-                caps = intersection;
-        }
+	if(filter) {
+		GstCaps *intersection = gst_caps_intersect(caps, filter);
+		gst_caps_unref(caps);
+		caps = intersection;
+	}
 	return caps;
 }
 
@@ -374,7 +407,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 /*
  * ============================================================================
  *
- *                          GObject Method Overrides
+ *			  GObject Method Overrides
  *
  * ============================================================================
  */
@@ -466,8 +499,8 @@ static void finalize(GObject *object)
 {
 	GSTLALSmoothCalibFactors *element = GSTLAL_SMOOTHCALIBFACTORS(object);
 
-        g_free(element->fifo_array);
-        element->fifo_array = NULL;
+	g_free(element->fifo_array);
+	element->fifo_array = NULL;
 
 	G_OBJECT_CLASS(gstlal_smoothcalibfactors_parent_class)->finalize(object);
 }
@@ -476,33 +509,6 @@ static void finalize(GObject *object)
 /*
  * class_init()
  */
-
-
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-	GST_BASE_TRANSFORM_SINK_NAME,
-	GST_PAD_SINK,
-	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
-		GST_AUDIO_CAPS_MAKE("{ " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }") ", " \
-		"layout = (string) interleaved, " \
-		"channel-mask = (bitmask) 0"
-	)
-);
-
-
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	GST_BASE_TRANSFORM_SRC_NAME,
-	GST_PAD_SRC,
-	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
-		"audio/x-raw, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
-		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
-		"layout = (string) interleaved, " \
-		"channel-mask = (bitmask) 0"
-	)
-);
 
 
 static void gstlal_smoothcalibfactors_class_init(GSTLALSmoothCalibFactorsClass *klass)
