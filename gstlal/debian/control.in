@@ -35,6 +35,7 @@ Replaces: gstlal-ugly (<< 0.99.0)
 Breaks: gstlal-ugly (<< 0.99.0)
 Recommends: gstlal-ugly
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
+ avahi-daemon,
  gir1.2-glib-2.0,
  gir1.2-gstreamer-1.0 (>= @MIN_GSTREAMER_VERSION@),
  gir1.2-gst-plugins-base-1.0 (>= @MIN_GSTREAMER_VERSION@),
@@ -49,6 +50,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  lalinspiral (>= @MIN_LALINSPIRAL_VERSION@),
  lalmetaio (>= @MIN_LALMETAIO_VERSION@),
  lalsimulation (>= @MIN_LALSIMULATION_VERSION@),
+ libavahi-glib1,
  libfftw3-3,
  libgirepository-1.0-1 (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
  libgsl2 (>= 1.9) | libgsl0ldbl (>= 1.9),

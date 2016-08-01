@@ -6,6 +6,8 @@ Release: 1%{?dist}
 Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
+Requires: avahi
+Requires: avahi-glib
 Requires: avahi-ui-tools
 Requires: dbus-python
 Requires: fftw >= 3
