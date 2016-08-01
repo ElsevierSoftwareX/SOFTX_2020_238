@@ -9,7 +9,6 @@ Group: LSC Software/Data Analysis
 Requires: avahi
 Requires: avahi-glib
 Requires: avahi-ui-tools
-Requires: dbus-python
 Requires: fftw >= 3
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: glue-segments >= @MIN_GLUE_VERSION@

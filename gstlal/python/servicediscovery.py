@@ -25,8 +25,9 @@
 
 
 import avahi
-import dbus	# FIXME:  port to gobject introspection interface
-import sys
+
+
+from gi.repository import Gio
 
 
 __all__ = ["DEFAULT_PROTO", "DEFAULT_DOMAIN", "Publisher", "Listener", "ServiceBrowser"]
@@ -61,28 +62,30 @@ DEFAULT_DOMAIN = "local"
 
 class Publisher(object):
 	def __init__(self):
-		bus = dbus.SystemBus()
-		server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
-		self.group = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.EntryGroupNew()), avahi.DBUS_INTERFACE_ENTRY_GROUP)
+		bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+		server = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER, avahi.DBUS_INTERFACE_SERVER, None)
+		group_path = server.EntryGroupNew("()")
+		self.group = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, group_path, avahi.DBUS_INTERFACE_ENTRY_GROUP, None)
 
 	def add_service(self, sname, port, stype = DEFAULT_PROTO, sdomain = DEFAULT_DOMAIN, host = "", properties = None):
 		if properties is not None:
 			assert not any("=" in key for key in properties)
 		self.group.AddService(
+			"(iiussssqaay)",
 			avahi.IF_UNSPEC,	# interface
 			avahi.PROTO_INET,	# protocol
-			dbus.UInt32(0),		# flags
+			0,			# flags
 			sname,			# service name
 			stype,			# service type
 			sdomain,		# domain
 			host,			# host name
-			dbus.UInt16(port),	# port
+			port,			# port
 			avahi.dict_to_txt_array(properties if properties is not None else {})	# text/description
 		)
-		self.group.Commit()
+		self.group.Commit("()")
 
 	def unpublish(self):
-		self.group.Reset()
+		self.group.Reset("()")
 
 	def __del__(self):
 		self.unpublish()
@@ -112,45 +115,47 @@ class Listener(object):
 
 
 class ServiceBrowser(object):
-	def __init__(self, mainloop, listener, stype = DEFAULT_PROTO, sdomain = DEFAULT_DOMAIN, ignore_local = False):
+	def __init__(self, listener, stype = DEFAULT_PROTO, sdomain = DEFAULT_DOMAIN, ignore_local = False):
 		self.listener = listener
 		self.ignore_local = ignore_local
-		bus = dbus.SystemBus(mainloop = mainloop)
-		self.server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
-		browser = dbus.Interface(bus.get_object(avahi.DBUS_NAME, self.server.ServiceBrowserNew(
+		bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+		self.server = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER, avahi.DBUS_INTERFACE_SERVER, None)
+		browser_path = self.server.ServiceBrowserNew(
+			"(iissu)",
 			avahi.IF_UNSPEC,	# interface
 			avahi.PROTO_UNSPEC,	# protocol
 			stype,			# service type
 			sdomain,		# service domain
-			dbus.UInt32(0)		# flags
-		)), avahi.DBUS_INTERFACE_SERVICE_BROWSER)
-		browser.connect_to_signal("ItemNew", self.itemnew_handler)
-		browser.connect_to_signal("ItemRemove", self.itemremove_handler)
-		browser.connect_to_signal("AllForNow", self.allfornow_handler)
+			0			# flags
+		)
+		bus.signal_subscribe(None, None, "ItemNew", browser_path, None, Gio.DBusSignalFlags.NONE, self.itemnew_handler, None)
+		bus.signal_subscribe(None, None, "ItemRemove", browser_path, None, Gio.DBusSignalFlags.NONE, self.itemremove_handler, None)
+		bus.signal_subscribe(None, None, "AllForNow", browser_path, None, Gio.DBusSignalFlags.NONE, self.allfornow_handler, None)
 
-	def itemnew_handler(self, interface, protocol, sname, stype, sdomain, flags):
+	def itemnew_handler(self, bus, sender_name, object_path, interface_name, signal_name, (interface, protocol, sname, stype, sdomain, flags), data):
 		if self.ignore_local and (flags & avahi.LOOKUP_RESULT_LOCAL):
 			# local service (on this machine)
 			return
-		self.server.ResolveService(interface, protocol, sname, stype, sdomain, avahi.PROTO_UNSPEC, dbus.UInt32(0), reply_handler = self.itemnew_resolved_handler, error_handler = self.resolve_error)
-
-	def itemnew_resolved_handler(self, interface, protocol, sname, stype, sdomain, host, aprotocol, address, port, txt, flags):
+		interface, protocol, sname, stype, sdomain, host, aprotocol, address, port, txt, flags = self.server.ResolveService(
+			"(iisssiu)",
+			interface,
+			protocol,
+			sname,
+			stype,
+			sdomain,
+			avahi.PROTO_UNSPEC,
+			0
+		)
 		self.listener.add_service(sname, stype, sdomain, host, port, dict(s.split("=", 1) for s in avahi.txt_array_to_string_array(txt)))
 
-	def resolve_error(self, *args, **kwargs):
-		print >>sys.stderr, "resolve error:", args, kwargs
-
-	def itemremove_handler(self, interface, protocol, sname, stype, sdomain, flags):
+	def itemremove_handler(self, bus, sender_name, object_path, interface_name, signal_name, (interface, protocol, sname, stype, sdomain, flags), data):
 		if self.ignore_local and (flags & avahi.LOOKUP_RESULT_LOCAL):
 			# local service (on this machine)
 			return
 		self.listener.remove_service(sname, stype, sdomain)
 
-	def allfornow_handler(self):
+	def allfornow_handler(self, bus, sender_name, object_path, interface_name, signal_name, parameters, data):
 		self.listener.all_for_now()
-
-	def failure_handler(self, exception):
-		self.listener.failure(exception)
 
 
 #
@@ -173,9 +178,8 @@ if __name__ == "__main__":
 	# are printed
 	#
 
-	from dbus.mainloop.glib import DBusGMainLoop
-	import gobject
-	import socket
+	from gi.repository import GLib
+	import sys
 
 	if sys.argv[-1] == "publish":
 		#
@@ -187,7 +191,7 @@ if __name__ == "__main__":
 			sname = "My Test Service",
 			stype = DEFAULT_PROTO,
 			sdomain = DEFAULT_DOMAIN,
-			host = socket.getfqdn(),
+			host = "",	# will figure it out itself
 			port = 3456,
 			properties = {
 				"version": "0.10",
@@ -214,6 +218,7 @@ if __name__ == "__main__":
 				self.print_msg("added", sname, stype, sdomain, host, port, properties)
 			def remove_service(self, sname, stype, sdomain):
 				self.print_msg("removed", sname, stype, sdomain, None, None, None)
-		browser = ServiceBrowser(DBusGMainLoop(), MyListener())
+		mainloop = GLib.MainLoop()
+		browser = ServiceBrowser(MyListener())
 		print "Browsing for services.  Press CTRL-C to quit.\n"
-		gobject.MainLoop().run()
+		mainloop.run()
