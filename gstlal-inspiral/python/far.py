@@ -46,8 +46,6 @@
 #
 
 
-import bisect
-import copy
 try:
 	from fpconst import NaN, NegInf, PosInf
 except ImportError:
@@ -72,7 +70,6 @@ import sys
 from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
@@ -86,6 +83,7 @@ from pylal import snglcoinc
 
 
 from gstlal import stats as gstlalstats
+from gstlal.stats import horizonhistory
 
 
 #
@@ -95,308 +93,6 @@ from gstlal import stats as gstlalstats
 #
 # =============================================================================
 #
-
-
-#
-# Horizon distance record keeping
-#
-
-
-class NearestLeafTree(object):
-	"""
-	A simple binary tree in which look-ups return the value of the
-	closest leaf.  Only float objects are supported for the keys and
-	values.  Look-ups raise KeyError if the tree is empty.
-
-	Example:
-
-	>>> x = NearestLeafTree()
-	>>> x[100.0] = 120.
-	>>> x[104.0] = 100.
-	>>> x[102.0] = 110.
-	>>> x[90.]
-	120.0
-	>>> x[100.999]
-	120.0
-	>>> x[101.001]
-	110.0
-	>>> x[200.]
-	100.0
-	>>> del x[104]
-	>>> x[200.]
-	110.0
-	>>> x.keys()
-	[100.0, 102.0]
-	>>> 102 in x
-	True
-	>>> 103 in x
-	False
-	>>> x.to_xml(u"H1").write()
-	<Array Type="real_8" Name="H1:nearestleaftree:array">
-		<Dim>2</Dim>
-		<Dim>2</Dim>
-		<Stream Delimiter=" " Type="Local">
-			100 102
-			120 110
-		</Stream>
-	</Array>
-	"""
-	def __init__(self, items = ()):
-		"""
-		Initialize a NearestLeafTree.
-
-		Example:
-
-		>>> x = NearestLeafTree()
-		>>> x = NearestLeafTree([(100., 120.), (104., 100.), (102., 110.)])
-		>>> y = {100.: 120., 104.: 100., 102.: 100.}
-		>>> x = NearestLeafTree(y.items())
-		"""
-		self.tree = list(items)
-		self.tree.sort()
-
-	def __setitem__(self, x, val):
-		"""
-		Example:
-
-		>>> x = NearestLeafTree()
-		>>> x[100.:200.] = 0.
-		>>> x[150.] = 1.
-		>>> x
-		NearestLeaftree([(100, 0), (150, 1), (200, 0)])
-		"""
-		if type(x) is slice:
-			# replace all entries in the requested range of
-			# co-ordiantes with two entries, each with the
-			# given value, one at the start of the range and
-			# one at the end of the range.  thus, after this
-			# all queries within that range will return this
-			# value.
-			if x.step is not None:
-				raise ValueError("%s: step not supported" % repr(x))
-			if x.start is None:
-				if not self.tree:
-					raise IndexError("open-ended slice not supported with empty tree")
-				x = slice(self.minkey(), x.stop)
-			if x.stop is None:
-				if not self.tree:
-					raise IndexError("open-ended slice not supported with empty tree")
-				x = slice(x.start, self.maxkey())
-			if x.stop < x.start:
-				raise ValueError("%s: bounds out of order" % repr(x))
-			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
-			hi = bisect.bisect_right(self.tree, (x.stop, PosInf))
-			self.tree[lo:hi] = ((x.start, val), (x.stop, val))
-		else:
-			# replace all entries having the same co-ordinate
-			# with this one
-			lo = bisect.bisect_left(self.tree, (x, NegInf))
-			hi = bisect.bisect_right(self.tree, (x, PosInf))
-			self.tree[lo:hi] = ((x, val),)
-
-	def __getitem__(self, x):
-		if not self.tree:
-			raise KeyError(x)
-		if type(x) is slice:
-			raise ValueError("slices not supported")
-		hi = bisect.bisect_right(self.tree, (x, PosInf))
-		try:
-			x_hi, val_hi = self.tree[hi]
-		except IndexError:
-			x_hi, val_hi = self.tree[-1]
-		if hi == 0:
-			x_lo, val_lo = x_hi, val_hi
-		else:
-			x_lo, val_lo = self.tree[hi - 1]
-		return val_lo if abs(x - x_lo) < abs(x_hi - x) else val_hi
-
-	def __delitem__(self, x):
-		"""
-		Example:
-
-		>>> x = NearestLeafTree([(100., 0.), (150., 1.), (200., 0.)])
-		>>> del x[150.]
-		>>> x
-		NearestLeafTree([(100., 0.), (200., 0.)])
-		>>> del x[:]
-		NearestLeafTree([])
-		"""
-		if type(x) is slice:
-			if x.step is not None:
-				raise ValueError("%s: step not supported" % repr(x))
-			if x.start is None:
-				if not self.tree:
-					# no-op
-					return
-				x = slice(self.minkey(), x.stop)
-			if x.stop is None:
-				if not self.tree:
-					# no-op
-					return
-				x = slice(x.start, self.maxkey())
-			if x.stop < x.start:
-				# no-op
-				return
-			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
-			hi = bisect.bisect_right(self.tree, (x.stop, PosInf))
-			del self.tree[lo:hi]
-		elif not self.tree:
-			raise IndexError(x)
-		else:
-			lo = bisect.bisect_left(self.tree, (x, NegInf))
-			if self.tree[lo][0] != x:
-				raise IndexError(x)
-			del self.tree[lo]
-
-	def __nonzero__(self):
-		return bool(self.tree)
-
-	def __iadd__(self, other):
-		for x, val in other.tree:
-			self[x] = val
-		return self
-
-	def keys(self):
-		return [x for x, val in self.tree]
-
-	def values(self):
-		return [val for x, val in self.tree]
-
-	def items(self):
-		return list(self.tree)
-
-	def min(self):
-		"""
-		Return the minimum value stored in the tree.  This is O(n).
-		"""
-		if not self.tree:
-			raise ValueError("empty tree")
-		return min(val for x, val in self.tree)
-
-	def minkey(self):
-		"""
-		Return the minimum key stored in the tree.  This is O(1).
-		"""
-		if not self.tree:
-			raise ValueError("empty tree")
-		return self.tree[0][0]
-
-	def max(self):
-		"""
-		Return the maximum value stored in the tree.  This is O(n).
-		"""
-		if not self.tree:
-			raise ValueError("empty tree")
-		return max(val for x, val in self.tree)
-
-	def maxkey(self):
-		"""
-		Return the maximum key stored in the tree.  This is O(1).
-		"""
-		if not self.tree:
-			raise ValueError("empty tree")
-		return self.tree[-1][0]
-
-	def __contains__(self, x):
-		try:
-			return bool(self.tree) and self.tree[bisect.bisect_left(self.tree, (x, NegInf))][0] == x
-		except IndexError:
-			return False
-
-	def __len__(self):
-		return len(self.tree)
-
-	def __repr__(self):
-		return "NearestLeaftree([%s])" % ", ".join("(%g, %g)" % item for item in self.tree)
-
-	@classmethod
-	def from_xml(cls, xml, name):
-		return cls(map(tuple, ligolw_array.get_array(xml, u"%s:nearestleaftree" % name).array[:]))
-
-	def to_xml(self, name):
-		return ligolw_array.from_array(u"%s:nearestleaftree" % name, numpy.array(self.tree, dtype = "double"))
-
-
-class HorizonHistories(dict):
-	def __iadd__(self, other):
-		for key, history in other.iteritems():
-			try:
-				self[key] += history
-			except KeyError:
-				self[key] = copy.deepcopy(history)
-		return self
-
-	def minkey(self):
-		"""
-		Return the minimum key stored in the trees.
-		"""
-		minkeys = tuple(history.minkey() for history in self.values() if history)
-		if not minkeys:
-			raise ValueError("empty trees")
-		return min(minkeys)
-
-	def maxkey(self):
-		"""
-		Return the maximum key stored in the trees.
-		"""
-		maxkeys = tuple(history.maxkey() for history in self.values() if history)
-		if not maxkeys:
-			raise ValueError("empty trees")
-		return max(maxkeys)
-
-	def getdict(self, x):
-		return dict((key, value[x]) for key, value in self.iteritems())
-
-	def randhorizons(self):
-		"""
-		Generator yielding a sequence of random horizon distance
-		dictionaries chosen by drawing random times uniformly
-		distributed between the lowest and highest times recorded
-		in the history and returning the dictionary of horizon
-		distances for each of those times.
-		"""
-		x_min = self.minkey()
-		x_max = self.maxkey()
-		getdict = self.getdict
-		rnd = random.uniform
-		while 1:
-			yield getdict(rnd(x_min, x_max))
-
-	def all(self):
-		"""
-		Returns a list of the unique sets of horizon distances
-		recorded in the histories.
-		"""
-		# unique times for which a horizon distance measurement is
-		# available
-		all_x = set(x for value in self.values() for x in value.keys())
-
-		# the unique horizon distances from those times, expressed
-		# as frozensets of instrument/distance pairs
-		result = set(frozenset(self.getdict(x).items()) for x in all_x)
-
-		# return a list of the results converted back to
-		# dictionaries
-		return map(dict, result)
-
-	@classmethod
-	def from_xml(cls, xml, name):
-		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"%s:horizonhistories" % name]
-		try:
-			xml, = xml
-		except ValueError:
-			raise ValueError("document must contain exactly 1 HorizonHistories named '%s'" % name)
-		keys = [elem.Name.replace(u":nearestleaftree", u"") for elem in xml.getElementsByTagName(ligolw.Array.tagName) if elem.hasAttribute(u"Name") and elem.Name.endswith(u":nearestleaftree")]
-		self = cls()
-		for key in keys:
-			self[key] = NearestLeafTree.from_xml(xml, key)
-		return self
-
-	def to_xml(self, name):
-		xml = ligolw.LIGO_LW({u"Name": u"%s:horizonhistories" % name})
-		for key, value in self.items():
-			xml.appendChild(value.to_xml(key))
-		return xml
 
 
 #
@@ -425,28 +121,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	#   accidental_weight * (measured denominator)
 	numerator_accidental_weight = 0.
 
-	# if two horizon distances, D1 and D2, differ by less than
-	#
-	#	| ln(D1 / D2) | <= log_distance_tolerance
-	#
-	# then they are considered to be equal for the purpose of recording
-	# horizon distance history, generating joint SNR PDFs, and so on.
-	# if the smaller of the two is < min_ratio * the larger then the
-	# smaller is treated as though it were 0.
-	# FIXME:  is this choice of distance quantization appropriate?
-	@staticmethod
-	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = PosInf, min_ratio = 0.1):
-		horizon_distance_norm = max(horizon_distances.values())
-		assert horizon_distance_norm >= 0.
-		# check for no-op:  all distances are 0.
-		if horizon_distance_norm == 0.:
-			return dict.fromkeys(horizon_distances, 0.)
-		# check for no-op:  map all (non-zero) values to 1
-		if math.isinf(log_distance_tolerance):
-			return dict((instrument, 1. if horizon_distance > 0. else 0.) for instrument, horizon_distance in horizon_distances.items())
-		min_distance = min_ratio * horizon_distance_norm
-		return dict((instrument, (0. if horizon_distance < min_distance else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
-
 	# binnings (filter funcs look-up initialized in .__init__()
 	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 300)))
 	binnings = {
@@ -465,7 +139,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	def __init__(self, *args, **kwargs):
 		super(ThincaCoincParamsDistributions, self).__init__(*args, **kwargs)
-		self.horizon_history = HorizonHistories()
+		self.horizon_history = horizonhistory.HorizonHistories()
 		self.pdf_from_rates_func = {
 			"instruments": self.pdf_from_rates_instruments,
 			"H1_snr_chi": self.pdf_from_rates_snrchi2,
@@ -523,7 +197,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# largest among them and then the fractions aquantized to
 		# integer powers of a common factor
 		#
-		return frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
+		return frozenset(instruments), frozenset(horizonhistory.quantize_horizon_distances(horizon_distances).items())
 
 	def get_snr_joint_pdf(self, instruments, horizon_distances, verbose = False):
 		#
@@ -948,7 +622,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def from_xml(cls, xml, name):
 		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name)
 		xml = self.get_xml_root(xml, name)
-		self.horizon_history = HorizonHistories.from_xml(xml, name)
+		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, name)
 		prefix = u"cached_snr_joint_pdf"
 		for elem in [elem for elem in xml.childNodes if elem.Name.startswith(u"%s:" % prefix)]:
 			key = ligolw_param.get_pyvalue(elem, u"key").strip().split(u";")

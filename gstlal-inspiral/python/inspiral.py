@@ -107,6 +107,7 @@ from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import cbc_template_iir
 from gstlal import far
+from gstlal.stats import horizonhistory
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -751,7 +752,7 @@ class Data(object):
 			try:
 				horizon_history = self.coinc_params_distributions.horizon_history[instrument]
 			except KeyError:
-				horizon_history = self.coinc_params_distributions.horizon_history[instrument] = far.NearestLeafTree()
+				horizon_history = self.coinc_params_distributions.horizon_history[instrument] = horizonhistory.NearestLeafTree()
 			horizon_history[float(timestamp)] = horizon_distance
 
 	def __get_likelihood_file(self):

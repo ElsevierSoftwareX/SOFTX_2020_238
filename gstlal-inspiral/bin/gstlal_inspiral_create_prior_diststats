@@ -60,6 +60,7 @@ from pylal import rate
 
 from gstlal import far
 from gstlal import reference_psd
+from gstlal.stats import horizonhistory
 
 
 __author__ = "Chad Hanna <chad.hanna@ligo.org>"
@@ -179,7 +180,7 @@ for horizon_distances in options.horizon_distances:
 			# coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, verbose = options.verbose)
 
 			# Force the SNR pdf to be generated to be at the actual horizon distance values not the quantized ones
-			key = frozenset(instruments), frozenset(coincparamsdistributions.quantize_horizon_distances(horizon_distances).items())
+			key = frozenset(instruments), frozenset(horizonhistory.quantize_horizon_distances(horizon_distances).items())
 			if options.verbose:
 				print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
 				progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))

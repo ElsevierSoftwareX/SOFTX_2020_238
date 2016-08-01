@@ -44,6 +44,7 @@
 import sys
 import shutil
 from gstlal import far
+from gstlal.stats import horizonhistory
 from gstlal import inspiral_pipe
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
@@ -82,8 +83,8 @@ def parse_command_line():
 		for x in options.segment_and_horizon:
 			ifo, start, stop, horizon = x.split(":")
 			seglistdict.setdefault(ifo, segments.segmentlist()).append(segments.segment([LIGOTimeGPS(float(start)), LIGOTimeGPS(float(stop))]))
-			horizon_history.setdefault(ifo, far.NearestLeafTree())[LIGOTimeGPS(float(start))] = float(horizon)
-			horizon_history.setdefault(ifo, far.NearestLeafTree())[LIGOTimeGPS(float(stop))] = float(horizon)
+			horizon_history.setdefault(ifo, horizonhistory.NearestLeafTree())[LIGOTimeGPS(float(start))] = float(horizon)
+			horizon_history.setdefault(ifo, horizonhistory.NearestLeafTree())[LIGOTimeGPS(float(stop))] = float(horizon)
 		return seglistdict, horizon_history
 
 	if options.segment_and_horizon is None:
@@ -170,7 +171,7 @@ horizon_distances = dict(((ifo, numpy.mean(h.values())) for ifo, h in horizon_hi
 for n in range(2, len(horizon_distances) + 1):
 	for instruments in iterutils.choices(horizon_distances.keys(), n):
 		# Force the SNR pdf to be generated to be at the actual horizon distance values not the quantized ones
-		key = frozenset(instruments), frozenset(diststats.quantize_horizon_distances(horizon_distances).items())
+		key = frozenset(instruments), frozenset(horizonhistory.quantize_horizon_distances(horizon_distances).items())
 		if options.verbose:
 			print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
 			progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
