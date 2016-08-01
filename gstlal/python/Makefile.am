@@ -1,4 +1,4 @@
-SUBDIRS = pipeparts
+SUBDIRS = pipeparts stats
 
 AM_CPPFLAGS = -I$(top_srcdir)/lib
 
