@@ -297,14 +297,14 @@ hoftsr = options.hoft_sample_rate  # Sample rate for h(t)
 calibstatesr = options.calib_state_sample_rate  # Sample rate for the CALIB_STATE_VECTOR
 odcsr = options.odc_sample_rate # Sample rate of the ODC channel that is read in
 ctrlsr = options.control_sample_rate # Sample rate of the control channel (such as DARM_CTRL or DELTAL_CTRL)
-hoft_caps = "audio/x-raw, format=F64LE, rate=%d" % hoftsr
-ctrl_caps = "audio/x-raw, format=F64LE, rate=%d" % ctrlsr
-calibstate_caps = "audio/x-raw, format=U32LE, rate=%d" % calibstatesr
-odc_caps = "audio/x-raw, format=U32LE, rate=%d" % odcsr
+hoft_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr
+ctrl_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % ctrlsr
+calibstate_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % calibstatesr
+odc_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % odcsr
 # caps strings for the computation kappas
-ref_factors_caps = "audio/x-raw, format=F64LE, rate=%d" % options.ref_channels_sr
-compute_calib_factors_caps = "audio/x-raw, format=F64LE, rate=%d" % options.compute_factors_sr
-compute_calib_factors_complex_caps = "audio/x-raw, format=Z128LE, rate=%d" % options.compute_factors_sr
+ref_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % options.ref_channels_sr
+compute_calib_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0X0" % options.compute_factors_sr
+compute_calib_factors_complex_caps = "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % options.compute_factors_sr
 
 # Set up smoothing, averaging and integration sample sizes for kappa calulations
 factors_integration_samples = int(options.demod_integration_time) * options.compute_factors_sr

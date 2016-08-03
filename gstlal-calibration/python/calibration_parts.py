@@ -145,7 +145,7 @@ def list_srcs(pipeline, *args):
 def smooth_kappas(pipeline, head, var, expected, Nav, N):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
 	head = mkaudiorate(pipeline, head)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothcalibfactors", max_value = expected + var, min_value = expected - var, default_val = expected, max_size = N)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.01, default_kappa = expected, array_size = N)
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
 	return head
 
@@ -218,7 +218,7 @@ def merge_into_complex(pipeline, real, imag):
 def split_into_real(pipeline, complex_chan, real_caps):
 	# split complex channel with complex caps into two channels (real and imag) with real caps
 	elem = pipeparts.mktogglecomplex(pipeline, complex_chan)
-	elem = pipeparts.mkgeneric(pipeline, elem, "deinterleave")
+	elem = pipeparts.mkgeneric(pipeline, elem, "deinterleave", keep_positions=True)
 	real = pipeparts.mkaudiorate(pipeline, None)
 	pipeparts.src_deferred_link(elem, "src_0", real.get_static_pad("sink"))
 	real = pipeparts.mkcapsfilter(pipeline, real, real_caps)

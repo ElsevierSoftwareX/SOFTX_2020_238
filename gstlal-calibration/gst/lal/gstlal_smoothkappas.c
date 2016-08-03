@@ -157,11 +157,18 @@ static void get_new_median_ ## DTYPE( DTYPE *default_kappa, DTYPE max_kappa_offs
 
 
 #define DEFINE_MEDIAN_APPROX_FUNC(DTYPE) \
-static void median_approx_func_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint buffer_size, double *default_kappa, double max_kappa_offset, double kappa_ceiling, gint array_size) { \
-	for(gint i = 0; i < buffer_size; i++) { \
-		get_new_median_ ## DTYPE((DTYPE *) default_kappa, (DTYPE) max_kappa_offset, (DTYPE) kappa_ceiling, array_size, src, dst); \
-		src++; \
-		dst++; \
+static void median_approx_func_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint buffer_size, double *default_kappa, double max_kappa_offset, double kappa_ceiling, gint array_size, gboolean gap) { \
+	if(!gap) { \
+		for(gint i = 0; i < buffer_size; i++) { \
+			get_new_median_ ## DTYPE((DTYPE *) default_kappa, (DTYPE) max_kappa_offset, (DTYPE) kappa_ceiling, array_size, src, dst); \
+			src++; \
+			dst++; \
+		} \
+	} else { \
+		for(gint i = 0; i < buffer_size; i++) { \
+			*dst = (DTYPE) *default_kappa; \
+			dst++; \
+		} \
 	} \
 }
 
@@ -265,10 +272,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if(element->unit_size == 4) {
 		gint buffer_size = outmap.size / element->unit_size;
-		median_approx_func_float((const float *) inmap.data, (float *) outmap.data, buffer_size, &element->default_kappa, element->max_kappa_offset, element->kappa_ceiling, element->median_array_size);
+		median_approx_func_float((const float *) inmap.data, (float *) outmap.data, buffer_size, &element->default_kappa, element->max_kappa_offset, element->kappa_ceiling, element->median_array_size, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP));
 	} else if(element->unit_size == 8) {
 		gint buffer_size = outmap.size / element->unit_size;
-		median_approx_func_double((const double *) inmap.data, (double *) outmap.data, buffer_size, &element->default_kappa, element->max_kappa_offset, element->kappa_ceiling, element->median_array_size);
+		median_approx_func_double((const double *) inmap.data, (double *) outmap.data, buffer_size, &element->default_kappa, element->max_kappa_offset, element->kappa_ceiling, element->median_array_size, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP));
 	} else {
 		g_assert_not_reached();
 	}
@@ -417,7 +424,7 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_double(
 			"kappa-ceiling",
 			"Reset kappas outside of range",
-			"If property exact is set to FALSE, accepted unsmoothed kappas outside of the range [current-median-value - kappa-ceiling, current-median-value + kappa_ceiling], are reset to current-median-value +- kappa-ceiling",
+			"Accepted unsmoothed kappas outside of the range [current-median-value - kappa-ceiling, current-median-value + kappa_ceiling], are reset to current-median-value +- kappa-ceiling",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 0.02,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
