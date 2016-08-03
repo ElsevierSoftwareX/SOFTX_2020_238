@@ -1166,11 +1166,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		def mkinterp(binnedarray):
+			binnedarray = binnedarray.copy()
 			with numpy.errstate(divide = "ignore"):
-				# need to insert an element at the start to
-				# get the binning indexes to map the
-				# correct locations in the array
-				return numpy.hstack(([NaN], numpy.log(binnedarray.array))).__getitem__
+				binnedarray.array = numpy.log(binnedarray.array)
+			return binnedarray.__getitem__
 		if "instruments" in self.background_pdf:
 			self.background_lnpdf_interp["instruments"] = mkinterp(self.background_pdf["instruments"])
 		if "instruments" in self.injection_pdf:
