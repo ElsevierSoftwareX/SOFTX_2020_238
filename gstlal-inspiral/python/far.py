@@ -1169,7 +1169,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			binnedarray = binnedarray.copy()
 			with numpy.errstate(divide = "ignore"):
 				binnedarray.array = numpy.log(binnedarray.array)
-			return binnedarray.__getitem__
+			return lambda *coords: binnedarray[coords]
 		if "instruments" in self.background_pdf:
 			self.background_lnpdf_interp["instruments"] = mkinterp(self.background_pdf["instruments"])
 		if "instruments" in self.injection_pdf:
