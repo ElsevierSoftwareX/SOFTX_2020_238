@@ -995,14 +995,14 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	
 			output->ra = phi;
 			output->dec = 2*M_PI - theta;
-			if (postcoh->output_skymap) {
+			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
 				filename = g_string_new(output->ifos);
-				g_string_append_printf(filename, "_%s_%d_%d", output->pivotal_ifo, output->end_time_L.gpsSeconds, output->end_time_L.gpsNanoSeconds);
-				g_string_append_printf(filename, "_%d_skymap.txt", output->tmplt_idx);
+				g_string_append_printf(filename, "skymap/_%s_%d_%d", output->pivotal_ifo, output->end_time_L.gpsSeconds, output->end_time_L.gpsNanoSeconds);
+				g_string_append_printf(filename, "_%d", output->tmplt_idx);
 				strcpy(output->skymap_fname, filename->str);
-//				printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
+				printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
 				file = fopen(output->skymap_fname, "w");
 				fwrite(&(pklist->cohsnr_skymap[ipeak * state->npix]), sizeof(float), state->npix, file);
 				fclose(file);
@@ -1154,6 +1154,7 @@ int timestamp_to_gps_idx(int gps_step, GstClockTime t)
 
 static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_ifo, cudaStream_t stream)
 {
+        state->snglsnr_max = 0;
 	int exe_len = state->exe_len, ntmplt = state->ntmplt, itmplt, ilen, jlen, npeak = 0;
 	COMPLEX_F *isnr = snglsnr;
 	float tmp_abssnr, tmp_tmplt, snglsnr_thresh = state->snglsnr_thresh;
@@ -1192,6 +1193,12 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 				npeak++;
 			}
 		}
+	}
+
+        /* keep track of the maximum single snr in this snr chunk */
+	for (ilen=0; ilen<exe_len; ilen++) {
+	  if (tmp_maxsnr[ilen] > state->snglsnr_max)
+	    state->snglsnr_max = tmp_maxsnr[ilen];
 	}
 
 	/* do clustering every 5 samples */

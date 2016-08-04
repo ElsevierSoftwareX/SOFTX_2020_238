@@ -50,6 +50,11 @@ G_BEGIN_DECLS
 #ifndef MAX_ALLIFO_LEN
 #define MAX_ALLIFO_LEN 14
 #endif
+
+#ifndef MIN_OUTPUT_SKYMAP_SNR
+#define MIN_OUTPUT_SKYMAP_SNR 20
+#endif
+
 typedef struct _CudaPostcoh CudaPostcoh;
 typedef struct _CudaPostcohClass CudaPostcohClass;
 
@@ -204,6 +209,7 @@ typedef struct _PostcohState {
   char cur_ifos[MAX_ALLIFO_LEN];
   gint cur_nifo;
   gint is_member_init;
+  float snglsnr_max;
   float *tmp_maxsnr;
   int *tmp_tmpltidx;
 } PostcohState;

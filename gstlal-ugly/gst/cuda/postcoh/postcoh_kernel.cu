@@ -257,14 +257,13 @@ __global__ void ker_coh_skymap
 	COMPLEX_F	**snr,			/* INPUT, (2, 3) * data_points */	
 	int		iifo,			/* INPUT, detector we are considering */
 	int		nifo,			/* INPUT, all detectors that are in this coherent analysis */
-	int		*tmplt_idx,		/* INPUT, the tmplt index of triggers	*/
 	int		*peak_pos,	/* INPUT, place the location of the trigger */
 	int		npeak,		/* INPUT, number of triggers */
 	float		*u_map,				/* INPUT, u matrix map */
 	float		*toa_diff_map,		/* INPUT, time of arrival difference map */
 	int		num_sky_directions,	/* INPUT, # of sky directions */
+	int		max_npeak,				/* INPUT, max number of peaks */
 	int		len,				/* INPUT, snglsnr length */
-	int		exe_len,				/* INPUT, snglsnr length */
 	int		start_exe,				/* INPUT, snglsnr start exe position */
 	float		dt,			/* INPUT, 1/ sampling rate */
 	int		ntmplt		/* INPUT, number of templates */
@@ -274,49 +273,52 @@ __global__ void ker_coh_skymap
 	int bn	= gridDim.x;
 
 	// float	*mu;	// matrix u for certain sky direction
-	int		peak_cur, tmplt_cur;
+	int		peak_cur, tmplt_cur, len_cur;
 	COMPLEX_F	dk[6];
 	int		NtOff;
 	int		map_idx;
 	float	real, imag;
 	float	utdka[6];
 	float	al_all = 0.0f;
-
 	for (int ipeak = bid; ipeak < npeak; ipeak += bn)
 	{
 		peak_cur = peak_pos[ipeak];
-		tmplt_cur = tmplt_idx[peak_cur];
+		// find the len_cur from len_idx
+		len_cur = peak_pos[peak_cur + max_npeak];
+		// find the tmplt_cur from tmplt_idx
+		tmplt_cur = peak_pos[peak_cur + 2 * max_npeak];
 
 		for (int ipix = threadIdx.x; ipix < num_sky_directions; ipix += blockDim.x)
 		{
+			// matrix u is stored in column order
+			// mu = u_map + nifo * nifo * i;			
+
 			for (int j = 0; j < nifo; ++j)
 			{
 				/* this is a simplified algorithm to get map_idx */
 				map_idx = iifo * nifo + j;
 				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
 				/* NOTE: The snr is stored channel-wise */
-				dk[j] = snr[j][((start_exe + peak_cur + NtOff + len) % len) * ntmplt + tmplt_cur ]; 	
-
+				if ( j == iifo )
+					dk[j] = snr[j][((start_exe + len_cur + len) % len) * ntmplt + tmplt_cur ]; 	
+				else
+					dk[j] = snr[j][((start_exe + len_cur + NtOff + len) % len) * ntmplt + tmplt_cur ]; 	
 			}
 
-			// do the matrix vector multiplication
 			for (int j = 0; j < nifo; ++j)
 			{
 				real = 0.0f;
 				imag = 0.0f;
 				for (int k = 0; k < nifo; ++k)
 				{
-					/*
-					real += mu[j * nifo + k] * dk[k].x;
-					imag += mu[j * nifo + k] * dk[k].y;
-					*/
+					// real += mu[j * nifo + k] * dk[k].x;
+					// imag += mu[j * nifo + k] * dk[k].y;
 					real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
 					imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
 				}
 				utdka[j] = real * real + imag * imag;	
-			}		
+			}
 
-			//cohsnr_skymap[ipeak * num_sky_directions + ipix] = (2 * (utdka[0] + utdka[1]) - 4) / sqrt(8.0f);
 			cohsnr_skymap[ipeak * num_sky_directions + ipix] = utdka[0] + utdka[1];
 
 			al_all = 0.0f;
@@ -836,7 +838,8 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
 	PeakList *pklist = state->peak_list[iifo];
 	int npeak = pklist->npeak[0];
-	if (output_skymap) {
+
+	if (output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
 	int mem_alloc_size = sizeof(float) * npeak * state->npix * 2;
 //	printf("alloc cohsnr_skymap size %d\n", mem_alloc_size);
 	
@@ -857,14 +860,13 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->dd_snglsnr,
 									iifo,	
 									state->nifo,
-									pklist->d_tmplt_idx,
 									pklist->d_peak_pos,
 									pklist->npeak[0],
 									state->d_U_map[gps_idx],
 									state->d_diff_map[gps_idx],
 									state->npix,
-									state->snglsnr_len,
 									state->max_npeak,
+									state->snglsnr_len,
 									state->snglsnr_start_exe,
 									state->dt,
 									state->ntmplt);
