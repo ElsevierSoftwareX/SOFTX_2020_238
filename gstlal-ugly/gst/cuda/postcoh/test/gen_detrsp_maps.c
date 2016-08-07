@@ -24,6 +24,7 @@ int generate_three_dets()
 
 	for(i=0;i<nifo;i++)
 		printf("ifo%d %s\n", i, ifos[i]);
+	/* norder is 4 */
 	DetSkymap *det_map = create_detresponse_skymap(ifos, nifo, horizons, 1800 ,4);
 
 	to_xml(det_map, "L1H1V1_skymap.xml", "L1H1V1_postcoh_skymap", 0);

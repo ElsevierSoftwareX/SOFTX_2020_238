@@ -122,12 +122,13 @@ create_detresponse_skymap(
 		for (ipix=0; ipix<npix; ipix++) {
 			for (iifo=0; iifo<nifo; iifo++) {
 
-				/* ra = phi, dec = 2pi - theta */	
+				/* ra = phi, dec = pi/2 - theta , phi: longitude 0-2PI, theta colatitude 0-PI, see bayestar lalinference plot.py healpix_lookup */	
 				pix2ang_nest(nside, ipix, &theta, &phi);
 		
 				/* get fplus, fcross from lalsuite DetResponse.c */
 
 				gmst = XLALGreenwichMeanSiderealTime(&gps_cur);
+				/* polarization angle---psi must be set to zero */
 				XLALComputeDetAMResponse(&fplus, &fcross, detectors[iifo]->response, phi, M_PI_2-theta, 0, gmst);
 	
 				A[iifo*2] = fplus*horizons[iifo];
