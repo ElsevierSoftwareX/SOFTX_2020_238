@@ -2,23 +2,34 @@
 # Before running, replace albert.einstein with your ligo.org credentials and
 # run: make env.sh, then source the resulting environment file and run: make
 #
+# example command:
+# time make logs/gstlal.txt -f Makefile.ligosoftware_gcc_sl7_gstreamer-1.0 1> make.out 2> make.err
 
 # albert.einstein for git checkout
-USER=chad.hanna
+USER=duncan.meacher
 
 # Set directories and paths
-SRC_DIR:=src
+SRC_DIR:=${PWD}/src
 TAR_DIR:=tarball
 LOGS_DIR:=logs
 PATCH_DIR:=${PWD}/patches
-GSTLAL_REPO:=git/gstlal
+GSTLAL_REPO:=${PWD}/git/gstlal
+LALSUITE_REPO:=${PWD}/git/lalsuite
 # Give full path to dep/lib directory of ATLAS installation.
 # See Makefile.ATLAS_install
 # ATLAS_PATH:=/path/to/ATLAS/dep/lib
 ATLAS_PATH:=/home/dmeacher/ATLAS_haswell/dep/lib
 INSTALL_DIR:=${LAL_PATH}
 
+# Set to build from git (0 = repo, 1 = git)
+LALSUITE_GIT=1
+GSTLAL_GIT=1
+
 # Set package release versions
+GSTLALINSPIRAL=gstlal-inspiral-0.99.0
+GSTLALCALIBRATION=gstlal-calibration-0.99.1
+GSTLALUGLY=gstlal-ugly-0.99.2
+GSTLAL=gstlal-0.99.6
 DOXYGEN=doxygen-1.8.9.1
 LALSUITEEXTRA=lalsuite-extra-1.1.0
 PYLAL=pylal-0.10.0
@@ -37,7 +48,7 @@ LAL=lal-6.16.1
 GDS=gds-2.17.8
 LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.5.1
 LDASTOOLSAL=ldas-tools-al-2.5.0
-SWIG=swig-2.0.11
+SWIG=swig-3.0.7
 METAIO=metaio-8.4.0
 LIBFRAME=libframe-8.21
 OPROFILE=oprofile-0.9.9
@@ -93,30 +104,54 @@ logs/gstlal.txt : $(LOGS_DIR)/doxygen.txt $(INSTALL_DIR)/lib/libgstlal.so $(INST
 # gstlal-inspiral
 $(INSTALL_DIR)/lib/libgstlalinspiral.so : $(INSTALL_DIR)/bin/gstlal_compute_strain
 	echo gstlal-inspiral 1>&2
-	cd $(GSTLAL_REPO)/gstlal-inspiral && echo | ./00init.sh
-	cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --prefix=$(INSTALL_DIR)
-	cd $(GSTLAL_REPO)/gstlal-inspiral && make -j$(CORES) && make install -j$(CORES)
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal-inspiral && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-inspiral && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
 
 # gstlal-calibration
 $(INSTALL_DIR)/bin/gstlal_compute_strain : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 	echo gstlal-calibration 1>&2
-	cd $(GSTLAL_REPO)/gstlal-calibration && echo | ./00init.sh
-	cd $(GSTLAL_REPO)/gstlal-calibration && ./configure --prefix=$(INSTALL_DIR)
-	cd $(GSTLAL_REPO)/gstlal-calibration && make -j$(CORES) && make install -j$(CORES)
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal-calibration && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal-calibration && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-calibration && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALCALIBRATION) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALCALIBRATION) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
 
 # gstlal-ugly
 $(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so : $(INSTALL_DIR)/lib/libgstlal.so
 	echo gstlal-ugly 1>&2
-	cd $(GSTLAL_REPO)/gstlal-ugly && echo | ./00init.sh
-	cd $(GSTLAL_REPO)/gstlal-ugly && ./configure --prefix=$(INSTALL_DIR)
-	cd $(GSTLAL_REPO)/gstlal-ugly && make -j$(CORES) && make install -j$(CORES)
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal-ugly && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal-ugly && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-ugly && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(GSTLALUGLY).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALUGLY) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALUGLY) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
 
 # gstlal
 $(INSTALL_DIR)/lib/libgstlal.so : $(INSTALL_DIR)/bin/doxygen $(INSTALL_DIR)/share/lalsimulation/SEOBNRv2ROM_SS_Phase_ciall.dat $(GSTLAL_REPO)/gstlal/configure.ac
 	echo gstlal 1>&2
-	cd $(GSTLAL_REPO)/gstlal && echo | ./00init.sh
-	cd $(GSTLAL_REPO)/gstlal && ./configure --prefix=$(INSTALL_DIR)
-	cd $(GSTLAL_REPO)/gstlal && make -j$(CORES) && make install -j$(CORES)
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(GSTLAL).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLAL) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLAL) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
 
 # doxygen
 logs/doxygen.txt : $(LOGS_DIR)/lalsuite-extra.txt $(INSTALL_DIR)/bin/doxygen
@@ -145,93 +180,200 @@ logs/lalsuite.txt : $(LOGS_DIR)/gds.txt $(INSTALL_DIR)/lib/liblal.so $(INSTALL_D
 # pylal
 $(INSTALL_DIR)/etc/pylal-user-env.sh : $(INSTALL_DIR)/bin/dmtdq_seg_insert
 	echo $(PYLAL) 1>&2
-	tar -xzf $(TAR_DIR)/$(PYLAL).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(PYLAL) && python setup.py install --prefix=$(INSTALL_DIR)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/pylal && python setup.py install --prefix=$(INSTALL_DIR) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(PYLAL).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(PYLAL) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+	fi ;
 
 # glue
 $(INSTALL_DIR)/bin/dmtdq_seg_insert : $(INSTALL_DIR)/bin/lalapps_psinject
 	echo $(GLUE) 1>&2
-	tar -xzf $(TAR_DIR)/$(GLUE).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(GLUE) && python setup.py install --prefix=$(INSTALL_DIR)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/glue && python setup.py install --prefix=$(INSTALL_DIR) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(GLUE).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GLUE) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+	fi ;
 
 # lalapps
 ## FIXME --enable-gcc-flags set to no on lalapps configure as work around to avoid warnings stopping install process
 ## Not sure what causes the warnings
 $(INSTALL_DIR)/bin/lalapps_psinject : $(INSTALL_DIR)/lib/liblalstochastic.so
 	echo $(LALAPPS) 1>&2
-	tar -xf $(TAR_DIR)/$(LALAPPS).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALAPPS) && ./configure --enable-gcc-flags=no --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALAPPS) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalapps && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalapps && ./configure --enable-gcc-flags=no --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalapps && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALAPPS).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALAPPS) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALAPPS) && ./configure --enable-gcc-flags=no --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALAPPS) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lalstochastic
 $(INSTALL_DIR)/lib/liblalstochastic.so : $(INSTALL_DIR)/lib/liblalinference.so
 	echo $(LALSTOCHASTIC) 1>&2
-	tar -xf $(TAR_DIR)/$(LALSTOCHASTIC).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALSTOCHASTIC) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALSTOCHASTIC) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalstochastic && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalstochastic && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalstochastic && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalstochastic && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALSTOCHASTIC).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALSTOCHASTIC) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALSTOCHASTIC) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALSTOCHASTIC) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lalinference
 $(INSTALL_DIR)/lib/liblalinference.so : $(INSTALL_DIR)/lib/liblalpulsar.so
 	echo $(LALINFERENCE) 1>&2
-	tar -xf $(TAR_DIR)/$(LALINFERENCE).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALINFERENCE) && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALINFERENCE) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalinference && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalinference && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalinference && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalinference && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALINFERENCE).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALINFERENCE) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALINFERENCE) && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALINFERENCE) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lalpulsar
 $(INSTALL_DIR)/lib/liblalpulsar.so : $(INSTALL_DIR)/lib/liblaldetchar.so
 	echo $(LALPULSAR) 1>&2
-	tar -xf $(TAR_DIR)/$(LALPULSAR).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALPULSAR) && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALPULSAR) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalpulsar && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalpulsar && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalpulsar && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalpulsar && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALPULSAR).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALPULSAR) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALPULSAR) && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALPULSAR) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # laldetchar
 $(INSTALL_DIR)/lib/liblaldetchar.so : $(INSTALL_DIR)/lib/liblalburst.so
 	echo $(LALDETCHAR) 1>&2
-	tar -xf $(TAR_DIR)/$(LALDETCHAR).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALDETCHAR) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALDETCHAR) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/laldetchar && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/laldetchar && ./00boot ; \
+		cd $(LALSUITE_REPO)/laldetchar && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/laldetchar && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALDETCHAR).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALDETCHAR) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALDETCHAR) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALDETCHAR) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lalburst
 $(INSTALL_DIR)/lib/liblalburst.so : $(INSTALL_DIR)/lib/liblalinspiral.so
 	echo $(LALBURST) 1>&2
-	tar -xf $(TAR_DIR)/$(LALBURST).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALBURST) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALBURST) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalburst && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalburst && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalburst && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalburst && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALBURST).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALBURST) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALBURST) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALBURST) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lalinspiral
 $(INSTALL_DIR)/lib/liblalinspiral.so : $(INSTALL_DIR)/lib/liblalsimulation.so
 	echo $(LALINSPIRAL) 1>&2
-	tar -xf $(TAR_DIR)/$(LALINSPIRAL).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALINSPIRAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALINSPIRAL) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalinspiral && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalinspiral && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalinspiral && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalinspiral && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALINSPIRAL).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALINSPIRAL) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALINSPIRAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lalsimulation
 $(INSTALL_DIR)/lib/liblalsimulation.so : $(INSTALL_DIR)/lib/liblalmetaio.so
 	echo $(LALSIMULATION) 1>&2
-	tar -xf $(TAR_DIR)/$(LALSIMULATION).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALSIMULATION) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALSIMULATION) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalsimulation && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalsimulation && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalsimulation && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalsimulation && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALSIMULATION).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lalmetaio
 $(INSTALL_DIR)/lib/liblalmetaio.so : $(INSTALL_DIR)/lib/liblalframe.so
 	echo $(LALMETAIO) 1>&2
-	tar -xf $(TAR_DIR)/$(LALMETAIO).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALMETAIO) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALMETAIO) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalmetaio && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalmetaio && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalmetaio && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalmetaio && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALMETAIO).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALMETAIO) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALMETAIO) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALMETAIO) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lalframe
 $(INSTALL_DIR)/lib/liblalframe.so : $(INSTALL_DIR)/lib/liblal.so
 	echo $(LALFRAME) 1>&2
-	tar -xf $(TAR_DIR)/$(LALFRAME).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALFRAME) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALFRAME) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalframe && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalframe && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalframe && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalframe && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALFRAME).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALFRAME) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALFRAME) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALFRAME) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # lal
 $(INSTALL_DIR)/lib/liblal.so : $(LOGS_DIR)/git.txt $(INSTALL_DIR)/lib/libFrame.so $(INSTALL_DIR)/lib/libmetaio.so $(INSTALL_DIR)/bin/swig $(INSTALL_DIR)/lib/libldastoolsal.so  $(INSTALL_DIR)/lib/libframecpp.so $(INSTALL_DIR)/lib/libwpipe.so
 	echo $(LAL) 1>&2
-	tar -xf $(TAR_DIR)/$(LAL).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LAL) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lal && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lal && ./00boot ; \
+		cd $(LALSUITE_REPO)/lal && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lal && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LAL).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LAL) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LAL) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+	# FIXME don't let it link against gsl cblas
 
 # gds
 logs/gds.txt : $(LOGS_DIR)/ldas-tools-framecpp.txt $(INSTALL_DIR)/lib/libwpipe.so
@@ -298,20 +440,18 @@ $(INSTALL_DIR)/lib/libFrame.so : $(INSTALL_DIR)/lib/oprofile/libopagent.so
 logs/oprofile.txt : $(LOGS_DIR)/gstreamer.txt $(INSTALL_DIR)/lib/oprofile/libopagent.so
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-#$(INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
-$(INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
+$(INSTALL_DIR)/lib/oprofile/libopagent.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstpythonplugin.so
 	echo $(OPROFILE) 1>&2
 	tar -xf $(TAR_DIR)/$(OPROFILE).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(OPROFILE)/ && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(OPROFILE)/ && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer (all)
-#logs/gstreamer.txt : $(LOGS_DIR)/gsl.txt $(INSTALL_DIR)/lib/libgstreamer-1.0.so $(INSTALL_DIR)/lib/libgstapp-1.0.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
-logs/gstreamer.txt : $(LOGS_DIR)/gsl.txt $(INSTALL_DIR)/lib/libgstreamer-1.0.so $(INSTALL_DIR)/lib/libgstapp-1.0.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
+logs/gstreamer.txt : $(LOGS_DIR)/gsl.txt $(INSTALL_DIR)/lib/libgstreamer-1.0.so $(INSTALL_DIR)/lib/libgstapp-1.0.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so $(INSTALL_DIR)/lib/gstreamer-1.0/libgstpythonplugin.so
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 # gstreamer plugin python
-$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
+$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpythonplugin.so : $(INSTALL_DIR)/lib/gstreamer-1.0/libgstsouphttpsrc.so
 	echo $(GSTPYTHON) 1>&2
 	mkdir -p $(INSTALL_DIR)/lib64/python2.7/site-packages/gi/overrides
 	tar -xf $(TAR_DIR)/$(GSTPYTHON).tar.xz -C $(SRC_DIR)
@@ -389,8 +529,20 @@ logs/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 #tarballs
-logs/tar.txt : $(LOGS_DIR)/git.txt $(TAR_DIR)/$(FFTW).tar.gz $(TAR_DIR)/$(ORC).tar.xz $(TAR_DIR)/$(GSL).tar.gz $(TAR_DIR)/$(GSTREAMER).tar.xz $(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz $(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz $(TAR_DIR)/$(GSTPYTHON).tar.xz $(TAR_DIR)/$(OPROFILE).tar.gz $(TAR_DIR)/$(LIBFRAME).tar.gz $(TAR_DIR)/$(METAIO).tar.gz $(TAR_DIR)/$(SWIG).tar.gz $(TAR_DIR)/$(LDASTOOLSAL).tar.gz $(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz $(TAR_DIR)/$(LAL).tar.xz $(TAR_DIR)/$(LALFRAME).tar.xz $(TAR_DIR)/$(LALMETAIO).tar.xz $(TAR_DIR)/$(LALSIMULATION).tar.xz $(TAR_DIR)/$(LALBURST).tar.xz $(TAR_DIR)/$(LALDETCHAR).tar.xz $(TAR_DIR)/$(LALINSPIRAL).tar.xz $(TAR_DIR)/$(LALPULSAR).tar.xz $(TAR_DIR)/$(LALINFERENCE).tar.xz $(TAR_DIR)/$(LALSTOCHASTIC).tar.xz $(TAR_DIR)/$(LALAPPS).tar.xz $(TAR_DIR)/$(GLUE).tar.gz $(TAR_DIR)/$(PYLAL).tar.gz $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz $(TAR_DIR)/$(DOXYGEN).src.tar.gz
+logs/tar.txt : $(LOGS_DIR)/git.txt $(TAR_DIR)/$(FFTW).tar.gz $(TAR_DIR)/$(ORC).tar.xz $(TAR_DIR)/$(GSL).tar.gz $(TAR_DIR)/$(GSTREAMER).tar.xz $(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz $(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz $(TAR_DIR)/$(GSTPYTHON).tar.xz $(TAR_DIR)/$(OPROFILE).tar.gz $(TAR_DIR)/$(LIBFRAME).tar.gz $(TAR_DIR)/$(METAIO).tar.gz $(TAR_DIR)/$(SWIG).tar.gz $(TAR_DIR)/$(LDASTOOLSAL).tar.gz $(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz $(TAR_DIR)/$(LAL).tar.xz $(TAR_DIR)/$(LALFRAME).tar.xz $(TAR_DIR)/$(LALMETAIO).tar.xz $(TAR_DIR)/$(LALSIMULATION).tar.xz $(TAR_DIR)/$(LALBURST).tar.xz $(TAR_DIR)/$(LALDETCHAR).tar.xz $(TAR_DIR)/$(LALINSPIRAL).tar.xz $(TAR_DIR)/$(LALPULSAR).tar.xz $(TAR_DIR)/$(LALINFERENCE).tar.xz $(TAR_DIR)/$(LALSTOCHASTIC).tar.xz $(TAR_DIR)/$(LALAPPS).tar.xz $(TAR_DIR)/$(GLUE).tar.gz $(TAR_DIR)/$(PYLAL).tar.gz $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz $(TAR_DIR)/$(DOXYGEN).src.tar.gz $(TAR_DIR)/$(GSTLAL).tar.gz $(TAR_DIR)/$(GSTLALUGLY).tar.gz $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz
 	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz : $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz
+	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc
+
+$(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz : $(TAR_DIR)/$(GSTLALUGLY).tar.gz
+	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(TAR_DIR)/$(GSTLALUGLY).tar.gz : $(TAR_DIR)/$(GSTLAL).tar.gz
+	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(TAR_DIR)/$(GSTLAL).tar.gz : $(TAR_DIR)/$(DOXYGEN).src.tar.gz
+	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(TAR_DIR)/$(DOXYGEN).src.tar.gz : $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz
 	wget --no-check-certificate ftp://ftp.stack.nl/pub/users/dimitri/$(DOXYGEN).src.tar.gz --directory-prefix=$(TAR_DIR) -nc
@@ -480,13 +632,35 @@ $(TAR_DIR)/$(FFTW).tar.gz : $(GSTLAL_REPO)/gstlal/configure.ac
 	wget --no-check-certificate http://www.fftw.org/$(FFTW).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 # git repos
-logs/git.txt : $(GSTLAL_REPO)/gstlal/configure.ac
+#logs/git.txt : $(LALSUITE_REPO)/configure.ac $(GSTLAL_REPO)/gstlal/configure.ac
+logs/git.txt : $(LALSUITE_REPO)/lal/README $(GSTLAL_REPO)/TODO
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-$(GSTLAL_REPO)/gstlal/configure.ac : $(LOGS_DIR)
-	mkdir -p $(GSTLAL_REPO)
-	ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER)
-	git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO)
+git-pull :
+	if [ -f $(LALSUITE_REPO)/lal/README ] ; then \
+		ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER) ; \
+		cd $(LALSUITE_REPO) && git clean -dxf && git pull --rebase ; \
+	fi ;
+	if [ -f $(GSTLAL_REPO)/TODO ] ; then \
+		cd $(GSTLAL_REPO) && git clean -dxf && git pull --rebase ; \
+	fi ;
+
+$(GSTLAL_REPO)/TODO : $(LALSUITE_REPO)/lal/README
+	if [ -f $@ ] ; then \
+		echo "Gstlal git repo exists" ; \
+	else \
+		mkdir -p $(GSTLAL_REPO) ; \
+		git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO) ; \
+	fi ;
+
+$(LALSUITE_REPO)/lal/README : $(LOGS_DIR)
+	if [ -f $@ ] ; then \
+		echo "Lalsuite git repo exists" ; \
+	else \
+		mkdir -p $(LALSUITE_REPO) ; \
+		ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER) ; \
+		git clone https://versions.ligo.org/git/lalsuite.git $(LALSUITE_REPO) ; \
+	fi ;
 
 $(LOGS_DIR) :
 	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(LOGS_DIR) $(TAR_DIR)
@@ -497,7 +671,7 @@ $(LOGS_DIR) :
 
 clean-all :
 	rm -rvf $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(LOGS_DIR)
-	rm -rvf opt
+	rm -rvf opt git
 	rm -rf *.txt
 
 clean-install :
