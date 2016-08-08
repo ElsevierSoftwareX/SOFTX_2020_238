@@ -148,8 +148,8 @@ def list_srcs(pipeline, *args):
 def smooth_kappas(pipeline, head, var, expected, Nav, N):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
 	head = mkaudiorate(pipeline, head)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.01, default_kappa = expected, array_size = N)
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+	#head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.01, default_kappa = expected, array_size = N)
+	#head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
 	return head
 
 def compute_kappa_bits(pipeline, averageok, raw, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, caps, status_out_raw = 1, status_out_smooth = 1, status_out_overall = 1, starting_rate=16, ending_rate=16):
@@ -217,26 +217,22 @@ def merge_into_complex(pipeline, real, imag):
 	head = pipeparts.mktogglecomplex(pipeline,head)
 	return head
 
-def split_into_real(pipeline, complex_chan, real_caps):
+def split_into_real(pipeline, complex_chan):
 	# split complex channel with complex caps into two channels (real and imag) with real caps
 	elem = pipeparts.mktogglecomplex(pipeline, complex_chan)
 	elem = pipeparts.mkgeneric(pipeline, elem, "deinterleave", keep_positions=True)
-	real = pipeparts.mkaudiorate(pipeline, None)
+	real = pipeparts.mkqueue(pipeline, None)
 	pipeparts.src_deferred_link(elem, "src_0", real.get_static_pad("sink"))
-	real = pipeparts.mkcapsfilter(pipeline, real, real_caps)
 	
-	imag = pipeparts.mkaudiorate(pipeline, None)
+	imag = pipeparts.mkqueue(pipeline, None)
 	pipeparts.src_deferred_link(elem, "src_1", imag.get_static_pad("sink"))
-	imag = pipeparts.mkcapsfilter(pipeline, imag, real_caps)
 	return real, imag
 
 def demodulate(pipeline, head, freq, td, caps):
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq)
-	headtee = pipeparts.mktee(pipeline, head)
-
-	head = pipeparts.mktogglecomplex(pipeline, headtee)
+	head = pipeparts.mktogglecomplex(pipeline, head)
 	head = pipeparts.mkresample(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkgeneric(pipeline, head, "audiocheblimit", cutoff = 0.05)
@@ -275,13 +271,9 @@ def complex_audioamplify(pipeline, chan, WR, WI):
 def complex_division(pipeline, a, b):
 	# Perform complex division of c = a/b and output the complex quotient c
 
-	#b = pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw, format=Z128LE, rate=16384, channels=1, width=128, endianness=1234")
 	b = pipeparts.mktogglecomplex(pipeline, b)
-	#bInv = b
 	bInv = pipeparts.mkgeneric(pipeline, b, "complex_pow", exponent = -1)
-	bInv = pipeparts.mkcapsfilter(pipeline, bInv, "audio/x-raw, format=F64LE, rate=16384, channels=2")
 	bInv = pipeparts.mktogglecomplex(pipeline, bInv)
-	#bInv = pipeparts.mkcapsfilter(pipeline, bInv, "audio/x-raw, format=Z128LE, rate=16384")
 
 	c = mkmultiplier(pipeline, list_srcs(pipeline, a, bInv))
 
