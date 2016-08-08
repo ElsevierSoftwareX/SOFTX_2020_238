@@ -243,7 +243,8 @@ if gw_data_source_info.data_source in ("lvshm", "framexmit"):# what about nds on
 # Seek
 if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter READY state")
-datasource.pipeline_seek_for_gps(pipeline, gw_data_source_info.seg[0], gw_data_source_info.seg[1])
+if gw_data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
+	datasource.pipeline_seek_for_gps(pipeline, gw_data_source_info.seg[0], gw_data_source_info.seg[1])
 
 # run
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
