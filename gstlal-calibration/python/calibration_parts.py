@@ -64,7 +64,7 @@ def mkreblock(pipeline, head):
 	return pipeparts.mkreblock(pipeline, head, block_duration = Gst.SECOND)
 
 def mkupsample(pipeline, head, new_caps):
-	head = pipeparts.mkgeneric(pipeline, head, "lal_constant_upsample")
+	head = pipeparts.mkgeneric(pipeline, head, "lal_constantupsample")
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
 	#head = mkaudiorate(pipeline, head)
 	#head = pipeparts.mktee(pipeline, head)
@@ -86,12 +86,15 @@ def mkmultiplier(pipeline, srcs, sync = True, Complex = False):
 				mkcomplexqueue(pipeline, src).link(elem)
 	return elem
 
-def mkinterleave(pipeline, srcs):
-	elem = pipeparts.mkgeneric(pipeline, None, "interleave")
-	if srcs is not None:
-		for src in srcs:
-			pipeparts.mkqueue(pipeline, src).link(elem)
-	elem = pipeparts.mkaudiorate(pipeline, elem)
+def mkinterleave(pipeline, src1, src2):
+	chan1 = pipeparts.mkmatrixmixer(pipeline, src1, matrix=[[1,0]])
+	chan2 = pipeparts.mkmatrixmixer(pipeline, src2, matrix=[[0,1]])
+	elem = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, chan1), mkqueue(pipeline, chan2))) 
+	#elem = pipeparts.mkgeneric(pipeline, None, "interleave")
+	#if srcs is not None:
+	#	for src in srcs:
+	#		pipeparts.mkqueue(pipeline, src).link(elem)
+	#elem = pipeparts.mkaudiorate(pipeline, elem)
 	return elem
 
 def mkadder(pipeline, srcs, sync = True, Complex = False):
@@ -210,8 +213,7 @@ def compute_kappa_bits_only_real(pipeline, averageok, raw, smooth, expected, ok_
 
 def merge_into_complex(pipeline, real, imag):
 	# Merge real and imag into one complex channel with complex caps
-	head = mkinterleave(pipeline, list_srcs(pipeline, real, imag))
-	head = mkaudiorate(pipeline, head) # This audiorate is necessary! Probaly once lal_interleave gets fixed it won't be
+	head = mkinterleave(pipeline, real, imag)
 	head = pipeparts.mktogglecomplex(pipeline,head)
 	return head
 
@@ -228,13 +230,34 @@ def split_into_real(pipeline, complex_chan, real_caps):
 	imag = pipeparts.mkcapsfilter(pipeline, imag, real_caps)
 	return real, imag
 
-def demodulate(pipeline, head, sr, freq, integration_samples, td):
+def demodulate(pipeline, head, freq, td, caps):
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq)
-	#head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=Z128LE")
+	headtee = pipeparts.mktee(pipeline, head)
 
-	#headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
+	head = pipeparts.mktogglecomplex(pipeline, headtee)
+	head = pipeparts.mkresample(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, head, caps)
+	head = pipeparts.mkgeneric(pipeline, head, "audiocheblimit", cutoff = 0.05)
+	head = pipeparts.mkmatrixmixer(pipeline, head, matrix=[[1.0,0.0],[0.0,-1.0]])
+	head = pipeparts.mktogglecomplex(pipeline, head)
+
+	""""
+	headR, headI = split_into_real(pipeline, headtee)
+	headR = pipeparts.mkresample(pipeline, headR)
+	headR = pipeparts.mkcapsfilter(pipeline, headR, "audio/x-raw, rate=512")
+	headR = pipeparts.mkaudioamplify(pipeline, headR, amplification = 1.0/16384.0);
+	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
+	headI = pipeparts.mkresample(pipeline, headI)
+	headI = pipeparts.mkcapsfilter(pipeline, headI, "audio/x-raw, rate=512")
+	headI = pipeparts.mkaudioamplify(pipeline, headI, amplification = -1.0/16384.0);
+	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
+	#pipeparts.mknxydumpsink(pipeline, headR, "real_new.txt")
+	#pipeparts.mknxydumpsink(pipeline, headI, "imag_new.txt")
+	head2 = merge_into_complex(pipeline, headR, headI)
+	pipeparts.mknxydumpsink(pipeline, head2, "old_method_demod.dump")
+	"""
 
 	return head
 
@@ -293,7 +316,7 @@ def compute_afctrl_from_filters_file(pipeline, derrfpu, excfpu, pcalfdarm, derrf
 	# afctrlfac = C0fpcal/(1+G0fpcal) * (1+G0fctrl)/C0fctrl
 	#
 
-	afctrl = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, complex_division(pipeline, derrfpu, excfpu), -1.0*afctrlR, -1.0*afctrlI), complex_division(pipeline, pcalfdarm, derrfdarm, complex_caps)))
+	afctrl = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, complex_division(pipeline, derrfpu, excfpu), -1.0*afctrlfacR, -1.0*afctrlfacI), complex_division(pipeline, pcalfdarm, derrfdarm)))
 
 
 	return afctrl
@@ -375,7 +398,7 @@ def compute_S(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpu, EP9):
 
 	Sinv = mkmultiplier(pipeline, list_srcs(pipeline, EP6, mkadder(pipeline, list_srcs(pipeline, complex_division(pipeline, pcalfpcal2, derrfpcal2), mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, EP7, -1.0, 0.0), mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, ktst, EP8)), mkmultiplier(pipeline, list_srcs(pipeline, kpu, EP9))))))))))
 	Sinv = pipeparts.mktogglecomplex(pipeline, Sinv)
-	S = pipeparts.mkgeneric(pipeline, Sinv, "complex_pow", exponent = -1)
+	S = pipeparts.mkgeneric(pipeline, Sinv, "complex_pow", exponent = -1.0)
 	S = pipeparts.mktogglecomplex(pipeline, S) 
 
 	return S
@@ -387,14 +410,26 @@ def compute_kappac(pipeline, SR, SI):
 	#
 
 	SR = pipeparts.mktee(pipeline, SR)
-	S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)))
-	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, SR, exponent=-1.0)))
+	SI = pipeparts.mktee(pipeline, SI)
+	# FIXME: The pow element behaving very strangely... I think there might be an issue where it is modifying buffers or parts of memory space that it shouldn't be touching. This is why I've avoided using the pow element via some very strange tricsk below.
+	S2 = mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, SR, SR)), mkmultiplier(pipeline, list_srcs(pipeline, SI, SI))))
+	#S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)))
+	SRinv = pipeparts.mkmatrixmixer(pipeline, SR, matrix=[[1.0, 0.0]])
+	SRinv = pipeparts.mkgeneric(pipeline, SRinv, "complex_pow", exponent = -1.0)
+	SRinv = pipeparts.mkmatrixmixer(pipeline, SRinv, matrix=[[1.0],[0.0]])
+	#kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SR), exponent=-1.0)))
+	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, SRinv))
 	return kc
 
 def compute_fcc(pipeline, SR, SI, fpcal2):
 	#
 	# f_cc = - (Re[S]/Im[S]) * fpcal2
 	#
-	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), pipeparts.mkpow(pipeline, SI, exponent=-1.0)))
-	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal2)
+
+	SIinv = pipeparts.mkmatrixmixer(pipeline, SI, matrix = [[1.0, 0.0]])
+	SIinv = pipeparts.mkgeneric(pipeline, SIinv, "complex_pow", exponent = -1.0)
+	SIinv = pipeparts.mkmatrixmixer(pipeline, SIinv, matrix=[[1.0],[0.0]])
+
+	#fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SI), exponent=-1.0)))
+	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), SIinv))
 	return fcc
