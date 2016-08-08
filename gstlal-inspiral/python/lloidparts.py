@@ -65,7 +65,7 @@
 # =============================================================================
 #
 
-from copy import deepcopy
+
 import math
 import numpy
 import os
@@ -254,7 +254,7 @@ class Handler(simplehandler.Handler):
 		dataclass.seglistdicts = self.seglistdicts
 
 		# create a deep copy to keep track of cumulative segments
-		self.cumulative_seglistdicts = deepcopy(self.seglistdicts)
+		self.cumulative_seglistdicts = self.seglistdicts.copy()
 
 		# state of segments being collected
 		self.current_segment_start = {}
