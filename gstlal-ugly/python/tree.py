@@ -14,7 +14,7 @@ def mass_sym(boundaries):
 
 class HyperCube(object):
 
-	def __init__(self, boundaries, symmetry_func = mass_sym, metric = None):
+	def __init__(self, boundaries, mismatch, symmetry_func = mass_sym, metric = None):
 		"""
 		Define a hypercube with boundaries given by boundaries, e.g.,
 
@@ -38,6 +38,7 @@ class HyperCube(object):
 		self.metric_tensor = self.metric.metric_tensor(self.center, self.deltas)
 		self.size = self._size()
 		self.symmetry_func = symmetry_func
+		self.__mismatch = mismatch
 
 	def N(self):
 		return len(self.boundaries)
@@ -66,7 +67,7 @@ class HyperCube(object):
 		rightbound = self.boundaries.copy()
 		leftbound[dim,1] = self.center[dim]
 		rightbound[dim,0] = self.center[dim]
-		return HyperCube(leftbound, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.symmetry_func, metric = self.metric)
+		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
 	def tile(self, mismatch, verbose = True):
 		tiles = []
@@ -146,9 +147,11 @@ class HyperCube(object):
 
 	def __contains__(self, coords):
 		size = self.size
+		tmps = self.num_tmps_per_side(self.__mismatch)
+		fraction = (tmps + 0.5) / tmps
 		for i, c in enumerate(coords):
 			# FIXME do something more sane to handle boundaries
-			if not (c >= 1. * self.boundaries[i,0] and c < 1. * self.boundaries[i,1]):
+			if not (c >= 1. * self.boundaries[i,0] and c < (fraction[i] * self.deltas[i] + self.boundaries[i,0])):
 				return False
 		return True
 
