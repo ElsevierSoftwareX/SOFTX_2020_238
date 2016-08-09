@@ -1,0 +1,66 @@
+M1bi=2.5
+M1bf=12.5
+M2bi=2.6
+M2bf=12.6
+M1i=3
+M1f=10
+M2i=3
+M2f=10
+FLOW = 30
+
+all : banksim_match_vs_injm1.png
+
+treebank.xml.gz:
+		../treebank --verbose --approximant IMRPhenomD  --max-mass1 $(M1bf) --max-mass2 $(M2bf)  --min-mass2 $(M2bi) --min-mass1 $(M1bi) --min-match 0.97 --flow $(FLOW) --psd-file psd.xml.gz
+
+H1-SBANK_SMALL-0-999999999.xml.gz:
+		# This produces 1269 templates
+		lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow 30 --reference-psd test.xml.gz --user-tag SMALL --instrument H1 --spin1-min 0 --spin1-max 0 --checkpoint 50 --iterative-match-df-max 2.0 --coarse-match-df 2.0
+
+H1-TMPLTBANK_H1_BNS_NSBH_BBH-941365351-2048.xml.gz:
+		# I've written here PhenomB, but I don't think lalapps_tmpltbank actually uses the approximant for anything.
+		# I'm using an aLIGO HPZD noise model here
+		# Is the PN order correct?
+		# This produces 57465 templates!
+		lalapps_tmpltbank --grid-spacing Hexagonal --space Tau0Tau3 \
+		--order twoPN --minimal-match 0.97 --spectrum-type aLIGOZDHiP \
+		--minimum-mass 1.0 --maximum-mass 99.0 --max-total-mass 100.0 \
+		--approximant IMRPhenomB --low-frequency-cutoff $(FLOW) \
+		--dynamic-range-exponent 69.0 --disable-high-pass --user-tag BNS_NSBH_BBH \
+		--gps-end-time 941367399 --gps-start-time 941365351 \
+		--min-high-freq-cutoff LRD --segment-length 65536 --num-freq-cutoffs 1 \
+		--sample-rate 16384 --high-frequency-cutoff 8192.0 \
+		--max-high-freq-cutoff LRD --write-compress --ifo-tag H1 --verbose
+
+
+H1-TMPLTBANK_H1_SMALL-941365351-2048.xml.gz:
+		# This produces 3248 templates!
+		lalapps_tmpltbank --grid-spacing Hexagonal --space Tau0Tau3 \
+		--order twoPN --minimal-match 0.97 --spectrum-type aLIGOZDHiP \
+		--minimum-mass $(M1bi) --maximum-mass $(M1bf) \
+		--approximant IMRPhenomB --low-frequency-cutoff $(FLOW) \
+		--dynamic-range-exponent 69.0 --disable-high-pass --user-tag SMALL \
+		--gps-end-time 941367399 --gps-start-time 941365351 \
+		--min-high-freq-cutoff LRD --segment-length 65536 --num-freq-cutoffs 1 \
+		--sample-rate 16384 --high-frequency-cutoff 8192.0 \
+		--max-high-freq-cutoff LRD --write-compress --ifo-tag H1 --verbose
+		# For some crazy reason, if I add --max-total-mass 100, I get 2x more templates!?
+
+HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml:
+		lalapps_inspinj --max-mass1 $(M1f) --max-mass2 $(M2f)  --min-mass2 $(M2i) --min-mass1 $(M1i) --m-distr componentMass --max-spin1 0.0 --max-spin2 0.0 --time-step 1 --taper-injection startend --gps-end-time 1000010000 --min-distance 10000 --max-distance 1000000 --waveform IMRPhenomD --polarization uniform --gps-start-time 1000000000 --l-distr random --d-distr volume --i-distr uniform --max-inc 179.99 --min-spin2 0.0 --min-spin1 0.0 --enable-spin  --f-lower $(FLOW) --seed 1234 --output HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+
+
+treebank.h5: treebank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+			 lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag treebank
+
+sbank.h5:  H1-SBANK_SMALL-0-999999999.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+		   lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag sbank
+
+tmpltbank.h5: H1-TMPLTBANK_H1_SMALL-941365351-2048.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+			  lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag tmpltbank
+
+%_match_vs_injm1.png: %.h5
+					  lalapps_cbc_sbank_plot_sim $<
+
+clean :
+	  rm treebank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml banksim.h5 *.png
