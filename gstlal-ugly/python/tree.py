@@ -82,6 +82,26 @@ class HyperCube(object):
 			raise
 			return tiles, popcount
 
+		if False:
+			# To Stephen with love
+			# From Chad
+			tiles = [self.center]
+			N = self.N()
+			target = numpy.ceil(self.num_templates(mismatch))
+			dl = self.dl(mismatch)
+			cnt = 0
+			rand_coords = numpy.random.rand(1e4, len(self.deltas))
+			for randcoord in rand_coords:
+				randcoord = (randcoord - 0.5) * self.deltas + self.center
+				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in tiles]
+				maxdist = max(distances)
+				mindist = min(distances)
+				assert randcoord in self
+				if mindist > dl * N**.5:
+					tiles.append(randcoord)
+				if len(tiles) > target:
+					break
+
 		# The bounding box has 2*N points to define it each point is
 		# an N length vector.  Figure out the x' coordinates of the
 		# bounding box in and divide by dl to get number of templates
