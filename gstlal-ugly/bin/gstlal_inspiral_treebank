@@ -8,10 +8,10 @@ from glue.ligolw import utils
 from glue.ligolw import ilwd
 from glue.ligolw.utils import process as ligolw_process
 from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
-import metric as metric_module
-import tree
+from gstlal import metric as metric_module
+from gstlal import tree
 # FIXME dont do this
-from tree import *
+from gstlal.tree import *
 import os,sys,argparse
 
 # Read command line options
@@ -142,7 +142,7 @@ g_ij = metric_module.Metric(
 
 # Initialize the tree root and then split with a given splitsize
 #bank = Node(HyperCube(numpy.array(x), symmetries = numpy.array([[0, 1, 0, 0, 0, 0, 0, 0]]), metric = g_ij))
-bank = Node(HyperCube(numpy.array(coord_limits), symmetry_func = tree.mass_sym, metric = g_ij))
+bank = Node(HyperCube(numpy.array(coord_limits), args.min_match, symmetry_func = tree.mass_sym, metric = g_ij))
 
 if args.verbose:
 	print "The bank size according to the center metric: ", bank.cube.size
@@ -150,7 +150,7 @@ if args.verbose:
 
 # Split according to how many templates you want to place in the hypercube
 mismatch = 1.0 - args.min_match
-bank.split(50, mismatch = mismatch, verbose = args.verbose)
+bank.split(4**len(coord_limits), mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
