@@ -494,7 +494,7 @@ class OneTimeSignalHandler(object):
 			try:
 				#FIXME how do I choose a timestamp?
 				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
-				if not self.pipeline.send_event(Gst.event_new_eos()):
+				if not self.pipeline.send_event(Gst.Event.new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
 			except Exception as e:
 				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
