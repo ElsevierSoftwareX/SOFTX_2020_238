@@ -8,4 +8,5 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	gviz_api.py \
-	metric.py
+	metric.py \
+	tree.py
