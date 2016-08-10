@@ -19,68 +19,68 @@ def parse_command_line():
 
 	parser = argparse.ArgumentParser(description="Template generator via a binary tree decomposition.")
 	parser.add_argument("-v", "--verbose", action="store_true", default=False,\
-				    help="Be verbose.")
+					help="Be verbose.")
 	parser.add_argument("-d", "--debug", action="store_true", default=False,\
-				    help="Extra explicit information for debugging and sanity checks.")
+					help="Extra explicit information for debugging and sanity checks.")
 	parser.add_argument("-o", "--output-name", action="store", default="treebank.xml.gz",\
-				    help="Specify output bank filename.")
+					help="Specify output bank filename.")
 
 	# mass limits
 	parser.add_argument("--min-mass1", action="store", type=float,\
-				    default=3.0, help="Minimum mass1 to generate bank.")
+					default=3.0, help="Minimum mass1 to generate bank.")
 	parser.add_argument("--max-mass1", action="store", type=float,\
-				    default=10.0, help="Maximum mass1 to generate bank.")
+					default=10.0, help="Maximum mass1 to generate bank.")
 	parser.add_argument("--min-mass2", action="store", type=float,\
-				    default=3.0, help="Minimum mass2 to generate bank.")
+					default=3.0, help="Minimum mass2 to generate bank.")
 	parser.add_argument("--max-mass2", action="store", type=float,\
-				    default=10.0, help="Maximum mass2 to generate bank.")
+					default=10.0, help="Maximum mass2 to generate bank.")
 
 	# aligned spin limits
 	parser.add_argument("--min-spin1z", action="store", type=float,\
-			default=0, help="Minimum mass1 to generate bank.")
+					default=0, help="Minimum mass1 to generate bank.")
 	parser.add_argument("--max-spin1z", action="store", type=float,\
-				    default=0, help="Maximum mass1 to generate bank.")
+					default=0, help="Maximum mass1 to generate bank.")
 	parser.add_argument("--min-spin2z", action="store", type=float,\
-				    default=0, help="Minimum mass2 to generate bank.")
+					default=0, help="Minimum mass2 to generate bank.")
 	parser.add_argument("--max-spin2z", action="store", type=float,\
-				    default=0, help="Maximum mass2 to generate bank.")
+					default=0, help="Maximum mass2 to generate bank.")
 
 	# in-plane spin limits
 	parser.add_argument("--min-spin1x", action="store", type=float,\
-				    default=0, help="Minimum mass1 to generate bank.")
+					default=0, help="Minimum mass1 to generate bank.")
 	parser.add_argument("--max-spin1x", action="store", type=float,\
-				    default=0, help="Maximum mass1 to generate bank.")
+					default=0, help="Maximum mass1 to generate bank.")
 	parser.add_argument("--min-spin2x", action="store", type=float,\
-				    default=0, help="Minimum mass2 to generate bank.")
+					default=0, help="Minimum mass2 to generate bank.")
 	parser.add_argument("--max-spin2x", action="store", type=float,\
-				    default=0, help="Maximum mass2 to generate bank.")
+					default=0, help="Maximum mass2 to generate bank.")
 	parser.add_argument("--min-spin1y", action="store", type=float,\
-				    default=0, help="Minimum mass1 to generate bank.")
+					default=0, help="Minimum mass1 to generate bank.")
 	parser.add_argument("--max-spin1y", action="store", type=float,\
-				    default=0, help="Maximum mass1 to generate bank.")
+					default=0, help="Maximum mass1 to generate bank.")
 	parser.add_argument("--min-spin2y", action="store", type=float,\
-				    default=0, help="Minimum mass2 to generate bank.")
+					default=0, help="Minimum mass2 to generate bank.")
 	parser.add_argument("--max-spin2y", action="store", type=float,\
-				    default=0, help="Maximum mass2 to generate bank.")
+					default=0, help="Maximum mass2 to generate bank.")
 
 	parser.add_argument("--min-inc", action="store", type=float,\
-				    default=0, help="Minimum inclination to generate bank. Relevant only for precessing / sub-dominant mode banks.")
+					default=0, help="Minimum inclination to generate bank. Relevant only for precessing / sub-dominant mode banks.")
 	parser.add_argument("--max-inc", action="store", type=float,\
-				    default=numpy.pi/2, help="Maximum inclination to generate bank. Relevant only for precessing / sub-dominant mode banks.")
+					default=numpy.pi/2, help="Maximum inclination to generate bank. Relevant only for precessing / sub-dominant mode banks.")
 
 	# meta-params
 	parser.add_argument("--min-match", action="store", type=float,\
-				    default=0.95, help="Minimum match to generate bank.")
+					default=0.95, help="Minimum match to generate bank.")
 	parser.add_argument("--flow", action="store", type=float,\
-				    default=30.0, help="Low frequency cutoff for overlap calculations.")
+					default=30.0, help="Low frequency cutoff for overlap calculations.")
 	parser.add_argument("--fhigh", action="store", type=float,\
-				    default=1024.0, help="High frequency cutoff for overlap calculations.")
+					default=1024.0, help="High frequency cutoff for overlap calculations.")
 	parser.add_argument("--approximant", action="store", type=str,\
-				    default="IMRPhenomD", help="Specify approximant.")
+					default="IMRPhenomD", help="Specify approximant.")
 	parser.add_argument("--psd-file", action="store",\
-				    default=None, help="Input PSD file.")
+					default=None, help="Input PSD file.")
 	parser.add_argument("--noise-model", action="store",\
-				    default=None, help="Specify standard noise model.")
+					default=None, help="Specify standard noise model.")
 
 	args = parser.parse_args()
 
@@ -120,11 +120,11 @@ for i, v in enumerate(("mass1", "mass2", "spin1x", "spin1y", "spin1z", "spin2x",
 # metric calculation and the coordinates needed to call into LALSimulation, the
 # latter of which includes parameters that may have fixed values.
 #   FIXME: Assumes fixed value is zero, but user could specify identical but
-#     non-zero min/max values.
+#	 non-zero min/max values.
 #   FIXME: Supports only precessing template banks. Add
-#     support for sub-dominant mode banks.
+#	 support for sub-dominant mode banks.
 #   FIXME: Define a number of standard coordinate functions. This one here is
-#     essentially just the identity mapping.
+#	 essentially just the identity mapping.
 def coord_func(coords, positions = positions):
 	out = numpy.zeros(8)
 	for i, pi in enumerate(positions):
@@ -146,7 +146,9 @@ bank = Node(HyperCube(numpy.array(coord_limits), args.min_match, symmetry_func =
 
 if args.verbose:
 	print "The bank size according to the center metric: ", bank.cube.size
-	print "The bank boundaries are                     : ", bank.cube.boundaries
+	print "The bank boundaries are: "
+		for row in bank.cube.boundaries:
+				print "\t", row
 
 # Split according to how many templates you want to place in the hypercube
 mismatch = 1.0 - args.min_match

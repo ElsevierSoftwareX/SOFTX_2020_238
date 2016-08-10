@@ -179,9 +179,13 @@ class HyperCube(object):
 
 
 class Node(object):
+	"""
+	A Node implements a node in a binary tree decomposition of the
+	parameter space. A node is a container for one hypercube. It can
+	have sub-nodes that split the hypercube.
+	"""
+
 	def __init__(self, cube, parent = None):
-		# A node is a container for one hypercube. It can have
-		# sub-nodes that split the hypercube.
 		self.cube = cube
 		self.right = None
 		self.left = None
@@ -198,14 +202,14 @@ class Node(object):
 		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates) or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
 			bifurcation += 1
 			left, right = self.cube.split(splitdim)
-			self.left = Node(left, self) 
+			self.left = Node(left, self)
 			self.right = Node(right, self)
 			if verbose:
 				print "Splitting parent with boundaries:"
-                                for row in self.cube.boundaries:
-                                        print "\t", row
+				for row in self.cube.boundaries:
+					print "\t", row
 				print "\t\t(est. templates / split threshold: %04d / %04d)" % (numtmps, split_num_templates)
-                                print "\tLeft center: ", self.left.cube.center
+				print "\tLeft center: ", self.left.cube.center
 				print "\tRight center:", self.right.cube.center
 
 			self.left.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
@@ -220,7 +224,7 @@ class Node(object):
 
 		# Always split on the largest size
 		splitdim = numpy.argmax(size)
-		derr = 2.0 
+		derr = 2.0
 
 		if self.parent is not None:
 			d1 = metric_module.distance(self.cube.metric_tensor, self.cube.center, self.parent.cube.center)
@@ -243,6 +247,10 @@ class Node(object):
 				print "%30s: %0.2f" % ("Not Splitting", derr)
 
 	def walk(self, out = []):
+		"""
+		Return a list of all leaf nodes that are ancestors of the given node
+		and whose bounding box is not fully contained in the symmetryic region.
+		"""
 		if self.right:
 			self.right.walk()
 		if self.left:
