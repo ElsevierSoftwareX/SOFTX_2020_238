@@ -490,7 +490,7 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
@@ -542,7 +542,7 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_cumulative_segments_xmldoc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_cumulative_segments_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
@@ -556,7 +556,7 @@ class Handler(simplehandler.Handler):
 	def web_get_psd_xml(self):
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 		return outstr

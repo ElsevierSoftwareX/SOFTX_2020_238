@@ -775,7 +775,7 @@ class Data(object):
 	def web_get_likelihood_file(self):
 		with self.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.__get_likelihood_file(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.__get_likelihood_file(), output)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
@@ -794,7 +794,7 @@ class Data(object):
 	def web_get_zero_lag_ranking_stats_file(self):
 		with self.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.__get_zero_lag_ranking_stats_file(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.__get_zero_lag_ranking_stats_file(), output)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
@@ -886,13 +886,13 @@ class Data(object):
 					)
 					psddict[instrument].data.data = data
 				fobj = StringIO.StringIO()
-				reference_psd.write_psd_fileobj(fobj, psddict, gz = True, trap_signals = None)
+				reference_psd.write_psd_fileobj(fobj, psddict, gz = True)
 				common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
 
 				if self.verbose:
 					print >>sys.stderr, "generating ranking_data.xml.gz ..."
 				fobj = StringIO.StringIO()
-				ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True, trap_signals = None)
+				ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True)
 				common_messages.append(("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue()))
 				del fobj
 
@@ -931,7 +931,7 @@ class Data(object):
 				except ValueError:
 					# already has it
 					pass
-			ligolw_utils.write_fileobj(xmldoc, message, gz = False, trap_signals = None)
+			ligolw_utils.write_fileobj(xmldoc, message, gz = False)
 			xmldoc.unlink()
 			# FIXME: make this optional from command line?
 			if True:
