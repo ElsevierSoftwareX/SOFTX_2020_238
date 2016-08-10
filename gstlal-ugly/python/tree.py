@@ -103,38 +103,40 @@ class HyperCube(object):
 				if len(tiles) > target:
 					break
 
-		# The bounding box has 2*N points to define it each point is
-		# an N length vector.  Figure out the x' coordinates of the
-		# bounding box in and divide by dl to get number of templates
-		bounding_box = numpy.zeros((2*self.N(), self.N()))
-		for i, (s,e) in enumerate(self.boundaries):
-			Vs = numpy.zeros(self.N())
-			Ve = numpy.zeros(self.N())
-			Vs[i] = s - self.center[i]
-			Ve[i] = e - self.center[i]
-			Vsp = numpy.dot(M, Vs) / self.dl(mismatch)
-			Vep = numpy.dot(M, Ve) / self.dl(mismatch)
-			Vsp[Vsp<0] = numpy.floor(Vsp[Vsp<0])
-			Vsp[Vsp>0] = numpy.ceil(Vsp[Vsp>0])
-			Vep[Vep<0] = numpy.floor(Vep[Vep<0]) 
-			Vep[Vep>0] = numpy.ceil(Vep[Vep>0])
-			bounding_box[2*i,:] = Vsp
-			bounding_box[2*i+1,:] = Vep
+		if True:
+			# The bounding box has 2*N points to define it each point is
+			# an N length vector.  Figure out the x' coordinates of the
+			# bounding box in and divide by dl to get number of templates
+			bounding_box = numpy.zeros((2*self.N(), self.N()))
+			for i, (s,e) in enumerate(self.boundaries):
+				Vs = numpy.zeros(self.N())
+				Ve = numpy.zeros(self.N())
+				Vs[i] = s - self.center[i]
+				Ve[i] = e - self.center[i]
+				Vsp = numpy.dot(M, Vs) / self.dl(mismatch)
+				Vep = numpy.dot(M, Ve) / self.dl(mismatch)
+				Vsp[Vsp<0] = numpy.floor(Vsp[Vsp<0])
+				Vsp[Vsp>0] = numpy.ceil(Vsp[Vsp>0])
+				Vep[Vep<0] = numpy.floor(Vep[Vep<0]) 
+				Vep[Vep>0] = numpy.ceil(Vep[Vep>0])
+				bounding_box[2*i,:] = Vsp
+				bounding_box[2*i+1,:] = Vep
 
-		grid = []
-		for (s,e) in zip(numpy.min(bounding_box,0), numpy.max(bounding_box,0)):
-			assert s < e
-			numtmps = 2**numpy.ceil(numpy.log2((numpy.ceil((e-s)) + 1) // 2))
-			grid.append(numpy.arange(-numtmps, numtmps) * self.dl(mismatch))
-			#grid.append(numpy.array((-numtmps, numtmps)))
-		for coords in itertools.product(*grid):
-			# check this math
-			norm_coords = numpy.dot(Minv, coords)
-			primed_coords = norm_coords + self.center
+			grid = []
+			for cnt, (s,e) in enumerate(zip(numpy.min(bounding_box,0), numpy.max(bounding_box,0))):
+				assert s < e
+				numtmps = 2**numpy.ceil(numpy.log2((numpy.ceil((e-s)) + 1) // 2))
+				# FIXME hexagonal lattice in 2D
+				grid.append((numpy.arange(-numtmps, numtmps) + 0.5 * cnt % 2)* self.dl(mismatch))
+				#grid.append(numpy.array((-numtmps, numtmps)))
+			for coords in itertools.product(*grid):
+				# check this math
+				norm_coords = numpy.dot(Minv, coords)
+				primed_coords = norm_coords + self.center
 
-			# FIXME take care of ratty edges
-			if primed_coords in self:
-				tiles.append(primed_coords)
+				# FIXME take care of ratty edges
+				if primed_coords in self:
+					tiles.append(primed_coords)
 
 		# Gaurantee at least one
 		if len(tiles) == 0:
@@ -161,6 +163,8 @@ class HyperCube(object):
 	def dl(self, mismatch):
 		# From Owen 1995 (2.15)
 		return 2 * mismatch**.5 / self.N()**.5
+		# FIXME the factor of 1.27 is just for a 2D hex lattice
+		return 2 * mismatch**.5 / self.N()**.5 * 1.27
 
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
