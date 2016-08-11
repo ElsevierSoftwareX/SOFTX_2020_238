@@ -189,9 +189,6 @@ if __name__ == "__main__":
 		publisher = Publisher()
 		publisher.add_service(
 			sname = "My Test Service",
-			stype = DEFAULT_PROTO,
-			sdomain = DEFAULT_DOMAIN,
-			host = "",	# will figure it out itself
 			port = 3456,
 			properties = {
 				"version": "0.10",
