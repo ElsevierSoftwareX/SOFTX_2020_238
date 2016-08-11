@@ -30,7 +30,7 @@ import avahi
 from gi.repository import Gio
 
 
-__all__ = ["DEFAULT_PROTO", "DEFAULT_DOMAIN", "Publisher", "Listener", "ServiceBrowser"]
+__all__ = ["DEFAULT_SERVICE_TYPE", "DEFAULT_DOMAIN", "Publisher", "Listener", "ServiceBrowser"]
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -47,7 +47,7 @@ __date__ = "FIXME"
 #
 
 
-DEFAULT_PROTO = "_http._tcp"
+DEFAULT_SERVICE_TYPE = "_http._tcp"
 DEFAULT_DOMAIN = "local"
 
 
@@ -67,7 +67,7 @@ class Publisher(object):
 		group_path = server.EntryGroupNew("()")
 		self.group = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, group_path, avahi.DBUS_INTERFACE_ENTRY_GROUP, None)
 
-	def add_service(self, sname, port, stype = DEFAULT_PROTO, sdomain = DEFAULT_DOMAIN, host = "", properties = None):
+	def add_service(self, sname, port, stype = DEFAULT_SERVICE_TYPE, sdomain = DEFAULT_DOMAIN, host = "", properties = None):
 		if properties is not None:
 			assert not any("=" in key for key in properties)
 		self.group.AddService(
@@ -115,7 +115,7 @@ class Listener(object):
 
 
 class ServiceBrowser(object):
-	def __init__(self, listener, stype = DEFAULT_PROTO, sdomain = DEFAULT_DOMAIN, ignore_local = False):
+	def __init__(self, listener, stype = DEFAULT_SERVICE_TYPE, sdomain = DEFAULT_DOMAIN, ignore_local = False):
 		self.listener = listener
 		self.ignore_local = ignore_local
 		bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
