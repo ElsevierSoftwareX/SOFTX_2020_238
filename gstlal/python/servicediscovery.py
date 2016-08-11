@@ -110,7 +110,7 @@ class Listener(object):
 	def all_for_now(self):
 		pass
 
-	def failure(self, exception):
+	def failure(self, *args):
 		pass
 
 
@@ -131,6 +131,7 @@ class ServiceBrowser(object):
 		bus.signal_subscribe(None, None, "ItemNew", browser_path, None, Gio.DBusSignalFlags.NONE, self.itemnew_handler, None)
 		bus.signal_subscribe(None, None, "ItemRemove", browser_path, None, Gio.DBusSignalFlags.NONE, self.itemremove_handler, None)
 		bus.signal_subscribe(None, None, "AllForNow", browser_path, None, Gio.DBusSignalFlags.NONE, self.allfornow_handler, None)
+		bus.signal_subscribe(None, None, "Failure", browser_path, None, Gio.DBusSignalFlags.NONE, self.failure_handler, None)
 
 	def itemnew_handler(self, bus, sender_name, object_path, interface_name, signal_name, (interface, protocol, sname, stype, sdomain, flags), data):
 		if self.ignore_local and (flags & avahi.LOOKUP_RESULT_LOCAL):
@@ -156,6 +157,9 @@ class ServiceBrowser(object):
 
 	def allfornow_handler(self, bus, sender_name, object_path, interface_name, signal_name, parameters, data):
 		self.listener.all_for_now()
+
+	def failure_handler(self, bus, sender_name, object_path, interface_name, signal_name, parameters, data):
+		self.listener.failure(*parameters)
 
 
 #
@@ -215,6 +219,8 @@ if __name__ == "__main__":
 				self.print_msg("added", sname, stype, sdomain, host, port, properties)
 			def remove_service(self, sname, stype, sdomain):
 				self.print_msg("removed", sname, stype, sdomain, None, None, None)
+			def failure(self, *args):
+				print >>sys.stderr, "failure", args
 		mainloop = GLib.MainLoop()
 		browser = ServiceBrowser(MyListener())
 		print "Browsing for services.  Press CTRL-C to quit.\n"
