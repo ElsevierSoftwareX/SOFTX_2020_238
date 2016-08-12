@@ -6,7 +6,6 @@ from gstlal import reference_psd
 from glue.ligolw import utils as ligolw_utils
 import itertools
 import scipy
-from pylal import series as lalseries
 from lal import LIGOTimeGPS
 import sys
 
@@ -90,7 +89,7 @@ class Metric(object):
 		self.flow = flow
 		self.fhigh = fhigh
 		self.working_length = int(round(self.duration * 2 * self.fhigh))
-		self.psd = reference_psd.interpolate_psd(series.read_psd_xmldoc(ligolw_utils.load_filename(psd_xml, verbose = True, contenthandler = lalseries.LIGOLWContentHandler)).values()[0], self.df)
+		self.psd = reference_psd.interpolate_psd(series.read_psd_xmldoc(ligolw_utils.load_filename(psd_xml, verbose = True, contenthandler = series.PSDContentHandler)).values()[0], self.df)
 
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
