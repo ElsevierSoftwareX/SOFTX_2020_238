@@ -92,7 +92,9 @@ from gstlal import datasource
 from gstlal import multirate_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
+from gstlal import reference_psd
 from gstlal import simplehandler
+from gstlal.stats import horizonhistory
 import lal
 from lal import LIGOTimeGPS
 
@@ -304,9 +306,11 @@ class Handler(simplehandler.Handler):
 
 				# update horizon distance history
 				#
-				# FIXME:  probably need to compute these for a
-				# bunch of masses.  which ones?
-				self.dataclass.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
+				# FIXME:  get canonical masses from the template bank bin that we're analyzing
+				# FIXME:  get frequency bounds from templates
+				horizon_distance = reference_psd.horizon_distance(psd, m1 = 1.4, m2 = 1.4, snr = 8.0, f_min = 40.0, f_max = 0.85 * (psd.f0 + (len(psd.data.data) - 1) * psd.deltaF))
+				assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
+				self.record_horizon_distance(instrument, float(timestamp), horizon_distance)
 				return True
 		elif message.type == Gst.MessageType.APPLICATION:
 			if message.get_structure().get_name() == "CHECKPOINT":
@@ -331,6 +335,29 @@ class Handler(simplehandler.Handler):
 			self.close_segments(timestamp)
 			return False
 		return False
+
+	def _record_horizon_distance(self, instrument, timestamp, horizon_distance):
+		"""
+		timestamp can be a float or a slice with float boundaries.
+		"""
+		# retrieve the horizon history for this instrument or
+		# initialize it if it doesn't exist yet
+		try:
+			horizon_history = self.dataclass.coinc_params_distributions.horizon_history[instrument]
+		except KeyError:
+			horizon_history = self.dataclass.coinc_params_distributions.horizon_history[instrument] = horizonhistory.NearestLeafTree()
+		# NOTE:  timestamps are floats here (or float slices).
+		# whitener should be reporting PSDs with integer
+		# timestamps, and, anyway, we don't need nanosecond
+		# precision for the horizon distance history.
+		horizon_history[timestamp] = horizon_distance
+
+	def record_horizon_distance(self, instrument, timestamp, horizon_distance):
+		"""
+		timestamp can be a float or a slice with float boundaries.
+		"""
+		with self.dataclass.lock:
+			self._record_horizon_distance(instrument, timestamp, horizon_distance)
 
 	def _close_segments(self, timestamp):
 		"""

@@ -107,7 +107,6 @@ from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import cbc_template_iir
 from gstlal import far
-from gstlal.stats import horizonhistory
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -738,22 +737,6 @@ class Data(object):
 			if self.gracedb_far_threshold is not None:
 				self.__do_gracedb_alerts()
 				self.__update_eye_candy()
-
-	def record_horizon_distance(self, instrument, timestamp, psd, m1, m2, snr_threshold = 8.0):
-		with self.lock:
-			# FIXME get frequency bounds from templates
-			horizon_distance = reference_psd.horizon_distance(psd, m1 = m1, m2 = m2, snr = snr_threshold, f_min = 40.0, f_max = 0.85 * (psd.f0 + (len(psd.data.data) - 1) * psd.deltaF))
-			assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
-			# NOTE:  timestamp is cast to float.  should be
-			# safe, whitener should be reporting PSDs with
-			# integer timestamps.  anyway, we don't need
-			# nanosecond precision for the horizon distance
-			# history.
-			try:
-				horizon_history = self.coinc_params_distributions.horizon_history[instrument]
-			except KeyError:
-				horizon_history = self.coinc_params_distributions.horizon_history[instrument] = horizonhistory.NearestLeafTree()
-			horizon_history[float(timestamp)] = horizon_distance
 
 	def __get_likelihood_file(self):
 		# generate a coinc parameter distribution document.  NOTE:
