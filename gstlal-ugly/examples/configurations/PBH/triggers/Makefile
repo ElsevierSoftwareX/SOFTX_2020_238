@@ -54,7 +54,7 @@ plots :
 	mkdir $(WEBDIR)
 
 tisi.xml :
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=L1=0:3.14159:3.14159 tisi.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:3.14159:3.14159 tisi.xml
 
 dag : vetoes.xml tisi.xml plots $(INJECTIONS)
 	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache $(FRAME_CACHE) --frame-segments-file $(SEGMENTS) --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING)

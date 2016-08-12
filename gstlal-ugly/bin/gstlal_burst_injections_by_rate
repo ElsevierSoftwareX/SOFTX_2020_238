@@ -44,7 +44,7 @@ sg_q=(3 9 100)
 
 # Burst injections need a zero lag time slide id to work with
 if [ ! -f "HLV_ZERO_LAG.xml" ]; then
-	ligolw_tisi -i H1=0:0:0 -i L1=0:0:0 -i V1=0:0:0 > HLV_ZERO_LAG.xml
+	lalapps_gen_timeslides -i H1=0:0:0 -i L1=0:0:0 -i V1=0:0:0 > HLV_ZERO_LAG.xml
 fi
 
 # sine gaussian

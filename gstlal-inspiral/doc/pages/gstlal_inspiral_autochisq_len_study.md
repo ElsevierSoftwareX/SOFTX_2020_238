@@ -83,8 +83,8 @@ Three identical NSBH - nonspinning analyses were completed.  The only change bet
 			mkdir -p $(WEBDIR)
 
 		tisi.xml :
-			ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
-			ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
+			lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
+			lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
 			ligolw_add --output $@ tisi0.xml tisi1.xml
 
 		dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) $(FAR_INJECTIONS)

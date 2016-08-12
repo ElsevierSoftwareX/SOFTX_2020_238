@@ -59,7 +59,7 @@ plots :
 	mkdir $(WEBDIR)
 
 tisi.xml :
-	ligolw_tisi \
+	lalapps_gen_timeslides \
 		--instrument=H1=0:0:0 \
 		--instrument=H2=0:0:0 \
 		--instrument=L1=0:30.14159:30.14159 \

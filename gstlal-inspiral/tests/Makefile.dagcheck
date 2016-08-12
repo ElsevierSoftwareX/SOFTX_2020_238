@@ -175,8 +175,8 @@ $(WEBDIR) :
 
 ## Even though we don't use time slides for background estimation, we still need a time slide table. It is constructed of a zero lag vector and a single offset that we use for "closed box" results
 tisi.xml :
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
 	ligolw_add --output $@ tisi0.xml tisi1.xml
 
 ## The dag generator and the whole point of this makefile. The result is a file: trigger_pipe.dag that can be submitted to HTCondor
