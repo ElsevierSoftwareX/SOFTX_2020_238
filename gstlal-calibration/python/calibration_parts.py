@@ -147,9 +147,9 @@ def list_srcs(pipeline, *args):
 
 def smooth_kappas(pipeline, head, var, expected, Nav, N):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.01, default_kappa = expected, array_size = N)
 	head = mkaudiorate(pipeline, head)
-	#head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.01, default_kappa = expected, array_size = N)
-	#head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
 	return head
 
 def compute_kappa_bits(pipeline, averageok, raw, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, caps, status_out_raw = 1, status_out_smooth = 1, status_out_overall = 1, starting_rate=16, ending_rate=16):

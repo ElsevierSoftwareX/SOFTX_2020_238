@@ -749,7 +749,7 @@ tst = calibration_parts.mkresample(pipeline, tst, "audio/x-raw, format=F64LE, ra
 # filter TST chain with the TST acutaiton filter
 tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdelay), fir_matrix = [tstfilt[::-1]], time_domain = td)
 # resample the TST actuation chain to the full sample rate
-if tstchainsr != pumuimchainsr:
+if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappapu:
 	tst = calibration_parts.mkresample(pipeline, tst, hoft_caps)
 
 # resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
@@ -757,7 +757,7 @@ pumuim = calibration_parts.mkresample(pipeline, pumuim, "audio/x-raw, format=F64
 # filter the PUM/UIM chain with the PUM/UIM actuation filter
 pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdelay), fir_matrix = [pumuimfilt[::-1]], time_domain = td)
 # resample the PUM/UIM actuation chain to the full sample rate
-if tstchainsr != pumuimchainsr:
+if tstchainsr != pumuimchainsr or options.apply_kappapu or options.apply_kappatst:
 	pumuim = calibration_parts.mkresample(pipeline, pumuim, hoft_caps)
 
 # apply kappa_tst
@@ -765,7 +765,7 @@ if options.apply_kappatst:
 	# Only apply the real part of \kappa_tst as a correction to A_tst
 	ktst_for_tst = calibration_parts.mkqueue(pipeline, smooth_ktstRtee)
 	ktst_for_tst = calibration_parts.mkresample(pipeline, ktst_for_tst, hoft_caps)
-	tst = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, ktst_for_tst, tst), hoft_caps)
+	tst = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, ktst_for_tst, tst))
 # apply kappa_pu
 if options.apply_kappapu:
 	# Only apply the real part of \kappa_pu as a correction to A_pu
