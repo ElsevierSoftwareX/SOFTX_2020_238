@@ -414,7 +414,7 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 			"maximum-offset",
 			"Maximum acceptable kappa offset",
 			"Maximum acceptable offset of unsmoothed kappa from current median to be entered into array from which median is approximated.",
-			-G_MAXDOUBLE, G_MAXDOUBLE, 0.2,
+			-G_MAXDOUBLE, G_MAXDOUBLE, 0.1,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -425,7 +425,7 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 			"kappa-ceiling",
 			"Reset kappas outside of range",
 			"Accepted unsmoothed kappas outside of the range [current-median-value - kappa-ceiling, current-median-value + kappa_ceiling], are reset to current-median-value +- kappa-ceiling",
-			-G_MAXDOUBLE, G_MAXDOUBLE, 0.02,
+			-G_MAXDOUBLE, G_MAXDOUBLE, 0.001,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);

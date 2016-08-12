@@ -70,7 +70,7 @@ static void demodulate_float(const float *src, gsize src_size, float complex *ds
 {
 	const float *src_end;
 	for(src_end = src + src_size; src < src_end; src++, dst++) {
-		*dst = *src * cexpf(2. * M_PI * I * frequency * t / 1000000000);
+		*dst = *src * cexpf(-2. * M_PI * I * frequency * t / 1000000000);
 		t += 1000000000 / rate;
 	}
 }
@@ -80,7 +80,7 @@ static void demodulate_double(const double *src, gsize src_size, double complex 
 {
 	const double *src_end;
 	for(src_end = src + src_size; src < src_end; src++, dst++) {
-		*dst = *src * cexp(2. * M_PI * I * frequency * t / 1000000000);
+		*dst = *src * cexp(-2. * M_PI * I * frequency * t / 1000000000);
 		t += 1000000000 / rate;
 	}
 }
@@ -542,7 +542,7 @@ static void gstlal_demodulate_class_init(GSTLALDemodulateClass *klass)
 	gst_element_class_set_details_simple(element_class,
 		"Demodulate",
 		"Filter/Audio",
-		"Multiplies incoming float stream by exp(i * 2 * pi * line_frequency * t)",
+		"Multiplies incoming float stream by exp(-i * 2 * pi * line_frequency * t)",
 		"Aaron Viets <aaron.viets@ligo.org>"
 	);
 

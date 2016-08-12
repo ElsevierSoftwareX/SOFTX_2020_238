@@ -179,6 +179,8 @@ parser.add_option("--kappapu-imag-ok-var", metavar = "float", type = float, defa
 parser.add_option("--kappatst-imag-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of the imaginary part of \kappa_tst +/- this number will be considered OK. (Default = 0.1)")
 parser.add_option("--kappac-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of \kappa_c +/- this number will be considered OK. (Default = 0.1)")
 parser.add_option("--fcc-ok-var", metavar = "Hz", type = float, default = 30, help = "Values of f_cc +/- this number (in Hz) will be considered OK. (Default = 30 Hz)")
+parser.add_option("--kappatst-real-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the real part of \kappa_tst +/- this number will be taken as is. Otherwise, they are reset to /kappa_tst_real +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--kappatst-imag-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the imaginary part of \kappa_tst +/- this number will be taken as is. Otherwise, they are reset to /kappa_tst_imag +/- this number and then applied. (Default = 0.001)")
 parser.add_option("--exc-channel-name", metavar = "name", default = "CAL-CS_LINE_SUM_DQ", help = "Set the name of the excitation channel.  This is only necessary when the calibration factors computation is turned on, which is the default behavior. (Default = CAL-CS_LINE_SUM_DQ)")
 parser.add_option("--tst-exc-channel-name", metavar = "name", default = "SUS-ETMY_L3_CAL_LINE_OUT_DQ", help = "Set the name of the TST excitation channel.  This is only necessary when the \kappa_tst factors computation is turned on, which is the default behavior. (Default = SUS-ETMY_L3_CAL_LINE_OUT_DQ)")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used for calculating the calibration factors. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
@@ -587,8 +589,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 
 	ktstR, ktstI = calibration_parts.split_into_real(pipeline, calibration_parts.mkqueue(pipeline, ktsttee)) 
 	
-	smooth_ktstR = calibration_parts.smooth_kappas(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, factors_average_samples, median_smoothing_samples)
-	smooth_ktstI = calibration_parts.smooth_kappas(pipeline, ktstI, options.kappatst_imag_ok_var, options.expected_kappatst_imag, factors_average_samples, median_smoothing_samples)
+smooth_ktstR = calibration_parts.smooth_kappas(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, options.kappatst_real_ceiling, median_smoothing_samples, factors_average_samples)
+        smooth_ktstI = calibration_parts.smooth_kappas(pipeline, ktstI, options.kappatst_imag_ok_var, options.expected_kappatst_imag, options.kappatst_imag_ceiling, median_smoothing_samples, factors_average_samples)
 
 	if not options.no_kappatst:
 		smooth_ktstRtee = pipeparts.mktee(pipeline, smooth_ktstR)

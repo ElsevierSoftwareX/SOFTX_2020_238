@@ -145,12 +145,38 @@ def list_srcs(pipeline, *args):
 # Calibration factor related functions
 #
 
-def smooth_kappas(pipeline, head, var, expected, Nav, N):
+def smooth_kappas(pipeline, head, var, expected, ceiling, N, Nav):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.01, default_kappa = expected, array_size = N)
-	head = mkaudiorate(pipeline, head)
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
-	return head
+        head = mkaudiorate(pipeline, head)
+        head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = ceiling, default_kappa = expected, array_size = N)
+        head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+        head = mkaudiorate(pipeline, head)
+        return head
+
+def smooth_kappas_real_test(pipeline, head, var, expected, ceiling, N, Nav):
+        # Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
+        head = mkaudiorate(pipeline, head)
+        tee = pipeparts.mktee(pipeline, head)
+
+        pipeparts.mknxydumpsink(pipeline, tee, "raw_kappatst.txt")
+
+        high_ceil_no_avg = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.001, default_kappa = expected, array_size = N)
+        pipeparts.mknxydumpsink(pipeline, high_ceil_no_avg, "smooth_kappatst_ceil0.001_no_avg.txt")
+
+        high_ceil_avg = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.001, default_kappa = expected, array_size = N)
+        high_ceil_avg = pipeparts.mkfirbank(pipeline, high_ceil_avg, fir_matrix = [numpy.ones(Nav)/Nav])
+        pipeparts.mknxydumpsink(pipeline, high_ceil_avg, "smooth_kappatst_ceil0.001_avg.txt")
+
+        low_ceil_no_avg = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.0001, default_kappa = expected, array_size = N)
+        pipeparts.mknxydumpsink(pipeline, low_ceil_no_avg, "smooth_kappatst_ceil0.0001_no_avg.txt")
+
+        low_ceil_avg = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.0001, default_kappa = expected, array_size = N)
+        low_ceil_avg = pipeparts.mkfirbank(pipeline, low_ceil_avg, fir_matrix = [numpy.ones(Nav)/Nav])
+        low_ceil_avg = pipeparts.mktee(pipeline, low_ceil_avg)
+        pipeparts.mknxydumpsink(pipeline, low_ceil_avg, "smooth_kappatst_ceil0.0001_avg.txt")
+
+        head = mkaudiorate(pipeline, low_ceil_avg)
+        return head
 
 def compute_kappa_bits(pipeline, averageok, raw, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, caps, status_out_raw = 1, status_out_smooth = 1, status_out_overall = 1, starting_rate=16, ending_rate=16):
 	rawR, rawI = split_into_real(pipeline, raw, caps)
@@ -397,31 +423,19 @@ def compute_S(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpu, EP9):
 
 def compute_kappac(pipeline, SR, SI):
 
-	#
-	# \kappa_C = |S|^2 / Re[S]
-	#
+        #
+        # \kappa_C = |S|^2 / Re[S]
+        #
 
-	SR = pipeparts.mktee(pipeline, SR)
-	SI = pipeparts.mktee(pipeline, SI)
-	# FIXME: The pow element behaving very strangely... I think there might be an issue where it is modifying buffers or parts of memory space that it shouldn't be touching. This is why I've avoided using the pow element via some very strange tricsk below.
-	S2 = mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, SR, SR)), mkmultiplier(pipeline, list_srcs(pipeline, SI, SI))))
-	#S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)))
-	SRinv = pipeparts.mkmatrixmixer(pipeline, SR, matrix=[[1.0, 0.0]])
-	SRinv = pipeparts.mkgeneric(pipeline, SRinv, "complex_pow", exponent = -1.0)
-	SRinv = pipeparts.mkmatrixmixer(pipeline, SRinv, matrix=[[1.0],[0.0]])
-	#kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SR), exponent=-1.0)))
-	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, SRinv))
-	return kc
+        S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)))
+        kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SR), exponent=-1.0)))
+        return kc
 
 def compute_fcc(pipeline, SR, SI, fpcal2):
-	#
-	# f_cc = - (Re[S]/Im[S]) * fpcal2
-	#
+        #
+        # f_cc = - (Re[S]/Im[S]) * fpcal2
+        #
 
-	SIinv = pipeparts.mkmatrixmixer(pipeline, SI, matrix = [[1.0, 0.0]])
-	SIinv = pipeparts.mkgeneric(pipeline, SIinv, "complex_pow", exponent = -1.0)
-	SIinv = pipeparts.mkmatrixmixer(pipeline, SIinv, matrix=[[1.0],[0.0]])
+        fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SI), exponent=-1.0)))
+        return fcc
 
-	#fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SI), exponent=-1.0)))
-	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), SIinv))
-	return fcc
