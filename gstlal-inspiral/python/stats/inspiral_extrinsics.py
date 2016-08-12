@@ -24,17 +24,40 @@
 #
 
 
+try:
+	from fpconst import NaN, NegInf, PosInf
+except ImportError:
+	# fpconst is not part of the standard library and might not be
+	# available
+	NaN = float("nan")
+	NegInf = float("-inf")
+	PosInf = float("+inf")
 import math
 import numpy
+import os
 import random
+from scipy import stats
 import sys
 
 
 from glue import iterutils
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
+from glue.text_progress_bar import ProgressBar
 import lal
 import lalsimulation
 from pylal import rate
 from pylal import snglcoinc
+
+
+# FIXME:  caution, this information might get organized differently later.
+# for now we just need to figure out where the gstlal-inspiral directory in
+# share/ is.  don't write anything that assumes that this module will
+# continue to define any of these symbols
+from gstlal import paths as gstlal_config_paths
 
 
 __all__ = [
@@ -314,6 +337,133 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instrume
 
 
 class SNRPDF(object):
+	#
+	# cache of pre-computed SNR joint PDFs.  structure is like
+	#
+	# 	= {
+	#		frozenset(("H1", ...)), frozenset([("H1", horiz_dist), ("L1", horiz_dist), ...]): (InterpBinnedArray, BinnedArray, age),
+	#		...
+	#	}
+	#
+	# at most max_cached_snr_joint_pdfs will be stored.  if a PDF is
+	# required that cannot be found in the cache, and there is no more
+	# room, the oldest PDF (the one with the *smallest* age) is pop()ed
+	# to make room, and the new one added with its age set to the
+	# highest age in the cache + 1.
+	#
+	# 5**3 * 4 = 5 quantizations in 3 instruments, 4 combos per
+	# quantized choice of horizon distances
+	#
+
+	DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_snr_pdf.xml.gz")
+	max_cached_snr_joint_pdfs = int(5**3 * 4)
+	snr_joint_pdf_cache = {}
+
+	@ligolw_array.use_in
+	@ligolw_param.use_in
+	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+		pass
+
+
+	# FIXME:  is the default choice of distance quantization appropriate?
+	def __init__(self, snr_cutoff, log_distance_tolerance = PosInf):
+		"""
+		snr_cutoff sets the minimum SNR below which it is
+		impossible to obtain a candidate (the trigger SNR
+		threshold).
+		"""
+		self.snr_cutoff = snr_cutoff
+		self.log_distance_tolerance = log_distance_tolerance
+
+
+	def quantize_horizon_distances(self, horizon_distances, min_ratio = 0.1):
+		"""
+		if two horizon distances, D1 and D2, differ by less than
+
+			| ln(D1 / D2) | <= log_distance_tolerance
+
+		then they are considered to be equal for the purpose of
+		recording horizon distance history, generating joint SNR
+		PDFs, and so on.  if the smaller of the two is < min_ratio
+		* the larger then the smaller is treated as though it were
+		0.
+		"""
+		if any(horizon_distance < 0. for horizon_distance in horizon_distances.values()):
+			raise ValueError("%s: negative horizon distance" % repr(horizon_distances))
+		horizon_distance_norm = max(horizon_distances.values())
+		# check for no-op:  all distances are 0.
+		if horizon_distance_norm == 0.:
+			return dict.fromkeys(horizon_distances, NegInf)
+		# check for no-op:  map all (non-zero) values to 1
+		if math.isinf(self.log_distance_tolerance):
+			return dict((instrument, 1 if horizon_distance > 0. else NegInf) for instrument, horizon_distance in horizon_distances.items())
+		min_distance = min_ratio * horizon_distance_norm
+		return dict((instrument, (NegInf if horizon_distance < min_distance else int(round(math.log(horizon_distance / horizon_distance_norm) / self.log_distance_tolerance)))) for instrument, horizon_distance in horizon_distances.items())
+
+
+	def quantized_horizon_distances(self, quants):
+		if math.isinf(self.log_distance_tolerance):
+			return dict((instrument, 0. if math.isinf(quant) else 1.) for instrument, quant in quants)
+		return dict((instrument, math.exp(quant * self.log_distance_tolerance)) for instrument, quant in quants)
+
+
+	def snr_joint_pdf_keyfunc(self, instruments, horizon_distances):
+		"""
+		Internal function defining the key for cache:  two element
+		tuple, first element is frozen set of instruments for which
+		this is the PDF, second element is frozen set of
+		(instrument, horizon distance) pairs for all instruments in
+		the network.  horizon distances are normalized to fractions
+		of the largest among them and then the fractions aquantized
+		to integer powers of a common factor
+		"""
+		return frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
+
+
+	def get_snr_joint_pdf(self, instruments, horizon_distances):
+		pdf, binnedarray, age = self.snr_joint_pdf_cache[self.snr_joint_pdf_keyfunc(instruments, horizon_distances)]
+		return pdf
+
+
+	def lnP_snrs(self, snrs, horizon_distances):
+		# PDF axes are in alphabetical order
+		instruments = sorted(snrs)
+		lnpdf = self.get_snr_joint_pdf(instruments, horizon_distances)
+		return lnpdf(*map(snrs.__getitem__, instruments))
+
+
+	def add_to_cache(self, instruments, horizon_distances, verbose = False):
+		key = self.snr_joint_pdf_keyfunc(instruments, horizon_distances)
+		# already in cache?
+		if key in self.snr_joint_pdf_cache:
+			pdf, binnedarray, age = self.snr_joint_pdf_cache[key]
+			return pdf
+		# need to build
+		if self.snr_joint_pdf_cache:
+			age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
+		else:
+			age = 0
+		if verbose:
+			print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
+			progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
+		else:
+			progressbar = None
+		binnedarray = self.joint_pdf_of_snrs(key[0], self.quantized_horizon_distances(key[1]), self.snr_cutoff, progressbar = progressbar)
+		del progressbar
+		lnbinnedarray = binnedarray.copy()
+		with numpy.errstate(divide = "ignore"):
+			lnbinnedarray.array = numpy.log(lnbinnedarray.array)
+		pdf = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf)
+		self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
+		# if the cache is full, delete the entry with the smallest
+		# age
+		while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
+			del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
+		if verbose:
+			print >>sys.stderr, "%d/%d slots in SNR PDF cache now in use" % (len(self.snr_joint_pdf_cache), self.max_cached_snr_joint_pdfs)
+		return pdf
+
+
 	@staticmethod
 	def joint_pdf_of_snrs(instruments, inst_horiz_mapping, snr_cutoff, n_samples = 160000, bins = rate.ATanLogarithmicBins(3.6, 1200., 170), progressbar = None):
 		"""
@@ -528,3 +678,57 @@ class SNRPDF(object):
 		assert numpy.isfinite(pdf.array).all()
 		# done
 		return pdf
+
+
+	@classmethod
+	def from_xml(cls, xml, name = u"generic"):
+		name = u"%s:%s" % (name, u"inspiral_snr_pdf")
+		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == name]
+		if len(xml) != 1:
+			raise ValueError("XML tree must contain exactly one %s element named %s" % (ligolw.LIGO_LW.tagName, name))
+		xml, = xml
+		self = cls(snr_cutoff = ligolw_param.get_pyvalue(xml, u"snr_cutoff"), log_distance_tolerance = ligolw_param.get_pyvalue(xml, u"log_distance_tolerance"))
+		for elem in xml.childNodes:
+			if elem.tagName != ligolw.LIGO_LW.tagName:
+				continue
+			binnedarray = rate.BinnedArray.from_xml(elem, elem.Name.rsplit(u":", 1)[0])
+
+			key = (
+				frozenset(lsctables.instrument_set_from_ifos(ligolw_param.get_pyvalue(elem, u"instruments:key"))),
+				frozenset((inst.strip(), float(quant) if math.isinf(float(quant)) else int(quant)) for inst, quant in (inst_quant.split(u"=") for inst_quant in ligolw_param.get_pyvalue(elem, u"quantizedhorizons:key").split(u",")))
+			)
+
+			if self.snr_joint_pdf_cache:
+				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
+			else:
+				age = 0
+			lnbinnedarray = binnedarray.copy()
+			with numpy.errstate(divide = "ignore"):
+				lnbinnedarray.array = numpy.log(lnbinnedarray.array)
+			self.snr_joint_pdf_cache[key] = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf), binnedarray, age
+			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
+				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
+		return self
+
+
+	def to_xml(self, name = u"generic"):
+		xml = ligolw.LIGO_LW()
+		xml.Name = u"%s:%s" % (name, u"inspiral_snr_pdf")
+		# FIXME: switch to ligolw_param.Param.from_pyvalue() when
+		# we can rely on a new-enough glue
+		xml.appendChild(ligolw_param.from_pyvalue(u"snr_cutoff", self.snr_cutoff))
+		xml.appendChild(ligolw_param.from_pyvalue(u"log_distance_tolerance", self.log_distance_tolerance))
+		for i, (key, (ignored, binnedarray, ignored)) in enumerate(self.snr_joint_pdf_cache.items()):
+			elem = xml.appendChild(binnedarray.to_xml(u"%d:pdf" % i))
+			# FIXME: switch to ligolw_param.Param.from_pyvalue() when
+			# we can rely on a new-enough glue
+			elem.appendChild(ligolw_param.from_pyvalue(u"instruments:key", lsctables.ifos_from_instrument_set(key[0])))
+			elem.appendChild(ligolw_param.from_pyvalue(u"quantizedhorizons:key", u",".join(u"%s=%.17g" % inst_quant for inst_quant in sorted(key[1]))))
+		return xml
+
+
+	@classmethod
+	def load(cls, fileobj = None, verbose = False):
+		if fileobj is None:
+			fileobj = open(cls.DEFAULT_FILENAME)
+		return cls.from_xml(ligolw_utils.load_fileobj(fileobj, gz = True, contenthandler = cls.LIGOLWContentHandler)[0])

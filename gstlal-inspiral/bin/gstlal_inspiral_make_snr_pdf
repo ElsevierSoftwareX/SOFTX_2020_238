@@ -1,0 +1,168 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2016  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+## @file gstlal_inspiral_make_snr_pdf
+# Generate an SNR PDF database file.
+#
+# ### Command line interface
+#
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import sys
+
+
+from glue import iterutils
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from glue.text_progress_bar import ProgressBar
+from gstlal import reference_psd
+from gstlal.stats import inspiral_extrinsics
+import lal.series
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		description = ""
+	)
+
+	parser.add_option("--horizon-distances", metavar = "instrument=distance[,instrument=distance,...]", action = "append", help = "Cache SNR PDFs for these instruments and horizon distances.  Format is, e.g., H1=120,L1=120,V1=48.  Units for distance are irrelevant (PDFs depend only on their ratios).  A PDF will be constructed for every combination of --min-instruments or more instruments from the set.  All --horizon-distances must list the same instruments (if an instrument is off set its horizon distance to 0).")
+	parser.add_option("--horizon-distance-masses", metavar = "m1,m2", action = "append", default = ["1.4,1.4"], help = "When computing pre-cached SNR PDFs from a collection of PSD files, compute horizon distances for these masses in solar mass units (default = 1.4,1.4).  Can be given multiple times.")
+	parser.add_option("--horizon-distance-flow", metavar = "Hz", default = 10., type = "float", help = "When computing pre-cached SNR PDFs from a collection PSD files, start horizon distance integral at this frequency in Hertz (default = 10 Hz).")
+	parser.add_option("--instruments", metavar = "name[,name,...]", help = "Name the instruments explicitly.  If only PSD files are to be used to get horizon distances (no --horizon-distances options are given) then this options is required, otherwise it is optional.  If both --instruments and --horizon-distances are given, they must list the same instruments.")
+	parser.add_option("--min-instruments", metavar = "count", default = 2, type = "int", help = "Set the minimum number of instruments required to form a candidate (default = 2).")
+	parser.add_option("--output", "-o", metavar = "filename", help = "Write SNR PDF cache to this file (required).")
+	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
+
+	options, filenames = parser.parse_args()
+
+	if options.instruments:
+		options.instruments = set(options.instruments.split(","))
+		if len(options.instruments) < options.min_instruments:
+			raise ValueError("--instruments must have at least --min-instruments entries")
+
+	if options.horizon_distances is not None:
+		options.horizon_distances = (items.split(",") for items in options.horizon_distances)
+		options.horizon_distances = ([keyval.split("=") for keyval in items] for items in options.horizon_distances)
+		options.horizon_distances = [dict((instrument, float(distance)) for instrument, distance in items) for items in options.horizon_distances]
+		if not options.horizon_distances or not all(options.horizon_distances):
+			raise ValueError("unknown failure parsing --horizon-distances")
+		instruments = set(options.horizon_distances[0])
+		if any(set(horizon_distances) != instruments for horizon_distances in options.horizon_distances):
+			raise ValueError("all --horizon-distances must list the same instruments (if an instrument is off set its horizon distance to 0)")
+		if not options.instruments:
+			options.instruments = instruments
+		elif instruments != options.instruments:
+			raise ValueError("--instruments does not match --horizon-distances")
+		if any(min(horizon_distances.values()) < 0. for horizon_distances in options.horizon_distances):
+			raise ValueError("all --horizon-distances must be >= 0.")
+	elif not filenames:
+		raise ValueError("must provide either one or more PSD files or one or more --horizon-distances, or one or more of both")
+	elif not options.instruments:
+		raise ValueError("must set --instruments when --horizon-distances not given")
+	else:
+		# we'll populate this later from the PSD files
+		options.horizon_distances = []
+
+	options.horizon_distance_masses = [map(float, s.split(",")) for s in options.horizon_distance_masses]
+	if any(len(masses) != 2 for masses in options.horizon_distance_masses):
+		raise ValueError("must provide exactly 2 masses for each --horizon-distance-masses")
+	if any((m1 <= 0. or m2 <= 0.) for m1, m2 in options.horizon_distance_masses):
+		raise ValueError("all --horizon-distances-masses must be > 0")
+
+	if options.min_instruments < 1:
+		raise ValueError("--min-instruments must be >= 1")
+
+	if not options.output:
+		raise ValueError("must set --output")
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# extract additional horizon distances from PSD files if given
+#
+
+
+for n, filename in enumerate(filenames, 1):
+	if options.verbose:
+		print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(filename, contenthandler = lal.series.PSDContentHandler, verbose = options.verbose))
+	for m1, m2 in options.horizon_distance_masses:
+		horizon_distances = dict((instrument, (0. if instrument not in psd else reference_psd.horizon_distance(psd[instrument], m1, m2, 8., options.horizon_distance_flow))) for instrument in options.instruments)
+		if options.verbose:
+			print >>sys.stderr, "\t%s" % ", ".join("%s = %.4g Mpc" % x for x in sorted(horizon_distances.items()))
+		options.horizon_distances.append(horizon_distances)
+
+
+#
+# build and populate SNR PDF cache
+#
+
+
+snrpdf = inspiral_extrinsics.SNRPDF(snr_cutoff = 4.)
+
+for horizon_distances in options.horizon_distances:
+	for n in range(options.min_instruments, len(horizon_distances) + 1):
+		for instruments in iterutils.choices(horizon_distances, n):
+			snrpdf.add_to_cache(instruments, horizon_distances, verbose = options.verbose)
+
+
+#
+# write to disk
+#
+
+
+xmldoc = ligolw.Document()
+xmldoc.appendChild(snrpdf.to_xml())
+ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

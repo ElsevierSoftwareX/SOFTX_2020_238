@@ -17,6 +17,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_lvalert_omegascan \
 	gstlal_inspiral_lvalert_psd_plotter \
 	gstlal_inspiral_lvalert_sngls_plotter \
+	gstlal_inspiral_make_snr_pdf \
 	gstlal_inspiral_marginalize_likelihood \
 	gstlal_inspiral_marginalize_likelihoods_online \
 	gstlal_inspiral_pipe \

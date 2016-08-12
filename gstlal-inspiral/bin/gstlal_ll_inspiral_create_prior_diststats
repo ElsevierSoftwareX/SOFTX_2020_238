@@ -46,17 +46,13 @@ import shutil
 from gstlal import far
 from gstlal import inspiral_pipe
 from gstlal.stats import horizonhistory
-from gstlal.stats import inspiral_extrinsics
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw import ligolw
-from glue.text_progress_bar import ProgressBar
-from pylal import rate, snglcoinc 
 from glue import segments
 from glue import iterutils
 from glue.lal import CacheEntry
 from lal import LIGOTimeGPS
-import numpy
 from optparse import OptionParser
 
 
@@ -83,9 +79,9 @@ def parse_command_line():
 		horizon_history = {}
 		for x in options.segment_and_horizon:
 			ifo, start, stop, horizon = x.split(":")
-			seglistdict.setdefault(ifo, segments.segmentlist()).append(segments.segment([LIGOTimeGPS(float(start)), LIGOTimeGPS(float(stop))]))
-			horizon_history.setdefault(ifo, horizonhistory.NearestLeafTree())[LIGOTimeGPS(float(start))] = float(horizon)
-			horizon_history.setdefault(ifo, horizonhistory.NearestLeafTree())[LIGOTimeGPS(float(stop))] = float(horizon)
+			seglistdict.setdefault(ifo, segments.segmentlist()).append(segments.segment([LIGOTimeGPS(start), LIGOTimeGPS(stop)]))
+			horizon_history.setdefault(ifo, horizonhistory.NearestLeafTree())[float(start)] = float(horizon)
+			horizon_history.setdefault(ifo, horizonhistory.NearestLeafTree())[float(stop)] = float(horizon)
 		return seglistdict, horizon_history
 
 	if options.segment_and_horizon is None:
@@ -163,30 +159,6 @@ for i in range(2, len(options.instruments) + 1):
 		diststats.zero_lag_rates["instruments"][ifos,] = min(n_background[ifo] for ifo in ifos) / 50.**(i-1)
 
 diststats.add_instrument_combination_counts(segs = segs, verbose = options.verbose)
-
-#
-# joint SNR PDF
-#
-
-horizon_distances = dict(((ifo, numpy.mean(h.values())) for ifo, h in horizon_history.items()))
-for n in range(2, len(horizon_distances) + 1):
-	for instruments in iterutils.choices(horizon_distances.keys(), n):
-		# Force the SNR pdf to be generated to be at the actual horizon distance values not the quantized ones
-		key = frozenset(instruments), frozenset(horizonhistory.quantize_horizon_distances(horizon_distances).items())
-		if options.verbose:
-			print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
-			progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
-		else:
-			progressbar = None
-		binnedarray = inspiral_extrinsics.joint_pdf_of_snrs(key[0], horizon_distances, diststats.snr_min, progressbar = progressbar)
-		del progressbar
-
-		lnbinnedarray = binnedarray.copy()
-		with numpy.errstate(divide = "ignore"):
-			lnbinnedarray.array = numpy.log(lnbinnedarray.array)
-		pdf = rate.InterpBinnedArray(lnbinnedarray, fill_value = float("-inf"))
-		diststats.snr_joint_pdf_cache[key] = pdf, binnedarray, 0
-
 diststats.populate_prob_of_instruments_given_signal()
 
 #

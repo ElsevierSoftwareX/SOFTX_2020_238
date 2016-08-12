@@ -65,7 +65,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
 
 
-__all__ = ["NearestLeafTree", "HorizonHistories", "quantize_horizon_distances"]
+__all__ = ["NearestLeafTree", "HorizonHistories"]
 
 
 #
@@ -432,28 +432,3 @@ class HorizonHistories(dict):
 		for key, value in self.items():
 			xml.appendChild(value.to_xml(key))
 		return xml
-
-
-# FIXME:  is the choice of distance quantization appropriate?
-def quantize_horizon_distances(horizon_distances, log_distance_tolerance = PosInf, min_ratio = 0.1):
-	"""
-	if two horizon distances, D1 and D2, differ by less than
-
-		| ln(D1 / D2) | <= log_distance_tolerance
-
-	then they are considered to be equal for the purpose of recording
-	horizon distance history, generating joint SNR PDFs, and so on.  if
-	the smaller of the two is < min_ratio * the larger then the smaller
-	is treated as though it were 0.
-	"""
-	if any(horizon_distance < 0. for horizon_distance in horizon_distances.values()):
-		raise ValueError("%s: negative horizon distance" % repr(horizon_distances))
-	horizon_distance_norm = max(horizon_distances.values())
-	# check for no-op:  all distances are 0.
-	if horizon_distance_norm == 0.:
-		return dict.fromkeys(horizon_distances, 0.)
-	# check for no-op:  map all (non-zero) values to 1
-	if math.isinf(log_distance_tolerance):
-		return dict((instrument, 1. if horizon_distance > 0. else 0.) for instrument, horizon_distance in horizon_distances.items())
-	min_distance = min_ratio * horizon_distance_norm
-	return dict((instrument, (0. if horizon_distance < min_distance else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())

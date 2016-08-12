@@ -40,7 +40,6 @@ from optparse import OptionParser
 import sys
 
 
-from glue import iterutils
 from glue.lal import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
@@ -134,19 +133,6 @@ if options.add_zerolag_to_background:
 else:
 	sampler_coincparamsdistributions = None
 coincparamsdistributions.finish(verbose = options.verbose)
-
-
-#
-# take a moment to make sure we have SNR PDFs for all instrument
-# combinations so that we don't end up doing this inside the sampling
-# threads
-#
-
-
-all_instrument_combos = [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]
-for horizon_distances in coincparamsdistributions.horizon_history.all():
-	for instruments in all_instrument_combos:
-		coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, verbose = options.verbose)
 
 
 #
