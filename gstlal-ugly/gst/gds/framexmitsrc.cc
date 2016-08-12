@@ -247,6 +247,12 @@ static GstClockTime GPSNow(void)
  */
 
 
+static void delete_wrapper(void *data)
+{
+	delete [] (char*) data;
+}
+
+
 static void *receive_thread(void *arg)
 {
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(arg);
@@ -277,7 +283,7 @@ static void *receive_thread(void *arg)
 			data,
 			len,
 			0, len,
-			data, free
+			data, delete_wrapper
 		);
 		GST_BUFFER_PTS(buffer) = timestamp * GST_SECOND;
 		GST_BUFFER_DURATION(buffer) = duration * GST_SECOND;
