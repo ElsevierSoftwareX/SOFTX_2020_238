@@ -44,8 +44,9 @@
 import sys
 import shutil
 from gstlal import far
-from gstlal.stats import horizonhistory
 from gstlal import inspiral_pipe
+from gstlal.stats import horizonhistory
+from gstlal.stats import inspiral_extrinsics
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw import ligolw
@@ -177,7 +178,7 @@ for n in range(2, len(horizon_distances) + 1):
 			progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
 		else:
 			progressbar = None
-		binnedarray = diststats.joint_pdf_of_snrs(key[0], horizon_distances, progressbar = progressbar)
+		binnedarray = inspiral_extrinsics.joint_pdf_of_snrs(key[0], horizon_distances, diststats.snr_min, progressbar = progressbar)
 		del progressbar
 
 		lnbinnedarray = binnedarray.copy()

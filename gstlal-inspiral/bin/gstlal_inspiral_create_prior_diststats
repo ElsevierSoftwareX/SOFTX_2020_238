@@ -61,6 +61,7 @@ from pylal import rate
 from gstlal import far
 from gstlal import reference_psd
 from gstlal.stats import horizonhistory
+from gstlal.stats import inspiral_extrinsics
 
 
 __author__ = "Chad Hanna <chad.hanna@ligo.org>"
@@ -186,7 +187,7 @@ for horizon_distances in options.horizon_distances:
 				progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
 			else:
 				progressbar = None
-			binnedarray = coincparamsdistributions.joint_pdf_of_snrs(key[0], horizon_distances, progressbar = progressbar)
+			binnedarray = inspiral_extrinsics.joint_pdf_of_snrs(key[0], horizon_distances, coincparamsdistributions.snr_min, progressbar = progressbar)
 			del progressbar
 			coincparamsdistributions.snr_joint_pdf_cache[key] = None, binnedarray, 0
 

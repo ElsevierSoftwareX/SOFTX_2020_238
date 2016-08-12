@@ -2,4 +2,5 @@ pkgpythondir = $(pkgpyexecdir)
 statsdir = $(pkgpythondir)/stats
 
 stats_PYTHON = \
-	horizonhistory.py
+	horizonhistory.py \
+	inspiral_extrinsics.py
