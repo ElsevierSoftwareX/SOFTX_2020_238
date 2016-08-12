@@ -147,8 +147,8 @@ bank = Node(HyperCube(numpy.array(coord_limits), args.min_match, symmetry_func =
 if args.verbose:
 	print "The bank size according to the center metric: ", bank.cube.size
 	print "The bank boundaries are: "
-		for row in bank.cube.boundaries:
-				print "\t", row
+	for row in bank.cube.boundaries:
+		print "\t", row
 
 # Split according to how many templates you want to place in the hypercube
 mismatch = 1.0 - args.min_match
