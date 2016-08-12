@@ -771,11 +771,11 @@ if options.apply_kappapu:
 	# Only apply the real part of \kappa_pu as a correction to A_pu
 	kpu_for_pu = calibration_parts.mkqueue(pipeline, smooth_kpuRtee)
 	kpu_for_pu = calibration_parts.mkresample(pipeline, kpu_for_pu, hoft_caps)
-	pumuim = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, kpu_for_pu, pumuim), hoft_caps)
+	pumuim = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, kpu_for_pu, pumuim))
 
 # Add the TST and PU/UIM chains together to form the full actuation chain
 ctrl = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, tst, pumuim))
-if tstchainsr != hoftsr:
+if tstchainsr != hoftsr or not options.apply_kappatst or not options.apply_kappapu:
 	ctrl = calibration_parts.mkresample(pipeline, ctrl, hoft_caps)
 
 #
@@ -799,7 +799,7 @@ if options.apply_kappac:
 	kc_modify_res_inv = pipeparts.mkgeneric(pipeline, kc_modify_res_inv, "complex_pow", exponent = -1.0)
 	kc_modify_res_inv = pipeparts.mkmatrixmixer(pipeline, kc_modify_res_inv, matrix = [[1.0],[0.0]])
 	#res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, pipeparts.mkpow(pipeline, kc_modify_res, exponent = -1.0)), hoft_caps)
-	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, kc_modify_res_inv), hoft_caps)
+	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, kc_modify_res_inv))
 		
 #
 # CONTROL + RESIDUAL = H(T)
