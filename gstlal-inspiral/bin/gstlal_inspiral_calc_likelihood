@@ -146,7 +146,7 @@ if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
 # compute the probability of instruments given signal
-coincparamsdistributions.populate_prob_of_instruments_given_signal(segs = seglists, n = 1.0, verbose = options.verbose)
+coincparamsdistributions.populate_prob_of_instruments_given_signal(n = 1.0, verbose = options.verbose)
 
 # compute the instrument combination counts
 coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)

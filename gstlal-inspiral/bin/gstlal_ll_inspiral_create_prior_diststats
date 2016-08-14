@@ -186,7 +186,7 @@ for n in range(2, len(horizon_distances) + 1):
 		pdf = rate.InterpBinnedArray(lnbinnedarray, fill_value = float("-inf"))
 		diststats.snr_joint_pdf_cache[key] = pdf, binnedarray, 0
 
-diststats.populate_prob_of_instruments_given_signal(segs)
+diststats.populate_prob_of_instruments_given_signal()
 
 #
 # Finished with this class

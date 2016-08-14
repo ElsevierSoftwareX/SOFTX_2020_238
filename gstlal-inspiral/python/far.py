@@ -477,32 +477,17 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
-	def populate_prob_of_instruments_given_signal(self, segs, n = 1., verbose = False):
+	def populate_prob_of_instruments_given_signal(self, n = 1., verbose = False):
 		#
 		# populate instrument combination binning
 		#
 
-		assert len(segs) > 1
-		assert set(self.horizon_history) <= set(segs)
-
 		# probability that a signal is detectable by each of the
-		# instrument combinations
+		# instrument combinations.  because the horizon distance is
+		# 0'ed when an instrument is off, this marginalization over
+		# horizon distance histories also accounts for duty cycles
 		P = P_instruments_given_signal(self.horizon_history)
 
-		# multiply by probability that enough instruments are on to
-		# form each of those combinations
-		#
-		# FIXME:  if when an instrument is off it has its horizon
-		# distance set to 0 in the horizon history, then this step
-		# will not be needed because the marginalization over
-		# horizon histories will already reflect the duty cycles.
-		P_live = snglcoinc.CoincSynthesizer(segmentlists = segs).P_live
-		for instruments in P:
-			P[instruments] *= sum(sorted(p for on_instruments, p in P_live.items() if on_instruments >= instruments))
-		# renormalize
-		total = sum(sorted(P.values()))
-		for instruments in P:
-			P[instruments] /= total
 		# populate binning from probabilities
 		for instruments, p in P.items():
 			self.injection_rates["instruments"][instruments,] += n * p

@@ -331,7 +331,7 @@ def get_likelihood_funcs(likelihood_files, options):
 	# Compute the probability of instruments given signal and the
 	# instrument combination counts
 	#
-	coinc_params_distributions.populate_prob_of_instruments_given_signal(segs = seglists, n = 1.0, verbose = options.verbose)
+	coinc_params_distributions.populate_prob_of_instruments_given_signal(n = 1.0, verbose = options.verbose)
 	coinc_params_distributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
 
 	return coinc_params_distributions.coinc_params, snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
