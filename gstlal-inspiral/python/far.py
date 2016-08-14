@@ -1668,7 +1668,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return pdf
 
 
-def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance = 0.):
+def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instruments = 2, min_distance = 0.):
 	# FIXME:  this function computes P(instruments | signal)
 	# marginalized over time (i.e., marginalized over the history of
 	# horizon distances).  what we really want is to know P(instruments
@@ -1683,6 +1683,8 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 		raise ValueError("n_samples=%d must be >= 1" % n_samples)
 	if min_distance < 0.:
 		raise ValueError("min_distance=%g must be >= 0" % min_distance)
+	if min_instruments < 1:
+		raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
 
 	# get instrument names
 	names = tuple(horizon_history)
@@ -1693,7 +1695,9 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 
 	# initialize output.  dictionary mapping instrument combination to
 	# probability (initially all 0).
-	result = dict.fromkeys((frozenset(instruments) for n in xrange(2, len(names) + 1) for instruments in iterutils.choices(names, n)), 0.0)
+	result = dict.fromkeys((frozenset(instruments) for n in xrange(min_instruments, len(names) + 1) for instruments in iterutils.choices(names, n)), 0.0)
+	if not result:
+		raise ValueError("not enough instruments in horizon_history to satisfy min_instruments")
 
 	# we select random uniformly-distributed right ascensions so
 	# there's no point in also choosing random GMSTs and any value is
@@ -1777,27 +1781,28 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance
 		# the SNR threshold in that combination.  sequence of
 		# instrument combinations is left as a generator expression
 		# for lazy evaluation
-		instruments = (frozenset(ordered_names[:n]) for n in xrange(2, len(order) + 1))
-		V = tuple(V_at_snr_threshold[i] for i in order[1:])
+		instruments = (frozenset(ordered_names[:n]) for n in xrange(min_instruments, len(order) + 1))
+		V = tuple(V_at_snr_threshold[i] for i in order[min_instruments - 1:])
 		if V[0] <= min_distance:
-			# fewer than two instruments are on, so no
-			# combination can see anything
+			# fewer than the required minimum number of
+			# instruments are on, so no combination can see
+			# anything
 			fails += 1
 			if successes + fails >= n_samples and fails / float(successes + fails) > .90:
 				raise ValueError("convergence too slow:  success/fail ratio = %d/%d" % (successes, fails))
 			continue
 
 		# for each instrument combination, probability that a
-		# source visible to at least two instruments is visible to
-		# that combination (here is where the proportionality
-		# constant and factor of (8/snr_threshold)**3 drop out of
-		# the calculation)
+		# source visible to at least the minimum required number of
+		# instruments is visible to that combination (here is where
+		# the proportionality constant and factor of
+		# (8/snr_threshold)**3 drop out of the calculation)
 		P = tuple(x / V[0] for x in V)
 
 		# accumulate result.  p - pnext is the probability that a
-		# source (that is visible to at least two instruments) is
-		# visible to that combination of instruments and not any
-		# other combination of instruments.
+		# source (that is visible to at least the minimum required
+		# number of instruments) is visible to that combination of
+		# instruments and not any other combination of instruments.
 		for key, p, pnext in zip(instruments, P, P[1:] + (0.,)):
 			result[key] += p - pnext
 		successes += 1
