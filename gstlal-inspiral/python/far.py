@@ -1943,7 +1943,7 @@ class RankingData(object):
 			print >>sys.stderr, "done computing ranking statistic PDFs"
 
 		#
-		# propogate knowledge of the background event rates through
+		# propagate knowledge of the background event rates through
 		# to the ranking statistic distributions.  this information
 		# is required so that when adding ranking statistic PDFs in
 		# ._compute_combined_rates() or our .__iadd__() method
@@ -1959,7 +1959,7 @@ class RankingData(object):
 				binnedarray.array *= coinc_params_distributions.background_rates["instruments"][instruments,] / binnedarray.array.sum()
 
 		#
-		# propogate instrument combination priors through to
+		# propagate instrument combination priors through to
 		# ranking statistic histograms so that
 		# ._compute_combined_rates() and .__iadd__() combine the
 		# histograms with the correct weights.
