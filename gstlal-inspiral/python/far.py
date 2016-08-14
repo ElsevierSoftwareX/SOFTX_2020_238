@@ -1477,7 +1477,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			instruments = []
 			for (instrument, key), (snr, chi2_over_snr2) in gens.items():
 				snr = snr()
-				if coinc_only and snr < snr_min:
+				if snr < snr_min:
 					continue
 				params[key] = snr, chi2_over_snr2()
 				instruments.append(instrument)
