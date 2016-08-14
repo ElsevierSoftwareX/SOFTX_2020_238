@@ -700,7 +700,7 @@ class Data(object):
 			# FIXME FIXME FIXME buf_timestamp - 1.0 is used to be
 			# the maximum offset a template can have within a
 			# buffer that would cause its end time to be before the
-			# tru buffer boundary start.  This comes from the
+			# true buffer boundary start.  This comes from the
 			# largest negative offset in any given SVD bank.  ITAC
 			# should be patched to do this once synchronization
 			# issues are sorted
