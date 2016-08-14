@@ -1889,7 +1889,7 @@ class RankingData(object):
 		"ln_likelihood_ratio": rate.gaussian_window(8.)
 	}
 
-	def __init__(self, coinc_params_distributions, instruments, sampler_coinc_params_distributions = None, process_id = None, nsamples = 1000000, verbose = False):
+	def __init__(self, coinc_params_distributions, instruments, sampler_coinc_params_distributions = None, process_id = None, nsamples = 1000000, min_instruments = 2, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
 		self.signal_likelihood_rates = {}
@@ -1898,12 +1898,17 @@ class RankingData(object):
 		self.zero_lag_likelihood_pdfs = {}
 		self.process_id = process_id
 
+		if min_instruments < 1:
+			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
+		if min_instruments > len(instruments):
+			raise ValueError("not enough instruments to satisfy min_instruments")
+
 		#
 		# initialize binnings
 		#
 
 		instruments = tuple(instruments)
-		for key in [frozenset(ifos) for n in range(2, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
+		for key in [frozenset(ifos) for n in range(min_instruments, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
 			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
