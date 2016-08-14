@@ -607,15 +607,14 @@ class Data(object):
 			buf = elem.emit("pull-sample").get_buffer()
 			result, mapinfo = buf.map(Gst.MapFlags.READ)
 			assert result
-			bufdata = mapinfo.data
-			# FIXME why does bufdata come out as an empty list on some occasions???
-			if bufdata:
-				events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(bufdata)
+			# FIXME why does mapinfo.data come out as an empty list on some occasions???
+			if mapinfo.data:
+				events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(mapinfo.data)
 			else:
 				events = []
 			buf.unmap(mapinfo)
 			# FIXME:  ugly way to get the instrument
-			instrument = elem.get_name().split("_")[0]
+			instrument = elem.get_name().split("_", 1)[0]
 
 			# update search_summary out segment and our
 			# livetime
