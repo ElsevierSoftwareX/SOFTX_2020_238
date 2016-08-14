@@ -268,6 +268,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# dictionary to not confuse the stock lnP_noise(),
 		# lnP_signal(), and friends methods.
 		#
+		# FIXME:  this should use .weighted_mean() to get an
+		# average over a interval
 
 		params.horizons = self.horizon_history.getdict(float(events[0].end))
 		# for instruments that provided triggers,
@@ -753,6 +755,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		if horizon_distance is None:
+			# FIXME:  use .weighted_mean() to get the average
+			# distance over a period of time in case the
+			# injection's "time" falls in an off interval
 			horizon_distance = self.horizon_history[float(sim.get_time_geocent())]
 		if snr_min is None:
 			snr_min = self.snr_min

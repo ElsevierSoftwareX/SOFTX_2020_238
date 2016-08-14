@@ -461,14 +461,51 @@ class Handler(simplehandler.Handler):
 		if self.verbose and elem is not None:
 			print >>sys.stderr, "%s: %s '%s' state transition: %s @ %s" % (elem.get_name(), instrument, segtype, new_state, str(timestamp))
 
-		# if there is a current_segment_start for this then the
-		# state transition has to be off
-		if state_key in self.current_segment_start:
-			self.seglistdicts[segtype][instrument] |= segments.segmentlist((segments.segment(self.current_segment_start.pop(state_key), timestamp),))
-		if new_state == "on":
+		if new_state == "off":
+			# record end of segment
+			if state_key in self.current_segment_start:
+				self.seglistdicts[segtype][instrument] |= segments.segmentlist((segments.segment(self.current_segment_start.pop(state_key), timestamp),))
+			# set the horizon distance history to 0 at
+			# on-to-off transitions of whitened h(t)
+			if segtype == "whitehtsegments":
+				if instrument in self.dataclass.coinc_params_distributions.horizon_history and self.dataclass.coinc_params_distributions.horizon_history[instrument]:
+					self._record_horizon_distance(instrument, slice(float(timestamp), None), 0.)
+				else:
+					self._record_horizon_distance(instrument, float(timestamp), 0.)
+		elif new_state == "on":
+			assert state_key not in self.current_segment_start
+			# record start of new segment
 			self.current_segment_start[state_key] = timestamp
+			# place a 0 in the horizon distance history at the
+			# time of an off-to-on transition so that the
+			# horizon distance queries in the interval of off
+			# state are certain to return 0.
+			#
+			# FIXME:  we're relying on the whitehtsegments gate
+			# to report state transitions *after* any potential
+			# whitener PSD messages have been generated.  this
+			# is normally guaranteed because the whitener does
+			# not generate PSD messages during gap intervals.
+			# the problem is gaps due to glitch excission,
+			# which is done using a gate that comes after the
+			# whitener.  the whitener might generate a PSD
+			# message that inserts a horizon distance into the
+			# history precisely when the glitch excission has
+			# turned off the instrument and the sensitivity
+			# should be 0. we're hoping that us zeroing the
+			# preceding "off" period will erase those entries,
+			# but that won't work if they get inserted after we
+			# do this stuff here.  it's not the end of the
+			# world if we get this wrong, it's just one way in
+			# which the horizon distance history could be
+			# somewhat inaccurate.
+			if segtype == "whitehtsegments":
+				if self.seglistdicts[segtype][instrument]:
+					self._record_horizon_distance(instrument, slice(float(self.seglistdicts[segtype][instrument][-1][-1]), float(timestamp)), 0.)
+				else:
+					self._record_horizon_distance(instrument, float(timestamp), 0.)
 		else:
-			assert new_state == "off"
+			assert False, "impossible new_state '%s'" % new_state
 
 	def gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
 		"""!
