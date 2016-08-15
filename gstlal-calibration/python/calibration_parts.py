@@ -147,11 +147,10 @@ def list_srcs(pipeline, *args):
 
 def smooth_kappas(pipeline, head, var, expected, ceiling, N, Nav):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
-        head = mkaudiorate(pipeline, head)
-        head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = ceiling, default_kappa = expected, array_size = N)
-        head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
-        head = mkaudiorate(pipeline, head)
-        return head
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = ceiling, default_kappa = expected, array_size = N)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+	head = mkaudiorate(pipeline, head)
+	return head
 
 def smooth_kappas_real_test(pipeline, head, var, expected, ceiling, N, Nav):
         # Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
@@ -178,8 +177,8 @@ def smooth_kappas_real_test(pipeline, head, var, expected, ceiling, N, Nav):
         head = mkaudiorate(pipeline, low_ceil_avg)
         return head
 
-def compute_kappa_bits(pipeline, averageok, raw, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, caps, status_out_raw = 1, status_out_smooth = 1, status_out_overall = 1, starting_rate=16, ending_rate=16):
-	rawR, rawI = split_into_real(pipeline, raw, caps)
+def compute_kappa_bits(pipeline, averageok, raw, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, status_out_raw = 1, status_out_smooth = 1, status_out_overall = 1, starting_rate=16, ending_rate=16):
+	rawR, rawI = split_into_real(pipeline, raw)
 
 	rawRInRange = pipeparts.mkgeneric(pipeline, rawR, "lal_add_constant", value = -expected_real)
 	rawRInRange = pipeparts.mkbitvectorgen(pipeline, rawRInRange, threshold = real_ok_var, invert_control = True, bit_vector = status_out_raw)
@@ -262,7 +261,6 @@ def demodulate(pipeline, head, freq, td, caps):
 	head = pipeparts.mkresample(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkgeneric(pipeline, head, "audiocheblimit", cutoff = 0.05)
-	head = pipeparts.mkmatrixmixer(pipeline, head, matrix=[[1.0,0.0],[0.0,-1.0]])
 	head = pipeparts.mktogglecomplex(pipeline, head)
 
 	""""
@@ -427,6 +425,7 @@ def compute_kappac(pipeline, SR, SI):
         # \kappa_C = |S|^2 / Re[S]
         #
 
+	SR = pipeparts.mktee(pipeline, SR)
         S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)))
         kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SR), exponent=-1.0)))
         return kc

@@ -151,17 +151,22 @@ parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (
 # These are options specific to the calibration procedure
 parser.add_option("--filters-file", metavar="filename", help = "Name of file containing filters (in npz format)")
 parser.add_option("--factors-from-filters-file", action = "store_true", help = "Compute the calibration factors from reference values contained in the filters file instead of from EPICS channels.")
+parser.add_option("--no-coherence", action = "store_true", help = "Gate the calibration factors with a pre-computed coherence channel.")
+parser.add_option("--coh-unc-sus-line1-channel", metavar="name", default="CAL-CS_TDEP_SUS_LINE1_UNCERTAINTY", help = "Channel name for SUS line 1 coherence uncertainty. (Default=CAL-CS_TDEP_SUS_LINE1_UNCERTAINTY)")
+parser.add_option("--coh-unc-pcaly-line1-channel", metavar="name", default="CAL-CS_TDEP_PCALY_LINE1_UNCERTAINTY", help = "Channel name for PCALY line 1 coherence uncertainty. (Default=CAL-CS_TDEP_PCALY_LINE1_UNCERTAINTY)")
+parser.add_option("--coh-unc-pcaly-line2-channel", metavar="name", default="CAL-CS_TDEP_PCALY_LINE2_UNCERTAINTY", help = "Channel name for PCALY line 2 coherence uncertainty. (Default=CAL-CS_TDEP_PCALY_LINE2_UNCERTAINTY)")
+parser.add_option("--coh-unc-darm-line1-channel", metavar="name", default="CAL-CS_TDEP_DARM_LINE1_UNCERTAINTY", help = "Channel name for DARM line 1 coherence uncertainty. (Default=CAL-CS_TDEP_DARM_LINE1_UNCERTAINTY)")
 parser.add_option("--no-kappatst", action = "store_true", help = "Set this to turn off the calculation of \kappa_tst.")
 parser.add_option("--no-kappapu", action = "store_true", help = "Set this to turn off the calculation of \kappa_pu.")
 parser.add_option("--no-kappaa", action = "store_true", help = "Set this to turn off the calculation of \kappa_a.")
 parser.add_option("--no-kappac", action = "store_true", help = "Set this to turn off the calculation of \kappa_c.")
 parser.add_option("--no-fcc", action = "store_true", help = "Set this to turn off the calculation of f_cc.")
-parser.add_option("--factors-averaging-time", metavar = "Sec", type = int, default = 128, help = "Time over which to average the time-varying calibration factors (\kappas), given in seconds. (Default = 128 seconds)")
+parser.add_option("--factors-averaging-time", metavar = "Sec", type = int, default = 10, help = "Time over which to average the smoothed time-varying calibration factors (\kappas), given in seconds. (Default = 10 seconds)")
 parser.add_option("--apply-kappapu", action = "store_true", help = "Set this to have the \kappa_pu factors multiply the actuation chain.")
 parser.add_option("--apply-kappatst", action = "store_true", help = "Set this to have the \kappa_tst factors multiply the actuation chain.")
 parser.add_option("--apply-kappac", action = "store_true", help = "Set this to have the \kappa_c factors multiply the sensing chain.")
 parser.add_option("--compute-factors-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which calibration factors are computed. (Default = 16 Hz)")
-parser.add_option("--median-smoothing-time", metavar = "s", type = int, default = 1, help = "Time (in seconds) for average to smooth out \kappa medians. (Default = 1 s)")
+parser.add_option("--median-smoothing-time", metavar = "s", type = int, default = 128, help = "Time (in seconds) to smooth out \kappas with a median-like method. (Default = 128 s)")
 parser.add_option("--record-factors-sr", metavar = "Hz", type = int, default = 16, help = "Sample rate at which calibration factors are recorded. (Default = 16 Hz)")
 parser.add_option("--expected-kappaa-real", metavar = "float", type = float, default = 1.0, help = "Expected value for the real part of \kappa_a. (Default = 1.0)")
 parser.add_option("--expected-kappapu-real", metavar = "float", type = float, default = 1.0, help = "Expected value for the real part of \kappa_pu. (Default = 1.0)")
@@ -179,8 +184,14 @@ parser.add_option("--kappapu-imag-ok-var", metavar = "float", type = float, defa
 parser.add_option("--kappatst-imag-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of the imaginary part of \kappa_tst +/- this number will be considered OK. (Default = 0.1)")
 parser.add_option("--kappac-ok-var", metavar = "float", type = float, default = 0.1, help = "Values of \kappa_c +/- this number will be considered OK. (Default = 0.1)")
 parser.add_option("--fcc-ok-var", metavar = "Hz", type = float, default = 30, help = "Values of f_cc +/- this number (in Hz) will be considered OK. (Default = 30 Hz)")
-parser.add_option("--kappatst-real-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the real part of \kappa_tst +/- this number will be taken as is. Otherwise, they are reset to /kappa_tst_real +/- this number and then applied. (Default = 0.001)")
-parser.add_option("--kappatst-imag-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the imaginary part of \kappa_tst +/- this number will be taken as is. Otherwise, they are reset to /kappa_tst_imag +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--kappatst-real-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the real part of \kappa_tst +/- this number will be taken as is. Otherwise, they are reset to \kappa_tst_real +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--kappatst-imag-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the imaginary part of \kappa_tst +/- this number will be taken as is. Otherwise, they are reset to \kappa_tst_imag +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--kappapu-real-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the real part of \kappa_pu +/- this number will be taken as is. Otherwise, they are reset to \kappa_pu_real +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--kappapu-imag-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the imaginary part of \kappa_pu +/- this number will be taken as is. Otherwise, they are reset to \kappa_pu_imag +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--kappaa-real-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the real part of \kappa_a +/- this number will be taken as is. Otherwise, they are reset to \kappa_a_real +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--kappaa-imag-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of the imaginary part of \kappa_a +/- this number will be taken as is. Otherwise, they are reset to \kappa_a_imag +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--kappac-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of \kappa_c +/- this number will be taken as is. Otherwise, they are reset to \kappa_c +/- this number and then applied. (Default = 0.001)")
+parser.add_option("--fcc-ceiling", metavar = "float", type = float, default = 0.001, help = "Values of \f_cc +/- this number will be taken as is. Otherwise, they are reset to \f_cc +/- this number and then applied. (Default = 0.001)")
 parser.add_option("--exc-channel-name", metavar = "name", default = "CAL-CS_LINE_SUM_DQ", help = "Set the name of the excitation channel.  This is only necessary when the calibration factors computation is turned on, which is the default behavior. (Default = CAL-CS_LINE_SUM_DQ)")
 parser.add_option("--tst-exc-channel-name", metavar = "name", default = "SUS-ETMY_L3_CAL_LINE_OUT_DQ", help = "Set the name of the TST excitation channel.  This is only necessary when the \kappa_tst factors computation is turned on, which is the default behavior. (Default = SUS-ETMY_L3_CAL_LINE_OUT_DQ)")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used for calculating the calibration factors. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
@@ -368,6 +379,18 @@ if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or 
 	if not options.factors_from_filters_file:
 		channel_list.extend(((instrument, options.EP1_real), (instrument, options.EP1_imag)))
 		headkeys.extend(("EP1_real", "EP1_imag"))
+
+# If we are using pre-computed coherence to gate kappas
+if not options.no_coherence:
+	if not options.no_kappatst or not options.no_kappaa or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+		channel_list.extend(((instrument, options.coh_unc_sus_line1_channel), (instrument, options.coh_unc_pcaly_line1_channel)))
+		headkeys.extend(("sus_coh", "pcaly_line1_coh"))
+	if not options.no_kappapu or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
+		channel_list.extend((instrument, options.coh_unc_darm_line1_channel))
+		headkeys.extend(("darm_coh"))
+	if not options.no_kappac or not options.no_fcc:
+		channel_list.extend((instrument, options.coh_unc_pcaly_line2_channel))
+		headkeys.extend(("pcaly_line2_coh")) 	
 	
 # If we are computing the CALIB_STATE_VECTOR, we need yet another channel
 if not options.no_dq_vector:
@@ -524,6 +547,23 @@ if options.data_source == "frames" and frame_segments is not None:
 		currenthead = head_dict[key]
 		head_dict[key] = pipeparts.mkgate(pipeline, currenthead, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, frame_segments[instrument]))
 
+#
+# DQ VECTOR BRANCH: PART 1
+#
+if not options.no_dq_vector:
+	odcstatevector = calibration_parts.mkaudiorate(pipeline, odcstatevector)
+	odctagstr = "channel-name=%s:%s, instrument=%s" % (instrument, options.dq_channel_name, instrument)
+	odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
+	odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector,"progress_odc_%s" % instrument)
+	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
+	# 
+	# OBSERVATION-INTENT BIT BRANCH
+	#
+
+	obsintent = calibration_parts.mkqueue(pipeline, odcstatevectortee)
+	obsintent = pipeparts.mkgeneric(pipeline, obsintent, "lal_logicalundersample", required_on = options.obs_intent_bitmask, status_out = 2)
+	obsintent = pipeparts.mkcapsfilter(pipeline, obsintent, calibstate_caps)
+	obsintenttee = pipeparts.mktee(pipeline, obsintent)	
 
 #
 # TIME-VARYING FACTORS COMPUTATIONS
@@ -585,11 +625,23 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	elif options.factors_from_filters_file:
 		ktst = calibration_parts.compute_kappatst_from_filters_file(pipeline, derr_at_esd_act_freq, tstexc_at_esd_act_freq, pipeparts.mkqueue(pipeline, pcal_at_darm_act_freq), derr_at_darm_act_freq, EP1_real, EP1_imag)
 
+	if not options.no_dq_vector:
+		if not options.no_coherence:
+			# Gate with the coherence and the dq vector
+			threshold = 2
+		else:
+			# Gate with only the dq vector
+			threshold = 1
+	else:
+		if not options.no_coherence:
+			# Gate with only the coherence
+			threshold = 1
+
 	ktsttee = pipeparts.mktee(pipeline, ktst)
 
 	ktstR, ktstI = calibration_parts.split_into_real(pipeline, calibration_parts.mkqueue(pipeline, ktsttee)) 
 	
-smooth_ktstR = calibration_parts.smooth_kappas(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, options.kappatst_real_ceiling, median_smoothing_samples, factors_average_samples)
+	smooth_ktstR = calibration_parts.smooth_kappas(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, options.kappatst_real_ceiling, median_smoothing_samples, factors_average_samples)
         smooth_ktstI = calibration_parts.smooth_kappas(pipeline, ktstI, options.kappatst_imag_ok_var, options.expected_kappatst_imag, options.kappatst_imag_ceiling, median_smoothing_samples, factors_average_samples)
 
 	if not options.no_kappatst:
@@ -642,8 +694,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	kputee = pipeparts.mktee(pipeline, kpu)
 
 	kpuR, kpuI = calibration_parts.split_into_real(pipeline, calibration_parts.mkqueue(pipeline, kputee)) 
-	smooth_kpuR = calibration_parts.smooth_kappas(pipeline, kpuR, options.kappapu_real_ok_var, options.expected_kappapu_real, factors_average_samples, median_smoothing_samples)
-	smooth_kpuI = calibration_parts.smooth_kappas(pipeline, kpuI, options.kappapu_imag_ok_var, options.expected_kappapu_imag, factors_average_samples, median_smoothing_samples)
+	smooth_kpuR = calibration_parts.smooth_kappas(pipeline, kpuR, options.kappapu_real_ok_var, options.expected_kappapu_real, options.kappapu_real_ceiling, median_smoothing_samples, factors_average_samples)
+	smooth_kpuI = calibration_parts.smooth_kappas(pipeline, kpuI, options.kappapu_imag_ok_var, options.expected_kappapu_imag, options.kappapu_imag_ceiling, median_smoothing_samples, factors_average_samples)
 
 	if not options.no_kappapu:
 		smooth_kpuRtee = pipeparts.mktee(pipeline, smooth_kpuR)
@@ -659,8 +711,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		katee = pipeparts.mktee(pipeline, ka)
 	
 		kaR, kaI = calibration_parts.split_into_real(pipeline, calibration_parts.mkqueue(pipeline, katee)) 
-		smooth_kaR = calibration_parts.smooth_kappas(pipeline, kaR, options.kappaa_real_ok_var, options.expected_kappaa_real, factors_average_samples, median_smoothing_samples)
-		smooth_kaI = calibration_parts.smooth_kappas(pipeline, kaI, options.kappaa_imag_ok_var, options.expected_kappaa_imag, factors_average_samples, median_smoothing_samples)
+		smooth_kaR = calibration_parts.smooth_kappas(pipeline, kaR, options.kappaa_real_ok_var, options.expected_kappaa_real, options.kappaa_real_ceiling, median_smoothing_samples, factors_average_samples)
+		smooth_kaI = calibration_parts.smooth_kappas(pipeline, kaI, options.kappaa_imag_ok_var, options.expected_kappaa_imag, options.kappaa_imag_ceiling, median_smoothing_samples, factors_average_samples)
 
 		smooth_kaRtee = pipeparts.mktee(pipeline, smooth_kaR)
 		smooth_kaItee = pipeparts.mktee(pipeline, smooth_kaI)
@@ -686,6 +738,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			S = calibration_parts.compute_S_from_filters_file(pipeline, EP6_real, EP6_imag, pcal_at_opt_gain_freq, derr_at_opt_gain_freq, EP7_real, EP7_imag, pipeparts.mkqueue(pipeline, ktsttee), EP8_real, EP8_imag, pipeparts.mkqueue(pipeline, kputee), EP9_real, EP9_imag)
 
 		S = pipeparts.mktee(pipeline, S)
+		pipeparts.mknxydumpsink(pipeline, S, "S.dump")
 
 		SR, SI = calibration_parts.split_into_real(pipeline, S)
 
@@ -698,9 +751,9 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			kc = calibration_parts.compute_kappac(pipeline, calibration_parts.mkqueue(pipeline, SR), calibration_parts.mkqueue(pipeline, SI))
 			
 			kctee = pipeparts.mktee(pipeline, kc)
+			pipeparts.mknxydumpsink(pipeline, kctee, "kc.dump")
 			
-			# FIXME: Fix factor smoothing and statevector info later
-			smooth_kc = calibration_parts.smooth_kappas(pipeline, pipeparts.mkqueue(pipeline, kctee), options.kappac_ok_var, options.expected_kappac, factors_average_samples, median_smoothing_samples)
+			smooth_kc = calibration_parts.smooth_kappas(pipeline, pipeparts.mkqueue(pipeline, kctee), options.kappac_ok_var, options.expected_kappac, options.kappac_ceiling, median_smoothing_samples, factors_average_samples)
 			smooth_kctee = pipeparts.mktee(pipeline, smooth_kc)
 
 		# compute f_cc
@@ -708,8 +761,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			fcc = calibration_parts.compute_fcc(pipeline, calibration_parts.mkqueue(pipeline, SR), calibration_parts.mkqueue(pipeline, SI), opt_gain_fcc_line_freq)
 			fcctee = pipeparts.mktee(pipeline, fcc)
 
-			# FIXME: Fix factor smoothing and statevector info later
-			smooth_fcc = calibration_parts.smooth_kappas(pipeline, fcctee, options.fcc_ok_var, options.expected_fcc, factors_average_samples, median_smoothing_samples)
+			smooth_fcc = calibration_parts.smooth_kappas(pipeline, fcctee, options.fcc_ok_var, options.expected_fcc, options.fcc_ceiling, median_smoothing_samples, factors_average_samples)
 			smooth_fcctee = pipeparts.mktee(pipeline, smooth_fcc)
 
 #
@@ -797,11 +849,11 @@ if not options.no_dewhitening:
 # Apply factors to actuation and sensing chains, if applicable
 if options.apply_kappac:
 	kc_modify_res = calibration_parts.mkresample(pipeline, calibration_parts.mkqueue(pipeline, smooth_kctee), hoft_caps)
-	kc_modify_res_inv = pipeparts.mkmatrixmixer(pipeline, kc_modify_res, matrix = [[1.0, 0.0]])
-	kc_modify_res_inv = pipeparts.mkgeneric(pipeline, kc_modify_res_inv, "complex_pow", exponent = -1.0)
-	kc_modify_res_inv = pipeparts.mkmatrixmixer(pipeline, kc_modify_res_inv, matrix = [[1.0],[0.0]])
-	#res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, pipeparts.mkpow(pipeline, kc_modify_res, exponent = -1.0)), hoft_caps)
-	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, kc_modify_res_inv))
+	#kc_modify_res_inv = pipeparts.mkmatrixmixer(pipeline, kc_modify_res, matrix = [[1.0, 0.0]])
+	#kc_modify_res_inv = pipeparts.mkgeneric(pipeline, kc_modify_res_inv, "complex_pow", exponent = -1.0)
+	#kc_modify_res_inv = pipeparts.mkmatrixmixer(pipeline, kc_modify_res_inv, matrix = [[1.0],[0.0]])
+	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, pipeparts.mkpow(pipeline, kc_modify_res, exponent = -1.0)))
+	#res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, kc_modify_res_inv))
 		
 #
 # CONTROL + RESIDUAL = H(T)
@@ -827,37 +879,23 @@ else:
 	
 
 #
-# GDS-CALIB_STATE_VECTOR BRANCH
+# DQ VECTORR BRANCH: PART 2
 #
 
 #FIXME: Add more comments!
 
 if not options.no_dq_vector:
-	odcstatevector = calibration_parts.mkaudiorate(pipeline, odcstatevector)
-	odctagstr = "channel-name=%s:%s, instrument=%s" % (instrument, options.dq_channel_name, instrument)
-	odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
-	odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector,"progress_odc_%s" % instrument)
-	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 	#
 	# GAP BIT BRANCH
 	#	
 	#FIXME: Need to make this bit value consistent
 
-	nogap = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, odcgaptee), nongap_is_control = True, bit_vector = 16384) 
+	nogap = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, odcgaptee), nongap_is_control = True, bit_vector = 1) 
 	nogap = pipeparts.mkcapsfilter(pipeline, nogap, odc_caps)
 	nogap = calibration_parts.mkaudiorate(pipeline, nogap)
-	nogap = pipeparts.mkgeneric(pipeline, nogap, "lal_logicalundersample", required_on = 16384, status_out = 16384)
+	nogap = pipeparts.mkgeneric(pipeline, nogap, "lal_logicalundersample", required_on = 1, status_out = 16777216)
 	nogap = pipeparts.mkcapsfilter(pipeline, nogap, calibstate_caps)
-
-	# 
-	# OBSERVATION-INTENT BIT BRANCH
-	#
-
-	obsintent = calibration_parts.mkqueue(pipeline, odcstatevectortee)
-	obsintent = pipeparts.mkgeneric(pipeline, obsintent, "lal_logicalundersample", required_on = options.obs_intent_bitmask, status_out = 2)
-	obsintent = pipeparts.mkcapsfilter(pipeline, obsintent, calibstate_caps)
-	obsintenttee = pipeparts.mktee(pipeline, obsintent)	
 
 	#
 	# OBSERVATION-READY BIT BRANCH
@@ -896,13 +934,13 @@ if not options.no_dq_vector:
 	# KAPPAA-OK BITS BRANCH
 	#
 	if not options.no_kappaa:
-		kaRawInRange, kaSmoothInRange, kaok = calibration_parts.compute_kappa_bits(pipeline, averageok, calibration_parts.mkqueue(pipeline, katee), calibration_parts.mkqueue(pipeline, smooth_kaRtee), calibration_parts.mkqueue(pipeline, smooth_kaItee), options.expected_kappaa_real, options.expected_kappaa_imag, options.kappaa_real_ok_var, options.kappaa_imag_ok_var, status_out_raw = 1024, status_out_smooth = 2048, status_out_overall = 512, starting_rate = options.compute_factors_sr, ending_rate = options.calibstatesr)
+		kaRawInRange, kaSmoothInRange, kaok = calibration_parts.compute_kappa_bits(pipeline, averageok, calibration_parts.mkqueue(pipeline, katee), calibration_parts.mkqueue(pipeline, smooth_kaRtee), calibration_parts.mkqueue(pipeline, smooth_kaItee), options.expected_kappaa_real, options.expected_kappaa_imag, options.kappaa_real_ok_var, options.kappaa_imag_ok_var, status_out_raw = 1024, status_out_smooth = 2048, status_out_overall = 512, starting_rate = options.compute_factors_sr, ending_rate =calibstatesr)
 
 	#
 	# KAPPAPU-OK BITS BRANCH
 	#
 	if not options.no_kappapu:
-		kpuRawInRange, kpuSmoothInRange, kpuok = calibration_parts.compute_kappa_bits(pipeline, averageok, calibration_parts.mkqueue(pipeline, kputee), calibration_parts.mkqueue(pipeline, smooth_kpuRtee), calibration_parts.mkqueue(pipeline, smooth_kpuItee), options.expected_kappapu_real, options.expected_kappapu_imag, options.kappapu_real_ok_var, options.kappapu_imag_ok_var, status_out_raw = 65536, status_out_smooth = 131072, status_out_overall = 32768, starting_rate = options.compute_factors_sr, ending_rate = options.calibstatesr)
+		kpuRawInRange, kpuSmoothInRange, kpuok = calibration_parts.compute_kappa_bits(pipeline, averageok, calibration_parts.mkqueue(pipeline, kputee), calibration_parts.mkqueue(pipeline, smooth_kpuRtee), calibration_parts.mkqueue(pipeline, smooth_kpuItee), options.expected_kappapu_real, options.expected_kappapu_imag, options.kappapu_real_ok_var, options.kappapu_imag_ok_var, status_out_raw = 65536, status_out_smooth = 131072, status_out_overall = 32768, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# KAPPATST-OK BITS BRANCH
@@ -914,20 +952,20 @@ if not options.no_dq_vector:
 	# KAPPAC-OK BITS BRANCH
 	#
 	if not options.no_kappac:
-		kcRawInRange, kcSmoothInRange, kcok = calibration_parts.compute_kappa_bits_real_only(pipeline, averageok, calibration_parts.mkqueue(pipeline, kctee), calibration_parts.mkqueue(pipeline, smooth_kctee), options.expected_kappac, options.kappac_ok_var, status_out_raw = 524288, status_out_smooth = 1048576, status_out_overall = 262144, starting_rate = options.compute_factors_sr, ending_rate = options.calibstatesr)
+		kcRawInRange, kcSmoothInRange, kcok = calibration_parts.compute_kappa_bits_only_real(pipeline, averageok, calibration_parts.mkqueue(pipeline, kctee), calibration_parts.mkqueue(pipeline, smooth_kctee), options.expected_kappac, options.kappac_ok_var, status_out_raw = 524288, status_out_smooth = 1048576, status_out_overall = 262144, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# FCC-OK BIT BRANCH
 	#
 	if not options.no_fcc:
-		fccRawInRange, fccSmoothInRange, fccok = calibration_parts.compute_kappa_bits_real_only(pipeline, averageok, calibration_parts.mkqueue(pipeline, fcctee), calibration_parts.mkqueue(pipeline, smooth_fcctee), options.expected_fcc, options.fcc_ok_var, status_out_raw = 4194303, status_out_smooth = 8388608, status_out_overall = 2097152, starting_rate = options.compute_factors_sr, ending_rate = options.calibstatesr)
+		fccRawInRange, fccSmoothInRange, fccok = calibration_parts.compute_kappa_bits_only_real(pipeline, averageok, calibration_parts.mkqueue(pipeline, fcctee), calibration_parts.mkqueue(pipeline, smooth_fcctee), options.expected_fcc, options.fcc_ok_var, status_out_raw = 4194303, status_out_smooth = 8388608, status_out_overall = 2097152, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# KAPPA-AVERAGE-OK BIT BRANCH
 	#
-	if not options.no_kappaa or not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
-		averageok = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, averageok), threshold = 1, bit_vector = 16777216)
-		averageok = pipeparts.mkcapsfilter(pipeline, averageok, calibstate_caps)	
+	#if not options.no_kappaa or not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+	#	averageok = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, averageok), threshold = 1, bit_vector = 16777216)
+	#	averageok = pipeparts.mkcapsfilter(pipeline, averageok, calibstate_caps)	
 	#
 	# H(T)-OK BIT BRANCH
 	#
