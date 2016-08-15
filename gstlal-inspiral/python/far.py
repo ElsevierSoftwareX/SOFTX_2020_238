@@ -65,12 +65,6 @@ import random
 import warnings
 from scipy import interpolate
 from scipy import optimize
-# FIXME remove this when the LDG upgrades scipy on the SL6 systems, Debian
-# systems are already fine
-try:
-	from scipy.optimize import curve_fit
-except ImportError:
-	from gstlal.curve_fit import curve_fit
 from scipy import stats
 from scipy.special import ive
 import sqlite3
@@ -2172,7 +2166,7 @@ WHERE
 
 				# Fit for the ratio of unclustered to clustered triggers.
 				# Only fit N_ratio over the range of ranks decided above
-				precluster_normalization, precluster_covariance_matrix = curve_fit(
+				precluster_normalization, precluster_covariance_matrix = optimize.curve_fit(
 					extincted_counts,
 					ranks[rank_range],
 					zero_lag_compcumcount.compress(rank_range),
