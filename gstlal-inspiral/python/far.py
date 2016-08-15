@@ -1876,11 +1876,6 @@ class RankingData(object):
 		self.zero_lag_likelihood_pdfs = {}
 		self.process_id = process_id
 
-		if min_instruments < 1:
-			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
-		if min_instruments > len(instruments):
-			raise ValueError("not enough instruments to satisfy min_instruments")
-
 		#
 		# initialize binnings
 		#
@@ -1898,6 +1893,15 @@ class RankingData(object):
 
 		if coinc_params_distributions is None:
 			return
+
+		#
+		# now check input
+		#
+
+		if min_instruments < 1:
+			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
+		if min_instruments > len(instruments):
+			raise ValueError("not enough instruments to satisfy min_instruments")
 
 		#
 		# run importance-weighted random sampling to populate
