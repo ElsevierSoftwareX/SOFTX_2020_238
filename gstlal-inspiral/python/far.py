@@ -84,7 +84,6 @@ from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
-from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
