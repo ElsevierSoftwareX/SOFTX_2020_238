@@ -1299,27 +1299,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return xml
 
 	@property
-	def count_above_threshold(self):
-		"""
-		Dictionary mapping instrument combination (as a frozenset)
-		to number of zero-lag coincs observed.  An additional entry
-		with key None stores the total.
-		"""
-		# FIXME now that we're using a categories-like binning,
-		# this is just literally the zero_lag_rates binned array.
-		# remove and just use zero_lag_rate directly
-		count_above_threshold = dict(zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
-		count_above_threshold[None] = sum(sorted(count_above_threshold.values()))
-		return count_above_threshold
-
-	@count_above_threshold.setter
-	def count_above_threshold(self, count_above_threshold):
-		self.zero_lag_rates["instruments"].array[:] = 0.
-		for instruments, count in count_above_threshold.items():
-			if instruments is not None:
-				self.zero_lag_rates["instruments"][instruments,] = count
-
-	@property
 	def Pinstrument_noise(self):
 		P = {}
 		for instruments, p in zip(self.background_pdf["instruments"].bins.centres()[0], self.background_pdf["instruments"].array):

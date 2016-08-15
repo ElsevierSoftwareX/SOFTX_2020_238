@@ -164,11 +164,25 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	axes0.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
 	axes0.set_title("Observed Background Event Counts")
 
+	def count_above_threshold(coinc_param_distributions):
+		"""
+		Dictionary mapping instrument combination (as a frozenset)
+		to number of zero-lag coincs observed.  An additional entry
+		with key None stores the total.
+		"""
+		# FIXME:  this is legacy code moved here from the
+		# ThincaCoincParamsDistributions class definition.  this is
+		# the only code that was still using it.  clean this up
+		# somehow
+		count_above_threshold = dict(zip(coinc_param_distributions.zero_lag_rates["instruments"].bins.centres()[0], coinc_param_distributions.zero_lag_rates["instruments"].array))
+		count_above_threshold[None] = sum(sorted(count_above_threshold.values()))
+		return count_above_threshold
+
 	# projected background counts
 	labels = []
 	sizes = []
 	colours = []
-	for instruments in sorted(sorted(instruments) for instruments in coinc_param_distributions.count_above_threshold if instruments is not None):
+	for instruments in sorted(sorted(instruments) for instruments in count_above_threshold(coinc_param_distributions) if instruments is not None):
 		count = coinc_param_distributions.background_rates["instruments"][frozenset(instruments),]
 		if len(instruments) < 2 or not count:
 			continue
@@ -197,7 +211,7 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	labels = []
 	sizes = []
 	colours = []
-	for instruments, count in sorted((sorted(instruments), count) for instruments, count in coinc_param_distributions.count_above_threshold.items() if instruments is not None):
+	for instruments, count in sorted((sorted(instruments), count) for instruments, count in count_above_threshold(coinc_param_distributions).items() if instruments is not None):
 		if len(instruments) < 2 or not count:
 			continue
 		labels.append("%s\n(%d)" % (", ".join(instruments), count))
