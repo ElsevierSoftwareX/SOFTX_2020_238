@@ -2514,10 +2514,3 @@ def get_live_time(seglistdict, verbose = False):
 	if verbose:
 		print >> sys.stderr, "Livetime: %.3g s" % livetime
 	return livetime
-
-
-def get_live_time_segs_from_search_summary_table(connection, program_name = "gstlal_inspiral"):
-	xmldoc = dbtables.get_xml(connection)
-	farsegs = ligolw_search_summary.segmentlistdict_fromsearchsummary(xmldoc, program_name).coalesce()
-	xmldoc.unlink()
-	return farsegs
