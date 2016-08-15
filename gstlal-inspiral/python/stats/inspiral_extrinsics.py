@@ -27,15 +27,18 @@
 import math
 import numpy
 import random
+import sys
 
 
 from glue import iterutils
 import lal
 import lalsimulation
 from pylal import rate
+from pylal import snglcoinc
 
 
 __all__ = [
+	"instruments_rate_given_noise",
 	"joint_pdf_of_snrs",
 	"P_instruments_given_signal"
 ]
@@ -48,6 +51,94 @@ __all__ = [
 #
 # =============================================================================
 #
+
+
+def instruments_rate_given_noise(singles_counts, zero_lag_coinc_counts, segs, delta_t, verbose = False):
+	"""
+	Models the expected number of background coincidence events.  Most
+	of the work is performed by pylal.snglcoinc.CoincSynthesizer.  The
+	output of that code is corrected using the assumption that the
+	events whose total counts are provided as input to this function
+	are occuring in distinct "bins" (= templates) and that they can
+	only form a coincidence if they are in the same bin.  The number of
+	distinct bins is solved for using the actual observed zero-lag
+	coincidence counts.
+
+	Note the odd cart-before-the-horse logic:  we need to know the
+	number of observed coincidence events in order to predict the
+	number of observed coincidence events.  However, the observed event
+	counts are used *only* to solve for the number of distinct bins.
+
+	Example:
+
+	>>> from glue.segments import *
+	>>> singles_counts = {"H1": 33, "L1": 35, "V1": 55}
+	>>> zero_lag_coinc_counts = {frozenset(['V1', 'H1']): 1, frozenset(['V1', 'H1', 'L1']): 0, frozenset(['H1', 'L1']): 1, frozenset(['V1', 'L1']): 2}
+	>>> seglists = segmentlistdict({"H1": segmentlist([segment(0, 30)]), "L1": segmentlist([segment(10, 50)]), "V1": segmentlist([segment(20, 70)])})
+	>>> instruments_rate_given_noise(singles_counts, zero_lag_coinc_counts, seglists, 0.005)
+	{frozenset(['V1', 'H1']): 0.7635015339606976, frozenset(['V1', 'H1', 'L1']): 0.017867580438332864, frozenset(['H1', 'L1']): 0.5601269964222882, frozenset(['V1', 'L1']): 1.7982741132776223}
+	"""
+	if set(singles_counts) != set(segs):
+		raise ValueError("singles_counts (%s) and segs (%s) must be for the same instruments" % (", ".join(sorted(singles_counts)), ", ".join(sorted(segs))))
+
+	#
+	# initialize the CoincSynthesizer object
+	#
+
+	if verbose:
+		print >>sys.stderr, "synthesizing background-like instrument combination probabilities ..."
+	coincsynth = snglcoinc.CoincSynthesizer(
+		eventlists = singles_counts,
+		segmentlists = segs,
+		delta_t = delta_t
+	)
+
+	if set(zero_lag_coinc_counts) < set(coincsynth.all_instrument_combos):
+		raise ValueError("zero_lag_coinc_counts must provide a count for each possible instrument combo:  missing %s" % ", ".join(sorted(set(coincsynth.all_instrument_combos) - set(zero_lag_coinc_counts))))
+
+	# assume the single-instrument events are being collected in
+	# several disjoint bins so that events from different instruments
+	# that occur at the same time but in different bins are not
+	# coincident.  if there are M bins for each instrument, the
+	# probability that N events all occur in the same bin is
+	# (1/M)^(N-1).  the number of bins, M, is therefore given by the
+	# (N-1)th root of the ratio of the predicted number of N-instrument
+	# coincs to the observed number of N-instrument coincs.  use the
+	# average of M measured from all instrument combinations.
+	#
+	# finding M by comparing predicted to observed zero-lag counts
+	# assumes we are in a noise-dominated regime, i.e., that the
+	# observed relative abundances of coincs are not significantly
+	# contaminated by signals.  if signals are present in large
+	# numbers, and occur in different abundances than the noise events,
+	# averaging the apparent M over different instrument combinations
+	# helps to suppress the contamination.  NOTE:  the number of
+	# coincidence bins, M, should be very close to the number of
+	# templates
+	N = 0
+	coincidence_bins = 0.
+	for instruments in coincsynth.all_instrument_combos:
+		predicted_count = coincsynth.mean_coinc_count[instruments]
+		observed_count = zero_lag_coinc_counts[instruments]
+		if predicted_count > 0 and observed_count > 0:
+			coincidence_bins += (predicted_count / observed_count)**(1. / (len(instruments) - 1))
+			N += 1
+	assert N > 0
+	assert coincidence_bins > 0.
+	coincidence_bins /= N
+	if verbose:
+		print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s).  using %g" % (coincidence_bins, round(coincidence_bins))
+	coincidence_bins = round(coincidence_bins)
+
+	# assume the rate is uniform across bins to convert observed
+	# single-instrument event rates to rates/bin by dividing by the
+	# number of bins
+	coincsynth.mu = dict((instrument, rate / coincidence_bins) for instrument, rate in coincsynth.mu.items())
+
+	# now compute the expected coincidence rates/bin/instrument combo,
+	# then multiply by the number of bins to get the expected
+	# coincidence rate/instrument combination.
+	return dict((instruments, count * coincidence_bins) for instruments, count in coincsynth.mean_coinc_count.items())
 
 
 def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instruments = 2, min_distance = 0.):

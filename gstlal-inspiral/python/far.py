@@ -422,58 +422,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# FIXME:  should this be done in .finish()?  but we'd need
 		# the segment lists
-
-		if verbose:
-			print >>sys.stderr, "synthesizing background-like instrument combination probabilities ..."
-		coincsynth = snglcoinc.CoincSynthesizer(
-			eventlists = dict((instrument, self.background_rates["instruments"][frozenset([instrument]),]) for instrument in segs),
-			segmentlists = segs,
-			delta_t = 0.005
-		)
-		# assume the single-instrument events are being collected
-		# in several disjoint bins so that events from different
-		# instruments that occur at the same time but in different
-		# bins are not coincident.  if there are M bins for each
-		# instrument, the probability that N events all occur in
-		# the same bin is (1/M)^(N-1).  the number of bins, M, is
-		# therefore given by the (N-1)th root of the ratio of the
-		# predicted number of N-instrument coincs to the observed
-		# number of N-instrument coincs.  use the average of M
-		# measured from all instrument combinations.
-		#
-		# finding M by comparing predicted to observed zero-lag
-		# counts assumes we are in a noise-dominated regime, i.e.,
-		# that the observed relative abundances of coincs are not
-		# significantly contaminated by signals.  if signals are
-		# present in large numbers, and occur in different
-		# abundances than the noise events, averaging the apparent
-		# M over different instrument combinations helps to
-		# suppress the contamination.  NOTE:  the number of
-		# coincidence bins, M, should be very close to the number
-		# of templates (experience shows that it is not equal to
-		# the number of templates, though I don't know why).
-		livetime = get_live_time(segs)
-		N = 0
-		coincidence_bins = 0.
-		for instruments in coincsynth.all_instrument_combos:
-			predicted_count = coincsynth.rates[frozenset(instruments)] * livetime
-			observed_count = self.zero_lag_rates["instruments"][frozenset(instruments),]
-			if predicted_count > 0 and observed_count > 0:
-				coincidence_bins += (predicted_count / observed_count)**(1. / (len(instruments) - 1))
-				N += 1
-		assert N > 0
-		assert coincidence_bins > 0.
-		coincidence_bins /= N
-		if verbose:
-			print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s)" % coincidence_bins
-		assert coincidence_bins >= 1.
-		# convert single-instrument event rates to rates/bin
-		coincsynth.mu = dict((instrument, rate / coincidence_bins) for instrument, rate in coincsynth.mu.items())
-		# now compute the expected coincidence rates/bin, then
-		# multiply by the number of bins to get the expected
-		# coincidence rates
-		for instruments, count in coincsynth.mean_coinc_count.items():
-			self.background_rates["instruments"][frozenset(instruments),] = count * coincidence_bins
+		for instruments, count in inspiral_extrinsics.instruments_rate_given_noise(
+			singles_counts = dict((instrument, self.background_rates["instruments"][frozenset([instrument]),]) for instrument in segs),
+			zero_lag_coinc_counts = dict((instruments, self.zero_lag_rates["instruments"][instruments,]) for instruments in self.zero_lag_rates["instruments"].bins[0].centres()),
+			segs = segs,
+			delta_t = 0.005,
+			verbose = verbose
+		).items():
+			self.background_rates["instruments"][instruments,] = count
 
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
