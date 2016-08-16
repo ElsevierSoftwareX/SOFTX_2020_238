@@ -2506,8 +2506,10 @@ def marginalize_pdf_urls(urls, require_coinc_param_data, require_ranking_stat_da
 #
 
 
-def get_live_time(seglistdict, verbose = False):
-	livetime = float(abs(vote((segs for instrument, segs in seglistdict.items() if instrument != "H2"), 2)))
+def get_live_time(seglistdict, min_instruments = 2, verbose = False):
+	if min_instruments < 1:
+		raise ValueError("min_instruments (=%d) must be >= 1" % min_instruments)
+	livetime = float(abs(vote((segs for instrument, segs in seglistdict.items() if instrument != "H2"), min_instruments)))
 	if verbose:
 		print >> sys.stderr, "Livetime: %.3g s" % livetime
 	return livetime
