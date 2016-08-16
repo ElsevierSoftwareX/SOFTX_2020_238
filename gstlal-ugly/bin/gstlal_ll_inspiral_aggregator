@@ -1,0 +1,88 @@
+#!/usr/bin/env python
+import h5py
+import numpy
+import os
+import itertools
+import argparse
+import lal
+from lal import LIGOTimeGPS
+import time
+
+def now():
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
+
+# Read command line options
+def parse_command_line():
+
+	parser = argparse.ArgumentParser(description="Online data aggregator")
+
+	# directory to put everything in
+	parser.add_argument("--base-dir", action="store", default="aggregator", help="Specify output path")
+
+	# num-jobs
+	parser.add_argument("--num-jobs", action="store", type=int, default=112, help="number of running jobs")
+	
+
+	args = parser.parse_args()
+
+	return args
+
+
+def makedir(path):
+	try:
+		os.makedirs(path)
+	except IOError:
+		pass
+	except OSError:
+		pass
+
+def create_new_dataset(path, data):
+	fname = os.path.join(path, "%s.hdf5" % data)
+	if os.path.exists(fname):
+		return
+	f = h5py.File(fname, "w")
+	f.create_dataset("time", (0,), dtype="f64")
+	f.create_dataset("data", (0,), dtype="f64")
+	f.close()
+
+def setup_dirs(gpstime, types, bins, data, base_dir, verbose = True):
+	# The next 100,000 seconds of directory structure after the specified start
+	# time given by the first 4 digits
+	str_time = str(gpstime).split(".")[0]
+	digits = [int(x) for x in str_time]
+	directories = [numpy.array([digits[x]]) for x in range(7)]
+
+	# Setup the directory structure and put in empty files
+	for dirs in [directories[:i+1] for i in range(len(directories))]:
+		for path in itertools.product(*dirs):
+			cur_dir = os.path.join(base_dir, "/".join(str(x) for x in path))
+			if verbose:
+				print cur_dir
+			makedir(cur_dir)
+			for typ in types:
+				type_dir = os.path.join(cur_dir, typ)
+				makedir(type_dir)
+				if typ == "all":
+					for b in bins:
+						bin_dir = os.path.join(type_dir, b)
+						makedir(bin_dir)
+						for d in data:
+							create_new_dataset(bin_dir, d)
+				else:
+					for d in data:
+						create_new_dataset(type_dir, d)
+	
+
+# parse command line
+args = parse_command_line()
+
+# FIXME don't hardcode some of these?
+types = ["min", "max", "mean", "all"]
+bins = ["%04d" % b for b in numpy.arange(0, args.num_jobs)]
+data = ["latency", "snr"]
+
+while True:
+	
+	setup_dirs(now(), types, bins, data, args.base_dir)
+	time.sleep(1)
+
