@@ -678,7 +678,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		src = pipeparts.mktee(pipeline, src)	# comment-out if the tee above is uncommented
 		elem = pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights), max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare" % logname)
-		elem = pipeline, pipeparts.mkresample(pipeline, elem, quality = 9)
+		elem = pipeparts.mkresample(pipeline, elem, quality = 9)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
 
