@@ -672,9 +672,6 @@ class Data(object):
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 
 				if self.marginalized_likelihood_file is not None:
-					# FIXME:  must set horizon
-					# distances in coinc params object
-
 					# enable streamthinca's likelihood
 					# ratio assignment using our own,
 					# local, parameter distribution
