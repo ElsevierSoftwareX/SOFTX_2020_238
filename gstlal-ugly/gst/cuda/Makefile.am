@@ -7,8 +7,8 @@ libcuda_plugin_la_SOURCES = \
 	LIGOLw_xmllib/LIGOLwWriter.c \
 	LIGOLw_xmllib/LIGOLwUtils.c \
 	cuda_plugin.c \
-	iirfilter/iirfilter_kernel.cu \
-	iirfilter/cuda_gstlal_iirbank.c \
+	spiir/cuspiir_kernel.cu \
+	spiir/cuspiir.c \
 	multiratespiir/multiratespiir_kernel.cu \
 	multiratespiir/spiir_state_utils.c \
 	multiratespiir/multiratespiir_utils.c \
@@ -44,8 +44,8 @@ libcuda_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS)
 
 noinst_HEADERS = \
 	LIGOLw_xmllib/LIGOLwHeader.h \
-	iirfilter/iirfilter_kernel.h \
-	iirfilter/cuda_gstlal_iirbank.h \
+	spiir/cuspiir_kernel.h \
+	spiir/cuspiir.h \
 	multiratespiir/multiratespiir.h \
 	multiratespiir/spiir_state_macro.h \
 	postcoh/postcoh_utils.h \

@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 #include <stdio.h>
-#include <iirfilter/iirfilter_kernel.h>
+#include <spiir/cuspiir_kernel.h>
 
 #ifdef __cplusplus
 }
