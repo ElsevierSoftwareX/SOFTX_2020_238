@@ -37,6 +37,7 @@ class HyperCube(object):
 		self.metric = metric
 		self.metric_tensor = self.metric.metric_tensor(self.center, self.deltas)
 		self.size = self._size()
+		self.tiles = []
 		self.symmetry_func = symmetry_func
 		self.__mismatch = mismatch
 
@@ -70,7 +71,7 @@ class HyperCube(object):
 		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
 	def tile(self, mismatch, verbose = True):
-		tiles = []
+
 		popcount = 0
 
 		# Find the coordinate transformation matrix
@@ -78,15 +79,15 @@ class HyperCube(object):
 			M = numpy.linalg.cholesky(self.metric_tensor)
 			Minv = numpy.linalg.inv(M)
 		except numpy.linalg.LinAlgError:
-			tiles.append(self.center)
+			self.tiles.append(self.center)
 			print >>sys.stderr, "tiling failed: %f" % numpy.linalg.det(self.metric_tensor)
 			raise
-			return tiles, popcount
+			return self.tiles, popcount
 
 		if False:
 			# To Stephen with love
 			# From Chad
-			tiles = [self.center]
+			self.tiles = [self.center]
 			N = self.N()
 			target = numpy.ceil(self.num_templates(mismatch))
 			dl = self.dl(mismatch)
@@ -94,13 +95,13 @@ class HyperCube(object):
 			rand_coords = numpy.random.rand(1e4, len(self.deltas))
 			for randcoord in rand_coords:
 				randcoord = (randcoord - 0.5) * self.deltas + self.center
-				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in tiles]
+				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in self.tiles]
 				maxdist = max(distances)
 				mindist = min(distances)
 				assert randcoord in self
 				if mindist > dl * N**.5:
-					tiles.append(randcoord)
-				if len(tiles) > target:
+					self.tiles.append(randcoord)
+				if len(self.tiles) > target:
 					break
 
 		if True:
@@ -137,16 +138,16 @@ class HyperCube(object):
 
 				# FIXME take care of ratty edges
 				if primed_coords in self:
-					tiles.append(primed_coords)
+					self.tiles.append(primed_coords)
 
 		# Gaurantee at least one
-		if len(tiles) == 0:
-			tiles.append(self.center)
+		if len(self.tiles) == 0:
+			self.tiles.append(self.center)
 		if verbose:
-			print "placing %04d tiles in hyperrectangle with boundary:" % len(tiles)
+			print "placing %04d tiles in hyperrectangle with boundary:" % len(self.tiles)
 			for row in self.boundaries:
 				print "\t", row
-		return list(tiles), popcount
+		return list(self.tiles), popcount
 
 	def __contains__(self, coords):
 		size = self.size
