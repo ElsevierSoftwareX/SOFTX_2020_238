@@ -127,7 +127,8 @@ class HyperCube(object):
 				assert s < e
 				numtmps = 2**numpy.ceil(numpy.log2((numpy.ceil((e-s)) + 1) // 2))
 				# FIXME hexagonal lattice in 2D
-				grid.append((numpy.arange(-numtmps, numtmps) + 0.5 * cnt % 2)* self.dl(mismatch))
+				grid.append((numpy.arange(-numtmps, numtmps))* self.dl(mismatch))
+				#grid.append((numpy.arange(-numtmps, numtmps) + 0.5 * cnt % 2)* self.dl(mismatch))
 				#grid.append(numpy.array((-numtmps, numtmps)))
 			for coords in itertools.product(*grid):
 				# check this math
@@ -150,10 +151,11 @@ class HyperCube(object):
 	def __contains__(self, coords):
 		size = self.size
 		tmps = self.num_tmps_per_side(self.__mismatch)
-		fraction = (tmps + 0.5) / tmps
+		fraction = (tmps + 1.0) / tmps
 		for i, c in enumerate(coords):
 			# FIXME do something more sane to handle boundaries
-			if not (c >= 1. * self.boundaries[i,0] and c < (fraction[i] * self.deltas[i] + self.boundaries[i,0])):
+			if not ((c >= self.center[i] - self.deltas[i] * fraction[i] / 2.) and (c < self.center[i] + self.deltas[i] * fraction[i] / 2.)):
+			#if not (c >= 1. * self.boundaries[i,0] and c < (fraction[i] * self.deltas[i] + self.boundaries[i,0])):
 				return False
 		return True
 
@@ -164,7 +166,7 @@ class HyperCube(object):
 		# From Owen 1995 (2.15)
 		return 2 * mismatch**.5 / self.N()**.5
 		# FIXME the factor of 1.27 is just for a 2D hex lattice
-		return 2 * mismatch**.5 / self.N()**.5 * 1.27
+		# return 2 * mismatch**.5 / self.N()**.5 * 1.27
 
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
