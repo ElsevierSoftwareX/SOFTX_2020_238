@@ -45,7 +45,7 @@
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal/gstlal.h>
-#include <spiir/cuspiir.h>
+#include <spiir/spiir.h>
 
 /*
  * stuff from FFTW and GSL
@@ -61,7 +61,7 @@
  * functions from cuda file
  */
 
-#include <spiir/cuspiir_kernel.h>
+#include <spiir/spiir_kernel.h>
 
 /*
  * ============================================================================

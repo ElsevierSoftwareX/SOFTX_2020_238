@@ -18,8 +18,8 @@
  */
 
 
-#ifndef __CUDA_MULTIRATE_SPIIR_H__
-#define __CUDA_MULTIRATE_SPIIR_H__
+#ifndef __CUDA_MULTIRATESPIIR_H__
+#define __CUDA_MULTIRATESPIIR_H__
 
 #include <glib.h>
 #include <gst/gst.h>
@@ -158,4 +158,4 @@ GType cuda_multirate_spiir_get_type(void);
 
 G_END_DECLS
 
-#endif /* __CUDA_MULTIRATE_SPIIR_H__ */
+#endif /* __CUDA_MULTIRATESPIIR_H__ */

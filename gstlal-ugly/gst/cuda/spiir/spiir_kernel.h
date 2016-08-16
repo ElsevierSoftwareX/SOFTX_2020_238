@@ -26,7 +26,7 @@
  */
 
 
-#include <spiir/cuspiir.h>
+#include <spiir/spiir.h>
 #define BANK_INIT_SUCCESS 1
 #define BANK_INIT_FAILED -1
 #define BANK_FREE_SUCCESS 1

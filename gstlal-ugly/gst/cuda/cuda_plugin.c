@@ -42,7 +42,7 @@
  */
 
 
-#include <spiir/cuspiir.h>
+#include <spiir/spiir.h>
 //#include <audioresample/cuda_gstaudioresample.h>
 //#include <multidownsample/gstlal_multidownsample.h>
 #include <multiratespiir/multiratespiir.h>

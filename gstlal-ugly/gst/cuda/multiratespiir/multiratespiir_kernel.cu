@@ -35,9 +35,7 @@ extern "C" {
 #include <gst/gst.h>
 
 
-#include "multiratespiir.h"
-#include "multiratespiir_utils.h"
-#include "spiir_state_macro.h"
+#include <multiratespiir/multiratespiir_kernel.h>
 #include <cuda_debug.h>
 #ifdef __cplusplus
 }

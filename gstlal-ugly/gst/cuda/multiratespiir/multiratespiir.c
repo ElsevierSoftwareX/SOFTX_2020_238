@@ -1,4 +1,4 @@
-/* GStreamer
+/* 
  * Copyright (C) 2014 Qi Chu
  *
  * This library is free software; you can redistribute it and/or
@@ -39,10 +39,9 @@
 #include <gstlal/gstlal.h>
 
 
-#include "multiratespiir.h"
-#include "multiratespiir_utils.h"
-#include "spiir_state_macro.h"
-#include "spiir_state_utils.h"
+#include <multiratespiir/multiratespiir.h>
+#include <multiratespiir/multiratespiir_utils.h>
+#include <multiratespiir/multiratespiir_kernel.h>
 
 #include <cuda_runtime.h>
 #include <cuda_debug.h>

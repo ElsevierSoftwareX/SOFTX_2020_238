@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 #include <stdio.h>
-#include <spiir/cuspiir_kernel.h>
+#include <spiir/spiir_kernel.h>
 
 #ifdef __cplusplus
 }
