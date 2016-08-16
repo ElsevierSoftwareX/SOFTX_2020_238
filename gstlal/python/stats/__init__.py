@@ -123,6 +123,17 @@ def assert_probability(f):
 	return g
 
 
+def assert_ln_probability(f):
+	def g(*args, **kwargs):
+		p = f(*args, **kwargs)
+		if isinstance(p, numpy.ndarray):
+			assert (p <= 0.).all()
+		else:
+			assert p <= 0.
+		return p
+	return g
+
+
 @assert_probability
 @numpy.vectorize
 def poisson_p_not_0(l):
@@ -176,6 +187,15 @@ def poisson_p_0(l):
 	yields a zero count.  = exp(-l).
 	"""
 	return numpy.exp(-l)
+
+
+@assert_ln_probability
+def poisson_ln_p_0(l):
+	"""
+	Return the natural logarithm of the probability that a Poisson
+	process with a mean rate of l yields a zero count.  = -l.
+	"""
+	return -l
 
 
 #
