@@ -65,7 +65,7 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_interp.h>
-#include "ssvkernel.h"
+#include <cohfar/ssvkernel.h>
 
 #define MAX(a,b) (a>b)?(a):(b)
 #define MIN(a,b) (a<b)?(a):(b)

@@ -31,6 +31,25 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 
+#define IFO_LEN 2
+#define MAX_COMBOS 4
+
+#define LOGSNR_CMIN	0.54 // center of the first bin
+#define LOGSNR_CMAX	3.0 // center of the last bin
+#define LOGSNR_NBIN	300 // step is 0.01
+#define LOGCHISQ_CMIN	-1.2
+#define LOGCHISQ_CMAX	4.0
+#define LOGCHISQ_NBIN	300
+
+#define	BACKGROUND_XML_RATES_NAME "background_rates"
+#define	BACKGROUND_XML_SNR_SUFFIX "_lgsnr"
+#define	BACKGROUND_XML_CHISQ_SUFFIX "_lgchisq"
+#define	BACKGROUND_XML_HIST_SUFFIX "_histogram"	
+#define	BACKGROUND_XML_PDF_NAME	"background_pdf"	
+#define	BACKGROUND_XML_CDF_NAME	"background_cdf"	
+#define BACKGROUND_XML_SNR_CHISQ_SUFFIX "_lgsnr_lgchisq"
+
+
 typedef struct {
 	double	cmin;
 	double	cmax;
