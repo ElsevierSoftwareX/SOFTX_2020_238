@@ -7,6 +7,9 @@ import argparse
 import lal
 from lal import LIGOTimeGPS
 import time
+from gstlal import servicediscovery
+from gi.repository import GLib
+
 
 def now():
 	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
@@ -22,7 +25,6 @@ def parse_command_line():
 	# num-jobs
 	parser.add_argument("--num-jobs", action="store", type=int, default=112, help="number of running jobs")
 	
-
 	args = parser.parse_args()
 
 	return args
@@ -72,6 +74,20 @@ def setup_dirs(gpstime, types, bins, data, base_dir, verbose = True):
 					for d in data:
 						create_new_dataset(type_dir, d)
 	
+class MyListener(servicediscovery.Listener):
+	def print_msg(self, action, sname, stype, sdomain, host, port, properties):
+		print >>sys.stderr, "Service \"%s\" %s" % (sname, action)
+		print >>sys.stderr, "\tType is \"%s\"" % stype
+		print >>sys.stderr, "\tDomain is \"%s\"" % sdomain
+		print >>sys.stderr, "\tHost is \"%s\"" % host
+		print >>sys.stderr, "\tPort is %s" % port
+		print >>sys.stderr, "\tProperties are %s\n" % properties
+	def add_service(self, sname, stype, sdomain, host, port, properties):
+		self.print_msg("added", sname, stype, sdomain, host, port, properties)
+	def remove_service(self, sname, stype, sdomain):
+		self.print_msg("removed", sname, stype, sdomain, None, None, None)
+	def failure(self, *args):
+		print >>sys.stderr, "failure", args
 
 # parse command line
 args = parse_command_line()
@@ -81,8 +97,12 @@ types = ["min", "max", "mean", "all"]
 bins = ["%04d" % b for b in numpy.arange(0, args.num_jobs)]
 data = ["latency", "snr"]
 
+mainloop = GLib.MainLoop()
+browser = servicediscovery.ServiceBrowser(MyListener())
+print "Browsing for services.  Press CTRL-C to quit.\n"
+mainloop.run()
+
 while True:
 	
 	setup_dirs(now(), types, bins, data, args.base_dir)
 	time.sleep(1)
-
