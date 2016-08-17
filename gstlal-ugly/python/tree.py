@@ -70,7 +70,7 @@ class HyperCube(object):
 		rightbound[dim,0] = self.center[dim]
 		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
-	def tile(self, mismatch, verbose = True):
+	def tile(self, mismatch, stochastic = False, verbose = True):
 
 		popcount = 0
 
@@ -84,7 +84,7 @@ class HyperCube(object):
 			raise
 			return self.tiles, popcount
 
-		if False:
+		if stochastic:
 			# To Stephen with love
 			# From Chad
 			self.tiles = [self.center]
@@ -104,7 +104,7 @@ class HyperCube(object):
 				if len(self.tiles) > target:
 					break
 
-		if True:
+		else:
 			# The bounding box has 2*N points to define it each point is
 			# an N length vector.  Figure out the x' coordinates of the
 			# bounding box in and divide by dl to get number of templates

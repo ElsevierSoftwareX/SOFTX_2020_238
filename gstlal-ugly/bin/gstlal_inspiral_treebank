@@ -14,6 +14,7 @@ from gstlal import tree
 from gstlal.tree import *
 import os,sys,argparse
 
+
 # Read command line options
 def parse_command_line():
 
@@ -71,6 +72,10 @@ def parse_command_line():
 	# meta-params
 	parser.add_argument("--min-match", action="store", type=float,\
 					default=0.95, help="Minimum match to generate bank.")
+	parser.add_argument("--stochastic", action="store_true", \
+					default=False, help="Use stochastic placement for tiling instead of a regular lattice.")
+	parser.add_argument("--rng-seed", action="store", type=float,\
+					default=314, help="Set seed used for random number generator. Relevant only when using stocahstic placement.")
 	parser.add_argument("--flow", action="store", type=float,\
 					default=30.0, help="Low frequency cutoff for overlap calculations.")
 	parser.add_argument("--fhigh", action="store", type=float,\
@@ -83,6 +88,8 @@ def parse_command_line():
 					default=None, help="Specify standard noise model.")
 
 	args = parser.parse_args()
+
+	numpy.random.seed(args.rng_seed)
 
 	if args.noise_model and args.psd_file:
 		raise ValueError("Cannot specify both --psd-file and --noise-model")
@@ -166,7 +173,7 @@ ligolw_process.set_process_end_time(process)
 totalpopcount = 0
 for n, c in enumerate(bank.walk()):
 
-	tiles, temppopcount = c.tile(mismatch = mismatch)
+	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic)
 	totalpopcount = totalpopcount + temppopcount
 
 	for t in tiles:
