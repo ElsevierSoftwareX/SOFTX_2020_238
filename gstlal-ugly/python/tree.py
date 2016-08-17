@@ -12,6 +12,17 @@ def mass_sym(boundaries):
 			return True
 	return False
 
+def find_neighbors_by_m1m2(cube, tiles):
+	# Assumes first two are m_1 m_2
+	m1 = cube.boundaries[0]
+	m2 = cube.boundaries[1]
+	neighbors = []
+	for t in tiles:
+		if numpy.any(corner in t for corner in itertools.product(m1,m2)):
+			neighbors.append(t)
+	return neighbors
+
+
 class HyperCube(object):
 
 	def __init__(self, boundaries, mismatch, symmetry_func = mass_sym, metric = None):
@@ -70,7 +81,7 @@ class HyperCube(object):
 		rightbound[dim,0] = self.center[dim]
 		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
-	def tile(self, mismatch, stochastic = False, verbose = True):
+	def tile(self, mismatch, stochastic = False, verbose = True, neighbors = []):
 
 		popcount = 0
 
@@ -95,7 +106,7 @@ class HyperCube(object):
 			rand_coords = numpy.random.rand(1e4, len(self.deltas))
 			for randcoord in rand_coords:
 				randcoord = (randcoord - 0.5) * self.deltas + self.center
-				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in self.tiles]
+				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in self.tiles + neighbors]
 				maxdist = max(distances)
 				mindist = min(distances)
 				assert randcoord in self

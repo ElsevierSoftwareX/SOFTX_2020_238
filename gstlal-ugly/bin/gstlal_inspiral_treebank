@@ -171,10 +171,12 @@ process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], {})
 ligolw_process.set_process_end_time(process)
 
 totalpopcount = 0
+previous_tiles = []
 for n, c in enumerate(bank.walk()):
 
-	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic)
+	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic, neighbors = tree.find_neighbors_by_m1m2(c, previous_tiles))
 	totalpopcount = totalpopcount + temppopcount
+	previous_tiles.extend(tiles)
 
 	for t in tiles:
 		row = SnglInspiralTable()
