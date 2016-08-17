@@ -61,11 +61,14 @@ struct _GSTLALSmoothKappas {
 	GstBaseTransform element;
 
 	gint unit_size;
+	double current_median;
 
 	/* properties */
-	int median_array_size;
-	double max_kappa_offset, kappa_ceiling;
+	int array_size;
+	double *fifo_array;
 	double default_kappa;
+	double maximum_offset;
+	gboolean default_to_median;
 };
 
 

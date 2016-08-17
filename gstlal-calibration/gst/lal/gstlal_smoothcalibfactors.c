@@ -87,12 +87,12 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-                "audio/x-raw, " \
-                "rate = (int) [1, MAX], " \
-                "channels = (int) 1, " \
-                "format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
-                "layout = (string) interleaved, " \
-                "channel-mask = (bitmask) 0"
+		"audio/x-raw, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -358,6 +358,20 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 
 /*
+ * start()
+ */
+
+static gboolean start(GstBaseTransform *trans)
+{
+	GSTLALSmoothCalibFactors *element = GSTLAL_SMOOTHCALIBFACTORS(trans);
+
+	element->fifo_array = g_malloc(sizeof(double) * element->med_array_size_max);
+
+	return TRUE;
+}
+
+
+/*
  * transform()
  */
 
@@ -532,6 +546,7 @@ static void gstlal_smoothcalibfactors_class_init(GSTLALSmoothCalibFactorsClass *
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));

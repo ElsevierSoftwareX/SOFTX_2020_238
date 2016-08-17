@@ -44,8 +44,8 @@ def lal_smoothkappas_01(pipeline, name):
 	# This test is to check that the inputs are smoothed in a desirable way
 	#
 
-	rate = 1024		# Hz
-	width = 64		# bytes
+	rate = 1000		# Hz
+	width = 32		# bytes
 	wave = 1
 	freq = 0.1		# Hz
 	volume = 0.03
@@ -77,12 +77,12 @@ def lal_smoothkappas_02(pipeline, name):
 
 	rate = 1000	     # Hz
 	width = 64	      # bytes
-	wave = 1
+	wave = 5
 	freq = 0.1	      # Hz
 	volume = 0.03
 	buffer_length = 1.0     # seconds
 	test_duration = 10.0    # seconds
-	gap_frequency = 1     # Hz
+	gap_frequency = 0.2     # Hz
 	gap_threshold = 0.5     # Hz
 	control_dump_filename = "control_smoothkappas_02.dump"
 
@@ -91,10 +91,9 @@ def lal_smoothkappas_02(pipeline, name):
 	#
 
 	src = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq, volume = volume, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = control_dump_filename)
-	add_constant = pipeparts.mkgeneric(pipeline, src, "lal_add_constant", value=1)
-	tee = pipeparts.mktee(pipeline, add_constant)
+	tee = pipeparts.mktee(pipeline, src)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
-	smoothkappas = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas")
+	smoothkappas = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", array_size=99, default_to_median=False, maximum_offset=1)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, smoothkappas), "%s_out.dump" % name)
 
 	#
@@ -176,6 +175,6 @@ def lal_smoothkappas_04(pipeline, name):
 
 
 #test_common.build_and_run(lal_smoothkappas_01, "lal_smoothkappas_01")
-#test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
-test_common.build_and_run(lal_smoothkappas_03, "lal_smoothkappas_03")
+test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
+#test_common.build_and_run(lal_smoothkappas_03, "lal_smoothkappas_03")
 #test_common.build_and_run(lal_smoothkappas_04, "lal_smoothkappas_04")

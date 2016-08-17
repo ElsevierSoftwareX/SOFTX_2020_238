@@ -19,17 +19,15 @@
 
 /**
  * SECTION:gstlal_smoothkappas
- * @short_description:  Smooths the calibration factors (kappas) using an
- * approximation to a running median.
+ * @short_description:  Smooths the calibration factors (kappas) using a 
+ * running median.
  *
- * This element smooths the kappas using an approximation to a running
- * median of an array whose size is set by the property array-size. The
- * algorithm resets accepted unsmoothed kappas outside of a narrow range
- * to the min or max of that range. This range is centered on the last
- * smoothed kappa, and its width is determined by the property
- * kappa-ceiling. A new smoothed kappa is calculated as the mean of an 
- * array in which one element is the unsmoothed kappa and the rest are
- * copies of the previous smoothed kappa. 
+ * This element smooths the kappas using a running median of an array 
+ * whose size is set by the property array-size. When a new raw value
+ * is entered into the array, it replaces the oldest value in the array
+ * (first in, first out). When this element receives a gap as input, it 
+ * will output a default kappa value (set by the property default-kappa)
+ * until it receives a buffer that is not flagged as a gap.
  */
 
 
@@ -142,41 +140,91 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-#define DEFINE_GET_NEW_MEDIAN(DTYPE) \
-static void get_new_median_ ## DTYPE( DTYPE *default_kappa, DTYPE max_kappa_offset, DTYPE kappa_ceiling, gint array_size, const DTYPE *unsmoothed_kappa, DTYPE *smoothed_kappa) { \
-	if(*unsmoothed_kappa > *default_kappa - max_kappa_offset && *unsmoothed_kappa < *default_kappa + max_kappa_offset) { \
-		if(*unsmoothed_kappa < *default_kappa - kappa_ceiling) \
-			*default_kappa = (array_size * (*default_kappa) - kappa_ceiling ) / array_size; \
-		else if(*unsmoothed_kappa > *default_kappa + kappa_ceiling) \
-			*default_kappa = (array_size * (*default_kappa) + kappa_ceiling ) / array_size; \
-		else \
-			*default_kappa = ((array_size - 1) * (*default_kappa) + *unsmoothed_kappa) / array_size; \
-	} \
-	*smoothed_kappa = *default_kappa; \
+static double get_new_median(double new_element, double *fifo_array, double *current_median, gint array_size) {
+	static int i;
+	if(!i)
+		i = 0;
+	fifo_array[i] = new_element;
+	if(i < array_size - 1)
+		i++;
+	else
+		i -= (array_size - 1);
+
+	int j, number_less, number_greater, number_equal;
+	double first_greater, second_greater, first_less, second_less;
+	number_less = 0;
+	number_equal = 0;
+	number_greater = 0;
+	first_greater = G_MAXDOUBLE;
+	second_greater = G_MAXDOUBLE;
+	first_less = -G_MAXDOUBLE;
+	second_less = -G_MAXDOUBLE;
+	for(j = 0; j < array_size; j++) {
+		if(fifo_array[j] < *current_median) {
+			number_less++;
+			if(fifo_array[j] > first_less) {
+				second_less = first_less;
+				first_less = fifo_array[j];
+			} else if(fifo_array[j] > second_less)
+				second_less = fifo_array[j];
+		}
+		else if(fifo_array[j] == *current_median)
+			number_equal++;
+		else if(fifo_array[j] > *current_median) {
+			number_greater++;
+			if(fifo_array[j] < first_greater) {
+				second_greater = first_greater;
+				first_greater = fifo_array[j];
+			} else if(fifo_array[j] < second_greater)
+				second_greater = fifo_array[j];
+		}
+		else
+			g_assert_not_reached();
+	}
+
+	g_assert_cmpint(number_less + number_equal + number_greater, ==, array_size);
+
+	if((!(array_size % 2)) && (number_less == array_size / 2) && (number_greater == array_size / 2))
+		*current_median = (first_greater + first_less) / 2;
+	else if((!(array_size % 2)) && (number_greater > array_size / 2))
+		*current_median = (first_greater + second_greater) / 2;
+	else if((!(array_size % 2)) && (number_less > array_size / 2))
+		*current_median = (first_less + second_less) / 2;
+	else if((!(array_size % 2)) && (number_greater == array_size / 2) && (number_less < array_size / 2))
+		*current_median = (*current_median + first_greater) / 2;
+	else if((!(array_size % 2)) && (number_less == array_size / 2) && (number_greater < array_size / 2))
+		*current_median = (*current_median + first_less) / 2;
+	else if((array_size % 2) && (number_greater > array_size / 2))
+		*current_median = first_greater;
+	else if((array_size % 2) && (number_less > array_size / 2))
+		*current_median = first_less;
+
+	return *current_median;
 }
 
 
-#define DEFINE_MEDIAN_APPROX_FUNC(DTYPE) \
-static void median_approx_func_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint buffer_size, double *default_kappa, double max_kappa_offset, double kappa_ceiling, gint array_size, gboolean gap) { \
-	if(!gap) { \
-		for(gint i = 0; i < buffer_size; i++) { \
-			get_new_median_ ## DTYPE((DTYPE *) default_kappa, (DTYPE) max_kappa_offset, (DTYPE) kappa_ceiling, array_size, src, dst); \
-			src++; \
-			dst++; \
-		} \
-	} else { \
-		for(gint i = 0; i < buffer_size; i++) { \
-			*dst = (DTYPE) *default_kappa; \
-			dst++; \
-		} \
+#define DEFINE_SMOOTH_BUFFER(DTYPE) \
+static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint buffer_size, double *fifo_array, double default_kappa, double *current_median, double maximum_offset, gint array_size, gboolean gap, gboolean default_to_median) { \
+	gint i; \
+	DTYPE new_element; \
+	for(i = 0; i < buffer_size; i++) { \
+		if(gap || (double) *src > default_kappa + maximum_offset || (double) *src < default_kappa - maximum_offset) { \
+			if(default_to_median) \
+				new_element = *current_median; \
+			else \
+				new_element = default_kappa; \
+		} else \
+			new_element = *src; \
+		*dst = (DTYPE) get_new_median((double) new_element, fifo_array, current_median, array_size); \
+		src++; \
+		dst++; \
 	} \
+	return GST_FLOW_OK; \
 }
 
 
-DEFINE_GET_NEW_MEDIAN(float);
-DEFINE_GET_NEW_MEDIAN(double);
-DEFINE_MEDIAN_APPROX_FUNC(float);
-DEFINE_MEDIAN_APPROX_FUNC(double);
+DEFINE_SMOOTH_BUFFER(float);
+DEFINE_SMOOTH_BUFFER(double);
 
 
 /*
@@ -226,10 +274,10 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 	success = gstlal_audio_info_from_caps(&info, incaps);
 	if(!success)
-		GST_ERROR_OBJECT(element, "unable to parse %" GST_PTR_FORMAT, incaps);
+		GST_ERROR_OBJECT(element, "unable to parse caps %" GST_PTR_FORMAT, incaps);
 
 	/*
-	 * set the median and smoothing functions
+	 * set the unit size
 	 */
 
 	if(success) {
@@ -243,13 +291,36 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 			break;
 
 		default:
-			GST_ERROR_OBJECT(element, "unsupported foramt %" GST_PTR_FORMAT, incaps);
+			GST_ERROR_OBJECT(element, "unsupported format %" GST_PTR_FORMAT, incaps);
 			success = FALSE;
 			break;
 		}
 	}
 
 	return success;
+}
+
+
+/*
+ * start()
+ */
+
+
+static gboolean start(GstBaseTransform *trans)
+{
+	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
+
+	element->current_median = element->default_kappa;
+
+	int i;
+	element->fifo_array = g_malloc(sizeof(double) * element->array_size);
+
+	for(i = 0; i < element->array_size; i++, (element->fifo_array)++) 
+		*(element->fifo_array) = element->default_kappa;
+
+	(element->fifo_array) -= element->array_size;
+
+	return TRUE;
 }
 
 
@@ -262,9 +333,15 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
 	GstMapInfo inmap, outmap;
+	GstFlowReturn result;
+
+	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
+
+	gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
+
+	gboolean gap = GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP);
 
 	gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
-	gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
 
 	g_assert_cmpuint(inmap.size % element->unit_size, ==, 0);
 	g_assert_cmpuint(outmap.size % element->unit_size, ==, 0);
@@ -272,18 +349,25 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if(element->unit_size == 4) {
 		gint buffer_size = outmap.size / element->unit_size;
-		median_approx_func_float((const float *) inmap.data, (float *) outmap.data, buffer_size, &element->default_kappa, element->max_kappa_offset, element->kappa_ceiling, element->median_array_size, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP));
+		result = smooth_buffer_float((const float *) inmap.data, (float *) outmap.data, buffer_size, element->fifo_array, element->default_kappa, &element->current_median, element->maximum_offset, element->array_size, gap, element->default_to_median);
 	} else if(element->unit_size == 8) {
 		gint buffer_size = outmap.size / element->unit_size;
-		median_approx_func_double((const double *) inmap.data, (double *) outmap.data, buffer_size, &element->default_kappa, element->max_kappa_offset, element->kappa_ceiling, element->median_array_size, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP));
+		result = smooth_buffer_double((const double *) inmap.data, (double *) outmap.data, buffer_size, element->fifo_array, element->default_kappa, &element->current_median, element->maximum_offset, element->array_size, gap, element->default_to_median);
 	} else {
 		g_assert_not_reached();
 	}
 
-	gst_buffer_unmap(outbuf, &outmap);
+	GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_GAP);
+
 	gst_buffer_unmap(inbuf, &inmap);
 
-	return GST_FLOW_OK;
+	gst_buffer_unmap(outbuf, &outmap);
+
+	/*
+	 * done
+	 */
+
+	return result;
 }
 
 
@@ -302,10 +386,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 
 enum property {
-	ARG_MEDIAN_ARRAY_SIZE = 1,
-	ARG_MAX_KAPPA_OFFSET,
-	ARG_KAPPA_CEILING,
-	ARG_DEFAULT_KAPPA
+	ARG_ARRAY_SIZE = 1,
+	ARG_DEFAULT_KAPPA,
+	ARG_MAXIMUM_OFFSET,
+	ARG_DEFAULT_TO_MEDIAN
 };
 
 
@@ -316,19 +400,18 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_MEDIAN_ARRAY_SIZE:
-		element->median_array_size = g_value_get_int(value);
-		break;
-	case ARG_MAX_KAPPA_OFFSET: 
-		element->max_kappa_offset = g_value_get_double(value);
-		break;
-	case ARG_KAPPA_CEILING:
-		element->kappa_ceiling = g_value_get_double(value);
+	case ARG_ARRAY_SIZE:
+		element->array_size = g_value_get_int(value);
 		break;
 	case ARG_DEFAULT_KAPPA:
 		element->default_kappa = g_value_get_double(value);
 		break;
-
+	case ARG_MAXIMUM_OFFSET:
+		element->maximum_offset = g_value_get_double(value);
+		break;
+	case ARG_DEFAULT_TO_MEDIAN:
+		element->default_to_median = g_value_get_boolean(value);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -345,25 +428,38 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_MEDIAN_ARRAY_SIZE:
-		g_value_set_int(value, element->median_array_size);
-		break;
-	case ARG_MAX_KAPPA_OFFSET:
-		g_value_set_double(value, element->max_kappa_offset);
-		break;
-	case ARG_KAPPA_CEILING:
-		g_value_set_double(value, element->kappa_ceiling);
+	case ARG_ARRAY_SIZE:
+		g_value_set_int(value, element->array_size);
 		break;
 	case ARG_DEFAULT_KAPPA:
 		g_value_set_double(value, element->default_kappa);
 		break;
-
+	case ARG_MAXIMUM_OFFSET:
+		g_value_set_double(value, element->maximum_offset);
+		break;
+	case ARG_DEFAULT_TO_MEDIAN:
+		g_value_set_boolean(value, element->default_to_median);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
+}
+
+
+/*
+ * finalize()
+ */
+
+
+static void finalize(GObject *object)
+{
+	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(object);
+	g_free(element->fifo_array);
+	element->fifo_array = NULL;
+	G_OBJECT_CLASS(gstlal_smoothkappas_parent_class)->finalize(object);
 }
 
 
@@ -382,15 +478,17 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		element_class,
 		"Smooth Calibration Factors",
 		"Filter/Audio",
-		"Smooths the calibration factors with a running median and threshold cut.",
+		"Smooths the calibration factors with a running median.",
 		"Madeline Wade <madeline.wade@ligo.org>, Aaron Viets <aaron.viets@ligo.org>"
 	);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
@@ -398,34 +496,12 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_MEDIAN_ARRAY_SIZE,
+		ARG_ARRAY_SIZE,
 		g_param_spec_int(
 			"array-size",
 			"Median array size",
-			"Size of the array of values from which the median is approximated",
+			"Size of the array of values from which the median is calculated",
 			G_MININT, G_MAXINT, 2048,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
-	);
-	g_object_class_install_property(
-		gobject_class,
-		ARG_MAX_KAPPA_OFFSET,
-		g_param_spec_double(
-			"maximum-offset",
-			"Maximum acceptable kappa offset",
-			"Maximum acceptable offset of unsmoothed kappa from current median to be entered into array from which median is approximated.",
-			-G_MAXDOUBLE, G_MAXDOUBLE, 0.1,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
-	);
-	g_object_class_install_property(
-		gobject_class,
-		ARG_KAPPA_CEILING,
-		g_param_spec_double(
-			"kappa-ceiling",
-			"Reset kappas outside of range",
-			"Accepted unsmoothed kappas outside of the range [current-median-value - kappa-ceiling, current-median-value + kappa_ceiling], are reset to current-median-value +- kappa-ceiling",
-			-G_MAXDOUBLE, G_MAXDOUBLE, 0.001,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -435,12 +511,33 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_double(
 			"default-kappa",
 			"Default kappa value",
-			"Default kappa value to be used if no input values pass kappa-offset criteria and there is no recent good kappa value.",
+			"Default kappa value to be used if there is a gap in the incoming buffer, or if no input values pass kappa-offset criteria. All elements of the fifo array are initialized to this value.",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
-
+	g_object_class_install_property(
+		gobject_class,
+		ARG_MAXIMUM_OFFSET,
+		g_param_spec_double(
+			"maximum-offset",
+			"Maximum acceptable kappa offset",
+			"Maximum acceptable offset of unsmoothed kappa from default-kappa to be entered into array from which median is calculated.",
+			0, G_MAXDOUBLE, G_MAXDOUBLE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DEFAULT_TO_MEDIAN,
+		g_param_spec_boolean(
+			"default-to-median",
+			"Default to median",
+			"If set to false (default), gaps (or times where input values do not pass kappa-offset criteria) are filled in by entering default-kappa into the fifo array. If set to true, gaps are filled in by entering the current median value into the fifo array.",
+			FALSE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
 }
 
 
@@ -452,6 +549,8 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 static void gstlal_smoothkappas_init(GSTLALSmoothKappas *element)
 {
 	element->unit_size = 0;
+	element->array_size = 0;
+	element->fifo_array = NULL;
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
-
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
