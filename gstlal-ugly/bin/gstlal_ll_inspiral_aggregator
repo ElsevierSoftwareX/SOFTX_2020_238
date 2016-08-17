@@ -110,7 +110,11 @@ def parse_command_line():
 
 
 class Collector(servicediscovery.Listener):
-	def __init__(self, mainloop, job_tag = None, dump_period = 180.):
+	def __init__(self, mainloop, datatypes, bins, dataurls, base_dir, job_tag = None, dump_period = 180.):
+		self.datatypes = datatypes
+		self.bins = bins
+		self.dataurls = dataurls
+		self.base_dir = base_dir
 		self.job_tag = job_tag
 		self.dump_period = dump_period
 		self.urls = {}
@@ -145,8 +149,8 @@ class Collector(servicediscovery.Listener):
 		try:
 			while self.dump_period:
 				logging.info("sleeping")
+				setup_dirs(now(), self.datatypes, self.bins, self.dataurls, self.base_dir)
 				time.sleep(self.dump_period)
-				setup_dirs(now(), types, bins, data, args.base_dir)
 				#with self.lock:
 				#	for job, url in sorted(self.urls.items()):
 				#		assert job
@@ -175,9 +179,9 @@ class Collector(servicediscovery.Listener):
 options = parse_command_line()
 
 # FIXME don't hardcode some of these?
-types = ["min", "max", "mean", "all"]
-bins = ["%04d" % b for b in numpy.arange(0, args.num_jobs)]
-data = ["latency", "snr"]
+datatypes = ["min", "max", "mean", "all"]
+bins = ["%04d" % b for b in numpy.arange(0, options.num_jobs)]
+dataurls = ["latency", "snr"]
 
 
 logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
@@ -185,7 +189,7 @@ logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(
 
 mainloop = GLib.MainLoop()
 
-collector = Collector(mainloop, job_tag = options.job_tag, dump_period = options.dump_period)
+collector = Collector(mainloop, datatypes, bins, dataurls, options.base_dir, job_tag = options.job_tag, dump_period = options.dump_period)
 browser = servicediscovery.ServiceBrowser(collector)
 
 try:
