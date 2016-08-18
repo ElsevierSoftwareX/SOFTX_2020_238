@@ -53,7 +53,7 @@ __all__ = [
 #
 
 
-def instruments_rate_given_noise(singles_counts, zero_lag_coinc_counts, segs, delta_t, verbose = False):
+def instruments_rate_given_noise(singles_counts, zero_lag_coinc_counts, segs, delta_t, min_instruments = 2, verbose = False):
 	"""
 	Models the expected number of background coincidence events.  Most
 	of the work is performed by pylal.snglcoinc.CoincSynthesizer.  The
@@ -90,7 +90,8 @@ def instruments_rate_given_noise(singles_counts, zero_lag_coinc_counts, segs, de
 	coincsynth = snglcoinc.CoincSynthesizer(
 		eventlists = singles_counts,
 		segmentlists = segs,
-		delta_t = delta_t
+		delta_t = delta_t,
+		min_instruments = min_instruments
 	)
 
 	if set(zero_lag_coinc_counts) < set(coincsynth.all_instrument_combos):
@@ -118,6 +119,11 @@ def instruments_rate_given_noise(singles_counts, zero_lag_coinc_counts, segs, de
 	N = 0
 	coincidence_bins = 0.
 	for instruments in coincsynth.all_instrument_combos:
+		if len(instruments) < 2:
+			# this calculation only depends on the counts of
+			# genuine coincs, not single-instrument "coincs" if
+			# they are allowed.
+			continue
 		predicted_count = coincsynth.mean_coinc_count[instruments]
 		observed_count = zero_lag_coinc_counts[instruments]
 		if predicted_count > 0 and observed_count > 0:
