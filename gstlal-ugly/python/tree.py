@@ -81,7 +81,7 @@ class HyperCube(object):
 		rightbound[dim,0] = self.center[dim]
 		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
-	def tile(self, mismatch, stochastic = False, verbose = True, neighbors = []):
+	def tile(self, mismatch, stochastic = False, neighbors = []):
 
 		popcount = 0
 
@@ -154,10 +154,7 @@ class HyperCube(object):
 		# Gaurantee at least one
 		if len(self.tiles) == 0:
 			self.tiles.append(self.center)
-		if verbose:
-			print "placing %04d tiles in hyperrectangle with boundary:" % len(self.tiles)
-			for row in self.boundaries:
-				print "\t", row
+
 		return list(self.tiles), popcount
 
 	def __contains__(self, coords):

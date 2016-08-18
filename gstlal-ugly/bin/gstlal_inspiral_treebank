@@ -172,7 +172,8 @@ ligolw_process.set_process_end_time(process)
 
 totalpopcount = 0
 previous_tiles = []
-for n, c in enumerate(bank.walk()):
+nodes = bank.walk()
+for n, c in enumerate(nodes):
 
 	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic, neighbors = tree.find_neighbors_by_m1m2(c, previous_tiles))
 	totalpopcount = totalpopcount + temppopcount
@@ -189,11 +190,17 @@ for n, c in enumerate(bank.walk()):
 			row.mass2 = mass1
 		tbl.append(row)
 
+        if args.verbose:
+		print "Placed %04d tiles in hyperrectangle %d/%d with boundary:" % (len(tiles), n+1, len(nodes))
+		for row in c.boundaries:
+			print "\t", row
+                print "\tcurrent bank size: %d" % len(tbl)
+
 
 utils.write_filename(xmldoc, args.output_name,  gz=args.output_name.endswith("gz"))
 
 if args.verbose:
-	print >>sys.stderr, "Number of leaf nodes: ", n
+	print >>sys.stderr, "Number of leaf nodes: ", n+1
 	print >>sys.stderr, "Number of templates (tiles): ", len(tbl)
 
 if args.debug:
