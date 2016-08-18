@@ -91,6 +91,7 @@ def parse_command_line():
 	seglistdict, horizon_history = parse_segment_and_horizon(options)
 
 	options.instruments = frozenset(seglistdict)
+	# FIXME:  generalize to < 2
 	if len(options.instruments) < 2:
 		raise ValueError("must specify at least two distinct instrument")
 
