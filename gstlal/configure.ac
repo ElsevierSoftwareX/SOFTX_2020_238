@@ -20,6 +20,7 @@ AC_CONFIG_FILES([ \
 	lib/Makefile \
 	lib/gstlal/gstlal.pc \
 	lib/gstlal/Makefile \
+	python/__init__.py \
 	python/Makefile \
 	python/pipeparts/Makefile \
 	gst/Makefile \

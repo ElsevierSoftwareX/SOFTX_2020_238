@@ -2,6 +2,7 @@ gstlal.spec
 lib/gstlal/gstlal.pc
 lib/gstlal/*.gir
 lib/gstlal/*.typelib
+python/__init__.py
 tests/*.pyc
 tests/*.dump
 doc/Doxyfile
