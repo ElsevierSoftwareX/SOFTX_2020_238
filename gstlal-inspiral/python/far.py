@@ -220,7 +220,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
 			else:
 				progressbar = None
-			binnedarray = inspiral_extrinsics.joint_pdf_of_snrs(key[0], dict(key[1]), self.snr_min, progressbar = progressbar)
+			binnedarray = inspiral_extrinsics.SNRPDF.joint_pdf_of_snrs(key[0], dict(key[1]), self.snr_min, progressbar = progressbar)
 			del progressbar
 			lnbinnedarray = binnedarray.copy()
 			with numpy.errstate(divide = "ignore"):
