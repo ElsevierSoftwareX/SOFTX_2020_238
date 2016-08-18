@@ -1288,7 +1288,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		prefix = u"cached_snr_joint_pdf"
 		for key, (ignored, binnedarray, ignored) in self.snr_joint_pdf_cache.items():
 			elem = xml.appendChild(binnedarray.to_xml(prefix))
-			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", "%s;%s" % (lsctables.ifos_from_instrument_set(key[0]), u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key[1])))))
+			elem.appendChild(ligolw_param.from_pyvalue(u"key", "%s;%s" % (lsctables.ifos_from_instrument_set(key[0]), u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key[1])))))
 		return xml
 
 	@property

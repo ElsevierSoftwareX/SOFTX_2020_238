@@ -282,12 +282,12 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 		root.appendChild(new_sngl_table)
 
 		# Add root-level scalar params
-		root.appendChild(ligolw_param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
-		root.appendChild(ligolw_param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
-		root.appendChild(ligolw_param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
-		root.appendChild(ligolw_param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
-		root.appendChild(ligolw_param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
-		root.appendChild(ligolw_param.new_param('bank_id', ligolw_types.FromPyType[str], bank.bank_id))
+		root.appendChild(ligolw_param.from_pyvalue('filter_length', bank.filter_length))
+		root.appendChild(ligolw_param.from_pyvalue('gate_threshold', bank.gate_threshold))
+		root.appendChild(ligolw_param.from_pyvalue('logname', bank.logname))
+		root.appendChild(ligolw_param.from_pyvalue('snr_threshold', bank.snr_threshold))
+		root.appendChild(ligolw_param.from_pyvalue('template_bank_filename', bank.template_bank_filename))
+		root.appendChild(ligolw_param.from_pyvalue('bank_id', bank.bank_id))
 
 		# apply clipping to autocorrelations and sigmasq
 		bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
@@ -312,9 +312,9 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 			frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
 			# Add scalar params
-			el.appendChild(ligolw_param.new_param('start', ligolw_types.FromPyType[float], frag.start))
-			el.appendChild(ligolw_param.new_param('end', ligolw_types.FromPyType[float], frag.end))
-			el.appendChild(ligolw_param.new_param('rate', ligolw_types.FromPyType[int], frag.rate))
+			el.appendChild(ligolw_param.from_pyvalue('start', frag.start))
+			el.appendChild(ligolw_param.from_pyvalue('end', frag.end))
+			el.appendChild(ligolw_param.from_pyvalue('rate', frag.rate))
 
 			# Add arrays
 			el.appendChild(ligolw_array.from_array('chifacs', frag.chifacs))
