@@ -412,7 +412,10 @@ class SNRPDF(object):
 		# FIXME:  scipy.stats.rice.rvs broken on reference OS.
 		# switch to it when we can rely on a new-enough scipy
 		#rice_rvs = stats.rice.rvs	# broken on reference OS
-		rice_rvs = lambda x: numpy.sqrt(stats.ncx2.rvs(2., x**2.))
+		# the .reshape is needed in the event that x is a 1x1
+		# array:  numpy returns a scalar from sqrt(), but we must
+		# have something that we can iterate over
+		rice_rvs = lambda x: numpy.sqrt(stats.ncx2.rvs(2., x**2.)).reshape(x.shape)
 		for i in xrange(n_samples):
 			# select random sky location and source orbital
 			# plane inclination and choice of polarization
