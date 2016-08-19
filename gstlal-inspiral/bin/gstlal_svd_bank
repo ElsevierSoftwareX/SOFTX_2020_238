@@ -174,7 +174,8 @@ svd_bank.write_bank(
 		samples_max_256 = options.samples_max_256,
 		samples_max_64 = options.samples_max_64, 
 		samples_max = options.samples_max,
-		bank_id = bank_id
+		bank_id = bank_id,
+		contenthandler = svd_bank.DefaultContentHandler
 	) for (template_bank, bank_id) in zip(options.template_bank, options.bank_id)],
 	options.clipleft,
 	options.clipright,

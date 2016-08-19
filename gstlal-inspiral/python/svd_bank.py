@@ -60,7 +60,6 @@ from gstlal import misc as gstlalmisc
 from gstlal import templates
 
 
-# FIXME:  require calling code to provide the content handler
 class DefaultContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 ligolw_array.use_in(DefaultContentHandler)
@@ -196,7 +195,7 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = DefaultContentHandler):
+def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = None):
 	"""!
 	Return an instance of a Bank class.
 
@@ -258,7 +257,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	return bank
 
 
-def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthandler = DefaultContentHandler, write_psd = False, verbose = False):
+def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd = False, verbose = False):
 	"""Write SVD banks to a LIGO_LW xml file."""
 
 	# Create new document
@@ -344,7 +343,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
 
 
-def read_banks(filename, contenthandler = DefaultContentHandler, verbose = False):
+def read_banks(filename, contenthandler, verbose = False):
 	"""Read SVD banks from a LIGO_LW xml file."""
 
 	# Load document
@@ -427,5 +426,5 @@ def svdbank_templates_mapping(filenames, contenthandler, verbose = False):
 	for n, filename in enumerate(filenames, start = 1):
 		if verbose:
 			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
-		mapping[filename] = sum((bank.sngl_inspiral_table for bank in read_banks(filename, contenthandler = contenthandler, verbose = verbose)), [])
+		mapping[filename] = sum((bank.sngl_inspiral_table for bank in read_banks(filename, contenthandler, verbose = verbose)), [])
 	return mapping
