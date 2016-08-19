@@ -36,6 +36,7 @@ __all__ = ["fftw"]
 
 
 paths = {
-	"prefix": "@prefix@",
-	"datarootdir": "@datarootdir@".replace("${prefix}", "@prefix@")
+	"datarootdir": "@datarootdir@".replace("${prefix}", "@prefix@"),
+	"prefix": "@prefix@"
 }
+paths["pkgdatadir"] = paths["datarootdir"] + "/@PACKAGE@"
