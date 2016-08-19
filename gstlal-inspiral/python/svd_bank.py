@@ -150,7 +150,9 @@ class Bank(object):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
-		self.filter_length = max(time_slices['end'])
+		# type cast needed otherwise the result has type
+		# "numpy.float64" which confuses the I/O code
+		self.filter_length = float(time_slices['end'].max())
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 		self.bank_id = bank_id
