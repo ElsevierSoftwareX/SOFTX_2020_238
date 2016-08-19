@@ -320,8 +320,13 @@ static gboolean start(GstBaseTransform *trans)
 	int i;
 	element->fifo_array = g_malloc(sizeof(double) * element->array_size);
 
-	for(i = 0; i < element->array_size; i++, (element->fifo_array)++) 
-		*(element->fifo_array) = element->default_kappa;
+	if(element->track_bad_kappa) {
+		for(i = 0; i < element->array_size; i++, (element->fifo_array)++)
+        	        *(element->fifo_array) = 0;
+	} else {
+		for(i = 0; i < element->array_size; i++, (element->fifo_array)++) 
+			*(element->fifo_array) = element->default_kappa;
+	}
 
 	(element->fifo_array) -= element->array_size;
 
