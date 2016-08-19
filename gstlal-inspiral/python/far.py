@@ -67,8 +67,6 @@ from scipy import interpolate
 from scipy import optimize
 from scipy import stats
 from scipy.special import ive
-import sqlite3
-sqlite3.enable_callback_tracebacks(True)
 import sys
 
 
@@ -79,7 +77,6 @@ from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
