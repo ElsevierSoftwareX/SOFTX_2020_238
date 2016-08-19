@@ -69,6 +69,7 @@ struct _GSTLALSmoothKappas {
 	double default_kappa;
 	double maximum_offset;
 	gboolean default_to_median;
+	gboolean track_bad_kappa;
 };
 
 

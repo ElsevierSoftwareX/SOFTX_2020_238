@@ -204,17 +204,22 @@ static double get_new_median(double new_element, double *fifo_array, double *cur
 
 
 #define DEFINE_SMOOTH_BUFFER(DTYPE) \
-static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint buffer_size, double *fifo_array, double default_kappa, double *current_median, double maximum_offset, gint array_size, gboolean gap, gboolean default_to_median) { \
+static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint buffer_size, double *fifo_array, double default_kappa, double *current_median, double maximum_offset, gint array_size, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa) { \
 	gint i; \
 	DTYPE new_element; \
 	for(i = 0; i < buffer_size; i++) { \
 		if(gap || (double) *src > default_kappa + maximum_offset || (double) *src < default_kappa - maximum_offset) { \
 			if(default_to_median) \
 				new_element = *current_median; \
+			else if (track_bad_kappa) \
+				new_element = 0.0; \
 			else \
 				new_element = default_kappa; \
 		} else \
-			new_element = *src; \
+			if (track_bad_kappa) \
+				new_element = 1.0; \
+			else \
+				new_element = *src; \
 		*dst = (DTYPE) get_new_median((double) new_element, fifo_array, current_median, array_size); \
 		src++; \
 		dst++; \
@@ -349,10 +354,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if(element->unit_size == 4) {
 		gint buffer_size = outmap.size / element->unit_size;
-		result = smooth_buffer_float((const float *) inmap.data, (float *) outmap.data, buffer_size, element->fifo_array, element->default_kappa, &element->current_median, element->maximum_offset, element->array_size, gap, element->default_to_median);
+		result = smooth_buffer_float((const float *) inmap.data, (float *) outmap.data, buffer_size, element->fifo_array, element->default_kappa, &element->current_median, element->maximum_offset, element->array_size, gap, element->default_to_median, element->track_bad_kappa);
 	} else if(element->unit_size == 8) {
 		gint buffer_size = outmap.size / element->unit_size;
-		result = smooth_buffer_double((const double *) inmap.data, (double *) outmap.data, buffer_size, element->fifo_array, element->default_kappa, &element->current_median, element->maximum_offset, element->array_size, gap, element->default_to_median);
+		result = smooth_buffer_double((const double *) inmap.data, (double *) outmap.data, buffer_size, element->fifo_array, element->default_kappa, &element->current_median, element->maximum_offset, element->array_size, gap, element->default_to_median, element->track_bad_kappa);
 	} else {
 		g_assert_not_reached();
 	}
@@ -389,7 +394,8 @@ enum property {
 	ARG_ARRAY_SIZE = 1,
 	ARG_DEFAULT_KAPPA,
 	ARG_MAXIMUM_OFFSET,
-	ARG_DEFAULT_TO_MEDIAN
+	ARG_DEFAULT_TO_MEDIAN,
+	ARG_TRACK_BAD_KAPPA
 };
 
 
@@ -411,6 +417,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	case ARG_DEFAULT_TO_MEDIAN:
 		element->default_to_median = g_value_get_boolean(value);
+		break;
+	case ARG_TRACK_BAD_KAPPA:
+		element->track_bad_kappa = g_value_get_boolean(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -439,6 +448,9 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 	case ARG_DEFAULT_TO_MEDIAN:
 		g_value_set_boolean(value, element->default_to_median);
+		break;
+	case ARG_TRACK_BAD_KAPPA:
+		g_value_set_boolean(value, element->track_bad_kappa);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -534,6 +546,17 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 			"default-to-median",
 			"Default to median",
 			"If set to false (default), gaps (or times where input values do not pass kappa-offset criteria) are filled in by entering default-kappa into the fifo array. If set to true, gaps are filled in by entering the current median value into the fifo array.",
+			FALSE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_TRACK_BAD_KAPPA,
+		g_param_spec_boolean(
+			"track-bad-kappa",
+			"Track input bad kappas",
+			"If set to false (default), gaps (or times where input values do not pass kappa-offset criteria) are filled in by entering default-kappa into the fifo array and non-gaps use the input buffer value. If set to true, gaps are filled in by entering 0 into the fifo array and non-gaps are filled by entering 1's into the fifo array.",
 			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)

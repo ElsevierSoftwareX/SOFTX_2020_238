@@ -146,10 +146,31 @@ def list_srcs(pipeline, *args):
 # Calibration factor related functions
 #
 
-def smooth_kappas(pipeline, head, var, expected, ceiling, N, Nav):
+def smooth_kappas_no_coherence(pipeline, head, var, expected, N, Nav):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = ceiling, default_kappa = expected, array_size = N)
+	# Use the maximum_offset property to determine whether input kappas are good or not
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, default_kappa = expected, array_size = N)
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+	head = mkaudiorate(pipeline, head)
+	return head
+
+def smooth_kappas(pipeline, head, expected, N, Nav):
+	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
+	# Assume input was previously gated with coherence uncertainty to determine if input kappas are good or not
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa = expected, array_size = N)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+	head = mkaudiorate(pipeline, head)
+	return head
+
+def track_bad_kappas_no_coherence(pipeline, head, var, expected, N):
+	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) by defaulting to default kappa for majority of input samples
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, default_kappa = expected, array_size = N, track_bad_kappa = True)
+	head = mkaudiorate(pipeline, head)
+	return head
+
+def track_bad_kappas(pipeline, head, expected, N):
+	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) by defaulting to default kappa for majority of input samples
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa = expected, array_size = N, track_bad_kappa = True)
 	head = mkaudiorate(pipeline, head)
 	return head
 
@@ -178,34 +199,45 @@ def smooth_kappas_real_test(pipeline, head, var, expected, ceiling, N, Nav):
         head = mkaudiorate(pipeline, low_ceil_avg)
         return head
 
-def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, status_out = 1, starting_rate=16, ending_rate=16):
+def compute_kappa_bits(pipeline, smoothR, smoothI, dqR, dqI, expected_real, expected_imag, real_ok_var, imag_ok_var, status_out_smooth = 1, status_out_median = 1, starting_rate=16, ending_rate=16):
 
 	smoothRInRange = pipeparts.mkgeneric(pipeline, smoothR, "lal_add_constant", value = -expected_real)
-	smoothRInRange = pipeparts.mkbitvectorgen(pipeline, smoothRInRange, threshold = real_ok_var, invert_control = True, bit_vector = status_out)
+	smoothRInRange = pipeparts.mkbitvectorgen(pipeline, smoothRInRange, threshold = real_ok_var, invert_control = True, bit_vector = status_out_smooth)
 	smoothRInRange = pipeparts.mkcapsfilter(pipeline, smoothRInRange, "audio/x-raw, format=U32LE, rate=%d" % starting_rate)
-	smoothRInRange = pipeparts.mkgeneric(pipeline, smoothRInRange, "lal_logicalundersample", required_on = status_out, status_out = status_out)
+	smoothRInRange = pipeparts.mkgeneric(pipeline, smoothRInRange, "lal_logicalundersample", required_on = status_out_smooth, status_out = status_out_smooth)
 	smoothRInRange = pipeparts.mkcapsfilter(pipeline, smoothRInRange, "audio/x-raw, format=U32LE, rate=%d" % ending_rate)
 	smoothRInRangetee = pipeparts.mktee(pipeline, smoothRInRange)
 
 	smoothIInRange = pipeparts.mkgeneric(pipeline, smoothI, "lal_add_constant", value = -expected_imag)
-	smoothIInRange = pipeparts.mkbitvectorgen(pipeline, smoothIInRange, threshold = imag_ok_var, invert_control = True, bit_vector = status_out)
+	smoothIInRange = pipeparts.mkbitvectorgen(pipeline, smoothIInRange, threshold = imag_ok_var, invert_control = True, bit_vector = status_out_smooth)
 	smoothIInRange = pipeparts.mkcapsfilter(pipeline, smoothIInRange, "audio/x-raw, format=U32LE, rate=%d" % starting_rate)
-	smoothIInRange = pipeparts.mkgeneric(pipeline, smoothIInRange, "lal_logicalundersample", required_on = status_out, status_out = status_out)
+	smoothIInRange = pipeparts.mkgeneric(pipeline, smoothIInRange, "lal_logicalundersample", required_on = status_out_smooth, status_out = status_out_smooth)
 	smoothIInRange = pipeparts.mkcapsfilter(pipeline, smoothIInRange, "audio/x-raw, format=U32LE, rate=%d" % ending_rate)
 
-	smoothInRange = pipeparts.mkgate(pipeline, mkqueue(pipeline, smoothRInRangetee), threshold = status_out * 2, control = mkadder(pipeline, list_srcs(pipeline, smoothIInRange, mkqueue(pipeline, smoothRInRangetee))))
+	smoothInRange = pipeparts.mkgate(pipeline, mkqueue(pipeline, smoothRInRangetee), threshold = status_out_smooth * 2, control = mkadder(pipeline, list_srcs(pipeline, smoothIInRange, mkqueue(pipeline, smoothRInRangetee))))
 
-	return smoothInRange
+	dqtotal = mkadder(pipeline, list_srcs(pipeline, dqR, dqI))
+	medianUncorrupt = pipeparts.mkbitvectorgen(pipeline, dqtotal, threshold = 2, bit_vector = status_out_median)
+	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate=%d" % starting_rate)
+	medianUncorrupt = pipeparts.mkgeneric(pipeline, medianUncorrupt, "lal_logicalundersample", required_on = status_out_median, status_out = status_out_median)
+	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate = %d" % ending_rate)
 
-def compute_kappa_bits_only_real(pipeline, smooth, expected, ok_var, status_out = 1,  starting_rate=16, ending_rate=16):
+	return smoothInRange, medianUncorrupt
+
+def compute_kappa_bits_only_real(pipeline, smooth, dq, expected, ok_var, status_out_smooth = 1, status_out_median = 1, starting_rate=16, ending_rate=16):
 
 	smoothInRange = pipeparts.mkgeneric(pipeline, smooth, "lal_add_constant", value = -expected)
-	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, threshold = ok_var, invert_control = True, bit_vector = status_out)
+	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, threshold = ok_var, invert_control = True, bit_vector = status_out_smooth)
 	smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d" % starting_rate)
-	smoothInRange = pipeparts.mkgeneric(pipeline, smoothInRange, "lal_logicalundersample", required_on = status_out, status_out = status_out)
+	smoothInRange = pipeparts.mkgeneric(pipeline, smoothInRange, "lal_logicalundersample", required_on = status_out_smooth, status_out = status_out_smooth)
 	smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d" % ending_rate)
 
-	return smoothInRange
+	medianUncorrupt = pipeparts.mkbitvectorgen(pipeline, dq, threshold = 1, bit_vector = status_out_median)
+	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate=%d" % starting_rate)
+	medianUncorrupt = pipeparts.mkgeneric(pipeline, medianUncorrupt, "lal_logicalundersample", required_on = status_out_median, status_out = status_out_median)
+	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate = %d" % ending_rate)
+
+	return smoothInRange, medianUncorrupt
 
 def merge_into_complex(pipeline, real, imag):
 	# Merge real and imag into one complex channel with complex caps
