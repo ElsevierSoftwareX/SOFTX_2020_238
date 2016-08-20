@@ -27,22 +27,6 @@ GObject.threads_init()
 Gst.init(None)
 
 #
-# Functions for making sure no channels are missing from the frames
-#
-
-def gate_strain_for_output_frames(pipeline, head, control):
-	controltee = pipeparts.mktee(pipeline, control)
-	control = mkaudiorate(pipeline, mkqueue(pipeline, controltee))
-	head = pipeparts.mkgate(pipeline, mkqueue(pipeline, head), control = control, threshold = 0, leaky = True)
-	control = mkqueue(pipeline, controltee)
-	return head, control
-
-def gate_other_with_strain(pipeline, other, strain):
-	other = pipeparts.mkgate(pipeline, mkqueue(pipeline, other), control = mkqueue(pipeline, strain), threshold=0, leaky = True)
-	other = mkaudiorate(pipeline, other)
-	return other
-
-#
 # Shortcut functions for common element combos/properties
 #
 
@@ -86,6 +70,16 @@ def mkmultiplier(pipeline, srcs, sync = True, Complex = False):
 				mkcomplexqueue(pipeline, src).link(elem)
 	return elem
 
+def mkadder(pipeline, srcs, sync = True, Complex = False):
+	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync)
+	if srcs is not None:
+		for src in srcs:
+			if not Complex:
+				mkqueue(pipeline, src).link(elem)
+			else:
+				mkcomplexqueue(pipeline, src).link(elem)
+	return elem
+
 def mkinterleave(pipeline, src1, src2):
 	chan1 = pipeparts.mkmatrixmixer(pipeline, src1, matrix=[[1,0]])
 	chan2 = pipeparts.mkmatrixmixer(pipeline, src2, matrix=[[0,1]])
@@ -97,15 +91,6 @@ def mkinterleave(pipeline, src1, src2):
 	#elem = pipeparts.mkaudiorate(pipeline, elem)
 	return elem
 
-def mkadder(pipeline, srcs, sync = True, Complex = False):
-	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync)
-	if srcs is not None:
-		for src in srcs:
-			if not Complex:
-				mkqueue(pipeline, src).link(elem)
-			else:
-				mkcomplexqueue(pipeline, src).link(elem)
-	return elem
 
 #
 # Write a pipeline graph function
@@ -215,6 +200,8 @@ def compute_kappa_bits(pipeline, smoothR, smoothI, dqR, dqI, expected_real, expe
 	smoothIInRange = pipeparts.mkcapsfilter(pipeline, smoothIInRange, "audio/x-raw, format=U32LE, rate=%d" % ending_rate)
 
 	smoothInRange = pipeparts.mkgate(pipeline, mkqueue(pipeline, smoothRInRangetee), threshold = status_out_smooth * 2, control = mkadder(pipeline, list_srcs(pipeline, smoothIInRange, mkqueue(pipeline, smoothRInRangetee))))
+	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
+	smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d" % ending_rate)
 
 	dqtotal = mkadder(pipeline, list_srcs(pipeline, dqR, dqI))
 	medianUncorrupt = pipeparts.mkbitvectorgen(pipeline, dqtotal, threshold = 2, bit_vector = status_out_median)
@@ -235,7 +222,7 @@ def compute_kappa_bits_only_real(pipeline, smooth, dq, expected, ok_var, status_
 	medianUncorrupt = pipeparts.mkbitvectorgen(pipeline, dq, threshold = 1, bit_vector = status_out_median)
 	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate=%d" % starting_rate)
 	medianUncorrupt = pipeparts.mkgeneric(pipeline, medianUncorrupt, "lal_logicalundersample", required_on = status_out_median, status_out = status_out_median)
-	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate = %d" % ending_rate)
+	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate=%d" % ending_rate)
 
 	return smoothInRange, medianUncorrupt
 
