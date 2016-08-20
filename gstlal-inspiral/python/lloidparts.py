@@ -94,7 +94,6 @@ from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import simplehandler
-from gstlal.stats import horizonhistory
 import lal
 from lal import LIGOTimeGPS
 
@@ -340,15 +339,12 @@ class Handler(simplehandler.Handler):
 		"""
 		timestamp can be a float or a slice with float boundaries.
 		"""
-		# retrieve the horizon history for this instrument or
-		# initialize it if it doesn't exist yet
-		try:
-			horizon_history = self.dataclass.coinc_params_distributions.horizon_history[instrument]
-		except KeyError:
-			horizon_history = self.dataclass.coinc_params_distributions.horizon_history[instrument] = horizonhistory.NearestLeafTree()
-		# NOTE:  timestamps are floats here (or float slices).
-		# whitener should be reporting PSDs with integer
-		# timestamps, and, anyway, we don't need nanosecond
+		# retrieve the horizon history for this instrument
+		horizon_history = self.dataclass.coinc_params_distributions.horizon_history[instrument]
+		# NOTE:  timestamps are floats here (or float slices), not
+		# LIGOTimeGPS.  whitener should be reporting PSDs with
+		# integer timestamps so the timestamps are not naturally
+		# high precision, and, anyway, we don't need nanosecond
 		# precision for the horizon distance history.
 		horizon_history[timestamp] = horizon_distance
 
@@ -468,7 +464,7 @@ class Handler(simplehandler.Handler):
 			# set the horizon distance history to 0 at
 			# on-to-off transitions of whitened h(t)
 			if segtype == "whitehtsegments":
-				if instrument in self.dataclass.coinc_params_distributions.horizon_history and self.dataclass.coinc_params_distributions.horizon_history[instrument]:
+				if self.dataclass.coinc_params_distributions.horizon_history[instrument]:
 					self._record_horizon_distance(instrument, slice(float(timestamp), None), 0.)
 				else:
 					self._record_horizon_distance(instrument, float(timestamp), 0.)

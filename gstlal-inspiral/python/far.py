@@ -119,40 +119,51 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	#   accidental_weight * (measured denominator)
 	numerator_accidental_weight = 0.
 
-	# binnings (filter funcs look-up initialized in .__init__()
-	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 300)))
+	# binnings (initialized in .__init__()
 	binnings = {
-		"instruments": rate.NDBins((snglcoinc.InstrumentBins(),)),
-		"H1_snr_chi": snr_chi_binning,
-		"H2_snr_chi": snr_chi_binning,
-		"H1H2_snr_chi": snr_chi_binning,
-		"L1_snr_chi": snr_chi_binning,
-		"V1_snr_chi": snr_chi_binning,
-		"E1_snr_chi": snr_chi_binning,
-		"E2_snr_chi": snr_chi_binning,
-		"E3_snr_chi": snr_chi_binning,
-		"E0_snr_chi": snr_chi_binning
 	}
-	del snr_chi_binning
 
-	def __init__(self, *args, **kwargs):
-		super(ThincaCoincParamsDistributions, self).__init__(*args, **kwargs)
-		self.horizon_history = horizonhistory.HorizonHistories()
-		self.pdf_from_rates_func = {
-			"instruments": self.pdf_from_rates_instruments,
-			"H1_snr_chi": self.pdf_from_rates_snrchi2,
-			"H2_snr_chi": self.pdf_from_rates_snrchi2,
-			"H1H2_snr_chi": self.pdf_from_rates_snrchi2,
-			"L1_snr_chi": self.pdf_from_rates_snrchi2,
-			"V1_snr_chi": self.pdf_from_rates_snrchi2,
-			"E1_snr_chi": self.pdf_from_rates_snrchi2,
-			"E2_snr_chi": self.pdf_from_rates_snrchi2,
-			"E3_snr_chi": self.pdf_from_rates_snrchi2,
-			"E0_snr_chi": self.pdf_from_rates_snrchi2,
-		}
+	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, **kwargs):
+		#
+		# check input
+		#
+
+		if min_instruments < 1:
+			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
+		if min_instruments > len(instruments):
+			raise ValueError("not enough instruments (%s) to satisfy min_instruments=%d" % (", ".join(sorted(instruments)), min_instruments))
+
+		# in the parent class this is a class attribute, but we use
+		# it as an instance attribute here
+		self.binnings = dict.fromkeys(("%s_snr_chi" % instrument for instrument in instruments), rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 300))))
+		self.binnings.update({
+			"instruments": rate.NDBins((snglcoinc.InstrumentBins(instruments),))
+		})
+
+		self.pdf_from_rates_func = dict.fromkeys(("%s_snr_chi" % instrument for instrument in instruments), self.pdf_from_rates_snrchi2)
+		self.pdf_from_rates_func.update({
+			"instruments": self.pdf_from_rates_instruments
+		})
+
+		# this can't be done until the binnings attribute has been
+		# populated
+		super(ThincaCoincParamsDistributions, self).__init__(**kwargs)
+
+		# record of horizon distances for all instruments in the
+		# network
+		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in instruments)
+
+		# the minimum number of instruments required to form a
+		# candidate
+		self.min_instruments = min_instruments
+		assert min_instruments == 2	# FIXME:  generalize
 
 		# set to True to include zero-lag histograms in background model
 		self.zero_lag_in_background = False
+
+	@property
+	def instruments(self):
+		return frozenset(self.horizon_history)
 
 	def __iadd__(self, other):
 		# NOTE:  because we use custom PDF constructions, the stock
@@ -160,6 +171,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# valid PDFs.  the rates arrays *are* handled correctly by
 		# the .__iadd__() method, by fiat, so just remember to
 		# invoke .finish() to get the PDFs in shape afterwards
+		if self.instruments != other.instruments:
+			raise ValueError("incompatible instrument sets")
+		if self.min_instruments != other.min_instruments:
+			raise ValueError("incompatible minimum number of instruments")
 		super(ThincaCoincParamsDistributions, self).__iadd__(other)
 		self.horizon_history += other.horizon_history
 		return self
@@ -173,14 +188,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		#
-		# 2D (snr, \chi^2) values.  don't allow both H1 and H2 to
-		# both contribute parameters to the same coinc.  if both
-		# have participated favour H1
+		# 2D (snr, \chi^2) values.
 		#
 
 		params = CoincParams(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
-		if "H2_snr_chi" in params and "H1_snr_chi" in params:
-			del params["H2_snr_chi"]
 
 		#
 		# instrument combination
@@ -246,6 +257,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
 		if df <= 0.:
 			raise ValueError("require df >= 0: %s" % repr(df))
+		if set(n) != self.instruments:
+			raise ValueError("n must provide a count for exactly each of %s" % ", ".join(sorted(self.instruments)))
 		pfs = numpy.logspace(numpy.log10(prefactors_range[0]), numpy.log10(prefactors_range[1]), 100)
 		for instrument, number_of_events in n.items():
 			binarr = rates_dict["%s_snr_chi" % instrument]
@@ -296,6 +309,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# extrapolated background.
 		#
 
+		if set(n) != self.instruments:
+			raise ValueError("n must provide a count for exactly each of %s" % ", ".join(sorted(self.instruments)))
 		if verbose:
 			print >>sys.stderr, "adding tilt to (SNR, \\chi^2) background PDFs ..."
 		for instrument, number_of_events in n.items():
@@ -353,6 +368,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			zero_lag_coinc_counts = dict((instruments, self.zero_lag_rates["instruments"][instruments,]) for instruments in self.zero_lag_rates["instruments"].bins[0].centres()),
 			segs = segs,
 			delta_t = 0.005,
+			min_instruments = self.min_instruments,
 			verbose = verbose
 		).items():
 			self.background_rates["instruments"][instruments,] = count
@@ -369,7 +385,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# instrument combinations.  because the horizon distance is
 		# 0'ed when an instrument is off, this marginalization over
 		# horizon distance histories also accounts for duty cycles
-		P = inspiral_extrinsics.P_instruments_given_signal(self.horizon_history)
+		P = inspiral_extrinsics.P_instruments_given_signal(self.horizon_history, min_instruments = self.min_instruments)
 
 		# populate binning from probabilities
 		for instruments, p in P.items():
@@ -490,13 +506,18 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	@classmethod
 	def from_xml(cls, xml, name):
-		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name)
-		xml = self.get_xml_root(xml, name)
+		xml = cls.get_xml_root(xml, name)
+		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name,
+			instruments = lsctables.instrument_set_from_ifos(ligolw_param.get_pyvalue(xml, u"instruments")),
+			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
+		)
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, name)
 		return self
 
 	def to_xml(self, name):
 		xml = super(ThincaCoincParamsDistributions, self).to_xml(name)
+		xml.appendChild(ligolw_param.from_pyvalue(u"instruments", lsctables.ifos_from_instrument_set(self.instruments)))
+		xml.appendChild(ligolw_param.from_pyvalue(u"min_instruments", self.min_instruments))
 		xml.appendChild(self.horizon_history.to_xml(name))
 		return xml
 
@@ -665,7 +686,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 					continue
 				params[key] = snr, chi2_over_snr2()
 				instruments.append(instrument)
-			if coinc_only and len(instruments) < 2:
+			if coinc_only and len(instruments) < self.min_instruments:
 				continue
 			params["instruments"] = (frozenset(instruments),)
 			params.horizons = horizon_distance
@@ -736,7 +757,7 @@ class RankingData(object):
 		"ln_likelihood_ratio": rate.gaussian_window(8.)
 	}
 
-	def __init__(self, coinc_params_distributions, instruments, sampler_coinc_params_distributions = None, process_id = None, nsamples = 1000000, min_instruments = 2, verbose = False):
+	def __init__(self, coinc_params_distributions, instruments = None, sampler_coinc_params_distributions = None, process_id = None, nsamples = 1000000, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
 		self.signal_likelihood_rates = {}
@@ -744,16 +765,6 @@ class RankingData(object):
 		self.zero_lag_likelihood_rates = {}
 		self.zero_lag_likelihood_pdfs = {}
 		self.process_id = process_id
-
-		#
-		# initialize binnings
-		#
-
-		instruments = tuple(instruments)
-		for key in [frozenset(ifos) for n in range(min_instruments, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
-			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
-			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
-			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 
 		#
 		# bailout out used by .from_xml() class method to get an
@@ -764,13 +775,22 @@ class RankingData(object):
 			return
 
 		#
-		# now check input
+		# initialize binnings
 		#
 
-		if min_instruments < 1:
-			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
-		if min_instruments > len(instruments):
-			raise ValueError("not enough instruments to satisfy min_instruments")
+		if coinc_params_distributions is not None:
+			if instruments is not None and set(instruments) != coinc_params_distributions.instruments:
+				raise ValueError("instrument set does not match coinc_params_distributions (hint:  don't supply instruments when initializing from ThincaCoincParamsDistributions)")
+			instruments = tuple(coinc_params_distributions.instruments)
+		elif instruments is None:
+			raise ValueError("must supply an instrument set when not initializing from a ThincaCoincParamsDistributions object")
+		else:
+			instruments = tuple(instruments)
+
+		for key in [frozenset(ifos) for n in range(coinc_params_distributions.min_instruments, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
+			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
+			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
+			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 
 		#
 		# run importance-weighted random sampling to populate

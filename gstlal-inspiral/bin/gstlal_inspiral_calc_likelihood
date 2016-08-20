@@ -171,7 +171,7 @@ ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coincparamsdistributions)
 
 
 if options.write_rates is not None:
-	ranking_data = far.RankingData(None, seglists.keys())
+	ranking_data = far.RankingData(None, instruments = seglists.keys())
 else:
 	ranking_data = None
 

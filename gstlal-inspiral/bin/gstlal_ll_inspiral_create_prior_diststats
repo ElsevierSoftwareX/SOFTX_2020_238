@@ -133,7 +133,7 @@ n_zerolag = dict(((ifo, float(abs(seg)) * options.num_templates / 50.) for ifo, 
 # Initialize an empty ThincaCoincParamsDistributions class
 #
 
-diststats = far.ThincaCoincParamsDistributions()
+diststats = far.ThincaCoincParamsDistributions(instruments = set(segs))
 
 #
 # Add background, zero_lag and injection prior distributions in the SNR and chi-squared plane
@@ -179,7 +179,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_
 # Instantiate a new RankingData class from our distribution stats
 #
 
-ranking_data = far.RankingData(diststats, instruments = options.instruments, process_id = process.process_id, nsamples = 100000, verbose = options.verbose)
+ranking_data = far.RankingData(diststats, process_id = process.process_id, nsamples = 100000, verbose = options.verbose)
 
 #
 # Simulate a measured coincident trigger likelihood histogram by just using the background one with a lower normalized count

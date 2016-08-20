@@ -140,7 +140,7 @@ coincparamsdistributions.finish(verbose = options.verbose)
 #
 
 
-ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), sampler_coinc_params_distributions = sampler_coincparamsdistributions, nsamples = options.ranking_stat_samples, verbose = options.verbose)
+ranking_data = far.RankingData(coincparamsdistributions, sampler_coinc_params_distributions = sampler_coincparamsdistributions, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
 #

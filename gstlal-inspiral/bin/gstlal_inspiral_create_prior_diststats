@@ -117,7 +117,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_pri
 #
 
 
-coincparamsdistributions = far.ThincaCoincParamsDistributions()
+coincparamsdistributions = far.ThincaCoincParamsDistributions(instruments = options.instrument)
 
 if options.background_prior > 0:
 	coincparamsdistributions.add_background_prior(n = dict((ifo, options.background_prior) for ifo in options.instrument), verbose = options.verbose)
