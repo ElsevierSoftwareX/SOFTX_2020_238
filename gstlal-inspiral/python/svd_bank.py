@@ -149,9 +149,7 @@ class Bank(object):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
-		# type cast needed otherwise the result has type
-		# "numpy.float64" which confuses the I/O code
-		self.filter_length = float(time_slices['end'].max())
+		self.filter_length = time_slices['end'].max()
 		self.snr_threshold = snr_threshold
 		if logname is not None and not logname:
 			raise ValueError("logname cannot be empty if it is set")
@@ -285,7 +283,10 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 		root.appendChild(new_sngl_table)
 
 		# Add root-level scalar params
-		root.appendChild(ligolw_param.from_pyvalue('filter_length', bank.filter_length))
+		# see the comment below about the assert and numpy type
+		# safety
+		assert isinstance(bank.filter_length, float)
+		root.appendChild(ligolw_param.from_pyvalue('filter_length', float(bank.filter_length)))
 		root.appendChild(ligolw_param.from_pyvalue('gate_threshold', bank.gate_threshold))
 		root.appendChild(ligolw_param.from_pyvalue('logname', bank.logname or ""))
 		root.appendChild(ligolw_param.from_pyvalue('snr_threshold', bank.snr_threshold))
@@ -315,9 +316,24 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 			frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
 			# Add scalar params
-			el.appendChild(ligolw_param.from_pyvalue('start', frag.start))
-			el.appendChild(ligolw_param.from_pyvalue('end', frag.end))
-			el.appendChild(ligolw_param.from_pyvalue('rate', frag.rate))
+			# NOTE:  commit fc95f5fc converted the list of time
+			# slice tuples to a numpy array which causes
+			# "numpy.float64", etc., types to leak out
+			# everywhere into the code in place of native
+			# Python types.  numpy types are generally not
+			# understood by the XML I/O code (they are, but
+			# only in the context of Array objects).  therefore
+			# we're forced to do type casts here, but this is
+			# dangerous because if something somewhere changes
+			# the type this code could mask a bug or cause loss
+			# of precision when writing to disk without the
+			# user knowing.  the assert is there to try to
+			# catch future bugs.
+
+			assert isinstance(frag.rate, int) and isinstance(frag.start, float) and isinstance(frag.end, float)
+			el.appendChild(ligolw_param.from_pyvalue('rate', int(frag.rate)))
+			el.appendChild(ligolw_param.from_pyvalue('start', float(frag.start)))
+			el.appendChild(ligolw_param.from_pyvalue('end', float(frag.end)))
 
 			# Add arrays
 			el.appendChild(ligolw_array.from_array('chifacs', frag.chifacs))
@@ -377,12 +393,11 @@ def read_banks(filename, contenthandler, verbose = False):
 		# Read bank fragments
 		bank.bank_fragments = []
 		for el in (node for node in root.childNodes if node.tagName == ligolw.LIGO_LW.tagName):
-			frag = BankFragment.__new__(BankFragment)
-
-			# Read scalar params
-			frag.start = ligolw_param.get_pyvalue(el, 'start')
-			frag.end = ligolw_param.get_pyvalue(el, 'end')
-			frag.rate = ligolw_param.get_pyvalue(el, 'rate')
+			frag = BankFragment(
+				rate = ligolw_param.get_pyvalue(el, 'rate'),
+				start = ligolw_param.get_pyvalue(el, 'start'),
+				end = ligolw_param.get_pyvalue(el, 'end')
+			)
 
 			# Read arrays
 			frag.chifacs = ligolw_array.get_array(el, 'chifacs').array
