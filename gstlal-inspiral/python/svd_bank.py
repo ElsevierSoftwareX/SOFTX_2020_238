@@ -181,7 +181,7 @@ class Bank(object):
 		if bank_fragment.sum_of_squares_weights is not None:
 			self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
 		else:
-			self.gate_threshold = 0
+			self.gate_threshold = 0.
 		if verbose:
 			print >>sys.stderr, "sum-of-squares threshold for false-alarm probability of %.16g:  %.16g" % (gate_fap, self.gate_threshold)
 
