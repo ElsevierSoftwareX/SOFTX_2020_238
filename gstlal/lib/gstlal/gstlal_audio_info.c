@@ -116,26 +116,20 @@ gstlal_audio_info_from_caps (GstAudioInfo *info, const GstCaps *caps)
 {
 	GstStructure *str;
 	const gchar *s;
-	gboolean success = gst_audio_info_from_caps(info, caps);
 
 	/*
-	 * if that worked, we're done
-	 */
-
-	if(success)
-		return success;
-
-	/*
-	 * if not, see if it's a complex-valued time series
+	 * first see if it's a complex-valued time series
 	 */
 
 	if((str = gst_caps_get_structure(caps, 0)) && gst_structure_has_name(str, "audio/x-raw") && (s = gst_structure_get_string(str, "format")) && s[0] == 'Z') {
 		/*
-		 * it is.  pretend it's native-endianness double-precision
-		 * floats and try parsing the caps again
+		 * it looks like it might be.  pretend it's
+		 * native-endianness double-precision floats and try
+		 * parsing the caps again
 		 */
 
 		GstCaps *pretend = gst_caps_copy(caps);
+		gboolean success;
 		gst_structure_set(gst_caps_get_structure(pretend, 0), "format", G_TYPE_STRING, GST_AUDIO_NE(F64), NULL);
 		success = gst_audio_info_from_caps(info, pretend);
 		gst_caps_unref(pretend);
@@ -148,21 +142,29 @@ gstlal_audio_info_from_caps (GstAudioInfo *info, const GstCaps *caps)
 			return success;
 
 		/*
-		 * if it did, we need to make a few adjustments to info
+		 * if it did, we need to make a few adjustments to the info
 		 * structure
 		 */
 
 		if(!strcmp(s, GST_AUDIO_NE(Z64))) {
 			info->finfo = &formatinfo[0];
+			return success;
 		} else if(!strcmp(s, GST_AUDIO_NE(Z128))) {
 			info->finfo = &formatinfo[1];
 			info->bpf *= 2;
-		} else {
-			/* oops, not really a format we understand */
-			info->finfo = NULL;
-			success = FALSE;
+			return success;
 		}
+
+		/* oops, not really a format we understand.  let the stock
+		 * implementationt try.  it will surely fail (because we
+		 * know the format string starts with a "Z" which it won't
+		 * understand) but it will put the appropriate error
+		 * message into the debug log for us */
 	}
 
-	return success;
+	/*
+	 * now let the stock implementation try
+	 */
+
+	return gst_audio_info_from_caps(info, caps);
 }
