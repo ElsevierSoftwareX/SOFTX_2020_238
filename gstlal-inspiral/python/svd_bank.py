@@ -153,6 +153,8 @@ class Bank(object):
 		# "numpy.float64" which confuses the I/O code
 		self.filter_length = float(time_slices['end'].max())
 		self.snr_threshold = snr_threshold
+		if logname is not None and not logname:
+			raise ValueError("logname cannot be empty if it is set")
 		self.logname = logname
 		self.bank_id = bank_id
 
@@ -285,7 +287,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 		# Add root-level scalar params
 		root.appendChild(ligolw_param.from_pyvalue('filter_length', bank.filter_length))
 		root.appendChild(ligolw_param.from_pyvalue('gate_threshold', bank.gate_threshold))
-		root.appendChild(ligolw_param.from_pyvalue('logname', bank.logname))
+		root.appendChild(ligolw_param.from_pyvalue('logname', bank.logname or ""))
 		root.appendChild(ligolw_param.from_pyvalue('snr_threshold', bank.snr_threshold))
 		root.appendChild(ligolw_param.from_pyvalue('template_bank_filename', bank.template_bank_filename))
 		root.appendChild(ligolw_param.from_pyvalue('bank_id', bank.bank_id))
@@ -362,7 +364,7 @@ def read_banks(filename, contenthandler, verbose = False):
 		# Read root-level scalar parameters
 		bank.filter_length = ligolw_param.get_pyvalue(root, 'filter_length')
 		bank.gate_threshold = ligolw_param.get_pyvalue(root, 'gate_threshold')
-		bank.logname = ligolw_param.get_pyvalue(root, 'logname')
+		bank.logname = ligolw_param.get_pyvalue(root, 'logname') or None
 		bank.snr_threshold = ligolw_param.get_pyvalue(root, 'snr_threshold')
 		bank.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
 		bank.bank_id = ligolw_param.get_pyvalue(root, 'bank_id')
