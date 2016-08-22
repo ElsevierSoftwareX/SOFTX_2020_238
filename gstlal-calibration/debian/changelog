@@ -1,3 +1,11 @@
+gstlal-calibration (1.0.0-1) unstable; urgency=low
+
+  * Updates to pipeline to run with kappas
+  * Updated CALIB_STATE_VECTOR definition
+  * Update to kappa smoothing routine
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 06 Jul 2016 16:22:00 +0900
+
 gstlal-calibration (0.99.1-1) unstable; urgency=low
 
   * More packaging related adjustments
