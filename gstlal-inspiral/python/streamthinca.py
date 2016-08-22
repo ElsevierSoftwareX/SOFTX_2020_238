@@ -55,23 +55,6 @@ import time
 #
 # =============================================================================
 #
-#                                Configuration
-#
-# =============================================================================
-#
-
-
-#
-# allowed instrument combinations (yes, hard-coded, just take off, eh)
-#
-
-
-allowed_instrument_combos = frozenset([frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")), frozenset(("H1H2", "L1")), frozenset(("H1H2", "L1", "V1")), frozenset(("E1", "E2")), frozenset(("E1", "E3")), frozenset(("E2", "E3")), frozenset(("E1", "E2", "E3"))])
-
-
-#
-# =============================================================================
-#
 #                      pylal.ligolw_thinca Customizations
 #
 # =============================================================================
@@ -320,7 +303,7 @@ class StreamThinca(object):
 		# coincidence segment in as a default value for the seg
 		# keyword argument
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - coincidence_back_off, boundary - coincidence_back_off)):
-			return frozenset(event.ifo for event in events) not in allowed_instrument_combos or min(event.end for event in events) not in seg
+			return min(event.end for event in events) not in seg
 
 		# find coincs
 		ligolw_thinca.ligolw_thinca(
