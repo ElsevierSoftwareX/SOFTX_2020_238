@@ -208,7 +208,7 @@ static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint 
 	gint i; \
 	DTYPE new_element; \
 	for(i = 0; i < buffer_size; i++) { \
-		if(gap || (double) *src > default_kappa + maximum_offset || (double) *src < default_kappa - maximum_offset) { \
+		if(gap || (double) *src > default_kappa + maximum_offset || (double) *src < default_kappa - maximum_offset || isnan(*src) || isinf(*src)) { \
 			if(default_to_median) \
 				new_element = *current_median; \
 			else if (track_bad_kappa) \
