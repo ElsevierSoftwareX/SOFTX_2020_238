@@ -216,20 +216,16 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 #define GST_CAT_DEFAULT gstlal_interpolator_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_interpolator", 0, "lal_interpolator element");
-}
-
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
         GSTLALInterpolator,
         gstlal_interpolator,
-        GstBaseTransform,
         GST_TYPE_BASE_TRANSFORM,
-        additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_interpolator", 0, "lal_interpolator element")
 );
 
-static void gstlal_interpolator_base_init(gpointer klass){}
+
+// FIXME- This is defined but never used? Commented out to squash warnings. 
+//static void gstlal_interpolator_base_init(gpointer klass){}
 
 /* Pads */
 
@@ -260,11 +256,11 @@ static GstStaticPadTemplate src_template =
  */
 
 static void finalize(GObject *object);
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size);
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size);
 static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * outcaps);
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf);
-static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps);
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize);
+static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter);
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize);
 static gboolean start(GstBaseTransform *trans);
 static gboolean stop(GstBaseTransform *trans);
 
@@ -295,7 +291,7 @@ static void gstlal_interpolator_class_init(GSTLALInterpolatorClass *klass)
 }
 
 
-static void gstlal_interpolator_init(GSTLALInterpolator *element, GSTLALInterpolatorClass *klass)
+static void gstlal_interpolator_init(GSTLALInterpolator *element)
 {
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 
@@ -318,7 +314,7 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element, GSTLALInterpol
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 }
 
-static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps) {
+static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter) {
 
 	/* 
          * FIXME actually pull out the allowed rates so that we can prevent
@@ -403,7 +399,7 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
 	GstStructure *str;
@@ -466,17 +462,17 @@ static guint get_output_size(GSTLALInterpolator *element, guint size) {
 	return get_output_length(element, size / element->unitsize) * element->unitsize;
 }
 
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
-	guint unit_size;
-	guint other_unit_size;
+	gsize unit_size;
+	gsize other_unit_size;
 	gboolean success = TRUE;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
 	if(size % unit_size) {
-		GST_ERROR_OBJECT(element, "size not a multiple of %u", unit_size);
+		GST_ERROR_OBJECT(element, "size not a multiple of %" G_GSIZE_FORMAT, unit_size);
 		return FALSE;
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
@@ -489,7 +485,8 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 * buffer of (at least) the requested size
 		 */
 		*othersize = minimum_input_size(element, size);
-		GST_INFO_OBJECT(element, "producing %d (bytes) buffer for request on SRC pad", *othersize);
+		//GST_INFO_OBJECT(element, "producing %d (bytes) buffer for request on SRC pad", *othersize);
+		GST_INFO_OBJECT(element, "producing %" G_GSIZE_FORMAT " (bytes) buffer for request on SRC pad", *othersize);
 		break;
 
 	case GST_PAD_SINK:
@@ -499,7 +496,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 */
 
 		*othersize = get_output_size(element, size);
-		GST_INFO_OBJECT(element, "SINK pad buffer of size %d (bytes) %d (samples) provided. Transforming to size %d (bytes) %d (samples).", size, size / element->unitsize,  *othersize, *othersize / element->unitsize);
+		GST_INFO_OBJECT(element, "SINK pad buffer of size %" G_GSIZE_FORMAT " (bytes) %" G_GSIZE_FORMAT " (samples) provided. Transforming to size %" G_GSIZE_FORMAT " (bytes) %" G_GSIZE_FORMAT " (samples).", size, size / element->unitsize,  *othersize, *othersize / element->unitsize);
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -563,6 +560,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	guint output_length;
 	GstFlowReturn result = GST_FLOW_OK;
 	gboolean copied_nongap;
+	GstMapInfo mapinfo;
 
 	g_assert(GST_BUFFER_PTS_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(inbuf));
@@ -590,7 +588,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->need_discont = TRUE;
 		element->need_pretend = TRUE;
-		GST_INFO_OBJECT(element, "A discontinuity was detected. The offset has been reset to %" G_GUINT64_FORMAT " and the timestamp has been reset to %" GST_TIME_SECONDS_FORMAT, element->offset0, element->t0);
+		//FIXME-- clean up this print statement
+		//GST_INFO_OBJECT(element, "A discontinuity was detected. The offset has been reset to %" G_GUINT64_FORMAT " and the timestamp has been reset to %" GST_TIME_SECONDS_FORMAT, element->offset0, element->t0);
 
 	}
 	else {
@@ -602,11 +601,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	GST_INFO_OBJECT(element, "%s input_buffer %p spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
-	GST_INFO_OBJECT(element, "pushing %d (bytes) %d (samples) sample buffer into adapter with size %d (samples)", GST_BUFFER_SIZE(inbuf), GST_BUFFER_SIZE(inbuf) / element->unitsize, get_available_samples(element));
+	//FIXME- clean up this print statement
+	//GST_INFO_OBJECT(element, "pushing %d (bytes) %d (samples) sample buffer into adapter with size %d (samples)", GST_BUFFER_SIZE(inbuf), GST_BUFFER_SIZE(inbuf) / element->unitsize, get_available_samples(element));
 
 	gst_buffer_ref(inbuf);  /* don't let calling code free buffer */
 	gst_audioadapter_push(element->adapter, inbuf);
-	GST_INFO_OBJECT(element, "adapter_size %d (samples)", get_available_samples(element));
+	GST_INFO_OBJECT(element, "adapter_size %u (samples)", (guint) get_available_samples(element));
 	
 	// FIXME check the sanity of the output buffer
 
@@ -614,18 +614,20 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * Handle the different possiblilities
 	 */
 
-	output_length = GST_BUFFER_SIZE(outbuf) / element->unitsize;
+	output_length = gst_buffer_get_size(outbuf) / element->unitsize;
 
-	if (GST_BUFFER_SIZE(outbuf) == 0)
+	if (gst_buffer_get_size(outbuf) == 0)
 		set_metadata(element, outbuf, 0, FALSE);
 	else {
 
 
 		guint processed = 0;
-		float *output = (float *) GST_BUFFER_DATA(outbuf);
+		//float *output = (float *) GST_BUFFER_DATA(outbuf);
+		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+		float *output = (float *) outbuf;
 		//memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));  // FIXME necesary?
-
-		GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length);
+		// FIXME- clean up this print statement (format)
+		//GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length);
 
 		while (processed < output_length) {
 
@@ -673,6 +675,6 @@ static void finalize(GObject *object)
          * chain to parent class' finalize() method
          */
 
-        G_OBJECT_CLASS(parent_class)->finalize(object);
+        G_OBJECT_CLASS(gstlal_interpolator_parent_class)->finalize(object);
 }
 
