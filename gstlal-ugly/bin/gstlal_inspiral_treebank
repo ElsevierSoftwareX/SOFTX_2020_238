@@ -14,6 +14,11 @@ from gstlal import tree
 from gstlal.tree import *
 import os,sys,argparse
 
+from scipy.interpolate import UnivariateSpline
+from lalinspiral.sbank.psds import read_psd
+from lalinspiral.sbank.waveforms import waveforms
+from lalinspiral.sbank.bank import Bank
+
 
 # Read command line options
 def parse_command_line():
@@ -159,7 +164,7 @@ if args.verbose:
 
 # Split according to how many templates you want to place in the hypercube
 mismatch = 1.0 - args.min_match
-bank.split(4**len(coord_limits), mismatch = mismatch, verbose = args.verbose)
+bank.split(50, mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
@@ -170,16 +175,35 @@ xmldoc.childNodes[-1].appendChild(tbl)
 process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], {})
 ligolw_process.set_process_end_time(process)
 
+
+
+# read in PSD and construct interpolator noise model
+psd = read_psd(args.psd_file)["H1"]
+f_orig = psd.f0 + numpy.arange(len(psd.data.data)) * psd.deltaF
+interpolator = UnivariateSpline(f_orig, numpy.log(psd.data.data), s=0)
+noise_model = lambda g: numpy.where(g < max(f_orig), numpy.exp(interpolator(g)), numpy.inf)
+waveform = waveforms[args.approximant]
+
+sbank = Bank(noise_model, args.flow, False, True, coarse_match_df=1.0, iterative_match_df_max=1.0)
+
+
+
 totalpopcount = 0
 previous_tiles = []
 nodes = bank.walk()
+
+if args.verbose:
+	print "\n\nSplitting complete. Tiling ..."
+	print "Expected bank size: %d tempaltes\n" % (sum(c.num_templates(mismatch) for c in nodes))
+
 for n, c in enumerate(nodes):
 
-	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic, neighbors = tree.find_neighbors_by_m1m2(c, previous_tiles))
+	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic, neighbors = tree.find_neighbors_by_m1m2(c, previous_tiles), bank = sbank)
 	totalpopcount = totalpopcount + temppopcount
 	previous_tiles.extend(tiles)
 
 	for t in tiles:
+                t = [t.params[k] for k in range(len(coord_limits))]
 		row = SnglInspiralTable()
 		row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z = coord_func(t)
 		row.event_id = ilwd.ilwdchar('sngl_inspiral:event_id:%d' % len(tbl))

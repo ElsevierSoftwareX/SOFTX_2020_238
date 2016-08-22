@@ -2,6 +2,10 @@ import itertools
 import metric as metric_module
 import numpy
 
+from lalinspiral.sbank.bank import Bank
+from lalinspiral.sbank.waveforms import waveforms
+waveform = waveforms["IMRPhenomD"]
+
 def mass_sym(boundaries):
 	# Assumes first two are m_1 m_2
 	# Makes sure the entire hypercube is outside the symmetric region
@@ -17,8 +21,9 @@ def find_neighbors_by_m1m2(cube, tiles):
 	m1 = cube.boundaries[0]
 	m2 = cube.boundaries[1]
 	neighbors = []
-	for t in tiles:
-		if numpy.any(corner in t for corner in itertools.product(m1,m2)):
+        for t in tiles:
+                _t = [t.params[0], t.params[1]]
+		if numpy.any(corner in _t for corner in itertools.product(m1,m2)):
 			neighbors.append(t)
 	return neighbors
 
@@ -81,7 +86,7 @@ class HyperCube(object):
 		rightbound[dim,0] = self.center[dim]
 		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
-	def tile(self, mismatch, stochastic = False, neighbors = []):
+	def tile(self, mismatch, stochastic = False, neighbors = [], bank = None):
 
 		popcount = 0
 
@@ -98,21 +103,21 @@ class HyperCube(object):
 		if stochastic:
 			# To Stephen with love
 			# From Chad
-			self.tiles = [self.center]
+			#self.tiles = [self.center]
 			N = self.N()
 			target = numpy.ceil(self.num_templates(mismatch))
 			dl = self.dl(mismatch)
 			cnt = 0
 			rand_coords = numpy.random.rand(1e4, len(self.deltas))
 			for randcoord in rand_coords:
-				randcoord = (randcoord - 0.5) * self.deltas + self.center
-				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in self.tiles + neighbors]
-				maxdist = max(distances)
-				mindist = min(distances)
-				assert randcoord in self
-				if mindist > dl * N**.5:
-					self.tiles.append(randcoord)
-				if len(self.tiles) > target:
+
+                                randcoord = (randcoord - 0.5) * self.deltas + self.center
+                                wf = waveform(randcoord[0], randcoord[1], 0, 0, bank=bank)
+                                match, matcher =  bank.covers(wf, 1 - mismatch, nhood = neighbors + self.tiles)
+                                if match < 1 - mismatch:
+                                        self.tiles.append(wf)
+
+				if len(self.tiles) > 3*target:
 					break
 
 		else:
@@ -139,7 +144,7 @@ class HyperCube(object):
 				assert s < e
 				numtmps = 2**numpy.ceil(numpy.log2((numpy.ceil((e-s)) + 1) // 2))
 				# FIXME hexagonal lattice in 2D
-				grid.append((numpy.arange(-numtmps, numtmps))* self.dl(mismatch))
+				grid.append((numpy.arange(-numtmps, numtmps))* self.dl(mismatch) / 5)
 				#grid.append((numpy.arange(-numtmps, numtmps) + 0.5 * cnt % 2)* self.dl(mismatch))
 				#grid.append(numpy.array((-numtmps, numtmps)))
 			for coords in itertools.product(*grid):
@@ -147,20 +152,25 @@ class HyperCube(object):
 				norm_coords = numpy.dot(Minv, coords)
 				primed_coords = norm_coords + self.center
 
-				# FIXME take care of ratty edges
 				if primed_coords in self:
-					self.tiles.append(primed_coords)
+                                        if len(primed_coords) == 2:
+                                                primed_coords = [primed_coords[0], primed_coords[1], 0, 0]
+                                        if -1 <= primed_coords[2] <= 1 and -1 <= primed_coords[3] <= 1:
+                                                wf = waveform(primed_coords[0], primed_coords[1], primed_coords[2], primed_coords[3], bank=bank)
+                                                match, matcher =  bank.covers(wf, 1 - mismatch, nhood = neighbors + self.tiles)
+                                                if match < 1 - mismatch:
+                                                        self.tiles.append(wf)
 
 		# Gaurantee at least one
 		if len(self.tiles) == 0:
-			self.tiles.append(self.center)
+                        self.tiles.append(waveform(self.center[0], self.center[1], 0, 0, bank=bank))
 
-		return list(self.tiles), popcount
+		return self.tiles, popcount
 
 	def __contains__(self, coords):
 		size = self.size
 		tmps = self.num_tmps_per_side(self.__mismatch)
-		fraction = (tmps + 1.0) / tmps
+		fraction = (tmps + 10.0) / tmps
 		for i, c in enumerate(coords):
 			# FIXME do something more sane to handle boundaries
 			if not ((c >= self.center[i] - self.deltas[i] * fraction[i] / 2.) and (c < self.center[i] + self.deltas[i] * fraction[i] / 2.)):
@@ -214,7 +224,7 @@ class Node(object):
 
 		# Figure out how many templates go inside
 		numtmps = numpy.floor(self.cube.num_templates(mismatch))
-		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates) or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
+		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates) or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 10):
 			bifurcation += 1
 			left, right = self.cube.split(splitdim)
 			self.left = Node(left, self)
@@ -232,7 +242,7 @@ class Node(object):
 		else:
 			if verbose:
 				print "%30s: %04d : %04d" % ("Next Level of Splitting",numtmps, split_num_templates)
-			self.split_fine(mismatch, bifurcation, verbose)
+                        #self.split_fine(mismatch, bifurcation, verbose)
 
 	def split_fine(self, mismatch, bifurcation = 0, verbose = True):
 		size = self.cube.size
