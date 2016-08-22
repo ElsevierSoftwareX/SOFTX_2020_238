@@ -89,9 +89,8 @@ def parse_command_line():
 	seglistdict, horizon_history = parse_segment_and_horizon(options)
 
 	options.instruments = frozenset(seglistdict)
-	# FIXME:  generalize to < 2
-	if len(options.instruments) < 2:
-		raise ValueError("must specify at least two distinct instrument")
+	if not options.instruments:
+		raise ValueError("must specify at least one instrument")
 
         bankcachedict = None #inspiral_pipe.parse_cache_str(options.bank_cache)
 

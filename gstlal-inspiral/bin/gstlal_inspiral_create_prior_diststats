@@ -75,9 +75,8 @@ def parse_command_line():
 	process_params = dict(options.__dict__)
 
 	options.instrument = set(options.instrument)
-	# FIXME:  reduce min to 1
-	if not options.instrument or len(options.instrument) < 2:
-		raise ValueError("must specify at least two distinct --instrument's")
+	if not options.instrument:
+		raise ValueError("must specify at least one --instrument")
 
 	if filenames:
 		raise ValueError("unrecognized arguments after options: %s" % " ".join(filenames))

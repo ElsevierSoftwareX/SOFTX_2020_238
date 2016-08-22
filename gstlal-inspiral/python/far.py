@@ -158,7 +158,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# the minimum number of instruments required to form a
 		# candidate
 		self.min_instruments = min_instruments
-		assert min_instruments == 2	# FIXME:  generalize
 
 		# the mean instrinsic signal rate for the region of
 		# parameter space tracked by this instance.  the units are
@@ -545,7 +544,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def Pinstrument_noise(self):
 		P = {}
 		for instruments, p in zip(self.background_pdf["instruments"].bins.centres()[0], self.background_pdf["instruments"].array):
-			if len(instruments) < 2 or not p:
+			if len(instruments) < self.min_instruments:
 				continue
 			P[instruments] = p
 		return P
@@ -554,7 +553,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def Pinstrument_signal(self):
 		P = {}
 		for instruments, p in zip(self.injection_pdf["instruments"].bins.centres()[0], self.injection_pdf["instruments"].array):
-			if len(instruments) < 2 or not p:
+			if len(instruments) < self.min_instruments:
 				continue
 			P[instruments] = p
 		return P
@@ -585,6 +584,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
 		ratio generator.
 		"""
+		if len(instruments) < self.min_instruments:
+			raise ValueError("cannot simulate candidates for < %d instruments" % self.min_instruments)
+
 		snr_slope = 0.8 / len(instruments)**3
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
