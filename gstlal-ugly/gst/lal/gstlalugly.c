@@ -51,8 +51,8 @@
 
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_iirbank.h>
-/*#include <gstlal_interpolator.h>
-#include <gstlal_mean.h>
+#include <gstlal_interpolator.h>
+/*#include <gstlal_mean.h>
 #include <gstlal_specgram.h>
 #include <gstlal_pad.h>
 #include <gstlal_trim.h>*/
@@ -76,7 +76,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
-		/*{"lal_interpolator", GSTLAL_INTERPOLATOR_TYPE},*/
+		{"lal_Interpolator", GSTLAL_INTERPOLATOR_TYPE},
 		/*{"lal_mean", GSTLAL_MEAN_TYPE},*/
 		/*{"lal_specgram", GSTLAL_SPECGRAM_TYPE},*/
 		/*{"lal_pad", GST_TYPE_LALPAD},
