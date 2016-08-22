@@ -123,7 +123,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	binnings = {
 	}
 
-	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, signal_rate = 1.0, **kwargs):
+	# FIXME:  get correct delta_t from calling code everywhere
+	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, signal_rate = 1.0, delta_t = 0.005, **kwargs):
 		#
 		# check input
 		#
@@ -132,6 +133,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
 		if min_instruments > len(instruments):
 			raise ValueError("not enough instruments (%s) to satisfy min_instruments=%d" % (", ".join(sorted(instruments)), min_instruments))
+		if delta_t < 0.:
+			raise ValueError("delta_t=%g must be >= 0" % delta_t)
 
 		# in the parent class this is a class attribute, but we use
 		# it as an instance attribute here
@@ -165,6 +168,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# parameter space
 		self.signal_rate = signal_rate
 
+		# the coincidence window.  needed for modelling instrument
+		# combination rates
+		self.delta_t = delta_t
+
 		# set to True to include zero-lag histograms in background model
 		self.zero_lag_in_background = False
 
@@ -191,6 +198,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			raise ValueError("incompatible instrument sets")
 		if self.min_instruments != other.min_instruments:
 			raise ValueError("incompatible minimum number of instruments")
+		if self.delta_t != other.delta_t:
+			raise ValueError("incompatible delta_t coincidence thresholds")
 		super(ThincaCoincParamsDistributions, self).__iadd__(other)
 		self.horizon_history += other.horizon_history
 		return self
@@ -487,14 +496,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# populate background instrument combination rates
 		#
-		# FIXME:  we need to know the coincidence window to do this
-		# correctly.  we assume 5ms.  get the correct number.
 		self.background_rates["instruments"].array[:] = 0.
 		for instruments, count in inspiral_extrinsics.instruments_rate_given_noise(
 			singles_counts = dict((instrument, self.background_rates["singles"][instrument,]) for instrument in self.background_rates["singles"].bins[0].centres()),
 			zero_lag_coinc_counts = dict((instruments, self.zero_lag_rates["instruments"][instruments,]) for instruments in self.zero_lag_rates["instruments"].bins[0].centres()),
 			segs = segs,
-			delta_t = 0.005,
+			delta_t = self.delta_t,
 			min_instruments = self.min_instruments,
 			verbose = verbose
 		).items():
@@ -527,7 +534,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name,
 			instruments = lsctables.instrument_set_from_ifos(ligolw_param.get_pyvalue(xml, u"instruments")),
 			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
-			signal_rate = ligolw_param.get_pyvalue(xml, u"signal_rate")
+			signal_rate = ligolw_param.get_pyvalue(xml, u"signal_rate"),
+			delta_t = ligolw_param.get_pyvalue(xml, u"delta_t")
 		)
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, name)
 		return self
@@ -537,6 +545,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		xml.appendChild(ligolw_param.from_pyvalue(u"instruments", lsctables.ifos_from_instrument_set(self.instruments)))
 		xml.appendChild(ligolw_param.from_pyvalue(u"min_instruments", self.min_instruments))
 		xml.appendChild(ligolw_param.from_pyvalue(u"signal_rate", self.signal_rate))
+		xml.appendChild(ligolw_param.from_pyvalue(u"delta_t", self.delta_t))
 		xml.appendChild(self.horizon_history.to_xml(name))
 		return xml
 
