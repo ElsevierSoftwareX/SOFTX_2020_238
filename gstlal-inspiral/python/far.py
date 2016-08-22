@@ -137,12 +137,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# it as an instance attribute here
 		self.binnings = dict.fromkeys(("%s_snr_chi" % instrument for instrument in instruments), rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 300))))
 		self.binnings.update({
-			"instruments": rate.NDBins((snglcoinc.InstrumentBins(instruments),))
+			"instruments": rate.NDBins((snglcoinc.InstrumentBins(instruments),)),
+			"singles": rate.NDBins((rate.HashableBins(instruments),))
 		})
 
 		self.pdf_from_rates_func = dict.fromkeys(("%s_snr_chi" % instrument for instrument in instruments), self.pdf_from_rates_snrchi2)
 		self.pdf_from_rates_func.update({
-			"instruments": self.pdf_from_rates_instruments
+			"instruments": self.pdf_from_rates_instruments,
+			"singles": lambda *args: None
 		})
 
 		# this can't be done until the binnings attribute has been
@@ -194,13 +196,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self.horizon_history += other.horizon_history
 		return self
 
-	def coinc_params(self, events, offsetvector):
+	def coinc_params(self, events, offsetvector, mode = "ranking"):
 		#
 		# NOTE:  unlike the burst codes, this function is expected
-		# to work with single-instrument event lists as well, as
-		# it's output is used to populate the single-instrument
-		# background bin counts.
+		# to work with single-instrument event lists as well
 		#
+
+		if mode not in ("ranking", "counting"):
+			raise ValueError("invalid mode '%s'" % mode)
 
 		#
 		# 2D (snr, \chi^2) values.
@@ -212,7 +215,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# instrument combination
 		#
 
-		params["instruments"] = (frozenset(event.ifo for event in events),)
+		if mode == "ranking":
+			if len(events) < self.min_instruments:
+				raise ValueError("candidates require >= %d events in ranking mode" % self.min_instruments)
+			params["instruments"] = (frozenset(event.ifo for event in events),)
+		elif mode == "counting":
+			if len(events) != 1:
+				raise ValueError("only singles are allowed in counting mode")
+			params["singles"] = (events[0].ifo,)
 
 		#
 		# record the horizon distances.  pick one trigger at random
@@ -355,7 +365,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# Give .1% of the requested events to this portion of the model
 			new_binarr.array *= 0.001 * number_of_events / new_binarr.array.sum()
 			# add to raw counts
-			getattr(self, ba)["instruments"][frozenset([instrument]),] += number_of_events
+			getattr(self, ba)["singles"][instrument,] += number_of_events
 			binarr += new_binarr
 
 		# Give 99.9% of the requested events to the "glitch model"
@@ -367,6 +377,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def _rebuild_interpolators(self):
 		keys = set(self.zero_lag_rates)
 		keys.remove("instruments")
+		keys.remove("singles")
 		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators(keys)
 
 		#
@@ -395,10 +406,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# the background counts
 		if self.zero_lag_in_background and pdf_dict is self.background_pdf:
 			binnedarray.array += self.zero_lag_rates[key].array
-
-		# be sure the single-instrument categories are zeroed.
-		for instrument in reduce(lambda a, b: a | b, binnedarray.bins[0].containers):
-			binnedarray[frozenset([instrument]),] = 0
 
 		# optionally mix denominator into numerator
 		if pdf_dict is self.injection_pdf and self.numerator_accidental_weight:
@@ -483,8 +490,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# FIXME:  we need to know the coincidence window to do this
 		# correctly.  we assume 5ms.  get the correct number.
+		self.background_rates["instruments"].array[:] = 0.
 		for instruments, count in inspiral_extrinsics.instruments_rate_given_noise(
-			singles_counts = dict((instrument, self.background_rates["instruments"][frozenset([instrument]),]) for instrument in segs),
+			singles_counts = dict((instrument, self.background_rates["singles"][instrument,]) for instrument in self.background_rates["singles"].bins[0].centres()),
 			zero_lag_coinc_counts = dict((instruments, self.zero_lag_rates["instruments"][instruments,]) for instruments in self.zero_lag_rates["instruments"].bins[0].centres()),
 			segs = segs,
 			delta_t = 0.005,
@@ -504,6 +512,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		P = inspiral_extrinsics.P_instruments_given_signal(self.horizon_history, min_instruments = self.min_instruments)
 
 		# populate binning from probabilities
+		self.injection_rates["instruments"].array[:] = 0.
 		for instruments, p in P.items():
 			self.injection_rates["instruments"][instruments,] = self.signal_rate * p
 
