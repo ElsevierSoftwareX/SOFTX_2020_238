@@ -60,7 +60,7 @@ def lal_smoothkappas_01(pipeline, name):
 	add_constant = pipeparts.mkgeneric(pipeline, src, "lal_add_constant", value=1)
 	tee = pipeparts.mktee(pipeline, add_constant)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
-	smoothkappas = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas")
+	smoothkappas = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", track_bad_kappa=True)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, smoothkappas), "%s_out.dump" % name)
 
 	#
@@ -174,7 +174,7 @@ def lal_smoothkappas_04(pipeline, name):
 #
 
 
-#test_common.build_and_run(lal_smoothkappas_01, "lal_smoothkappas_01")
-test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
+test_common.build_and_run(lal_smoothkappas_01, "lal_smoothkappas_01")
+#test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
 #test_common.build_and_run(lal_smoothkappas_03, "lal_smoothkappas_03")
 #test_common.build_and_run(lal_smoothkappas_04, "lal_smoothkappas_04")
