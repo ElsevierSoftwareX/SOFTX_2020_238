@@ -123,7 +123,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	binnings = {
 	}
 
-	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, **kwargs):
+	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, signal_rate = 1.0, **kwargs):
 		#
 		# check input
 		#
@@ -158,6 +158,12 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self.min_instruments = min_instruments
 		assert min_instruments == 2	# FIXME:  generalize
 
+		# the mean instrinsic signal rate for the region of
+		# parameter space tracked by this instance.  the units are
+		# arbitrary, but must be consistent across regions of
+		# parameter space
+		self.signal_rate = signal_rate
+
 		# set to True to include zero-lag histograms in background model
 		self.zero_lag_in_background = False
 
@@ -171,6 +177,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# valid PDFs.  the rates arrays *are* handled correctly by
 		# the .__iadd__() method, by fiat, so just remember to
 		# invoke .finish() to get the PDFs in shape afterwards
+
+		# FIXME: this operation is invalid for
+		# ThincaCoincParamsDistributions from different parts of
+		# the parameter space.  each ThincaCoincParamsDistributions
+		# should carry an identifier associating it with a template
+		# bank bin and this method should refuse to add instances
+		# from different bins unless some sort of --force override
+		# is enabled.  for now we rely on the pipeline's workflow
+		# code to not do the wrong thing.
 		if self.instruments != other.instruments:
 			raise ValueError("incompatible instrument sets")
 		if self.min_instruments != other.min_instruments:
@@ -346,50 +361,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# Give 99.9% of the requested events to the "glitch model"
 		self.add_snrchi_prior(getattr(self, ba), dict((ifo, x * 0.999) for ifo, x in n.items()), prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
-	def add_instrument_combination_counts(self, segs, verbose = False):
-		#
-		# populate instrument combination binning.  assume the
-		# single-instrument categories in the background rates
-		# instruments binning provide the background event counts
-		# for the segment lists provided.  NOTE:  we're using the
-		# counts in the single-instrument categories for input, and
-		# the output only goes into the 2-instrument and higher
-		# categories, so this procedure does not result in a loss
-		# of information and can be performed multiple times
-		# without altering the statistics of the input data.
-		#
-		# FIXME:  we need to know the coincidence window to do this
-		# correctly.  we assume 5ms.  get the correct number.
-		#
-		# FIXME:  should this be done in .finish()?  but we'd need
-		# the segment lists
-		for instruments, count in inspiral_extrinsics.instruments_rate_given_noise(
-			singles_counts = dict((instrument, self.background_rates["instruments"][frozenset([instrument]),]) for instrument in segs),
-			zero_lag_coinc_counts = dict((instruments, self.zero_lag_rates["instruments"][instruments,]) for instruments in self.zero_lag_rates["instruments"].bins[0].centres()),
-			segs = segs,
-			delta_t = 0.005,
-			min_instruments = self.min_instruments,
-			verbose = verbose
-		).items():
-			self.background_rates["instruments"][instruments,] = count
-
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
-
-	def populate_prob_of_instruments_given_signal(self, n = 1., verbose = False):
-		#
-		# populate instrument combination binning
-		#
-
-		# probability that a signal is detectable by each of the
-		# instrument combinations.  because the horizon distance is
-		# 0'ed when an instrument is off, this marginalization over
-		# horizon distance histories also accounts for duty cycles
-		P = inspiral_extrinsics.P_instruments_given_signal(self.horizon_history, min_instruments = self.min_instruments)
-
-		# populate binning from probabilities
-		for instruments, p in P.items():
-			self.injection_rates["instruments"][instruments,] += n * p
 
 	def _rebuild_interpolators(self):
 		keys = set(self.zero_lag_rates)
@@ -504,12 +477,49 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				assert not math.isnan(norm), "encountered impossible PDF:  %s is non-zero in a bin with infinite volume" % name
 				binnedarray.array[i] /= norm
 
+	def finish(self, segs, verbose = False):
+		#
+		# populate background instrument combination rates
+		#
+		# FIXME:  we need to know the coincidence window to do this
+		# correctly.  we assume 5ms.  get the correct number.
+		for instruments, count in inspiral_extrinsics.instruments_rate_given_noise(
+			singles_counts = dict((instrument, self.background_rates["instruments"][frozenset([instrument]),]) for instrument in segs),
+			zero_lag_coinc_counts = dict((instruments, self.zero_lag_rates["instruments"][instruments,]) for instruments in self.zero_lag_rates["instruments"].bins[0].centres()),
+			segs = segs,
+			delta_t = 0.005,
+			min_instruments = self.min_instruments,
+			verbose = verbose
+		).items():
+			self.background_rates["instruments"][instruments,] = count
+
+		#
+		# populate signal instrument combination rates
+		#
+
+		# probability that a signal is detectable by each of the
+		# instrument combinations.  because the horizon distance is
+		# 0'ed when an instrument is off, this marginalization over
+		# horizon distance histories also accounts for duty cycles
+		P = inspiral_extrinsics.P_instruments_given_signal(self.horizon_history, min_instruments = self.min_instruments)
+
+		# populate binning from probabilities
+		for instruments, p in P.items():
+			self.injection_rates["instruments"][instruments,] = self.signal_rate * p
+
+		#
+		# chain to parent class
+		#
+
+		super(ThincaCoincParamsDistributions, self).finish(verbose = verbose)
+
 	@classmethod
 	def from_xml(cls, xml, name):
 		xml = cls.get_xml_root(xml, name)
 		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name,
 			instruments = lsctables.instrument_set_from_ifos(ligolw_param.get_pyvalue(xml, u"instruments")),
 			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
+			signal_rate = ligolw_param.get_pyvalue(xml, u"signal_rate")
 		)
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, name)
 		return self
@@ -518,6 +528,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		xml = super(ThincaCoincParamsDistributions, self).to_xml(name)
 		xml.appendChild(ligolw_param.from_pyvalue(u"instruments", lsctables.ifos_from_instrument_set(self.instruments)))
 		xml.appendChild(ligolw_param.from_pyvalue(u"min_instruments", self.min_instruments))
+		xml.appendChild(ligolw_param.from_pyvalue(u"signal_rate", self.signal_rate))
 		xml.appendChild(self.horizon_history.to_xml(name))
 		return xml
 

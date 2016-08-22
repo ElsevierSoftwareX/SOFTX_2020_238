@@ -158,14 +158,11 @@ for i in range(2, len(options.instruments) + 1):
 	for ifos in [frozenset(x) for x in iterutils.choices(tuple(options.instruments), i)]:
 		diststats.zero_lag_rates["instruments"][ifos,] = min(n_background[ifo] for ifo in ifos) / 50.**(i-1)
 
-diststats.add_instrument_combination_counts(segs = segs, verbose = options.verbose)
-diststats.populate_prob_of_instruments_given_signal()
-
 #
-# Finished with this class
+# Wrap it up
 #
 
-diststats.finish()
+diststats.finish(segs = segs, verbose = options.verbose)
 
 #
 # Prep an output XML file

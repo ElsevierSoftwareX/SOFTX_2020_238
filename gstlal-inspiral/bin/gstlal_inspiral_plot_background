@@ -104,7 +104,7 @@ def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose 
 	if coinc_params_distributions is not None:
 		if options.add_zerolag_to_background:
 			coinc_params_distributions.zero_lag_in_background = True
-		coinc_params_distributions.finish(verbose = verbose)
+		coinc_params_distributions.finish(segs = seglists, verbose = verbose)
 	if ranking_data is not None and not options.dont_apply_extinction:
 		# FIXME signal PDFs are still not right.
 		ranking_data, _ = ranking_data.new_with_extinction(ranking_data)

@@ -638,8 +638,10 @@ class Data(object):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 
 				# if a reference likelihood file is given,
-				# overwrite coinc_params_distributions with
-				# its contents
+				# overwrite coinc_params_distributions with its
+				# contents.  in either case, invoke .finish()
+				# to re-populate the PDF arrays from the raw
+				# counts
 				# FIXME There is currently no guarantee that
 				# the reference_likelihood_file on disk will
 				# have updated since the last snapshot, but for
@@ -647,11 +649,10 @@ class Data(object):
 				# an effect. The data loaded should never be
 				# older than the snapshot before last
 				if self.likelihood_files_namedtuple.reference_likelihood_file is not None:
-					self.coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.likelihood_files_namedtuple.reference_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
-
-				# smooth the distributions.  re-populates
-				# PDF arrays from raw counts
-				self.coinc_params_distributions.finish(verbose = self.verbose)
+					self.coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.likelihood_files_namedtuple.reference_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+					self.coinc_params_distributions.finish(segs = seglists, verbose = self.verbose)
+				else:
+					self.coinc_params_distributions.finish(segs = self.seglistdicts["triggersegments"], verbose = self.verbose)
 
 				# post a checkpoint message.
 				# FIXME:  make sure this triggers

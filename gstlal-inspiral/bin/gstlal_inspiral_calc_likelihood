@@ -145,12 +145,6 @@ coincparamsdistributions, _, seglists = far.marginalize_pdf_urls(options.likelih
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
-# compute the probability of instruments given signal
-coincparamsdistributions.populate_prob_of_instruments_given_signal(n = 1.0, verbose = options.verbose)
-
-# compute the instrument combination counts
-coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
-
 #
 # rebuild event parameter PDFs (+= method has not constructed these
 # correctly, and we might have added additional priors to the histograms),
@@ -160,7 +154,7 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 
 if options.add_zerolag_to_background:
 	coincparamsdistributions.zero_lag_in_background = True
-coincparamsdistributions.finish(verbose = options.verbose)
+coincparamsdistributions.finish(segs = seglists, verbose = options.verbose)
 ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coincparamsdistributions)
 
 

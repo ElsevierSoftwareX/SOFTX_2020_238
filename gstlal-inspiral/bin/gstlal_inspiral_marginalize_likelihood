@@ -156,7 +156,7 @@ distributions, ranking_data, seglists = far.marginalize_pdf_urls(
 if options.add_zerolag_to_background:
 	distributions.zero_lag_in_background = True
 if distributions is not None:
-	distributions.finish(verbose = options.verbose)
+	distributions.finish(segs = seglists, verbose = options.verbose)
 if ranking_data is not None:
 	ranking_data.finish(verbose = options.verbose)
 
