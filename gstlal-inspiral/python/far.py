@@ -123,7 +123,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	binnings = {
 	}
 
-	# FIXME:  get correct delta_t from calling code everywhere
 	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, signal_rate = 1.0, delta_t = 0.005, **kwargs):
 		#
 		# check input

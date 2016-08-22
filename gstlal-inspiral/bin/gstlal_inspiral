@@ -684,7 +684,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 		if coinc_params_distributions is None:
 			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1])
 	else:
-		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = set(detectors.channel_dict)), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
+		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = set(detectors.channel_dict), delta_t = options.coincidence_threshold), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
 
 	if zero_lag_ranking_stats_file is None:
 		zero_lag_ranking_stats = None

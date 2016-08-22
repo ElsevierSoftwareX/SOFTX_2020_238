@@ -22,6 +22,7 @@
 # ### Command line interface
 #
 #		--verbose, action = "store_true", help = "Be verbose."
+#		--coincidence-threshold, metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 #		--num-templates, metavar = "N", default = 1000, type = "int", help = "Set the number of templates per bank. default 1000")
 #		--num-banks, metavar = "N", default = 1, type = "int", help = "Set the number of banks. default 1")
 #		--write-likelihood-basename, metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
@@ -61,6 +62,8 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	# FIXME:  default must be kept identical to gstlal_inspiral's
+	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--num-templates", metavar = "N", default = 1000, type = "int", help = "Set the number of templates per bank. default 1000")
 	parser.add_option("--num-banks", metavar = "N", default = 1, type = "int", help = "Set the number of banks. default 1")
 	parser.add_option("--write-likelihood-basename", metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
@@ -132,7 +135,7 @@ n_zerolag = dict(((ifo, float(abs(seg)) * options.num_templates / 50.) for ifo, 
 # Initialize an empty ThincaCoincParamsDistributions class
 #
 
-diststats = far.ThincaCoincParamsDistributions(instruments = set(segs))
+diststats = far.ThincaCoincParamsDistributions(instruments = set(segs), delta_t = options.coincidence_threshold)
 
 #
 # Add background, zero_lag and injection prior distributions in the SNR and chi-squared plane
