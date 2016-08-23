@@ -2,7 +2,11 @@
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
 ACCOUNTING_TAG=ligo.dev.o2.cbc.bbh.gstlaloffline
 GROUP_USER=duncan.meacher
-CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER) --condor-command='Requirements=TARGET.cpuinfo_model=?="44"'
+# cit
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER) --condor-command='Requirements=TARGET.cpuinfo_model=?="60"'
+# uwm & Atlas
+#CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER) --condor-command='Requirements=TARGET.cpuinfo_model=?="44"'
+# Non-optimised
 #CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
 
 ############################
@@ -70,7 +74,10 @@ TAG = test_dag
 # Run number
 RUN = run1
 # A web directory for output
-WEBDIR = ~/WWW/LSC/MDC/VT_sensitivity/$(TAG)/$(START)-$(STOP)-chunk123-NSBH-C02-zero_lag-run1
+# cit & uwm
+WEBDIR = ~/public_html/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
+# Atlas
+#WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
 # The number of sub banks to process in parallel for each gstlal_inspiral job
 NUMBANKS = 5
 # The control peak time for the composite detection statistic.  If set to 0 the
@@ -126,7 +133,7 @@ SEGMENT_MIN_LENGTH = 512
 
 # Vetoes file names
 # Obtain veto definer from here: https://code.pycbc.phy.syr.edu/detchar/veto-definitions/tree/master/cbc/ER8
-VETODEF = H1L1-CBC_VETO_DEFINER_C02_O1_1126051217-11203200.xml
+VETODEF = $(HOME)/local/src/gstlal/gstlal-inspiral/share/O1/H1L1-CBC_VETO_DEFINER_C02_O1_1126051217-11203200.xml
 vetoes_suffix := _vetoes.xml
 VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
 
@@ -150,7 +157,7 @@ CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 # Get some basic definitions.  NOTE this comes from the share directory probably. #
 ###################################################################################
 
-include Makefile.offline_analysis_rules
+include ~/local/src/gstlal/gstlal-inspiral/share/Makefile.offline_analysis_rules
 
 ############
 # Workflow #
@@ -210,8 +217,8 @@ $(WEBDIR) : $(MAKEFILE_LIST)
 	cp $(MAKEFILE_LIST) $@
 
 tisi.xml :
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 tisi0.xml
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 tisi1.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 tisi0.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 tisi1.xml
 	ligolw_add --output $@ tisi0.xml tisi1.xml
 
 dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
@@ -251,7 +258,7 @@ segments.xml.gz: $(SEGMENTS_FILES) frame.cache
 vetoes.xml.gz: $(VETOES_FILES)
 	ligolw_add --output $@ $(VETOES_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
-	gzip $@
+#	gzip $@
 
 # Generate injections, e.g., 1_injections.xml or 2_injections.xml for whatever seeds are requested
 %_injections.xml:
