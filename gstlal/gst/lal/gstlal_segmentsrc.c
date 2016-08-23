@@ -74,8 +74,10 @@
  */
 
 #include <gstlal/gstlal.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal_segmentsrc.h>
 
+#undef GST_CAT_DEFAULT
 
 /*
  * ============================================================================
@@ -99,11 +101,16 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
     )
 );
 
-G_DEFINE_TYPE(
-    GSTLALSegmentSrc,
-    gstlal_segmentsrc,
-    GST_TYPE_BASE_SRC
-);
+#define GST_CAT_DEFAULT gstlal_segmentsrc_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+static void additional_initializations(GType type)
+{
+    GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_segmentsrc", 0, "lal_segmentsrc element");
+}
+
+
+G_DEFINE_TYPE_WITH_CODE(GSTLALSegmentSrc, gstlal_segmentsrc, GST_TYPE_BASE_SRC, additional_initializations(g_define_type_id));
 
 enum property {
     ARG_SEGMENT_LIST = 1,
@@ -206,6 +213,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     mark_segments(element, *buffer, &info);
     if(element->offset == 0)
         GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+
+    GST_DEBUG_OBJECT(element, "pushing buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(*buffer));
 
     element->offset += numsamps;
 
