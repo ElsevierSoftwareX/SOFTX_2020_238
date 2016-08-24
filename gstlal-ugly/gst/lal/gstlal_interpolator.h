@@ -70,6 +70,7 @@ typedef struct _GSTLALInterpolatorClass GSTLALInterpolatorClass;
 struct _GSTLALInterpolator {
 	GstBaseTransform element;
 
+	GstAudioInfo audio_info;
         GstAudioAdapter *adapter;
 
 	gint inrate;

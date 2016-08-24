@@ -321,16 +321,16 @@ static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection directi
 	 *  downsampling at the negotiation stage
 	 */
 	GstStructure *capsstruct;
-	gint channels
+	gint channels;
 	capsstruct = gst_caps_get_structure (caps, 0);
 	char capsstr[256] = {0};
 
 	if (direction == GST_PAD_SINK && gst_structure_get_int (capsstruct, "channels", &channels)) {
-		sprintf(capsstr, "audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) ", rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
+		sprintf(capsstr, "audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
 		return gst_caps_from_string(capsstr);
 	}
 
-	return gst_caps_from_string("audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) ", rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
+	return gst_caps_from_string("audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
 
 }
 
@@ -541,7 +541,7 @@ static void set_metadata(GSTLALInterpolator *element, GstBuffer *buf, guint64 ou
 	element->next_output_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_output_offset;
 	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->outrate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->outrate) - GST_BUFFER_PTS(buf);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info))) - GST_BUFFER_PTS(buf);
 	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
