@@ -233,22 +233,22 @@ static GstStaticPadTemplate sink_template =
 	GST_STATIC_PAD_TEMPLATE ("sink",
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS ("audio/x-raw-float, "
-		"endianness = (int) BYTE_ORDER, "
-		"width = (int) 32, "
-		"rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, "
-		"channels = (int) [1, MAX]")
+	GST_STATIC_CAPS ("audio/x-raw, " \
+		"format = (string) {" GST_AUDIO_NE(F32) "}, " \
+		"rate = (int) [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768], " \
+		"channels = (int) [1, MAX]," \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0")
 	);
 
 static GstStaticPadTemplate src_template =
 	GST_STATIC_PAD_TEMPLATE ("src",
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS ("audio/x-raw-float, "
-		"endianness = (int) BYTE_ORDER, "
-		"width = (int) 32, "
-		"rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, "
-		"channels = (int) [1, MAX]")
+	GST_STATIC_CAPS ("audio/x-raw, " \
+		GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(F32) "}") ", " \
+		"layout = (string) interleaved, " \
+                "channel-mask = (bitmask) 0")
 	);
 
 /*
@@ -321,16 +321,16 @@ static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection directi
 	 *  downsampling at the negotiation stage
 	 */
 	GstStructure *capsstruct;
-	gint channels;
+	gint channels
 	capsstruct = gst_caps_get_structure (caps, 0);
 	char capsstr[256] = {0};
 
 	if (direction == GST_PAD_SINK && gst_structure_get_int (capsstruct, "channels", &channels)) {
-		sprintf(capsstr, "audio/x-raw-float, endianness = (int) BYTE_ORDER, width = (int) 32, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
+		sprintf(capsstr, "audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) ", rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
 		return gst_caps_from_string(capsstr);
 	}
 
-	return gst_caps_from_string("audio/x-raw-float, endianness = (int) BYTE_ORDER, width = (int) 32, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
+	return gst_caps_from_string("audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) ", rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
 
 }
 

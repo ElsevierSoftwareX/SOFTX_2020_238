@@ -48,7 +48,8 @@ def interp_test_01(pipeline, name):
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudioconvert(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % in_rate)
 	head = tee = pipeparts.mktee(pipeline, head)
 
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw, rate=%d" % out_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % out_rate)
+	#head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw, rate=%d" % out_rate)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
 

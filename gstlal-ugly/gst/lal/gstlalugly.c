@@ -76,7 +76,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
-		{"lal_Interpolator", GSTLAL_INTERPOLATOR_TYPE},
+		{"lal_interpolator", GSTLAL_INTERPOLATOR_TYPE},
 		/*{"lal_mean", GSTLAL_MEAN_TYPE},*/
 		/*{"lal_specgram", GSTLAL_SPECGRAM_TYPE},*/
 		/*{"lal_pad", GST_TYPE_LALPAD},
