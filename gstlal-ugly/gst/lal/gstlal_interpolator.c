@@ -235,8 +235,8 @@ static GstStaticPadTemplate sink_template =
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS ("audio/x-raw, " \
 		"format = (string) {" GST_AUDIO_NE(F32) "}, " \
-		"rate = (int) [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768], " \
-		"channels = (int) [1, MAX]," \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
+		"channels = (int) 1, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0")
 	);
@@ -245,7 +245,7 @@ static GstStaticPadTemplate src_template =
 	GST_STATIC_PAD_TEMPLATE ("src",
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS ("audio/x-raw, " \
+	GST_STATIC_CAPS (
 		GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(F32) "}") ", " \
 		"layout = (string) interleaved, " \
                 "channel-mask = (bitmask) 0")
@@ -401,21 +401,12 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
-	GstStructure *str;
-	gint width, channels;
-	gboolean success = TRUE;
-
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
-	success &= gst_structure_get_int(str, "width", &width);
+	GstAudioInfo info;
+	gboolean success = gst_audio_info_from_caps(&info, caps);
 		
 
 	if(success) {
-		*size = width / 8 * channels;
-		element->unitsize = *size;
-		g_object_set(element->adapter, "unit-size", *size, NULL);
-		GST_INFO_OBJECT(element, "channels %d, width %d", channels, width);
+		*size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
 	}
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
