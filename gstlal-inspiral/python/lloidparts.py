@@ -672,28 +672,35 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		elem.link(control_snk)
 
 		#
-		# use sum-of-squares aggregate as gate control for orthogonal SNRs
+		# use sum-of-squares aggregate as gate control for
+		# orthogonal SNRs
 		#
-		# FIXME This queue has to be large for the peak finder on the control
-		# signal if that element gets smarter maybe this could be made smaller
-		# It should be > 1 * control_peak_time * gst.SECOND + 4 * block_duration
+		# FIXME the queuing in this code is broken.  enabling this
+		# causes lock-ups.  there is latency in the construction of
+		# the composite detection statistic due to the need for
+		# resampling and because of the peak finding, therefore the
+		# source stream going into the gate needs to be queued
+		# until the composite detection statistic can catch up, but
+		# we don't know by how much (what we've got here doesn't
+		# work).  there should not be a need to buffer the control
+		# stream at all, nor is there a need for the queuing to
+		# accomodate different latencies for different SNR slices,
+		# but we do require that all elements correctly modify
+		# segments events to reflect their latency and the actual
+		# time stamps of the data stream they will produce.  it
+		# might be that not all elements are doing that correctly.
 		#
-		# FIXME for an unknown reason there needs to be an extra large
-		# queue in this part of the pipeline in order to prevent
-		# lock-ups.  Fortunately this is buffering up relatively
-		# lightweight data, i.e., before reconstruction
-		#
-		# FIXME since peakfinding is done, or control is based on
-		# injections only, we ignore the bank.gate_threshold parameter
-		# and just use 1e-100
+		# FIXME we ignore the bank.gate_threshold parameter and
+		# just use 1e-100.  this change was made when peak finding
+		# was put into the composite detector
 
 		src = pipeparts.mkgate(
 			pipeline,
-			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * Gst.SECOND + 12 * block_duration),
+			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * int((2. * control_peak_time + float(abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * Gst.SECOND)),
 			threshold = 1e-100,
 			attack_length = gate_attack_length,
 			hold_length = gate_hold_length,
-			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * Gst.SECOND + 12 * block_duration)
+			control = control_src
 		)
 		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
