@@ -125,6 +125,7 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_start))
 		element->t_start = t_cur;
 
+	/* Check that we have collected enough backgrounds */
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start)&& (t_cur - element->t_start)/GST_SECOND >= (unsigned) element->collection_time) {
 		element->t_roll_start = t_cur;
 		if (element->input_fname)
@@ -132,6 +133,7 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 		element->pass_collection_time = TRUE;
 	}
 
+	/* Check if it is time to refresh the background stats */
 	if (element->pass_collection_time && element->refresh_interval > 0 && (t_cur - element->t_roll_start)/GST_SECOND > (unsigned) element->refresh_interval) {
 		element->t_roll_start = t_cur;
 		if (element->input_fname)
@@ -147,7 +149,13 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
 			if (icombo > -1)
+			{
+				/* FIXME: currently hardcoded for single detectors FAP */
 				table->fap = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats[icombo]->cdf);
+				table->fap_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, stats[1]->cdf);
+				table->fap_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, stats[0]->cdf);
+				table->fap_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, stats[2]->cdf);
+			}
 		}
 	}
 
