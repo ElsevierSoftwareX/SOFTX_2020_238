@@ -130,15 +130,14 @@ from lal import LIGOTimeGPS
 #	"? sink N" -> lal_adder;
 #	lal_adder -> capsfilter;
 #	capsfilter -> lal_peak;
-#	lal_peak -> "mksegmentsrcgate()";
-#	"mksegmentsrcgate()" -> lal_checktimestamps;
+#	lal_peak -> lal_checktimestamps;
 #	lal_checktimestamps -> tee;
 #	tee -> "? src";
 # }
 # @enddot
 #
 #
-def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstruction_segment_list = None, control_peak_samples = None):
+def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, control_peak_samples = None):
 	"""!
 	This function implements a portion of a gstreamer graph to provide a
 	control signal for deciding when to reconstruct physical SNRS
@@ -147,7 +146,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	@param rate An integer representing the target sample rate of the resulting src
 	@param verbose Make verbose
 	@param suffix Log name for verbosity
-	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
 	@param control_peak_samples If nonzero, this would do peakfinding on the control signal with the window specified by this parameter.  The peak finding would give a single sample of "on" state at the peak.   This will cause far less CPU to be used if you only want to reconstruct SNR around the peak of the control signal. 
 	"""
 	#
@@ -163,17 +161,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 
 	if control_peak_samples > 0:
 		src = pipeparts.mkpeak(pipeline, src, control_peak_samples)
-
-	#
-	# optionally add a segment src and gate to only reconstruct around
-	# injections
-	#
-	# FIXME:  set the names of these gates so their segments can be
-	# collected later?  or else propagate this segment list into the
-	# output some other way.
-
-	if reconstruction_segment_list is not None:
-		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, invert_output = False)
 
 	#
 	# verbosity and a tee
@@ -615,13 +602,14 @@ class Handler(simplehandler.Handler):
 #	queue3 -> gate;
 #	tee -> queue4 -> gate;
 #	gate -> lal_checktimestamps5;
-#	lal_checktimestamps5 -> matrixmixer;
+#	lal_checktimestamps5 -> "mksegmentsrcgate()";
+#	"mksegmentsrcgate()" -> matrixmixer;
 #
 # }
 # @enddot
 #
 #
-def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, block_duration, nxydump_segment = None, fir_stride = None, control_peak_time = None):
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, block_duration, nxydump_segment = None, fir_stride = None, control_peak_time = None, reconstruction_segment_list = None):
 	"""!
 	Make a single slice of one branch of the lloid graph, e.g. one instrument and one
 	template bank fragment. For details see: http://arxiv.org/abs/1107.2665
@@ -640,6 +628,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	@param nxydump_segment Not used
 	@param fir_stride The target length of output buffers from lal_firbank.  Directly effects latency.  Making this short will force time-domain convolution. Otherwise FFT convolution will be done to save CPU cycles, but at higher latency.
 	@param control_peak_time The window over which to find peaks in the control signal.  Shorter windows increase computational cost but probably also detection efficiency.
+	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
 	"""
 	logname = "%s_%.2f.%.2f" % (bank.logname, bank_fragment.start, bank_fragment.end)
 
@@ -709,6 +698,17 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
+	# optionally add a segment src and gate to only reconstruct around
+	# injections
+	#
+	# FIXME:  set the names of these gates so their segments can be
+	# collected later?  or else propagate this segment list into the
+	# output some other way.
+
+	if reconstruction_segment_list is not None:
+		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, invert_output = False)
+
+	#
 	# reconstruct physical SNRs
 	#
 
@@ -728,10 +728,12 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	return src
 
 
-def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_duration, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, snrslices = None):
+def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_duration, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, snrslices = None, reconstruction_segment_list = None):
 	"""!
 	Build the pipeline fragment that creates the SnrSlices associated with
 	different sample rates from hoft.
+
+	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
 	"""
 	#
 	# parameters
@@ -785,7 +787,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			block_duration,
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
-			control_peak_time = control_peak_time
+			control_peak_time = control_peak_time,
+			reconstruction_segment_list = reconstruction_segment_list
 		))
 
 	#
@@ -996,12 +999,12 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	# build gate control branches
 	#
 
-	if control_peak_time > 0 or reconstruction_segment_list is not None:
+	if control_peak_time > 0:
 		control_branch = {}
 		for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			if instrument != "H2":
-				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, reconstruction_segment_list = reconstruction_segment_list, control_peak_samples = control_peak_time * max(bank.get_rates()))
+				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, control_peak_samples = control_peak_time * max(bank.get_rates()))
 				#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 	else:
 		control_branch = None
@@ -1035,7 +1038,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			nxydump_segment = nxydump_segment,
 			control_peak_time = control_peak_time,
 			fir_stride = fir_stride,
-			snrslices = snrslices
+			snrslices = snrslices,
+			reconstruction_segment_list = reconstruction_segment_list
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
 		# uncomment this tee if the diagnostic sinks below are
