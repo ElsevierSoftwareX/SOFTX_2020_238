@@ -594,7 +594,6 @@ def append_options(parser):
 #	compound=true;
 #	node [shape=record fontsize=10 fontname="Verdana"];
 #	rankdir=LR;
-# 	lal_gate;
 #	lal_segmentsrc [URL="\ref pipeparts.mksegmentsrc()"];
 #	lal_gate [URL="\ref pipeparts.mkgate()"];
 #	in [label="?"];
@@ -611,9 +610,7 @@ def mksegmentsrcgate(pipeline, src, segment_list, invert_output = False, **kwarg
 
 	@param kwargs passed through to pipeparts.mkgate(), e.g., used to set the gate's name.
 	"""
-	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output = invert_output)
-	# FIXME:  remove
-	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc, **kwargs)
+	return pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output = invert_output), **kwargs)
 
 
 ##
