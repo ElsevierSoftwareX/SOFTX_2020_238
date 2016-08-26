@@ -262,7 +262,8 @@ class FinalSink(object):
 					self.nevent_clustered += 1
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold:
+					# FIXME: Currently hard-coded for single detector far H and L
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2:
 						self.__do_gracedb_alerts(self.candidate)
 					if self.need_online_perform:
 						self.onperformer.update_eye_candy(self.candidate)
@@ -329,6 +330,9 @@ class FinalSink(object):
 	def __set_far(self, candidate):
 		hack_factor = max(0.5, self.nevent_clustered / float(1 + self.snapshot_duration.gpsSeconds))
 		candidate.far = candidate.fap * hack_factor * self.far_factor
+		candidate.far_h = candidate.fap_h * hack_factor * self.far_factor
+		candidate.far_l = candidate.fap_l * hack_factor * self.far_factor
+		candidate.far_v = candidate.fap_v * hack_factor * self.far_factor
 
 	def __need_trigger_control(self, trigger):
 		# do trigger control
