@@ -347,7 +347,7 @@ def read_banks(filename, contenthandler, verbose = False):
 	"""Read SVD banks from a LIGO_LW xml file."""
 
 	# Load document
-	xmldoc = ligolw_utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+	xmldoc = ligolw_utils.load_url(filename, contenthandler = contenthandler, verbose = verbose)
 
 	banks = []
 

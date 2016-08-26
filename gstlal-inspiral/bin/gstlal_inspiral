@@ -170,6 +170,7 @@
 # - Consider deleting timeslicechisq
 
 
+import itertools
 import os
 import resource
 import sys
@@ -300,6 +301,7 @@ def parse_command_line():
 	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
 
 	options, filenames = parser.parse_args()
+	missing_options = []
 
 	#
 	# do this before messing with options object
@@ -310,28 +312,31 @@ def parse_command_line():
 	#
 	# check for options, files that are always required
 	#
-	
+
+	# FIXME Put all svd banks for different detectors in one file.
+	svd_banks = []
 	if options.svd_bank_cache:
-		#FIXME Use Ordered Dictionary when we use python 2.7
-		svd_bank_dict = {}
-		descriptions = []
-		for line in open(options.svd_bank_cache):
-			svd_bank_cache_entry = CacheEntry(line)
-			if svd_bank_cache_entry.description not in descriptions:
-				descriptions.append(svd_bank_cache_entry.description)
-			svd_bank_dict.setdefault(svd_bank_cache_entry.description, []).append("{0}:{1}".format(svd_bank_cache_entry.observatory, svd_bank_cache_entry.url))
-		# do this out-of-place to preserve process_params' contents
-		options.svd_bank = options.svd_bank + [",".join(svd_bank_dict[description]) for description in descriptions]
+		svd_bank_cache = map(CacheEntry, open(options.svd_bank_cache))
+		svd_bank_cache.sort(key = lambda cache_entry: cache_entry.description)
+		for key, seq in itertools.groupby(svd_bank_cache, key = lambda cache_entry: cache_entry.description):
+			svd_banks.append(dict((cache_entry.observatory, cache_entry.url) for cache_entry in seq))
+	if options.svd_bank:
+		try:
+			svd_banks += map(inspiral.parse_svdbank_string, options.svd_bank)
+		except ValueError as e:
+			print "Unable to parse --svd-bank"
+			raise
+	if not svd_banks:
+		missing_options.append("must supply at least one of --svd-bank or --svd-bank-cache")
 
 	if options.output_cache:
 		# do this out-of-place to preserve process_params' contents
 		options.output = options.output + [CacheEntry(line).url for line in open(options.output_cache)]
+	missing_options += ["--%s" % option.replace("_", "-") for option in ["output"] if getattr(options, option) is None]
 
 	if options.likelihood_file_cache:
 		# do this out-of-place to preserve process_params' contents
 		options.likelihood_file = options.likelihood_file + [CacheEntry(line).url for line in open(options.likelihood_file_cache)]
-
-	missing_options = ["--%s" % option.replace("_", "-") for option in ["svd_bank", "output"] if getattr(options, option) is None]
 	if options.likelihood_file is None and options.reference_likelihood_file is None:
 		missing_options.append("either --likelihood-file or --reference-likelihood-file")
 
@@ -342,21 +347,18 @@ def parse_command_line():
 	if len(detectors.channel_dict) < 2:
 		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
 
-	# FIXME Put all svd banks for different detectors in one file.  
-	try:
-		svd_banks = [inspiral.parse_svdbank_string(svdbank) for svdbank in options.svd_bank]
-	except ValueError as e:
-		print "Unable to parse svd banks"
-		raise
-
 	# FIXME: should also check for read permissions
 	required_files = []
 	for svd_bank_set in svd_banks: 
-		for instrument in svd_bank_set:
-			required_files.append(svd_bank_set[instrument])
+		required_files += svd_bank_set.values()
 	if options.veto_segments_file:
 		required_files += [options.veto_segments_file]
-	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
+	for i in range(len(required_files)):
+		try:
+			required_files[i] = ligolw_utils.local_path_from_url(required_files[i])
+		except ValueError:
+			required_files[i] = None
+	missing_files = [filename for filename in required_files if filename is not None and not os.path.exists(filename)]
 
 	if missing_files:
 		raise ValueError("files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files)))
@@ -389,7 +391,7 @@ def parse_command_line():
 		if missed_options:
 			raise ValueError("%s required for --data-source is lvshm or framexmit" % ", ".join(missed_options))
 
-		if len(options.svd_bank) > 1:
+		if len(svd_banks) > 1:
 			raise ValueError("more than one --svd-bank not allowed for --datasource lvshm or framexmit, %d given" % len(options.likelihood_file))
 
 		# make an "infinite" extent segment
@@ -417,8 +419,8 @@ def parse_command_line():
 	else:
 		likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(likelihood_file,None) for likelihood_file in options.likelihood_file]
 
-	if not (len(options.svd_bank) == len(options.output) == len(likelihood_namedtuples_list)):
-		raise ValueError("must have equal numbers of svd banks, output files and likelihood files")
+	if not (len(svd_banks) == len(options.output) == len(likelihood_namedtuples_list)):
+		raise ValueError("must have equal numbers of svd banks (%d), output files (%d) and likelihood files (%d)" % (len(svd_banks), len(options.output), len(likelihood_namedtuples_list)))
 
 	#
 	# Option checks complete
