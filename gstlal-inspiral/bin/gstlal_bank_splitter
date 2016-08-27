@@ -217,7 +217,7 @@ for bank_count, (_, rows) in enumerate(outputrows):
 		row.mtotal = row.mass1 + row.mass2
 
 	sngl_inspiral_table[:] = rows
-	output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
+	output = inspiral_pipe.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
 	output_cache_file.write("%s\n" % gluelal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
 	ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 

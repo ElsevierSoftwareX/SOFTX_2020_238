@@ -250,7 +250,7 @@ class generic_node(InspiralNode):
 
 		for opt, val in input_cache_files.items():
 			cache_entries = [lal.CacheEntry.from_T050017(url) for url in val]
-			cache_file_name = "{0}/{1}_{2}.cache".format(job.tag_base, opt.replace("-cache", "").replace("-", "_"), job.number-1)
+			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = job.tag_base)
 			with open(cache_file_name, "w") as cache_file:
 				lal.Cache(cache_entries).tofile(cache_file)
 			self.add_var_opt(opt, cache_file_name)
@@ -259,7 +259,7 @@ class generic_node(InspiralNode):
 
 		for opt, val in output_cache_files.items():
 			cache_entries = [lal.CacheEntry.from_T050017(url) for url in val]
-			cache_file_name = "{0}/{1}_{2}.cache".format(job.tag_base, opt.replace("-cache", "").replace("-", "_"), job.number-1)
+			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = job.tag_base)
 			with open(cache_file_name, "w") as cache_file:
 				lal.Cache(cache_entries).tofile(cache_file)
 			self.add_var_opt(opt, cache_file_name)
@@ -386,3 +386,52 @@ def condor_command_dict_from_opts(opts, defaultdict = {}):
 		v = "=".join(osplit[1:])
 		defaultdict.update([(k, v)])
 	return defaultdict
+
+
+def group_T050017_filename_from_T050017_files(cache_entries, extension, path = None):
+	"""!
+	A function to return the name of a file created from multiple files following
+	the T050017 convention. In addition to the T050017 requirements, this assumes
+	that numbers relevant to organization schemes will be the first entry in the
+	description, e.g. 0_DIST_STATS, and that all files in a given cache file are
+	from the same group of ifos and either contain data from the same segment or
+	from the same background bin.  Note, that each file doesn't have to be from
+	the same IFO, for example the template bank cache could contain template bank
+	files from H1 and template bank files from L1.
+	"""
+	# Check that every file has same observatory. 
+	observatories = [cache_entries[0].observatory]
+	for entry in cache_entries[1:]:
+		if entry.observatory == observatories[0]:
+			break
+		observatories.append(entry.observatory)
+
+	split_description = cache_entries[0].description.split('_')
+	min_bin = [x for x in split_description[:2] if x.isdigit()]
+	max_bin = [x for x in cache_entries[-1].description.split('_')[:2] if x.isdigit()]
+	min_seg = min([int(x.segment[0]) for x in cache_entries])
+	max_seg = max([int(x.segment[1]) for x in cache_entries])
+	if min_bin:
+		min_bin = min_bin[0]
+	if max_bin:
+		max_bin = max_bin[-1]
+	if min_bin and (min_bin == max_bin or not max_bin):
+		# All files from same bin, thus segments may be different.
+		# Note that this assumes that if the last file in the cache
+		# does not start with a number that every file in the cache is
+		# from the same bin, an example of this is the cache file
+		# generated for gstlal_inspiral_calc_likelihood, which contains
+		# all of the DIST_STATS files from a given background bin and
+		# then CREATE_PRIOR_DIST_STATS files which are not generated
+		# for specific bins
+		return T050017_filename(''.join(observatories), cache_entries[0].description, min_seg, max_seg, extension, path = path)
+	elif min_bin and max_bin and min_bin != max_bin:
+		if split_description[1].isdigit():
+			description_base = split_description[2:]
+		else:
+			description_base = split_description[1:]
+		# Files from different bins, thus segments must be same
+		return T050017_filename(''.join(observatories), '_'.join([min_bin, max_bin] + description_base), min_seg, max_seg, extension, path = path)
+	else:
+		print >>sys.stderr, "ERROR: first and last file of cache file do not match known pattern, cannot name group file under T050017 convention. \nFile 1: %s\nFile 2: %s" % (cache_entries[0].path, cache_entries[-1].path)
+		raise ValueError
