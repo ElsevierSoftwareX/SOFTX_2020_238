@@ -680,7 +680,7 @@ FROM
 						axes.plot([x_func(sim) for sim in sims], [y_func(sim) for sim in sims], c="cornflowerblue", marker=".", linestyle="None")
 				if missed:
 					legend.append("Missed")
-					if max([sim.alpha3 for sim in sims]) > 20:
+					if max([sim.alpha3 for sim in missed]) > 20:
 						axes.semilogy([x_func(sim) for sim in missed], [y_func(sim) for sim in missed], "k.")
 					else:
 						axes.plot([x_func(sim) for sim in missed], [y_func(sim) for sim in missed], "k.")
@@ -1555,12 +1555,14 @@ WHERE
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
 				yield fig, "count_vs_lr", is_open_box
 
-		fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
-		axes.semilogy()
-		background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
-		zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
-		create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar, xlim = (5., 5. * math.ceil(max(background_stats.max(), zerolag_stats.max()) / 5.)))
-		yield fig, "count_vs_lr_fig3", True
+		# FIXME make this work from FAPFAR
+		if self.background_ln_likelihood_ratio:
+			fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
+			axes.semilogy()
+			background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
+			zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
+			create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar, xlim = (5., 5. * math.ceil(max(background_stats.max(), zerolag_stats.max()) / 5.)))
+			yield fig, "count_vs_lr_fig3", True
 
 
 #
