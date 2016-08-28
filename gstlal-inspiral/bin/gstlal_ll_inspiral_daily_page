@@ -51,11 +51,11 @@ def process_mass_bin(args):
 	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if pattern.match(xml)])
 	for f in files:
 		try:
-			subprocess.check_call(["ligolw_sqlite", "--tmp-space", "/dev/shm", "--database", "%s" % db, "%s" % f])
+			subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--database", "%s" % db, "%s" % f])
 		except:
 			print >> sys.stderr, "couldn't process %s" % f
 			continue
-		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", "/dev/shm", "--sql-file", cluster_file,  "%s" % db])
+		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", os.environ["TMPDIR"], "--sql-file", cluster_file,  "%s" % db])
 
 	# rename files
 	if os.path.exists(db):
@@ -128,7 +128,10 @@ if __name__ == '__main__':
 	for f in noninj_files_to_merge + seg_files:
 		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % noninjdb, "%s" % f])
 		# Do not cluster! the online analysis doesn't do a global clustering stage!!
-		subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % noninjdb])
+		try:
+			subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % noninjdb])
+		except subprocess.CalledProcessError as runsqlite_error:
+			print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, noninjdb, f)
 		progressbar.increment()
 	del progressbar
 
@@ -136,7 +139,10 @@ if __name__ == '__main__':
 	for f in inj_files_to_merge + seg_files:
 		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "%s" % f])
 		# Do not cluster! the online analysis doesn't do a global clustering stage!!
-		subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % injdb])
+		try:
+			subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % injdb])
+		except subprocess.CalledProcessError as runsqlite_error:
+			print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, injdb, f)
 		progressbar.increment()
 	del progressbar
 
@@ -162,8 +168,11 @@ if __name__ == '__main__':
 	#	m = pattern.match(d)
 	#	if m:
 	#		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
-	subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", "ALL", "--database", noninjdb, "--verbose", "marginalized_likelihood.xml.gz"])
-	subprocess.check_call(["gstlal_inspiral_plotsummary", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
+	try:
+		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", "ALL", "--database", noninjdb, "--verbose", "marginalized_likelihood.xml.gz"])
+	except subprocess.CalledProcessError as plotbg_error:
+		print >> sys.stderr, "plot background failed. recieved error%s...continuing anyway" % plotbg_error
+	subprocess.check_call(["gstlal_inspiral_plotsummary", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
 
 	subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
 
