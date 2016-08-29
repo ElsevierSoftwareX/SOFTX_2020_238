@@ -2460,10 +2460,10 @@ def marginalize_pdf_urls(urls, require_coinc_param_data, require_ranking_stat_da
 		try:
 			in_xmldoc = ligolw_utils.load_url(url, verbose = verbose, contenthandler = ThincaCoincParamsDistributions.LIGOLWContentHandler)
 		except IOError:
-			# IOError is raised when an on-disk file is missing.
-			# urllib2.URLError is raised when a URL cannot be loaded,
-			# but this is subclassed from IOError so IOError will catch
-			# those, too.
+			# IOError is raised when an on-disk file is
+			# missing.  urllib2.URLError is raised when a URL
+			# cannot be loaded, but this is subclassed from
+			# IOError so IOError will catch those, too.
 			if not ignore_missing_files:
 				raise
 			if verbose:
