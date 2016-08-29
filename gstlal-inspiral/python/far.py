@@ -2361,8 +2361,12 @@ class FAPFAR(object):
 		# FIXME:  choose function names more likely to be unique?
 		# FIXME:  abusing false_alarm_rate column to store FAP,
 		# move to a false_alarm_probability column??
-		connection.create_function("fap", 1, self.fap_from_rank)
-		connection.create_function("far", 1, self.far_from_rank)
+		def as_float(f):
+			def g(x):
+				return float(f(x))
+			return g
+		connection.create_function("fap", 1, as_float(self.fap_from_rank))
+		connection.create_function("far", 1, as_float(self.far_from_rank))
 		connection.cursor().execute("""
 UPDATE
 	coinc_inspiral
