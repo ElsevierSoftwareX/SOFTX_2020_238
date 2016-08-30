@@ -249,7 +249,7 @@ class generic_node(InspiralNode):
 		# is handled by gstlal_inspiral_pipe directly
 
 		for opt, val in input_cache_files.items():
-			cache_entries = [lal.CacheEntry.from_T050017(url) for url in val]
+			cache_entries = [lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in val]
 			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = job.tag_base)
 			with open(cache_file_name, "w") as cache_file:
 				lal.Cache(cache_entries).tofile(cache_file)
@@ -258,7 +258,7 @@ class generic_node(InspiralNode):
 			self.cache_inputs.setdefault(opt, []).append(cache_file_name)
 
 		for opt, val in output_cache_files.items():
-			cache_entries = [lal.CacheEntry.from_T050017(url) for url in val]
+			cache_entries = [lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in val]
 			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = job.tag_base)
 			with open(cache_file_name, "w") as cache_file:
 				lal.Cache(cache_entries).tofile(cache_file)

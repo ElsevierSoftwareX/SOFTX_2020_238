@@ -224,8 +224,8 @@ def svd_bank_cache_maker(svd_bank_strings, counter, injection = False):
 	svd_cache_entries = []
 	parsed_svd_bank_strings = [inspiral.parse_svdbank_string(single_svd_bank_string) for single_svd_bank_string in svd_bank_strings]
 	for svd_bank_parsed_dict in parsed_svd_bank_strings:
-		for url in svd_bank_parsed_dict.itervalues():
-			svd_cache_entries.append(CacheEntry.from_T050017(url))
+		for filename in svd_bank_parsed_dict.itervalues():
+			svd_cache_entries.append(CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)))
 
 	return [svd_cache_entry.url for svd_cache_entry in svd_cache_entries] 
 
@@ -456,7 +456,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 
 			# Merging all the dbs from the same sub bank
 			for subbank, inputs in enumerate([node.input_files[""] for node in nodes]):
-				db = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017(url) for url in inputs], '.sqlite')
+				db = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
 					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_cache_files = {"input-cache":inputs},
@@ -481,7 +481,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 
 			# Merging all the dbs from the same sub bank and injection run
 			for subbank, inputs in enumerate([node.input_files[""] for node in nodes]):
-				injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017(url) for url in inputs], '.sqlite')
+				injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
 					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_cache_files = {"input-cache":inputs},
@@ -506,7 +506,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 	# Process the chirp mass bins in chunks to paralellize the merging process
 	for chunk, dbs in enumerate(chunks([node.input_files[""] for node in innodes[None]], 20)):
 		# Merge the final non injection database into chunks
-		noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017(url) for url in dbs], '.sqlite')
+		noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite')
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = innodes[None],
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 			input_cache_files = {"input-cache": dbs},
@@ -547,7 +547,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		for chunk, dbs in enumerate(chunks([node.input_files[""] for node in thisinjnodes], 20)):
 
 			# Setup the final output names, etc.
-			injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017(url) for url in dbs], '.sqlite')
+			injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite')
 
 
 			# merge
@@ -620,7 +620,7 @@ def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJo
 	margnodes = []
 	margnum = 16
 	for i,n in enumerate(range(0, len(margin), margnum)):
-		margout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017(url) for url in margin[n:n+margnum]], '.xml.gz'))
+		margout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz'))
 		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = final_sqlite_nodes + rankpdf_nodes,
 			output_files = {"output":margout[-1]}, 
 			input_cache_files = {"likelihood-cache":margin[n:n+margnum]}
