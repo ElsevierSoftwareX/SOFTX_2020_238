@@ -217,8 +217,8 @@ $(WEBDIR) : $(MAKEFILE_LIST)
 	cp $(MAKEFILE_LIST) $@
 
 tisi.xml :
-	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 tisi0.xml
-	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 tisi1.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 tisi0.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 tisi1.xml
 	ligolw_add --output $@ tisi0.xml tisi1.xml
 
 dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
