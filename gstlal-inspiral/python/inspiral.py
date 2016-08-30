@@ -1044,7 +1044,7 @@ class Data(object):
 			with self.lock:
 				snr_threshold = bottle.request.forms["snr"]
 				if snr_threshold:
-					self.stream_thinca.sngls_snr_threshold = float(rate)
+					self.stream_thinca.sngls_snr_threshold = float(snr_threshold)
 					yield "OK: snr=%.17g\n" % self.stream_thinca.sngls_snr_threshold
 				else:
 					self.stream_thinca.sngls_snr_threshold = None
