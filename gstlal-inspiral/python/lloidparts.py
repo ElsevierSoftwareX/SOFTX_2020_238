@@ -284,12 +284,18 @@ class Handler(simplehandler.Handler):
 
 	def do_on_message(self, bus, message):
 		"""!
-		Override the on_message method of simplehandler to handle
-		additional message types, e.g., spectrum and checkpointing messages.
+		Handle application-specific message types, e.g., spectrum
+		and checkpointing messages.
 
 		@param bus A reference to the pipeline's bus
 		@param message A reference to the incoming message
 		"""
+		#
+		# return value of True tells parent class that we have done
+		# all that is needed in response to the message, and that
+		# it should ignore it.  a return value of False means the
+		# parent class should do what it thinks should be done
+		#
 		if message.type == Gst.MessageType.ELEMENT:
 			if message.get_structure().get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
