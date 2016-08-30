@@ -198,7 +198,8 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 		labels = []
 		sizes = []
 		colours = []
-		for instruments, fraction in sorted(coinc_param_distributions.Pinstrument_signal.items(), key = lambda (instruments, fraction): sorted(instruments)):
+		Pinstrument_signal = dict(zip(coinc_param_distributions.injection_pdf["instruments"].bins[0].centres(), coinc_param_distributions.injection_pdf["instruments"].array))
+		for instruments, fraction in sorted(Pinstrument_signal.items(), key = lambda (instruments, fraction): sorted(instruments)):
 			if len(instruments) < 2 or not fraction:
 				continue
 			labels.append(", ".join(sorted(instruments)))

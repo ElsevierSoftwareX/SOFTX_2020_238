@@ -542,24 +542,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		xml.appendChild(self.horizon_history.to_xml(name))
 		return xml
 
-	@property
-	def Pinstrument_noise(self):
-		P = {}
-		for instruments, p in zip(self.background_pdf["instruments"].bins.centres()[0], self.background_pdf["instruments"].array):
-			if len(instruments) < self.min_instruments:
-				continue
-			P[instruments] = p
-		return P
-
-	@property
-	def Pinstrument_signal(self):
-		P = {}
-		for instruments, p in zip(self.injection_pdf["instruments"].bins.centres()[0], self.injection_pdf["instruments"].array):
-			if len(instruments) < self.min_instruments:
-				continue
-			P[instruments] = p
-		return P
-
 	def random_params(self, instruments):
 		"""
 		Generator that yields an endless sequence of randomly
