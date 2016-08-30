@@ -649,7 +649,11 @@ class Data(object):
 				# an effect. The data loaded should never be
 				# older than the snapshot before last
 				if self.likelihood_files_namedtuple.reference_likelihood_file is not None:
+					params_before = self.coinc_params_distributions.instruments, self.coinc_params_distributions.min_instruments, self.coinc_params_distributions.delta_t
 					self.coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.likelihood_files_namedtuple.reference_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+					params_after  = self.coinc_params_distributions.instruments, self.coinc_params_distributions.min_instruments, self.coinc_params_distributions.delta_t
+					if params_before != params_after:
+						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.likelihood_files_namedtuple.reference_likelihood_file)
 					self.coinc_params_distributions.finish(segs = seglists, verbose = self.verbose)
 				else:
 					self.coinc_params_distributions.finish(segs = self.seglistdicts["triggersegments"], verbose = self.verbose)
