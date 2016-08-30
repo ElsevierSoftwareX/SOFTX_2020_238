@@ -151,10 +151,13 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, coincidence_threshold, thinca_interval = 50.0, sngls_snr_threshold = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, min_instruments = 2, sngls_snr_threshold = None):
 		self._xmldoc = None
 		self.thinca_interval = thinca_interval	# seconds
 		self.last_coincs = {}
+		if min_instruments < 1:
+			raise ValueError("min_instruments (=%d) must be >= 1" % min_instruments)
+		self.min_instruments = min_instruments
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
 		self.coinc_params_distributions = None
@@ -317,6 +320,7 @@ class StreamThinca(object):
 			ntuple_comparefunc = ntuple_comparefunc,
 			likelihood_func = self.ln_likelihood_func,
 			likelihood_params_func = self.ln_likelihood_params_func,
+			min_instruments = self.min_instruments,
 			max_dt = self.max_dt
 		)
 
@@ -360,14 +364,14 @@ class StreamThinca(object):
 			newids = set(coinc_event_map_table.getColumnByName("event_id")) - self.event_ids
 			self.event_ids |= newids
 
-			# find zero-lag coinc event IDs
+			# find multi-instrument zero-lag coinc event IDs
 			zero_lag_time_slide_ids = set(time_slide_id for time_slide_id, offsetvector in offsetvectors.items() if not any(offsetvector.values()))
-			zero_lag_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.time_slide_id in zero_lag_time_slide_ids)
+			zero_lag_multi_instrument_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.nevents >= 2 and row.time_slide_id in zero_lag_time_slide_ids)
 
-			# singles used in coincs but not in zero-lag
-			# coincs.  these will be added to the
-			# "non-coincident singles" list before returning
-			background_coinc_sngl_ids = set(coinc_event_map_table.getColumnByName("event_id")) - set(row.event_id for row in coinc_event_map_table if row.coinc_event_id in zero_lag_coinc_event_ids)
+			# singles used in coincs but not in zero-lag coincs
+			# with two or more instruments.  these will be added to
+			# the "non-coincident singles" list before returning
+			background_coinc_sngl_ids = set(coinc_event_map_table.getColumnByName("event_id")) - set(row.event_id for row in coinc_event_map_table if row.coinc_event_id in zero_lag_multi_instrument_coinc_event_ids)
 			background_coinc_sngls = map(index.__getitem__, background_coinc_sngl_ids)
 
 			# copy rows into target tables.
@@ -398,7 +402,8 @@ class StreamThinca(object):
 				if event.snr >= self.sngls_snr_threshold:
 					real_sngl_inspiral_table.append(event)
 
-		# return sngls that are not coincident in zero-lag
+		# return sngls that were not used in multi-instrument
+		# zero-lag coincidences
 		return noncoinc_sngls + background_coinc_sngls
 
 

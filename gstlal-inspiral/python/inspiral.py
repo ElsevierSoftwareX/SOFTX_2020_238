@@ -51,6 +51,7 @@
 
 
 from collections import deque
+import itertools
 import math
 import numpy
 import os
@@ -560,6 +561,7 @@ class Data(object):
 		self.stream_thinca = streamthinca.StreamThinca(
 			coincidence_threshold = coinc_params_distributions.delta_t,
 			thinca_interval = thinca_interval,	# seconds
+			min_instruments = coinc_params_distributions.min_instruments,
 			sngls_snr_threshold = sngls_snr_threshold
 		)
 
@@ -690,15 +692,19 @@ class Data(object):
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
-			# coincs
-			# FIXME FIXME FIXME buf_timestamp - 1.0 is used to be
-			# the maximum offset a template can have within a
-			# buffer that would cause its end time to be before the
-			# true buffer boundary start.  This comes from the
-			# largest negative offset in any given SVD bank.  ITAC
-			# should be patched to do this once synchronization
-			# issues are sorted
-			for event in self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp - 1.0, fapfar = self.fapfar):
+			# coincs.  NOTE:  we rely on the arguments to
+			# .chain() being evaluated in left-to-right order
+			# so that .add_events() is evaluated before
+			# .last_coincs because the former initializes the
+			# latter.
+			# FIXME FIXME FIXME buf_timestamp - 1.0 is used to
+			# be the maximum offset a template can have within
+			# a buffer that would cause its end time to be
+			# before the true buffer boundary start.  This
+			# comes from the largest negative offset in any
+			# given SVD bank.  ITAC should be patched to do
+			# this once synchronization issues are sorted
+			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp - 1.0, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
 				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
 			self.coincs_document.commit()
 
