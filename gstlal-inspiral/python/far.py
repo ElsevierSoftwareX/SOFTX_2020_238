@@ -489,10 +489,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# populate background instrument combination rates
 		#
+
 		self.background_rates["instruments"].array[:] = 0.
 		for instruments, count in inspiral_extrinsics.instruments_rate_given_noise(
-			singles_counts = dict((instrument, self.background_rates["singles"][instrument,]) for instrument in self.background_rates["singles"].bins[0].centres()),
-			zero_lag_coinc_counts = dict((instruments, self.zero_lag_rates["instruments"][instruments,]) for instruments in self.zero_lag_rates["instruments"].bins[0].centres()),
+			singles_counts = dict(zip(self.background_rates["singles"].bins[0].centres(), self.background_rates["singles"].array)),
+			zero_lag_coinc_counts = dict(zip(self.zero_lag_rates["instruments"].bins[0].centres(), self.zero_lag_rates["instruments"].array)),
 			segs = segs,
 			delta_t = self.delta_t,
 			min_instruments = self.min_instruments,
