@@ -205,14 +205,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	def coinc_params(self, events, offsetvector, mode = "ranking"):
 		#
-		# NOTE:  unlike the burst codes, this function is expected
-		# to work with single-instrument event lists as well
-		#
-
-		if mode not in ("ranking", "counting"):
-			raise ValueError("invalid mode '%s'" % mode)
-
-		#
 		# 2D (snr, \chi^2) values.
 		#
 
@@ -230,6 +222,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if len(events) != 1:
 				raise ValueError("only singles are allowed in counting mode")
 			params["singles"] = (events[0].ifo,)
+		else:
+			raise ValueError("invalid mode '%s'" % mode)
 
 		#
 		# record the horizon distances.  pick one trigger at random
