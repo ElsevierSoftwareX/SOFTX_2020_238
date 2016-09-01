@@ -219,7 +219,7 @@ class generic_node(InspiralNode):
 	an empty argument by setting it to "".  However options set to None are simply
 	ignored.
 	"""
-	def __init__(self, job, dag, parent_nodes, opts = {}, input_files = {}, output_files = {}, input_cache_files = {}, output_cache_files = {}):
+	def __init__(self, job, dag, parent_nodes, opts = {}, input_files = {}, output_files = {}, input_cache_files = {}, output_cache_files = {}, input_cache_file_name = None):
 		InspiralNode.__init__(self, job, dag, parent_nodes)
 
 		self.input_files = input_files.copy()
@@ -250,7 +250,10 @@ class generic_node(InspiralNode):
 
 		for opt, val in input_cache_files.items():
 			cache_entries = [lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in val]
-			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = job.tag_base)
+			if input_cache_file_name is None:
+				cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = job.tag_base)
+			else:
+				cache_file_name = input_cache_file_name
 			with open(cache_file_name, "w") as cache_file:
 				lal.Cache(cache_entries).tofile(cache_file)
 			self.add_var_opt(opt, cache_file_name)
