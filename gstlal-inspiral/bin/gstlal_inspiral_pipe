@@ -372,7 +372,7 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 
 	return lloid_output, lloid_diststats
 
-def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set, snrpdfnode):
+def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set):
 
 	likelihood_nodes = {}
 	rankpdf_nodes = []
@@ -393,8 +393,8 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
-				parent_nodes = [priornode, snrpdfnode],
-				input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
+				parent_nodes = [priornode],
+				input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 		priornodes.append(priornode)
@@ -404,12 +404,11 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		# Break up the likelihood jobs into chunks to process fewer files, e.g, 25
 		likelihood_nodes.setdefault(None,[]).append(
 			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
-				parent_nodes = [priornode, snrpdfnode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
+				parent_nodes = [priornode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 				input_files = {"":chunked_inputs},
 				input_cache_files = {"likelihood-cache":diststats +
-					[priornode.output_files["write-likelihood"],
-					snrpdfnode.output_files["write-likelihood"]]
+					[priornode.output_files["write-likelihood"]]
 					}
 				) for chunked_inputs in chunks(inputs, 25)]
 			)
@@ -423,12 +422,11 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			# Break up the likelihood jobs into chunks to process fewer files, e.g., 25
 			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
 				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
-					parent_nodes = parents + [priornodes[n], snrpdfnode],
+					parent_nodes = parents + [priornodes[n]],
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_files = {"":chunked_inputs},
 					input_cache_files = {"likelihood-cache":diststats + 
-						[priornodes[n].output_files["write-likelihood"], 
-						snrpdfnode.output_files["write-likelihood"]]
+						[priornodes[n].output_files["write-likelihood"]] 
 						}
 					) for chunked_inputs in chunks(inputs, 25)]
 				)
@@ -844,14 +842,6 @@ if options.reference_psd is None:
 	ref_psd = median_psd_node.output_files["output-name"]
 	ref_psd_parent_nodes = [median_psd_node]
 
-
-	# NOTE: compute just the SNR pdf cache here, set other features to 0
-	snrpdfnode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
-			parent_nodes = ref_psd_parent_nodes,
-			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
-			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
-		)
-
 else:
 	ref_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
 
@@ -859,15 +849,6 @@ else:
 	output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(options.reference_psd)))
 	output_cache_file.close()
 
-	# NOTE: compute just the SNR pdf cache here, set other features to 0
-	# NOTE: This will likely result in downstream codes needing to compute
-	# more SNR PDFS, since in this codepath only an average spectrum is
-	# used.
-	snrpdfnode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
-			opts = {"instrument":instrument_set, "synthesize-injection-count":0, "background-prior":0},
-			input_files = {"":options.reference_psd},
-			output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, 'SNR_PDFS_CREATE_PRIOR_DIST_STATS', int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
-		)
 	ref_psd_parent_nodes = []
 
 #
@@ -912,7 +893,7 @@ for inj in options.injections:
 # Setup likelihood jobs, clustering and merging
 #
 
-rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set, snrpdfnode)
+rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set)
 
 #
 # after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
