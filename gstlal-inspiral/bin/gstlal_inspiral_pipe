@@ -449,7 +449,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		nodes = flatten(nodes)
 		merge_nodes = []
 		# Flatten the input/output files from calc_likelihood
-		inputs = flatten([node.input_files[""] for node in nodes])
+		inputs = flatten([node.input_files["input-cache"] for node in nodes])
 		if inj is None:
 			# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
 			for n in range(0, len(inputs), files_to_group):
@@ -463,7 +463,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
 
 			# Merging all the dbs from the same sub bank
-			for subbank, inputs in enumerate([node.input_files[""] for node in nodes]):
+			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
 				db = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
 					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
@@ -489,7 +489,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
 
 			# Merging all the dbs from the same sub bank and injection run
-			for subbank, inputs in enumerate([node.input_files[""] for node in nodes]):
+			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
 				injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
 					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
