@@ -50,6 +50,7 @@
 #	+ `--inspiral-executable [str]: Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral
 #	+ `--blind-injections [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.
 #	+ `--far-injections` [filename]: Injection files with injections too far away to be seen that are not filtered. Must be 1:1 with --injections if given at all. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.
+#	+ `--disable-calc-inj-snr`: Disable injection SNR calculation (default = False)
 #	+ `--request-cpu`: Set inspiral CPU count, default 8
 #	+ `--request-memory`: Set inspiral memory, default 15GB
 #	+ `--condor-command`: Set condor commands of the form command=value; can be given multiple times.
@@ -682,6 +683,7 @@ def parse_command_line():
 	parser.add_option("--copy-raw-results", default=False, action = "store_true", help = "Copy raw gstlal_inspiral results before applying clustering and other lossy operations.")
 	parser.add_option("--gzip-test", default=False, action = "store_true", help = "Perform gzip --test on all output files.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+	parser.add_option("--disable-calc-inj-snr", default=False, action = "store_true", help = "Disable injection SNR calculation")
 
 	# Override the datasource injection option
 	parser.remove_option("--injections")
@@ -852,6 +854,18 @@ else:
 	ref_psd_parent_nodes = []
 
 #
+# Calculate Expected SNR jobs
+#
+
+injsnrnodes = []
+if not options.disable_calc_inj_snr:
+	for inj in options.injections:
+		injsnrnodes.append(inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes,
+			opts = {"flow":options.flow},
+			input_files = {"injection-file":inj, "reference-psd-cache":"reference_psd.cache"}
+		))
+
+#
 # Compute SVD banks
 #
 
@@ -869,25 +883,6 @@ inspiral_nodes = inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag,
 #
 
 lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
-
-#
-# Calculate Expected SNR jobs
-#
-
-injsnrparents = []
-for ifos in segsdict:
-	for seg in segsdict[ifos]:
-		# iterate over the mass space chunks for each segment
-		for j, node in enumerate(inspiral_nodes[(ifos, None)][seg]):
-			for inj in options.injections:
-				injsnrparents.append(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg][j])
-
-injsnrnodes = []
-for inj in options.injections:
-	injsnrnodes.append(inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=injsnrparents,
-		opts = {"flow":options.flow},
-		input_files = {"injection-file":inj, "reference-psd-cache":"reference_psd.cache"}
-	))
 
 #
 # Setup likelihood jobs, clustering and merging
