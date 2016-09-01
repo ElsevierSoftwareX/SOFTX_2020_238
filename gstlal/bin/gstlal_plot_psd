@@ -45,8 +45,6 @@ if len(sys.argv) < 3:
 
 outname = sys.argv[1]
 
-minpsd = []
-
 for fname in sys.argv[2:]:
 	psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(fname, verbose = True, contenthandler = lal.series.PSDContentHandler))
 	for k,v in psds.items():
@@ -56,7 +54,6 @@ for fname in sys.argv[2:]:
 			flabel = fname
 		else:
 			flabel = ""
-		minpsd.append(min(v.data))
 		pyplot.loglog(v.deltaF * numpy.arange(len(v.data.data)), v.data.data, label = '%s %s: %0.f Mpc' % (flabel, k, h), alpha=0.75)
 		pyplot.xlabel('Frequency (Hz)')
 		pyplot.ylabel('Strain^2/Hz')
