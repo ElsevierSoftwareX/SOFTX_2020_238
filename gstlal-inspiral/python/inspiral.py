@@ -358,18 +358,18 @@ def chisq_distribution(df, non_centralities, size):
 class CoincsDocument(object):
 	sngl_inspiral_columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")
 
-	def __init__(self, filename, process_params, comment, instruments, seg, injection_filename = None, time_slide_file = None, tmp_path = None, replace_file = None, verbose = False):
+	def __init__(self, url, process_params, comment, instruments, seg, injection_filename = None, time_slide_file = None, tmp_path = None, replace_file = None, verbose = False):
 		#
 		# how to make another like us
 		#
 
-		self.get_another = lambda: CoincsDocument(filename = filename, process_params = process_params, comment = comment, instruments = instruments, seg = seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+		self.get_another = lambda: CoincsDocument(url = url, process_params = process_params, comment = comment, instruments = instruments, seg = seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 
 		#
-		# filename
+		# url
 		#
 
-		self.filename = filename
+		self.url = url
 
 		#
 		# build the XML document
@@ -422,8 +422,8 @@ class CoincsDocument(object):
 		# interface to the database file
 		#
 
-		if filename is not None and filename.endswith('.sqlite'):
-			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+		if url is not None and url.endswith('.sqlite'):
+			self.working_filename = dbtables.get_connection_filename(ligolw_utils.local_path_from_url(url), tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread = False)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
 
@@ -490,7 +490,7 @@ class CoincsDocument(object):
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
 
 
-	def write_output_file(self, verbose = False):
+	def write_output_url(self, verbose = False):
 		self.llwsegments.finalize()
 		ligolw_process.set_process_end_time(self.process)
 
@@ -508,15 +508,15 @@ class CoincsDocument(object):
 			dbtables.build_indexes(self.connection, verbose = verbose)
 			self.connection.close()
 			self.connection = None
-			dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
+			dbtables.put_connection_filename(ligolw_utils.local_path_from_url(self.url), self.working_filename, verbose = verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			self.search_summary.nevents = len(self.sngl_inspiral_table)
-			ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+			ligolw_utils.write_url(self.xmldoc, self.url, gz = (self.url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 
 class Data(object):
-	def __init__(self, filename, process_params, pipeline, seg, coincidence_threshold, coinc_params_distributions, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_files_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, url, process_params, pipeline, seg, coincidence_threshold, coinc_params_distributions, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_url_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -527,7 +527,7 @@ class Data(object):
 		self.upload_auxiliary_data_to_gracedb = upload_auxiliary_data_to_gracedb
 		# None to disable likelihood ratio assignment, otherwise a filename
 		self.marginalized_likelihood_file = marginalized_likelihood_file
-		self.likelihood_files_namedtuple = likelihood_files_namedtuple
+		self.likelihood_url_namedtuple = likelihood_url_namedtuple
 		# None to disable periodic snapshots, otherwise seconds
 		# set to 1.0 to disable background data decay
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
@@ -558,7 +558,7 @@ class Data(object):
 		# initialize document to hold coincs and segments
 		#
 
-		self.coincs_document = CoincsDocument(filename, process_params, comment, coinc_params_distributions.instruments, seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+		self.coincs_document = CoincsDocument(url, process_params, comment, coinc_params_distributions.instruments, seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 
 		#
 		# attach a StreamThinca instance to ourselves
@@ -648,25 +648,25 @@ class Data(object):
 				# our purpose it should not have that large of
 				# an effect. The data loaded should never be
 				# older than the snapshot before last
-				if self.likelihood_files_namedtuple.reference_likelihood_file is not None:
+				if self.likelihood_url_namedtuple.reference_likelihood_url is not None:
 					params_before = self.coinc_params_distributions.instruments, self.coinc_params_distributions.min_instruments, self.coinc_params_distributions.delta_t
-					self.coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.likelihood_files_namedtuple.reference_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+					self.coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.likelihood_url_namedtuple.reference_likelihood_url, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 					params_after  = self.coinc_params_distributions.instruments, self.coinc_params_distributions.min_instruments, self.coinc_params_distributions.delta_t
 					if params_before != params_after:
-						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.likelihood_files_namedtuple.reference_likelihood_file)
+						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.likelihood_url_namedtuple.reference_likelihood_url)
 					self.coinc_params_distributions.finish(segs = seglists, verbose = self.verbose)
 				else:
 					self.coinc_params_distributions.finish(segs = self.seglistdicts["triggersegments"], verbose = self.verbose)
 
 				# post a checkpoint message.
 				# FIXME:  make sure this triggers
-				# self.snapshot_output_file() to be
+				# self.snapshot_output_url() to be
 				# invoked.  lloidparts takes care of that
 				# for now, but spreading the program logic
 				# around like that isn't a good idea, this
 				# code should be responsible for it
 				# somehow, no?  NOTE:
-				# self.snapshot_output_file() does not
+				# self.snapshot_output_url() does not
 				# write the coinc_params_distributions
 				# object to disk if a reference likelihood
 				# file is given, so the the thing that was
@@ -1056,18 +1056,18 @@ class Data(object):
 		except:
 			yield "error\n"
 
-	def __write_output_file(self, filename = None, verbose = False):
+	def __write_output_url(self, url = None, verbose = False):
 		self.__flush()
 
 		# FIXME:  should this be done in .flush() somehow?
 		for segtype, seglistdict in self.seglistdicts.items():
 			self.coincs_document.llwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID")
 
-		if filename is not None:
-			self.coincs_document.filename = filename
-		self.coincs_document.write_output_file(verbose = verbose)
+		if url is not None:
+			self.coincs_document.url = url
+		self.coincs_document.write_output_url(verbose = verbose)
 
-	def __write_likelihood_file(self, filename, description, snapshot = False, verbose = False):
+	def __write_likelihood_url(self, url, description, snapshot = False, verbose = False):
 		# write the parameter PDF file.  NOTE;  this file contains
 		# raw bin counts, and might or might not contain smoothed,
 		# normalized, PDF arrays but if it does they will not
@@ -1078,29 +1078,32 @@ class Data(object):
 		# thinca.  we want to know precisely when the arrays get
 		# updated so we can have a hope of computing the likelihood
 		# ratio PDFs correctly.
+		#
+		# FIXME Can we delete the temporary file atomic process now
+		# that glue creates temp files before writing
 
-		path, filename = os.path.split(filename)
-		tmp_likelihood_file = os.path.join(path, 'tmp_%s' % filename)
-		ligolw_utils.write_filename(self.__get_likelihood_file(), tmp_likelihood_file, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
-		shutil.move(tmp_likelihood_file, os.path.join(path,filename))
+		scheme_host_path, filename = os.path.split(url)
+		tmp_likelihood_url = os.path.join(scheme_host_path, 'tmp_%s' % filename)
+		ligolw_utils.write_url(self.__get_likelihood_file(), tmp_likelihood_url, gz = (tmp_likelihood_url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		shutil.move(ligolw_utils.local_path_from_url(tmp_likelihood_url), ligolw_utils.local_path_from_url(url))
 		# Snapshots get their own custom file and path
 		if snapshot:
 			fname = self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz')
-			shutil.copy(os.path.join(path,filename), os.path.join(subdir_from_T050017_filename(fname), fname))
+			shutil.copy(ligolw_utils.local_path_from_url(url), os.path.join(subdir_from_T050017_filename(fname), fname))
 
 	def __write_zero_lag_ranking_stats_file(self, filename, verbose = False):
 		ligolw_utils.write_filename(self.__get_zero_lag_ranking_stats_file(), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
-	def write_output_file(self, filename = None, description = "", verbose = False):
+	def write_output_url(self, url = None, description = "", verbose = False):
 		with self.lock:
-			self.__write_output_file(filename = filename, verbose = verbose)
-			if self.likelihood_files_namedtuple.likelihood_file: 
-				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, description, verbose = verbose)
+			self.__write_output_url(url = url, verbose = verbose)
+			if self.likelihood_url_namedtuple.likelihood_url: 
+				self.__write_likelihood_url(self.likelihood_url_namedtuple.likelihood_url, description, verbose = verbose)
 
 			# can't be used anymore
 			del self.coincs_document
 
-	def snapshot_output_file(self, description, extension, zero_lag_ranking_stats_filename = None, verbose = False):
+	def snapshot_output_url(self, description, extension, zero_lag_ranking_stats_filename = None, verbose = False):
 		with self.lock:
 			coincs_document = self.coincs_document.get_another()
 			# We require the likelihood file to have the same name
@@ -1108,9 +1111,9 @@ class Data(object):
 			# as we go
 			fname = self.coincs_document.T050017_filename(description, extension)
 			fname = os.path.join(subdir_from_T050017_filename(fname), fname)
-			self.__write_output_file(filename = fname, verbose = verbose)
-			if self.likelihood_files_namedtuple.likelihood_file:
-				self.__write_likelihood_file(self.likelihood_files_namedtuple.likelihood_file, description, snapshot = True, verbose = verbose)
+			self.__write_output_url(url = fname, verbose = verbose)
+			if self.likelihood_url_namedtuple.likelihood_url:
+				self.__write_likelihood_url(self.likelihood_url_namedtuple.likelihood_url, description, snapshot = True, verbose = verbose)
 			if zero_lag_ranking_stats_filename is not None:
 				self.__write_zero_lag_ranking_stats_file(zero_lag_ranking_stats_filename, verbose = verbose)
 

@@ -348,17 +348,17 @@ def parse_command_line():
 		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
 
 	# FIXME: should also check for read permissions
-	required_files = []
+	required_urls = []
 	for svd_bank_set in svd_banks: 
-		required_files += svd_bank_set.values()
+		required_urls += svd_bank_set.values()
 	if options.veto_segments_file:
-		required_files += [options.veto_segments_file]
-	for i in range(len(required_files)):
+		required_urls += [options.veto_segments_file]
+	for i in range(len(required_urls)):
 		try:
-			required_files[i] = ligolw_utils.local_path_from_url(required_files[i])
+			required_urls[i] = ligolw_utils.local_path_from_url(required_urls[i])
 		except ValueError:
-			required_files[i] = None
-	missing_files = [filename for filename in required_files if filename is not None and not os.path.exists(filename)]
+			required_urls[i] = None
+	missing_files = [ligolw_utils.local_path_from_url(url) for url in required_urls if url is not None and not os.path.exists(ligolw_utils.local_path_from_url(url))]
 
 	if missing_files:
 		raise ValueError("files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files)))
@@ -415,12 +415,12 @@ def parse_command_line():
 		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
 	
 	if options.reference_likelihood_file:
-		likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(None, options.reference_likelihood_file)]
+		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(None, options.reference_likelihood_file)]
 	else:
-		likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(likelihood_file,None) for likelihood_file in options.likelihood_file]
+		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file,None) for likelihood_file in options.likelihood_file]
 
-	if not (len(svd_banks) == len(options.output) == len(likelihood_namedtuples_list)):
-		raise ValueError("must have equal numbers of svd banks (%d), output files (%d) and likelihood files (%d)" % (len(svd_banks), len(options.output), len(likelihood_namedtuples_list)))
+	if not (len(svd_banks) == len(options.output) == len(likelihood_url_namedtuples_list)):
+		raise ValueError("must have equal numbers of svd banks (%d), output files (%d) and likelihood files (%d)" % (len(svd_banks), len(options.output), len(likelihood_url_namedtuples_list)))
 
 	#
 	# Option checks complete
@@ -468,11 +468,11 @@ def parse_command_line():
 	else:
 		reconstruction_segment_list = None
 
-	if options.zero_lag_ranking_stat_file is None and likelihood_namedtuples_list:
-		options.zero_lag_ranking_stat_file = [None] * len(likelihood_namedtuples_list)
+	if options.zero_lag_ranking_stat_file is None and likelihood_url_namedtuples_list:
+		options.zero_lag_ranking_stat_file = [None] * len(likelihood_url_namedtuples_list)
 
 	# we're done
-	return options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list
+	return options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_url_namedtuples_list
 
 
 #
@@ -519,7 +519,7 @@ class OneTimeSignalHandler(object):
 #
 
 
-options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list = parse_command_line()
+options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_url_namedtuples_list = parse_command_line()
 
 if not options.check_time_stamps:
 	pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
@@ -557,21 +557,21 @@ else:
 #
 
 
-for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_lag_ranking_stats_file) in enumerate(zip(svd_banks, options.output, likelihood_namedtuples_list, options.zero_lag_ranking_stat_file)):
+for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtuple, zero_lag_ranking_stats_file) in enumerate(zip(svd_banks, options.output, likelihood_url_namedtuples_list, options.zero_lag_ranking_stat_file)):
 	#
 	# Checkpointing only supported for gzip files in offline analysis
 	# FIXME Is there a better way to check if a file is corrupted? Implement a means by which to check for sqlite file validity
 	#
 
-	if options.data_source not in ("lvshm", "framexmit") and output_filename.endswith('.gz'):
+	if options.data_source not in ("lvshm", "framexmit") and output_url.endswith('.gz'):
 		try:
-			subprocess.check_call(["gzip", "--test", output_filename])
-			subprocess.check_call(["gzip", "--test", likelihood_namedtuple[0]])
+			subprocess.check_call(["gzip", "--test", output_url])
+			subprocess.check_call(["gzip", "--test", likelihood_url_namedtuple[0]])
 			# File is OK and there is no need to process it, skip ahead in the loop
 			continue
 		except subprocess.CalledProcessError:
 			# File does not exist or is corrupted, need to reprocess
-			print >>sys.stderr, "Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_filename))
+			print >>sys.stderr, "Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_url))
 			pass
 
 	#
@@ -606,7 +606,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 
 	@bottle.route("/")
 	@bottle.route("/index.html")
-	def index(job_tag = options.job_tag, instruments = set(svd_bank.keys())):
+	def index(job_tag = options.job_tag, instruments = set(svd_bank_url_dict.keys())):
 		# get the host and port to report in the links from the
 		# request we've received so that the URLs contain the IP
 		# address by which client has contacted us
@@ -632,7 +632,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	#
 
 
-	banks = inspiral.parse_bank_files(svd_bank, verbose = options.verbose)
+	banks = inspiral.parse_bank_files(svd_bank_url_dict, verbose = options.verbose)
 
 	@bottle.route("/bank.txt")
 	def get_filter_length_and_chirpmass(banks = banks):
@@ -679,10 +679,10 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 
 
 	if options.data_source in ("lvshm", "framexmit"):
-		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 		assert set(seglists) == set(detectors.channel_dict)
 		if coinc_params_distributions is None:
-			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1])
+			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1])
 	else:
 		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = set(detectors.channel_dict), delta_t = options.coincidence_threshold), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
 
@@ -706,7 +706,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	if options.verbose:
 		print >>sys.stderr, "initializing output document ..."
 	output = inspiral.Data(
-		filename = output_filename or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
+		url = output_url or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
 		process_params = process_params,
 		pipeline = pipeline,
 		seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
@@ -714,7 +714,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 		coinc_params_distributions = coinc_params_distributions,
 		zero_lag_ranking_stats = zero_lag_ranking_stats,
 		marginalized_likelihood_file = options.marginalized_likelihood_file,
-		likelihood_files_namedtuple = likelihood_namedtuple,
+		likelihood_url_namedtuple = likelihood_url_namedtuple,
 		injection_filename = options.injections,
 		time_slide_file = options.time_slide_file,
 		comment = options.comment,
@@ -802,7 +802,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	#
 
 
-	output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
+	output.write_output_url(url = output_url or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
 
 
 	#

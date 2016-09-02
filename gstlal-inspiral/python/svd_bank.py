@@ -195,11 +195,11 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = None):
+def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = None):
 	"""!
 	Return an instance of a Bank class.
 
-	@param template_bank_filename The template bank filename containing a subbank of templates to decompose in a single inpsiral table.
+	@param template_bank_url The template bank filename or url containing a subbank of templates to decompose in a single inpsiral table.
 	@param psd A class instance of a psd.
 	@param flow The lower frequency cutoff.
 	@param ortho_gate_fap The FAP threshold for the sum of squares threshold, see http://arxiv.org/abs/1101.0584
@@ -218,7 +218,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	"""
 
 	# Open template bank file
-	bank_xmldoc = ligolw_utils.load_filename(template_bank_filename, contenthandler = contenthandler, verbose = verbose)
+	bank_xmldoc = ligolw_utils.load_url(template_bank_url, contenthandler = contenthandler, verbose = verbose)
 
 	# Get sngl inspiral table
 	bank_sngl_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
@@ -253,7 +253,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 
 	# FIXME: remove this when no longer needed
 	# by trigger generator element.
-	bank.set_template_bank_filename(template_bank_filename)
+	bank.set_template_bank_filename(ligolw_utils.local_path_from_url(template_bank_url))
 	return bank
 
 

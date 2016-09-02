@@ -404,7 +404,7 @@ class Handler(simplehandler.Handler):
 		# buffer would be an especially bad choice.
 		self.flush_segments_to_disk(timestamp)
 		try:
-			self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", zero_lag_ranking_stats_filename = self.zero_lag_ranking_stats_filename, verbose = self.verbose)
+			self.dataclass.snapshot_output_url("%s_LLOID" % self.tag, "xml.gz", zero_lag_ranking_stats_filename = self.zero_lag_ranking_stats_filename, verbose = self.verbose)
 		except TypeError as te:
 			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
 
