@@ -398,14 +398,15 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		# for a given bin marginalized over time. This is all that will
 		# be needed to compute the likelihood
 		diststats_per_bin_node = inspiral_pipe.generic_node(marginalizeJob, dag,
-			parent_nodes = [priornode] + parents,
+			parent_nodes = [priornode],
 			input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
-			output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)}
+			output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)},
+			input_cache_file_name = inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.cache', path = calcRankPDFsJob.output_path)
 			)
 
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
-				parent_nodes = [priornode],
-				input_cache_files = {"likelihood-cache":[diststats_per_bin_node.output_files["output"]]},
+				parent_nodes = [diststats_per_bin_node],
+				input_files = {"":diststats_per_bin_node.output_files["output"]},
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 		margnodes.append(diststats_per_bin_node)
@@ -417,9 +418,8 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
 				parent_nodes = [diststats_per_bin_node],
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-				input_cache_files = {"likelihood-cache":[diststats_per_bin_node.output_files["output"]],
-					"input-cache":chunked_inputs
-					}
+				input_files = {"likelihood-url":diststats_per_bin_node.output_files["output"]},
+				input_cache_files = {"input-cache":chunked_inputs}
 				) for chunked_inputs in chunks(inputs, 250)]
 			)
 
@@ -434,10 +434,8 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
 					parent_nodes = parents + [margnodes[n]],
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-					input_cache_files = {"likelihood-cache":diststats + 
-						[margnodes[n].output_files["write-likelihood"]],
-						"input-cache":chunked_inputs
-						}
+					input_files = {"likelihood-url":margnodes[n].output_files["output"]},
+					input_cache_files = {"input-cache":chunked_inputs}
 					) for chunked_inputs in chunks(inputs, 250)]
 				)
 
@@ -634,7 +632,7 @@ def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJo
 	margnodes = []
 	margnum = 16
 	for i,n in enumerate(range(0, len(margin), margnum)):
-		margout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz'))
+		margout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz', path = marginalizeJob.output_path))
 		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = final_sqlite_nodes + rankpdf_nodes,
 			output_files = {"output":margout[-1]}, 
 			input_cache_files = {"likelihood-cache":margin[n:n+margnum]},
@@ -643,7 +641,8 @@ def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJo
 
 	margnode = inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = margnodes,
 		output_files = {"output":"marginalized_likelihood.xml.gz"},
-		input_cache_files = {"likelihood-cache":margout}
+		input_cache_files = {"likelihood-cache":margout},
+		input_cache_file_name = os.path.join(marginalizeJob.output_path, "marginalized_likelihood.cache")
 	)
 	
 	farnode = inspiral_pipe.generic_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = [margnode],
