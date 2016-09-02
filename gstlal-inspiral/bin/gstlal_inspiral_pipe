@@ -226,7 +226,7 @@ def svd_bank_cache_maker(svd_bank_strings, counter, injection = False):
 	parsed_svd_bank_strings = [inspiral.parse_svdbank_string(single_svd_bank_string) for single_svd_bank_string in svd_bank_strings]
 	for svd_bank_parsed_dict in parsed_svd_bank_strings:
 		for filename in svd_bank_parsed_dict.itervalues():
-			svd_cache_entries.append(CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)))
+			svd_cache_entries.append(CacheEntry.from_T050017(filename))
 
 	return [svd_cache_entry.url for svd_cache_entry in svd_cache_entries] 
 
