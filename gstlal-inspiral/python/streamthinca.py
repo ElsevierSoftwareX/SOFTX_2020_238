@@ -303,9 +303,11 @@ class StreamThinca(object):
 		# coincidence segment in as a default value for the seg
 		# keyword argument
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - coincidence_back_off, boundary - coincidence_back_off)):
+			# False/0 = keep, True/non-0 = discard
 			return min(event.end for event in events) not in seg
 
-		# find coincs
+		# find coincs.  NOTE:  do not pass veto segments to this
+		# function.  See comments in InspiralEventList above
 		ligolw_thinca.ligolw_thinca(
 			xmldoc,
 			process_id = process_id,
