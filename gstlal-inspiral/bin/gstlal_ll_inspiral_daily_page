@@ -66,7 +66,15 @@ def process_mass_bin(args):
 
 if __name__ == '__main__':
 
+	#
+	# Some data reduction happens in parallel
+	#
+
 	pool = Pool(20)
+
+	#
+	# Parse command line
+	#
 
 	parser = OptionParser()
 	parser.add_option("--directory", default = ".", help = "directory to start looking for results")
@@ -89,8 +97,11 @@ if __name__ == '__main__':
 	cluster_file = os.path.join(options.directory, "ll_simplify_and_cluster.sql")
 	simplify_file = os.path.join(options.directory, "ll_simplify.sql")
 
-	result_dirs = sorted([d for d in os.listdir(options.directory) if dir_pattern.match(d)])
+	#
+	# Parallel process data within each result directory (every 100,000 seconds)
+	#
 
+	result_dirs = sorted([d for d in os.listdir(options.directory) if dir_pattern.match(d)])
 	for n, d in enumerate(result_dirs):
 
 		noninjdball = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite' % (d,))
@@ -114,6 +125,10 @@ if __name__ == '__main__':
 		subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % injdball] + inj_mass_bin_files_to_merge)	
 		noninj_files_to_merge.append(noninjdball)
 		inj_files_to_merge.append(injdball)
+
+	#
+	# Do top level data reduction
+	#
 
 	# FIXME only add *new* files
 	noninjdb = os.path.join(options.directory, 'H1L1-ALL_LLOID-0-2000000000.sqlite.tmp')
@@ -158,7 +173,10 @@ if __name__ == '__main__':
 	progressbar.increment()
 
 
+	#
 	# Make plots and such
+	#
+
 	if os.path.exists(os.path.join(options.directory, "plots")):
 		os.rename(os.path.join(options.directory, "plots"), "%s.%s" % (os.path.join(options.directory, "plots"), str(now())))
 	os.mkdir(os.path.join(options.directory, "plots"))
@@ -168,15 +186,44 @@ if __name__ == '__main__':
 	#	m = pattern.match(d)
 	#	if m:
 	#		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
+
+
+
+	#
+	# Plot background
+	#
+
 	try:
 		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", "ALL", "--database", noninjdb, "--verbose", "marginalized_likelihood.xml.gz"])
-	except subprocess.CalledProcessError as plotbg_error:
-		print >> sys.stderr, "plot background failed. recieved error%s...continuing anyway" % plotbg_error
-	subprocess.check_call(["gstlal_inspiral_plotsummary", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
+	except subprocess.CalledProcessError as plot_error:
+		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
-	subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
+	#
+	# Plot summary
+	#
 
-	subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
+	try:
+		subprocess.check_call(["gstlal_inspiral_plotsummary", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
+	except subprocess.CalledProcessError as plot_error:
+		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
+
+	#
+	# Plot sensitivity
+	#
+
+	try:
+		subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
+	except subprocess.CalledProcessError as plot_error:
+		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
+
+	#
+	# Summary page
+	#
+
+	try:
+		subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
+	except subprocess.CalledProcessError as plot_error:
+		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
 
 	# copy the working files back
