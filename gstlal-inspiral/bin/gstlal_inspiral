@@ -706,7 +706,6 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		process_params = process_params,
 		pipeline = pipeline,
 		seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
-		coincidence_threshold = options.coincidence_threshold,
 		coinc_params_distributions = coinc_params_distributions,
 		zero_lag_ranking_stats = zero_lag_ranking_stats,
 		marginalized_likelihood_file = options.marginalized_likelihood_file,
