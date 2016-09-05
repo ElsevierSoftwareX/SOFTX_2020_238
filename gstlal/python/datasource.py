@@ -59,20 +59,11 @@ Gst.init(None)
 
 from gstlal import bottle
 from gstlal import pipeparts
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 import lal
 from lal import LIGOTimeGPS
-
-
-## #### ContentHandler
-# A stub to wrap ligolw.LIGOLWContentHandler for now
-class ContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-lsctables.use_in(ContentHandler)
 
 
 #
@@ -425,7 +416,7 @@ class GWDataSourceInfo(object):
 
 		if options.frame_segments_file is not None:
 			## Frame segments from a user defined file
-			self.frame_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
+			self.frame_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.frame_segments_file, contenthandler=ligolw_segments.LIGOLWContentHandler), options.frame_segments_name).coalesce()
 			if self.seg is not None:
 				# Clip frame segments to seek segment if it
 				# exists (not required, just saves some
