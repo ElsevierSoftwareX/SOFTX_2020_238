@@ -237,7 +237,8 @@ class Handler(simplehandler.Handler):
 		else:
 			self.seglistdicts["triggersegments"] = seglistdict
 		# hook the Data class's livetime record keeping into ours
-		# so that all segments come here
+		# so that all segments come here and the Data class has all
+		# of ours
 		# FIXME:  don't do this, get rid of the Data class
 		dataclass.seglistdicts = self.seglistdicts
 
