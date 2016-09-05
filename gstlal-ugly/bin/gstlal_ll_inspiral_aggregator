@@ -235,7 +235,7 @@ def gps_range(jobtime, dataspan):
 	return range(min_t, max_t+MIN_TIME_QUANTA, MIN_TIME_QUANTA), range(min_t+MIN_TIME_QUANTA, max_t+2*MIN_TIME_QUANTA, MIN_TIME_QUANTA)
 
 
-def update_lowest_level_data(path, d, s, e, typ, self, jobtime, func):
+def update_lowest_level_data(job, path, d, s, e, typ, self, jobtime, jobdata, func):
 	try:
 		fname, prev_times, prev_data = get_dataset(path, d)
 	except:
@@ -262,7 +262,7 @@ def job_expanse(dataspan):
 	else:
 		return [], []
 
-def reduce_data_from_lower_level(s, level, self, this_level_dir, job, typ, d, func, s, e):
+def reduce_data_from_lower_level(level, self, this_level_dir, job, typ, d, func, s, e):
 
 	agg_data = []
 	agg_time = []
@@ -277,7 +277,7 @@ def reduce_data_from_lower_level(s, level, self, this_level_dir, job, typ, d, fu
 			pass
 	reduced_time, reduced_data = reduce(agg_time, agg_data, func, level=level)
 	path = "/".join([this_level_dir, "by_job", job, typ])
-	loggging.info("processing reduced data %s for job %s  in span [%d,%d] of type %s at level %d: found %d/%d" % (d, job, s, e, typ, level, len(reduced_time), len(agg_time)))
+	logging.info("processing reduced data %s for job %s  in span [%d,%d] of type %s at level %d: found %d/%d" % (d, job, s, e, typ, level, len(reduced_time), len(agg_time)))
 	tmpfname = create_new_dataset(path, d, reduced_time, reduced_data, tmp = True)
 	# FIXME don't assume we can get the non temp file name this way
 	shutil.move(tmpfname, tmpfname.replace(".tmp",""))
@@ -297,7 +297,7 @@ def reduce_across_jobs(self, this_level_dir, typ, d, func, level, s, e):
 			logging.error(ioerr)
 			pass
 	reduced_time, reduced_data = reduce(agg_time, agg_data, func, level=level)
-	loggin.info("processing reduced data %s in span [%d,%d] of type %s at level %d: found %d/%d" % (d, s, e, typ, level, len(reduced_time), len(agg_time)))
+	logging.info("processing reduced data %s in span [%d,%d] of type %s at level %d: found %d/%d" % (d, s, e, typ, level, len(reduced_time), len(agg_time)))
 	path = "/".join([this_level_dir, typ])
 	tmpfname = create_new_dataset(path, d, reduced_time, reduced_data, tmp = True)
 	# FIXME don't assume we can get the non temp file name this way
@@ -367,7 +367,7 @@ class Collector(servicediscovery.Listener):
 							for s,e in zip(gps1, gps2):
 								for (typ, func) in self.datatypes:
 									path = "/".join([self.base_dir, gps_to_leaf_directory(s), "by_job", job, typ])
-									update_lowest_level_data(path, d, s, e, typ, self, jobtime, func)
+									update_lowest_level_data(job, path, d, s, e, typ, self, jobtime, jobdata, func)
 
 					# Data reduction across jobs at the lowest level
 					gps1, gps2 = job_expanse(dataspan)
@@ -380,7 +380,7 @@ class Collector(servicediscovery.Listener):
 									# Produce the data at this level by descending a level.
 									if level > 0:
 										for job in sorted(self.urls):
-											reduce_data_from_lower_level(s, level, self, this_level_dir, job, typ, d, func, s, e)
+											reduce_data_from_lower_level(level, self, this_level_dir, job, typ, d, func, s, e)
 									# reduce data across jobs at this level
 									reduce_across_jobs(self, this_level_dir, typ, d, func, level, s, e)
 		except:
