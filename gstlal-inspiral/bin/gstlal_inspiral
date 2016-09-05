@@ -135,6 +135,7 @@
 #	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal), default = infinity.
 #	+ `--chisq-type" [type]: Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.
 #	+ `--coincidence-threshold` [value] (float): Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.
+#	+ `--min-instruments` [count] (int): Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).
 #	+ `--write-pipeline` [filename]: Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.
 #	+ `--comment`: Set the string to be recorded in comment and tag columns in various places in the output file (optional).
 #	+ `--check-time-stamps`: Turn on time stamp checking.
@@ -274,6 +275,7 @@ def parse_command_line():
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
@@ -347,8 +349,6 @@ def parse_command_line():
 		raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
 	detectors = datasource.GWDataSourceInfo(options)
-	if len(detectors.channel_dict) < 2:
-		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
 
 	# FIXME: should also check for read permissions
 	required_urls = []
@@ -424,6 +424,11 @@ def parse_command_line():
 
 	if not (len(svd_banks) == len(options.output) == len(likelihood_url_namedtuples_list)):
 		raise ValueError("must have equal numbers of svd banks (%d), output files (%d) and likelihood files (%d)" % (len(svd_banks), len(options.output), len(likelihood_url_namedtuples_list)))
+
+	if options.min_instruments < 1:
+		raise ValueError("--min-instruments must be >= 1")
+	if options.min_instruments > len(detectors.channel_dict):
+		raise ValueError("--min-instruments is greater than the number of --channel-name's")
 
 	#
 	# Option checks complete
@@ -690,8 +695,10 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 			raise ValueError("\"%s\" does not contain parameter distribution data" % filename)
 		if coinc_params_distributions.delta_t != options.coincidence_threshold:
 			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (filename, coinc_params_distributions.delta_t, options.coincidence_threshold))
+		if coinc_params_distributions.min_instruments != options.min_instruments:
+			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (filename, coinc_params_distributions.min_instruments, options.min_instruments))
 	else:
-		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = set(detectors.channel_dict), delta_t = options.coincidence_threshold), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
+		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = set(detectors.channel_dict), delta_t = options.coincidence_threshold, min_instruments = options.min_instruments), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
 
 	if zero_lag_ranking_stats_file is None:
 		zero_lag_ranking_stats = None
@@ -703,6 +710,8 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 			raise ValueError("\"%s\" is for the instruments %s, we need %s" % (", ".join(sorted(zero_lag_ranking_stats.instruments)), ", ".join(sorted(detectors.channel_dict))))
 		if zero_lag_ranking_stats.delta_t != options.coincidence_threshold:
 			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (zero_lag_ranking_stats_file, zero_lag_ranking_stats.delta_t, options.coincidence_threshold))
+		if zero_lag_ranking_stats.min_instruments != options.min_instruments:
+			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (zero_lag_ranking_stats_file, zero_lag_ranking_stats.min_instruments, options.min_instruments))
 
 
 	#
