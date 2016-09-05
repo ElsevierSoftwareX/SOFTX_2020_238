@@ -51,17 +51,12 @@
 
 
 from collections import deque
-import copy
 import math
 import numpy
 import os
 import resource
 from scipy import random
-try:
-	import sqlite3
-except ImportError:
-        # pre 2.5.x
-	from pysqlite2 import dbapi2 as sqlite3
+import sqlite3
 import StringIO
 import subprocess
 import sys
@@ -107,8 +102,6 @@ from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import cbc_template_iir
 from gstlal import far
-
-lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
 #
