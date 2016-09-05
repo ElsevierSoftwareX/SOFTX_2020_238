@@ -679,10 +679,14 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 
 	if options.data_source in ("lvshm", "framexmit"):
-		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-		assert set(seglists) == set(detectors.channel_dict)
+		filename = likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1]
+		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(filename, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+		if set(seglists) != set(detectors.channel_dict):
+			raise ValueError("segment lists in \"%s\" are for instruments %s but we need %s" % (filename, ", ".join(sorted(seglists)), ", ".join(sorted(detectors.channel_dict))))
 		if coinc_params_distributions is None:
-			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1])
+			raise ValueError("\"%s\" does not contain parameter distribution data" % filename)
+		if coinc_params_distributions.delta_t != options.coincidence_threshold:
+			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (filename, coinc_params_distributions.delta_t, options.coincidence_threshold))
 	else:
 		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = set(detectors.channel_dict), delta_t = options.coincidence_threshold), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
 
@@ -692,6 +696,10 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		_, zero_lag_ranking_stats, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(zero_lag_ranking_stats_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 		if zero_lag_ranking_stats is None:
 			raise ValueError("\"%s\" does not contain ranking statistic PDF data" % zero_lag_ranking_stat_file)
+		if zero_lag_ranking_stats.instruments != set(detectors.channel_dict):
+			raise ValueError("\"%s\" is for the instruments %s, we need %s" % (", ".join(sorted(zero_lag_ranking_stats.instruments)), ", ".join(sorted(detectors.channel_dict))))
+		if zero_lag_ranking_stats.delta_t != options.coincidence_threshold:
+			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (zero_lag_ranking_stats_file, zero_lag_ranking_stats.delta_t, options.coincidence_threshold))
 
 
 	#
