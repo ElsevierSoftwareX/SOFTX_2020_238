@@ -390,7 +390,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		# mass bin dependent prior, but it really doesn't matter for
 		# the time being.   
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
-				parent_nodes = parents,
+				parent_nodes = [],
 				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
@@ -398,7 +398,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		# for a given bin marginalized over time. This is all that will
 		# be needed to compute the likelihood
 		diststats_per_bin_node = inspiral_pipe.generic_node(marginalizeJob, dag,
-			parent_nodes = [priornode],
+			parent_nodes = [priornode] + parents,
 			input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
 			output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)},
 			input_cache_file_name = inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.cache', path = calcRankPDFsJob.output_path)
