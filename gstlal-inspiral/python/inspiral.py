@@ -116,8 +116,10 @@ from gstlal import far
 
 def message_new_checkpoint(src, timestamp = None):
 	s = Gst.Structure.new_empty("CHECKPOINT")
-	s.set_value("timestamp", timestamp)
-	return Gst.Message.new_application(src, s)
+	message = Gst.Message.new_application(src, s)
+	if timestamp is not None:
+		message.timestamp = timestamp
+	return message
 
 
 def channel_dict_from_channel_list(channel_list, channel_dict = {"H1" : "LSC-STRAIN", "H2" : "LSC-STRAIN", "L1" : "LSC-STRAIN", "V1" : "LSC-STRAIN"}):

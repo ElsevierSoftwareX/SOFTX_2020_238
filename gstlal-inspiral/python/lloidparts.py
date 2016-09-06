@@ -319,15 +319,7 @@ class Handler(simplehandler.Handler):
 				return True
 		elif message.type == Gst.MessageType.APPLICATION:
 			if message.get_structure().get_name() == "CHECKPOINT":
-				# FIXME make a custom parser for CHECKPOINT messages?
-				timestamp = message.get_structure()["timestamp"]
-				# FIXME:  the function that makes these
-				# messages uses a default value of None,
-				# and in principle could be called with
-				# other non-timestamp-like things, so this
-				# code should check that it has actually
-				# gotten a valid timestamp
-				self.checkpoint(timestamp)
+				self.checkpoint(message.timestamp)
 				return True
 		elif message.type == Gst.MessageType.EOS:
 			with self.dataclass.lock:
