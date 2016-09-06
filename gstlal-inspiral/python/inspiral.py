@@ -707,7 +707,15 @@ class Data(object):
 			# .chain() being evaluated in left-to-right order
 			# so that .add_events() is evaluated before
 			# .last_coincs because the former initializes the
-			# latter.
+			# latter.  we skip singles collected during times
+			# when only one instrument was on.  NOTE:  the
+			# definition of "on" is blurry since we can recover
+			# triggers with end times outside of the available
+			# strain data, but the purpose of this test is
+			# simply to prevent signals occuring during
+			# single-detector times from contaminating our
+			# noise model, so it's not necessary for this test
+			# to be super precisely defined.
 			# FIXME FIXME FIXME buf_timestamp - 1.0 is used to
 			# be the maximum offset a template can have within
 			# a buffer that would cause its end time to be
@@ -716,7 +724,9 @@ class Data(object):
 			# given SVD bank.  ITAC should be patched to do
 			# this once synchronization issues are sorted
 			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp - 1.0, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
-				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
+
+				if len(self.seglistdicts["whitehtsegments"].keys_at(event.end)) > 1:
+					self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
 			self.coincs_document.commit()
 
 			# update zero-lag coinc bin counts in
