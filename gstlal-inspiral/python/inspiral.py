@@ -512,7 +512,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, url, process_params, pipeline, seg, coinc_params_distributions, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_url_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, url, process_params, pipeline, seg, coinc_params_distributions, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_url_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -564,6 +564,7 @@ class Data(object):
 			coincidence_threshold = coinc_params_distributions.delta_t,
 			thinca_interval = thinca_interval,	# seconds
 			min_instruments = coinc_params_distributions.min_instruments,
+			min_log_L = min_log_L,
 			sngls_snr_threshold = sngls_snr_threshold
 		)
 

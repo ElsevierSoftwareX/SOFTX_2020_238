@@ -151,13 +151,14 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, coincidence_threshold, thinca_interval = 50.0, min_instruments = 2, sngls_snr_threshold = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, min_instruments = 2, min_log_L = None, sngls_snr_threshold = None):
 		self._xmldoc = None
 		self.thinca_interval = thinca_interval	# seconds
 		self.last_coincs = {}
 		if min_instruments < 1:
 			raise ValueError("min_instruments (=%d) must be >= 1" % min_instruments)
 		self.min_instruments = min_instruments
+		self.min_log_L = min_log_L
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
 		self.coinc_params_distributions = None
@@ -320,6 +321,7 @@ class StreamThinca(object):
 			ntuple_comparefunc = ntuple_comparefunc,
 			likelihood_func = self.ln_likelihood_func,
 			likelihood_params_func = self.ln_likelihood_params_func,
+			min_log_L = self.min_log_L,
 			min_instruments = self.min_instruments,
 			max_dt = self.max_dt
 		)
