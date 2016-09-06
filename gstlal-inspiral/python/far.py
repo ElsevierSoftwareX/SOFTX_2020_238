@@ -1207,7 +1207,6 @@ class FAPFAR(object):
 		# arXiv:1209.0718
 		return gstlalstats.fap_after_trials(self.ccdf_from_rank(rank), self.zero_lag_total_count)
 
-	@numpy.vectorize
 	def rank_from_fap(self, p, tolerance = 1e-6):
 		"""
 		Inverts .fap_from_rank().  This function is sensitive to
@@ -1229,6 +1228,7 @@ class FAPFAR(object):
 				# jackpot
 				return mid
 		return (hi + lo) / 2.
+	rank_from_fap = numpy.vectorize(rank_from_fap, excluded = ['self', 'tolerance'])
 
 	def far_from_rank(self, rank):
 		# implements equation (B4) of Phys. Rev. D 88, 024025.
@@ -1240,7 +1240,6 @@ class FAPFAR(object):
 		log_tdp = numpy.log1p(-self.ccdf_from_rank(rank))
 		return self.zero_lag_total_count * -log_tdp / self.livetime
 
-	@numpy.vectorize
 	def rank_from_far(self, rate, tolerance = 1e-6):
 		"""
 		Inverts .far_from_rank() using a bisection search.  The
@@ -1260,6 +1259,7 @@ class FAPFAR(object):
 				# jackpot
 				return mid
 		return (hi + lo) / 2.
+	rank_from_far = numpy.vectorize(rank_from_far, excluded = ['self', 'tolerance'])
 
 	def assign_fapfars(self, connection):
 		# assign false-alarm probabilities and false-alarm rates
