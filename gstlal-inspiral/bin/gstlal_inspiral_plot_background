@@ -280,7 +280,7 @@ else:
 #
 
 # SNR and Chisquared
-for instrument in ("H1","L1","V1"):
+for instrument in coinc_params_distributions.instruments:
 	for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
 		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr, sngls = sngls)
 		if fig is None:
@@ -300,9 +300,12 @@ fig.savefig(plotname)
 
 
 # SNR PDFs
-for (instruments, horizon_distances) in sorted(coinc_params_distributions.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
-	horizon_distances = dict(horizon_distances)	# stored as frozen set of key/value pairs in cache key
-	fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions, instruments, horizon_distances, options.max_snr, sngls = sngls)
+# FIXME: this won't scale.
+for (instruments, horizon_distances) in sorted(coinc_params_distributions.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
+	# they're stored as a frozen set of quantized key/value pairs, need
+	# to unquantize them and get a dictionary back
+	horizon_distances = coinc_params_distributions.SNRPDF.quantized_horizon_distances(horizon_distances)
+	fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions.SNRPDF, instruments, horizon_distances, options.max_snr, sngls = sngls)
 	if fig is not None:
 		plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 		if options.verbose:
