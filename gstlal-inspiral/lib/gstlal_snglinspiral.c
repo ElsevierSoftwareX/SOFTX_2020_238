@@ -18,10 +18,12 @@
  * K. Cannon, J. Creighton, C. Hanna, F. Robinett 
  * 
  * Actions:
- *  56: free() should be LALFree()
  * 67,79: outside of loop
  * 144: add bankarray end time here to take into account the IMR waveform shifts
  * 152: figure out how to use a more accurate sigmasq calculation
+ *
+ * Complete Actions:
+ *  56: free() should be LALFree()
  */
 
 double gstlal_eta(double m1, double m2)
@@ -67,7 +69,7 @@ int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable *
 		*bank = *this;
 		bank->next = NULL;
 		bank++;
-		free(this);
+		LALFree(this);
 		this = next;
 	}
 
