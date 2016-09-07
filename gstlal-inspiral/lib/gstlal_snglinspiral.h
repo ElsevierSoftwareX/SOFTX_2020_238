@@ -32,16 +32,9 @@
 
 
 #include <glib.h>
-#include <glib-object.h>
 #include <gst/gst.h>
-#include <gstlal/gstlal_peakfinder.h>
-#include <complex.h>
-#include <string.h>
-#include <math.h>
 #include <lal/LIGOMetadataTables.h>
 
-#include <lal/LIGOLwXMLInspiralRead.h>
-#include <lal/LALStdlib.h>
 
 G_BEGIN_DECLS
 
