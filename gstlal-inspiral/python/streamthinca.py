@@ -48,8 +48,17 @@ from glue import segments
 from glue.ligolw import lsctables
 from pylal import ligolw_thinca
 from pylal import snglcoinc
+from pylal.xlal.tools import CoincMap
 import lal
 import time
+
+
+#
+# Use C row classes for memory efficiency and speed.
+#
+
+
+lsctables.CoincMapTable.RowType = lsctables.CoincMap = CoincMap
 
 
 #
