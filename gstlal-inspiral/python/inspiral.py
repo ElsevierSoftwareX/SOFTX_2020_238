@@ -602,6 +602,15 @@ class Data(object):
 			buf = elem.emit("pull-sample").get_buffer()
 			result, mapinfo = buf.map(Gst.MapFlags.READ)
 			assert result
+			# NOTE NOTE NOTE NOTE
+			# It is critical that the correct class'
+			# .from_buffer() method be used here.  This code is
+			# interpreting the buffer's contents as an array of
+			# C structures and building instances of python
+			# wrappers of those structures but if the python
+			# wrappers are for the wrong structure declaration
+			# then terrible terrible things will happen
+			# NOTE NOTE NOTE NOTE
 			# FIXME why does mapinfo.data come out as an empty list on some occasions???
 			if mapinfo.data:
 				events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(mapinfo.data)
