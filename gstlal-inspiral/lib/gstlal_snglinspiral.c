@@ -43,7 +43,7 @@ double gstlal_effective_distance(double snr, double sigmasq)
 	return sqrt(sigmasq) / snr;
 }
 
-int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable **bankarray)
+int gstlal_snglinspiral_array_from_file(const char *bank_filename, SnglInspiralTable **bankarray)
 {
 	SnglInspiralTable *this = NULL;
 	SnglInspiralTable *bank = NULL;
