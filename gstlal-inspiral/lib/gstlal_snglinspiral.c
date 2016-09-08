@@ -183,8 +183,8 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				output->coa_phase = carg(maxdata_channel);
 				output->chisq = 0.0;
 				output->chisq_dof = 1;
-				XLALGPSAddGPS(&output->end_time, &end_time);
-				output->end_time_gmst = XLALGreenwichMeanSiderealTime(&output->end_time);
+				XLALGPSAddGPS(&output->end, &end_time);
+				output->end_time_gmst = XLALGreenwichMeanSiderealTime(&output->end);
 				output->eff_distance = gstlal_effective_distance(output->snr, output->sigmasq);
 				/* populate chi squared if we have it */
 				switch (input->type)
