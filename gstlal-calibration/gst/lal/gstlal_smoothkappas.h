@@ -61,13 +61,23 @@ struct _GSTLALSmoothKappas {
 	GstBaseTransform element;
 
 	gint unit_size;
-	double current_median;
+	double current_median_re;
+	double current_median_im;
+	double *fifo_array_re;
+	double *fifo_array_im;
+	enum gstlal_smoothkappas_data_type {
+		F32 = 0,
+		F64,
+		Z64,
+		Z128
+	} data_type;
 
 	/* properties */
 	int array_size;
-	double *fifo_array;
-	double default_kappa;
-	double maximum_offset;
+	double default_kappa_re;
+	double default_kappa_im;
+	double maximum_offset_re;
+	double maximum_offset_im;
 	gboolean default_to_median;
 	gboolean track_bad_kappa;
 };

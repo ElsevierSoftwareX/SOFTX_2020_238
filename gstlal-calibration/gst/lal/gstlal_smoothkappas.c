@@ -47,6 +47,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <complex.h>
 
 
 /*
@@ -97,7 +98,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
+		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -112,7 +113,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
+		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -140,15 +141,25 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-static double get_new_median(double new_element, double *fifo_array, double *current_median, gint array_size) {
-	static int i;
-	if(!i)
-		i = 0;
-	fifo_array[i] = new_element;
-	if(i < array_size - 1)
-		i++;
-	else
-		i -= (array_size - 1);
+static double get_new_median(double new_element, double *fifo_array, double *current_median, gint array_size, gboolean array_is_imaginary) {
+	static int re, im;
+	if(!re)
+		re = 0;
+	if(!im)
+		im = 0;
+	if(array_is_imaginary) {
+		fifo_array[im] = new_element;
+		if(im < array_size - 1)
+			im++;
+		else
+			im -= (array_size - 1);
+	} else {
+		fifo_array[re] = new_element;
+		if(re < array_size - 1)
+			re++;
+		else
+			re -= (array_size - 1);
+	}
 
 	int j, number_less, number_greater, number_equal;
 	double first_greater, second_greater, first_less, second_less;
@@ -215,12 +226,53 @@ static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint 
 				new_element = 0.0; \
 			else \
 				new_element = default_kappa; \
-		} else \
+		} else { \
 			if (track_bad_kappa) \
 				new_element = 1.0; \
 			else \
 				new_element = *src; \
-		*dst = (DTYPE) get_new_median((double) new_element, fifo_array, current_median, array_size); \
+		} \
+		*dst = (DTYPE) get_new_median((double) new_element, fifo_array, current_median, array_size, FALSE); \
+		src++; \
+		dst++; \
+	} \
+	return GST_FLOW_OK; \
+}
+
+
+#define DEFINE_SMOOTH_COMPLEX_BUFFER(DTYPE) \
+static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, DTYPE complex *dst, gint buffer_size, double *fifo_array_re, double *fifo_array_im, double default_kappa_re, double default_kappa_im, double *current_median_re, double *current_median_im, double maximum_offset_re, double maximum_offset_im, gint array_size, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa) { \
+	gint i; \
+	double new_element_re, new_element_im; \
+	for(i = 0; i < buffer_size; i++) { \
+		double complex doublesrc = (double complex) *src; \
+		if(gap || creal(doublesrc) > default_kappa_re + maximum_offset_re || creal(doublesrc) < default_kappa_re - maximum_offset_re || isnan(creal(doublesrc)) || isinf(creal(doublesrc))) { \
+			if(default_to_median) \
+				new_element_re = *current_median_re; \
+			else if (track_bad_kappa) \
+				new_element_re = 0.0; \
+			else \
+				new_element_re = default_kappa_re; \
+		} else { \
+			if (track_bad_kappa) \
+				new_element_re = 1.0; \
+			else \
+				new_element_re = creal(doublesrc); \
+		} \
+		if(gap || cimag(doublesrc) > default_kappa_im + maximum_offset_im || cimag(doublesrc) < default_kappa_im - maximum_offset_im || isnan(cimag(doublesrc)) || isinf(cimag(doublesrc))) { \
+			if(default_to_median) \
+				new_element_im = *current_median_im; \
+			else if (track_bad_kappa) \
+				new_element_im = 0.0; \
+			else \
+				new_element_im = default_kappa_im; \
+		} else { \
+			if (track_bad_kappa) \
+				new_element_im = 1.0; \
+			else \
+				new_element_im = cimag(doublesrc); \
+		} \
+		*dst = (DTYPE) get_new_median(new_element_re, fifo_array_re, current_median_re, array_size, FALSE) + I * (DTYPE) get_new_median(new_element_im, fifo_array_im, current_median_im, array_size, TRUE); \
 		src++; \
 		dst++; \
 	} \
@@ -230,6 +282,8 @@ static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint 
 
 DEFINE_SMOOTH_BUFFER(float);
 DEFINE_SMOOTH_BUFFER(double);
+DEFINE_SMOOTH_COMPLEX_BUFFER(float);
+DEFINE_SMOOTH_COMPLEX_BUFFER(double);
 
 
 /*
@@ -248,13 +302,11 @@ DEFINE_SMOOTH_BUFFER(double);
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
 	GstAudioInfo info;
 	gboolean success = gstlal_audio_info_from_caps(&info, caps);
 
 	if(success) {
 		*size = GST_AUDIO_INFO_BPF(&info);
-		element->unit_size = *size;
 	} else
 		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
 
@@ -270,36 +322,42 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
-	GstAudioInfo info;
 	gboolean success = TRUE;
+	gsize unit_size;
 
 	/*
 	 * parse the caps
 	 */
 
-	success = gstlal_audio_info_from_caps(&info, incaps);
+	success &= get_unit_size(trans, incaps, &unit_size);
+	GstStructure *str = gst_caps_get_structure(incaps, 0);
+	const gchar *name = gst_structure_get_string(str, "format");
+	success &= (name != NULL);
+
 	if(!success)
 		GST_ERROR_OBJECT(element, "unable to parse caps %" GST_PTR_FORMAT, incaps);
 
 	/*
-	 * set the unit size
+	 * record stream parameters
 	 */
 
 	if(success) {
-		switch(GST_AUDIO_INFO_FORMAT(&info)) {
-		case GST_AUDIO_FORMAT_F32:
-			element->unit_size = 4;
-			break;
+		if(!strcmp(name, GST_AUDIO_NE(F32))) {
+			element->data_type = F32;
+			g_assert_cmpuint(unit_size, ==, 4);
+		} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
+			element->data_type = F64;
+			g_assert_cmpuint(unit_size, ==, 8);
+		} else if(!strcmp(name, GST_AUDIO_NE(Z64))) {
+			element->data_type = Z64;
+			g_assert_cmpuint(unit_size, ==, 8);
+		} else if(!strcmp(name, GST_AUDIO_NE(Z128))) {
+			element->data_type = Z128;
+			g_assert_cmpuint(unit_size, ==, 16);
+		} else
+			g_assert_not_reached();
 
-		case GST_AUDIO_FORMAT_F64:
-			element->unit_size = 8;
-			break;
-
-		default:
-			GST_ERROR_OBJECT(element, "unsupported format %" GST_PTR_FORMAT, incaps);
-			success = FALSE;
-			break;
-		}
+		element->unit_size = unit_size;
 	}
 
 	return success;
@@ -315,20 +373,26 @@ static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
 
-	element->current_median = element->default_kappa;
+	element->current_median_re = element->default_kappa_re;
+	element->current_median_im = element->default_kappa_im;
 
+	element->fifo_array_re = g_malloc(sizeof(double) * element->array_size);
+	element->fifo_array_im = g_malloc(sizeof(double) * element->array_size);
 	int i;
-	element->fifo_array = g_malloc(sizeof(double) * element->array_size);
-
 	if(element->track_bad_kappa) {
-		for(i = 0; i < element->array_size; i++, (element->fifo_array)++)
-        	        *(element->fifo_array) = 0;
+		for(i = 0; i < element->array_size; i++, (element->fifo_array_re)++, (element->fifo_array_im)++) {
+			*(element->fifo_array_re) = 0;
+			*(element->fifo_array_im) = 0;
+		}
 	} else {
-		for(i = 0; i < element->array_size; i++, (element->fifo_array)++) 
-			*(element->fifo_array) = element->default_kappa;
+		for(i = 0; i < element->array_size; i++, (element->fifo_array_re)++, (element->fifo_array_im)++) { 
+			*(element->fifo_array_re) = element->default_kappa_re;
+			*(element->fifo_array_im) = element->default_kappa_im;
+		}
 	}
 
-	(element->fifo_array) -= element->array_size;
+	(element->fifo_array_re) -= element->array_size;
+	(element->fifo_array_im) -= element->array_size;
 
 	return TRUE;
 }
@@ -357,12 +421,18 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	g_assert_cmpuint(outmap.size % element->unit_size, ==, 0);
 	g_assert_cmpuint(inmap.size, ==, outmap.size);
 
-	if(element->unit_size == 4) {
+	if(element->data_type == F32) {
 		gint buffer_size = outmap.size / element->unit_size;
-		result = smooth_buffer_float((const float *) inmap.data, (float *) outmap.data, buffer_size, element->fifo_array, element->default_kappa, &element->current_median, element->maximum_offset, element->array_size, gap, element->default_to_median, element->track_bad_kappa);
-	} else if(element->unit_size == 8) {
+		result = smooth_buffer_float((const float *) inmap.data, (float *) outmap.data, buffer_size, element->fifo_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, gap, element->default_to_median, element->track_bad_kappa);
+	} else if(element->data_type == F64) {
 		gint buffer_size = outmap.size / element->unit_size;
-		result = smooth_buffer_double((const double *) inmap.data, (double *) outmap.data, buffer_size, element->fifo_array, element->default_kappa, &element->current_median, element->maximum_offset, element->array_size, gap, element->default_to_median, element->track_bad_kappa);
+		result = smooth_buffer_double((const double *) inmap.data, (double *) outmap.data, buffer_size, element->fifo_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, gap, element->default_to_median, element->track_bad_kappa);
+	} else if(element->data_type == Z64) {
+		gint buffer_size = outmap.size / element->unit_size;
+		result = smooth_complex_buffer_float((const float complex *) inmap.data, (float complex *) outmap.data, buffer_size, element->fifo_array_re, element->fifo_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, gap, element->default_to_median, element->track_bad_kappa);
+	} else if(element->data_type == Z128) { 
+		gint buffer_size = outmap.size / element->unit_size;
+		result = smooth_complex_buffer_double((const double complex *) inmap.data, (double complex *) outmap.data, buffer_size, element->fifo_array_re, element->fifo_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, gap, element->default_to_median, element->track_bad_kappa);
 	} else {
 		g_assert_not_reached();
 	}
@@ -397,8 +467,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 enum property {
 	ARG_ARRAY_SIZE = 1,
-	ARG_DEFAULT_KAPPA,
-	ARG_MAXIMUM_OFFSET,
+	ARG_DEFAULT_KAPPA_RE,
+	ARG_DEFAULT_KAPPA_IM,
+	ARG_MAXIMUM_OFFSET_RE,
+	ARG_MAXIMUM_OFFSET_IM,
 	ARG_DEFAULT_TO_MEDIAN,
 	ARG_TRACK_BAD_KAPPA
 };
@@ -414,11 +486,17 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	case ARG_ARRAY_SIZE:
 		element->array_size = g_value_get_int(value);
 		break;
-	case ARG_DEFAULT_KAPPA:
-		element->default_kappa = g_value_get_double(value);
+	case ARG_DEFAULT_KAPPA_RE:
+		element->default_kappa_re = g_value_get_double(value);
 		break;
-	case ARG_MAXIMUM_OFFSET:
-		element->maximum_offset = g_value_get_double(value);
+	case ARG_DEFAULT_KAPPA_IM:
+		element->default_kappa_im = g_value_get_double(value);
+		break;
+	case ARG_MAXIMUM_OFFSET_RE:
+		element->maximum_offset_re = g_value_get_double(value);
+		break;
+	case ARG_MAXIMUM_OFFSET_IM:
+		element->maximum_offset_im = g_value_get_double(value);
 		break;
 	case ARG_DEFAULT_TO_MEDIAN:
 		element->default_to_median = g_value_get_boolean(value);
@@ -445,11 +523,17 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	case ARG_ARRAY_SIZE:
 		g_value_set_int(value, element->array_size);
 		break;
-	case ARG_DEFAULT_KAPPA:
-		g_value_set_double(value, element->default_kappa);
+	case ARG_DEFAULT_KAPPA_RE:
+		g_value_set_double(value, element->default_kappa_re);
 		break;
-	case ARG_MAXIMUM_OFFSET:
-		g_value_set_double(value, element->maximum_offset);
+	case ARG_DEFAULT_KAPPA_IM:
+		g_value_set_double(value, element->default_kappa_im);
+		break;
+	case ARG_MAXIMUM_OFFSET_RE:
+		g_value_set_double(value, element->maximum_offset_re);
+		break;
+	case ARG_MAXIMUM_OFFSET_IM:
+		g_value_set_double(value, element->maximum_offset_im);
 		break;
 	case ARG_DEFAULT_TO_MEDIAN:
 		g_value_set_boolean(value, element->default_to_median);
@@ -474,8 +558,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 static void finalize(GObject *object)
 {
 	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(object);
-	g_free(element->fifo_array);
-	element->fifo_array = NULL;
+	g_free(element->fifo_array_re);
+	element->fifo_array_re = NULL;
+	g_free(element->fifo_array_im);
+	element->fifo_array_im = NULL;
 	G_OBJECT_CLASS(gstlal_smoothkappas_parent_class)->finalize(object);
 }
 
@@ -524,23 +610,44 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_DEFAULT_KAPPA,
+		ARG_DEFAULT_KAPPA_RE,
 		g_param_spec_double(
-			"default-kappa",
-			"Default kappa value",
-			"Default kappa value to be used if there is a gap in the incoming buffer, or if no input values pass kappa-offset criteria. All elements of the fifo array are initialized to this value.",
+			"default-kappa-re",
+			"Default real part of kappa value",
+			"Default real part of kappa value to be used if there is a gap in the incoming buffer, or if no input values pass kappa-offset criteria. All elements of the real fifo array are initialized to this value.",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_MAXIMUM_OFFSET,
+		ARG_DEFAULT_KAPPA_IM,
 		g_param_spec_double(
-			"maximum-offset",
-			"Maximum acceptable kappa offset",
-			"Maximum acceptable offset of unsmoothed kappa from default-kappa to be entered into array from which median is calculated.",
+			"default-kappa-im",
+			"Default imaginary part of kappa value",
+			"Default imaginary part of kappa value to be used if there is a gap in the incoming buffer, or if no input values pass kappa-offset criteria. All elements of the imaginary fifo array are initialized to this value.",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_MAXIMUM_OFFSET_RE,
+		g_param_spec_double(
+			"maximum-offset-re",
+			"Maximum acceptable real kappa offset",
+			"Maximum acceptable offset of unsmoothed real kappa from default-kappa-re to be entered into real array from which median is calculated.",
 			0, G_MAXDOUBLE, G_MAXDOUBLE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_MAXIMUM_OFFSET_IM,
+		g_param_spec_double(
+			"maximum-offset-im",
+			"Maximum acceptable imaginary kappa offset",
+			"Maximum acceptable offset of unsmoothed imaginary kappa from default-kappa-im to be entered into imaginary-part array from which median is calculated.",			0, G_MAXDOUBLE, G_MAXDOUBLE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -578,7 +685,8 @@ static void gstlal_smoothkappas_init(GSTLALSmoothKappas *element)
 {
 	element->unit_size = 0;
 	element->array_size = 0;
-	element->fifo_array = NULL;
+	element->fifo_array_re = NULL;
+	element->fifo_array_im = NULL;
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }

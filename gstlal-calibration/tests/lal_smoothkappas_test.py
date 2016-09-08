@@ -45,10 +45,10 @@ def lal_smoothkappas_01(pipeline, name):
 	#
 
 	rate = 1000		# Hz
-	width = 32		# bytes
-	wave = 1
+	width = 64		# bytes
+	wave = 5
 	freq = 0.1		# Hz
-	volume = 0.03
+	volume = 0.9
 	buffer_length = 1.0	# seconds
 	test_duration = 10.0	# seconds
 
@@ -56,12 +56,12 @@ def lal_smoothkappas_01(pipeline, name):
 	# build pipeline
 	#
 
-	src = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq, volume = volume)
-	add_constant = pipeparts.mkgeneric(pipeline, src, "lal_add_constant", value=1)
-	tee = pipeparts.mktee(pipeline, add_constant)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
-	smoothkappas = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", track_bad_kappa=True)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, smoothkappas), "%s_out.dump" % name)
+	src = test_common.test_src(pipeline, channels = 2, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq, volume = volume)
+	head = pipeparts.mktogglecomplex(pipeline, src)
+	head = pipeparts.mktee(pipeline, head)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_in.dump" % name)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", array_size = 3, maximum_offset_re = 1, maximum_offset_im = 1, default_kappa_im = 1.2, default_kappa_re = 0, default_to_median = True)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 
 	#
 	# done
@@ -93,7 +93,7 @@ def lal_smoothkappas_02(pipeline, name):
 	src = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq, volume = volume, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = control_dump_filename)
 	tee = pipeparts.mktee(pipeline, src)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
-	smoothkappas = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", array_size=99, default_to_median=False, maximum_offset=1)
+	smoothkappas = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", array_size=3, default_to_median=False, maximum_offset_re=1, track_bad_kappa = True)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, smoothkappas), "%s_out.dump" % name)
 
 	#
@@ -174,7 +174,7 @@ def lal_smoothkappas_04(pipeline, name):
 #
 
 
-test_common.build_and_run(lal_smoothkappas_01, "lal_smoothkappas_01")
-#test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
+#test_common.build_and_run(lal_smoothkappas_01, "lal_smoothkappas_01")
+test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
 #test_common.build_and_run(lal_smoothkappas_03, "lal_smoothkappas_03")
 #test_common.build_and_run(lal_smoothkappas_04, "lal_smoothkappas_04")
