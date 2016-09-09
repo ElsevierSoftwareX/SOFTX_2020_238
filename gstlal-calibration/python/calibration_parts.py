@@ -133,56 +133,86 @@ def list_srcs(pipeline, *args):
 
 def smooth_kappas_no_coherence(pipeline, head, var, expected, N, Nav):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
-	# Use the maximum_offset property to determine whether input kappas are good or not
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, default_kappa = expected, array_size = N)
+	# Use the maximum_offset_re property to determine whether input kappas are good or not
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N)
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
 	head = mkaudiorate(pipeline, head)
 	return head
+
+def smooth_complex_kappas_no_coherence(pipeline, head, real_var, imag_var, real_expected, imag_expected, N, Nav):
+	# Find median of complex calibration factors array with size N, split into real and imaginary parts, and smooth out medians with an average over Nav samples
+	# Use the maximum_offset_re and maximum_offset_im properties to determine whether input kappas are good or not
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = real_var, maximum_offset_im = imag_var, default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N)
+	re, im = split_into_real(pipeline, head)
+	re = pipeparts.mkfirbank(pipeline, re, fir_matrix = [numpy.ones(Nav)/Nav])
+	im = pipeparts.mkfirbank(pipeline, im, fir_matrix = [numpy.ones(Nav)/Nav])
+	re = mkaudiorate(pipeline, re)
+	im = mkaudiorate(pipeline, im)
+	return re, im
 
 def smooth_kappas(pipeline, head, expected, N, Nav):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
 	# Assume input was previously gated with coherence uncertainty to determine if input kappas are good or not
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa = expected, array_size = N)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = expected, array_size = N)
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
 	head = mkaudiorate(pipeline, head)
 	return head
 
+def smooth_complex_kappas(pipeline, head, real_expected, imag_expected, N, Nav):
+	# Find median of complex calibration factors array with size N, split into real and imaginary parts, and smooth out medians with an average over Nav samples
+	# Assume input was previously gated with coherence uncertainty to determine if input kappas are good or not
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N)
+	re, im = split_into_real(pipeline, head)
+	re = pipeparts.mkfirbank(pipeline, re, fir_matrix = [numpy.ones(Nav)/Nav])
+	im = pipeparts.mkfirbank(pipeline, im, fir_matrix = [numpy.ones(Nav)/Nav])
+	re = mkaudiorate(pipeline, re)
+	im = mkaudiorate(pipeline, im)
+	return re, im
+
 def track_bad_kappas_no_coherence(pipeline, head, var, expected, N):
 	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) by defaulting to default kappa for majority of input samples
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset = var, default_kappa = expected, array_size = N, track_bad_kappa = True)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N, track_bad_kappa = True)
 	head = mkaudiorate(pipeline, head)
 	return head
+
+def track_bad_complex_kappas_no_coherence(pipeline, head, real_var, imag_var, real_expected, imag_expected, N):
+	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) by defaulting to default kappa for majority of input samples
+	# Real and imaginary parts are done separately (outputs of lal_smoothkappas can be 1+i, 1, i, or 0)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = real_var, maximum_offset_im = imag_var, default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, track_bad_kappa = True)
+	re, im = split_into_real(pipeline, head)
+	re = mkaudiorate(pipeline, re)
+	im = mkaudiorate(pipeline, im)
+	return re, im
 
 def track_bad_kappas(pipeline, head, expected, N):
 	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) by defaulting to default kappa for majority of input samples
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa = expected, array_size = N, track_bad_kappa = True)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = expected, array_size = N, track_bad_kappa = True)
 	head = mkaudiorate(pipeline, head)
 	return head
 
-def smooth_kappas_real_test(pipeline, head, var, expected, ceiling, N, Nav):
-        # Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
-        head = mkaudiorate(pipeline, head)
-        tee = pipeparts.mktee(pipeline, head)
+def track_bad_complex_kappas(pipeline, head, real_expected, imag_expected, N):
+	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) by defaulting to default kappa for majority of input samples
+	# Real and imaginary parts are done separately (outputs of lal_smoothkappas can be 1+i, 1, i, or 0)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, track_bad_kappa = True)
+	re, im = split_into_real(pipeline, head)
+	re = mkaudiorate(pipeline, re)
+	im = mkaudiorate(pipeline, im)
+	return re, im
 
-        pipeparts.mknxydumpsink(pipeline, tee, "raw_kappatst.txt")
+def smooth_kappas_no_coherence_test(pipeline, head, var, expected, N, Nav):
+	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
+	head = mkaudiorate(pipeline, head)
+	head = pipeparts.mktee(pipeline, head)
 
-        high_ceil_no_avg = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.001, default_kappa = expected, array_size = N)
-        pipeparts.mknxydumpsink(pipeline, high_ceil_no_avg, "smooth_kappatst_ceil0.001_no_avg.txt")
+	pipeparts.mknxydumpsink(pipeline, head, "raw_kappatst.txt")
 
-        high_ceil_avg = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.001, default_kappa = expected, array_size = N)
-        high_ceil_avg = pipeparts.mkfirbank(pipeline, high_ceil_avg, fir_matrix = [numpy.ones(Nav)/Nav])
-        pipeparts.mknxydumpsink(pipeline, high_ceil_avg, "smooth_kappatst_ceil0.001_avg.txt")
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+	head = pipeparts.mktee(pipeline, head)
+	pipeparts.mknxydumpsink(pipeline, head, "smooth_kappatst.txt")
 
-        low_ceil_no_avg = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.0001, default_kappa = expected, array_size = N)
-        pipeparts.mknxydumpsink(pipeline, low_ceil_no_avg, "smooth_kappatst_ceil0.0001_no_avg.txt")
-
-        low_ceil_avg = pipeparts.mkgeneric(pipeline, tee, "lal_smoothkappas", maximum_offset = var, kappa_ceiling = 0.0001, default_kappa = expected, array_size = N)
-        low_ceil_avg = pipeparts.mkfirbank(pipeline, low_ceil_avg, fir_matrix = [numpy.ones(Nav)/Nav])
-        low_ceil_avg = pipeparts.mktee(pipeline, low_ceil_avg)
-        pipeparts.mknxydumpsink(pipeline, low_ceil_avg, "smooth_kappatst_ceil0.0001_avg.txt")
-
-        head = mkaudiorate(pipeline, low_ceil_avg)
-        return head
+	head = mkaudiorate(pipeline, head)
+	return head
 
 def compute_kappa_bits(pipeline, smoothR, smoothI, dqR, dqI, expected_real, expected_imag, real_ok_var, imag_ok_var, status_out_smooth = 1, status_out_median = 1, starting_rate=16, ending_rate=16):
 
@@ -295,7 +325,7 @@ def complex_division(pipeline, a, b):
 
 def compute_kappatst_from_filters_file(pipeline, derrfesd, tstexcfesd, pcalfdarm, derrfdarm, ktstfacR, ktstfacI):
 
-	#               
+	#	       
 	# \kappa_TST = ktstfac * (derrfesd/tstexcfesd) * (pcalfdarm/derrfdarm)
 	# ktstfac = -(1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
 	#
@@ -306,7 +336,7 @@ def compute_kappatst_from_filters_file(pipeline, derrfesd, tstexcfesd, pcalfdarm
 
 def compute_kappatst(pipeline, derrfesd, tstexcfesd, pcalfdarm,  derrfdarm, ktstfac):
 
-	#               
+	#	       
 	# \kappa_TST = ktstfac * (derrfesd/tstexcfesd) * (pcalfdarm/derrfdarm)
 	# ktstfac = -(1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
 	#
@@ -411,20 +441,20 @@ def compute_S(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpu, EP9):
 
 def compute_kappac(pipeline, SR, SI):
 
-        #
-        # \kappa_C = |S|^2 / Re[S]
-        #
+	#
+	# \kappa_C = |S|^2 / Re[S]
+	#
 
 	SR = pipeparts.mktee(pipeline, SR)
-        S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)))
-        kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SR), exponent=-1.0)))
-        return kc
+	S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)))
+	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SR), exponent=-1.0)))
+	return kc
 
 def compute_fcc(pipeline, SR, SI, fpcal2):
-        #
-        # f_cc = - (Re[S]/Im[S]) * fpcal2
-        #
+	#
+	# f_cc = - (Re[S]/Im[S]) * fpcal2
+	#
 
-        fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SI), exponent=-1.0)))
-        return fcc
+	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), pipeparts.mkpow(pipeline, pipeparts.mkqueue(pipeline, SI), exponent=-1.0)))
+	return fcc
 
