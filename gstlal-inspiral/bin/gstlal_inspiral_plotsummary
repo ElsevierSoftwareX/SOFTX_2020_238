@@ -1563,7 +1563,7 @@ WHERE
 			axes.semilogy()
 			background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
 			zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
-			create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar, xlim = (5., 5. * math.ceil(max(background_stats.max(), zerolag_stats.max()) / 5.)))
+			create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar, xlim = (5., 5. * math.ceil(max(background_stats.max(), zerolag_stats.max(), 200.) / 5.)))
 			yield fig, "count_vs_lr_fig3", True
 
 
