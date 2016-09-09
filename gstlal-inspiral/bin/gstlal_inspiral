@@ -228,6 +228,9 @@ def setrlimit(res, lim):
 setrlimit(resource.RLIMIT_NPROC, None)
 setrlimit(resource.RLIMIT_AS, None)
 setrlimit(resource.RLIMIT_RSS, None)
+# FIXME:  tests at CIT show that this next tweak has no effect.  it's
+# possible that SL7 has lowered the default stack size from SL6 and we
+# don't need to do this anymore.  remove?
 setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
