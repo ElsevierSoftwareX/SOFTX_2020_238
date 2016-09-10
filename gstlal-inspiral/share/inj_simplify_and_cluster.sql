@@ -248,15 +248,21 @@ WHERE
 --
 -- delete unused sngl_inspiral rows
 --
--- NOTE:  the singles threshold must much that used in the search.  the
--- value here is the default setting for gstlal-inspiral.  Don't forget to
--- update this if gstlal-inspiral is changed.
---
 
 DELETE FROM
 	sngl_inspiral
 WHERE
-	sngl_inspiral.snr < 8
+	sngl_inspiral.snr < (
+		SELECT
+			-- if they aren't all the same err on the size of
+			-- saving disk space
+			MAX(value)
+		FROM
+			process_params
+		WHERE
+			program == "gstlal_inspiral"
+			AND param == "--singles-threshold"
+	)
 	AND event_id NOT IN (
 		SELECT
 			event_id
