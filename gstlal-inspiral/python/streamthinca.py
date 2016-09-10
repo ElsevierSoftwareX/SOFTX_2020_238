@@ -41,15 +41,16 @@
 
 
 import bisect
+import time
 
 
 from glue import iterutils
 from glue import segments
 from glue.ligolw import lsctables
+import lal
 from pylal import ligolw_thinca
 from pylal import snglcoinc
-import lal
-import time
+from gstlal import snglinspiraltable
 
 
 #
@@ -59,6 +60,16 @@ import time
 #
 # =============================================================================
 #
+
+
+#
+# Custom trigger class that defines comparison the way we need
+#
+
+
+class SnglInpsiral(snglinspiraltable.GSTLALSnglInpsiral):
+	__slots__ = ()
+	__cmp__ = ligolw_thinca.SnglInspiral.__cmp__
 
 
 #
