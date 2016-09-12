@@ -192,6 +192,8 @@ def parse_command_line():
 	parser.add_option("--psd-fft-length", metavar = "s", default = 32, type = "int", help = "FFT length, default 32s.  Note that 50% will be used for zero-padding.")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+	parser.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
+	parser.add_option("--min-log-L", metavar = "log likelihood ratio", type = "float", help = "Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).")
 	parser.add_option("--channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
 	parser.add_option("--framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.")
@@ -363,7 +365,9 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"gracedb-service-url":options.gracedb_service_url,
 			"thinca-interval":options.thinca_interval,
 			"job-tag":jobTags[-1],
-			"likelihood-snapshot-interval":options.likelihood_snapshot_interval
+			"likelihood-snapshot-interval":options.likelihood_snapshot_interval,
+			"min-instruments":options.min_instruments,
+			"min-log-L":options.min_log_L
 			},
 		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
 		output_files = {"output":"not_used.xml.gz",
@@ -402,7 +406,9 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 				"gracedb-service-url":options.inj_gracedb_service_url,
 				"thinca-interval":options.thinca_interval,
 				"job-tag":inj_jobTags[-1],
-				"likelihood-snapshot-interval":options.likelihood_snapshot_interval
+				"likelihood-snapshot-interval":options.likelihood_snapshot_interval,
+				"min-instruments":options.min_instruments,
+				"min-log-L":options.min_log_L
 				},
 			input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file,
 			"reference-likelihood-file":[likefile]},
