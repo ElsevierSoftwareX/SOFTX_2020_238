@@ -29,6 +29,7 @@
 #include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/LALStdlib.h>
 #include <snglinspiralrowtype.h>
+#include <gsl/gsl_matrix_float.h>
 
 /**
  * SECTION:gstlal_snglinspiral.c
@@ -129,7 +130,7 @@ int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 	return 0;
 }
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2)
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_float_view *snr_matrix_view)
 {
 	GstBuffer *srcbuf = gst_buffer_new();
 
