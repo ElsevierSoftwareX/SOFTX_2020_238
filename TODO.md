@@ -169,12 +169,12 @@ Streaming with gstreamer
     has fallen off radar.
 * fix service discovery to allow more than one job to be running on the same computer and remove need for URL dump files to be exchanged via filesystem.
 * framecpp demuxer and muxer cannot decode/encode gaps using "DataValid" bit vector stream.  figure out how and fix.  (probably required to implement offline pipeline's data staging, maybe not)
+* Add --min-instruments support to the DAG script (gstlal_inspiral and the create_prior programs) **Cody**
+* Add --min-log-L support to the DAG script (gstlal_inspiral) **Cody**
 
 ## O2 Development
 
 ### Urgent
-* Add --min-instruments support to the DAG script (gstlal_inspiral and the create_prior programs) **Cody, offline; Chad, online**
-* Add --min-log-L support to the DAG script (gstlal_inspiral) **Cody, offline, Chad, online**
 * Don't set a --singles-threshold on gstlal_inspiral jobs doing injection runs (since now the dag is patched to not delete singles, so we should watch out for injection jobs) - really just make sure that the injection jobs are sane. **Chad + Cody??**
 * Patch itac to populate the SNR vectors on the triggers.  I have made all the changes needed to switch the code over to the new trigger object but the SNR vector is not being populated.  I don't know how. Somebody who does needs to take a look. **Chad**
 * When itac is patched, a gracedb upload needs to be performed ASAP to test the plumbing all the way through and to give Leo a sample file to look at for him to code against. **Chad**
