@@ -563,11 +563,13 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		/* Find the peak */
 		gstlal_float_complex_peak_over_window_interp(element->maxdata, dataptr.as_complex, outsamps);
 		}
-	if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
+	else if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 		dataptr.as_double_complex = ((double complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
 		/* Find the peak */
 		gstlal_double_complex_peak_over_window_interp(element->maxdata, dataptr.as_double_complex, outsamps);
 		}
+	else
+		g_assert_not_reached();
 
 	/* compute \chi^2 values if we can */
 	if (element->autocorrelation_matrix) {
@@ -582,11 +584,13 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 			gstlal_double_complex_series_around_peak(element->maxdata, dataptr.as_double_complex, (double complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			}
-		if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
+		else if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_float_complex_series_around_peak(element->maxdata, dataptr.as_complex, (float complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			}
+		else
+			g_assert_not_reached();
 		/* create the output buffer */
 		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2);
 		}
