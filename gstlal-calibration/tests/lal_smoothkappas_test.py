@@ -44,7 +44,7 @@ def lal_smoothkappas_01(pipeline, name):
 	# This test is to check that the inputs are smoothed in a desirable way
 	#
 
-	rate = 1000		# Hz
+	rate = 10		# Hz
 	width = 64		# bytes
 	wave = 5
 	freq = 0.1		# Hz
@@ -60,7 +60,7 @@ def lal_smoothkappas_01(pipeline, name):
 	head = pipeparts.mktogglecomplex(pipeline, src)
 	head = pipeparts.mktee(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_in.dump" % name)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", array_size = 3, maximum_offset_re = 1, maximum_offset_im = 1, default_kappa_im = 1.2, default_kappa_re = 0, default_to_median = True)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", array_size = 3, maximum_offset_re = 1, maximum_offset_im = 1, default_kappa_im = 0, default_kappa_re = 0, default_to_median = True)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 
 	#
@@ -115,19 +115,23 @@ def lal_smoothkappas_03(pipeline, name):
 	volume = 0.01
 	buffer_length = 1.0     # seconds
 	test_duration = 40.0    # seconds
+	real_expected = 1
+	imag_expected = 0
+	N = 2048
+	Nav = 160
 
 	src = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq, volume = volume)
 	tee = pipeparts.mktee(pipeline, src)
-	kappa = pipeparts.mkgeneric(pipeline, tee, "lal_add_constant", value=1)
-	kappa = pipeparts.mktee(pipeline, kappa)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, kappa), "%s_kappa_in.dump" % name)
+	real = pipeparts.mkgeneric(pipeline, tee, "lal_add_constant", value=1)
+	kappas = calibration_parts.merge_into_complex(pipeline, real, tee)
+	kappas = pipeparts.mktee(pipeline, kappas)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, kappas), "%s_kappa_in.dump" % name)
 
 	fake_statevector = pipeparts.mkgeneric(pipeline, tee, "pow", exponent=0)
 	fake_statevector = pipeparts.mkgeneric(pipeline, fake_statevector, "lal_demodulate", line_frequency=0.5)
 	fake_statevector = pipeparts.mkgeneric(pipeline, fake_statevector, "lal_togglecomplex")
 	fake_statevector = pipeparts.mkgeneric(pipeline, fake_statevector, "lal_matrixmixer", matrix = [[1],[0]])
 	fake_statevector = pipeparts.mkgeneric(pipeline, fake_statevector, "lal_bitvectorgen", threshold=0.1, bit_vector=1)
-	fake_statevector = pipeparts.mktee(pipeline, fake_statevector)
 
 	fake_coherence = pipeparts.mkgeneric(pipeline, tee, "pow", exponent=0)
 	fake_coherence = pipeparts.mkgeneric(pipeline, fake_coherence, "lal_demodulate", line_frequency=0.10)
@@ -135,13 +139,9 @@ def lal_smoothkappas_03(pipeline, name):
 	fake_coherence = pipeparts.mkgeneric(pipeline, fake_coherence, "lal_matrixmixer", matrix = [[1],[0]])
 	fake_coherence = pipeparts.mkgeneric(pipeline, fake_coherence, "lal_bitvectorgen", threshold=0.15, bit_vector=1)
 
-	to_kappa_or_not_to_kappa = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, fake_statevector, fake_coherence))
-	gapped_kappas = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kappa), control = calibration_parts.mkqueue(pipeline, to_kappa_or_not_to_kappa), threshold = 2)
-	gapped_kappas = pipeparts.mkgeneric(pipeline, gapped_kappas, "audiorate")
-
-	smooth_kappas = pipeparts.mkgeneric(pipeline, gapped_kappas, "lal_smoothkappas", kappa_ceiling=0.01)
-	smooth_kappas = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, smooth_kappas), control = calibration_parts.mkqueue(pipeline, fake_statevector), threshold=1)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, smooth_kappas), "%s_kappa_out.dump" % name)
+	re, im = calibration_parts.smooth_complex_kappas(pipeline, kappas, fake_statevector, fake_coherence, real_expected, imag_expected, N, Nav)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, re), "%s_re_kappa_out.dump" % name)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, im), "%s_im_kappa_out.dump" % name)
 
 	#
 	# done
@@ -175,6 +175,6 @@ def lal_smoothkappas_04(pipeline, name):
 
 
 #test_common.build_and_run(lal_smoothkappas_01, "lal_smoothkappas_01")
-test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
-#test_common.build_and_run(lal_smoothkappas_03, "lal_smoothkappas_03")
+#test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
+test_common.build_and_run(lal_smoothkappas_03, "lal_smoothkappas_03")
 #test_common.build_and_run(lal_smoothkappas_04, "lal_smoothkappas_04")

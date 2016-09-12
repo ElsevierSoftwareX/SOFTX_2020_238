@@ -34,6 +34,10 @@
  * the closed interval [9, 10] will be rejected and gapped and/or replaced
  * as specified by the user. To reject a single value, say zero,
  * #bad_data_intervals should be chosen to be [0, 0].
+ * If the data stream is complex, the real and and imaginary parts of
+ * each input is tested, and if either is bad, the value is rejected.
+ * The #bad_data_intervals and #replace_value properties are applied to
+ * both real and imaginary parts.
  */
 
 
@@ -53,6 +57,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <complex.h>
 
 
 /*
@@ -72,6 +77,7 @@
 
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_debug.h>
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal_insertgap.h>
 
 
@@ -92,7 +98,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
+		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -107,7 +113,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) " }, " \
+		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -135,35 +141,140 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-static gboolean check_data(double data, double *bad_data_intervals, gint array_length, gboolean remove_nan, gboolean remove_inf) {
-	gboolean data_is_bad = FALSE;
+static gboolean check_data(double complex data, double *bad_data_intervals, gint array_length, gboolean remove_nan, gboolean remove_inf, gboolean complex_data) {
+	double data_re = creal(data);
 	gint i;
-	for(i = 0; i < array_length; i += 2) {
-		if(data >= bad_data_intervals[i] && data <= bad_data_intervals[i + 1])
-			data_is_bad = TRUE;
+	if(complex_data){
+		double data_im = cimag(data);
+		for(i = 0; i < array_length; i += 2) {
+			if((data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1]) || (data_im >= bad_data_intervals[i] && data_im <= bad_data_intervals[i + 1]))
+				return TRUE;
+		}
+		if(remove_nan && (isnan(data_re) || isnan(data_im)))
+			return TRUE;
+		if(remove_inf && (isinf(data_re) || isinf(data_im)))
+			return TRUE;
+	} else {
+		for(i = 0; i < array_length; i += 2) {
+			if(data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1])
+				return TRUE;
+		}
+		if(remove_nan && (isnan(data_re)))
+			return TRUE;
+		if(remove_inf && (isinf(data_re)))
+			return TRUE;
 	}
-	if(remove_nan && isnan(data))
-		data_is_bad = TRUE;
-	if(remove_inf && isinf(data))
-		data_is_bad = TRUE;
 
-	return data_is_bad;
+	return FALSE;
 }
 
 
-#define DEFINE_PROCESS_INBUF(DTYPE) \
-static GstFlowReturn process_inbuf_ ## DTYPE(const DTYPE *indata, DTYPE *outdata, guint64 length, guint64 max_block_length, double *bad_data_intervals, gint array_length, gboolean remove_nan, gboolean remove_inf, gboolean insert_gap, gboolean remove_gap, double replace_value, GstPad *srcpad, gboolean sinkbuf_gap, gboolean sinkbuf_discont, guint64 sinkbuf_offset, GstClockTime sinkbuf_dur, GstClockTime sinkbuf_pts) \
+#define DEFINE_PROCESS_INBUF(DTYPE,COMPLEX) \
+static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *indata, DTYPE COMPLEX *outdata, guint64 length, guint64 max_block_length, GSTLALInsertGap *element, gboolean sinkbuf_gap, gboolean sinkbuf_discont, guint64 sinkbuf_offset, guint64 sinkbuf_offset_end, GstClockTime sinkbuf_dur, GstClockTime sinkbuf_pts, gboolean complex_data) \
 { \
 	GstFlowReturn result = GST_FLOW_OK; \
+ \
+	/*
+	 * First, deal with discontinuity if necessary
+	 */ \
+	if(element->fill_discont && (element->last_sinkbuf_offset_end != 0) && (sinkbuf_pts != element->last_sinkbuf_ets)) { \
+		guint64 missing_samples = gst_util_uint64_scale_int_round(sinkbuf_pts - element->last_sinkbuf_ets, element->rate, 1000000000); \
+		guint standard_blocks = (guint) (missing_samples / max_block_length); \
+		guint64 last_block_length = missing_samples % max_block_length; \
+		DTYPE COMPLEX sample_value; \
+		if(complex_data) \
+			sample_value = (element->replace_value < G_MAXDOUBLE) ? ((DTYPE) (element->replace_value)) * (1 + I) : 0; \
+		else \
+			sample_value = (element->replace_value < G_MAXDOUBLE) ? ((DTYPE) (element->replace_value)) : 0; \
+ \
+		/* first make and push any buffers of size max_buffer_size */ \
+		if(standard_blocks != 0) { \
+			guint buffer_num; \
+			for(buffer_num = 0; buffer_num < standard_blocks; buffer_num++) { \
+				GstBuffer *discont_buf; \
+				DTYPE COMPLEX *discont_buf_data; \
+				discont_buf_data = g_malloc(max_block_length * sizeof(DTYPE COMPLEX)); \
+				guint sample_num; \
+				for(sample_num = 0; sample_num < max_block_length; sample_num++) { \
+					*discont_buf_data = sample_value; \
+					discont_buf_data++; \
+				} \
+				discont_buf = gst_buffer_new_wrapped((discont_buf_data - max_block_length), max_block_length * sizeof(DTYPE COMPLEX)); \
+				if(G_UNLIKELY(!discont_buf)) { \
+					GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
+					result = GST_FLOW_ERROR; \
+					goto done; \
+				} \
+ \
+				/* set flags, caps, offset, and timestamps. */ \
+				GST_BUFFER_OFFSET(discont_buf) = element->last_sinkbuf_offset_end + element->discont_offset + buffer_num * max_block_length; \
+				GST_BUFFER_OFFSET_END(discont_buf) = GST_BUFFER_OFFSET(discont_buf) + max_block_length; \
+				GST_BUFFER_PTS(discont_buf) = element->last_sinkbuf_ets + gst_util_uint64_scale_round(sinkbuf_pts - element->last_sinkbuf_ets, (guint64) buffer_num * max_block_length, missing_samples); \
+				GST_BUFFER_DURATION(discont_buf) = element->last_sinkbuf_ets + gst_util_uint64_scale_round(sinkbuf_pts - element->last_sinkbuf_ets, ((guint64) buffer_num + 1) * max_block_length, missing_samples) - GST_BUFFER_PTS(discont_buf); \
+				if(element->insert_gap) \
+					GST_BUFFER_FLAG_SET(discont_buf, GST_BUFFER_FLAG_GAP); \
+ \
+				/* push buffer downstream */ \
+				GST_DEBUG_OBJECT(element, "pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(discont_buf)); \
+				result = gst_pad_push(element->srcpad, discont_buf); \
+				if(G_UNLIKELY(result != GST_FLOW_OK)) { \
+					GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result)); \
+					goto done; \
+				} \
+			} \
+		} \
+ \
+		/* then make and push the remainder buffer */ \
+		if(last_block_length != 0) { \
+			GstBuffer *last_discont_buf; \
+			DTYPE COMPLEX *last_discont_buf_data; \
+			last_discont_buf_data = g_malloc(last_block_length * sizeof(DTYPE COMPLEX)); \
+			guint sample_num; \
+			for(sample_num = 0; sample_num < last_block_length; sample_num++) { \
+				*last_discont_buf_data = sample_value; \
+				last_discont_buf_data++; \
+			} \
+			last_discont_buf = gst_buffer_new_wrapped((last_discont_buf_data - last_block_length), last_block_length * sizeof(DTYPE COMPLEX)); \
+			if(G_UNLIKELY(!last_discont_buf)) { \
+				GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
+				result = GST_FLOW_ERROR; \
+				goto done; \
+			} \
+ \
+			/* set flags, caps, offset, and timestamps. */ \
+			GST_BUFFER_OFFSET(last_discont_buf) = element->last_sinkbuf_offset_end + element->discont_offset + missing_samples - last_block_length; \
+			GST_BUFFER_OFFSET_END(last_discont_buf) = GST_BUFFER_OFFSET(last_discont_buf) + last_block_length; \
+			GST_BUFFER_PTS(last_discont_buf) = element->last_sinkbuf_ets + gst_util_uint64_scale_round(sinkbuf_pts - element->last_sinkbuf_ets, missing_samples - last_block_length, missing_samples); \
+			GST_BUFFER_DURATION(last_discont_buf) = sinkbuf_pts - GST_BUFFER_PTS(last_discont_buf); \
+			if(element->insert_gap) \
+				GST_BUFFER_FLAG_SET(last_discont_buf, GST_BUFFER_FLAG_GAP); \
+ \
+			/* push buffer downstream */ \
+			GST_DEBUG_OBJECT(element, "pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(last_discont_buf)); \
+			result = gst_pad_push(element->srcpad, last_discont_buf); \
+			if(G_UNLIKELY(result != GST_FLOW_OK)) { \
+				GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result)); \
+				goto done; \
+			} \
+		} \
+		element->discont_offset += (missing_samples + element->last_sinkbuf_offset_end - sinkbuf_offset); \
+	} \
+ \
+	/*
+	 * Now, use data on input buffer to make next output buffer(s)
+	 */ \
 	gboolean data_is_bad, srcbuf_gap, srcbuf_gap_next; \
 	guint64 offset, current_srcbuf_length; \
 	current_srcbuf_length = 0; \
-	data_is_bad = check_data((double) *indata, bad_data_intervals, array_length, remove_nan, remove_inf); \
-	srcbuf_gap = (sinkbuf_gap && (!remove_gap)) || (insert_gap && data_is_bad); \
+	data_is_bad = check_data((double complex) *indata, element->bad_data_intervals, element->array_length, element->remove_nan, element->remove_inf, complex_data); \
+	srcbuf_gap = (sinkbuf_gap && (!(element->remove_gap))) || ((element->insert_gap) && data_is_bad); \
 	for(offset = 0; offset < length; offset++) { \
-		data_is_bad = check_data((double) *indata, bad_data_intervals, array_length, remove_nan, remove_inf); \
-		srcbuf_gap_next = (sinkbuf_gap && (!remove_gap)) || (insert_gap && data_is_bad); \
-		*outdata = ((replace_value < G_MAXDOUBLE) && data_is_bad) ? (DTYPE) replace_value : *indata; \
+		data_is_bad = check_data((double complex) *indata, element->bad_data_intervals, element->array_length, element->remove_nan, element->remove_inf, complex_data); \
+		srcbuf_gap_next = (sinkbuf_gap && (!(element->remove_gap))) || ((element->insert_gap) && data_is_bad); \
+		if(complex_data) \
+			*outdata = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? ((DTYPE) (element->replace_value)) * (1 + I) : *indata; \
+		else \
+			*outdata = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? (DTYPE) (element->replace_value) : *indata; \
 		current_srcbuf_length++; \
 		indata++; \
 		outdata++; \
@@ -188,21 +299,21 @@ static GstFlowReturn process_inbuf_ ## DTYPE(const DTYPE *indata, DTYPE *outdata
 				outdata--; \
 			} \
 			GstBuffer *srcbuf; \
-			DTYPE *srcbuf_data; \
-			srcbuf_data = g_malloc(current_srcbuf_length * sizeof(DTYPE)); \
-			memcpy(srcbuf_data, (outdata - current_srcbuf_length), current_srcbuf_length * sizeof(DTYPE)); \
-			srcbuf = gst_buffer_new_wrapped(srcbuf_data, current_srcbuf_length * sizeof(DTYPE)); \
+			DTYPE COMPLEX *srcbuf_data; \
+			srcbuf_data = g_malloc(current_srcbuf_length * sizeof(DTYPE COMPLEX)); \
+			memcpy(srcbuf_data, (outdata - current_srcbuf_length), current_srcbuf_length * sizeof(DTYPE COMPLEX)); \
+			srcbuf = gst_buffer_new_wrapped(srcbuf_data, current_srcbuf_length * sizeof(DTYPE COMPLEX)); \
  \
 			if(G_UNLIKELY(!srcbuf)) { \
-				GST_ERROR("failure creating sub-buffer"); \
+				GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
 				result = GST_FLOW_ERROR; \
-				break; \
+				goto done; \
 			} \
  \
 			/* set flags, caps, offset, and timestamps. */ \
-			GST_BUFFER_OFFSET(srcbuf) = sinkbuf_offset + offset - current_srcbuf_length + 1; \
+			GST_BUFFER_OFFSET(srcbuf) = sinkbuf_offset + element->discont_offset + offset + 1 - current_srcbuf_length; \
 			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + current_srcbuf_length; \
-			GST_BUFFER_PTS(srcbuf) = sinkbuf_pts + gst_util_uint64_scale_int_round(sinkbuf_dur, offset - current_srcbuf_length + 1, length); \
+			GST_BUFFER_PTS(srcbuf) = sinkbuf_pts + gst_util_uint64_scale_int_round(sinkbuf_dur, offset + 1 - current_srcbuf_length, length); \
 			GST_BUFFER_DURATION(srcbuf) = sinkbuf_pts + gst_util_uint64_scale_int_round(sinkbuf_dur, offset + 1, length) - GST_BUFFER_PTS(srcbuf); \
 			if(srcbuf_gap) \
 				GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP); \
@@ -213,9 +324,8 @@ static GstFlowReturn process_inbuf_ ## DTYPE(const DTYPE *indata, DTYPE *outdata
 			 * only the first subbuffer of a buffer flagged as a
 			 * discontinuity is a discontinuity.
 			 */ \
-			if((offset + 1 - current_srcbuf_length == 0) && sinkbuf_discont) \
+			if(sinkbuf_discont && (offset + 1 - current_srcbuf_length == 0) && ((!(element->fill_discont)) || (element->last_sinkbuf_ets == 0))) \
 				GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT); \
- \
 			if(srcbuf_gap_next != srcbuf_gap) { \
 				/* We need to reset our place in the input buffer */ \
 				offset++; \
@@ -227,20 +337,25 @@ static GstFlowReturn process_inbuf_ ## DTYPE(const DTYPE *indata, DTYPE *outdata
 				current_srcbuf_length = 0; \
  \
 			/* push buffer downstream */ \
-			GST_DEBUG("pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf)); \
-			result = gst_pad_push(srcpad, srcbuf); \
+			GST_DEBUG_OBJECT(element, "pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf)); \
+			result = gst_pad_push(element->srcpad, srcbuf); \
 			if(G_UNLIKELY(result != GST_FLOW_OK)) { \
-				GST_WARNING("push failed: %s", gst_flow_get_name(result)); \
-				break; \
+				GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result)); \
+				goto done; \
 			} \
 		} \
 	} \
+done: \
+	element->last_sinkbuf_ets = sinkbuf_pts + sinkbuf_dur; \
+	element->last_sinkbuf_offset_end = sinkbuf_offset_end; \
 	return result; \
 }
 
 
-DEFINE_PROCESS_INBUF(float)
-DEFINE_PROCESS_INBUF(double)
+DEFINE_PROCESS_INBUF(float, )
+DEFINE_PROCESS_INBUF(double, )
+DEFINE_PROCESS_INBUF(float,complex)
+DEFINE_PROCESS_INBUF(double,complex)
 
 
 /*
@@ -268,10 +383,28 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		GstCaps *caps;
 		GstAudioInfo info;
 		gst_event_parse_caps(event, &caps);
-		success = gst_audio_info_from_caps(&info, caps);
+		success &= gstlal_audio_info_from_caps(&info, caps);
+		GstStructure *str = gst_caps_get_structure(caps, 0);
+		const gchar *name = gst_structure_get_string(str, "format");
+		success &= (name != NULL);
 		if(success) {
+			/* record stream parameters */
 			element->rate = GST_AUDIO_INFO_RATE(&info);
 			element->unit_size = GST_AUDIO_INFO_BPF(&info);
+			if(!strcmp(name, GST_AUDIO_NE(F32))) {
+				element->data_type = GSTLAL_INSERTGAP_F32;
+				g_assert_cmpuint(element->unit_size, ==, 4);
+			} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
+				element->data_type = GSTLAL_INSERTGAP_F64;
+				g_assert_cmpuint(element->unit_size, ==, 8);
+			} else if(!strcmp(name, GST_AUDIO_NE(Z64))) {
+				element->data_type = GSTLAL_INSERTGAP_Z64;
+				g_assert_cmpuint(element->unit_size, ==, 8);
+			} else if(!strcmp(name, GST_AUDIO_NE(Z128))) {
+				element->data_type = GSTLAL_INSERTGAP_Z128;
+				g_assert_cmpuint(element->unit_size, ==, 16);
+			} else
+				g_assert_not_reached();
 		}
 		break;
 	}
@@ -302,8 +435,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 	GST_DEBUG_OBJECT(element, "received %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 
-	/* if buffer does not possess valid metadata, push gap downstream */
-	if(!(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
+	/* if buffer does not possess valid metadata or is zero length, push gap downstream */
+	if(!(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) || GST_BUFFER_DURATION(sinkbuf) == 0) {
 		/* FIXME: What is the best course of action in this case? */
 		GST_DEBUG_OBJECT(element, "pushing gap buffer");
 		GstBuffer *srcbuf;
@@ -328,10 +461,11 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	g_assert_cmpuint(inmap.size % element->unit_size, ==, 0);
 	g_assert_cmpuint(length, ==, inmap.size / element->unit_size); /*sanity checks */
 
-	/* We'll need these to decide gaps, offsets, and timestamps on the outgoing buffers */
+	/* We'll need these to decide gaps, offsets, and timestamps on the outgoing buffer(s) */
 	gboolean sinkbuf_gap = GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP);
 	gboolean sinkbuf_discont = GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
 	guint64 sinkbuf_offset = GST_BUFFER_OFFSET(sinkbuf);
+	guint64 sinkbuf_offset_end = GST_BUFFER_OFFSET_END(sinkbuf);
 	GstClockTime sinkbuf_dur = GST_BUFFER_DURATION(sinkbuf);
 	GstClockTime sinkbuf_pts = GST_BUFFER_PTS(sinkbuf);;
 
@@ -339,13 +473,20 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	void *outdata;
 	outdata = g_malloc(length * element->unit_size);
 
-	switch(element->unit_size) {
-	case 4:
-		result = process_inbuf_float((float *) inmap.data, outdata, length, max_block_length, element->bad_data_intervals, element->array_length, element->remove_nan, element->remove_inf, element->insert_gap, element->remove_gap, element->replace_value, element->srcpad, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_dur, sinkbuf_pts);
+	switch(element->data_type) {
+	case GSTLAL_INSERTGAP_F32:
+		result = process_inbuf_float((float *) inmap.data, outdata, length, max_block_length, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, FALSE);
 		break;
-	case 8:
-		result = process_inbuf_double((double *) inmap.data, outdata, length, max_block_length, element->bad_data_intervals, element->array_length, element->remove_nan, element->remove_inf, element->insert_gap, element->remove_gap, element->replace_value, element->srcpad, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_dur, sinkbuf_pts);
+	case GSTLAL_INSERTGAP_F64:
+		result = process_inbuf_double((double *) inmap.data, outdata, length, max_block_length, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, FALSE);
 		break;
+	case GSTLAL_INSERTGAP_Z64:
+		result = process_inbuf_floatcomplex((float complex *) inmap.data, outdata, length, max_block_length, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, TRUE);
+		break;
+	case GSTLAL_INSERTGAP_Z128:
+		result = process_inbuf_doublecomplex((double complex *) inmap.data, outdata, length, max_block_length, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, TRUE);
+		break;
+
 	default:
 		g_assert_not_reached();
 	}
@@ -382,6 +523,7 @@ enum property {
 	ARG_REMOVE_GAP,
 	ARG_REMOVE_NAN,
 	ARG_REMOVE_INF,
+	ARG_FILL_DISCONT,
 	ARG_REPLACE_VALUE,
 	ARG_BAD_DATA_INTERVALS,
 	ARG_BLOCK_DURATION
@@ -406,6 +548,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	case ARG_REMOVE_INF:
 		element->remove_inf = g_value_get_boolean(value);
+		break;
+	case ARG_FILL_DISCONT:
+		element->fill_discont = g_value_get_boolean(value);
 		break;
 	case ARG_REPLACE_VALUE:
 		element->replace_value = g_value_get_double(value);
@@ -447,6 +592,9 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 	case ARG_REMOVE_INF:
 		g_value_set_boolean(value, element->remove_inf);
+		break;
+	case ARG_FILL_DISCONT:
+		g_value_set_boolean(value, element->fill_discont);
 		break;
 	case ARG_REPLACE_VALUE:
 		g_value_set_double(value, element->replace_value);
@@ -500,7 +648,7 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		element_class,
 		"Replace unwanted data with gaps",
 		"Filter",
-		"Replace unwanted data, specified with the property bad-data-intervals, with gaps. Also can replace with another value, given by replace-value. Can also remove gaps where data is acceptable.",
+		"Replace unwanted data, specified with the property bad-data-intervals, with gaps.\n			   Also can replace with another value, given by replace-value. Can also remove gaps\n			   where data is acceptable.",
 		"Aaron Viets <aaron.viets@ligo.org>"
 	);
 
@@ -517,7 +665,7 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"insert-gap",
 			"Insert gap",
-			"If set to true (default), any data fitting the criteria specified by the property bad-data-intervals is replaced with gaps. Also, NaN's and inf's are replaced with gaps if the properties remove-nan and remove-inf are set to true, respectively.",
+			"If set to true (default), any data fitting the criteria specified by the property\n			bad-data-intervals is replaced with gaps. Also, NaN's and inf's are replaced with\n			gaps if the properties remove-nan and remove-inf are set to true, respectively.",
 			TRUE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -529,7 +677,7 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"remove-gap",
 			"Remove gap",
-			"If set to true, any data in an input gap buffer that does not fit the criteria specified by the property bad-data-intervals will be marked as non-gap. If the property insert-gap is false and remove-gap is true, gaps with unacceptable data will be replaced by the value specified by the property replace-value.",
+			"If set to true, any data in an input gap buffer that does not fit the criteria\n			specified by the property bad-data-intervals will be marked as non-gap. If the\n			property insert-gap is false and remove-gap is true, gaps with unacceptable\n			data will be replaced by the value specified by the property replace-value.",
 			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -541,7 +689,7 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"remove-nan",
 			"Remove NaN",
-			"If set to true (default), NaN's in the data stream will be replaced with gaps and/or the replace-value, as specified by user.",
+			"If set to true (default), NaN's in the data stream will be replaced with gaps\n			and/or the replace-value, as specified by user.",
 			TRUE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -553,8 +701,20 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"remove-inf",
 			"Remove inf",
-			"If set to true (default), infinities in the data stream will be replaced with gaps and/or the replace-value, as specified by user.",
+			"If set to true (default), infinities in the data stream will be replaced with\n			gaps and/or the replace-value, as specified by user.",
 			TRUE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FILL_DISCONT,
+		g_param_spec_boolean(
+			"fill-discont",
+			"Fill discontinuity",
+			"If set to true, discontinuities in the data stream will be filled with the\n			replace-value (if set, otherwise 0), and gapped if insert-gap is true.",
+			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -565,7 +725,7 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_double(
 			"replace-value",
 			"Replace value",
-			"If set, this value is used to replace any data that fits the criteria specified by the property bad-data-intervals. If unset, values are not replaced.", 
+			"If set, this value is used to replace any data that fits the criteria\n			specified by the property bad-data-intervals. If unset, values are not replaced.", 
 			-G_MAXDOUBLE, G_MAXDOUBLE, G_MAXDOUBLE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -577,7 +737,7 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_value_array(
 			"bad-data-intervals",
 			"Bad data intervals",
-			"Array of at most 16 elements containing minima and maxima of closed intervals in which data is considered unacceptable and will be replaced with gaps and/or the replace-value. Array indices 0, 2, 4, etc., represent minima, and array indices 1, 3, 5, etc., represent the corresponding maxima.",
+			"Array of at most 16 elements containing minima and maxima of closed intervals\n			in which data is considered unacceptable and will be replaced with gaps and/or the\n			replace-value. Array indices 0, 2, 4, etc., represent minima, and\n			array indices 1, 3, 5, etc., represent the corresponding maxima.",
 			g_param_spec_double(
 				"coefficient",
 				"Coefficient",
@@ -595,7 +755,7 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_uint64(
 			"block-duration",
 			"Block duration",
-			"Maximum output buffer duration in nanoseconds. Buffers may be smaller than this. Default is to not change buffer length except as required by added/removed gaps.",
+			"Maximum output buffer duration in nanoseconds. Buffers may be smaller than this.\n			Default is to not change buffer length except as required by added/removed gaps.",
 			0, G_MAXUINT64, G_MAXUINT64 / 2,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -633,4 +793,7 @@ static void gstlal_insertgap_init(GSTLALInsertGap *element)
 	/* internal data */
 	element->rate = 0;
 	element->unit_size = 0;
+	element->last_sinkbuf_ets = 0;
+        element->last_sinkbuf_offset_end = 0;
+        element->discont_offset = 0;
 }

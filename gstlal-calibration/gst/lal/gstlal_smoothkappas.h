@@ -65,6 +65,8 @@ struct _GSTLALSmoothKappas {
 	double current_median_im;
 	double *fifo_array_re;
 	double *fifo_array_im;
+	int index_re;
+	int index_im;
 	enum gstlal_smoothkappas_data_type {
 		F32 = 0,
 		F64,

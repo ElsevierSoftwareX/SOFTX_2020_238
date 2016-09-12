@@ -59,11 +59,25 @@ typedef struct _GSTLALInsertGapClass GSTLALInsertGapClass;
 struct _GSTLALInsertGap {
 	GstElement element;
 
+	/* pads */
+
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
+	/* stream parameters */
+
 	gint rate;
 	gint unit_size;
+	enum gstlal_insertgap_data_type {
+		GSTLAL_INSERTGAP_F32 = 0,
+		GSTLAL_INSERTGAP_F64,
+		GSTLAL_INSERTGAP_Z64,
+		GSTLAL_INSERTGAP_Z128
+	} data_type;
+
+	guint64 last_sinkbuf_ets;
+        guint64 last_sinkbuf_offset_end;
+        guint64 discont_offset;
 
 	/* properties */
 
@@ -71,6 +85,7 @@ struct _GSTLALInsertGap {
 	gboolean remove_gap;
 	gboolean remove_nan;
 	gboolean remove_inf;
+	gboolean fill_discont;
 	double replace_value;
 	double *bad_data_intervals;
 	gint array_length;

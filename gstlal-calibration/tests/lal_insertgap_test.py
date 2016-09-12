@@ -41,7 +41,7 @@ import test_common
 
 def lal_insertgap_test_01(pipeline, name):
 	#
-	# This is similar to the above test, and makes sure the element treats gaps correctly
+	# This test should first replace negative numbers with zeros, and then replace them.
 	#
 
 	rate = 1000		# Hz
@@ -58,10 +58,42 @@ def lal_insertgap_test_01(pipeline, name):
 
 	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, channels = 1, test_duration = test_duration, wave = 0, freq = 1, volume = 1, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = control_dump_filename)
 	#head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, channels = 1, test_duration = test_duration, wave = 5, freq = 0, volume = 1)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = False, replace_value = 0.0)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = False, fill_discont = True, replace_value = 0.0)
 	head = pipeparts.mktee(pipeline, head)
-        pipeparts.mknxydumpsink(pipeline, head, "%s_in.dump" % name)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals2, insert_gap = True, replace_value = 7.0)
+	pipeparts.mknxydumpsink(pipeline, head, "%s_in.dump" % name)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals2, insert_gap = True, fill_discont = True, replace_value = 7.0)
+	pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
+
+	#
+	# done
+	#
+
+	return pipeline
+
+def lal_insertgap_test_02(pipeline, name):
+	#
+	# This tests the element's treatment of complex data streams.
+	#
+
+	rate = 1000	     # Hz
+	width = 32
+	buffer_length = 1.0     # seconds
+	test_duration = 100.0   # seconds
+	gap_frequency = 0.1     # Hz
+	gap_threshold = 0.0
+	control_dump_filename = "control_insertgap_test_01.dump"
+	#bad_data_intervals = numpy.random.random((4,)).astype("float64")
+	#bad_data_intervals2 = numpy.random.random((4,)).astype("float64")
+	bad_data_intervals = [-1.0, -0.5]
+	bad_data_intervals2 = [0.5, 1.0]
+
+	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, channels = 2, test_duration = test_duration, wave = 0, freq = 1, volume = 1, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = control_dump_filename)
+	head = pipeparts.mktogglecomplex(pipeline, head)
+	#head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, channels = 1, test_duration = test_duration, wave = 5, freq = 0, volume = 1)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = True, fill_discont = True, replace_value = 3.0)
+	head = pipeparts.mktee(pipeline, head)
+	pipeparts.mknxydumpsink(pipeline, head, "%s_in.dump" % name)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals2, insert_gap = True, remove_gap = True, fill_discont = True, replace_value = 7.0)
 	pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
 
 	#
@@ -80,3 +112,4 @@ def lal_insertgap_test_01(pipeline, name):
 
 
 test_common.build_and_run(lal_insertgap_test_01, "lal_insertgap_test_01")
+#test_common.build_and_run(lal_insertgap_test_02, "lal_insertgap_test_02")
