@@ -51,7 +51,7 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 		self._event_id = int(val)
 
 	@property
-	def snr(self):
+	def snr_time_series(self):
 		try:
 			name = self._snr_name
 		except ValueError:

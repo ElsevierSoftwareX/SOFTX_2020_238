@@ -937,7 +937,7 @@ class Data(object):
 					pass
 			# add SNR time series if available
 			for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
-				snr_time_series = event.snr
+				snr_time_series = event.snr_time_series
 				if snr_time_series is not None:
 					snr_time_series = xmldoc.childNodes[-1].appendChild(lalseries.build_COMPLEX8TimeSeries(snr_time_series))
 					snr_time_series.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
