@@ -272,7 +272,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 							"singles-threshold":options.singles_threshold,
 							"fir-stride":options.fir_stride,
 							"data-source":"frames",
-							"local-frame-caching":""
+							"local-frame-caching":"",
+							"min-instruments":options.min_instruments,
+							"min-log-L":options.min_log_L
 							},
 						input_files = {	"time-slide-file":options.time_slide_file,
 								"frame-cache":options.frame_cache,
@@ -320,7 +322,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"singles-threshold":options.singles_threshold,
 								"fir-stride":options.fir_stride,
 								"data-source":"frames",
-								"local-frame-caching":""
+								"local-frame-caching":"",
+								"min-instruments":options.min_instruments,
+								"min-log-L":options.min_log_L
 								},
 							input_files = {	"frame-cache":options.frame_cache,
 									"frame-segments-file":options.frame_segments_file,
@@ -391,7 +395,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		# the time being.   
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = [],
-				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1},
+				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1, "min-instruments":options.min_instruments},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		# Create a file that has the priors *and* all of the diststats
@@ -681,6 +685,8 @@ def parse_command_line():
 	parser.add_option("--fir-stride", type="int", metavar = "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
 	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
+	parser.add_option("--min-log-L", metavar = "log likelihood ratio", type = "float", help = "Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).")
 	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
