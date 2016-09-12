@@ -316,7 +316,7 @@ class Handler(simplehandler.Handler):
 				return True
 		elif message.type == Gst.MessageType.APPLICATION:
 			if message.get_structure().get_name() == "CHECKPOINT":
-				self.checkpoint(message.timestamp)
+				self.checkpoint(LIGOTimeGPS(0, message.timestamp))
 				return True
 		elif message.type == Gst.MessageType.EOS:
 			with self.dataclass.lock:
@@ -325,7 +325,7 @@ class Handler(simplehandler.Handler):
 				# set to CLOCK_TIME_NONE so they can't be
 				# used for this.
 				try:
-					timestamp = self.seglistdicts["triggersegments"].extent_all()[1].ns()
+					timestamp = LIGOTimeGPS(0, self.seglistdicts["triggersegments"].extent_all()[1].ns())
 				except ValueError:
 					# no segments
 					return False
@@ -364,7 +364,7 @@ class Handler(simplehandler.Handler):
 		"""!
 		Checkpoint, e.g., flush segments and triggers to disk.
 
-		@param timestamp the gstreamer timestamp in nanoseconds of the current buffer in order to close off open segment intervals before writing to disk
+		@param timestamp the LIGOTimeGPS timestamp of the current buffer in order to close off open segment intervals before writing to disk
 		"""
 		# FIXME:  the timestamp is used to close off open segments
 		# and so should *not* be the timestamp of the current
@@ -384,9 +384,8 @@ class Handler(simplehandler.Handler):
 		Flush segments to disk, e.g., when checkpointing or shutting
 		down an online pipeline.
 
-		@param timestamp the gstreamer timestamp in nanoseconds of the current buffer in order to close off open segment intervals before writing to disk
+		@param timestamp the LIGOTimeGPS timestamp of the current buffer in order to close off open segment intervals before writing to disk
 		"""
-		timestamp = LIGOTimeGPS(0, timestamp)
 		with self.dataclass.lock:
 			# make a copy of the current segmentlistdicts
 			seglistdicts = dict((key, value.copy()) for key, value in self.seglistdicts)
