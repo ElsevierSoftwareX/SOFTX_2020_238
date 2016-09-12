@@ -28,6 +28,7 @@
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/LALStdlib.h>
+#include <snglinspiralrowtype.h>
 
 /**
  * SECTION:gstlal_snglinspiral.c
@@ -130,19 +131,12 @@ int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 
 GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2)
 {
-	/* FIXME check errors */
-
-	GstBuffer *srcbuf = gst_buffer_new_allocate(NULL, sizeof(*bankarray) * input->num_events, NULL);
-	guint channel;
-	double complex maxdata_channel = 0;
-	GstMapInfo info;
+	GstBuffer *srcbuf = gst_buffer_new();
 
 	if (!srcbuf) {
 		GST_ERROR_OBJECT(pad, "Could not allocate sngl-inspiral buffer");
 		return srcbuf;
 		}
-
-	gst_buffer_map(srcbuf, &info, GST_MAP_WRITE);
 
 	if (input->num_events == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
@@ -155,17 +149,19 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
         GST_BUFFER_PTS(srcbuf) = time;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
-	/* FIXME do error checking */
 	if (input->num_events) {
-		SnglInspiralTable *output = (SnglInspiralTable *) info.data;
+		guint channel;
 		for(channel = 0; channel < input->channels; channel++) {
-	
+			struct GSTLALSnglInspiral *event;
+			SnglInspiralTable *parent;
+			double complex maxdata_channel = 0;
+
 			switch (input->type)
 				{
 				case GSTLAL_PEAK_COMPLEX:
 				maxdata_channel = (double complex) input->interpvalues.as_float_complex[channel];
 				break;
-		
+
 				case GSTLAL_PEAK_DOUBLE_COMPLEX:
 				maxdata_channel = (double complex) input->interpvalues.as_double_complex[channel];
 				break;
@@ -174,38 +170,79 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
 				}
 
-			if ( maxdata_channel ) {
-				LIGOTimeGPS end_time;
-				XLALINT8NSToGPS(&end_time, time);
-				XLALGPSAdd(&end_time, (double) input->interpsamples[channel] / rate);
-				memcpy(output, &(bankarray[channel]), sizeof(*bankarray));
-				output->snr = cabs(maxdata_channel);
-				output->coa_phase = carg(maxdata_channel);
-				output->chisq = 0.0;
-				output->chisq_dof = 1;
-				XLALGPSAddGPS(&output->end, &end_time);
-				output->end_time_gmst = XLALGreenwichMeanSiderealTime(&output->end);
-				output->eff_distance = gstlal_effective_distance(output->snr, output->sigmasq);
-				/* populate chi squared if we have it */
-				switch (input->type)
-					{
-					case GSTLAL_PEAK_COMPLEX:
-					if (chi2) output->chisq = (double) *(((float *) chi2 ) + channel);
-					break;
-		
-					case GSTLAL_PEAK_DOUBLE_COMPLEX:
-					if (chi2) output->chisq = (double) *(((double *) chi2 ) + channel);
-					break;
+			if ( !maxdata_channel )
+				continue;
 
-					default:
-					g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
-					}
-				output++;
+			/*
+			 * allocate new event structure
+			 */
+
+			event = gstlal_snglinspiral_new();
+			parent = (SnglInspiralTable *) event;
+			if (!event) {
+				/* FIXME handle error */
 			}
+
+			/*
+			 * populate
+			 */
+
+			*parent = bankarray[channel];
+			parent->snr = cabs(maxdata_channel);
+			parent->coa_phase = carg(maxdata_channel);
+
+			{
+			LIGOTimeGPS end_time;
+			XLALINT8NSToGPS(&end_time, time);
+			XLALGPSAdd(&end_time, (double) input->interpsamples[channel] / rate);
+			XLALGPSAddGPS(&parent->end, &end_time);
+			}
+
+			parent->end_time_gmst = XLALGreenwichMeanSiderealTime(&parent->end);
+			parent->eff_distance = gstlal_effective_distance(parent->snr, parent->sigmasq);
+			/* populate chi squared if we have it */
+			parent->chisq = 0.0;
+			parent->chisq_dof = 1;
+			switch (input->type)
+				{
+				case GSTLAL_PEAK_COMPLEX:
+				if (chi2) parent->chisq = (double) *(((float *) chi2 ) + channel);
+				break;
+
+				case GSTLAL_PEAK_DOUBLE_COMPLEX:
+				if (chi2) parent->chisq = (double) *(((double *) chi2 ) + channel);
+				break;
+
+				default:
+				g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
+				}
+
+			/* FIXME:  allocate a COMPLEX8TimeSeries object,
+			 * fill it with the SNR vector, then attached to
+			 * event using
+			gstlal_snglinspiral_set_snr(event, snr);
+			 * that will take ownership of the
+			 * COMPLEX8TimeSeries object.
+			 */
+
+			/*
+			 * add to buffer
+			 */
+
+			gst_buffer_append_memory(
+				srcbuf,
+				gst_memory_new_wrapped(
+					GST_MEMORY_FLAG_READONLY | GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS,
+					event,
+					sizeof(*event),
+					0,
+					sizeof(*event),
+					event,
+					(GDestroyNotify) gstlal_snglinspiral_free
+				)
+			);
 		}
-		g_assert_cmpuint(output - (SnglInspiralTable *) info.data, ==, input->num_events);
 	}
 
-	gst_buffer_unmap(srcbuf, &info);
 	return srcbuf;
 }

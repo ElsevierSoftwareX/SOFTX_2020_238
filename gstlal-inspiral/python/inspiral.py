@@ -95,6 +95,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import time_slide as ligolw_time_slide
 import lal
 from lal import LIGOTimeGPS
+from lal import series as lalseries
 from pylal import rate
 
 from gstlal import bottle
@@ -616,7 +617,7 @@ class Data(object):
 			# NOTE NOTE NOTE NOTE
 			# FIXME why does mapinfo.data come out as an empty list on some occasions???
 			if mapinfo.data:
-				events = streamthinca.ligolw_thinca.SnglInspiral.from_buffer(mapinfo.data)
+				events = streamthinca.SnglInspiral.from_buffer(mapinfo.data)
 			else:
 				events = []
 			buf.unmap(mapinfo)
@@ -934,6 +935,13 @@ class Data(object):
 				except ValueError:
 					# already has it
 					pass
+			# add SNR time series if available
+			for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
+				snr_time_series = event.snr
+				if snr_time_series is not None:
+					snr_time_series = xmldoc.childNodes[-1].appendChild(lalseries.build_COMPLEX8TimeSeries(snr_time_series))
+					snr_time_series.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
+			# serialize to XML
 			ligolw_utils.write_fileobj(xmldoc, message, gz = False)
 			xmldoc.unlink()
 			# FIXME: make this optional from command line?
