@@ -34,7 +34,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <lal/LIGOMetadataTables.h>
-
+#include <gsl/gsl_matrix_float.h>
 
 G_BEGIN_DECLS
 
@@ -47,7 +47,10 @@ int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 int gstlal_set_instrument_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *instrument);
 int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, double *sigmasq);
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2);
+/*
+ * FIXME: only support single precision SNR snippets at the moment
+ */
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_float_view *snr_matrix_view);
 
 
 G_END_DECLS
