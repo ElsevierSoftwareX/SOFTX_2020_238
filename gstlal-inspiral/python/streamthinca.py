@@ -67,7 +67,7 @@ from gstlal import snglinspiraltable
 #
 
 
-class SnglInpsiral(snglinspiraltable.GSTLALSnglInpsiral):
+class SnglInspiral(snglinspiraltable.GSTLALSnglInspiral):
 	__slots__ = ()
 	__cmp__ = ligolw_thinca.SnglInspiral.__cmp__
 
