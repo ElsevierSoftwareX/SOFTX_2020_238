@@ -15,7 +15,12 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 
 	spin1 = lsctables.SnglInspiral.spin1
 	spin2 = lsctables.SnglInspiral.spin2
-	__eq__ = lsctables.SnglInspiral.__eq__
+
+	def __eq__(self, other):
+		return not cmp(
+			(self.ifo, self.end, self.mass1, self.mass2, self.spin1, self.spin2, self.search),
+			(other.ifo, other.end, other.mass1, other.mass2, other.spin1, other.spin2, other.search)
+		)
 
 	@property
 	def end(self):

@@ -69,7 +69,10 @@ from gstlal import snglinspiraltable
 
 class SnglInspiral(snglinspiraltable.GSTLALSnglInspiral):
 	__slots__ = ()
-	__cmp__ = ligolw_thinca.SnglInspiral.__cmp__
+
+	def __cmp__(self, other):
+		# copied from ligolw_thinca.SnglInspiral
+		return cmp(self.end, other)
 
 
 #
