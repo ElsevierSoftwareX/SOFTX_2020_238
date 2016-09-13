@@ -91,7 +91,7 @@ typedef struct {
 	 * FIXME: currently we only support including SNR snippets in single
 	 * precision mode
 	 */
-	gsl_matrix_float_view snr_matrix_view;
+	gsl_matrix_complex_float_view snr_matrix_view;
 	
 	GMutex bank_lock;
 } GSTLALItac;
