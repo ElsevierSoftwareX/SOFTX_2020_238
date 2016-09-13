@@ -388,7 +388,7 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			# make a copy of the current segmentlistdicts
-			seglistdicts = dict((key, value.copy()) for key, value in self.seglistdicts)
+			seglistdicts = dict((key, value.copy()) for key, value in self.seglistdicts.items())
 
 			# FIXME:  in the next step we don't clip the
 			# triggersegments.  the online pipeline needs these
