@@ -762,6 +762,17 @@ class Data(object):
 				self.__do_gracedb_alerts()
 				self.__update_eye_candy()
 
+			# no longer need per-trigger SNR data for the
+			# triggers that were used in coincs in this
+			# iteration (they can't participate in any more
+			# coincs and will not be used for gracedb alerts).
+			# triggers that never participate in any coincs
+			# will eventually be removed from memory altogether
+			# so we don't need to worry about those.
+			for coinc_event_id in self.stream_thinca.last_coincs:
+				for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
+					del event.snr_time_series
+
 	def __get_likelihood_file(self):
 		# generate a coinc parameter distribution document.  NOTE:
 		# likelihood ratio PDFs *are* included if they were present in
@@ -841,6 +852,16 @@ class Data(object):
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
 			self.__do_gracedb_alerts()
+
+		# no longer need per-trigger SNR data for the triggers that
+		# were used in coincs in this iteration (they can't
+		# participate in any more coincs and will not be used for
+		# gracedb alerts).  triggers that never participate in any
+		# coincs will eventually be removed from memory altogether
+		# so we don't need to worry about those.
+		for coinc_event_id in self.stream_thinca.last_coincs:
+			for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
+				del event.snr_time_series
 
 	def flush(self):
 		with self.lock:

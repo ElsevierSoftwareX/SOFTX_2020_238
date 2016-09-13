@@ -291,8 +291,19 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 }
 
 
+static PyObject *_snr_time_series_deleter(PyObject *self, PyObject *args)
+{
+	if(!gstlal_snglinspiral_set_snr(&((gstlal_GSTLALSnglInspiral *) self)->row, NULL)) {
+		/* function cannot fail */
+	}
+	Py_INCREF(Py_None);
+	return Py_None;
+}
+
+
 static struct PyMethodDef methods[] = {
 	{"from_buffer", from_buffer, METH_VARARGS | METH_CLASS, "Construct a tuple of GSTLALSnglInspiral objects from a buffer object.  The buffer is interpreted as a C array of GSTLALSnglInspiral structures.  All data is copied, the buffer can be deallocated afterwards."},
+	{"_snr_time_series_deleter", _snr_time_series_deleter, METH_NOARGS, "Release the SNR time series attached to the GSTLALSnglInspiral object."},
 	{NULL,}
 };
 

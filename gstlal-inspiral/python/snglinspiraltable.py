@@ -66,5 +66,17 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 			lal.Unit(self._snr_sampleUnits),
 			self._snr_data_length
 		)
-		series.data.data = self._snr_data
+		# we want to be able to keep the table row object in memory
+		# for an extended period of time so we need to be able to
+		# release the memory used by the SNR time series when we no
+		# longer need it, and so we copy the data here instead of
+		# holding a reference to the original memory.  if we
+		# allowed references to the original memory to leak out
+		# into Python land we could never know if it's safe to free
+		# it
+		series.data.data[:] = self._snr_data
 		return series
+
+	@snr_time_series.deleter
+	def snr_time_series(self):
+		self._snr_time_series_deleter()

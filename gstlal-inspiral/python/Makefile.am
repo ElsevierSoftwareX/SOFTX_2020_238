@@ -40,4 +40,5 @@ _rate_estimation_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(PYTHON_LDFLAGS) -modul
 _snglinspiraltable_la_SOURCES = snglinspiraltable.c
 _snglinspiraltable_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS) -DMODULE_NAME="\"gstlal._snglinspiraltable\""
 _snglinspiraltable_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSL_CFLAGS) $(gstreamer_CFLAGS) -fno-strict-aliasing -DMODULE_NAME="\"gstlal._snglinspiraltable\""
+_snglinspiraltable_la_LIBADD = $(top_builddir)/lib/libgstlalinspiral.la
 _snglinspiraltable_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSL_LIBS) $(PYTHON_LDFLAGS) -module -avoid-version
