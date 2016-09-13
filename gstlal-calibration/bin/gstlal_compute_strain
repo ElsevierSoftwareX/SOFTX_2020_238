@@ -64,9 +64,6 @@ from gstlal import calibration_parts
 from gstlal import simplehandler
 from gstlal import datasource
 
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
-from pylal.date import XLALUTCToGPS
-
 from glue.ligolw import ligolw
 from glue.ligolw import array
 from glue.ligolw import param
@@ -95,7 +92,7 @@ setrlimit(resource.RLIMIT_RSS, None)
 setrlimit(resource.RLIMIT_STACK, 1024*1024) 
 
 def now():
-	return LIGOTimeGPS(lal.UTCToGPS(tim.gmtime()), 0)
+	return lal.LIGOTimeGPS(lal.UTCToGPS(tim.gmtime()), 0)
 	
 
 ###################################################################################################
@@ -264,11 +261,11 @@ if options.gps_start_time is not None:
 	if options.data_source == "lvshm" or options.data_source == "white":
 		raise ValueError("cannot set --gps-start-time or --gps-end-time with --data-source=lvshm or --data-source=white")
 	try:
-		start = LIGOTimeGPS(options.gps_start_time)
+		start = lal.LIGOTimeGPS(options.gps_start_time)
 	except ValueError:
 		raise ValueError("invalid --gps-start-time %s" % options.gps_start_time)
 	try:
-		end = LIGOTimeGPS(options.gps_end_time)
+		end = lal.LIGOTimeGPS(options.gps_end_time)
 	except ValueError:
 		raise ValueError("invalid --gps-end-time %s" % options.gps_end_time)
 	if start >= end:
@@ -1249,7 +1246,7 @@ if options.data_source == "frames":
 	start = int(options.gps_start_time)
 elif options.data_source == "lvshm":
 	tm = time.gmtime()
-	start = int(XLALUTCToGPS(tm))
+	start = int(lal.UTCToGPS(tm))
 # start writing frame files that only start after the desired start time + filter latency + kappa settling (if computing kappas)
 if not options.no_kappatst or not options.no_kappaa or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
 	output_start = start + int(filter_settle_time) + options.median_smoothing_time + options.factors_averaging_time  + 10 # 10 additional seconds seem necessary to make sure the low-pass filter for demodulation is also settled (I think that's the cause at least)
