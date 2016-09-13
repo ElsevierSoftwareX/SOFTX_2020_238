@@ -200,7 +200,12 @@ static void update_peak_info_from_autocorrelation_properties(GSTLALItac *element
 		if (element->snr_mat)
 			free(element->snr_mat);
 		element->snr_mat = calloc(autocorrelation_channels(element) * autocorrelation_length(element), element->maxdata->unit);
-		element->snr_matrix_view = gsl_matrix_float_view_array(element->snr_mat, autocorrelation_channels(element), autocorrelation_length(element));
+		/*
+		 * Each row is one sample point of the snr time series with N
+		 * columns for N channels. Assumes proper packing to go from real to complex.
+		 * FIXME assumes single precision
+		 */
+		element->snr_matrix_view = gsl_matrix_complex_float_view_array((float *) element->snr_mat, autocorrelation_length(element), autocorrelation_channels(element));
 	}
 }
 
@@ -585,7 +590,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 			gstlal_double_complex_series_around_peak(element->maxdata, dataptr.as_double_complex, (double complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			/* create the output buffer */
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view));
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL);
 			}
 		else if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
@@ -593,7 +598,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			/* create the output buffer */
 			/* FIXME snr snippets not supported for double precision yet */
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view));
 			}
 		else
 			g_assert_not_reached();
