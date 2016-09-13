@@ -102,6 +102,32 @@ def lal_insertgap_test_02(pipeline, name):
 
 	return pipeline
 
+def lal_insertgap_test_03(pipeline, name):
+        #
+        # This tests how the element handles 32 bit unsigned integers
+        #
+
+        rate = 1000             # Hz
+        width = 32
+        buffer_length = 1.0     # seconds
+        test_duration = 100.0   # seconds
+        bad_data_intervals = [0.0, 1000000000]
+        bad_data_intervals2 = [0.0, 0.0]
+
+	head = test_common.int_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration)
+	head = pipeparts.mkaudioconvert(pipeline, head, "audio/x-raw,format=U32LE")
+	head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = False, fill_discont = True, replace_value = 0.0)
+        head = pipeparts.mktee(pipeline, head)
+        pipeparts.mknxydumpsink(pipeline, head, "%s_in.dump" % name)
+        head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals2, insert_gap = True, fill_discont = True, replace_value = 7.0)
+        pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
+
+        #
+        # done
+        #
+
+        return pipeline
+
 #
 # =============================================================================
 #
@@ -111,5 +137,6 @@ def lal_insertgap_test_02(pipeline, name):
 #
 
 
-test_common.build_and_run(lal_insertgap_test_01, "lal_insertgap_test_01")
+#test_common.build_and_run(lal_insertgap_test_01, "lal_insertgap_test_01")
 #test_common.build_and_run(lal_insertgap_test_02, "lal_insertgap_test_02")
+test_common.build_and_run(lal_insertgap_test_03, "lal_insertgap_test_03")

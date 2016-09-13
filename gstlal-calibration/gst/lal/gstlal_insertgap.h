@@ -69,7 +69,8 @@ struct _GSTLALInsertGap {
 	gint rate;
 	gint unit_size;
 	enum gstlal_insertgap_data_type {
-		GSTLAL_INSERTGAP_F32 = 0,
+		GSTLAL_INSERTGAP_U32 = 0,
+		GSTLAL_INSERTGAP_F32,
 		GSTLAL_INSERTGAP_F64,
 		GSTLAL_INSERTGAP_Z64,
 		GSTLAL_INSERTGAP_Z128

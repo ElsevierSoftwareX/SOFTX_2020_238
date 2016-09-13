@@ -101,7 +101,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
+		"format = (string) { "GST_AUDIO_NE(U32)", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -116,7 +116,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"format = (string) { " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
+		"format = (string) { "GST_AUDIO_NE(U32)", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -355,6 +355,7 @@ done: \
 }
 
 
+DEFINE_PROCESS_INBUF(guint32, )
 DEFINE_PROCESS_INBUF(float, )
 DEFINE_PROCESS_INBUF(double, )
 DEFINE_PROCESS_INBUF(float,complex)
@@ -394,7 +395,10 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			/* record stream parameters */
 			element->rate = GST_AUDIO_INFO_RATE(&info);
 			element->unit_size = GST_AUDIO_INFO_BPF(&info);
-			if(!strcmp(name, GST_AUDIO_NE(F32))) {
+			if(!strcmp(name, GST_AUDIO_NE(U32))) {
+				element->data_type = GSTLAL_INSERTGAP_U32;
+				g_assert_cmpuint(element->unit_size, ==, 4);
+			} else if(!strcmp(name, GST_AUDIO_NE(F32))) {
 				element->data_type = GSTLAL_INSERTGAP_F32;
 				g_assert_cmpuint(element->unit_size, ==, 4);
 			} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
@@ -477,6 +481,9 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	outdata = g_malloc(length * element->unit_size);
 
 	switch(element->data_type) {
+	case GSTLAL_INSERTGAP_U32:
+		result = process_inbuf_guint32((guint32 *) inmap.data, outdata, length, max_block_length, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, FALSE);
+		break;
 	case GSTLAL_INSERTGAP_F32:
 		result = process_inbuf_float((float *) inmap.data, outdata, length, max_block_length, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, FALSE);
 		break;
