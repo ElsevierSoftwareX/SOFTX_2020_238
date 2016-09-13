@@ -708,12 +708,6 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		_, zero_lag_ranking_stats, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(zero_lag_ranking_stats_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 		if zero_lag_ranking_stats is None:
 			raise ValueError("\"%s\" does not contain ranking statistic PDF data" % zero_lag_ranking_stat_file)
-		if zero_lag_ranking_stats.instruments != set(detectors.channel_dict):
-			raise ValueError("\"%s\" is for the instruments %s, we need %s" % (", ".join(sorted(zero_lag_ranking_stats.instruments)), ", ".join(sorted(detectors.channel_dict))))
-		if zero_lag_ranking_stats.delta_t != options.coincidence_threshold:
-			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (zero_lag_ranking_stats_file, zero_lag_ranking_stats.delta_t, options.coincidence_threshold))
-		if zero_lag_ranking_stats.min_instruments != options.min_instruments:
-			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (zero_lag_ranking_stats_file, zero_lag_ranking_stats.min_instruments, options.min_instruments))
 
 
 	#
