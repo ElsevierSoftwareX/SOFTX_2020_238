@@ -736,7 +736,7 @@ def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, *args, **kwarg
 	try:
 		queue.put(binned_log_likelihood_ratio_rates_from_samples(*args, **kwargs))
 	except:
-		queue.put(None)
+		queue.put((None, None))
 		raise
 
 
