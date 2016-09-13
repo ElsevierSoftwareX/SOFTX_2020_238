@@ -978,6 +978,8 @@ WHERE
 
 	@classmethod
 	def new_with_extinction(cls, src):
+		# create a new instance with copies of the rates arrays
+		# from src
 		self = cls(None, ())
 		for key, binnedarray in src.background_likelihood_rates.items():
 			self.background_likelihood_rates[key] = binnedarray.copy()
@@ -986,10 +988,13 @@ WHERE
 		for key, binnedarray in src.zero_lag_likelihood_rates.items():
 			self.zero_lag_likelihood_rates[key] = binnedarray.copy()
 
-		self.finish()
-
-		# Compute the combined rates, we need them for the extinction model
+		# populate the combined rates, we need them for the
+		# extinction model (they might have already been populated
+		# in src, but this way we're sure)
 		self._compute_combined_rates()
+
+		# populate ranking statistic PDFs
+		self.finish()
 
 		# FIXME We extinct each instrument combination separately,
 		# HOWEVER, only the 'None' key is used, which is all
