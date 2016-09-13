@@ -28,8 +28,10 @@
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/LALStdlib.h>
+#include <lal/Units.h>
 #include <snglinspiralrowtype.h>
 #include <gsl/gsl_matrix_float.h>
+#include <gsl/gsl_blas.h>
 
 /**
  * SECTION:gstlal_snglinspiral.c
@@ -130,9 +132,10 @@ int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 	return 0;
 }
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_float_view *snr_matrix_view)
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view)
 {
 	GstBuffer *srcbuf = gst_buffer_new();
+	LALUnit snr_units;	
 
 	if (!srcbuf) {
 		GST_ERROR_OBJECT(pad, "Could not allocate sngl-inspiral buffer");
@@ -218,13 +221,23 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
 				}
 
-			/* FIXME:  allocate a COMPLEX8TimeSeries object,
-			 * fill it with the SNR vector, then attached to
-			 * event using
-			gstlal_snglinspiral_set_snr(event, snr);
-			 * that will take ownership of the
-			 * COMPLEX8TimeSeries object.
+			/* 
+			 * Populate the SNR snippet if available 
+			 * FIXME: only supported for single precision at the moment
 			 */
+			if (snr_matrix_view)
+			{
+				/* Get the column of SNR we are interested in */
+				gsl_vector_complex_float_view snr_vector_view = gsl_matrix_complex_float_column(&(snr_matrix_view->matrix), channel);
+				/* Allocate an empty time series to hold it. The event takes ownership, so no need to free it*/
+				COMPLEX8TimeSeries *snr_series = XLALCreateCOMPLEX8TimeSeries("snr", (const LIGOTimeGPS *) &(parent->end), 0, 1. / rate, &snr_units, snr_vector_view.vector.size);
+				/* Make a GSL view of the time series array data */
+				gsl_vector_complex_float_view snr_series_view = gsl_vector_complex_float_view_array((float *) snr_series->data->data, snr_series->data->length);
+				/* Use BLAS to do the copy */
+				gsl_blas_ccopy (&(snr_vector_view.vector), &(snr_series_view.vector));
+				// FIXME uncommenting this leads to a seg fault
+				//gstlal_snglinspiral_set_snr(event, snr_series);
+			}
 
 			/*
 			 * add to buffer
