@@ -714,16 +714,12 @@ class SNRPDF(object):
 	def to_xml(self, name = u"generic"):
 		xml = ligolw.LIGO_LW()
 		xml.Name = u"%s:%s" % (name, u"inspiral_snr_pdf")
-		# FIXME: switch to ligolw_param.Param.from_pyvalue() when
-		# we can rely on a new-enough glue
-		xml.appendChild(ligolw_param.from_pyvalue(u"snr_cutoff", self.snr_cutoff))
-		xml.appendChild(ligolw_param.from_pyvalue(u"log_distance_tolerance", self.log_distance_tolerance))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"snr_cutoff", self.snr_cutoff))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"log_distance_tolerance", self.log_distance_tolerance))
 		for i, (key, (ignored, binnedarray, ignored)) in enumerate(self.snr_joint_pdf_cache.items()):
 			elem = xml.appendChild(binnedarray.to_xml(u"%d:pdf" % i))
-			# FIXME: switch to ligolw_param.Param.from_pyvalue() when
-			# we can rely on a new-enough glue
-			elem.appendChild(ligolw_param.from_pyvalue(u"instruments:key", lsctables.ifos_from_instrument_set(key[0])))
-			elem.appendChild(ligolw_param.from_pyvalue(u"quantizedhorizons:key", u",".join(u"%s=%.17g" % inst_quant for inst_quant in sorted(key[1]))))
+			elem.appendChild(ligolw_param.Param.from_pyvalue(u"instruments:key", lsctables.ifos_from_instrument_set(key[0])))
+			elem.appendChild(ligolw_param.Param.from_pyvalue(u"quantizedhorizons:key", u",".join(u"%s=%.17g" % inst_quant for inst_quant in sorted(key[1]))))
 		return xml
 
 

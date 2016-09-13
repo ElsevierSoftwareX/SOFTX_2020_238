@@ -536,10 +536,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	def to_xml(self, name):
 		xml = super(ThincaCoincParamsDistributions, self).to_xml(name)
-		xml.appendChild(ligolw_param.from_pyvalue(u"instruments", lsctables.ifos_from_instrument_set(self.instruments)))
-		xml.appendChild(ligolw_param.from_pyvalue(u"min_instruments", self.min_instruments))
-		xml.appendChild(ligolw_param.from_pyvalue(u"signal_rate", self.signal_rate))
-		xml.appendChild(ligolw_param.from_pyvalue(u"delta_t", self.delta_t))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.ifos_from_instrument_set(self.instruments)))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"signal_rate", self.signal_rate))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"delta_t", self.delta_t))
 		xml.appendChild(self.horizon_history.to_xml(name))
 		return xml
 
@@ -1125,7 +1125,7 @@ WHERE
 
 	def to_xml(self, name):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
-		xml.appendChild(ligolw_param.from_pyvalue(u"process_id", self.process_id))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"process_id", self.process_id))
 		def store(xml, prefix, source_dict):
 			for key, binnedarray in source_dict.items():
 				if key is not None:
