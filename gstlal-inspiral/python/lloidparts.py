@@ -325,7 +325,7 @@ class Handler(simplehandler.Handler):
 				# set to CLOCK_TIME_NONE so they can't be
 				# used for this.
 				try:
-					timestamp = LIGOTimeGPS(0, self.seglistdicts["triggersegments"].extent_all()[1].ns())
+					timestamp = self.seglistdicts["triggersegments"].extent_all()[1]
 				except ValueError:
 					# no segments
 					return False
