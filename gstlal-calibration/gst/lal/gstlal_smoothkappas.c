@@ -609,7 +609,9 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_double(
 			"default-kappa-re",
 			"Default real part of kappa value",
-			"Default real part of kappa value to be used if there is a gap in the incoming buffer, or if no input values pass kappa-offset criteria. All elements of the real fifo array are initialized to this value.",
+			"Default real part of kappa value to be used if there is a gap in the\n\t\t\t"
+			"incoming buffer, or if no input values pass kappa-offset criteria.\n\t\t\t"
+			"All elements of the real fifo array are initialized to this value.",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -620,7 +622,9 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_double(
 			"default-kappa-im",
 			"Default imaginary part of kappa value",
-			"Default imaginary part of kappa value to be used if there is a gap in the incoming buffer, or if no input values pass kappa-offset criteria. All elements of the imaginary fifo array are initialized to this value.",
+			"Default imaginary part of kappa value to be used if there is a gap in the\n\t\t\t"
+			"incoming buffer, or if no input values pass kappa-offset criteria. All\n\t\t\t"
+			"elements of the imaginary fifo array are initialized to this value.",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -631,8 +635,9 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_double(
 			"maximum-offset-re",
 			"Maximum acceptable real kappa offset",
-			"Maximum acceptable offset of unsmoothed real kappa from default-kappa-re to be entered into real array from which median is calculated.",
-			0, G_MAXDOUBLE, G_MAXDOUBLE,
+			"Maximum acceptable offset of unsmoothed real kappa from default-kappa-re\n\t\t\t"
+			"to be entered into real array from which median is calculated.",
+			0, G_MAXDOUBLE, G_MAXDOUBLE / 2,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -642,7 +647,9 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_double(
 			"maximum-offset-im",
 			"Maximum acceptable imaginary kappa offset",
-			"Maximum acceptable offset of unsmoothed imaginary kappa from default-kappa-im to be entered into imaginary-part array from which median is calculated.",			0, G_MAXDOUBLE, G_MAXDOUBLE,
+			"Maximum acceptable offset of unsmoothed imaginary kappa from default-kappa-im\n\t\t\t"
+			"to be entered into imaginary-part array from which median is calculated.",
+			0, G_MAXDOUBLE, G_MAXDOUBLE / 2,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -652,7 +659,10 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_boolean(
 			"default-to-median",
 			"Default to median",
-			"If set to false (default), gaps (or times where input values do not pass kappa-offset criteria) are filled in by entering default-kappa into the fifo array. If set to true, gaps are filled in by entering the current median value into the fifo array.",
+			"If set to false (default), gaps (or times where input values do not pass\n\t\t\t"
+			"kappa-offset criteria) are filled in by entering default-kappa into the\n\t\t\t"
+			"fifo array. If set to true, gaps are filled in by entering the current\n\t\t\t"
+			"median value into the fifo array.",
 			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -663,7 +673,11 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_boolean(
 			"track-bad-kappa",
 			"Track input bad kappas",
-			"If set to false (default), gaps (or times where input values do not pass kappa-offset criteria) are filled in by entering default-kappa into the fifo array and non-gaps use the input buffer value. If set to true, gaps are filled in by entering 0 into the fifo array and non-gaps are filled by entering 1's into the fifo array.",
+			"If set to false (default), gaps (or times where input values do not pass\n\t\t\t"
+			"kappa-offset criteria) are filled in by entering default-kappa into the fifo\n\t\t\t"
+			"array and non-gaps use the input buffer value. If set to true, gaps are\n\t\t\t"
+			"filled in by entering 0 into the fifo array and non-gaps are filled by\n\t\t\t"
+			"entering 1's into the fifo array.",
 			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)

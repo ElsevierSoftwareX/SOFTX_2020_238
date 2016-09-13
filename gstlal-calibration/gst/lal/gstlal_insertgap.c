@@ -38,6 +38,9 @@
  * each input is tested, and if either is bad, the value is rejected.
  * The #bad_data_intervals and #replace_value properties are applied to
  * both real and imaginary parts.
+ * This element also has the ability to fill in discontinuities if the
+ * property #fill-discont is set to true. Presentation timestamps and
+ * buffer offsets are adjusted as needed.
  */
 
 
@@ -648,7 +651,9 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		element_class,
 		"Replace unwanted data with gaps",
 		"Filter",
-		"Replace unwanted data, specified with the property bad-data-intervals, with gaps.\n			   Also can replace with another value, given by replace-value. Can also remove gaps\n			   where data is acceptable.",
+		"Replace unwanted data, specified with the property bad-data-intervals, with gaps.\n\t\t\t   "
+		"Also can replace with another value, given by replace-value. Can also remove gaps\n\t\t\t   "
+		"where data is acceptable, and fill in discontinuities if desired.",
 		"Aaron Viets <aaron.viets@ligo.org>"
 	);
 
@@ -665,7 +670,9 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"insert-gap",
 			"Insert gap",
-			"If set to true (default), any data fitting the criteria specified by the property\n			bad-data-intervals is replaced with gaps. Also, NaN's and inf's are replaced with\n			gaps if the properties remove-nan and remove-inf are set to true, respectively.",
+			"If set to true (default), any data fitting the criteria specified by the property\n\t\t\t"
+			"bad-data-intervals is replaced with gaps. Also, NaN's and inf's are replaced with\n\t\t\t"
+			"gaps if the properties remove-nan and remove-inf are set to true, respectively.",
 			TRUE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -677,7 +684,10 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"remove-gap",
 			"Remove gap",
-			"If set to true, any data in an input gap buffer that does not fit the criteria\n			specified by the property bad-data-intervals will be marked as non-gap. If the\n			property insert-gap is false and remove-gap is true, gaps with unacceptable\n			data will be replaced by the value specified by the property replace-value.",
+			"If set to true, any data in an input gap buffer that does not fit the criteria\n\t\t\t"
+			"specified by the property bad-data-intervals will be marked as non-gap. If the\n\t\t\t"
+			"property insert-gap is false and remove-gap is true, gaps with unacceptable\n\t\t\t"
+			"data will be replaced by the value specified by the property replace-value.",
 			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -689,7 +699,8 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"remove-nan",
 			"Remove NaN",
-			"If set to true (default), NaN's in the data stream will be replaced with gaps\n			and/or the replace-value, as specified by user.",
+			"If set to true (default), NaN's in the data stream will be replaced with gaps\n\t\t\t"
+			"and/or the replace-value, as specified by user.",
 			TRUE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -701,7 +712,8 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"remove-inf",
 			"Remove inf",
-			"If set to true (default), infinities in the data stream will be replaced with\n			gaps and/or the replace-value, as specified by user.",
+			"If set to true (default), infinities in the data stream will be replaced with\n\t\t\t"
+			"gaps and/or the replace-value, as specified by user.",
 			TRUE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -713,7 +725,8 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_boolean(
 			"fill-discont",
 			"Fill discontinuity",
-			"If set to true, discontinuities in the data stream will be filled with the\n			replace-value (if set, otherwise 0), and gapped if insert-gap is true.",
+			"If set to true, discontinuities in the data stream will be filled with the\n\t\t\t"
+			"replace-value (if set, otherwise 0), and gapped if insert-gap is true.",
 			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -725,7 +738,8 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_double(
 			"replace-value",
 			"Replace value",
-			"If set, this value is used to replace any data that fits the criteria\n			specified by the property bad-data-intervals. If unset, values are not replaced.", 
+			"If set, this value is used to replace any data that fits the criteria\n\t\t\t"
+			"specified by the property bad-data-intervals. If unset, values are not replaced.", 
 			-G_MAXDOUBLE, G_MAXDOUBLE, G_MAXDOUBLE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -737,7 +751,10 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_value_array(
 			"bad-data-intervals",
 			"Bad data intervals",
-			"Array of at most 16 elements containing minima and maxima of closed intervals\n			in which data is considered unacceptable and will be replaced with gaps and/or the\n			replace-value. Array indices 0, 2, 4, etc., represent minima, and\n			array indices 1, 3, 5, etc., represent the corresponding maxima.",
+			"Array of at most 16 elements containing minima and maxima of closed intervals\n\t\t\t"
+			"in which data is considered unacceptable and will be replaced with gaps and/or\n\t\t\t"
+			"the replace-value. Array indices 0, 2, 4, etc., represent minima, and\n\t\t\t"
+			"array indices 1, 3, 5, etc., represent the corresponding maxima.",
 			g_param_spec_double(
 				"coefficient",
 				"Coefficient",
@@ -755,7 +772,8 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_uint64(
 			"block-duration",
 			"Block duration",
-			"Maximum output buffer duration in nanoseconds. Buffers may be smaller than this.\n			Default is to not change buffer length except as required by added/removed gaps.",
+			"Maximum output buffer duration in nanoseconds. Buffers may be smaller than this.\n\t\t\t"
+			"Default is to not change buffer length except as required by added/removed gaps.",
 			0, G_MAXUINT64, G_MAXUINT64 / 2,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)

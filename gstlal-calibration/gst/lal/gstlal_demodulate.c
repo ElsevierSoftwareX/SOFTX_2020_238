@@ -555,7 +555,8 @@ static void gstlal_demodulate_class_init(GSTLALDemodulateClass *klass)
 		g_param_spec_double(
 			"line-frequency",
 			"Calibration line frequency",
-			"The frequency of the calibration line corresponding to the calibration factor 'kappa' we wish to extract from incoming stream",
+			"The frequency of the calibration line corresponding to the calibration\n\t\t\t"
+			"factor 'kappa' we wish to extract from incoming stream",
 			0, G_MAXDOUBLE, 300.,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)

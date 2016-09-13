@@ -34,21 +34,21 @@
 
 static const char gst_lalwings_doc[] =
     "Pass data only inside a region and mark everything else as gaps.\n"
-    "\n"
-    "The \"offsets\" are media-type specific. For audio buffers, it's the "
-    "number of samples produced so far. For video buffers, it's generally "
-    "the frame number. For compressed data, it could be the byte offset in "
+    "\n\t\t\t   "
+    "The \"offsets\" are media-type specific. For audio buffers, it's the\n\t\t\t   "
+    "number of samples produced so far. For video buffers, it's generally\n\t\t\t   "
+    "the frame number. For compressed data, it could be the byte offset in\n\t\t\t   "
     "a source or destination file.\n"
-    "\n"
-    "If \"inverse=true\" is set, only data *outside* of the specified "
+    "\n\t\t\t   "
+    "If \"inverse=true\" is set, only data *outside* of the specified\n\t\t\t   "
     "region will pass, and data in the inside will be marked as gaps.\n"
-    "\n"
-    "Example launch line:\n"
+    "\n\t\t\t   "
+    "Example launch line:\n\t\t\t   "
     "  gst-launch audiotestsrc wave=sine num-buffers=100 ! lal_wings "
-    "initial-offset=10240 final-offset=20480 ! alsasink\n"
-    "Another example, saving data to disk:\n"
+    "initial-offset=10240 final-offset=20480 ! alsasink\n\t\t\t   "
+    "Another example, saving data to disk:\n\t\t\t   "
     "  gst-launch audiotestsrc num-buffers=10 ! audio/x-raw-float,"
-    "rate=16384,width=64 ! lal_wings initial-offset=1024 final-offset=9216 "
+    "rate=16384,width=64 ! lal_wings initial-offset=1024 final-offset=9216\n\t\t\t   "
     "inverse=true ! lal_nxydump ! filesink location=borders.txt\n";
 
 

@@ -75,7 +75,7 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-#define DEFAULT_EXPRESSION "0.01 * (sin(2. * pi * 256. * t) + sin(2. * pi * 440. * t)) # quiet middle C and A"
+#define DEFAULT_EXPRESSION "0.01 * (sin(2. * pi * 256. * t) + sin(2. * pi * 440. * t))\n\t\t\t# quiet middle C and A"
 
 
 /*
@@ -519,7 +519,8 @@ static void gstlal_pyfuncsrc_class_init(GstLALPyFuncSrcClass *klass)
 		g_param_spec_string(
 			"expression",
 			"Expression",
-			"Expression to evaluate.  The namespace will include \"from numpy input *\" and a variable \"t\" containing the current time.",
+			"Expression to evaluate.  The namespace will include \"from numpy input *\"\n\t\t\t"
+			"and a variable \"t\" containing the current time.",
 			DEFAULT_EXPRESSION,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)

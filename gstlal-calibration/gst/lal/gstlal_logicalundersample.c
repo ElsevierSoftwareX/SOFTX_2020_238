@@ -649,7 +649,11 @@ static void gstlal_logicalundersample_class_init(GSTLALLogicalUnderSampleClass *
 	gst_element_class_set_details_simple(element_class,
 		"Undersample",
 		"Filter/Audio",
-		"Undersamples an integer stream. The undersampling applies a bit mask across all cadence samples.  (Cadence samples are the input samples that are combined via bitwise & to make one output sample.) The undersampled stream is therefore a summary of the cadence samples.  This element's output sample rate must be an integer divisor of its input sample rate.",
+		"Undersamples an integer stream. The undersampling applies a bit mask across\n\t\t\t   "
+		"all cadence samples.  (Cadence samples are the input samples that are combined\n\t\t\t   "
+		"via bitwise & to make one output sample.) The undersampled stream is therefore\n\t\t\t   "
+		"a summary of the cadence samples.  This element's output sample rate must be\n\t\t\t   "
+		"an integer divisor of its input sample rate.",
 		"Madeline Wade <madeline.wade@ligo.org>, Aaron Viets <aaron.viets@ligo.org>"
 	);
 
@@ -662,7 +666,9 @@ static void gstlal_logicalundersample_class_init(GSTLALLogicalUnderSampleClass *
 		g_param_spec_uint(
 			"required-on",
 			"On bits",
-			"Bit mask setting the bits that must be on in the incoming stream.  Note:  if the mask is wider than the input stream, the high-order bits should be 0 or the on condition will never be met.",
+			"Bit mask setting the bits that must be on in the incoming stream.  Note:  if the\n\t\t\t"
+			"mask is wider than the input stream, the high-order bits should be 0 or the on\n\t\t\t"
+			"condition will never be met.",
 			0, G_MAXUINT, 0x1,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
