@@ -623,7 +623,7 @@ class Data(object):
 				# FIXME why does mapinfo.data come out as
 				# an empty list on some occasions???
 				if mapinfo.data:
-					events.append(streamthinca.SnglInspiral.from_buffer(mapinfo.data))
+					events.extend(streamthinca.SnglInspiral.from_buffer(mapinfo.data))
 				memory.unmap(mapinfo)
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_", 1)[0]
