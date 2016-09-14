@@ -356,7 +356,7 @@ def T050017_filename(instruments, description, start, end, extension, path = Non
 	"""!
 	A function to generate a T050017 filename.
 	"""
-	if type(instruments) != type(str()):
+	if not isinstance(instruments, basestring):
 		instruments = "".join(sorted(instruments))
 	duration = end - start
 	extension = extension.strip('.')
