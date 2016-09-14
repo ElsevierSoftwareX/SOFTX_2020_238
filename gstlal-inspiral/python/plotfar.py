@@ -333,10 +333,10 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios
 	ylo = 10**math.floor(math.log10(ylo))
 	yhi = 10.
 
-	if zerolag_ln_likelihood_ratios is not None:
-		zerolag_ln_likelihood_ratios = numpy.array(zerolag_ln_likelihood_ratios)
-		x = zerolag_ln_likelihood_ratios[:,0]
-		y = zerolag_ln_likelihood_ratios[:,1]
+	if observed_ln_likelihood_ratios is not None:
+		observed_ln_likelihood_ratios = numpy.array(observed_ln_likelihood_ratios)
+		x = observed_ln_likelihood_ratios[:,0]
+		y = observed_ln_likelihood_ratios[:,1]
 		axes.semilogy(x, y, color = "k", linestyle = "", marker = "+")
 
 	if ln_likelihood_ratio_markers is not None:
