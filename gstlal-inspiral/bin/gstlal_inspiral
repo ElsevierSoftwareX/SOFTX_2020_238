@@ -173,17 +173,16 @@
 
 
 import itertools
+import math
+from optparse import OptionParser
 import os
 import resource
-import sys
-from optparse import OptionParser
 import signal
 import socket
-import time
-import tempfile
-import math
 import subprocess
-from collections import namedtuple
+import sys
+import tempfile
+import time
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -212,9 +211,9 @@ from gstlal import inspiral_pipe
 from gstlal import pipeparts
 from gstlal import simulation
 
+@lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-lsctables.use_in(LIGOLWContentHandler)
 
 #
 # Make sure we have sufficient resources
@@ -237,7 +236,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def now():
-	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()))
 
 
 #
