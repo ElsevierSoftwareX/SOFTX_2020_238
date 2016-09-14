@@ -13,7 +13,8 @@ dist_pkgdata_DATA = \
 	Makefile.IMBH_example \
 	de_calc_likelihood.sql \
 	inj_simplify_and_cluster.sql \
-	simplify_and_cluster.sql
+	simplify_and_cluster.sql \
+	O1_snr_chi_pdf_reference.xml.gz
 
 inspiral_snr_pdf.xml.gz :
 	gstlal_inspiral_make_snr_pdf --verbose --output $@ \
