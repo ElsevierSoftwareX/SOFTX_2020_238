@@ -176,8 +176,6 @@ Streaming with gstreamer
 
 ### Urgent
 * Don't set a --singles-threshold on gstlal_inspiral jobs doing injection runs (since now the dag is patched to not delete singles, so we should watch out for injection jobs) - really just make sure that the injection jobs are sane. **Chad + Cody??**
-* Patch itac to populate the SNR vectors on the triggers.  I have made all the changes needed to switch the code over to the new trigger object but the SNR vector is not being populated.  I don't know how. Somebody who does needs to take a look. **Chad**
-* When itac is patched, a gracedb upload needs to be performed ASAP to test the plumbing all the way through and to give Leo a sample file to look at for him to code against. **Chad**
 * Get the O1 marg liklihood file converted (for now use one from prior dist stats?). This will be used to assign preliminary LRs **Kipp**
 * Figure out plumbing to assign likelihood in offline and disentangle the LR assignment from FAP assignment from snapshotting, etc. **Chad and Cody**
 * Different injection channels online **Duncan**
@@ -207,3 +205,5 @@ Streaming with gstreamer
   * The "bank" tab - say chirp mass
   * when should we be concerned about RAM history
   * What is "state vector on-off gap"
+* Patch itac to populate the SNR vectors on the triggers.  I have made all the changes needed to switch the code over to the new trigger object but the SNR vector is not being populated.  I don't know how. Somebody who does needs to take a look. **Chad**
+ * When itac is patched, a gracedb upload needs to be performed ASAP to test the plumbing all the way through and to give Leo a sample file to look at for him to code against. **Chad**
