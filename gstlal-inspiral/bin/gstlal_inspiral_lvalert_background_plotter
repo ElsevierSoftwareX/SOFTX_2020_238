@@ -215,7 +215,7 @@ for gid in gid_list:
 			fig.savefig(os.path.join(options.output_path, filename))
 
 
-	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,max(25., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), event_ln_likelihood_ratio = coinc_event.likelihood)
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,max(25., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
 	try:
 		fig.tight_layout()
 	except AttributeError:

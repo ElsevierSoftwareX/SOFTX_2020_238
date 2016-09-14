@@ -323,7 +323,7 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	fig.tight_layout(pad = .8)
 	return fig
 
-def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios = None, event_ln_likelihood_ratio = None):
+def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios = None, ln_likelihood_ratio_markers = None):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 
 	x = numpy.linspace(xlo, xhi, 10000)
@@ -339,8 +339,9 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios 
 		y = zerolag_ln_likelihood_ratios[:,1]
 		axes.semilogy(x, y, color = "k", linestyle = "", marker = "+")
 
-	if event_ln_likelihood_ratio is not None:
-		axes.axvline(event_ln_likelihood_ratio, ylo, yhi)
+	if ln_likelihood_ratio_markers is not None:
+		for ln_likelihood_ratio in ln_likelihood_ratio_markers:
+			axes.axvline(ln_likelihood_ratio, ylo, yhi)
 
 	axes.set_xlim((xlo, xhi))
 	axes.set_ylim((ylo, yhi))
