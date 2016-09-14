@@ -605,7 +605,7 @@ class Data(object):
 			# retrieve triggers from appsink element
 			buf = elem.emit("pull-sample").get_buffer()
 			events = []
-			for i in buf.n_memory():
+			for i in range(buf.n_memory()):
 				memory = buf.peek_memory(i)
 				result, mapinfo = memory.map(Gst.MapFlags.READ)
 				assert result
