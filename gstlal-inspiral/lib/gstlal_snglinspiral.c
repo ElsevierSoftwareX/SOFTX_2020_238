@@ -224,7 +224,9 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 			/* 
 			 * Populate the SNR snippet if available 
 			 * FIXME: only supported for single precision at the moment
+			 * FIXME: We still have segfaults when actually using gstlal_snglinspiral_set_snr()
 			 */
+#if 0
 			if (snr_matrix_view)
 			{
 				/* Get the column of SNR we are interested in */
@@ -235,10 +237,9 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				gsl_vector_complex_float_view snr_series_view = gsl_vector_complex_float_view_array((float *) snr_series->data->data, snr_series->data->length);
 				/* Use BLAS to do the copy */
 				gsl_blas_ccopy (&(snr_vector_view.vector), &(snr_series_view.vector));
-				// FIXME uncommenting this leads to a seg fault
-				//gstlal_snglinspiral_set_snr(event, snr_series);
+				gstlal_snglinspiral_set_snr(event, snr_series);
 			}
-
+#endif
 			/*
 			 * add to buffer
 			 */
