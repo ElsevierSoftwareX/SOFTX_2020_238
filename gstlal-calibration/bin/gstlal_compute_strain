@@ -528,7 +528,7 @@ for key, chan in zip(headkeys, channel_list):
 if not options.no_dq_vector:
 	# FIXME: When the ODC is written as unsigned ints, this piece can be removed
 	odcstatevector = pipeparts.mkaudioconvert(pipeline, head_dict["odcstatevector"], odc_caps)
-	odcstatevector = calibration_parts.mkinsertgap(pipeline, odcstatevector, remove_gap = False, insert_gap = True)
+	odcstatevector = calibration_parts.mkinsertgap(pipeline, odcstatevector)
 	odcgaptee = pipeparts.mktee(pipeline, odcstatevector)
 	
 
@@ -960,7 +960,7 @@ if not options.no_dq_vector:
 	# GAP BIT BRANCH
 	#	
 
-	nogap = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, odcgaptee), nongap_is_control = True, bit_vector = 1) 
+	nogap = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, odcgaptee), threshold=1, bit_vector = 1) 
 	nogap = pipeparts.mkcapsfilter(pipeline, nogap, odc_caps)
 	nogap = pipeparts.mkgeneric(pipeline, nogap, "lal_logicalundersample", required_on = 1, status_out = 512)
 	nogap = pipeparts.mkcapsfilter(pipeline, nogap, calibstate_caps)
