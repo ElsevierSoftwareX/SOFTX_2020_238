@@ -48,6 +48,9 @@ def mkaudiorate(pipeline, head):
 def mkreblock(pipeline, head):
 	return pipeparts.mkreblock(pipeline, head, block_duration = Gst.SECOND)
 
+def mkinsertgap(pipeline, head, bad_data_intervals = [1, 0], insert_gap = False, remove_gap = True, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND):
+	return pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = insert_gap, remove_gap = remove_gap, replace_value = replace_value, fill_discont = fill_discont, block_duration = block_duration)
+
 def mkupsample(pipeline, head, new_caps):
 	head = pipeparts.mkgeneric(pipeline, head, "lal_constantupsample")
 	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
@@ -104,15 +107,14 @@ def write_graph(demux, pipeline, name):
 # Common element combo functions
 #
 
-def hook_up_and_reblock(pipeline, demux, channel_name, instrument):
+def hook_up(pipeline, demux, channel_name, instrument):
 	head = mkqueue(pipeline, None)
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_static_pad("sink"))
-	head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = [1, 0], insert_gap = False, remove_gap = True, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND)
 	return head
 
 def caps_and_progress(pipeline, head, caps, progress_name):
-	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, caps)
+	head = pipeparts.mkaudioconvert(pipeline, head, caps)
+	head = mkinsertgap(pipeline, head)
 	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 	head = mkaudiorate(pipeline, head)
 	return head

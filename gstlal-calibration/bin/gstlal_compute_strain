@@ -522,14 +522,14 @@ if options.data_source == "frames":
 
 # Get everything hooked up and blocked off to no more than 1 second buffers
 for key, chan in zip(headkeys, channel_list):
-	head_dict[key] = calibration_parts.hook_up_and_reblock(pipeline, demux, chan[1], instrument)
+	head_dict[key] = calibration_parts.hook_up(pipeline, demux, chan[1], instrument)
 
 # Tee off the ODC channel to check for gaps and convert it to unsigned ints (if necessary)
 if not options.no_dq_vector:
-	odcgaptee = pipeparts.mktee(pipeline, head_dict["odcstatevector"])
 	# FIXME: When the ODC is written as unsigned ints, this piece can be removed
-	odcstatevector = pipeparts.mkaudioconvert(pipeline, odcgaptee)
-	odcstatevector = pipeparts.mkcapsfilter(pipeline, odcstatevector, odc_caps)
+	odcstatevector = pipeparts.mkaudioconvert(pipeline, head_dict["odcstatevector"], odc_caps)
+	odcstatevector = calibration_parts.mkinsertgap(pipeline, odcstatevector, remove_gap = False, insert_gap = True)
+	odcgaptee = pipeparts.mktee(pipeline, odcstatevector)
 	
 
 # When reading from disk, clip the incoming data stream(s) to segment list if one is provided
@@ -542,7 +542,7 @@ if options.data_source == "frames" and frame_segments is not None:
 # DQ VECTOR BRANCH: PART 1
 #
 if not options.no_dq_vector:
-	odcstatevector = calibration_parts.mkaudiorate(pipeline, odcstatevector)
+	odcstatevector = calibration_parts.mkaudiorate(pipeline, odcgaptee)
 	odctagstr = "channel-name=%s:%s, instrument=%s" % (instrument, options.dq_channel_name, instrument)
 	odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
 	odcstatevector = pipeparts.mkprogressreport(pipeline, odcstatevector,"progress_odc_%s" % instrument)
