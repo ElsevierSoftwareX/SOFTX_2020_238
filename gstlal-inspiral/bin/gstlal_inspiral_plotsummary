@@ -554,6 +554,13 @@ FROM
 			instruments = frozenset(instrument for instrument, segments in contents.seglists.items() if sim.get_time_geocent() in segments)
 			self.injections.setdefault(sim.waveform, []).append(sim)
 
+	@staticmethod
+	def marker_and_size(n):
+		if n > 2000:
+			return "ko", (10000.0 / n)**0.7
+		else:
+			return "k.", None
+
 	def finish(self):
 		for waveform, sims in self.injections.items():
 			for col1,col2,ax1,ax2,name,aspect in [
@@ -564,10 +571,8 @@ FROM
 							([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"Spin 1 z", r"Spin 2 z", "sim_dist_spin1z_spin2z_%s",None)]:
 				fig, axes = create_plot(ax1,ax2, aspect = aspect)
 				axes.set_title(r"Injection Parameter Distribution (%s Injections)" % waveform)
-				if len(col1) > 2000:
-					axes.plot(col1,col2, "ko",markersize=(10000.0/len(col1))**0.7)
-				else:
-					axes.plot(col1,col2, "k.")
+				mrkr, markersize = self.marker_and_size(len(col1))
+				axes.plot(col1,col2, mrkr, markersize = markersize)
 				minx, maxx = axes.get_xlim()
 				miny, maxy = axes.get_ylim()
 				if aspect == 1:
