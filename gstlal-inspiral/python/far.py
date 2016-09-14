@@ -1233,7 +1233,7 @@ class FAPFAR(object):
 				# jackpot
 				return mid
 		return (hi + lo) / 2.
-	rank_from_fap = numpy.vectorize(rank_from_fap, excluded = ['self', 'tolerance'])
+	rank_from_fap.__get__ = numpy.vectorize(rank_from_fap, otypes = (numpy.float64,), excluded = (0, 2, 'self', 'tolerance'))
 
 	def far_from_rank(self, rank):
 		# implements equation (B4) of Phys. Rev. D 88, 024025.
@@ -1264,7 +1264,7 @@ class FAPFAR(object):
 				# jackpot
 				return mid
 		return (hi + lo) / 2.
-	rank_from_far = numpy.vectorize(rank_from_far, excluded = ['self', 'tolerance'])
+	rank_from_far.__get__ = numpy.vectorize(rank_from_far, otypes = (numpy.float64,), excluded = (0, 2, 'self', 'tolerance'))
 
 	def assign_fapfars(self, connection):
 		# assign false-alarm probabilities and false-alarm rates
