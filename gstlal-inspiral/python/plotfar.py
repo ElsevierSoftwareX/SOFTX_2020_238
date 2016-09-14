@@ -220,12 +220,8 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 		colours.append(plotutil.colour_from_instruments(instruments))
 	axes3.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
 	axes3.set_title("Observed Coincidence Counts")
-	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
-	try:
-		fig.tight_layout(pad = .8)
-		return fig
-	except AttributeError:
-		return fig
+	fig.tight_layout(pad = .8)
+	return fig
 
 
 def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, max_snr, ifo_snr = {}, sngls = None):
@@ -324,12 +320,8 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	ylo = max(yhi * 1e-40, ylo)
 	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
-	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
-	try:
-		fig.tight_layout(pad = .8)
-		return fig
-	except AttributeError:
-		return fig
+	fig.tight_layout(pad = .8)
+	return fig
 
 def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios = None, event_ln_likelihood_ratio = None):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
@@ -356,12 +348,8 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios 
 	axes.set_title(r"False Alarm Probability vs.\ Log Likelihood Ratio")
 	axes.set_xlabel(r"$\ln \mathcal{L}$")
 	axes.set_ylabel(r"$P(\mathrm{one\ or\ more\ candidates} \geq \ln \mathcal{L} | \mathrm{noise})$")
-	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
-	try:	
-		fig.tight_layout(pad = .8)
-		return fig
-	except AttributeError:
-		return fig
+	fig.tight_layout(pad = .8)
+	return fig
 
 def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo,thi), tbins, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
 	tlo, thi = float(tlo), float(thi)
@@ -381,10 +369,5 @@ def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo,thi), tbins, c
 	axes.set_xlabel('GPS Time (s)')
 	axes.set_title('Horizon Distance vs.\ Time')
 	axes.legend(loc = "lower left")
-	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
-	try:	
-		fig.tight_layout(pad = .8)
-		return fig
-	except AttributeError:
-		return fig
-
+	fig.tight_layout(pad = .8)
+	return fig
