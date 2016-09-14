@@ -324,9 +324,11 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	return fig
 
 def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios = None, ln_likelihood_ratio_markers = None):
+	assert xlo < xhi
+
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 
-	x = numpy.linspace(xlo, xhi, 10000)
+	x = numpy.linspace(xlo, xhi, int(math.ceil(xhi - xlo)) * 8)
 	axes.semilogy(x, fapfar.fap_from_rank(x), color = "k")
 
 	ylo = fapfar.fap_from_rank(xhi)
