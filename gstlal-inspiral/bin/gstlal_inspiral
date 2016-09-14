@@ -155,7 +155,7 @@
 #	+ `--gracedb-group`: gracedb group (default is Test).
 #	+ `--gracedb-service-url`: gracedb service url (default is https://gracedb.ligo.org/api/)
 #	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 4s.
-#	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = 8).
+#	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = +inf, i.e., don't retain singles).
 #
 # ### Review Status
 #
@@ -172,6 +172,13 @@
 # - Consider deleting timeslicechisq
 
 
+from collections import namedtuple
+try:
+	from fpconst import PosInf
+except ImportError:
+	# fpconst is not part of the standard library and might not be
+	# available
+	PosInf = float("+inf")
 import itertools
 import math
 from optparse import OptionParser
@@ -304,7 +311,7 @@ def parse_command_line():
 	# which it can delete uninteresting singles after the coincs are
 	# ranked.  if the name of this option is changed, be sure to update
 	# gstlal_inspiral_calc_likelihood
-	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
+	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = PosInf, help = "Set the SNR threshold at which to record single-instrument events in the output (default = +inf, i.e. don't retain singles).")
 
 	options, filenames = parser.parse_args()
 	missing_options = []
