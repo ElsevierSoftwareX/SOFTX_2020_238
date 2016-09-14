@@ -306,11 +306,11 @@ def parse_command_line():
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "gracedb service url, default is https://gracedb.ligo.org/api/")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 4.0, help = "Set the thinca interval, default = 4s")
-	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
-	# in the process_params table to determine the threshold below
-	# which it can delete uninteresting singles after the coincs are
-	# ranked.  if the name of this option is changed, be sure to update
-	# gstlal_inspiral_calc_likelihood
+	# NOTE:  the clustering SQL scripts search for this option in the
+	# process_params table to determine the threshold below which it
+	# can delete uninteresting singles after the coincs are ranked.  if
+	# the name of this option is changed, be sure to update
+	# simplify_and_cluster.sql and derivatives
 	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = PosInf, help = "Set the SNR threshold at which to record single-instrument events in the output (default = +inf, i.e. don't retain singles).")
 
 	options, filenames = parser.parse_args()
