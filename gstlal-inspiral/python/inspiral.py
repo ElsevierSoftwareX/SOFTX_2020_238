@@ -604,23 +604,27 @@ class Data(object):
 		with self.lock:
 			# retrieve triggers from appsink element
 			buf = elem.emit("pull-sample").get_buffer()
-			result, mapinfo = buf.map(Gst.MapFlags.READ)
-			assert result
-			# NOTE NOTE NOTE NOTE
-			# It is critical that the correct class'
-			# .from_buffer() method be used here.  This code is
-			# interpreting the buffer's contents as an array of
-			# C structures and building instances of python
-			# wrappers of those structures but if the python
-			# wrappers are for the wrong structure declaration
-			# then terrible terrible things will happen
-			# NOTE NOTE NOTE NOTE
-			# FIXME why does mapinfo.data come out as an empty list on some occasions???
-			if mapinfo.data:
-				events = streamthinca.SnglInspiral.from_buffer(mapinfo.data)
-			else:
-				events = []
-			buf.unmap(mapinfo)
+			events = []
+			for i in buf.n_memory():
+				memory = buf.peek_memory(i)
+				result, mapinfo = memory.map(Gst.MapFlags.READ)
+				assert result
+				# NOTE NOTE NOTE NOTE
+				# It is critical that the correct class'
+				# .from_buffer() method be used here.  This
+				# code is interpreting the buffer's
+				# contents as an array of C structures and
+				# building instances of python wrappers of
+				# those structures but if the python
+				# wrappers are for the wrong structure
+				# declaration then terrible terrible things
+				# will happen
+				# NOTE NOTE NOTE NOTE
+				# FIXME why does mapinfo.data come out as
+				# an empty list on some occasions???
+				if mapinfo.data:
+					events.append(streamthinca.SnglInspiral.from_buffer(mapinfo.data))
+				memory.unmap(mapinfo)
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_", 1)[0]
 
