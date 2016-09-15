@@ -162,7 +162,7 @@ class OneTimeSignalHandler(object):
 			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
 			try:
 				self.do_on_call(signum, frame)
-				if not self.pipeline.send_event(Gst.event_new_eos()):
+				if not self.pipeline.send_event(Gst.Event.new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
 			except Exception, e:
 				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
