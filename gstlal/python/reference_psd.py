@@ -180,7 +180,8 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 		print >>sys.stderr, "putting pipeline into READY state ..."
 	if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter READY state")
-	datasource.pipeline_seek_for_gps(pipeline, *gw_data_source_info.seg)
+	if gw_data_source_info.data_source not in ("lvshm", "framexmit"):# FIXME what about nds online?
+		datasource.pipeline_seek_for_gps(pipeline, *gw_data_source_info.seg)
 	if verbose:
 		print >>sys.stderr, "putting pipeline into PLAYING state ..."
 	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
