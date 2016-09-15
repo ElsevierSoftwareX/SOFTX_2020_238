@@ -6,7 +6,7 @@
 # time make logs/gstlal.txt -f Makefile.ligosoftware_icc_deb8_gstreamer-1.0 1> make.out 2> make.err
 
 # albert.einstein for git checkout
-USER=alexander.pace
+USER=duncan.meacher
 
 # Set directories and paths
 SRC_DIR:=${PWD}/src
@@ -41,7 +41,7 @@ LALSIMULATION=lalsimulation-1.6.0
 LALMETAIO=lalmetaio-1.2.8
 LALFRAME=lalframe-1.4.1
 LAL=lal-6.16.1
-GDS=gds-2.17.8
+GDS=gds-2.17.9
 LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.5.1
 LDASTOOLSAL=ldas-tools-al-2.5.0
 SWIG=swig-3.0.7
@@ -599,7 +599,7 @@ $(TAR_DIR)/$(FFTW).tar.gz : $(GSTLAL_REPO)/gstlal/configure.ac
 
 # git repos
 #logs/git.txt : $(LALSUITE_REPO)/configure.ac $(GSTLAL_REPO)/gstlal/configure.ac
-logs/git.txt : $(LALSUITE_REPO)/lal/README $(GSTLAL_REPO)/TODO
+logs/git.txt : $(LALSUITE_REPO)/lal/README $(GSTLAL_REPO)/TODO.md
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 git-pull :
@@ -611,7 +611,7 @@ git-pull :
 		cd $(GSTLAL_REPO) && git clean -dxf && git pull --rebase ; \
 	fi ;
 
-$(GSTLAL_REPO)/TODO : $(LALSUITE_REPO)/lal/README
+$(GSTLAL_REPO)/TODO.md : $(LALSUITE_REPO)/lal/README
 	if [ -f $@ ] ; then \
 		echo "Gstlal git repo exists" ; \
 	else \
