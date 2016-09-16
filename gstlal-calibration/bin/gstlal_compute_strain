@@ -176,7 +176,7 @@ parser.add_option("--expected-kappac", metavar = "float", type = float, default 
 parser.add_option("--expected-fcc", metavar = "Hz", type = float, default = 330.0, help = "Expected value for the coupled cavity pole. (Default = 330.0 Hz)")
 parser.add_option("--kappaa-real-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the real part of \kappa_a +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--kappapu-real-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the real part of \kappa_pu +/- this number will be considered OK. (Default = 0.2)")
-parser.add_option("--kappatst-real-ok-var", metavar = "float", type = float, default = 0.5, help = "Values of the real part of \kappa_tst +/- this number will be considered OK. (Default = 0.5)")
+parser.add_option("--kappatst-real-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the real part of \kappa_tst +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--kappaa-imag-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the imaginary part of \kappa_a +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--kappapu-imag-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the imaginary part of \kappa_pu +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--kappatst-imag-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the imaginary part of \kappa_tst +/- this number will be considered OK. (Default = 0.2)")
@@ -426,14 +426,24 @@ pcal_corr_at_opt_gain_fcc_freq_real = float(filters["kc_pcal_corr_re"])
 pcal_corr_at_opt_gain_fcc_freq_imag = float(filters["kc_pcal_corr_im"])
 esd_act_line_freq = float(filters["ktst_esd_line_freq"])
 if options.dewhitening:
-	derr_dewhiten_at_darm_act_freq_real = float(filters["ka_pcal_whitener_re"])
-	derr_dewhiten_at_darm_act_freq_imag = float(filters["ka_pcal_whitener_im"])
-	derr_dewhiten_at_pu_act_freq_real = float(filters["ka_esd_whitener_re"])
-	derr_dewhiten_at_pu_act_freq_imag = float(filters["ka_esd_whitener_im"])
-	derr_dewhiten_at_opt_gain_fcc_freq_real = float(filters["kc_pcal_whitener_re"])
-	derr_dewhiten_at_opt_gain_fcc_freq_imag = float(filters["kc_pcal_whitener_im"])
-	derr_dewhiten_at_esd_act_freq_real = float(filters["ktst_esd_whitener_re"])
-	derr_dewhiten_at_esd_act_freq_imag = float(filters["ktst_esd_whitener_im"])
+	try:
+		derr_dewhiten_at_darm_act_freq_real = float(filters["ka_pcal_whitener_re"])
+		derr_dewhiten_at_darm_act_freq_imag = float(filters["ka_pcal_whitener_im"])
+		derr_dewhiten_at_pu_act_freq_real = float(filters["ka_esd_whitener_re"])
+		derr_dewhiten_at_pu_act_freq_imag = float(filters["ka_esd_whitener_im"])
+		derr_dewhiten_at_opt_gain_fcc_freq_real = float(filters["kc_pcal_whitener_re"])
+		derr_dewhiten_at_opt_gain_fcc_freq_imag = float(filters["kc_pcal_whitener_im"])
+		derr_dewhiten_at_esd_act_freq_real = float(filters["ktst_esd_whitener_re"])
+		derr_dewhiten_at_esd_act_freq_imag = float(filters["ktst_esd_whitener_im"])
+	except:
+		derr_dewhiten_at_darm_act_freq_real = 1.0
+		derr_dewhiten_at_darm_act_freq_imag = 0.0
+		derr_dewhiten_at_pu_act_freq_real = 1.0
+		derr_dewhiten_at_pu_act_freq_imag = 0.0
+		derr_dewhiten_at_opt_gain_fcc_freq_real = 1.0
+		derr_dewhiten_at_opt_gain_fcc_freq_imag = 0.0
+		derr_dewhiten_at_esd_act_freq_real = 1.0
+		derr_dewhiten_at_esd_act_freq_imag = 0.0
 
 # If we're performing partial calibration, load the deltal filters
 if options.partial_calibration:
@@ -637,6 +647,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	if not options.no_dq_vector:
 		ktstR = pipeparts.mktee(pipeline, ktstR)
 		ktstI = pipeparts.mktee(pipeline, ktstI)
+
 	
 	if options.no_coherence:
 		smooth_ktstR = calibration_parts.smooth_kappas_no_coherence(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, median_smoothing_samples, factors_average_samples)
@@ -792,17 +803,18 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			if not options.no_dq_vector:
 				kc = pipeparts.mkgate(pipeline, kc, control = pipeparts.mkqueue(pipeline, obsreadystatevec), threshold = 1)
 				kc = pipeparts.mktee(pipeline, kc)
-			
+
 			if options.no_coherence:
 				smooth_kc = calibration_parts.smooth_kappas_no_coherence(pipeline, kc, options.kappac_ok_var, options.expected_kappac, median_smoothing_samples, factors_average_samples)
+
 				if not options.no_dq_vector:
 					smooth_kcdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, kc, options.kappac_ok_var, options.expected_kappac, median_smoothing_samples)
 			else:
 				smooth_kc = calibration_parts.smooth_kappas(pipeline, kc, options.expected_kappac, median_smoothing_samples, factors_average_samples)
 				if not options.no_dq_vector:
 					smooth_kcdq = calibration_parts.track_bad_kappas(pipeline, kc, options.expected_kappac, median_smoothing_samples)
-				
-			smooth_kctee = pipeparts.mktee(pipeline, smooth_kc)
+
+		smooth_kctee = pipeparts.mktee(pipeline, smooth_kc)
 
 		# compute f_cc
 		if not options.no_fcc:
