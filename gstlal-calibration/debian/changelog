@@ -1,10 +1,16 @@
+gstlal-calibration (1.0.1-1) unstable; urgency=low
+
+  * Fix to how pipeline deals with discontinuities
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Wed, 16 Sept 2016 13:12:00 +0900
+
 gstlal-calibration (1.0.0-1) unstable; urgency=low
 
   * Updates to pipeline to run with kappas
   * Updated CALIB_STATE_VECTOR definition
   * Update to kappa smoothing routine
 
- -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 06 Jul 2016 16:22:00 +0900
+ -- Madeline Wade <madeline.wade@ligo.org>  Wed, 06 Jul 2016 16:22:00 +0900
 
 gstlal-calibration (0.99.1-1) unstable; urgency=low
 
