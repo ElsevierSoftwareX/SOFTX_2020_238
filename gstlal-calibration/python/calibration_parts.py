@@ -18,7 +18,6 @@
 
 from gstlal import pipeparts
 import numpy
-import random
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -137,18 +136,15 @@ def list_srcs(pipeline, *args):
 def smooth_kappas_no_coherence(pipeline, head, var, expected, N, Nav):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
 	# Use the maximum_offset_re property to determine whether input kappas are good or not
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N)
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N, avg_array_size = Nav)
 	head = mkaudiorate(pipeline, head)
 	return head
 
 def smooth_complex_kappas_no_coherence(pipeline, head, real_var, imag_var, real_expected, imag_expected, N, Nav):
 	# Find median of complex calibration factors array with size N, split into real and imaginary parts, and smooth out medians with an average over Nav samples
 	# Use the maximum_offset_re and maximum_offset_im properties to determine whether input kappas are good or not
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = real_var, maximum_offset_im = imag_var, default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = real_var, maximum_offset_im = imag_var, default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav)
 	re, im = split_into_real(pipeline, head)
-	re = pipeparts.mkfirbank(pipeline, re, fir_matrix = [numpy.ones(Nav)/Nav])
-	im = pipeparts.mkfirbank(pipeline, im, fir_matrix = [numpy.ones(Nav)/Nav])
 	re = mkaudiorate(pipeline, re)
 	im = mkaudiorate(pipeline, im)
 	return re, im
@@ -156,8 +152,7 @@ def smooth_complex_kappas_no_coherence(pipeline, head, real_var, imag_var, real_
 def smooth_kappas(pipeline, head, expected, N, Nav):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
 	# Assume input was previously gated with coherence uncertainty to determine if input kappas are good or not
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = expected, array_size = N)
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = [numpy.ones(Nav)/Nav])
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = expected, array_size = N, avg_array_size = Nav)
 	head = mkaudiorate(pipeline, head)
 	return head
 
@@ -167,11 +162,9 @@ def smooth_complex_kappas(pipeline, kappas, statevector, coherence, real_expecte
 
 	statevector = pipeparts.mktee(pipeline, statevector)
 	to_kappa_or_not_to_kappa = mkadder(pipeline, list_srcs(pipeline, statevector, coherence))
-        gapped_kappas = pipeparts.mkgate(pipeline, kappas, control = to_kappa_or_not_to_kappa, threshold = 2)
-	smooth_kappas = pipeparts.mkgeneric(pipeline, gapped_kappas, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N)
+	gapped_kappas = pipeparts.mkgate(pipeline, kappas, control = to_kappa_or_not_to_kappa, threshold = 2)
+	smooth_kappas = pipeparts.mkgeneric(pipeline, gapped_kappas, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav)
 	re, im = split_into_real(pipeline, smooth_kappas)
-	re = pipeparts.mkfirbank(pipeline, re, fir_matrix = [numpy.ones(Nav)/Nav])
-	im = pipeparts.mkfirbank(pipeline, im, fir_matrix = [numpy.ones(Nav)/Nav])
 	re = mkaudiorate(pipeline, re)
 	im = mkaudiorate(pipeline, im)
 	re = pipeparts.mkgate(pipeline, re, control = statevector, threshold=1)
@@ -203,11 +196,11 @@ def track_bad_complex_kappas(pipeline, kappas, statevector, coherence, real_expe
 	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) by defaulting to default kappa for majority of input samples
 	# Real and imaginary parts are done separately (outputs of lal_smoothkappas can be 1+i, 1, i, or 0)
 
-        to_kappa_or_not_to_kappa = mkadder(pipeline, list_srcs(pipeline, statevector, coherence))
-        gapped_kappas = pipeparts.mkgate(pipeline, kappas, control = to_kappa_or_not_to_kappa, threshold = 2)
-        track_kappas = pipeparts.mkgeneric(pipeline, gapped_kappas, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, track_bad_kappa = True)
-        re, im = split_into_real(pipeline, track_kappas)
-        return re, im
+	to_kappa_or_not_to_kappa = mkadder(pipeline, list_srcs(pipeline, statevector, coherence))
+	gapped_kappas = pipeparts.mkgate(pipeline, kappas, control = to_kappa_or_not_to_kappa, threshold = 2)
+	track_kappas = pipeparts.mkgeneric(pipeline, gapped_kappas, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, track_bad_kappa = True)
+	re, im = split_into_real(pipeline, track_kappas)
+	return re, im
 
 def smooth_kappas_no_coherence_test(pipeline, head, var, expected, N, Nav):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples

@@ -65,8 +65,12 @@ struct _GSTLALSmoothKappas {
 	double current_median_im;
 	double *fifo_array_re;
 	double *fifo_array_im;
+	double *avg_array_re;
+	double *avg_array_im;
 	int index_re;
 	int index_im;
+	int avg_index_re;
+	int avg_index_im;
 	enum gstlal_smoothkappas_data_type {
 		F32 = 0,
 		F64,
@@ -76,6 +80,7 @@ struct _GSTLALSmoothKappas {
 
 	/* properties */
 	int array_size;
+	int avg_array_size;
 	double default_kappa_re;
 	double default_kappa_im;
 	double maximum_offset_re;

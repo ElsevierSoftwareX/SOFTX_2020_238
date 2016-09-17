@@ -56,12 +56,14 @@ def lal_smoothkappas_01(pipeline, name):
 	# build pipeline
 	#
 
-	src = test_common.test_src(pipeline, channels = 2, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq, volume = volume)
-	head = pipeparts.mktogglecomplex(pipeline, src)
+	head = test_common.test_src(pipeline, channels = 2, buffer_length = buffer_length, rate = rate, width = width, test_duration = test_duration, wave = wave, freq = freq, volume = volume)
+	head = pipeparts.mktogglecomplex(pipeline, head)
 	head = pipeparts.mktee(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_in.dump" % name)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", array_size = 3, maximum_offset_re = 1, maximum_offset_im = 1, default_kappa_im = 0, default_kappa_re = 0, default_to_median = True)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
+	median = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", array_size = 3, maximum_offset_re = 0.5, maximum_offset_im = 0.5, default_kappa_im = 0.5, default_kappa_re = 0.5, track_bad_kappa = True, default_to_median = False)
+	median_avg = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", array_size = 3, avg_array_size = 2,  maximum_offset_re = 0.5, maximum_offset_im = 0.5, default_kappa_im = 0.5, default_kappa_re = 0.5, track_bad_kappa = True, default_to_median = False)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, median), "%s_median.dump" % name)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, median_avg), "%s_median_avg.dump" % name)
 
 	#
 	# done
@@ -174,7 +176,7 @@ def lal_smoothkappas_04(pipeline, name):
 #
 
 
-#test_common.build_and_run(lal_smoothkappas_01, "lal_smoothkappas_01")
+test_common.build_and_run(lal_smoothkappas_01, "lal_smoothkappas_01")
 #test_common.build_and_run(lal_smoothkappas_02, "lal_smoothkappas_02")
-test_common.build_and_run(lal_smoothkappas_03, "lal_smoothkappas_03")
+#test_common.build_and_run(lal_smoothkappas_03, "lal_smoothkappas_03")
 #test_common.build_and_run(lal_smoothkappas_04, "lal_smoothkappas_04")
