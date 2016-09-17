@@ -99,7 +99,7 @@ def get_url(url,d):
 	return jobtime, jobdata
 
 
-def reduce(xarr, yarr, func, level = 0):
+def reduce_data(xarr, yarr, func, level = 0):
 	"""!
 	This function does a data reduction by powers of 10
 	"""
@@ -114,8 +114,9 @@ def reduce(xarr, yarr, func, level = 0):
 	reduced_time = [x[1] for x in reduced_data]
 	reduced_data = [x[0] for x in reduced_data]
 	assert len(reduced_data) == len(reduced_time)
-
-	return reduced_time, reduced_data
+	idx = numpy.argsort(reduced_time)
+	
+	return list(numpy.array(reduced_time)[idx]), list(numpy.array(reduced_data)[idx])
 
 
 def makedir(path):
@@ -248,7 +249,7 @@ def update_lowest_level_data(job, path, d, s, e, typ, self, jobtime, jobdata, fu
 		this_time_ix = [i for i,t in enumerate(jobtime) if s <= t < e]
 	this_time = [jobtime[i] for i in this_time_ix] + prev_times
 	this_data = [jobdata[i] for i in this_time_ix] + prev_data
-	reduced_time, reduced_data = reduce(this_time, this_data, func, level = 0)
+	reduced_time, reduced_data = reduce_data(this_time, this_data, func, level = 0)
 	logging.info("processing job %s for data %s in span [%d,%d] of type %s: found %d" % (job, d, s, e, typ, len(reduced_time)))
 	tmpfname = create_new_dataset(path, d, reduced_time, reduced_data, tmp = True)
 	# copy the tmp file over the original
@@ -275,7 +276,7 @@ def reduce_data_from_lower_level(level, self, this_level_dir, job, typ, d, func,
 		except IOError as ioerr:
 			logging.error(ioerr)
 			pass
-	reduced_time, reduced_data = reduce(agg_time, agg_data, func, level=level)
+	reduced_time, reduced_data = reduce_data(agg_time, agg_data, func, level=level)
 	path = "/".join([this_level_dir, "by_job", job, typ])
 	logging.info("processing reduced data %s for job %s  in span [%d,%d] of type %s at level %d: found %d/%d" % (d, job, s, e, typ, level, len(reduced_time), len(agg_time)))
 	tmpfname = create_new_dataset(path, d, reduced_time, reduced_data, tmp = True)
@@ -296,7 +297,7 @@ def reduce_across_jobs(self, this_level_dir, typ, d, func, level, s, e):
 		except IOError as ioerr:
 			logging.error(ioerr)
 			pass
-	reduced_time, reduced_data = reduce(agg_time, agg_data, func, level=level)
+	reduced_time, reduced_data = reduce_data(agg_time, agg_data, func, level=level)
 	logging.info("processing reduced data %s in span [%d,%d] of type %s at level %d: found %d/%d" % (d, s, e, typ, level, len(reduced_time), len(agg_time)))
 	path = "/".join([this_level_dir, typ])
 	tmpfname = create_new_dataset(path, d, reduced_time, reduced_data, tmp = True)
