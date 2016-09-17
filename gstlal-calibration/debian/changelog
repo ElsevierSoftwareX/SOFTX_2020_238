@@ -1,3 +1,9 @@
+gstlal-calibration (1.0.2-1) unstable; urgency=low
+
+  * Bug fix for how one of kappa state vector bits is calculated
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Wed, 16 Sept 2016 23:48:00 +0900
+
 gstlal-calibration (1.0.1-1) unstable; urgency=low
 
   * Fix to how pipeline deals with discontinuities
