@@ -426,7 +426,7 @@ margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files =
 
 # FIXME by default the inspiral jobs advertise the current directory as their
 # job tag, but this should be made to be more flexible
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd()})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags)})
 
 if options.injection_file:
 	for g in groups(inj_jobTags, 10):
