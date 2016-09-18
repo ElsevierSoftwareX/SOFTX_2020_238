@@ -489,15 +489,25 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# populate background instrument combination rates
 		#
+		# NOTE:  we need to know the number of templates the
+		# singles we have collected have come from, and we get this
+		# by assuming a saturated triggering rate of 1/s, and
+		# averaging the number of templates that implies across the
+		# available instruments.  FIXME:  in the future, obtain the
+		# number of templates from the bank
+		#
 
+		if verbose:
+			print >>sys.stderr, "synthesizing background-like instrument combination probabilities ..."
 		self.background_rates["instruments"].array[:] = 0.
+		singles_counts = dict(zip(self.background_rates["singles"].bins[0].centres(), self.background_rates["singles"].array))
+		num_templates = int(round(sum(singles_counts[instrument] / (float(livetime) / 1.0) for instrument, livetime in abs(segs).items()) / len(segs)))
 		for instruments, count in inspiral_extrinsics.instruments_rate_given_noise(
-			singles_counts = dict(zip(self.background_rates["singles"].bins[0].centres(), self.background_rates["singles"].array)),
-			zero_lag_coinc_counts = dict(zip(self.zero_lag_rates["instruments"].bins[0].centres(), self.zero_lag_rates["instruments"].array)),
+			singles_counts = singles_counts,
+			num_templates = num_templates,
 			segs = segs,
 			delta_t = self.delta_t,
 			min_instruments = self.min_instruments,
-			verbose = verbose
 		).items():
 			self.background_rates["instruments"][instruments,] = count
 
