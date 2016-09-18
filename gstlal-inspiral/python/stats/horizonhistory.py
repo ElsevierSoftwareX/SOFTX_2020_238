@@ -340,7 +340,7 @@ class NearestLeafTree(object):
 		return cls(map(tuple, ligolw_array.get_array(xml, u"%s:nearestleaftree" % name).array[:]))
 
 	def to_xml(self, name):
-		return ligolw_array.from_array(u"%s:nearestleaftree" % name, numpy.array(self.tree, dtype = "double"))
+		return ligolw_array.Array.build(u"%s:nearestleaftree" % name, numpy.array(self.tree, dtype = "double"))
 
 
 class HorizonHistories(dict):

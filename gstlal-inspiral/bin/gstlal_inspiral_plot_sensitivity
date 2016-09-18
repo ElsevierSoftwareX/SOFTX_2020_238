@@ -441,20 +441,20 @@ for bin_type in opts.bin_types:
         for j in range(len(bins[1:])):
             xml = ligolw.LIGO_LW({u"Name": u"mass%d_bins:%s" % (j+1,bin_type)})
             edges = tuple( numpy.concatenate((l,u[-1:])) for l,u in zip(bins.lower(), bins.upper()) )
-            xml.appendChild(ligolw_array.from_array(u"array", edges[j+1]))
+            xml.appendChild(ligolw_array.Array.build(u"array", edges[j+1]))
             child.appendChild(xml)
 
         # write out fars/snrs/livetime
         xml = ligolw.LIGO_LW({u"Name": u"far_bins:%s" % (bin_type,)})
-        xml.appendChild(ligolw_array.from_array(u"array", fars))
+        xml.appendChild(ligolw_array.Array.build(u"array", fars))
         child.appendChild(xml)
 
         xml = ligolw.LIGO_LW({u"Name": u"snr_bins:%s" % (bin_type,)})
-        xml.appendChild(ligolw_array.from_array(u"array", snrs))
+        xml.appendChild(ligolw_array.Array.build(u"array", snrs))
         child.appendChild(xml)
 
         xml = ligolw.LIGO_LW({u"Name": u"livetime:%s" % (bin_type,)})
-        xml.appendChild(ligolw_array.from_array(u"array", numpy.array([UL.livetime[instr]])))
+        xml.appendChild(ligolw_array.Array.build(u"array", numpy.array([UL.livetime[instr]])))
         child.appendChild(xml)
 
         #
@@ -490,15 +490,15 @@ for bin_type in opts.bin_types:
             # write volume and volume errors array to xml
             #
             xml = ligolw.LIGO_LW({u"Name": u"volume_lo_by_far_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol_lo.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol_lo.array))
             child.appendChild(xml)
 
             xml = ligolw.LIGO_LW({u"Name": u"volume_by_far_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol.array))
             child.appendChild(xml)
 
             xml = ligolw.LIGO_LW({u"Name": u"volume_hi_by_far_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol_hi.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol_hi.array))
             child.appendChild(xml)
 
             #
@@ -521,15 +521,15 @@ for bin_type in opts.bin_types:
             # write volume and volume errors array to xml
             #
             xml = ligolw.LIGO_LW({u"Name": u"volume_lo_by_snr_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol_lo.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol_lo.array))
             child.appendChild(xml)
 
             xml = ligolw.LIGO_LW({u"Name": u"volume_by_snr_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol.array))
             child.appendChild(xml)
 
             xml = ligolw.LIGO_LW({u"Name": u"volume_hi_by_snr_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol_hi.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol_hi.array))
             child.appendChild(xml)
 
         #

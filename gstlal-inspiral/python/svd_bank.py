@@ -297,10 +297,10 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 
 		# Add root-level arrays
 		# FIXME:  ligolw format now supports complex-valued data
-		root.appendChild(ligolw_array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
-		root.appendChild(ligolw_array.from_array('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
-		root.appendChild(ligolw_array.from_array('autocorrelation_mask', bank.autocorrelation_mask))
-		root.appendChild(ligolw_array.from_array('sigmasq', numpy.array(bank.sigmasq)))
+		root.appendChild(ligolw_array.Array.build('autocorrelation_bank_real', bank.autocorrelation_bank.real))
+		root.appendChild(ligolw_array.Array.build('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
+		root.appendChild(ligolw_array.Array.build('autocorrelation_mask', bank.autocorrelation_mask))
+		root.appendChild(ligolw_array.Array.build('sigmasq', numpy.array(bank.sigmasq)))
 
 		# Write bank fragments
 		for i, frag in enumerate(bank.bank_fragments):
@@ -318,14 +318,14 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 			el.appendChild(ligolw_param.Param.from_pyvalue('end', frag.end))
 
 			# Add arrays
-			el.appendChild(ligolw_array.from_array('chifacs', frag.chifacs))
+			el.appendChild(ligolw_array.Array.build('chifacs', frag.chifacs))
 			if frag.mix_matrix is not None:
-				el.appendChild(ligolw_array.from_array('mix_matrix', frag.mix_matrix))
-			el.appendChild(ligolw_array.from_array('orthogonal_template_bank', frag.orthogonal_template_bank))
+				el.appendChild(ligolw_array.Array.build('mix_matrix', frag.mix_matrix))
+			el.appendChild(ligolw_array.Array.build('orthogonal_template_bank', frag.orthogonal_template_bank))
 			if frag.singular_values is not None:
-				el.appendChild(ligolw_array.from_array('singular_values', frag.singular_values))
+				el.appendChild(ligolw_array.Array.build('singular_values', frag.singular_values))
 			if frag.sum_of_squares_weights is not None:
-				el.appendChild(ligolw_array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
+				el.appendChild(ligolw_array.Array.build('sum_of_squares_weights', frag.sum_of_squares_weights))
 
 			# Add bank fragment container to root container
 			root.appendChild(el)
