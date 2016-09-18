@@ -283,12 +283,12 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 		root.appendChild(new_sngl_table)
 
 		# Add root-level scalar params
-		root.appendChild(ligolw_param.from_pyvalue('filter_length', bank.filter_length))
-		root.appendChild(ligolw_param.from_pyvalue('gate_threshold', bank.gate_threshold))
-		root.appendChild(ligolw_param.from_pyvalue('logname', bank.logname or ""))
-		root.appendChild(ligolw_param.from_pyvalue('snr_threshold', bank.snr_threshold))
-		root.appendChild(ligolw_param.from_pyvalue('template_bank_filename', bank.template_bank_filename))
-		root.appendChild(ligolw_param.from_pyvalue('bank_id', bank.bank_id))
+		root.appendChild(ligolw_param.Param.from_pyvalue('filter_length', bank.filter_length))
+		root.appendChild(ligolw_param.Param.from_pyvalue('gate_threshold', bank.gate_threshold))
+		root.appendChild(ligolw_param.Param.from_pyvalue('logname', bank.logname or ""))
+		root.appendChild(ligolw_param.Param.from_pyvalue('snr_threshold', bank.snr_threshold))
+		root.appendChild(ligolw_param.Param.from_pyvalue('template_bank_filename', bank.template_bank_filename))
+		root.appendChild(ligolw_param.Param.from_pyvalue('bank_id', bank.bank_id))
 
 		# apply clipping to autocorrelations and sigmasq
 		bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
@@ -313,9 +313,9 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 			frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
 			# Add scalar params
-			el.appendChild(ligolw_param.from_pyvalue('rate', frag.rate))
-			el.appendChild(ligolw_param.from_pyvalue('start', frag.start))
-			el.appendChild(ligolw_param.from_pyvalue('end', frag.end))
+			el.appendChild(ligolw_param.Param.from_pyvalue('rate', frag.rate))
+			el.appendChild(ligolw_param.Param.from_pyvalue('start', frag.start))
+			el.appendChild(ligolw_param.Param.from_pyvalue('end', frag.end))
 
 			# Add arrays
 			el.appendChild(ligolw_array.from_array('chifacs', frag.chifacs))
