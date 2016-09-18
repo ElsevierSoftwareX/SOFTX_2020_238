@@ -21,12 +21,12 @@ import os
 import numpy
 import sys
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require("0.10")
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
+
 
 import lal
 from glue.ligolw import ligolw
@@ -51,10 +51,7 @@ if "--help" in sys.argv or "-h" in sys.argv:
         except ValueError:
                 pass
 
-        import gst
         sys.argv.append( "--help" )
-else:
-        import gst
 
 from gstlal import pipeparts
 from gstlal import pipeutil
@@ -123,16 +120,16 @@ if options.virtualenv_activator is not None:
 # PB: temporary solution for virtual environment (not sure why virtual
 # environment not working)
 # See e.g. http://stackoverflow.com/questions/10095037/why-use-sys-path-appendpath-instead-of-sys-path-insert1-path
-sys.path.insert(1, '/usr/share/llldd/lib/gracedb-client')
+# sys.path.insert(1, '/usr/share/llldd/lib/gracedb-client')
 
 # Now that we have the virtual environment loaded, load up GraceDb
 from ligo.gracedb.rest import GraceDb
 
 # setup the pipeline
-pipeline = gst.Pipeline(os.path.split(sys.argv[0])[1])
+pipeline = Gst.Pipeline(os.path.split(sys.argv[0])[1])
 
 # main loop 
-mainloop = gobject.MainLoop()
+mainloop = GObject.MainLoop()
 
 # reading from shared memory
 src = pipeparts.mklvshmsrc(pipeline, shm_name = options.shared_memory_read)
@@ -145,7 +142,7 @@ if options.write_pipeline is not None:
 
 # original channel
 inj = pipeparts.mkaudioconvert(pipeline, None)
-pipeparts.src_deferred_link(src, options.channel, inj.get_pad("sink"))
+pipeparts.src_deferred_link(src, options.channel, inj.get_static_pad("sink"))
 #inj = pipeparts.mkcapsfilter(pipeline, inj, "audio/x-raw-float,width=64")
 inj = pipeparts.mkqueue(pipeline, inj, max_size_buffers = 0 , max_size_time = 0, max_size_bytes = 0)
 
@@ -162,13 +159,13 @@ channel_src_map[options.channel_inj] = inj
 
 # Data Quality Vector channel
 dqv = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = 0, max_size_bytes = 0)
-pipeparts.src_deferred_link(src, options.dqv_channel, dqv.get_pad("sink"))
+pipeparts.src_deferred_link(src, options.dqv_channel, dqv.get_static_pad("sink"))
 channel_src_map[options.dqv_channel] = dqv
 
 
 if options.save_channel is not None:
     saved_channel = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_time = 0, max_size_bytes = 0)
-    pipeparts.src_deferred_link(src, options.save_channel, saved_channel.get_pad("sink"))
+    pipeparts.src_deferred_link(src, options.save_channel, saved_channel.get_static_pad("sink"))
     channel_src_map[options.save_channel] = saved_channel
 
 # muxer
@@ -250,23 +247,32 @@ class GraceDBThread ( threading.Thread ):
 #######################################################
 # add a probe to the pipeline
 def watch_data(pad, obj, sim_inspiral_table):
-    if isinstance(obj, gst.Buffer):
-        timestamp = lal.LIGOTimeGPS(0, obj.timestamp)
-        duration = lal.LIGOTimeGPS(0, obj.duration)
+    if obj.type & Gst.PadProbeType.BUFFER != 0:
+        buffer = obj.get_buffer()
+        timestamp = lal.LIGOTimeGPS(0, int(buffer.pts))
+        duration = lal.LIGOTimeGPS(0, int(buffer.duration))
         print "current buffer = [%s, %s)" % (timestamp, timestamp + duration)
         while sim_inspiral_table and sim_inspiral_table[-1].get_end() < timestamp + duration:
             sim = sim_inspiral_table.pop()
             if options.upload_to_gracedb is not None:
                 print "upload sim to gracedb" 
                 GraceDBThread(sim).start()
-    elif isinstance(obj, gst.Event) and obj.type == gst.EVENT_NEWSEGMENT:
-        update, rate, format, start, stop, position = obj.parse_new_segment()
-        start = lal.LIGOTimeGPS(0, start)
-        print "data starts at %s" % start
-        while sim_inspiral_table and sim_inspiral_table[-1].get_end() < start:
-            sim_inspiral_table.pop()
+    elif obj.type & Gst.PadProbeType.EVENT_BOTH != 0:
+        event = obj.get_event()
+        if event.type == Gst.EventType.SEGMENT:
+            segment = event.parse_segment()
+            rate = segment.rate
+            format = Gst.Format.get_name(segment.format)
+            start = segment.start
+            stop = segment.stop
+            position = segment.position
+            # update, rate, format, start, stop, position = obj.parse_new_segment()
+            start = lal.LIGOTimeGPS(0, start)
+            print "data starts at %s" % start
+            while sim_inspiral_table and sim_inspiral_table[-1].get_end() < start:
+                sim_inspiral_table.pop()
     return True
-mux.get_pad("src").add_data_probe(watch_data, sim_inspiral_table)
+mux.get_static_pad("src").add_probe(Gst.PadProbeType.DATA_DOWNSTREAM, watch_data, sim_inspiral_table)
 
 #######################################################
 
@@ -277,13 +283,13 @@ mux = pipeparts.mkprogressreport(pipeline, mux, name = "multiplexer")
 # ALSO note: if they are not exactly correct, the system complains that it cannot write to
 # the shared memory.
 
-pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", shm_name = options.shared_memory_write, num_buffers=options.num_buffers, blocksize=options.blocksize, buffer_mode=2)
+pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", shm_name = options.shared_memory_write, num_buffers=options.num_buffers, blocksize=options.blocksize, buffer_mode=2, sync=0, async=0)
 
 if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
         pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
 
 # state playing
-if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError( "pipeline failed to enter PLAYING state" )
 else:
         print "set to playing successfully"
