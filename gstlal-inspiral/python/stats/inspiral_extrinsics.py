@@ -311,7 +311,7 @@ class SNRPDF(object):
 	#
 
 	DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_snr_pdf.xml.gz")
-	max_cached_snr_joint_pdfs = int(5**3 * 4)
+	max_cached_snr_joint_pdfs = float("+inf")
 	snr_joint_pdf_cache = {}
 
 	@ligolw_array.use_in
@@ -321,7 +321,7 @@ class SNRPDF(object):
 
 
 	# FIXME:  is the default choice of distance quantization appropriate?
-	def __init__(self, snr_cutoff, log_distance_tolerance = PosInf):
+	def __init__(self, snr_cutoff, log_distance_tolerance = math.log(1.05)):
 		"""
 		snr_cutoff sets the minimum SNR below which it is
 		impossible to obtain a candidate (the trigger SNR
@@ -415,7 +415,7 @@ class SNRPDF(object):
 		while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
 			del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
 		if verbose:
-			print >>sys.stderr, "%d/%d slots in SNR PDF cache now in use" % (len(self.snr_joint_pdf_cache), self.max_cached_snr_joint_pdfs)
+			print >>sys.stderr, "%d of %g slots in SNR PDF cache now in use" % (len(self.snr_joint_pdf_cache), self.max_cached_snr_joint_pdfs)
 		return pdf
 
 
