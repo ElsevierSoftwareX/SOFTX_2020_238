@@ -44,10 +44,12 @@
 
 
 import sys
+import os
 import shutil
 from gstlal import far
 from gstlal import inspiral_pipe
 from gstlal.stats import horizonhistory
+from gstlal import paths as gstlal_config_paths
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw import ligolw
@@ -55,6 +57,7 @@ from glue import segments
 from glue import iterutils
 from glue.lal import CacheEntry
 from lal import LIGOTimeGPS
+from pylal import rate
 from optparse import OptionParser
 
 
@@ -123,18 +126,11 @@ if options.verbose:
 # 2) Each template produces exactly 1 trigger for every second that a given
 # detector is on according to the user provided segments
 #
+# FIXME what should zero lag be? Right now we set them to be the same
+#
 
 n_background = dict(((ifo, float(abs(seg)) * options.num_templates) for ifo, seg in segs.items())) 
-
-#
-# Number of zero lag events in each detector
-#
-# This is calculated assuming the following
-# 1) Only coincident events go into the zero_lag histograms
-# 2) The coincidence rate is 50 times lower than background rate for each detector
-#
-
-n_zerolag = dict(((ifo, float(abs(seg)) * options.num_templates / 50.) for ifo, seg in segs.items()))
+n_zerolag    = dict(((ifo, float(abs(seg)) * options.num_templates) for ifo, seg in segs.items()))
 
 #
 # Initialize an empty ThincaCoincParamsDistributions class
@@ -146,8 +142,31 @@ diststats = far.ThincaCoincParamsDistributions(instruments = set(segs), delta_t 
 # Add background, zero_lag and injection prior distributions in the SNR and chi-squared plane
 # 
 
-diststats.add_background_prior(n = n_background, ba = "background_rates", prefactors_range = tuple(float(x) for x in options.background_prefactors.split(",")), verbose = options.verbose)
-diststats.add_background_prior(n = n_zerolag, ba = "zero_lag_rates", prefactors_range = tuple(float(x) for x in options.background_prefactors.split(",")), verbose = options.verbose)
+# pull out the all O1 marginalized snr / chisq as a good prior guess
+background_pdf_file = os.path.join(gstlal_config_paths["pkgdatadir"], "O1_snr_chi_pdf_reference.xml.gz")
+background_xml = ligolw_utils.load_filename(background_pdf_file, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+background_binned_array = rate.BinnedArray.from_xml(background_xml, name = "background:H1_snr_chi")
+
+# fill in the background to the requested amount
+for instrument, number_of_events in n_background.items():
+	binarr = diststats.background_rates["%s_snr_chi" % instrument]
+	binarr.array[:] = background_binned_array.array[:]
+	binarr.array *= number_of_events / binarr.array.sum()
+	# FIXME is this right? Assuming that the events are produced at a rate
+	# of 1 per template per second, the total rate in this bin is just
+	# equal to the number of templates
+	diststats.background_rates["singles"][instrument,] = number_of_events * 1000
+
+# fill in the zerolag to the requested amount
+for instrument, number_of_events in n_zerolag.items():
+	binarr = diststats.zero_lag_rates["%s_snr_chi" % instrument]
+	binarr.array[:] = background_binned_array.array[:]
+	binarr.array *= number_of_events / binarr.array.sum()
+	# FIXME is this right? Assuming that the events are produced at a rate
+	# of 1 per template per second, the total rate in this bin is just
+	# equal to the number of templates
+	diststats.zero_lag_rates["singles"][instrument,] = number_of_events * 1000
+
 diststats.add_foreground_snrchi_prior(n = dict(((ifo, 1e8) for ifo, seg in segs.items())), prefactors_range = tuple(float(x) for x in options.injection_prefactors.split(",")), verbose = options.verbose)
 
 #
@@ -157,8 +176,8 @@ diststats.add_foreground_snrchi_prior(n = dict(((ifo, 1e8) for ifo, seg in segs.
 diststats.horizon_history.update(horizon_history)
 
 #
-# Fake a set of coincident triggers for all possible combinations
-# FIXME Derive these from the segment lists!!! Use Kipp's code??
+# Fake a set of coincident triggers for all possible combinations assuming each coincidence level reduces the rate by 50.
+# FIXME How is this related to the background_rates["singles"] ???
 #
 
 for i in range(options.min_instruments, len(options.instruments) + 1):
