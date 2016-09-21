@@ -44,7 +44,8 @@ def interp_test_01(pipeline, name):
 	# build pipeline
 	#
 
-	head = test_common.gapped_test_src(pipeline, channels = 1, wave = 0, freq = 10, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
+	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = 32, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)§
+	#head = test_common.gapped_test_src(pipeline, channels = 1, wave = 0, freq = 10, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudioconvert(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % in_rate)
 	head = tee = pipeparts.mktee(pipeline, head)
 

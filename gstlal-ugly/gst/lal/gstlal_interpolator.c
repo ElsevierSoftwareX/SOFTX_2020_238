@@ -235,8 +235,8 @@ static GstStaticPadTemplate sink_template =
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS ("audio/x-raw, " \
 		"format = (string) {" GST_AUDIO_NE(F32) "}, " \
-		"rate = " GST_AUDIO_RATE_RANGE ", " \
-		"channels = (int) 1, " \
+		"rate =  (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, " \
+		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0")
 	);
@@ -245,10 +245,13 @@ static GstStaticPadTemplate src_template =
 	GST_STATIC_PAD_TEMPLATE ("src",
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS (
-		GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(F32) "}") ", " \
+	GST_STATIC_CAPS ("audio/x-raw, " \
+		"format = (string) {" GST_AUDIO_NE(F32) "}, " \
+		"rate =  (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, " \
+		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"layout = (string) interleaved, " \
-                "channel-mask = (bitmask) 0")
+		"channel-mask = (bitmask) 0")
+		
 	);
 
 /*
@@ -338,9 +341,12 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR (base);
 	GstStructure *instruct, *outstruct;
 	gint inchannels, inrate, outchannels, outrate;
+	gboolean success = gst_audio_info_from_caps(&element->audio_info, outcaps);
 
 	instruct = gst_caps_get_structure (incaps, 0);
 	outstruct = gst_caps_get_structure (outcaps, 0);
+
+
 	g_return_val_if_fail(gst_structure_get_int (instruct, "channels", &inchannels), FALSE);
 	g_return_val_if_fail(gst_structure_get_int (instruct, "rate", &inrate), FALSE);
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "channels", &outchannels), FALSE);
@@ -354,6 +360,10 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->outrate = outrate;
 	element->channels = inchannels;
 	element->factor = outrate / inrate;
+
+	//AEP-adding getunitsize
+	
+        get_unit_size(base, outcaps, &(element->unitsize));
 
 	/* Timestamp and offset bookeeping */
 
@@ -380,8 +390,9 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	if (element->workspace)
 		gsl_matrix_float_free(element->workspace);
 	element->workspace = gsl_matrix_float_calloc (element->blocksampsin, element->channels);
+	g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_WIDTH(&element->audio_info) / 8, NULL);
 
-	return TRUE;
+	return success;
 }
 
 
@@ -406,7 +417,8 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 		
 
 	if(success) {
-		*size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
+		*size = GST_AUDIO_INFO_BPF(&info);
+		//*size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
 	}
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);

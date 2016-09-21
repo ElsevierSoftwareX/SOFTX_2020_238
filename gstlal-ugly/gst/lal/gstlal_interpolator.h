@@ -88,7 +88,7 @@ struct _GSTLALInterpolator {
 	gboolean need_pretend;
 
 	/* Variables to control the size of transforms */
-	guint unitsize;
+	gsize unitsize;
 	guint blocksampsin;
 	guint blocksampsout;
 	guint blockstridein;
