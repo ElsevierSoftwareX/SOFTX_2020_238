@@ -1262,7 +1262,6 @@ elif options.data_source == "lvshm":
 # start writing frame files that only start after the desired start time + filter latency + kappa settling (if computing kappas)
 if not options.no_kappatst or not options.no_kappaa or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
 	output_start = start + int(filter_settle_time) + options.median_smoothing_time + options.factors_averaging_time  + 68 # 68 additional seconds seem necessary to make sure the low-pass filter for demodulation is also settled (I think that's the cause at least)
-	print output_start
 else:
 	output_start = start + int(filter_settle_time)
 
