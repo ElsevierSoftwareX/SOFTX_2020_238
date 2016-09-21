@@ -302,7 +302,7 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element)
 	element->inrate = 0;
 	element->outrate = 0;
 
-	element->factor = 0; // size of complex output to FFT
+	element->factor = 0; // Upsample Factor
 	element->kernel = NULL;
 	element->workspace = NULL;
 
@@ -390,7 +390,8 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	if (element->workspace)
 		gsl_matrix_float_free(element->workspace);
 	element->workspace = gsl_matrix_float_calloc (element->blocksampsin, element->channels);
-	g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_WIDTH(&element->audio_info) / 8, NULL);
+	g_object_set(element->adapter, "unit-size", element->unitsize, NULL);
+	//g_object_set(element->adapter, "unit-size", element->channels * GST_AUDIO_INFO_WIDTH(&element->audio_info) / 8, NULL);
 
 	return success;
 }
