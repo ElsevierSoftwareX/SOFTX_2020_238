@@ -31,7 +31,6 @@
 #		--write-zerolag-likelihood-cache, metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
 #		--segment-and-horizon, action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
 #		--override-background-prior, metavar = "N", type = "float", help = "Override the count in the SNR/chisquared bins to be this value")
-#		--background-prefactors, metavar = "s,e", default = "0.5,20.", help = "Set the range of prefactors on the chi-squared distribution for the background model: default 0.5,20.")
 #		--injection-prefactors, metavar = "s,e", default = "0.01,0.25", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.01,0.25")
 
 #
@@ -77,7 +76,6 @@ def parse_command_line():
 	parser.add_option("--write-zerolag-likelihood-cache", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
 	parser.add_option("--segment-and-horizon", action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
 	parser.add_option("--override-background-prior", metavar = "N", type = "float", help = "Override the count in the SNR/chisquared bins to be this value")
-	parser.add_option("--background-prefactors", metavar = "s,e", default = "0.5,20.", help = "Set the range of prefactors on the chi-squared distribution for the background model: default 0.5,20.")
 	parser.add_option("--injection-prefactors", metavar = "s,e", default = "0.01,0.25", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.01,0.25")
 	options, filenames = parser.parse_args()
 
@@ -155,7 +153,9 @@ for instrument, number_of_events in n_background.items():
 	# FIXME is this right? Assuming that the events are produced at a rate
 	# of 1 per template per second, the total rate in this bin is just
 	# equal to the number of templates
-	diststats.background_rates["singles"][instrument,] = number_of_events * 1000
+	diststats.background_rates["singles"][instrument,] = number_of_events
+	if options.verbose:
+		print "setting number of background events in %s to %d" % (instrument, number_of_events)
 
 # fill in the zerolag to the requested amount
 for instrument, number_of_events in n_zerolag.items():
@@ -165,7 +165,9 @@ for instrument, number_of_events in n_zerolag.items():
 	# FIXME is this right? Assuming that the events are produced at a rate
 	# of 1 per template per second, the total rate in this bin is just
 	# equal to the number of templates
-	diststats.zero_lag_rates["singles"][instrument,] = number_of_events * 1000
+	diststats.zero_lag_rates["singles"][instrument,] = number_of_events
+	if options.verbose:
+		print "setting number of zero events in %s to %d" % (instrument, number_of_events)
 
 diststats.add_foreground_snrchi_prior(n = dict(((ifo, 1e8) for ifo, seg in segs.items())), prefactors_range = tuple(float(x) for x in options.injection_prefactors.split(",")), verbose = options.verbose)
 
@@ -182,7 +184,10 @@ diststats.horizon_history.update(horizon_history)
 
 for i in range(options.min_instruments, len(options.instruments) + 1):
 	for ifos in [frozenset(x) for x in iterutils.choices(tuple(options.instruments), i)]:
-		diststats.zero_lag_rates["instruments"][ifos,] = min(n_background[ifo] for ifo in ifos) / 50.**(i-1)
+		diststats.zero_lag_rates["instruments"][ifos,] = min(n_zerolag[ifo] for ifo in ifos) / 50.**(i-1)
+		if options.verbose:
+			print "setting number of zerolag events for %s to %d" % (ifos, diststats.zero_lag_rates["instruments"][ifos,])
+
 
 #
 # Wrap it up
