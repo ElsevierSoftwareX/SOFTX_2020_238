@@ -627,9 +627,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		guint processed = 0;
 		//float *output = (float *) GST_BUFFER_DATA(outbuf);
+		//memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));  // FIXME necesary?
 		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
 		float *output = (float *) outbuf;
-		//memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));  // FIXME necesary?
+		memset(mapinfo.data, 0, mapinfo.size);	
+		gst_buffer_unmap(outbuf, &mapinfo);
 		// FIXME- clean up this print statement (format)
 		//GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length);
 
