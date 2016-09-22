@@ -48,7 +48,7 @@ def process_mass_bin(args):
 	pattern = re.compile('.*-%d%s_LLOID-.*.xml.gz' % (typecode, massbin[1:]))
 
 	# First do non injections
-	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if pattern.match(xml)])
+	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if pattern.match(xml) and "~" not in xml])
 	for f in files:
 		try:
 			subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--database", "%s" % db, "%s" % f])
@@ -203,7 +203,7 @@ if __name__ == '__main__':
 	#
 
 	try:
-		subprocess.check_call(["gstlal_inspiral_plotsummary", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
+		subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
@@ -212,7 +212,7 @@ if __name__ == '__main__':
 	#
 
 	try:
-		subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
+		subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
