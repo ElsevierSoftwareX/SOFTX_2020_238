@@ -1013,8 +1013,14 @@ WHERE
 		# diagnostic tool.  This could change in the future once we
 		# have 3 instruments again to correct each by-instrument PDF
 		# with the survival function
+		#
+		# FIXME, leaving the comment in place above, but with single
+		# ifo searches it is possible (And easy) to not have enough
+		# data in one. For now we just extinct None
 		for key in self.background_likelihood_rates:
 
+			if key is not None:
+				continue
 			# pull out both the bg counts and the pdfs, we need 'em both
 			bgcounts_ba = self.background_likelihood_rates[key]
 			bgpdf_ba = self.background_likelihood_pdfs[key]
