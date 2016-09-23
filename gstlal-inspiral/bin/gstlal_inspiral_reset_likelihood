@@ -79,7 +79,7 @@ for instruments in zlike_rd.background_likelihood_rates:
 	zlike_rd.zero_lag_likelihood_rates[instruments].array[zlike_rd.zero_lag_likelihood_rates[instruments].array < 1.] = 0.
 	if options.verbose:
 		print >> sys.stderr, "replacing %s with %d zero lag counts" % (str(instruments), zlike_rd.zero_lag_likelihood_rates[instruments].array.sum())
-	if zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() <= 100:
+	if instruments is None and zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() <= 100:
 		raise ValueError("Must have greater than 100 counts in zero lag, have: %d" % zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()) 
 
 
