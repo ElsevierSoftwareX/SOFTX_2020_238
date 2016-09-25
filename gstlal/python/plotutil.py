@@ -1,4 +1,4 @@
-# Copyright (C) 2013-2015 Kipp Cannon
+# Copyright (C) 2013-2016 Kipp Cannon
 # Copyright (C) 2015      Chad Hanna
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -32,6 +32,10 @@
 
 import math
 import numpy
+import re
+
+
+golden_ratio = (1. + math.sqrt(5.)) / 2. 
 
 
 def colour_from_instruments(instruments, colours = {
@@ -46,10 +50,30 @@ def colour_from_instruments(instruments, colours = {
 }):
 	# mix colours additively
 	colour = sum(map(colours.__getitem__, instruments))
-	# desaturate
-	colour += len(instruments) - 1
-	# normalize
-	return colour / colour.max()
+	# use single-instrument colours as-given
+	if len(instruments) > 1:
+		# desaturate
+		colour += len(instruments) - 1
+		# normalize
+		colour /= colour.max()
+	return colour
 
 
-golden_ratio = (1. + math.sqrt(5.)) / 2. 
+#
+# =============================================================================
+#
+#                                 TeX Helpers
+#
+# =============================================================================
+#
+
+
+floatpattern = re.compile("([+-]?[.0-9]+)[Ee]([+-]?[0-9]+)")
+
+def latexnumber(s):
+	"""
+	Convert a string of the form "d.dddde-dd" to "d.dddd \times
+	10^{-dd}"
+	"""
+	m, e = floatpattern.match(s).groups()
+	return r"%s \times 10^{%d}" % (m, int(e))
