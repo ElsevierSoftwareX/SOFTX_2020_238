@@ -19,13 +19,10 @@
 ## @file
 # A program to plot the sensitivity of a gstlal inspiral search, e.g., VT
 
+import math
 import numpy
 
-try:
-  import sqlite3
-except ImportError:
-  # pre 2.5.x
-  from pysqlite2 import dbapi2 as sqlite3
+import sqlite3
 
 import matplotlib
 matplotlib.use("agg")
@@ -33,10 +30,10 @@ from matplotlib import pyplot
 
 import os
 import sys
-import copy
 from optparse import OptionParser
 
 from gstlal import inspiral_pipe
+from gstlal import plotutil
 
 from glue import segments
 from glue.ligolw import ligolw
@@ -545,10 +542,14 @@ for bin_type in opts.bin_types:
         # plotting in a separate code
         #
         fig_far, fig_far_range, fig_snr, fig_eff = pyplot.figure(), pyplot.figure(), pyplot.figure(), pyplot.figure()
-        ax_far = fig_far.add_axes([0.15, 0.15, 0.7, 0.7])
-        ax_far_range = fig_far_range.add_axes([0.15, 0.15, 0.7, 0.7])
-        ax_snr = fig_snr.add_axes([0.15, 0.15, 0.7, 0.7])
-        ax_eff = fig_eff.add_axes([0.15, 0.15, 0.7, 0.7])
+        fig_far.set_size_inches((8., 8. / plotutil.golden_ratio))
+        fig_far_range.set_size_inches((8., 8. / plotutil.golden_ratio))
+        fig_snr.set_size_inches((8., 8. / plotutil.golden_ratio))
+        fig_eff.set_size_inches((8., 8. / plotutil.golden_ratio))
+        ax_far = fig_far.gca()
+        ax_far_range = fig_far_range.gca()
+        ax_snr = fig_snr.gca()
+        ax_eff = fig_eff.gca()
 
         # plot the volume/range versus far/snr for each bin
         mbins = rate.NDBins(bins[1:])
@@ -563,34 +564,34 @@ for bin_type in opts.bin_types:
             if bin_type == "Mass_Ratio":
                 label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
             if bin_type == "Total_Mass":
-                label = "$M_\mathrm{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
+                label = "$M_\mathrm{total} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Chirp_Mass":
-                label = "$M_\mathrm{chirp} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
+                label = "$M_\mathrm{chirp} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Mass1_Mass2":
                 if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
                     continue
-                label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
+                label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
             labels.append(label)
 
             # sensitivity vs far
             center = numpy.array([v[mmid] for v in vols_far])
             lo = numpy.array([v[mmid] for v in vols_lo_far])
             hi = numpy.array([v[mmid] for v in vols_hi_far])
-            line, = ax_far.plot( fars, center, label=label, linewidth=2 )
+            line, = ax_far.loglog( fars, center, label=label, linewidth=2 )
             ax_far.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
 
             # range vs far
-            center = (center/(4*3.14*UL.livetime[instr]/3))**(1./3)
-            lo = (lo/(4*3.14*UL.livetime[instr]/3))**(1./3)
-            hi = (hi/(4*3.14*UL.livetime[instr]/3))**(1./3)
-            line, = ax_far_range.plot( fars, center, label=label, linewidth=2 )
+            center = (center/(4*math.pi*UL.livetime[instr]/3))**(1./3)
+            lo = (lo/(4*math.pi*UL.livetime[instr]/3))**(1./3)
+            hi = (hi/(4*math.pi*UL.livetime[instr]/3))**(1./3)
+            line, = ax_far_range.semilogx( fars, center, label=label, linewidth=2 )
             ax_far_range.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
 
             # sensitivity vs snr
             center = numpy.array([v[mmid] for v in vols_snr])
             lo = numpy.array([v[mmid] for v in vols_lo_snr])
             hi = numpy.array([v[mmid] for v in vols_hi_snr])
-            line, = ax_snr.plot( snrs, center, label=label, linewidth=2 )
+            line, = ax_snr.semilogy( snrs, center, label=label, linewidth=2 )
             ax_snr.fill_between( snrs, lo, hi, alpha=0.5, color=line.get_color())
 
             # plot fiducial efficiency
@@ -606,13 +607,11 @@ for bin_type in opts.bin_types:
         vol_tix = ax_far.get_yticks()
         tx = ax_far.twinx() # map volume to distance
         tx.set_yticks(vol_tix)
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
         tx.set_ylabel("Range (Mpc)")
 
         ax_far.set_xlabel("Combined FAR (Hz)")
-        ax_far.set_ylabel("Volume (Mpc$^3$ yr)")
-        ax_far.set_yticklabels( ["%.1e" % (float(k)) for k in ax_far.get_yticks()] )
-        ax_far.set_xscale("log")
+        ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
         ax_far.set_xlim([min(fars), max(fars)])
         ax_far.invert_xaxis()
         ax_far.legend(loc="upper right")
@@ -621,7 +620,6 @@ for bin_type in opts.bin_types:
         # range vs far
         ax_far_range.set_xlabel("Combined FAR (Hz)")
         ax_far_range.set_ylabel("Range (Mpc)")
-        ax_far_range.set_xscale("log")
         ax_far_range.set_xlim([min(fars), max(fars)])
         ax_far_range.invert_xaxis()
         ax_far_range.legend(loc="upper right")
@@ -631,11 +629,11 @@ for bin_type in opts.bin_types:
         vol_tix = ax_snr.get_yticks()
         tx = ax_snr.twinx() # map volume to distance
         tx.set_yticks(vol_tix)
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
         tx.set_ylabel("Range (Mpc)")
 
         ax_snr.set_xlabel("Network SNR")
-        ax_snr.set_ylabel("Volume (Mpc$^3$ yr)")
+        ax_snr.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
         ax_snr.set_xlim([min(snrs), max(snrs)])
         ax_snr.set_ylim(ymin=0)
         ax_snr.legend(loc="upper right")
@@ -650,7 +648,12 @@ for bin_type in opts.bin_types:
         ax_snr.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
         ax_far.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
         ax_far_range.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
-        ax_eff.set_title("%s Observing (FAR $<$ %.2eHz)" % ("".join(sorted(list(instr))), opts.fiducial_far))
+        ax_eff.set_title("%s Observing ($\mathrm{FAR} < %s\,\mathrm{Hz}$)" % ("".join(sorted(list(instr))), plotutil.latexnumber("%.2e" % opts.fiducial_far)))
+
+        fig_far.tight_layout(pad = .8)
+        fig_far_range.tight_layout(pad = .8)
+        fig_snr.tight_layout(pad = .8)
+        fig_eff.tight_layout(pad = .8)
 
         # save and close figures
         tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
