@@ -306,7 +306,7 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	fig.tight_layout(pad = .8)
 	return fig
 
-def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios = None, ln_likelihood_ratio_markers = None):
+def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios = None, is_open_box = False, ln_likelihood_ratio_markers = None):
 	assert xlo < xhi
 
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
@@ -322,7 +322,8 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios
 		observed_ln_likelihood_ratios = numpy.array(observed_ln_likelihood_ratios)
 		x = observed_ln_likelihood_ratios[:,0]
 		y = observed_ln_likelihood_ratios[:,1]
-		axes.semilogy(x, y, color = "k", linestyle = "", marker = "+")
+		axes.semilogy(x, y, color = "k", linestyle = "", marker = "+", label = r"Candidates" if is_open_box else r"Candidates (time shifted)")
+		axes.legend(loc = "upper right")
 
 	if ln_likelihood_ratio_markers is not None:
 		for ln_likelihood_ratio in ln_likelihood_ratio_markers:
