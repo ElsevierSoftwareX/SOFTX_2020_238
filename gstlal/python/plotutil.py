@@ -28,11 +28,11 @@
 #
 # plotting utilities module
 #
+
+
 import math
-import matplotlib
-from matplotlib import figure
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
+
 
 def colour_from_instruments(instruments, colours = {
 	"G1": numpy.array((0.0, 1.0, 1.0)),
@@ -51,5 +51,5 @@ def colour_from_instruments(instruments, colours = {
 	# normalize
 	return colour / colour.max()
 
-golden_ratio = (1. + math.sqrt(5.)) / 2. 
 
+golden_ratio = (1. + math.sqrt(5.)) / 2. 
