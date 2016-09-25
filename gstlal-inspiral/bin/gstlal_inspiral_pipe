@@ -404,8 +404,8 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		diststats_per_bin_node = inspiral_pipe.generic_node(marginalizeJob, dag,
 			parent_nodes = [priornode] + parents,
 			input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
-			output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)},
-			input_cache_file_name = inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.cache', path = calcRankPDFsJob.output_path)
+			output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = marginalizeJob.output_path)},
+			input_cache_file_name = inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.cache', path = marginalizeJob.output_path)
 			)
 
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
