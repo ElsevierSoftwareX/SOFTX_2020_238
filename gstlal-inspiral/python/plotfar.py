@@ -141,7 +141,7 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	return fig
 
 
-def plot_rates(coinc_param_distributions, ranking_data = None):
+def plot_rates(coinc_param_distributions):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((6., 6.))
@@ -154,72 +154,55 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	labels = []
 	sizes = []
 	colours = []
-	for instrument in sorted(reduce(lambda a, b: a | b, coinc_param_distributions.binnings["instruments"][0].containers)):
-		count = coinc_param_distributions.background_rates["instruments"][frozenset([instrument]),]
-		if not count:
-			continue
+	for instrument in sorted(coinc_param_distributions.instruments):
+		count = coinc_param_distributions.background_rates["singles"][instrument,]
 		labels.append("%s\n(%d)" % (instrument, count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments((instrument,)))
 	axes0.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
 	axes0.set_title("Observed Background Event Counts")
 
-	def count_above_threshold(coinc_param_distributions):
-		"""
-		Dictionary mapping instrument combination (as a frozenset)
-		to number of zero-lag coincs observed.  An additional entry
-		with key None stores the total.
-		"""
-		# FIXME:  this is legacy code moved here from the
-		# ThincaCoincParamsDistributions class definition.  this is
-		# the only code that was still using it.  clean this up
-		# somehow
-		count_above_threshold = dict(zip(coinc_param_distributions.zero_lag_rates["instruments"].bins.centres()[0], coinc_param_distributions.zero_lag_rates["instruments"].array))
-		count_above_threshold[None] = sum(sorted(count_above_threshold.values()))
-		return count_above_threshold
-
 	# projected background counts
 	labels = []
 	sizes = []
 	colours = []
-	for instruments in sorted(sorted(instruments) for instruments in count_above_threshold(coinc_param_distributions) if instruments is not None):
-		count = coinc_param_distributions.background_rates["instruments"][frozenset(instruments),]
-		if len(instruments) < 2 or not count:
+	for instruments, count in sorted(zip(coinc_param_distributions.background_rates["instruments"].bins[0].centres(), coinc_param_distributions.background_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < coinc_param_distributions.min_instruments:
+			assert count == 0
 			continue
-		labels.append("%s\n(%d)" % (", ".join(instruments), count))
+		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments(instruments))
 	axes1.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes1.set_title("Projected Background Coincidence Counts")
+	axes1.set_title("Expected Background Candidate Counts\n(before $\ln \mathcal{L}$ cut)")
 
-	# recovered signal distribution
-	# FIXME ranking data is not even used, why is this check here?
-	if ranking_data is not None:
-		labels = []
-		sizes = []
-		colours = []
-		Pinstrument_signal = dict(zip(coinc_param_distributions.injection_pdf["instruments"].bins[0].centres(), coinc_param_distributions.injection_pdf["instruments"].array))
-		for instruments, fraction in sorted(Pinstrument_signal.items(), key = lambda (instruments, fraction): sorted(instruments)):
-			if len(instruments) < 2 or not fraction:
-				continue
-			labels.append(", ".join(sorted(instruments)))
-			sizes.append(fraction)
-			colours.append(plotutil.colour_from_instruments(instruments))
-		axes2.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-		axes2.set_title(r"Projected Recovered Signal Distribution")
+	# signal distribution
+	labels = []
+	sizes = []
+	colours = []
+	for instruments, fraction in sorted(zip(coinc_param_distributions.injection_pdf["instruments"].bins[0].centres(), coinc_param_distributions.injection_pdf["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < coinc_param_distributions.min_instruments:
+			assert fraction == 0
+			continue
+		labels.append(", ".join(sorted(instruments)))
+		sizes.append(fraction)
+		colours.append(plotutil.colour_from_instruments(instruments))
+	axes2.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
+	axes2.set_title(r"Projected Recovered Signal Distribution")
 
 	# observed counts
 	labels = []
 	sizes = []
 	colours = []
-	for instruments, count in sorted((sorted(instruments), count) for instruments, count in count_above_threshold(coinc_param_distributions).items() if instruments is not None):
-		if len(instruments) < 2 or not count:
+	for instruments, count in sorted(zip(coinc_param_distributions.zero_lag_rates["instruments"].bins[0].centres(), coinc_param_distributions.zero_lag_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < coinc_param_distributions.min_instruments:
+			assert count == 0
 			continue
-		labels.append("%s\n(%d)" % (", ".join(instruments), count))
+		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments(instruments))
 	axes3.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes3.set_title("Observed Coincidence Counts")
+	axes3.set_title("Observed Candidate Counts\n(after $\ln \mathcal{L}$ cut)")
 	fig.tight_layout(pad = .8)
 	return fig
 

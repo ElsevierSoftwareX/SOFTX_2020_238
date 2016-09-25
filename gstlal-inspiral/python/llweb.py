@@ -543,7 +543,7 @@ class GstlalWebSummary(object):
 		out = ""
 		for id in self.registry:
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
-			fig = plotfar.plot_rates(likelihood, ranking_data)
+			fig = plotfar.plot_rates(likelihood)
 			out += self.to_png(fig = fig)
 		return out
 

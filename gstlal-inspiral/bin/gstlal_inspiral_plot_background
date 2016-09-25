@@ -292,7 +292,7 @@ for instrument in coinc_params_distributions.instruments:
 
 
 # Trigger and event rates
-fig = plotfar.plot_rates(coinc_params_distributions, ranking_data)
+fig = plotfar.plot_rates(coinc_params_distributions)
 plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_RATES" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 if options.verbose:
 	print >>sys.stderr, "writing %s" % plotname
