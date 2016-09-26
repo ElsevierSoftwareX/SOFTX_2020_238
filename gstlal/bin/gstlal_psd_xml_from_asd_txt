@@ -20,8 +20,7 @@ import numpy
 from scipy.interpolate import interp1d
 import sys
 from gstlal import reference_psd
-from pylal.xlal import datatypes
-from pylal.xlal.datatypes import lalunit
+import lal
 from optparse import OptionParser
 
 ## @file
@@ -88,5 +87,6 @@ psdinterp = interp1d(f_padded, psd_padded)
 
 psd = psdinterp(uniformf)
 
-psdseries = datatypes.real8frequencyseries.REAL8FrequencySeries(deltaF=options.df, data=psd, sampleUnits=lalunit.LALUnit("s strain^2"), f0=0)
+psdseries = lal.CreateREAL8FrequencySeries("Sn(f)", 0, 0, options.df, lal.Unit("s strain^2"), len(psd))
+psdseries.data.data = psd
 reference_psd.write_psd(options.output, {options.instrument: psdseries})
