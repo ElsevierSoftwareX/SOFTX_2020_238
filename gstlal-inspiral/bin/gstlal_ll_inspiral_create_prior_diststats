@@ -217,7 +217,7 @@ for instruments in ranking_data.background_likelihood_rates:
 	if instruments is None:
 		continue
 	else:
-		ranking_data.zero_lag_likelihood_rates[instruments].array[:] = ranking_data.background_likelihood_rates[instruments].array[:] / ranking_data.background_likelihood_rates[instruments].array.sum() * diststats.zero_lag_rates["instruments"][ifos,]
+		ranking_data.zero_lag_likelihood_rates[instruments].array[:] = ranking_data.background_likelihood_rates[instruments].array[:] / ranking_data.background_likelihood_rates[instruments].array.sum() * diststats.zero_lag_rates["instruments"][instruments,]
 		ranking_data.zero_lag_likelihood_rates[instruments].array[:] = ranking_data.zero_lag_likelihood_rates[instruments].array.round()
 
 ranking_data._compute_combined_rates()
@@ -270,14 +270,16 @@ xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = options.instruments, paramdict = process_params)
 # re-use ranking_data from above so we've got the right instrument
-# combinations, but wipe the arrays
+# combinations, but wipe the arrays of the other rates
 for instruments in ranking_data.background_likelihood_rates:
-	ranking_data.background_likelihood_rates[instruments].array[:] = 0
-	ranking_data.background_likelihood_pdfs[instruments].array[:] = 0
-	ranking_data.signal_likelihood_rates[instruments].array[:] = 0
-	ranking_data.signal_likelihood_pdfs[instruments].array[:] = 0
-	ranking_data.zero_lag_likelihood_rates[instruments].array[:] = 0
-	ranking_data.zero_lag_likelihood_pdfs[instruments].array[:] = 0
+	if instruments is not None:
+		ranking_data.background_likelihood_rates[instruments].array[:] = 0
+		ranking_data.background_likelihood_pdfs[instruments].array[:] = 0
+		ranking_data.signal_likelihood_rates[instruments].array[:] = 0
+		ranking_data.signal_likelihood_pdfs[instruments].array[:] = 0
+		if options.verbose:
+			print "setting %f counts for zero lag in instrument combo %s" % (ranking_data.zero_lag_likelihood_rates[instruments].array.sum(), instruments)
+
 far.gen_likelihood_control_doc(xmldoc, process, None, ranking_data, segs, comment = u"zerolag priors (no real data)")
 cachefile = open(options.write_zerolag_likelihood_cache, "w")
 for n in range(options.num_banks):
