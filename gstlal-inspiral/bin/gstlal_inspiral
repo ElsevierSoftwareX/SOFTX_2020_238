@@ -129,7 +129,7 @@
 #	+ `--reference-psd` [filename]: Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).
 #	+ `--track-psd`: Track PSD even if a reference is given.
 #	+ `--svd-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.
-#	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets.
+#	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets (required).
 #	+ `--control-peak-time` [time] (int): Set a time window in seconds to find peaks in the control signal.
 #	+ `--fir-stride` [time] (int): Set the length of the fir filter stride in seconds, default = 8.
 #	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal), default = infinity.
@@ -276,7 +276,7 @@ def parse_command_line():
 	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
 	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.")
 	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Provide a cache file of svd-bank files")
-	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
+	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (required).")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
@@ -352,6 +352,9 @@ def parse_command_line():
 		options.likelihood_file = options.likelihood_file + [CacheEntry(line).url for line in open(options.likelihood_file_cache)]
 	if options.likelihood_file is None and options.reference_likelihood_file is None:
 		missing_options.append("either --likelihood-file or --reference-likelihood-file")
+
+	if not options.time_slide_file:
+		missing_options.append("--time-slide-file")
 
 	if missing_options:
 		raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
@@ -553,6 +556,18 @@ else:
 
 
 #
+# Load the time slide vectors, and use them to define the complete
+# instrument list for the network
+#
+
+
+offsetvectors = lsctables.TimeSlideTable.get_table(ligolw_utils.load_filename(options.time_slide_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)).as_dict().values()
+all_instruments = reduce(lambda a, b: a | set(b), offsetvectors, set())
+if len(all_instruments) < options.min_instruments:
+	raise ValueError("--time-slide-file \"%s\" names %s but we need at least %d instruments" % (options.time_slide_file, ", ".join(sorted(all_instruments)), options.min_instruments))
+
+
+#
 # set up the PSDs
 #
 # There are three modes for psds in this program
@@ -622,7 +637,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 	@bottle.route("/")
 	@bottle.route("/index.html")
-	def index(job_tag = options.job_tag, instruments = set(svd_bank_url_dict.keys())):
+	def index(job_tag = options.job_tag, instruments = all_instruments):
 		# get the host and port to report in the links from the
 		# request we've received so that the URLs contain the IP
 		# address by which client has contacted us
@@ -705,8 +720,10 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (filename, coinc_params_distributions.delta_t, options.coincidence_threshold))
 		if coinc_params_distributions.min_instruments != options.min_instruments:
 			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (filename, coinc_params_distributions.min_instruments, options.min_instruments))
+		if coinc_params_distributions.instruments != all_instruments:
+			raise ValueError("\"%s\" is for %s but we need %s" % (filename, ", ".join(sorted(coinc_params_distributions.instruments)), ", ".join(sorted(all_instruments))))
 	else:
-		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = set(detectors.channel_dict), delta_t = options.coincidence_threshold, min_instruments = options.min_instruments), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
+		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
 
 	if zero_lag_ranking_stats_file is None:
 		zero_lag_ranking_stats = None
@@ -733,7 +750,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		marginalized_likelihood_file = options.marginalized_likelihood_file,
 		likelihood_url_namedtuple = likelihood_url_namedtuple,
 		injection_filename = options.injections,
-		time_slide_file = options.time_slide_file,
+		offsetvectors = offsetvectors,
 		comment = options.comment,
 		tmp_path = options.tmp_space,
 		likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds

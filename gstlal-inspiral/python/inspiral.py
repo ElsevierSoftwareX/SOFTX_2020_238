@@ -355,12 +355,12 @@ def chisq_distribution(df, non_centralities, size):
 class CoincsDocument(object):
 	sngl_inspiral_columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")
 
-	def __init__(self, url, process_params, comment, instruments, seg, injection_filename = None, time_slide_file = None, tmp_path = None, replace_file = None, verbose = False):
+	def __init__(self, url, process_params, comment, instruments, seg, offsetvectors, injection_filename = None, tmp_path = None, replace_file = None, verbose = False):
 		#
 		# how to make another like us
 		#
 
-		self.get_another = lambda: CoincsDocument(url = url, process_params = process_params, comment = comment, instruments = instruments, seg = seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+		self.get_another = lambda: CoincsDocument(url = url, process_params = process_params, comment = comment, instruments = instruments, seg = seg, offsetvectors = offsetvectors, injection_filename = injection_filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 
 		#
 		# url
@@ -398,16 +398,13 @@ class CoincsDocument(object):
 			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], contenthandler = LIGOLWContentHandler, verbose = verbose)
 
 		#
-		# optionally insert a time slide table document.  if we
-		# don't have one, add an all-zero offset vector.  remove
-		# duplicate offset vectors when done
+		# insert time slide offset vectors.  remove duplicate
+		# offset vectors when done
 		#
 
 		time_slide_table = lsctables.TimeSlideTable.get_table(self.xmldoc)
-		if time_slide_file is not None:
-			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], contenthandler = LIGOLWContentHandler, verbose = verbose)
-		else:
-			time_slide_table.append_offsetvector(dict.fromkeys(instruments, 0.0), self.process)
+		for offsetvector in offsetvectors:
+			time_slide_table.append_offsetvector(offsetvector, self.process)
 		time_slide_mapping = ligolw_time_slide.time_slides_vacuum(time_slide_table.as_dict())
 		iterutils.inplace_filter(lambda row: row.time_slide_id not in time_slide_mapping, time_slide_table)
 		for tbl in self.xmldoc.getElementsByTagName(ligolw.Table.tagName):
@@ -513,7 +510,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, url, process_params, pipeline, seg, coinc_params_distributions, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_url_namedtuple = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, url, process_params, pipeline, seg, coinc_params_distributions, offsetvectors, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_url_namedtuple = None, injection_filename = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -555,7 +552,7 @@ class Data(object):
 		# initialize document to hold coincs and segments
 		#
 
-		self.coincs_document = CoincsDocument(url, process_params, comment, coinc_params_distributions.instruments, seg, injection_filename = injection_filename, time_slide_file = time_slide_file, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+		self.coincs_document = CoincsDocument(url, process_params, comment, coinc_params_distributions.instruments, seg, offsetvectors, injection_filename = injection_filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 
 		#
 		# attach a StreamThinca instance to ourselves
