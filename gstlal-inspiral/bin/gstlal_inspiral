@@ -382,7 +382,7 @@ def parse_command_line():
 	if options.blind_injections and options.injections:
 		bad_combos.append("(--blind-injections, --injections)")
 	if options.likelihood_file and options.reference_likelihood_file:
-		bad_combos.append(("--likelihood-file", "--reference-likelihood-file"))
+		bad_combos.append("(--likelihood-file, --reference-likelihood-file)")
 
 	if bad_combos:
 		raise ValueError("must use only one option from each set: %s" % ', '.join(bad_combos))
