@@ -539,12 +539,12 @@ class Handler(simplehandler.Handler):
 		A method to update the recent segment histories
 		"""
 		current_gps_time = lal.GPSTimeNow()
-		seglist_to_drop = segments.segmentlist([segments.segment(segments.NegInfinity, current_gps_time - self.segment_history_duration), segments.segment(current_gps_time, segments.PosInfinity)])
+		interval_to_keep = segments.segmentlist([segments.segment(current_gps_time - self.segment_history_duration, current_gps_time)])
 		for segtype, seglistdict in self.recent_segment_histories.items():
 			seglistdict.extend(self.seglistdicts[segtype])
 			seglistdict.coalesce()
 			for seglist in seglistdict.values():
-				seglist -= seglist_to_drop
+				seglist &= interval_to_keep
 
 	def gen_recent_segment_history_xmldoc(self):
 		"""!
