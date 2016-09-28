@@ -425,8 +425,10 @@ def parse_command_line():
 	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
 		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
 	
-	if options.reference_likelihood_file:
+	if options.reference_likelihood_file and options.likelihood_file:
 		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file, options.reference_likelihood_file) for likelihood_file in options.likelihood_file]
+	elif options.reference_likelihood_file and not options.likelihood_file:
+		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(None, options.reference_likelihood_file)]
 	else:
 		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file, None) for likelihood_file in options.likelihood_file]
 
