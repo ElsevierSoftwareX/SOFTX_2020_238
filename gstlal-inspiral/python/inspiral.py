@@ -588,6 +588,15 @@ class Data(object):
 		self.zero_lag_ranking_stats = zero_lag_ranking_stats
 		self.fapfar = None
 
+		# We are not in an online mode, but we still want to assign LRs
+		# from a reference likelihood file to be able to apply an LR
+		# threshold
+
+		if self.likelihood_snapshot_interval is None and self.likelihood_url_namedtuple.reference_likelihood_url is not None:
+			thinca_coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.likelihood_url_namedtuple.reference_likelihood_url, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+			thinca_coinc_params_distributions.finish(segs = seglists, verbose = self.verbose)
+			self.stream_thinca.coinc_params_distributions = thinca_coinc_params_distributions
+
 		#
 		# Fun output stuff
 		#
