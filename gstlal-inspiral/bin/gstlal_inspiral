@@ -384,11 +384,8 @@ def parse_command_line():
 	bad_combos = []
 	if options.blind_injections and options.injections:
 		bad_combos.append("(--blind-injections, --injections)")
-	if options.likelihood_file and options.reference_likelihood_file:
-		bad_combos.append("(--likelihood-file, --reference-likelihood-file)")
-
 	if bad_combos:
-		raise ValueError("must use only one option from each set: %s" % ', '.join(bad_combos))
+		raise ValueError("must use only one option from each set: %s" % ','.join(bad_combos))
 
 	#
 	# check sanity of options
@@ -415,7 +412,7 @@ def parse_command_line():
 		os.environ['GSTLAL_LL_JOB'] = options.job_tag
 	else:
 		bad_options = []
-		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval", "reference_likelihood_file"]:
+		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
 			if getattr(options, option) is not None:
 				bad_options.append("--%s" % option.replace("_","-"))
 		if bad_options:
@@ -429,9 +426,9 @@ def parse_command_line():
 		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
 	
 	if options.reference_likelihood_file:
-		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(None, options.reference_likelihood_file)]
+		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file, options.reference_likelihood_file) for likelihood_file in options.likelihood_file]
 	else:
-		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file,None) for likelihood_file in options.likelihood_file]
+		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file, None) for likelihood_file in options.likelihood_file]
 
 	if not (len(svd_banks) == len(options.output) == len(likelihood_url_namedtuples_list)):
 		raise ValueError("must have equal numbers of svd banks (%d), output files (%d) and likelihood files (%d)" % (len(svd_banks), len(options.output), len(likelihood_url_namedtuples_list)))
