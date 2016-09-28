@@ -1,0 +1,107 @@
+#!/usr/bin/python
+
+import gviz_api
+import h5py
+import os
+import cgi
+import cgitb
+cgitb.enable()
+form = cgi.parse()
+import numpy
+#import pyparsing
+
+print "Content-type: application/json"
+print
+
+# we have to get a query according to the google standard
+# queries must be of the form
+# tq = 
+
+assert "tq" in form
+assert "reqId" in form
+reqId = form["reqId"][0]
+query = form["tq"][0]
+
+#
+# Default values
+#
+
+base_path = "/home/gstlalcbctest/engineering/10/S6/bns"
+
+#
+# "SQL" parser.  FIXME. First, google query langauge isn't really SQL and
+# second, if this keeps going we need to switch to a parsing library e.g.,
+# pyparsing.  For now this is likely to be a collection of once-offs.
+#
+
+#
+# Data types
+#
+for dt in (	("latency_history", "Latency"), 
+		("snr_history", "SNR")
+	):
+	if dt[0] in query:
+		data_type = dt[0]
+		latest_time_path = base_path + "/aggregator"
+		# FIXME DONT HARD CODE
+		for level in range(6):
+			latest_time_path += "/%s" % sorted([d for d in os.listdir(latest_time_path) if len(d) == 1 and d.isdigit()])[-1]
+		out_data = []
+		path = latest_time_path
+		path += "/by_job"
+		for job in os.listdir(path):
+			fname = "%s/%s/median/%s.hdf5" % (path, job, data_type)
+			f = f = h5py.File(fname, "r")
+			this_data = numpy.array(f["data"])
+			if len(this_data) > 0:
+				mindata = numpy.min(this_data)# + numpy.random.randn()
+				maxdata = numpy.max(this_data)# + numpy.random.randn()
+				meandata = numpy.mean(this_data)
+				std = numpy.std(this_data)
+				out_data.append([job, mindata, meandata-std/2., meandata+std/2., maxdata])
+				f.close()
+		description = [
+			("job", "string"),
+			("std dev", "number"),
+			("job median-std/2", "number"),
+			("job median+std/2", "number"),
+			("job max", "number")
+			]
+		
+		data_table = gviz_api.DataTable(description)
+		data_table.LoadData(out_data)
+		print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+
+for dt in (("horizon_history", "horizon"), ("noise", "noise")):
+	if dt[0] in query:
+		data_type = dt[0]
+		latest_time_path = base_path + "/dq"
+		out_data = []
+		path = latest_time_path
+
+		fname = "%s/H1/%s.hdf5" % (path, data_type)
+		f = f = h5py.File(fname, "r")
+		H1 = {}
+		for t,d in zip(f["time"], f[dt[1]]):
+			H1[t] = d
+		f.close()
+
+		fname = "%s/L1/%s.hdf5" % (path, data_type)
+		f = f = h5py.File(fname, "r")
+		L1 = {}
+		for t,d in zip(f["time"], f[dt[1]]):
+			L1[t] = d
+		f.close()
+
+		for t in set(H1) | set(L1):
+			out_data.append([t, H1.setdefault(t,0), L1.setdefault(t,0)])
+		
+		description = [
+			("time", "number"),
+			("H1 %s" % dt[1], "number"),
+			("L1 %s" % dt[1], "number")
+			]
+		
+		data_table = gviz_api.DataTable(description)
+		data_table.LoadData(out_data)
+		print data_table.ToJSonResponse(order_by = "time", req_id = reqId)
