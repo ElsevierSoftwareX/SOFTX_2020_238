@@ -791,6 +791,23 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 		pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
+	#
+	# put a 0 into all horizon histories at the boundaries of the
+	# analysis segment so that queries for horizon distance at times
+	# outside the segment and for horizon distance for instruments for
+	# which there is no data report 0.  NOTE:  if this job is
+	# contiguous with another job then this makes it seem like there is
+	# a 0 in the horizon distance history at the boundary between them
+	# when that is probably not correct.  because it's a single sample
+	# it shouldn't lead to significant problems, but this is something
+	# to be aware of.
+	#
+
+	if detectors.seg:
+		for instrument in coinc_params_distributions.instruments:
+			handler.record_horizon_distance(instrument, float(detectors.seg[0]), 0.0)
+			handler.record_horizon_distance(instrument, float(detectors.seg[1]), 0.0)
+
 
 	#
 	# Run pipeline
