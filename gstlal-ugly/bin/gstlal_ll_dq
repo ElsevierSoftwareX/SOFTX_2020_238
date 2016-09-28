@@ -1,10 +1,12 @@
 #!/usr/bin/python
+import os
 import numpy, scipy
+import shutil
 from collections import deque
 from scipy import signal
 import sys
 import StringIO
-from gstlal import pipeparts, datasource, simplehandler, pipeio
+from gstlal import pipeparts, datasource, simplehandler, pipeio, reference_psd
 from optparse import OptionParser
 import gi
 gi.require_version('Gst', '1.0')
@@ -20,76 +22,65 @@ def parse_command_line():
 	datasource.append_options(parser)
 
 	# add our own options
-	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
+	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 16384 Hz")
 	parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 	options, filenames = parser.parse_args()
 
-	# check our own options
-	if options.write_psd is None:
-		raise ValueError("Must specify --write-psd")
-
 	return options, filenames
-
-def to_hdf5(name, datadict):
-	f = h5py.File("%s.tmp" % name, "w")
-	for k, v in datadict.items():
-		f[k] = v
-	f.close()
-	shutil.move("%s.tmp" % name, name)
-
 
 class PSDHandler(simplehandler.Handler):
 	def __init__(self, *args, **kwargs):
 		self.psd = None
+		self.out_path = kwargs["out_path"]
+		del kwargs["out_path"]
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 		self.horizon_history = deque(maxlen = 900)
-		noisedeq = deque(maxlen = 3600)
-		timedeq = deque(maxlen = 3600)
+		self.horizon_history_time = deque(maxlen = 900)
+		self.noisedeq = deque(maxlen = 3600)
+		self.timedeq = deque(maxlen = 3600)
 
 	def do_on_message(self, bus, message):
 		if message.type == Gst.MessageType.ELEMENT and message.get_structure().get_name() == "spectrum":
 			self.psd = pipeio.parse_spectrum_message(message)
-			self.horizon_history.append(reference_psd.horizon_distance(selfpsd, 1.4, 1.4, 8, 20))
-			to_hdf5("psd.hdf5", {"freq": numpy.arange(self.psd.data.length / 32) * self.psd.deltaF * 16, "asd": signal.decimate(self.psd.data.data[:], 32)[:-1]}
-			#f = h5py.File("psd.hdf5", "w")
-			# decimate by 32
-			#f.create_dataset("asd", (self.psd.data.length / 32,), dtype="f4")
-			#f.create_dataset("freq", (self.psd.data.length / 32,), dtype="f4")
-			#f["freq"][...] = numpy.arange(self.psd.data.length / 32) * self.psd.deltaF * 16
-			#f["asd"][...] = signal.decimate(self.psd.data.data[:], 32)[:-1]
-			#f.close()
+			self.horizon_history.append(reference_psd.horizon_distance(self.psd, 1.4, 1.4, 8, 20))
+			self.horizon_history_time.append(float(self.psd.epoch))
+			self.to_hdf5("psd.hdf5", {"freq": numpy.arange(self.psd.data.length / 32) * self.psd.deltaF * 16, "asd": signal.decimate(self.psd.data.data[:], 32)[:-1]})
+			self.to_hdf5("horizon_history.hdf5", {"time": numpy.array(self.horizon_history_time), "horizon": numpy.array(self.horizon_history)})
 			return True
 		return False
 
-noisedeq = deque(maxlen = 3600)
-timedeq = deque(maxlen = 3600)
+	def bufhandler(self,elem):
+		buf = elem.emit("pull-sample").get_buffer()
+		(result, mapinfo) = buf.map(Gst.MapFlags.READ)
+		if mapinfo.data:
+			s = StringIO.StringIO(mapinfo.data)
+			data = numpy.array([(float(x.split()[0]), abs(float(x.split()[1]))) for x in s.getvalue().split('\n') if x])
+			ix = numpy.argmax(data, axis=0)[1]
+			self.timedeq.append(data[ix,0])
+			self.noisedeq.append(data[ix,1] / 3.8) #3.8 is approximately the expectation value in noise for 1 second
+			self.to_hdf5("noise.hdf5", {"time": numpy.array(self.timedeq), "noise": numpy.array(self.noisedeq)})
+		buf.unmap(mapinfo)
+		del buf
+		return Gst.FlowReturn.OK
 
-def bufhandler(elem, noisedeq = noisedeq, timedeq = timedeq):
-        buf = elem.emit("pull-sample").get_buffer()
-	(result, mapinfo) = buf.map(Gst.MapFlags.READ)
-	if mapinfo.data:
-		s = StringIO.StringIO(mapinfo.data)
-		data = numpy.array([(float(x.split()[0]), abs(float(x.split()[1]))) for x in s.getvalue().split('\n') if x])
-		ix = numpy.argmax(data, axis=0)[1]
-		timedeq.append(data[ix,0])
-		noisedeq.append(data[ix,1] / 3.8)
-		f = h5py.File("noise.hdf5", "w")
-		f.create_dataset("noise", (len(timedeq),), dtype="f4")
-		f.create_dataset("time", (len(timedeq),), dtype="f4")
-		f["time"][...] = numpy.array(timedeq)
-		f["noise"][...] = numpy.array(noisedeq)
+	def prehandler(self,elem):
+		buf = elem.emit("pull-preroll")
+		del buf
+		return Gst.FlowReturn.OK
+
+	def to_hdf5(self, name, datadict):
+		path = os.path.join(self.out_path,"%s" % name)
+		tmppath = path + ".tmp"
+		f = h5py.File(tmppath, "w")
+		for k, v in datadict.items():
+			f[k] = v
 		f.close()
-	buf.unmap(mapinfo)
-	del buf
-	return Gst.FlowReturn.OK
+		shutil.move(tmppath, path)
 
-def prehandler(elem):
-        buf = elem.emit("pull-preroll")
-	del buf
-	return Gst.FlowReturn.OK
+
 
 #
 # MAIN
@@ -112,10 +103,9 @@ if options.verbose:
 	print >>sys.stderr, "building pipeline ..."
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(name="DQ")
-handler = PSDHandler(mainloop, pipeline)
+handler = PSDHandler(mainloop, pipeline, out_path = options.out_path)
 
 head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
-#head = pipeparts.mkaudioconvert(pipeline, head)
 head = pipeparts.mkresample(pipeline, head, quality = 9)
 head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.sample_rate)
 head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
@@ -124,8 +114,8 @@ head = pipeparts.mkqueue(pipeline, head)
 head = pipeparts.mkreblock(pipeline, head)
 head = pipeparts.mkgeneric(pipeline, head, "lal_nxydump")
 sink = pipeparts.mkappsink(pipeline, head, max_buffers = 1, sync = False)
-sink.connect("new-sample", bufhandler)
-sink.connect("new-preroll", prehandler)
+sink.connect("new-sample", handler.bufhandler)
+sink.connect("new-preroll", handler.prehandler)
 
 #
 # setup signal handler to shutdown pipeline for live data
