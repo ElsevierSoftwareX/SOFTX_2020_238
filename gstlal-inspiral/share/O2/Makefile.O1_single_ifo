@@ -1,0 +1,301 @@
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=ligo.dev.o2.cbc.bbh.gstlaloffline
+GROUP_USER=chad.hanna
+#CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER) --condor-command='Requirements=TARGET.cpuinfo_model=?="44"'
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+
+############################
+# Template bank parameters #
+############################
+
+# Note that these can can change if you modify the template bank program.
+# Waveform approximant
+APPROXIMANT = TaylorF2
+# Minimum component mass for the template bank
+MIN_MASS = 1.0
+# Maximum component mass for the template bank
+MAX_MASS = 2.0
+# Minimum total mass for the template bank
+MIN_TOTAL_MASS = 2.0
+# Maximum total mass for the template bank
+MAX_TOTAL_MASS = 4.0
+# Maximum symmetric mass ratio for the template bank
+MAX_ETA = 0.25
+# Minimum symmetric mass ratio for the template bank
+MIN_ETA = 0.2222
+# Low frequency cut off for the template bank placement
+LOW_FREQUENCY_CUTOFF = 30.0
+# High pass frequency to condition the data before measuring the psd for template placement
+HIGH_PASS_FREQ = 20.0
+# Highest frequency at which to compute the metric
+HIGH_FREQUENCY_CUTOFF = 1024.0
+# The sample rate at which to compute the template bank
+SAMPLE_RATE = 4096
+# The minimal match of the template bank; determines how much SNR is retained for signals "in between the bank points"
+MM = 0.975
+# The start time for reading the data for the bank
+#BANKSTART = 1126051317
+BANKSTART = 1127000000
+# The stop time for reading the data for the bank (Bank start + 2048s)
+#BANKSTOP = 1126053365
+BANKSTOP = 1127002048
+
+# Controls the number of templates in each SVD sub bank
+NUM_SPLIT_TEMPLATES = 180
+# Number of bins of chi to uniformly bin templates into
+NUM_CHI_BINS = 20
+# Controls the overlap from sub bank to sub bank - helps mitigate edge effects
+# in the SVD.  Redundant templates will be removed
+OVERLAP = 30
+MCHIRP_SPLIT = 1.73
+# The approximant that you wish to filter with for BANK_MCHIRP1 and BANK_MCHIRP2, respectively.
+APPROXIMANT1 = 0.00:$(MCHIRP_SPLIT):TaylorF2
+APPROXIMANT2 = $(MCHIRP_SPLIT):1000.0:SEOBNRv2_ROM_DoubleSpin
+
+#########################
+# Triggering parameters #
+#########################
+
+# The detectors to analyze
+IFOS = H1 L1 
+# The GPS start time for analysis (O1)
+#START = 1126051217
+START = 1127000000
+# The GPS end time for analysis (O1, start + 100000s)
+#STOP = 1126151217
+STOP =  1127100000
+# A user tag for the run
+TAG = test_dag
+# Run number
+RUN = run1
+# A web directory for output
+WEBDIR = /home/channa/public_html/single_ifo
+# The number of sub banks to process in parallel for each gstlal_inspiral job
+NUMBANKS = 5
+# The control peak time for the composite detection statistic.  If set to 0 the
+# statistic is disabled
+PEAK = 0
+# The length of autocorrelation chi-squared in sample points
+AC_LENGTH = 351
+# The minimum number of samples to include in a given time slice
+SAMPLES_MIN = 512
+# The maximum number of samples to include in the 256 Hz or above time slices
+SAMPLES_MAX_256 = 512
+
+#############################
+# additional options, e.g., #
+#############################
+
+#ADDITIONAL_DAG_OPTIONS = "--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) --blind-injections BNS-MDC1-WIDE.xml"
+ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256)
+
+##############
+# Injections #
+##############
+
+# The seed is the string before the suffix _injections.xml
+# Change as appropriate, whitespace is important
+# NOTE This uses gstlal_injections_by_local_rate for this example, but you might want to use lalapps_inspinj since it is reviewed etc.
+# specify the seeds and number of injections.  The should be <seed>_injections.xml.  The same rule will be applied to each target.  For a more heterogeneous injection plan more work has to go into this Makefile but it is straight forward.
+INJECTIONS := 1_injections.xml
+# Maximum injection distance in Mpc
+INJ_MAX_DIST = 200
+# Minimum component mass 1 for injections
+INJ_MIN_MASS1 = 1.35
+# Maximum component mass 1 for injections
+INJ_MAX_MASS1 = 1.45
+# Minimum component mass 2 for injections
+INJ_MIN_MASS2 = 1.35
+# Maximum component mass 2 for injections
+INJ_MAX_MASS2 = 1.45
+# Minimum total mass for injections
+INJ_MIN_TOTAL_MASS = 2.7
+# Maximum total mass for injections
+INJ_MAX_TOTAL_MASS = 2.9
+# minimum frequency for injections. NOTE this should be lower than the intended filtering frequency
+INJ_FLOW = 25
+
+# GSTLAL_SEGMENTS Options
+SEG_SERVER=https://segments.ligo.org
+LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C02:1"
+SEGMENT_TRIM = 16
+SEGMENT_MIN_LENGTH = 512
+
+#GSTLAL VETO Options
+
+# Vetoes file names
+# Obtain veto definer from here: https://code.pycbc.phy.syr.edu/detchar/veto-definitions/tree/master/cbc/ER8
+VETODEF = H1L1-CBC_VETO_DEFINER_C02_O1_1126051217-11203200.xml
+vetoes_suffix := _vetoes.xml
+VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
+
+LIGO_VETOES="$*:DMT-INJECTION"
+
+###############################
+# Segment and frame type info #
+###############################
+
+# The LIGO frame types
+HANFORD_FRAME_TYPE='H1_HOFT_C02'
+LIVINGSTON_FRAME_TYPE='L1_HOFT_C02'
+
+# The Channel names. FIXME sadly you have to change the CHANNEL_NAMES string if
+# you want to analyze a different set of IFOS
+H1_CHANNEL=DCS-CALIB_STRAIN_C02
+L1_CHANNEL=DCS-CALIB_STRAIN_C02
+CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
+
+#######################################################
+# Set ranges and times for reference likelihood files #
+#######################################################
+
+# NOTE needed to make 10000s duration to get sufficient zero lag triggers
+H1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-15000")
+H1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)-5000")
+L1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-10000")
+L1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
+H1PRIORRANGE=60
+L1PRIORRANGE=60
+
+
+###################################################################################
+# Get some basic definitions.  NOTE this comes from the share directory probably. #
+###################################################################################
+
+include Makefile.offline_analysis_rules
+
+############
+# Workflow #
+############
+
+all : dag
+
+## Making the master template bank
+H1-TMPLTBANK-$(START)-2048.xml: H1_frame.cache
+	lalapps_tmpltbank \
+		--disable-compute-moments \
+		--grid-spacing Hexagonal \
+		--dynamic-range-exponent 69.0 \
+		--enable-high-pass $(HIGH_PASS_FREQ) \
+		--high-pass-order 8 \
+		--strain-high-pass-order 8 \
+		--minimum-mass $(MIN_MASS) \
+		--maximum-mass $(MAX_MASS) \
+		--min-total-mass $(MIN_TOTAL_MASS) \
+		--max-total-mass $(MAX_TOTAL_MASS) \
+		--max-eta $(MAX_ETA) \
+		--min-eta $(MIN_ETA) \
+		--gps-start-time $(BANKSTART) \
+		--gps-end-time $(BANKSTOP) \
+		--calibrated-data real_8 \
+		--channel-name H1:DCS-CALIB_STRAIN_C02 \
+		--space Tau0Tau3 \
+		--number-of-segments 15 \
+		--minimal-match $(MM) \
+		--high-pass-attenuation 0.1 \
+		--min-high-freq-cutoff ERD \
+		--segment-length 1048576 \
+		--low-frequency-cutoff $(LOW_FREQUENCY_CUTOFF) \
+		--pad-data 8 \
+		--num-freq-cutoffs 1 \
+		--sample-rate $(SAMPLE_RATE) \
+		--high-frequency-cutoff $(HIGH_FREQUENCY_CUTOFF) \
+		--resample-filter ldas \
+		--strain-high-pass-atten 0.1 \
+		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
+		--frame-cache H1_frame.cache \
+		--max-high-freq-cutoff ERD \
+		--approximant $(APPROXIMANT) \
+		--order twoPN \
+		--spectrum-type median \
+		--verbose
+
+%_split_bank.cache : H1-TMPLTBANK-$(START)-2048.xml
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank --approximant $(APPROXIMANT1) --approximant $(APPROXIMANT2) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+
+plots :
+	mkdir plots
+
+$(WEBDIR) : $(MAKEFILE_LIST)
+	mkdir -p $(WEBDIR)/OPEN-BOX
+	cp $(MAKEFILE_LIST) $@
+
+tisi.xml : inj_tisi.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 bg_tisi.xml
+	ligolw_add --output $@ bg_tisi.xml $<
+
+inj_tisi.xml :
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
+
+dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) reference_likelihood_file.xml.gz
+	gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 1 --web-dir $(WEBDIR) --time-slide-file tisi.xml --inj-time-slide-file inj_tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --ht-gate-threshold 50 $(ADDITIONAL_DAG_OPTIONS) $(CONDOR_COMMANDS) --singles-threshold 100.0 --request-cpu 4 --request-memory 7GB --min-log-L 2. --min-instruments 1 --reference-likelihood-file reference_likelihood_file.xml.gz
+	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
+
+H1_frame.cache:
+	# FIXME force the observatory column to actually be instrument
+	gw_data_find -o H -t $(HANFORD_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
+
+L1_frame.cache:
+	# FIXME force the observatory column to actually be instrument
+	gw_data_find -o L -t $(LIVINGSTON_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
+
+frame.cache: $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
+	#FIXME: since these frame types were made incorrectly, make sure ligolw_path_to_cache
+	#       reads ifo names properly
+	sed -i s/H\ $(LIGO_FRAME_TYPE)/H\ H1_$(LIGO_FRAME_TYPE)/g frame.cache
+	sed -i s/L\ $(LIGO_FRAME_TYPE)/L\ L1_$(LIGO_FRAME_TYPE)/g frame.cache
+
+%_segmentspadded.xml:
+	ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
+
+segments.xml.gz: $(SEGMENTS_FILES) frame.cache
+	# These segments come from the MDC set	
+	ligolw_add --output segdb.xml $(SEGMENTS_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
+	gstlal_cache_to_segments frame.cache nogaps.xml
+	gstlal_segments_operations --segment-file1 segdb.xml --segment-file2 nogaps.xml --intersection --output-file $@
+	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
+
+%_vetoes.xml: $(VETODEF)
+	ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
+	gstlal_segments_operations --union --segment-file1 $*-VETOTIME_CAT3-*.xml --segment-name1 VETO_CAT3_CUMULATIVE --segment-file2 $*-VETOTIME_CAT3-*.xml --segment-name2 VETO_CAT3_CUMULATIVE  --output-file $@ --output-segment-name vetoes
+
+vetoes.xml.gz: $(VETOES_FILES)
+	ligolw_add --output $@ $(VETOES_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
+	gzip $@
+
+# Generate injections, e.g., 1_injections.xml or 2_injections.xml for whatever seeds are requested
+%_injections.xml:
+	gstlal_injections_by_local_rate \
+		--output $@ \
+		--seed $* \
+		--flower $(INJ_FLOW) \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--bns-max-distance $(INJ_MAX_DIST) \
+		--nsbh-local-rate 0 \
+		--bbh-local-rate 0 \
+		--bns-local-rate 22000
+
+reference_likelihood_file.xml.gz:
+	gstlal_ll_inspiral_create_prior_diststats \
+		--segment-and-horizon=H1:$(H1PRIORSTART):$(H1PRIORSTOP):$(H1PRIORRANGE) \
+		--segment-and-horizon=L1:$(L1PRIORSTART):$(L1PRIORSTOP):$(L1PRIORRANGE) \
+		--write-likelihood-basename $@ \
+		--num-templates 1000 \
+		--min-instruments 1 \
+		--verbose
+
+clean:
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -vf segments.xml.gz tisi.xml H1-*.xml H1_*.xml L1-*.xml L1_*xml V1-*.xml V1_*xml ?_injections.xml ????-*_split_bank-*.xml vetoes.xml.gz
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf tisi0.xml tisi1.xml
+	-rm -rf *_split_bank*
+	-rm -rf nogaps.xml segdb.xml
+	-rm -rf bank_aligned_spin.xml.gz
