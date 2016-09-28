@@ -767,7 +767,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 	handler = lloidparts.Handler(mainloop, pipeline,
 		output,
-		instruments = set(detectors.channel_dict),
+		instruments = coinc_params_distributions.instruments,
 		tag = options.job_tag,
 		seglistdict = seglists,
 		zero_lag_ranking_stats_filename = zero_lag_ranking_stats_file,
