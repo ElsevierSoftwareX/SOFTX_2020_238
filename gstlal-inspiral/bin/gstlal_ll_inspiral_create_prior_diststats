@@ -248,47 +248,52 @@ ligolw_process.set_process_end_time(process)
 #
 
 far.gen_likelihood_control_doc(xmldoc, process, diststats, ranking_data, segs, comment = u"background and signal priors (no real data)")
-cachefile = open(options.write_likelihood_cache, "w")
-for n in range(options.num_banks):
-	this_name = "%04d_%s" % (n, options.write_likelihood_basename)
-	c = CacheEntry("".join(sorted(segs.keys())), "PRIORS", segs.extent_all(), this_name)
-	if n == 0:
-		ligolw_utils.write_filename(xmldoc, this_name, gz = this_name.endswith(".gz"), verbose = options.verbose)
-		original = this_name
-	else:
-		shutil.copyfile(original, this_name)
-	print >> cachefile, str(c)
-cachefile.close()
+ligolw_utils.write_filename(xmldoc, options.write_likelihood_basename, gz = options.write_likelihood_basename.endswith(".gz"), verbose = options.verbose)
 
 
 #
-# create all-zero ranking statistic histograms to seed zero-lag counts
+# write a file for each bin and record to cache file if requested
 #
 
+if options.write_likelihood_cache:
+	cachefile = open(options.write_likelihood_cache, "w")
+	for n in range(options.num_banks):
+		this_name = "%04d_%s" % (n, options.write_likelihood_basename)
+		c = CacheEntry("".join(sorted(segs.keys())), "PRIORS", segs.extent_all(), this_name)
+		if n == 0:
+			ligolw_utils.write_filename(xmldoc, this_name, gz = this_name.endswith(".gz"), verbose = options.verbose)
+			original = this_name
+		else:
+			shutil.copyfile(original, this_name)
+		print >> cachefile, str(c)
+	cachefile.close()
 
-xmldoc = ligolw.Document()
-xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = options.instruments, paramdict = process_params)
-# re-use ranking_data from above so we've got the right instrument
-# combinations, but wipe the arrays of the other rates
-for instruments in ranking_data.background_likelihood_rates:
-	if instruments is not None:
+
+#
+# create all-zero ranking statistic histograms to seed zero-lag counts if requested
+#
+
+if options.write_zerolag_likelihood_cache:
+	xmldoc = ligolw.Document()
+	xmldoc.appendChild(ligolw.LIGO_LW())
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = options.instruments, paramdict = process_params)
+	# re-use ranking_data from above so we've got the right instrument
+	# combinations, but wipe the arrays
+	for instruments in ranking_data.background_likelihood_rates:
 		ranking_data.background_likelihood_rates[instruments].array[:] = 0
 		ranking_data.background_likelihood_pdfs[instruments].array[:] = 0
 		ranking_data.signal_likelihood_rates[instruments].array[:] = 0
 		ranking_data.signal_likelihood_pdfs[instruments].array[:] = 0
-		if options.verbose:
-			print "setting %f counts for zero lag in instrument combo %s" % (ranking_data.zero_lag_likelihood_rates[instruments].array.sum(), instruments)
 
-far.gen_likelihood_control_doc(xmldoc, process, None, ranking_data, segs, comment = u"zerolag priors (no real data)")
-cachefile = open(options.write_zerolag_likelihood_cache, "w")
-for n in range(options.num_banks):
-	this_name = "%04d_zerolag_%s" % (n, options.write_likelihood_basename)
-	c = CacheEntry("".join(sorted(segs.keys())), "PRIORS", segs.extent_all(), this_name)
-	if n == 0:
-		ligolw_utils.write_filename(xmldoc, this_name, gz = this_name.endswith(".gz"), verbose = options.verbose)
-		original = this_name
-	else:
-		shutil.copyfile(original, this_name)
-	print >> cachefile, str(c)
-cachefile.close()
+	far.gen_likelihood_control_doc(xmldoc, process, None, ranking_data, segs, comment = u"zerolag priors (no real data)")
+	cachefile = open(options.write_zerolag_likelihood_cache, "w")
+	for n in range(options.num_banks):
+		this_name = "%04d_zerolag_%s" % (n, options.write_likelihood_basename)
+		c = CacheEntry("".join(sorted(segs.keys())), "PRIORS", segs.extent_all(), this_name)
+		if n == 0:
+			ligolw_utils.write_filename(xmldoc, this_name, gz = this_name.endswith(".gz"), verbose = options.verbose)
+			original = this_name
+		else:
+			shutil.copyfile(original, this_name)
+		print >> cachefile, str(c)
+	cachefile.close()
