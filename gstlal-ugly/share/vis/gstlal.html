@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>gstlal CBC Latency</title>
+<link rel="stylesheet" type="text/css" href="gstlal.css">
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<script type="text/javascript" src="gstlal.js"></script>
+<script type="text/javascript">
+google.charts.load('current', {'packages':['corechart']});
+
+google.charts.setOnLoadCallback(drawLatency);
+google.charts.setOnLoadCallback(drawSNR);
+google.charts.setOnLoadCallback(drawHorizon);
+google.charts.setOnLoadCallback(drawNoise);
+
+var latency_wrapper;
+var snr_wrapper;
+var horizon_wrapper;
+var noise_wrapper;
+
+function drawLatency() {
+// Draw a column chart
+latency_wrapper = new google.visualization.ChartWrapper({
+	chartType: 'CandlestickChart',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=0',
+	query: 'select latency_history',
+	refreshInterval: 5,
+	options: {	title: 'Latency', 
+			animation: {duration: 1000, easing: 'inAndOut', startup: true},
+			vAxis: {scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] },
+			hAxis: {slantedText: true, slantedTextAngle: 90},
+			chartArea: {left:25,top:5,width:'100%',height:'73%'},
+			titlePosition: 'in',
+	},
+	containerId: 'visualization',
+});
+latency_wrapper.draw();
+}
+
+function drawSNR() {
+	snr_wrapper = new google.visualization.ChartWrapper({
+	chartType: 'CandlestickChart',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=1',
+	query: 'select snr_history',
+	refreshInterval: 5,
+	options: {	title: 'SNR', 
+			animation: {duration: 1000, easing: 'inAndOut', startup: true},
+			vAxis: {scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] },
+			hAxis: {slantedText: true, slantedTextAngle: 90},
+			chartArea: {left:30,top:5,width:'100%',height:'73%'},
+			titlePosition: 'in',
+	},
+	containerId: 'snr',
+});
+snr_wrapper.draw();
+}
+
+function drawHorizon() {
+	horizon_wrapper = new google.visualization.ChartWrapper({
+	chartType: 'LineChart',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=2',
+	query: 'select horizon_history',
+	refreshInterval: 5,
+	options: {	title: 'Horizon', 
+			animation: {duration: 1000, easing: 'inAndOut', startup: true},
+			vAxis: {scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64,128] },
+			chartArea: {left:30,top:5,width:'100%',height:'73%'},
+			titlePosition: 'in',
+			series: {0: {color: "red"}, 1: {color:"green"}}
+	},
+	containerId: 'horizon',
+});
+horizon_wrapper.draw();
+}
+
+function drawNoise() {
+	noise_wrapper = new google.visualization.ChartWrapper({
+	chartType: 'LineChart',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=3',
+	query: 'select noise',
+	refreshInterval: 5,
+	options: {	title: 'Noise', 
+			animation: {duration: 1000, easing: 'inAndOut', startup: true},
+			vAxis: {scaleType: 'log', textPosition: 'out'},
+			chartArea: {left:30,top:5,width:'100%',height:'73%'},
+			titlePosition: 'in',
+			series: {0: {color: "red"}, 1: {color:"green"}}
+	},
+	containerId: 'noise',
+});
+noise_wrapper.draw();
+}
+
+</script>
+</head>
+
+<body>
+
+<div class=topbox> 
+	<table>
+        <tr><td><img width=100px src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png"></td>
+	    <td><ul class="tab">
+	      <li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard')">Dashboard</a></li>
+	      <li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise')">Noise</a></li>
+	      <li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity')">Sensitivity</a></li>
+	      <li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency')">Latency</a></li>
+	      <li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR')">SNR</a></li>
+	   </td></ul>
+        </tr>
+	</table>
+</div>
+<br>
+
+<div id="Dashboard" class="tabcontent">
+</div>
+
+<div id="Noise" class="tabcontent">
+<div id="noise"></div>
+</div>
+
+<div id="Sensitivity" class="tabcontent">
+<div id="horizon"></div>
+</div>
+
+<div id="Latency" class="tabcontent">
+<div id="visualization"></div>
+</div>
+
+<div id="SNR" class="tabcontent">
+<div id="snr"></div>
+</div>
+
+</body>
+</html>
