@@ -237,6 +237,7 @@ def parse_command_line():
 	parser.add_option("--injection-file", help = "The injection xml file that corresponds to the low latency injections: only used for making missed found plots.")
 	parser.add_option("--state-backup-destination", metavar = "URL", help = "Location to back state up to, e.g. gstlalcbc@ldas-pcdev1.ligo.caltech.edu.")
 	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
+	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
 
 	options, filenames = parser.parse_args()
 
@@ -368,7 +369,8 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"job-tag":jobTags[-1],
 			"likelihood-snapshot-interval":options.likelihood_snapshot_interval,
 			"min-instruments":options.min_instruments,
-			"min-log-L":options.min_log_L
+			"min-log-L":options.min_log_L,
+			"time-slide-file":options.time_slide_file
 			},
 		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
 		output_files = {"output":"not_used.xml.gz",
@@ -409,7 +411,8 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 				"job-tag":inj_jobTags[-1],
 				"likelihood-snapshot-interval":options.likelihood_snapshot_interval,
 				"min-instruments":options.min_instruments,
-				"min-log-L":options.min_log_L
+				"min-log-L":options.min_log_L,
+				"time-slide-file":options.time_slide_file
 				},
 			input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file,
 			"reference-likelihood-file":[likefile]},
