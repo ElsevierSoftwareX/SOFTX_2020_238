@@ -260,12 +260,14 @@ def parse_command_line():
 	dq_channel_dict = datasource.channel_dict_from_channel_list(options.dq_channel_name)
 	framexmit_dict = datasource.framexmit_ports['CIT'] # set the default
 	framexmit_dict.update(datasource.framexmit_dict_from_framexmit_list(options.framexmit_addr))
-	inj_channel_dict = datasource.channel_dict_from_channel_list(options.inj_channel_name)
+	inj_channel_dict = datasource.channel_dict_from_channel_list_with_node_range(options.inj_channel_name)
 	inj_dq_channel_dict = datasource.channel_dict_from_channel_list(options.inj_dq_channel_name)
 	inj_framexmit_dict = datasource.framexmit_dict_from_framexmit_list(options.inj_framexmit_addr)
 
-	if inj_channel_dict and not ( set(inj_channel_dict.keys()) == set(channel_dict.keys()) ):
-		raise ValueError("Either no injection jobs must be given or the injection and non-injection channels must be specified for the same set of detectors")
+	if inj_channel_dict:
+		for nodes in inj_channel_dict.keys():
+			if not ( set(inj_channel_dict[nodes].keys()) == set(channel_dict.keys()) ):
+				raise ValueError("Either no injection jobs must be given or the injection and non-injection channels must be specified for the same set of detectors")
 
 	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 
@@ -389,7 +391,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 		inspInjNode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, [],
 			opts = {"psd-fft-length":options.psd_fft_length,
 				"ht-gate-threshold":options.ht_gate_threshold,
-				"channel-name":datasource.pipeline_channel_list_from_channel_dict(inj_channel_dict),
+				"channel-name":datasource.pipeline_channel_list_from_channel_dict_with_node_range(inj_channel_dict, node = jobTags[-1]),
 				"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(inj_dq_channel_dict, opt = "dq-channel-name"),
 				"state-vector-on-bits":options.inj_state_vector_on_bits,
 				"state-vector-off-bits":options.inj_state_vector_off_bits,

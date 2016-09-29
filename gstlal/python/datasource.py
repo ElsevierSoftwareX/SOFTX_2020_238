@@ -85,6 +85,30 @@ def channel_dict_from_channel_list(channel_list):
 	"""
 	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
+def channel_dict_from_channel_list_with_node_range(channel_list):
+	"""!
+	Given a list of channels with a range of mass bins, produce a dictionary
+	keyed by ifo of channel names:
+
+	The list here typically comes from an option parser with options that
+	specify the "append" action.
+
+	Examples:
+
+		>>> channel_dict_from_channle_list_with_node_range(["0000:0002:H1=LSC_STRAIN_1,L1=LSC_STRAIN_2", "0002:0004:H1=LSC_STRAIN_3,L1=LSC_STRAIN_4", "0004:0006:H1=LSC_STRAIN_5,L1=LSC_STRAIN_6"])
+		{'0000' : {'H1': 'LSC_STRAIN_1', 'L1': 'LSC-STRAIN_2'},
+		 '0001' : {'H1': 'LSC_STRAIN_1', 'L1': 'LSC-STRAIN_2'},
+		 '0002' : {'H1': 'LSC_STRAIN_3', 'L1': 'LSC-STRAIN_4'},
+		 '0003' : {'H1': 'LSC_STRAIN_3', 'L1': 'LSC-STRAIN_4'},
+		 '0004' : {'H1': 'LSC_STRAIN_5', 'L1': 'LSC-STRAIN_6'},
+		 '0005' : {'H1': 'LSC_STRAIN_5', 'L1': 'LSC-STRAIN_6'} }
+	"""
+	outdict = {}
+	for instrument_channel_full in channel_list:
+		instrument_channel_split = instrument_channel_full.split(':')
+		for ii in range(int(instrument_channel_split[0]),int(instrument_channel_split[1])):
+			outdict[str(ii).zfill(4)] = dict((instrument_channel.split("=")) for instrument_channel in instrument_channel_split[2].split(','))
+	return outdict
 
 def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "channel-name"):
 	"""!
@@ -120,6 +144,40 @@ def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "ch
 
 	return outstr
 
+def pipeline_channel_list_from_channel_dict_with_node_range(channel_dict, node = 0, ifos = None, opt = "channel-name"):
+	"""!
+	Creates a string of channel names options from a dictionary keyed by ifos.
+
+	FIXME: This function exists to work around pipeline.py's inability to
+	give the same option more than once by producing a string to pass as an argument
+	that encodes the other instances of the option.
+
+	- override --channel-name with a different option by setting opt.
+	- restrict the ifo keys to a subset of the channel_dict by.
+	  setting ifos
+
+	Examples:
+
+	>--->>> pipeline_channel_list_from_channel_dict({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0)
+	>---'H2=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
+
+	>--->>> pipeline_channel_list_from_channel_dict({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, ifos=["H1"])
+	>---'H1=LSC-STRAIN '
+
+	>--->>> pipeline_channel_list_from_channel_dict('0000': {{'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, opt="test-string")
+	>---'H2=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
+	"""
+	outstr = ""
+	node = str(node).zfill(4)
+	if ifos is None:
+		ifos = channel_dict[node].keys()
+	for i, ifo in enumerate(ifos):
+		if i == 0:
+			outstr += "%s=%s " % (ifo, channel_dict[node][ifo])
+		else:
+			outstr += "--%s=%s=%s " % (opt, ifo, channel_dict[node][ifo])
+
+	return outstr
 
 ## #### Default dictionary of state vector on/off bits by ifo
 # Used as the default argument to state_vector_on_off_dict_from_bit_lists()
