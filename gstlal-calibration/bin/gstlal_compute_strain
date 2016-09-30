@@ -602,7 +602,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	pcal_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, pcal_at_darm_act_freq_nocorr, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
 	if not options.no_coherence:
 		# gate the output with the coherence for this line
-		pcaly_line1_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line1_coh"], coh_caps, "pcaly_line1_coh")
+		pcaly_line1_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line1_coh"], coh_caps, "pcaly_line1_coh", replace_zeros = True)
 		if not options.no_dq_vector:
 			pcaly_line1_coh = pipeparts.mktee(pipeline, pcaly_line1_coh)
 		pcal_at_darm_act_freq = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, pcal_at_darm_act_freq), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh), threshold = options.coherence_uncertainty_threshold)
@@ -621,7 +621,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	tstexc = calibration_parts.mkresample(pipeline, tstexc, hoft_caps)
 	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_caps)
 	if not options.no_coherence:
-		sus_coh = calibration_parts.caps_and_progress(pipeline, head_dict["sus_coh"], coh_caps, "sus_coh")
+		sus_coh = calibration_parts.caps_and_progress(pipeline, head_dict["sus_coh"], coh_caps, "sus_coh", replace_zeros = True)
 		if not options.no_dq_vector:
 			sus_coh = pipeparts.mktee(pipeline, sus_coh)
 		tstexc_at_esd_act_freq = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, tstexc_at_esd_act_freq), control = calibration_parts.mkqueue(pipeline, sus_coh), threshold = options.coherence_uncertainty_threshold)
@@ -643,24 +643,14 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 
 	ktsttee = pipeparts.mktee(pipeline, ktst)
 
-	ktstR, ktstI = calibration_parts.split_into_real(pipeline, calibration_parts.mkqueue(pipeline, ktsttee)) 
-	if not options.no_dq_vector:
-		ktstR = pipeparts.mktee(pipeline, ktstR)
-		ktstI = pipeparts.mktee(pipeline, ktstI)
-
-	
 	if options.no_coherence:
-		smooth_ktstR = calibration_parts.smooth_kappas_no_coherence(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, median_smoothing_samples, factors_average_samples)
-        	smooth_ktstI = calibration_parts.smooth_kappas_no_coherence(pipeline, ktstI, options.kappatst_imag_ok_var, options.expected_kappatst_imag, median_smoothing_samples, factors_average_samples)
+		smooth_ktstR, smooth_ktstI = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, ktsttee, options.kappatst_real_ok_var, options.kappatst_imag_ok_var, options.expected_kappatst_real, options.expected_kappatst_imag, median_smoothing_samples, factors_average_samples)
 		if not options.no_dq_vector:
-			smooth_ktstRdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, ktstR, options.kappatst_real_ok_var, options.expected_kappatst_real, median_smoothing_samples)
-			smooth_ktstIdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, ktstI, options.kappatst_imag_ok_var, options.expected_kappatst_imag, median_smoothing_samples)
+			smooth_ktstRdq, smooth_ktstIdq = calibration_parts.track_bad_complex_kappas_no_coherence(pipeline, ktsttee, options.kappatst_real_ok_var, options.kappatst_imag_ok_var, options.expected_kappatst_real, options.expected_kappatst_imag, median_smoothing_samples)
 	else:
-		smooth_ktstR = calibration_parts.smooth_kappas(pipeline, ktstR, options.expected_kappatst_real, median_smoothing_samples, factors_average_samples)
-        	smooth_ktstI = calibration_parts.smooth_kappas(pipeline, ktstI, options.expected_kappatst_imag, median_smoothing_samples, factors_average_samples)
+		smooth_ktstR, smooth_ktstI = calibration_parts.smooth_complex_kappas(pipeline, ktsttee, options.expected_kappatst_real, options.expected_kappatst_imag, median_smoothing_samples, factors_average_samples)
 		if not options.no_dq_vector:
-			smooth_ktstRdq = calibration_parts.track_bad_kappas(pipeline, ktstR, options.expected_kappatst_real, median_smoothing_samples)
-			smooth_ktstIdq = calibration_parts.track_bad_kappas(pipeline, ktstI, options.expected_kappatst_imag, median_smoothing_samples)
+			smooth_ktstRdq, smooth_ktstIdq = calibration_parts.track_bad_complex_kappas(pipeline, ktsttee, options.expected_kappatst_real, options.expected_kappatst_imag, median_smoothing_samples)
 			
 
 	if not options.no_kappatst:
@@ -673,7 +663,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, exc), pu_act_esd_line_freq, td,compute_calib_factors_caps)
 	if not options.no_coherence:
 		# gate the output with the coherence for this line
-		darm_coh = calibration_parts.caps_and_progress(pipeline, head_dict["darm_coh"], coh_caps, "darm_coh")
+		darm_coh = calibration_parts.caps_and_progress(pipeline, head_dict["darm_coh"], coh_caps, "darm_coh", replace_zeros = True)
 		if not options.no_dq_vector:
 			darm_coh = pipeparts.mktee(pipeline, darm_coh)
 		exc_at_pu_act_freq = pipeparts.mkgate(pipeline, exc_at_pu_act_freq, control = calibration_parts.mkqueue(pipeline, darm_coh), threshold = options.coherence_uncertainty_threshold)
@@ -709,23 +699,14 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 
 	kputee = pipeparts.mktee(pipeline, kpu)
 
-	kpuR, kpuI = calibration_parts.split_into_real(pipeline, calibration_parts.mkqueue(pipeline, kputee)) 
-	if not options.no_dq_vector:
-		kpuR = pipeparts.mktee(pipeline, kpuR)
-		kpuI = pipeparts.mktee(pipeline, kpuI)
-
 	if options.no_coherence:
-		smooth_kpuR = calibration_parts.smooth_kappas_no_coherence(pipeline, kpuR, options.kappapu_real_ok_var, options.expected_kappapu_real, median_smoothing_samples, factors_average_samples)
-		smooth_kpuI = calibration_parts.smooth_kappas_no_coherence(pipeline, kpuI, options.kappapu_imag_ok_var, options.expected_kappapu_imag, median_smoothing_samples, factors_average_samples)
+		smooth_kpuR, smooth_kpuI = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, kputee, options.kappapu_real_ok_var, options.kappapu_imag_ok_var, options.expected_kappapu_real, options.expected_kappapu_imag, median_smoothing_samples, factors_average_samples)
 		if not options.no_dq_vector:
-			smooth_kpuRdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, kpuR, options.kappapu_real_ok_var, options.expected_kappapu_real, median_smoothing_samples)
-			smooth_kpuIdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, kpuI, options.kappapu_imag_ok_var, options.expected_kappapu_imag, median_smoothing_samples)
+			smooth_kpuRdq, smooth_kpuIdq = calibration_parts.track_bad_complex_kappas_no_coherence(pipeline, kputee, options.kappapu_real_ok_var, options.kappapu_imag_ok_var, options.expected_kappapu_real, options.expected_kappapu_imag, median_smoothing_samples)
 	else:
-		smooth_kpuR = calibration_parts.smooth_kappas(pipeline, kpuR, options.expected_kappapu_real, median_smoothing_samples, factors_average_samples)
-		smooth_kpuI = calibration_parts.smooth_kappas(pipeline, kpuI, options.expected_kappapu_imag, median_smoothing_samples, factors_average_samples)
+		smooth_kpuR, smooth_kpuI = calibration_parts.smooth_complex_kappas(pipeline, kputee, options.expected_kappapu_real, options.expected_kappapu_imag, median_smoothing_samples, factors_average_samples)
 		if not options.no_dq_vector:
-			smooth_kpuRdq = calibration_parts.track_bad_kappas(pipeline, kpuR, options.expected_kappapu_real, median_smoothing_samples)
-			smooth_kpuIdq = calibration_parts.track_bad_kappas(pipeline, kpuI, options.expected_kappapu_imag, median_smoothing_samples)
+			smooth_kpuRdq, smooth_kpuIdq = calibration_parts.track_bad_complex_kappas(pipeline, kputee, options.expected_kappapu_real, options.expected_kappapu_imag, median_smoothing_samples)
 
 	if not options.no_kappapu:
 		smooth_kpuRtee = pipeparts.mktee(pipeline, smooth_kpuR)
@@ -742,24 +723,15 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			ka = pipeparts.mkgate(pipeline, ka, control = pipeparts.mkqueue(pipeline, obsreadystatevec), threshold = 1)
 
 		katee = pipeparts.mktee(pipeline, ka)
-	
-		kaR, kaI = calibration_parts.split_into_real(pipeline, calibration_parts.mkqueue(pipeline, katee)) 
-		if not options.no_dq_vector:
-			kaR = pipeparts.mktee(pipeline, kaR)
-			kaI = pipeparts.mktee(pipeline, kaI)
 
 		if options.no_coherence:
-			smooth_kaR = calibration_parts.smooth_kappas_no_coherence(pipeline, kaR, options.kappaa_real_ok_var, options.expected_kappaa_real, median_smoothing_samples, factors_average_samples)
-			smooth_kaI = calibration_parts.smooth_kappas_no_coherence(pipeline, kaI, options.kappaa_imag_ok_var, options.expected_kappaa_imag, median_smoothing_samples, factors_average_samples)
+			smooth_kaR, smooth_kaI = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, katee, options.kappaa_real_ok_var, options.kappaa_imag_ok_var, options.expected_kappaa_real, options.expected_kappaa_imag, median_smoothing_samples, factors_average_samples)
 			if not options.no_dq_vector:
-				smooth_kaRdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, kaR, options.kappaa_real_ok_var, options.expected_kappaa_real, median_smoothing_samples)
-				smooth_kaIdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, kaI, options.kappaa_imag_ok_var, options.expected_kappaa_imag, median_smoothing_samples)
+				smooth_kaRdq, smooth_kaIdq = calibration_parts.track_bad_complex_kappas_no_coherence(pipeline, katee, options.kappaa_real_ok_var, options.kappaa_imag_ok_var, options.expected_kappaa_real, options.expected_kappaa_imag, median_smoothing_samples)
 		else:
-			smooth_kaR = calibration_parts.smooth_kappas(pipeline, kaR, options.expected_kappaa_real, median_smoothing_samples, factors_average_samples)
-			smooth_kaI = calibration_parts.smooth_kappas(pipeline, kaI, options.expected_kappaa_imag, median_smoothing_samples, factors_average_samples)
+			smooth_kaR, smooth_kaI = calibration_parts.smooth_complex_kappas(pipeline, katee, options.expected_kappaa_real, options.expected_kappaa_imag, median_smoothing_samples, factors_average_samples)
 			if not options.no_dq_vector:
-				smooth_kaRdq = calibration_parts.track_bad_kappas(pipeline, kaR, options.expected_kappaa_real, median_smoothing_samples)
-				smooth_kaIdq = calibration_parts.track_bad_kappas(pipeline, kaI, options.expected_kappaa_imag, median_smoothing_samples)
+				smooth_kaRdq, smooth_kaIdq = calibration_parts.track_bad_complex_kappas(pipeline, katee, options.expected_kappaa_real, options.expected_kappaa_imag, median_smoothing_samples)
 
 		smooth_kaRtee = pipeparts.mktee(pipeline, smooth_kaR)
 		smooth_kaItee = pipeparts.mktee(pipeline, smooth_kaI)
@@ -772,7 +744,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		pcal_at_opt_gain_freq = calibration_parts.complex_audioamplify(pipeline, pcal_at_opt_gain_freq_nocorr, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
 		if not options.no_coherence:
 			# gate the output with the coherence for this line
-			pcaly_line2_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line2_coh"], coh_caps, "pcaly_line2_coh")
+			pcaly_line2_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line2_coh"], coh_caps, "pcaly_line2_coh", replace_zeros = True)
 			if not options.no_dq_vector:
 				pcaly_line2_coh = pipeparts.mktee(pipeline, pcaly_line2_coh)
 			pcal_at_opt_gain_freq = pipeparts.mkgate(pipeline, pcal_at_opt_gain_freq, control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh), threshold = options.coherence_uncertainty_threshold)
@@ -1261,7 +1233,7 @@ elif options.data_source == "lvshm":
 	start = int(lal.UTCToGPS(tm))
 # start writing frame files that only start after the desired start time + filter latency + kappa settling (if computing kappas)
 if not options.no_kappatst or not options.no_kappaa or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
-	output_start = start + int(filter_settle_time) + options.median_smoothing_time + options.factors_averaging_time  + 68 # 68 additional seconds seem necessary to make sure the low-pass filter for demodulation is also settled (I think that's the cause at least)
+	output_start = start + int(filter_settle_time) + options.median_smoothing_time + options.factors_averaging_time  + 10 # 10 additional seconds seem necessary to make sure the low-pass filter for demodulation is also settled (I think that's the cause at least)
 else:
 	output_start = start + int(filter_settle_time)
 
