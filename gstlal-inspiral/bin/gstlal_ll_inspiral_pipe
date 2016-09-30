@@ -319,6 +319,9 @@ aggJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_aggregator",  universe = 
 # Summary page job
 pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
+# DQ job
+dqJob = inspiral_pipe.generic_job("gstlal_ll_dq",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+
 if options.injection_file:
 	# Sensitivity plots job
 	sensJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_calculate_range", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
@@ -327,13 +330,31 @@ if options.state_backup_destination:
 	# State saving job 
 	stateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_save_state", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
+listenNode = lvalert_listen_node(listenJob, dag)
+
+# dq with default options
+for ifo in channel_dict:
+	outpath = "dq/%s" % ifo
+	try:
+		os.makedirs(outpath)
+	except OSError:
+		pass
+	inspiral_pipe.generic_node(dqJob, dag, [],
+	opts = {"psd-fft-length":options.psd_fft_length,
+		"channel-name":datasource.pipeline_channel_list_from_channel_dict({ifo: channel_dict[ifo]}),
+		"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict({ifo: dq_channel_dict[ifo]}, opt = "dq-channel-name"),
+		"state-vector-on-bits":options.state_vector_on_bits,
+		"state-vector-off-bits":options.state_vector_off_bits,
+		"framexmit-addr":datasource.framexmit_list_from_framexmit_dict({ifo: framexmit_dict[ifo]}),
+		"framexmit-iface":options.framexmit_iface,
+		"data-source":options.data_source,
+		"out-path": outpath
+		}
+	)
 
 #
 # loop over banks to run gstlal inspiral pre clustering and far computation
 #
-
-
-listenNode = lvalert_listen_node(listenJob, dag)
 
 jobTags = []
 inj_jobTags = []
