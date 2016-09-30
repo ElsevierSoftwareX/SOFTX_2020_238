@@ -8,6 +8,7 @@ import cgitb
 cgitb.enable()
 form = cgi.parse()
 import numpy
+from gstlal import llweb
 #import pyparsing
 
 print "Content-type: application/json"
@@ -44,15 +45,15 @@ for dt in (	("latency_history", "Latency"),
 		data_type = dt[0]
 		latest_time_path = base_path + "/aggregator"
 		# FIXME DONT HARD CODE
-		for level in range(6):
-			latest_time_path += "/%s" % sorted([d for d in os.listdir(latest_time_path) if len(d) == 1 and d.isdigit()])[-1]
+		for level in str(int(llweb.now()))[0:6]:
+			latest_time_path += "/%s" % level
 		out_data = []
 		path = latest_time_path
 		path += "/by_job"
 		for job in os.listdir(path):
 			fname = "%s/%s/median/%s.hdf5" % (path, job, data_type)
 			f = f = h5py.File(fname, "r")
-			this_data = numpy.array(f["data"])
+			this_data = numpy.array(f["data"])[-25:]
 			if len(this_data) > 0:
 				mindata = numpy.min(this_data)# + numpy.random.randn()
 				maxdata = numpy.max(this_data)# + numpy.random.randn()
@@ -72,35 +73,44 @@ for dt in (	("latency_history", "Latency"),
 		data_table.LoadData(out_data)
 		print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
 
-for dt in (("horizon_history", "horizon"), ("noise", "noise")):
+for dt in (("horizon_history", "time", "horizon"), ("noise", "time", "noise"), ("psd", "freq", "asd")):
 	if dt[0] in query:
 		data_type = dt[0]
 		latest_time_path = base_path + "/dq"
 		out_data = []
 		path = latest_time_path
 
-		fname = "%s/H1/%s.hdf5" % (path, data_type)
-		f = f = h5py.File(fname, "r")
-		H1 = {}
-		for t,d in zip(f["time"], f[dt[1]]):
-			H1[t] = d
-		f.close()
+		datadict = {}
+		latest = {}
+		latest["H1"] = 0
+		latest["L1"] = 0
+		for ifo in ("H1", "L1"):
+			datadict[ifo] = {} 
+			try:
+				fname = "%s/%s/%s.hdf5" % (path, ifo, data_type)
+				f = f = h5py.File(fname, "r")
+				for t,d in zip(f[dt[1]], f[dt[2]]):
+					datadict[ifo][t] = d
+					latest[ifo] = (t,d)
+				f.close()
+			except IOError:
+				pass
 
-		fname = "%s/L1/%s.hdf5" % (path, data_type)
-		f = f = h5py.File(fname, "r")
-		L1 = {}
-		for t,d in zip(f["time"], f[dt[1]]):
-			L1[t] = d
-		f.close()
-
-		for t in set(H1) | set(L1):
-			out_data.append([t, H1.setdefault(t,0), L1.setdefault(t,0)])
-		
-		description = [
-			("time", "number"),
-			("H1 %s" % dt[1], "number"),
-			("L1 %s" % dt[1], "number")
-			]
+		if "now" in query:
+			out_data.append([latest["H1"][1], latest["L1"][1]])
+			description = [
+				("H1 %s" % (dt[2],), "number"),
+				("L1 %s" % (dt[2],), "number")
+				]
+		else:
+			# FIXME don't harcode
+			for t in set(datadict["H1"]) | set(datadict["L1"]):
+				out_data.append([t, datadict["H1"].setdefault(t,0), datadict["L1"].setdefault(t,0)])
+			description = [
+				(dt[1], "number"),
+				("H1 %s" % dt[2], "number"),
+				("L1 %s" % dt[2], "number")
+				]
 		
 		data_table = gviz_api.DataTable(description)
 		data_table.LoadData(out_data)
