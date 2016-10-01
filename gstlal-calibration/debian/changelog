@@ -1,3 +1,9 @@
+gstlal-calibration (1.0.3-1) unstable; urgency=low
+
+  * Quick patch for underflow exceptions causing large latencies
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 30 Sept 2016 20:36:00 +0900
+
 gstlal-calibration (1.0.2-1) unstable; urgency=low
 
   * Bug fix for how one of kappa state vector bits is calculated
