@@ -24,7 +24,7 @@ def parse_command_line():
 	# add our own options
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 16384 Hz")
-	parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
+	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 8s")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 	options, filenames = parser.parse_args()
@@ -47,7 +47,8 @@ class PSDHandler(simplehandler.Handler):
 			self.psd = pipeio.parse_spectrum_message(message)
 			self.horizon_history.append(reference_psd.horizon_distance(self.psd, 1.4, 1.4, 8, 20))
 			self.horizon_history_time.append(float(self.psd.epoch))
-			self.to_hdf5("psd.hdf5", {"freq": numpy.arange(self.psd.data.length / 32) * self.psd.deltaF * 16, "asd": signal.decimate(self.psd.data.data[:], 32)[:-1]})
+			self.to_hdf5("psd.hdf5", {"freq": numpy.arange(self.psd.data.length / 32) * self.psd.deltaF * 32, "asd": signal.decimate(self.psd.data.data[:], 32, ftype='fir')[:-1]**.5})
+			#self.to_hdf5("psd.hdf5", {"freq": numpy.arange(self.psd.data.length) * self.psd.deltaF*32, "asd": self.psd.data.data[:-1:32]**.5})
 			self.to_hdf5("horizon_history.hdf5", {"time": numpy.array(self.horizon_history_time), "horizon": numpy.array(self.horizon_history)})
 			return True
 		return False
@@ -60,7 +61,7 @@ class PSDHandler(simplehandler.Handler):
 			data = numpy.array([(float(x.split()[0]), abs(float(x.split()[1]))) for x in s.getvalue().split('\n') if x])
 			ix = numpy.argmax(data, axis=0)[1]
 			self.timedeq.append(data[ix,0])
-			self.noisedeq.append(data[ix,1] / 3.8) #3.8 is approximately the expectation value in noise for 1 second
+			self.noisedeq.append(data[ix,1])
 			self.to_hdf5("noise.hdf5", {"time": numpy.array(self.timedeq), "noise": numpy.array(self.noisedeq)})
 		buf.unmap(mapinfo)
 		del buf
@@ -106,10 +107,10 @@ pipeline = Gst.Pipeline(name="DQ")
 handler = PSDHandler(mainloop, pipeline, out_path = options.out_path)
 
 head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
-head = pipeparts.mkresample(pipeline, head, quality = 9)
-head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.sample_rate)
+#head = pipeparts.mkresample(pipeline, head, quality = 9)
+#head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.sample_rate)
 head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
-head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = 0, fft_length = options.psd_fft_length, average_samples = 64, median_samples = 7)
+head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, fft_length = options.psd_fft_length, average_samples = 64, median_samples = 7, expand_gaps = True)
 head = pipeparts.mkqueue(pipeline, head)
 head = pipeparts.mkreblock(pipeline, head)
 head = pipeparts.mkgeneric(pipeline, head, "lal_nxydump")
