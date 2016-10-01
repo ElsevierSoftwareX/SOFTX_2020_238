@@ -28,62 +28,139 @@ function openGstlalTab(evt, cityName) {
  * Google charts
  */
 
+// Give these wrappers global scope
+var latency_status_by_nodes_wrapper;
+var latency_history_wrapper;
+var latency_gauge_wrapper;
 
-var latency_wrapper;
-var snr_wrapper;
+var snr_status_by_nodes_wrapper;
+var snr_history_wrapper;
+
 var horizon_wrapper;
-var noise_wrapper;
 var psd_wrapper;
-var noise_gauge_wrapper;
 var range_gauge_wrapper;
 
-function drawLatency() {
-// Draw a column chart
-latency_wrapper = new google.visualization.ChartWrapper({
-	chartType: 'CandlestickChart',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=0',
-	query: 'select latency_history',
-	refreshInterval: 5,
-	options: {	title: 'Latency', 
-			animation: {duration: 1000, easing: 'inAndOut', startup: true},
-			vAxis: {scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] },
-			hAxis: {slantedText: true, slantedTextAngle: 90},
-			chartArea: {left:25,top:5,width:'100%',height:'73%'},
-			titlePosition: 'in',
-	},
-	containerId: 'visualization',
-});
-latency_wrapper.draw();
+var noise_wrapper;
+var noise_gauge_wrapper;
+
+
+/*
+ * Charts about latency
+ */
+
+
+function drawLatencyStatusByNodes() {
+	// Draw a column chart
+	latency_status_by_nodes_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'CandlestickChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:0',
+		query: 'select latency_history where status by node',
+		refreshInterval: 5,
+		options: {title: 'Latency', 
+			  animation: {duration: 1000, easing: 'inAndOut'},
+			  vAxis: {scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] },
+			  hAxis: {slantedText: true, slantedTextAngle: 90},
+			  chartArea: {left:25,top:5,width:'100%',height:'73%'},
+			  titlePosition: 'in',
+		},
+		containerId: 'latency_status_by_nodes_wrapper',
+	});
+	latency_status_by_nodes_wrapper.draw();
 }
 
 
-function drawSNR() {
-	snr_wrapper = new google.visualization.ChartWrapper({
-	chartType: 'CandlestickChart',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=1',
-	query: 'select snr_history',
+function drawLatencyHistory() {
+	// Draw a column chart
+	latency_history_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'LineChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1',
+		query: 'select latency_history where node is all',
+		refreshInterval: 5,
+		options: {title: 'Latency', 
+			  animation: {duration: 1000, easing: 'inAndOut'},
+			  vAxis: {scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] },
+			  chartArea: {left:25,top:5,width:'100%',height:'73%'},
+			  titlePosition: 'in',
+		},
+		containerId: 'latency_history_wrapper',
+	});
+	latency_history_wrapper.draw();
+}
+
+
+function drawLatencyGauge() {
+	latency_gauge_wrapper = new google.visualization.ChartWrapper({
+	chartType: 'Gauge',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:2',
+	query: 'select latency_history where now',
 	refreshInterval: 5,
-	options: {	title: 'SNR', 
-			animation: {duration: 1000, easing: 'inAndOut', startup: true},
-			vAxis: {scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] },
-			hAxis: {slantedText: true, slantedTextAngle: 90},
-			chartArea: {left:30,top:5,width:'100%',height:'73%'},
-			titlePosition: 'in',
-	},
-	containerId: 'snr',
-});
-snr_wrapper.draw();
+        options: {
+		animation: {duration: 4000, easing: 'linear'},
+		width: 1800, height: 200,
+		redFrom: 0, redTo: 20,
+		yellowFrom: 20, yellowTo: 50,
+		greenFrom: 50, greenTo: 100,
+		minorTicks: 5,
+		max: 100,
+		min: 0
+		},
+	containerId: 'latency_gauge_wrapper',
+	});
+	latency_gauge_wrapper.draw();
+}
+
+
+/*
+ * Charts about SNR
+ * NOTE these start numbering reqId at 100
+ */
+
+
+function drawSNRStatusByNodes() {
+	snr_status_by_nodes_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'CandlestickChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:100',
+		query: 'select snr_history where status by node',
+		refreshInterval: 5,
+		options: {title: 'SNR', 
+			  animation: {duration: 1000, easing: 'inAndOut'},
+			  vAxis: {scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] },
+			  hAxis: {slantedText: true, slantedTextAngle: 90},
+			  chartArea: {left:30,top:5,width:'100%',height:'73%'},
+			  titlePosition: 'in',
+		},
+		containerId: 'snr_status_by_nodes_wrapper',
+	});
+	snr_status_by_nodes_wrapper.draw();
+}
+
+
+function drawSNRHistory() {
+	snr_history_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'LineChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:101',
+		query: 'select snr_history where node is all',
+		refreshInterval: 5,
+		options: {title: 'SNR', 
+			  animation: {duration: 1000, easing: 'inAndOut'},
+			  vAxis: {scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] },
+			  chartArea: {left:30,top:5,width:'100%',height:'73%'},
+			  titlePosition: 'in',
+		},
+		containerId: 'snr_history_wrapper',
+	});
+	snr_history_wrapper.draw();
 }
 
 
 function drawHorizon() {
 	horizon_wrapper = new google.visualization.ChartWrapper({
 	chartType: 'LineChart',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=2',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:102',
 	query: 'select horizon_history',
 	refreshInterval: 5,
 	options: {	title: 'Horizon', 
-			animation: {duration: 1000, easing: 'inAndOut', startup: true},
+			animation: {duration: 1000, easing: 'inAndOut'},
 			vAxis: {scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64,128] },
 			chartArea: {left:30,top:5,width:'100%',height:'73%'},
 			titlePosition: 'in',
@@ -98,11 +175,11 @@ horizon_wrapper.draw();
 function drawNoise() {
 	noise_wrapper = new google.visualization.ChartWrapper({
 	chartType: 'LineChart',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=3',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:200',
 	query: 'select noise',
 	refreshInterval: 5,
 	options: {	title: 'Noise', 
-			animation: {duration: 1000, easing: 'inAndOut', startup: true},
+			animation: {duration: 1000, easing: 'inAndOut'},
 			vAxis: {textPosition: 'out', viewWindowMode:'explicit', viewWindow:{min:-0.1, max:2}},
 			chartArea: {left:30,top:5,width:'100%',height:'73%'},
 			titlePosition: 'in',
@@ -117,7 +194,7 @@ noise_wrapper.draw();
 function drawPSD() {
 	psd_wrapper = new google.visualization.ChartWrapper({
 	chartType: 'LineChart',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=4',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:300',
 	query: 'select psd',
 	refreshInterval: 5,
 	options: {	title: 'Amplitude Spectral Density', 
@@ -136,18 +213,18 @@ psd_wrapper.draw();
 function drawNoiseGauge() {
 	noise_gauge_wrapper = new google.visualization.ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=5',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:400',
 	query: 'select noise where now',
 	refreshInterval: 5,
         options: {
 		animation: {duration: 4000, easing: 'linear'},
 		width: 1800, height: 200,
-		redFrom: 1, redTo: 2,
-		yellowFrom: 0.3, yellowTo: 1,
-		greenFrom: -0.1, greenTo: 0.3,
+		redFrom: 50, redTo: 100,
+		yellowFrom: 10, yellowTo: 50,
+		greenFrom: 0, greenTo: 10,
 		minorTicks: 5,
-		max: 2,
-		min: -0.2
+		max: 100,
+		min: 0
 		},
 	containerId: 'noise_gauge',
 	});
@@ -155,10 +232,11 @@ function drawNoiseGauge() {
 	noise_gauge_wrapper.draw();
 }
 
+
 function drawRangeGauge() {
 	range_gauge_wrapper = new google.visualization.ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?reqId=6',
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:500',
 	query: 'select horizon_history where now',
 	refreshInterval: 5,
         options: {
