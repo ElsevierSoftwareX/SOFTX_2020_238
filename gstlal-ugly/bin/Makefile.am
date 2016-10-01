@@ -28,4 +28,5 @@ dist_bin_SCRIPTS = \
 	gstlal_inj_frames \
 	gstlal_cache_to_segments \
 	gstlal_parse_frame_segment_logs \
-	gstlal_ll_inspiral_aggregator
+	gstlal_ll_inspiral_aggregator \
+	gstlal_ll_dq
