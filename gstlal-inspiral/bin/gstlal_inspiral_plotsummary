@@ -1433,7 +1433,7 @@ def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar, 
 	# legend
 	#
 
-	axes.legend((line1, line5, line6), (r"Noise Model", r"Time-shifted Trial", r"Observed"), loc = "upper right", handlelength = 5)
+	axes.legend((line1, line5, line6), (r"Noise Model", r"Time-shifted Trial", r"Observed"), loc = "lower left", handlelength = 5)
 
 	#
 	# adjust bounds of plot
