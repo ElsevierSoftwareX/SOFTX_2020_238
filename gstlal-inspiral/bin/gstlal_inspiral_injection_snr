@@ -17,10 +17,10 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 ## @file gstlal_inspiral_injection_snr
-# The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to run CBC workflows
+# Used to assign characteristic SNRs to injections
 #
 # ### Usage:
-# Takes an injection xml and a cache of reference PSDs and calculated expected SNRs. The values
+# Takes an injection xml and a cache of reference PSDs and calculated characteristic SNRs. The values
 # will be written to the alpha3 and alpha4 columns in the sim_inspiral table.
 #
 # ### Command line options
@@ -29,7 +29,7 @@
 #	+ `--flow [float]: Set the low frequency for waveform generation and SNR integral.
 
 """
-This program calculates expected SNRs given an injection xml and a cache of reference PSDs.
+This program calculates characteristic SNRs given an injection xml and a cache of reference PSDs.
 """
 
 __author__ = 'Ryan Lang <ryan.lang@ligo.org>'
@@ -89,6 +89,12 @@ def calc_expected_snr(inj):
 			#Return the distance of the injection from the center of each segment
 			return numpy.absolute(((time1-time0)/2.0 + 1.0*time0) - injtime)
 
+		# FIXME If there are overlapping PSD files for both double and single
+		# ifo times, then use the double coinc files. Will need fixing when Virgo
+		# comes online.
+		if len(cachelist.sieve(ifos='H1L1')) > 0:
+			cachelist = cachelist.sieve(ifos='H1L1')
+
 		seg_start = int(sorted([(dist_from_center(cachelist[index].segment[0], cachelist[index].segment[1], geocent_end_time[0]), cachelist[index].segment[0]) for index in range(len(cachelist))])[0][1])
 		chosenPSD = allPSDs[seg_start]
 	else:
@@ -107,16 +113,22 @@ def calc_expected_snr(inj):
 	h_plus.epoch += inj.geocent_end_time
 	h_cross.epoch += inj.geocent_end_time
 
-	# Compute strain in detector:
+	# Compute strain in each detector. If one detector wasn't on, snr will be set to zero.
 	detector = lalsimulation.DetectorPrefixToLALDetector('H1')
 	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
 
-	h1snr = lalsimulation.MeasureSNR(h,chosenPSD['H1'],options.flow,-1)
+	try:
+		h1snr = lalsimulation.MeasureSNR(h,chosenPSD['H1'],options.flow,-1)
+	except KeyError:
+		h1snr = 0.0
 
 	detector = lalsimulation.DetectorPrefixToLALDetector('L1')
 	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
 
-	l1snr = lalsimulation.MeasureSNR(h,chosenPSD['L1'],options.flow,-1)
+	try:
+		l1snr = lalsimulation.MeasureSNR(h,chosenPSD['L1'],options.flow,-1)
+	except KeyError:
+		l1snr = 0.0
 
 	return h1snr, l1snr
 
