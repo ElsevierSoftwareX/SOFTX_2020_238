@@ -1265,6 +1265,8 @@ def check_complete_frames(pad, info, (output_start, frame_duration, wings_start,
 	buf = info.get_buffer()
 	startts = lal.LIGOTimeGPS(0, buf.pts)
 	duration = lal.LIGOTimeGPS(0, buf.duration)
+	if not (startts % frame_duration == 0):
+		return Gst.PadProbeReturn.DROP
 	if startts < output_start:
 		return Gst.PadProbeReturn.DROP	
 	if duration != frame_duration:
