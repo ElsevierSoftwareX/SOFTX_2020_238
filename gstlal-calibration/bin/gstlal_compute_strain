@@ -605,7 +605,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		pcaly_line1_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line1_coh"], coh_caps, "pcaly_line1_coh", replace_zeros = True)
 		if not options.no_dq_vector:
 			pcaly_line1_coh = pipeparts.mktee(pipeline, pcaly_line1_coh)
-		pcal_at_darm_act_freq = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, pcal_at_darm_act_freq), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh), threshold = options.coherence_uncertainty_threshold)
+		pcal_at_darm_act_freq = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, pcal_at_darm_act_freq), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
 	if not options.no_kappapu or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
 		pcal_at_darm_act_freq = pipeparts.mktee(pipeline, pcal_at_darm_act_freq)
 
@@ -624,7 +624,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		sus_coh = calibration_parts.caps_and_progress(pipeline, head_dict["sus_coh"], coh_caps, "sus_coh", replace_zeros = True)
 		if not options.no_dq_vector:
 			sus_coh = pipeparts.mktee(pipeline, sus_coh)
-		tstexc_at_esd_act_freq = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, tstexc_at_esd_act_freq), control = calibration_parts.mkqueue(pipeline, sus_coh), threshold = options.coherence_uncertainty_threshold)
+		tstexc_at_esd_act_freq = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, tstexc_at_esd_act_freq), control = calibration_parts.mkqueue(pipeline, sus_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
 
 	# demodulate DARM_ERR at the ESD actuation line frequency
 	derr_at_esd_act_freq = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, derrtee), esd_act_line_freq, td, compute_calib_factors_caps)
@@ -666,7 +666,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 		darm_coh = calibration_parts.caps_and_progress(pipeline, head_dict["darm_coh"], coh_caps, "darm_coh", replace_zeros = True)
 		if not options.no_dq_vector:
 			darm_coh = pipeparts.mktee(pipeline, darm_coh)
-		exc_at_pu_act_freq = pipeparts.mkgate(pipeline, exc_at_pu_act_freq, control = calibration_parts.mkqueue(pipeline, darm_coh), threshold = options.coherence_uncertainty_threshold)
+		exc_at_pu_act_freq = pipeparts.mkgate(pipeline, exc_at_pu_act_freq, control = calibration_parts.mkqueue(pipeline, darm_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
 
 	# demodulate DARM_ERR at PU actuation line frequency
 	derr_at_pu_act_freq = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, derrtee), pu_act_esd_line_freq, td, compute_calib_factors_caps)
@@ -747,7 +747,7 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			pcaly_line2_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line2_coh"], coh_caps, "pcaly_line2_coh", replace_zeros = True)
 			if not options.no_dq_vector:
 				pcaly_line2_coh = pipeparts.mktee(pipeline, pcaly_line2_coh)
-			pcal_at_opt_gain_freq = pipeparts.mkgate(pipeline, pcal_at_opt_gain_freq, control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh), threshold = options.coherence_uncertainty_threshold)
+			pcal_at_opt_gain_freq = pipeparts.mkgate(pipeline, pcal_at_opt_gain_freq, control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
 
 		# demodulate DARM_ERR at optical gain and f_cc line frequency
 		derr_at_opt_gain_freq = calibration_parts.demodulate(pipeline, calibration_parts.mkqueue(pipeline, derrtee), opt_gain_fcc_line_freq, td, compute_calib_factors_caps)
