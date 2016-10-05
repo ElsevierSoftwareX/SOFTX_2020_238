@@ -64,7 +64,7 @@ IFOS = H1 L1
 START = 1127000000
 # The GPS end time for analysis (O1, start + 100000s)
 #STOP = 1126151217
-STOP =  1127100000
+STOP =  1128000000
 # A user tag for the run
 TAG = test_dag
 # Run number
