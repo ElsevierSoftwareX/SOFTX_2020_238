@@ -181,8 +181,8 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 	 * First, deal with discontinuity if necessary
 	 */ \
 	if(element->fill_discont && (element->last_sinkbuf_offset_end != 0) && (sinkbuf_pts != element->last_sinkbuf_ets)) { \
-		GST_WARNING_OBJECT(element, "filling in discontinuity of length %" GST_TIME_FORMAT, GST_TIME_ARGS(sinkbuf_pts - element->last_sinkbuf_ets)); \
 		guint64 missing_samples = gst_util_uint64_scale_int_round(sinkbuf_pts - element->last_sinkbuf_ets, element->rate, 1000000000); \
+		GST_WARNING_OBJECT(element, "filling discontinuity of length %f seconds (%lu samples) starting at %f seconds (offset %lu)", (((double) sinkbuf_pts - (double) element->last_sinkbuf_ets) / 1000000000.0), (long unsigned) missing_samples, (double) (element->last_sinkbuf_ets / 1000000000.0), (long unsigned) element->last_sinkbuf_offset_end); \
 		guint standard_blocks = (guint) (missing_samples / max_block_length); \
 		guint64 last_block_length = missing_samples % max_block_length; \
 		DTYPE COMPLEX sample_value; \

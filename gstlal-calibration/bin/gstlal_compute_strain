@@ -149,7 +149,7 @@ parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (
 parser.add_option("--filters-file", metavar="filename", help = "Name of file containing filters (in npz format)")
 parser.add_option("--factors-from-filters-file", action = "store_true", help = "Compute the calibration factors from reference values contained in the filters file instead of from EPICS channels.")
 parser.add_option("--no-coherence", action = "store_true", help = "Gate the calibration factors with a pre-computed coherence channel.")
-parser.add_option("--coherence-uncertainty-threshold", metavar = "float", type = float, default = 0.20, help = "Threshold for the coherence uncertainty for each calibration line. (Default = 0.20)")
+parser.add_option("--coherence-uncertainty-threshold", metavar = "float", type = float, default = 0.0025, help = "Threshold for the coherence uncertainty for each calibration line. (Default = 0.0025)")
 parser.add_option("--coh-unc-sus-line1-channel", metavar="name", default="CAL-CS_TDEP_SUS_LINE1_UNCERTAINTY", help = "Channel name for SUS line 1 coherence uncertainty. (Default=CAL-CS_TDEP_SUS_LINE1_UNCERTAINTY)")
 parser.add_option("--coh-unc-pcaly-line1-channel", metavar="name", default="CAL-CS_TDEP_PCALY_LINE1_UNCERTAINTY", help = "Channel name for PCALY line 1 coherence uncertainty. (Default=CAL-CS_TDEP_PCALY_LINE1_UNCERTAINTY)")
 parser.add_option("--coh-unc-pcaly-line2-channel", metavar="name", default="CAL-CS_TDEP_PCALY_LINE2_UNCERTAINTY", help = "Channel name for PCALY line 2 coherence uncertainty. (Default=CAL-CS_TDEP_PCALY_LINE2_UNCERTAINTY)")
@@ -571,8 +571,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 	exc = calibration_parts.caps_and_progress(pipeline, head_dict["exc"], hoft_caps, "exc")
 
 if not options.no_kappatst or not options.no_kappaa or not options.no_kappac or not options.no_fcc:
-        tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % options.tst_exc_sample_rate
-        tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
+	tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % options.tst_exc_sample_rate
+	tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
 
 for key in headkeys:
 	if key.startswith("EP"):
@@ -1223,9 +1223,9 @@ if not options.no_fcc:
 mux = pipeparts.mkframecppchannelmux(pipeline, None)
 
 if options.frame_duration is not None:
-        mux.set_property("frame-duration", options.frame_duration)
+	mux.set_property("frame-duration", options.frame_duration)
 if options.frames_per_file is not None:
-        mux.set_property("frames-per-file", options.frames_per_file)
+	mux.set_property("frames-per-file", options.frames_per_file)
 mux.set_property("compression-scheme", options.compression_scheme)
 mux.set_property("compression-level", options.compression_level)
 
