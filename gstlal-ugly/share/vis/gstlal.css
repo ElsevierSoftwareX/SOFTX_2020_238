@@ -22,6 +22,28 @@ ul.tab li a {
     font-size: 12px;
 }
 
+/* Style the form inside the list items */
+ul.tab li input {
+    display: inline;
+    color: black;
+    text-align: center;
+    padding: 10px 5px 5px 5px;
+    text-decoration: none;
+    transition: 0.3s;
+    font-size: 12px;
+}
+
+/* Style the form inside the list items */
+ul.tab li div {
+    display: inline;
+    color: black;
+    text-align: center;
+    padding: 5px 5px 5px 5px;
+    text-decoration: none;
+    transition: 0.3s;
+    font-size: 24px;
+}
+
 /* Change background color of links on hover */
 ul.tab li a:hover {background-color: #ddd;}
 
@@ -56,7 +78,7 @@ ul.tab li a:focus, .active {background-color: #ccc;}
 	border-radius: 25px;
 	border: 2px solid gray;
 	background: white;
-	padding: 5px; 
+	padding: 10px; 
 	width: 97%;
 	box-shadow: 10px 10px 5px #888888;
 }
