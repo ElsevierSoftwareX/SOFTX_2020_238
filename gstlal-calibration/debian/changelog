@@ -1,3 +1,11 @@
+gstlal-calibration (1.0.4-1) unstable; urgency=low
+
+  * Bug fix for coherence gating
+  * Explicit check on frame start time
+  * More debugging messages related to discontinuities
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 06 Oct 2016 15:27:00 +0900
+
 gstlal-calibration (1.0.3-1) unstable; urgency=low
 
   * Quick patch for underflow exceptions causing large latencies
