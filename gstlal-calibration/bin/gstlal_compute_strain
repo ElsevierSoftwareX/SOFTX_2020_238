@@ -817,38 +817,42 @@ pumuim_filter_settle_time = 0
 # The reverse of the filters will be used in all filtering below due to the definition of the filtering procedure employed by lal_firbank
 if options.partial_calibration:
 	# enforce caps on actuation channels and set up progress report if verbose is on
-	tsttee = pipeparts.mktee(pipeline, head_dict["tst"])
-	tst = calibration_parts.caps_and_progress(pipeline, tsttee, ctrl_caps, "tst")
-	pumtee = pipeparts.mktee(pipeline, head_dict["pum"])
-	pum = calibration_parts.caps_and_progress(pipeline, pumtee, ctrl_caps, "pum")
-	uimtee = pipeparts.mktee(pipeline, head_dict["uim"])
-	uim = calibration_parts.caps_and_progress(pipeline, uimtee, ctrl_caps, "uim")
+	tst = calibration_parts.caps_and_progress(pipeline, head_dict["tst"], ctrl_caps, "tst")
+	tsttee = pipeparts.mktee(pipeline, tst)
+	pum = calibration_parts.caps_and_progress(pipeline, head_dict["pum"], ctrl_caps, "pum")
+	pumtee = pipeparts.mktee(pipeline, pum)
+	uim = calibration_parts.caps_and_progress(pipeline, head_dict["uim"], ctrl_caps, "uim")
+	uimtee = pipeparts.mktee(pipeline, uim)
 
 	# add together the PUM and UIM actuation channels; this may change in the future...
-	pumuim = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pum, uim))
+	pumuim = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pumtee, uimtee))
 
 	# if you need to, dewhiten the TST and PUM/UIM chains
 	if options.dewhitening:
 		pumuim = calibration_parts.mkresample(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" % pumuimdewhitensr) 
 		pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = td)
 		pumuim_filter_settle_time += (len(pumuimdewhiten)+abs(pumuimdewhitendelay))/pumuimdewhitensr
-		tst = calibration_parts.mkresample(pipeline, tst, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
+		tst = calibration_parts.mkresample(pipeline, tsttee, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
 		tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdewhitendelay), fir_matrix = [tstdewhiten[::-1]], time_domain = td)
 		tst_filter_settle_time += (len(tstdewhiten)+abs(tstdewhitendelay))/tstdewhitensr
+	else:
+		tst = pipeparts.mkqueue(pipeline, tsttee)
 
 if options.full_calibration:
 	# enforce caps on actuation channels and set up progress report, if verbose is on
-	darmctrltee = pipeparts.mktee(pipeline, head_dict["ctrl"])
-	ctrl = calibration_parts.caps_and_progress(pipeline, darmctrltee, hoft_caps, "ctrl")
+	ctrl = calibration_parts.caps_and_progress(pipeline, head_dict["ctrl"], hoft_caps, "ctrl")
+	darmctrltee = pipeparts.mktee(pipeline, ctrl)
 	
 	if options.dewhitening:
 		# dewhiten the DARM_CTRL channel
-		ctrl = calibration_parts.mkresample(pipeline, ctrl, "audio/x-raw, format=F64LE, rate=%d" % ctrldewhitensr)
+		ctrl = calibration_parts.mkresample(pipeline, darmctrltee, "audio/x-raw, format=F64LE, rate=%d" % ctrldewhitensr)
 		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrldewhitendelay), fir_matrix = [ctrldewhiten[::-1]], time_domain = td)
 		tst_filter_settle_time += (len(ctrldewhiten)+abs(ctrldewhitendelay))/ctrldewhitensr
 		pumuim_filter_settle_time += (len(ctrldewhiten)+abs(ctrldewhitendelay))/ctrldewhitensr
-	# tee off DARM_CTRL to be filtered with PUM/UIM and TST filters separately
-	ctrltee = pipeparts.mktee(pipeline, ctrl)
+		# tee off DARM_CTRL to be filtered with PUM/UIM and TST filters separately
+		ctrltee = pipeparts.mktee(pipeline, ctrl)
+	else:
+		ctrltee = pipeparts.mktee(pipeline, darmctrltee)
 	tst = calibration_parts.mkqueue(pipeline, ctrltee)
 	pumuim = calibration_parts.mkqueue(pipeline, ctrltee)
 
@@ -898,11 +902,11 @@ res_filter_settle_time = 0
 # The reverse of the filters will be used in all filtering below due to the definition of the filtering procedure employed by lal_firbank
 
 # enforce caps on the residual branch and hook up progress report if verbose is on
-restee = pipeparts.mktee(pipeline, head_dict["res"])
-res = calibration_parts.caps_and_progress(pipeline, restee, hoft_caps, "res")
+res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "res")
+restee = pipeparts.mktee(pipeline, res)
 
 # apply the residual chain filter 	
-res = pipeparts.mkfirbank(pipeline, res, latency = int(reschaindelay), fir_matrix = [reschainfilt[::-1]], time_domain = td)
+res = pipeparts.mkfirbank(pipeline, restee, latency = int(reschaindelay), fir_matrix = [reschainfilt[::-1]], time_domain = td)
 res_filter_settle_time += (len(reschainfilt)+abs(reschaindelay))/hoftsr
 if options.dewhitening:
 	res = pipeparts.mkfirbank(pipeline, res, latency = int(resdewhitendelay), fir_matrix = [resdewhiten[::-1]], time_domain = td)
