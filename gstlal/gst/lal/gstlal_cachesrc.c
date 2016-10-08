@@ -365,13 +365,13 @@ static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
 }
 
 
-static char *cache_entry_src(GstLALCacheSrc *element, guint i)
+static const char *cache_entry_src(GstLALCacheSrc *element, guint i)
 {
 	return element->cache->list[i].src;
 }
 
 
-static char *cache_entry_dsc(GstLALCacheSrc *element, guint i)
+static const char *cache_entry_dsc(GstLALCacheSrc *element, guint i)
 {
 	return element->cache->list[i].dsc;
 }
