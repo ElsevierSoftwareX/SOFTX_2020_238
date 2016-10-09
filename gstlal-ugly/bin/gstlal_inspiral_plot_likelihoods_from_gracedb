@@ -25,7 +25,6 @@ import pylab
 import numpy
 from scipy.stats import chi2
 from glue.ligolw import utils
-from pylal import ligolw_burca_tailor
 import copy
 import itertools
 from gstlal import far
