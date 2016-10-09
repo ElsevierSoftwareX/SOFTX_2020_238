@@ -51,7 +51,7 @@ from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
-from pylal import ligolw_burca2
+from lalburst import ligolw_burca2
 from pylal import ligolw_thinca
 from pylal import snglcoinc
 from gstlal import far

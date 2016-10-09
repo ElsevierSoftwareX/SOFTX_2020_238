@@ -59,9 +59,8 @@ from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.lal import CacheEntry
-from pylal import db_thinca_rings
 from pylal import git_version
-from pylal import SimBurstUtils
+from lalburst import SimBurstUtils
 from gstlal import far
 from gstlal import inspiral_pipe
 
@@ -96,7 +95,6 @@ class SnglInspiral(lsctables.SnglInspiral):
 	def chi(self):
 		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
 
-lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
 lsctables.SimInspiralTable.RowType = SimInspiral
 lsctables.SnglInspiralTable.RowType = SnglInspiral
 
@@ -236,7 +234,8 @@ class CoincDatabase(object):
 		# get the live time
 		if verbose:
 			print >>sys.stderr, "calculating background livetimes: ",
-		self.offset_vectors = db_thinca_rings.get_background_offset_vectors(connection)
+		# retrieve background offset vectors
+		self.offset_vectors = [offsetvector for offsetvector in dbtables.TimeSlideTable(connection = connection).as_dict().values() if any(offsetvector.values())]
 
 		if verbose:
 			print >>sys.stderr

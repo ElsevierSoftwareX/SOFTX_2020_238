@@ -34,7 +34,7 @@ from glue import segments
 from gstlal import inspiral
 from gstlal import far
 from lal import UTCToGPS
-from pylal import ligolw_burca2
+from lalburst import ligolw_burca2
 from pylal import snglcoinc
 
 # FIXME Need to add entries to process and process_params tables

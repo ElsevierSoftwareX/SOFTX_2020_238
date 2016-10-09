@@ -50,7 +50,7 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = ""):
 
 def plotsnrchisq(url, name = "gstlal_inspiral_likelihood"):
 	from glue.ligolw import utils
-	from pylal import ligolw_burca_tailor
+	from lalburst import ligolw_burca_tailor
 	coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([url], u"gstlal_inspiral_likelihood", verbose = False)
 
 	fig = plt.figure(figsize = (10.5,7))

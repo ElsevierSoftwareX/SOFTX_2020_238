@@ -21,7 +21,7 @@ import warnings
 import numpy
 
 import lal
-from pylal import lalburst
+from pylal.xlal import lalburst
 from pylal.lalfft import XLALCreateForwardREAL8FFTPlan, XLALCreateReverseREAL8FFTPlan, XLALREAL8FreqTimeFFT
 from pylal import datatypes as laltypes
 
