@@ -1,3 +1,12 @@
+gstlal-calibration (1.0.5-1) unstable; urgency=low
+  
+  * Potential bug fix for discontinuities leading to production of overlapping
+    frame files
+  * Fix typo in lal_smoothkappas element with isinf() parentheses
+  * Bug fix for Debian package build
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 06 Oct 2016 15:27:00 +0900
+
 gstlal-calibration (1.0.4-1) unstable; urgency=low
 
   * Bug fix for coherence gating
