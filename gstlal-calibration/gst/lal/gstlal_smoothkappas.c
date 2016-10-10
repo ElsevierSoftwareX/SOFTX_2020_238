@@ -365,16 +365,16 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 	if(success) {
 		if(!strcmp(name, GST_AUDIO_NE(F32))) {
-			element->data_type = F32;
+			element->data_type = GSTLAL_SMOOTHKAPPAS_F32;
 			g_assert_cmpuint(unit_size, ==, 4);
 		} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
-			element->data_type = F64;
+			element->data_type = GSTLAL_SMOOTHKAPPAS_F64;
 			g_assert_cmpuint(unit_size, ==, 8);
 		} else if(!strcmp(name, GST_AUDIO_NE(Z64))) {
-			element->data_type = Z64;
+			element->data_type = GSTLAL_SMOOTHKAPPAS_Z64;
 			g_assert_cmpuint(unit_size, ==, 8);
 		} else if(!strcmp(name, GST_AUDIO_NE(Z128))) {
-			element->data_type = Z128;
+			element->data_type = GSTLAL_SMOOTHKAPPAS_Z128;
 			g_assert_cmpuint(unit_size, ==, 16);
 		} else
 			g_assert_not_reached();
@@ -446,16 +446,16 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	g_assert_cmpuint(outmap.size % element->unit_size, ==, 0);
 	g_assert_cmpuint(inmap.size, ==, outmap.size);
 
-	if(element->data_type == F32) {
+	if(element->data_type == GSTLAL_SMOOTHKAPPAS_F32) {
 		gint buffer_size = outmap.size / element->unit_size;
 		result = smooth_buffer_float((const float *) inmap.data, (float *) outmap.data, buffer_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, gap, element->default_to_median, element->track_bad_kappa);
-	} else if(element->data_type == F64) {
+	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_F64) {
 		gint buffer_size = outmap.size / element->unit_size;
 		result = smooth_buffer_double((const double *) inmap.data, (double *) outmap.data, buffer_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, gap, element->default_to_median, element->track_bad_kappa);
-	} else if(element->data_type == Z64) {
+	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_Z64) {
 		gint buffer_size = outmap.size / element->unit_size;
 		result = smooth_complex_buffer_float((const float complex *) inmap.data, (float complex *) outmap.data, buffer_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, gap, element->default_to_median, element->track_bad_kappa);
-	} else if(element->data_type == Z128) { 
+	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_Z128) { 
 		gint buffer_size = outmap.size / element->unit_size;
 		result = smooth_complex_buffer_double((const double complex *) inmap.data, (double complex *) outmap.data, buffer_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, gap, element->default_to_median, element->track_bad_kappa);
 	} else {

@@ -72,10 +72,10 @@ struct _GSTLALSmoothKappas {
 	int avg_index_re;
 	int avg_index_im;
 	enum gstlal_smoothkappas_data_type {
-		F32 = 0,
-		F64,
-		Z64,
-		Z128
+		GSTLAL_SMOOTHKAPPAS_F32 = 0,
+		GSTLAL_SMOOTHKAPPAS_F64,
+		GSTLAL_SMOOTHKAPPAS_Z64,
+		GSTLAL_SMOOTHKAPPAS_Z128
 	} data_type;
 
 	/* properties */
