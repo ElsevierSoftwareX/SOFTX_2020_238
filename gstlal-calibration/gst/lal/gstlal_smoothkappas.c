@@ -266,7 +266,7 @@ static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, D
 	double new_element_re, new_element_im; \
 	for(i = 0; i < buffer_size; i++) { \
 		double complex doublesrc = (double complex) *src; \
-		if(gap || creal(doublesrc) > default_kappa_re + maximum_offset_re || creal(doublesrc) < default_kappa_re - maximum_offset_re || isnan(creal(doublesrc)) || isinf(creal(doublesrc) || creal(doublesrc) == 0)) { \
+		if(gap || creal(doublesrc) > default_kappa_re + maximum_offset_re || creal(doublesrc) < default_kappa_re - maximum_offset_re || isnan(creal(doublesrc)) || isinf(creal(doublesrc)) || creal(doublesrc) == 0) { \
 			if(default_to_median) \
 				new_element_re = *current_median_re; \
 			else \
@@ -274,7 +274,7 @@ static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, D
 		} else { \
 			new_element_re = creal(doublesrc); \
 		} \
-		if(gap || cimag(doublesrc) > default_kappa_im + maximum_offset_im || cimag(doublesrc) < default_kappa_im - maximum_offset_im || isnan(cimag(doublesrc)) || isinf(cimag(doublesrc) || cimag(doublesrc) == 0)) { \
+		if(gap || cimag(doublesrc) > default_kappa_im + maximum_offset_im || cimag(doublesrc) < default_kappa_im - maximum_offset_im || isnan(cimag(doublesrc)) || isinf(cimag(doublesrc)) || cimag(doublesrc) == 0) { \
 			if(default_to_median) \
 				new_element_im = *current_median_im; \
 			else \
