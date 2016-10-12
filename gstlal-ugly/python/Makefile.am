@@ -7,6 +7,7 @@ AM_CPPFLAGS = -I$(top_srcdir)/gst/framecpp
 pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
+	aggregator.py \
 	gviz_api.py \
 	metric.py \
 	tree.py
