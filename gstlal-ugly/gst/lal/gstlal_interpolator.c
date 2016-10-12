@@ -156,6 +156,8 @@ void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint k
 
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
 	gsl_matrix_float_view input_matrix = gsl_matrix_float_view_array(input, kernel_length, channels);
+
+
 	gsl_blas_sgemv (CblasTrans, 1.0, &(input_matrix.matrix), thiskernel, 0, &(output_vector.vector));
 	return;
 }
@@ -196,15 +198,8 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 		kernel_offset = samp % factor;
 		output_offset = samp * channels;
 		input_offset = samp / factor * channels;
-		/*
-		 * The first kernel is a delta function by definition, so just
- 		 * copy the input 
-		 */
-		// AEP- disable the copy conditional, always perform the convolution.
-		/*if (kernel_offset == 0)
-			copy_input(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
-		else*/
-			convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
+
+		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
 	}
 	return;
 }
@@ -626,12 +621,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 
 		guint processed = 0;
-		//float *output = (float *) GST_BUFFER_DATA(outbuf);
-		//memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));  // FIXME necesary?
 		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-		float *output = (float *) outbuf;
+		float *output = (float *) mapinfo.data;
 		memset(mapinfo.data, 0, mapinfo.size);	
-		gst_buffer_unmap(outbuf, &mapinfo);
 		// FIXME- clean up this print statement (format)
 		//GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length);
 
@@ -659,6 +651,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		}
 		GST_INFO_OBJECT(element, "Processed a %d samples", processed);
 		set_metadata(element, outbuf, output_length, !copied_nongap);
+		gst_buffer_unmap(outbuf, &mapinfo);
 
 	}
 	return result;

@@ -39,18 +39,18 @@ def interp_test_01(pipeline, name):
 	gap_threshold = .75	# of 1
 	buffer_length = 5.0	# seconds
 	test_duration = 20.0	# seconds
+	frequency     = 11.0
+	wave          = 0
 
 	#
 	# build pipeline
 	#
 
-	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, width = 32, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)§
-	#head = test_common.gapped_test_src(pipeline, channels = 1, wave = 0, freq = 10, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
+	head = test_common.gapped_test_src(pipeline, freq=frequency, wave=wave, buffer_length = buffer_length, rate = in_rate, width = 32, test_duration = test_duration, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "%s_control.dump" % name)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudioconvert(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % in_rate)
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % out_rate)
-	#head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw, rate=%d" % out_rate)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)
 

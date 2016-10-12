@@ -14,8 +14,8 @@ import test_common
 import numpy
 
 in_rate = 512
-out_rate = 2048
-num_chan = 200
+out_rate = 1024
+num_chan = 100
 
 opt = sys.argv[1]
 
@@ -30,6 +30,7 @@ head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.ones((num_chan,1))
 if opt == "resample":
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % out_rate)
 if opt == "interp":
+	print "Notice-- running interpolator"
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % out_rate)
 pipeparts.mkfakesink(pipeline, head)
 
