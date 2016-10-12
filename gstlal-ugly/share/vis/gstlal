@@ -6,11 +6,18 @@ import cgitb
 cgitb.enable()
 form = cgi.parse()
 
-gps = duration = -1
+gps = "-1"
+duration = "-1"
 if "GPS" in form:
 	gps = form["GPS"][0]
-if "duration" in form:
+if "Duration" in form:
 	duration = form["Duration"][0]
+if gps != "-1" or duration != "-1":
+	refresh = 1000000
+	longrefresh = 1000000
+else:
+	refresh = 5
+	longrefresh = 30
 
 print "Content-type: text/html"
 print "Cache-Control: max-age=10"
@@ -27,18 +34,19 @@ print '''
 	<script type="text/javascript">
 	google.charts.load('current', {'packages':['corechart']});
 '''
-print "		google.charts.setOnLoadCallback(function(){ drawLatencyStatusByNodes(%s,%s) });" % (gps, duration)
-print " 	google.charts.setOnLoadCallback(function(){ drawLatencyHistory(%s,%s) });" % (gps, duration)
-print " 	google.charts.setOnLoadCallback(function(){ drawLatencyGauge(%s,%s) });" % (gps, duration)
-print " "
-print "		google.charts.setOnLoadCallback(function(){ drawSNRStatusByNodes(%s,%s) });" % (gps, duration)
-print " 	google.charts.setOnLoadCallback(function(){ drawSNRHistory(%s,%s) });" % (gps, duration)
-print " "
-print " 	google.charts.setOnLoadCallback(function(){ drawHorizon(%s,%s) });" % (gps, duration)
-print " 	google.charts.setOnLoadCallback(function(){ drawNoise(%s,%s) });" % (gps, duration)
-print " 	google.charts.setOnLoadCallback(function(){ drawPSD(%s,%s) });" % (gps, duration)
-print " 	google.charts.setOnLoadCallback(function(){ drawNoiseGauge(%s,%s) });" % (gps, duration)
-print " 	google.charts.setOnLoadCallback(function(){ drawRangeGauge(%s,%s) });" % (gps, duration)
+
+print "	google.charts.setOnLoadCallback(function(){ drawLatencyStatusByNodes(%s,%s,%d) });" % (gps, duration, longrefresh)
+print "	google.charts.setOnLoadCallback(function(){ drawLatencyHistory(%s,%s,%d) });" % (gps, duration, longrefresh)
+print "	google.charts.setOnLoadCallback(function(){ drawLatencyGauge(%s,%s,%d) });" % (gps, duration, longrefresh)
+print ""
+print "	google.charts.setOnLoadCallback(function(){ drawSNRStatusByNodes(%s,%s,%d) });" % (gps, duration, longrefresh)
+print "	google.charts.setOnLoadCallback(function(){ drawSNRHistory(%s,%s,%d) });" % (gps, duration, longrefresh)
+print ""
+print "	google.charts.setOnLoadCallback(function(){ drawHorizon(%s,%s,%d) });" % (gps, duration, refresh)
+print "	google.charts.setOnLoadCallback(function(){ drawNoise(%s,%s,%d) });" % (gps, duration, refresh)
+print "	google.charts.setOnLoadCallback(function(){ drawPSD(%s,%s,%d) });" % (gps, duration, refresh)
+print "	google.charts.setOnLoadCallback(function(){ drawNoiseGauge(%s,%s,%d) });" % (gps, duration, refresh)
+print "	google.charts.setOnLoadCallback(function(){ drawRangeGauge(%s,%s,%d) });" % (gps, duration, refresh)
 
 print '''
 	</script>
@@ -46,29 +54,29 @@ print '''
 
 <body>
 	<form>
-	<div class=topbox> 
+	<!-- <div class=topbox> -->
 		<ul class="tab">
-			<li><img width=100px src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png"></li>
+			<li><img style="width: 100px; margin: 5px 5px 5px 5px;" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png"></li>
 			<!-- <li><a href="#ldg" class="tablinks" onclick="openGstlalTab(event, 'LDG')">LDG</a></li> -->
-			<li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard')">Dashboard</a></li>
+			<li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard', noise_gauge_wrapper, latency_gauge_wrapper, range_gauge_wrapper)">Dashboard</a></li>
 			<!-- <li><a href="#events" class="tablinks" onclick="openGstlalTab(event, 'Events')">Events</a></li> -->
 			<li><a href="#detchar" class="tablinks" onclick="openGstlalTab(event, 'Detchar')">Detchar</a></li>
 			<li><a href="#logs" class="tablinks" onclick="openGstlalTab(event, 'Logs')">Logs</a></li>
-			<li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise')">Noise</a></li>
-			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity')">Sensitivity</a></li>
-			<li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency')">Latency</a></li>
-			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR')">SNR</a></li>
+			<li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise', noise_wrapper)">Noise</a></li>
+			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity', horizon_wrapper, psd_wrapper)">Sensitivity</a></li>
+			<li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency', latency_status_by_nodes_wrapper, latency_history_wrapper)">Latency</a></li>
+			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper)">SNR</a></li>
 			<li>
-				<input type="text" name="GPS" value="" size=11><input type="submit" value="GPS">
-				<input type="text" name="Duration" value="" size=7>
-				<input type="submit" value="Duration">
+'''				
+print '			<input type="text" name="GPS" value="%s" size=8 style="margin: 7px 5px 5px 5px;"><input type="submit" value="GPS" style="margin: 7px 5px 5px 5px;">' % (gps,)
+print '			<input type="text" name="Duration" value="%s" size=4 style="margin: 7px 5px 5px 5px;">' % (duration,)
+print '			<input type="submit" value="Duration" style="margin: 7px 5px 5px 5px;">'
+print '''			
 			</li>
-			<li><div id="clock"></div></li>
+			<div id="clock" style="text-align: right; margin: 7px 5px 5px 5px;"></div>
 		</ul>
-	</div>
+	<!-- </div> -->
 	</form>
-
-	<br>
 
 	<!--
 	<div id="LDG" class="tabcontent">
@@ -77,8 +85,8 @@ print '''
 	-->
 
 	<div id="Dashboard" class="tabcontent">
-		<div id="noise_gauge"></div>
-		<div id="range_gauge"></div>
+		<div id="noise_gauge_wrapper"></div>
+		<div id="range_gauge_wrapper"></div>
 		<div id="latency_gauge_wrapper"></div>
 	</div>
 
@@ -100,12 +108,12 @@ print '''
 	-->
 
 	<div id="Noise" class="tabcontent">
-		<div id="noise"></div>
+		<div id="noise_wrapper"></div>
 	</div>
 
 	<div id="Sensitivity" class="tabcontent">
-		<div id="horizon"></div>
-		<div id="psd"></div>
+		<div id="horizon_wrapper"></div>
+		<div id="psd_wrapper"></div>
 	</div>
 
 	<div id="Latency" class="tabcontent">

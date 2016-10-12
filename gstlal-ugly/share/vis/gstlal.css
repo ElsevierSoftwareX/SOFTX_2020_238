@@ -1,3 +1,7 @@
+body {
+	font: 10pt verdana;
+}
+
 /* Style the list */
 ul.tab {
     list-style-type: none;
@@ -19,29 +23,17 @@ ul.tab li a {
     padding: 10px 12px;
     text-decoration: none;
     transition: 0.3s;
-    font-size: 12px;
+    font-size: 10pt;
 }
 
 /* Style the form inside the list items */
 ul.tab li input {
-    display: inline;
+    display: inline-block;
     color: black;
     text-align: center;
-    padding: 10px 5px 5px 5px;
     text-decoration: none;
     transition: 0.3s;
-    font-size: 12px;
-}
-
-/* Style the form inside the list items */
-ul.tab li div {
-    display: inline;
-    color: black;
-    text-align: center;
-    padding: 5px 5px 5px 5px;
-    text-decoration: none;
-    transition: 0.3s;
-    font-size: 24px;
+    font-size: 10pt;
 }
 
 /* Change background color of links on hover */
@@ -74,7 +66,8 @@ ul.tab li a:focus, .active {background-color: #ccc;}
 }
 
 .topbox {
-	font: 10pt arial, sans-serif;
+	/*font: 10pt arial, sans-serif;*/
+	font: 12pt verdana;
 	border-radius: 25px;
 	border: 2px solid gray;
 	background: white;
