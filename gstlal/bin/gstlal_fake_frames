@@ -274,7 +274,7 @@ else:
 
 if options.whiten_reference_psd or options.whiten_track_psd:
 	## 5) Set the pipeline head to a whitened data stream if requested using a multirate_datasource.mkwhitened_multirate_src()
-	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.sample_rate], instrument, psd = wpsd, seekevent = gw_data_source.seekevent, track_psd = options.whiten_track_psd)[options.sample_rate]
+	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.sample_rate], instrument, psd = wpsd, track_psd = options.whiten_track_psd)[options.sample_rate]
 else:
 	## 6) Otherwise simply add a pipeparts.mkcapsfilter() and pipeparts.mkresample()
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw, rate=%d" % options.sample_rate)
@@ -294,7 +294,7 @@ if options.color_psd:
 	max_sample = int(round(1.0 / rpsd.deltaF * options.sample_rate / 2.0)) + 1
 
 	# Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
-	rpsd.data = rpsd.data[:max_sample]
+	rpsd.data.data = rpsd.data.data[:max_sample]
 	
 	# create the coloring FIR kernel from reference_psd.psd_to_fir_kernel()
 	fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
@@ -333,6 +333,9 @@ head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.frame_t
 head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, digits(options.gps_start_time) - digits(options.frame_duration * options.frames_per_file * 100)))
 
 # Run it
+if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter READY state")
+datasource.pipeline_seek_for_gps(pipeline, gw_data_source.seg[0], gw_data_source.seg[1])
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 
