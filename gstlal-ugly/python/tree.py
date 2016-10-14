@@ -51,6 +51,8 @@ class HyperCube(object):
 		self.tiles = []
 		self.symmetry_func = symmetry_func
 		self.__mismatch = mismatch
+		self.neighbors = []
+		self.vertices = self.vertices()
 
 	def N(self):
 		return len(self.boundaries)
@@ -81,7 +83,7 @@ class HyperCube(object):
 		rightbound[dim,0] = self.center[dim]
 		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
-	def tile(self, mismatch, stochastic = False, neighbors = []):
+	def tile(self, mismatch, stochastic = False):
 
 		popcount = 0
 
@@ -104,9 +106,13 @@ class HyperCube(object):
 			dl = self.dl(mismatch)
 			cnt = 0
 			rand_coords = numpy.random.rand(1e4, len(self.deltas))
+			neighbor_tiles = []
+			for neighbor in self.neighbors:
+				neighbor_tiles.extend(neighbor.tiles)
+			print len(neighbor_tiles)
 			for randcoord in rand_coords:
 				randcoord = (randcoord - 0.5) * self.deltas + self.center
-				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in self.tiles + neighbors]
+				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in self.tiles + neighbor_tiles]
 				maxdist = max(distances)
 				mindist = min(distances)
 				assert randcoord in self
@@ -163,7 +169,7 @@ class HyperCube(object):
 		fraction = (tmps + 1.0) / tmps
 		for i, c in enumerate(coords):
 			# FIXME do something more sane to handle boundaries
-			if not ((c >= self.center[i] - self.deltas[i] * fraction[i] / 2.) and (c < self.center[i] + self.deltas[i] * fraction[i] / 2.)):
+			if not ((c >= self.center[i] - self.deltas[i] * fraction[i] / 2.) and (c <= self.center[i] + self.deltas[i] * fraction[i] / 2.)):
 			#if not (c >= 1. * self.boundaries[i,0] and c < (fraction[i] * self.deltas[i] + self.boundaries[i,0])):
 				return False
 		return True
@@ -191,7 +197,36 @@ class HyperCube(object):
 		# From Owen 1995 (2.16)
 		return self.volume() / self.dl(mismatch)**self.N()
 
+	def vertices(self):
+		vertices = []
+		for n in range (0, len(self.boundaries)):
+			paramOne = self.boundaries[0][n]
+			for m in range (0, len(self.boundaries[n])):
+				paramTwo = self.boundaries[1][m]
+				vertices.append([paramOne, paramTwo])
+		#print 'VERTICES:', vertices
+		return vertices
 
+	def returnneighbors(self):
+		revisedneighbors = []
+		for neighbor in self.neighbors:
+			#print 'NCHECK:', len(self.neighbors)
+			#print 'VCHECK:', neighbor.vertices
+			for vertex in neighbor.vertices:
+				#print 'VCHECK1:', vertex
+				if vertex in self:
+					#print 'HELLO WORLD', neighbor
+					revisedneighbors.append(neighbor)
+					break
+
+			for vertex in self.vertices:
+				#print 'VCHECK2'
+				if vertex in neighbor:
+					#print 'HELLO WORLD', neighbor
+					revisedneighbors.append(neighbor)
+					break
+		self.neighbors = revisedneighbors
+		print 'FINALNLIST:', len(self.neighbors)
 
 class Node(object):
 	"""
@@ -216,9 +251,26 @@ class Node(object):
 		numtmps = numpy.floor(self.cube.num_templates(mismatch))
 		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates) or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
 			bifurcation += 1
+			print 'BIF:', bifurcation
 			left, right = self.cube.split(splitdim)
+
 			self.left = Node(left, self)
 			self.right = Node(right, self)
+
+			self.left.cube.neighbors += self.cube.neighbors
+			self.right.cube.neighbors += self.cube.neighbors
+
+			self.left.cube.neighbors.append(self.right.cube)
+			self.right.cube.neighbors.append(self.left.cube)
+
+			#print 'NLCHECK:', self.left.cube.neighbors
+			#print 'NRCHECKL:', self.right.cube.neighbors
+
+			self.left.cube.returnneighbors()
+			self.right.cube.returnneighbors()
+			#print 'NORMLEFT:', self.left.cube.neighbors
+			#print 'NORMRIGHT:', self.right.cube.neighbors
+
 			if verbose:
 				print "Splitting parent with boundaries:"
 				for row in self.cube.boundaries:
@@ -250,9 +302,25 @@ class Node(object):
 
 		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and derr > 0.05):
 			bifurcation += 1
+			print 'BIF:', bifurcation
 			left, right = self.cube.split(splitdim)
 			self.left = Node(left, self)
 			self.right = Node(right, self)
+
+                        self.left.cube.neighbors += self.cube.neighbors
+                        self.right.cube.neighbors += self.cube.neighbors
+
+                        self.left.cube.neighbors.append(self.right.cube)
+                        self.right.cube.neighbors.append(self.left.cube)
+
+                        #print 'NLCHECK:', self.left.cube.neighbors
+                        #print 'NRCHECKL:', self.right.cube.neighbors
+
+                        self.left.cube.returnneighbors()
+                        self.right.cube.returnneighbors()
+                        #print 'FINELEFT:', self.left.cube.neighbors
+                        #print 'FINERIGHT:', self.right.cube.neighbors
+
 			if verbose:
 				print "%30s: %0.2f" % ("Splitting", derr)
 			self.left.split_fine(mismatch = mismatch, bifurcation = bifurcation)

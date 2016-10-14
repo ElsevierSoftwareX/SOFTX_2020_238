@@ -175,7 +175,7 @@ previous_tiles = []
 nodes = bank.walk()
 for n, c in enumerate(nodes):
 
-	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic, neighbors = tree.find_neighbors_by_m1m2(c, previous_tiles))
+	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic)
 	totalpopcount = totalpopcount + temppopcount
 	previous_tiles.extend(tiles)
 
