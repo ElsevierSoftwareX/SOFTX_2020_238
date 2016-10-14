@@ -203,6 +203,8 @@ def setup_dir_across_job_by_level(gpstime, typ, route, base_dir, verbose = True,
 
 def gps_range(jobtime):
 	gpsblocks = set((gps_to_minimum_time_quanta(t) for t in jobtime))
+	if not gpsblocks:
+		return [], []
 	min_t, max_t = min(gpsblocks), max(gpsblocks)
 	return range(min_t, max_t+MIN_TIME_QUANTA, MIN_TIME_QUANTA), range(min_t+MIN_TIME_QUANTA, max_t+2*MIN_TIME_QUANTA, MIN_TIME_QUANTA)
 
