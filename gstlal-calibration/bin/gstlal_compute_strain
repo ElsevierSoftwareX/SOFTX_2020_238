@@ -777,7 +777,6 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			kc = calibration_parts.compute_kappac(pipeline, calibration_parts.mkqueue(pipeline, SR), calibration_parts.mkqueue(pipeline, SI))
 			if not options.no_dq_vector:
 				kc = pipeparts.mkgate(pipeline, kc, control = pipeparts.mkqueue(pipeline, obsreadystatevec), threshold = 1)
-				kc = pipeparts.mktee(pipeline, kc)
 			if not options.no_coherence:
 				pcaly_line2_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line2_coh"], coh_caps, "pcaly_line2_coh", replace_zeros = True)
 				if not options.no_dq_vector or not options.no_fcc:
@@ -787,6 +786,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 				kc = pipeparts.mkgate(pipeline, kc, control = calibration_parts.mkqueue(pipeline, darm_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
 				kc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
 				kc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc), control = calibration_parts.mkqueue(pipeline, sus_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
+			if not options.no_dq_vector:
+				kc = pipeparts.mktee(pipeline, kc)
 
 			if options.no_coherence:
 				smooth_kc = calibration_parts.smooth_kappas_no_coherence(pipeline, kc, options.kappac_ok_var, options.expected_kappac, median_smoothing_samples, factors_average_samples)
@@ -805,7 +806,6 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 			fcc = calibration_parts.compute_fcc(pipeline, calibration_parts.mkqueue(pipeline, SR), calibration_parts.mkqueue(pipeline, SI), opt_gain_fcc_line_freq)
 			if not options.no_dq_vector:
 				fcc = pipeparts.mkgate(pipeline, fcc, control = pipeparts.mkqueue(pipeline, obsreadystatevec), threshold = 1)
-				fcc = pipeparts.mktee(pipeline, fcc)
 
 			if not options.no_coherence:
 				# Gate f_cc with all four of the calibration lines
@@ -813,6 +813,8 @@ if not options.no_kappaa or not options.no_kappac or not options.no_fcc or not o
 				fcc = pipeparts.mkgate(pipeline, fcc, control = calibration_parts.mkqueue(pipeline, darm_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
 				fcc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
 				fcc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc), control = calibration_parts.mkqueue(pipeline, sus_coh), threshold = options.coherence_uncertainty_threshold, invert_control = True)
+			if not options.no_dq_vector:
+				fcc = pipeparts.mktee(pipeline, fcc)
 
 			if options.no_coherence:
 				smooth_fcc = calibration_parts.smooth_kappas_no_coherence(pipeline, fcc, options.fcc_ok_var, options.expected_fcc, median_smoothing_samples, factors_average_samples)
