@@ -5,14 +5,15 @@ import cgi
 import cgitb
 cgitb.enable()
 form = cgi.parse()
+import time
 
 gps = "-1"
-duration = "-1"
+duration = "600"
 if "GPS" in form:
 	gps = form["GPS"][0]
 if "Duration" in form:
 	duration = form["Duration"][0]
-if gps != "-1" or duration != "-1":
+if gps != "-1":
 	refresh = 1000000
 	longrefresh = 1000000
 else:
@@ -32,7 +33,7 @@ print '''
 	<script type="text/javascript" src="../jquery-3.1.1.min.js"></script>
 	<script type="text/javascript" src="../gstlal.js"></script>
 	<script type="text/javascript">
-	google.charts.load('current', {'packages':['corechart']});
+	google.charts.load('current', {'packages':['corechart', 'table']});
 '''
 
 print "	google.charts.setOnLoadCallback(function(){ drawLatencyStatusByNodes(%s,%s,%d) });" % (gps, duration, longrefresh)
@@ -98,7 +99,15 @@ print '''
 	</div>
 
 	<div id="Detchar" class="tabcontent">
-		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/" width=100% height=675></iframe>
+'''
+
+if gps =="-1":
+	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/" width=100% height=675></iframe>'''
+else: 
+	date = "%04d%02d%02d" % time.gmtime(int(gps)+ 315964785)[0:3]
+	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/day/%s/" width=100%% height=675></iframe>''' % (date,)
+
+print '''
 	</div>
 
 	<!--
@@ -109,11 +118,13 @@ print '''
 
 	<div id="Noise" class="tabcontent">
 		<div id="noise_wrapper"></div>
+		<div id="noise_table_wrapper"></div>
 	</div>
 
 	<div id="Sensitivity" class="tabcontent">
 		<div id="horizon_wrapper"></div>
 		<div id="psd_wrapper"></div>
+		<div id="horizon_table_wrapper"></div>
 	</div>
 
 	<div id="Latency" class="tabcontent">

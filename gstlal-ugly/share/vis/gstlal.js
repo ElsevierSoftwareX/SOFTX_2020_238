@@ -31,10 +31,12 @@ var snr_status_by_nodes_wrapper;
 var snr_history_wrapper;
 
 var horizon_wrapper;
+var horizon_table_wrapper;
 var psd_wrapper;
 var range_gauge_wrapper;
 
 var noise_wrapper;
+var noise_table_wrapper;
 var noise_gauge_wrapper;
 
 default_options = {
@@ -47,7 +49,7 @@ default_options = {
 	legend: {position: "in"},
 	explorer: {actions: ['dragToZoom', 'rightClickToReset']},
 	dataOpacity: "0.5",
-	curveType: "function",
+	curveType: "none",
 	fontName: "verdana",
 	fontSize: 12,
 	lineWidth: 2,
@@ -116,7 +118,8 @@ function openGstlalTab(evt, tabName) {
 
 	// Assume the rest are charts that need to be drawn
 	for (i = 2; i < arguments.length; i++) {
-		arguments[i].getChart().clearChart();
+		if (arguments[i].getChart())
+			arguments[i].getChart().clearChart();
 		arguments[i].draw();
         }
 }
@@ -186,7 +189,7 @@ function drawLatencyHistory(gps, duration, refresh) {
 
 	latency_history_wrapper = new google.visualization.ChartWrapper({
 		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1&gpstime=' + gps + '&duration=' + duration,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:100&gpstime=' + gps + '&duration=' + duration,
 		query: 'select latency_history where node is all',
 		refreshInterval: refresh,
 		options: these_options,
@@ -199,7 +202,7 @@ function drawLatencyHistory(gps, duration, refresh) {
 function drawLatencyGauge(gps, duration, refresh) {
 	latency_gauge_wrapper = new google.visualization.ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:2' + '&gpstime='  + gps + '&duration=' + duration,
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:200' + '&gpstime='  + gps + '&duration=' + duration,
 	query: 'select latency_history where now',
 	refreshInterval: refresh,
         options: {
@@ -232,7 +235,7 @@ function drawSNRStatusByNodes(gps, duration, refresh) {
 
 	snr_status_by_nodes_wrapper = new google.visualization.ChartWrapper({
 		chartType: 'CandlestickChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:100'  + '&gpstime='  + gps + '&duration=' + duration,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:300'  + '&gpstime='  + gps + '&duration=' + duration,
 		query: 'select snr_history where status by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -249,7 +252,7 @@ function drawSNRHistory(gps, duration, refresh) {
 
 	snr_history_wrapper = new google.visualization.ChartWrapper({
 		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:101'  + '&gpstime='  + gps + '&duration=' + duration,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:400'  + '&gpstime='  + gps + '&duration=' + duration,
 		query: 'select snr_history where node is all',
 		refreshInterval: refresh,
 		options: these_options,
@@ -264,19 +267,31 @@ function drawSNRHistory(gps, duration, refresh) {
 
 function drawHorizon(gps, duration, refresh) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {minValue:0, maxValue:150, textPosition: 'out', ticks: [10,30,50,70,90,110] };
+	these_options.vAxis = {minValue:0, maxValue:250, textPosition: 'out'};
 	these_options.title = 'Horizon';
 	these_options.series = {0: {color: "red"}, 1: {color:"green"}};
 
 	horizon_wrapper = new google.visualization.ChartWrapper({
-	chartType: 'LineChart',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:200'  + '&gpstime='  + gps + '&duration=' + duration,
-	query: 'select horizon_history',
-	refreshInterval: refresh,
-	options: these_options,
-	containerId: 'horizon_wrapper',
-});
-horizon_wrapper.draw();
+		chartType: 'LineChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:500'  + '&gpstime='  + gps + '&duration=' + duration,
+		query: 'select horizon_history',
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'horizon_wrapper',
+	});
+
+	horizon_table_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'Table',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:501'  + '&gpstime='  + gps + '&duration=' + duration,
+		query: horizon_wrapper.getQuery(),
+		refreshInterval: refresh,
+		containerId: 'horizon_table_wrapper',
+		options : { sortColumn: 1, width: "100%", page : "enable", sortAscending : false},
+	});
+
+
+	horizon_wrapper.draw();
+	horizon_table_wrapper.draw();
 }
 
 
@@ -288,21 +303,21 @@ function drawPSD(gps, duration, refresh) {
 	these_options.series = {0: {color: "red"}, 1: {color:"green"}};
 
 	psd_wrapper = new google.visualization.ChartWrapper({
-	chartType: 'LineChart',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:201'  + '&gpstime='  + gps + '&duration=' + duration,
-	query: 'select psd where now',
-	refreshInterval: refresh,
-	options: these_options,
-	containerId: 'psd_wrapper',
-});
-psd_wrapper.draw();
+		chartType: 'LineChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:600'  + '&gpstime='  + gps + '&duration=' + duration,
+		query: 'select psd' + ((gps == "-1") ? 'where now' : ''),
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'psd_wrapper',
+	});
+	psd_wrapper.draw();
 }
 
 
 function drawRangeGauge(gps, duration, refresh) {
 	range_gauge_wrapper = new google.visualization.ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:201'  + '&gpstime='  + gps + '&duration=' + duration,
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:700'  + '&gpstime='  + gps + '&duration=' + duration,
 	query: 'select horizon_history where now',
 	refreshInterval: refresh,
         options: {
@@ -334,14 +349,24 @@ function drawNoise(gps, duration, refresh) {
 
 	noise_wrapper = new google.visualization.ChartWrapper({
 		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:300'  + '&gpstime='  + gps + '&duration=' + duration,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:800'  + '&gpstime='  + gps + '&duration=' + duration,
 		query: 'select noise',
 		refreshInterval: refresh,
 		options: these_options,
 		containerId: 'noise_wrapper',
-});
+	});
 
-noise_wrapper.draw();
+	noise_table_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'Table',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:801'  + '&gpstime='  + gps + '&duration=' + duration,
+		query: noise_wrapper.getQuery(),
+		refreshInterval: refresh,
+		containerId: 'noise_table_wrapper',
+		options : { sortColumn: 1, width: "100%", page : "enable", sortAscending : false},
+	});
+
+	noise_wrapper.draw();
+	noise_table_wrapper.draw();
 
 }
 
@@ -349,7 +374,7 @@ noise_wrapper.draw();
 function drawNoiseGauge(gps, duration, refresh) {
 	noise_gauge_wrapper = new google.visualization.ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:301'  + '&gpstime='  + gps + '&duration=' + duration,
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:900'  + '&gpstime='  + gps + '&duration=' + duration,
 	query: 'select noise where now',
 	refreshInterval: refresh,
         options: {
