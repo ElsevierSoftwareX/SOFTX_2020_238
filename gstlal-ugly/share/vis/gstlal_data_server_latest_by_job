@@ -11,6 +11,7 @@ import numpy
 import re
 import time
 import zlib
+from scipy.interpolate import interp1d
 #import pyparsing
 
 print "Content-type: application/json"
@@ -28,40 +29,46 @@ assert "tqx" in form
 reqId = form["tqx"][0].split(":")[1]
 query = form["tq"][0]
 
+# FIXME these are not google API complient.
 # Figure out if a GPS time is being specified, else assume "now"
-if "gpstime" in query:
-	regex = re.compile("[0-9]{10}")
-	query_time = int(regex.search(query).group(0))
+if "gpstime" in form:
+	query_time = form["gpstime"][0]
+	if query_time != "-1":
+		query_time = int(query_time)
+	else:
+		query_time = int(now())
 else:
 	query_time = int(now())
 
-# see if there are additional flags 
-# FIXME these are not google API complient.
 if "duration" in form:
-	duration = int(form["duration"][0])
+	duration = form["duration"][0]
+	if duration != "-1":
+		duration = int(duration)
+	else:
+		duration = 1000
 else:
-	duration = 1000
+	duration = int(now())
+
 
 if "type" in form:
 	datatype = form["type"]
 else:
 	datatype = "median"
 
-# FIXME, this is sort of dumb. But I did it this way so that we could tailor it to our needs
-if duration <= 10000:# hour
+# FIXME, this is sort of dumb. But I did it this way so that we could tailor it
+# to our needs later
+if duration <= 1000:# hour
 	level = 6
-if 10000 < duration <= 100000:
+if 1000 < duration <= 10000:
 	level = 5
-if 100000 < duration <= 1000000:
+if 10000 < duration <= 100000:
 	level = 4
-if 1000000 < duration <= 10000000:
+if 100000 < duration <= 1000000:
 	level = 3
-if duration > 10000000:
+if duration > 1000000:
 	level = 2
 
-# a unique identifier for this particular query
-# hashnumber = zlib.adler32("".join(sys.argv[1:])+query_time)
-
+lowestdir = ""
 thisgpsdir = ""
 prevgpsdir = ""
 prev_time = query_time - 10**(10-level)
@@ -69,10 +76,12 @@ for digit in str(query_time)[0:level]:
 	thisgpsdir += "/%s" % digit
 for digit in str(prev_time)[0:level]:
 	prevgpsdir += "/%s" % digit
-
+for digit in str(query_time)[0:6]:
+	lowestdir += "/%s" % digit
 
 # FIXME don't hard code
-base_path = "/home/gstlalcbctest/engineering/10/S6/bns"
+#base_path = "/home/gstlalcbctest/engineering/10/S6/bns"
+base_path = "/home/gstlalcbctest/engineering/10/trigs_uber"
 
 #
 # "SQL" parser.  FIXME. First, google query langauge isn't really SQL and
@@ -87,25 +96,32 @@ for route, label in (("latency_history", "Latency (s)"),
 	   ("snr_history", "SNR")
 	  ):
 	if route in query:
-		#for gpsdir in (prevgpsdir, thisgpsdir):
 		path = base_path + "/aggregator" + thisgpsdir
+		prevpath = base_path + "/aggregator" + prevgpsdir
 
 		max_time = []
 		if "status by node" in query:
-			# FIXME at 10,000 second boundaries this query won't
-			# return the latest 25 samples, we need to look back a
-			# directory
 			out_data = []
 			path += "/by_job"
+			prevpath += "/by_job"
 			for job in os.listdir(path):
-				fname = "%s/%s/median/%s.hdf5" % (path, job, route)
-				f = f = h5py.File(fname, "r")
-				this_data = numpy.array(f["data"])
-				this_time = numpy.array(f["time"])
+				this_data = numpy.array([])
+				this_time = numpy.array([])
+				for p in (prevpath, path):
+					try:
+						fname = "%s/%s/median/%s.hdf5" % (p, job, route)
+						f = f = h5py.File(fname, "r")
+						this_data = numpy.hstack((this_data, numpy.array(f["data"])))
+						this_time = numpy.hstack((this_time, numpy.array(f["time"])))
+					except IOError:
+						pass
 				ix = numpy.logical_and(this_time > (query_time-duration), this_time <= query_time)
 				this_time = this_time[ix]
 				this_data = this_data[ix]
-				max_time.append(this_time[-1])
+				if len(this_time) > 0:
+					max_time.append(this_time[-1])
+				else: # possible there is no data, so register the query time
+					max_time.append(query_time)
 				if len(this_data) > 0:
 					mindata = numpy.min(this_data)
 					maxdata = numpy.max(this_data)
@@ -131,17 +147,29 @@ for route, label in (("latency_history", "Latency (s)"),
 			# return all the relevant samples
 			# FIXME decide how many samples to return
 			out_data = []
-			fname = "%s/median/%s.hdf5" % (path, route)
-			f = h5py.File(fname, "r")
-			this_data = numpy.array(f["data"])
-			this_time = numpy.array(f["time"])
+			## make function
+			this_data = numpy.array([])
+			this_time = numpy.array([])
+			for p in (prevpath, path):
+				try:
+					fname = "%s/median/%s.hdf5" % (p, route)
+					f = h5py.File(fname, "r")
+					this_data = numpy.hstack((this_data, numpy.array(f["data"])))
+					this_time = numpy.hstack((this_time, numpy.array(f["time"])))
+				except IOError:
+					f = None
+					pass
 			ix = numpy.logical_and(this_time > (query_time-duration), this_time <= query_time)
 			this_time = this_time[ix]
 			this_data = this_data[ix]
+			## end make function
 			# FIXME use numpy operations
 			out_data.extend([[t,d] for t,d in zip(this_time, this_data)])
-			f.close()
-			description = [("time", "number"), ("%d" % this_time[-1], "number")]
+			if f: f.close()
+			if len(this_time) > 0:
+				description = [("time", "number"), ("%d" % this_time[-1], "number")]
+			else: # possible there is no data, so register the query time
+				description = [("time", "number"), ("%d" % query_time, "number")]
 			data_table = gviz_api.DataTable(description)
 			data_table.LoadData(out_data)
 			print data_table.ToJSonResponse(order_by = "time", req_id = reqId)
@@ -151,7 +179,10 @@ for route, label in (("latency_history", "Latency (s)"),
 			out_data = []
 			fname = "%s/median/%s.hdf5" % (path, route)
 			f = h5py.File(fname, "r")
-			out_data = [[float(f["data"][-1])]]
+			try:
+				out_data = [[float(f["data"][-1])]]
+			except ValueError:
+				out_data = [[]]
 			f.close()
 			description = [(label, "number")]
 			data_table = gviz_api.DataTable(description)
@@ -160,7 +191,7 @@ for route, label in (("latency_history", "Latency (s)"),
 			sys.exit()
 
 # there should always be data for this!!
-for dt in (("horizon_history", "time", "horizon", "(Mpc)"), ("noise", "time", "noise", "|n(t)|")):
+for dt in (("horizon_history", "time", "horizon", "(Mpc)"), ("noise", "time", "noise", "")):
 	if dt[0] in query:
 		data_type = dt[0]
 		out_data = []
@@ -173,7 +204,7 @@ for dt in (("horizon_history", "time", "horizon", "(Mpc)"), ("noise", "time", "n
 		if "now" in query:
 			for ifo in ("H1", "L1"):
 				datadict[ifo] = {} 
-				fname = "%s/dq/%s/%s/median/%s.hdf5" % (base_path, ifo, thisgpsdir, data_type)
+				fname = "%s/dq/%s/%s/max/%s.hdf5" % (base_path, ifo, thisgpsdir, data_type)
 				f = h5py.File(fname, "r")
 				latest[ifo] = f["time"][-1], f["data"][-1]
 				f.close()
@@ -183,27 +214,24 @@ for dt in (("horizon_history", "time", "horizon", "(Mpc)"), ("noise", "time", "n
 				("L1 %s" % (dt[3],), "number")
 				]
 		else:
+			H1L1time = {}; H1L1data = {}
+			# FIXME don't harcode
 			for ifo in ("H1", "L1"):
-				datadict[ifo] = {} 
-				fname = "%s/dq/%s/%s/median/%s.hdf5" % (base_path, ifo, thisgpsdir, data_type)
+				fname = "%s/dq/%s/%s/max/%s.hdf5" % (base_path, ifo, thisgpsdir, data_type)
 				f = h5py.File(fname, "r")
 				this_time = numpy.array(f["time"])
 				this_data = numpy.array(f["data"])
 				ix = numpy.logical_and(this_time > (query_time-duration), this_time <= query_time)
-				this_time = this_time[ix]
-				this_data = this_data[ix]
-
-				for t,d in zip(this_time, this_data):
-					datadict[ifo][t] = d
-					latest[ifo] = (t,d)
+				H1L1data[ifo] = interp1d(this_time[ix], this_data[ix], fill_value = 0., bounds_error = False)
+				H1L1time[ifo] = this_time[ix]
 				f.close()
-			# FIXME don't harcode
-			for t in set(datadict["H1"]) | set(datadict["L1"]):
-				out_data.append([t, datadict["H1"].setdefault(t,0), datadict["L1"].setdefault(t,0)])
+
+			for t in numpy.hstack((H1L1time["H1"], H1L1time["L1"])):
+				out_data.append([t, float(H1L1data["H1"](t)), float(H1L1data["L1"](t))])
 			description = [
 				(dt[1], "number"),
-				("H1 %s @ %d" % (dt[3], latest["H1"][0]), "number"),
-				("L1 %s @ %d" % (dt[3], latest["L1"][0]), "number")
+				("H1 %s @ %d" % (dt[3], H1L1time["H1"][-1]), "number"),
+				("L1 %s @ %d" % (dt[3], H1L1time["L1"][-1]), "number")
 				]
 		
 		data_table = gviz_api.DataTable(description)
@@ -217,25 +245,24 @@ out_data = []
 if "psd" in query:
 	for ifo in ("H1", "L1"):
 		if "now" in query:
-			fname = "%s/dq/%s/%s/psd.hdf5" % (base_path, ifo, thisgpsdir)
+			fname = "%s/dq/%s/%s/psd.hdf5" % (base_path, ifo, lowestdir)
 		else:
 			# PSD files are like: H1-PSD-1159632740-10.hdf5
-			fname = "%s/dq/%s/%s/%s-PSD-%d-10.hdf5" % (base_path, ifo, thisgpsdir, ifo, int(round(query_time,-1)))
+			fname = "%s/dq/%s/%s/%s-PSD-%d-10.hdf5" % (base_path, ifo, lowestdir, ifo, int(round(query_time,-1)))
 		f = h5py.File(fname, "r")
 		datadict[ifo] = numpy.array(f["asd"])
 		# assume same freq vector
 		freq = numpy.array(f["freq"])
 		f.close()
-		print len(datadict[ifo]), len(freq)
 	# FIXME don't harcode
 	for f, H1asd, L1asd in zip(freq, datadict["H1"], datadict["L1"]):
-		out_data.append([f, H1asd, L1asd])
+		out_data.append([float(f), float(H1asd), float(L1asd)])
 	description = [
-		("freq (Hz)", "number"),
+		("freq", "number"),
 		("H1 ASD @ %d" % query_time, "number"),
 		("L1 ASD @ %d" % query_time, "number")
 		]
 	
 	data_table = gviz_api.DataTable(description)
 	data_table.LoadData(out_data)
-	print data_table.ToJSonResponse(order_by = "freq", req_id = reqId)
+	print data_table.ToJSonResponse(req_id = reqId)
