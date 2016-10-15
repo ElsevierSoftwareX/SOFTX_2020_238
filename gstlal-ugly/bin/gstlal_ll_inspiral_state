@@ -1,0 +1,112 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2016  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+import h5py
+import numpy
+import sys, os
+import itertools
+import argparse
+import lal
+from lal import LIGOTimeGPS
+import time
+from gi.repository import GLib
+import logging
+import subprocess
+import urllib2
+import shutil
+import collections
+from multiprocessing import Pool
+from gstlal import aggregator
+
+MIN_TIME_QUANTA = 10000
+DIRS = 6
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+# Read command line options
+def parse_command_line():
+
+	parser = argparse.ArgumentParser(description="Online data aggregator")
+
+	# directory to put everything in
+	parser.add_argument("--base-dir", action="store", default="aggregator", help="Specify output path")
+	parser.add_argument("--dump-period", type = float, default = 180., help = "Wait this many seconds between dumps of the URLs (default = 180., set to 0 to disable)")
+	parser.add_argument("--num-jobs", action="store", type=int, default=10, help="number of running jobs")
+	parser.add_argument("--job-tag", help = "Collect URLs for jobs reporting this job tag (default = collect all gstlal_inspiral URLs).")
+	parser.add_argument("--num-threads", type = int, default = 16, help = "Number of threads to use concurrently")
+
+	args = parser.parse_args()
+
+	return args
+
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+def get_data_from_route((job, job_tag, routes, basedir)):
+        with open(os.path.join(job_tag, "%s_registry.txt" % job)) as f:
+                url = f.readline().strip()
+        for route in routes:
+                logging.info("processing job %s for route %s" % (job, route))
+                data = aggregator.get_url(url, route)
+		if "ram_history" in route:
+			jobtime, jobdata = aggregator.get_url(url, route)
+		if "strain_add_drop" in route:
+			jobtime, jobdata = aggregator.get_url(url, route)[0:2]
+		if "state_vector_on_off_gap" in route:
+			jobtime, ontime, offtime = aggregator.get_url(url, route)[0:3]
+			print ontime.shape, offtime.shape
+			jobdata = ontime + offtime
+		path = "%s/by_job/%s" % (basedir, job)
+		fname = aggregator.create_new_dataset(path, route.replace("/","_"), timedata = jobtime, data = jobdata, tmp = True)
+		shutil.move(fname, fname.replace(".tmp", ""))
+
+if __name__ == '__main__':
+
+	options = parse_command_line()
+	jobs = ["%04d" % b for b in numpy.arange(0, options.num_jobs)]
+	routes = ["ram_history", "H1/strain_add_drop", "L1/strain_add_drop", "H1/state_vector_on_off_gap", "L1/state_vector_on_off_gap"]
+
+	for job in jobs: aggregator.makedir("%s/by_job/%s" % (options.base_dir, job))
+
+	logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
+
+	pool = Pool(options.num_threads)
+	prevdataspan = set()
+	while True:
+		logging.info("sleeping")
+		time.sleep(options.dump_period)
+		mapargs = [(job, options.job_tag, routes, options.base_dir) for job in jobs]
+		map(get_data_from_route, mapargs)
+
+	sys.exit(1)
