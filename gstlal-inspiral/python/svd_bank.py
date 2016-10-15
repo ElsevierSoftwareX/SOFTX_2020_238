@@ -277,6 +277,8 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 		# put the bank table into the output document
 		new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
 		for row in bank.sngl_inspiral_table[clipleft:clipright]:
+			# FIXME need a proper id column
+			row.Gamma1 = int(bank.bank_id.split("_")[0])
 			new_sngl_table.append(row)
 
 		# put the possibly clipped table into the file
