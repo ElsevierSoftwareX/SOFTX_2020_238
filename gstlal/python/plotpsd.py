@@ -36,12 +36,12 @@ import matplotlib
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
-from gstlal.plotutil import golden_ratio
+from gstlal import plotutil
 from glue.ligolw import lsctables
 from gstlal.reference_psd import horizon_distance
 
 
-def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
+def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 	"""!
 	Produces a matplotlib figure of PSDs. 
 
@@ -52,10 +52,6 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 	of the metadata as would be uploaded to gracedb.  This is optional.
 
 	@param plot_width How wide to make the plot in pixels
-
-	@param colours A misspelling of the word "colors" here used to indictate
-	the color of the PSD trace for each instrument
-	
 	"""
 
 	if coinc_xmldoc is not None:
@@ -79,7 +75,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 
 	fig = figure.Figure()
 	FigureCanvas(fig)
-	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / golden_ratio)) / float(fig.get_dpi()))
+	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / plotutil.golden_ratio)) / float(fig.get_dpi()))
 	axes = fig.gca()
 	axes.grid(True)
 
@@ -94,12 +90,12 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640, colours = {"H1": "r",
 		min_fs.append(f[0])
 		max_fs.append(f[-1])
 		#FIXME: Horizon distance stopped at 0.9 max frequency due to low pass filter messing up the end of the PSD
-		axes.loglog(f, psd_data, color = colours[instrument], alpha = 0.8, label = "%s (%.4g Mpc Horizon)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f))))
+		axes.loglog(f, psd_data, color = plotutil.colour_from_instruments([instrument]), alpha = 0.8, label = "%s (%.4g Mpc Horizon)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f))))
 		if instrument in sngl_inspirals:
 			logging.info("found %s event with SNR %g" % (instrument, sngl_inspirals[instrument].snr))
 			inspiral_spectrum = [None, None]
 			horizon_distance(psd, mass1, mass2, sngl_inspirals[instrument].snr, 10, inspiral_spectrum = inspiral_spectrum)
-			axes.loglog(inspiral_spectrum[0], inspiral_spectrum[1], color = colours[instrument], dashes = (5, 2), alpha = 0.8, label = "SNR = %.3g" % sngl_inspirals[instrument].snr)
+			axes.loglog(inspiral_spectrum[0], inspiral_spectrum[1], color = plotutil.colour_from_instruments([instrument]), dashes = (5, 2), alpha = 0.8, label = "SNR = %.3g" % sngl_inspirals[instrument].snr)
 		# record the minimum from within the rage 10 Hz -- 1 kHz
 		min_psds.append(psd_data[int((10.0 - psd.f0) / psd.deltaF) : int((1000 - psd.f0) / psd.deltaF)].min())
 		# record the maximum from within the rage 1 Hz -- 1 kHz
