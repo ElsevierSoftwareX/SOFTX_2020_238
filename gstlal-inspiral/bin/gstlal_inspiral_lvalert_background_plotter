@@ -73,16 +73,6 @@ def parse_command_line():
 
 	options, gid_list = parser.parse_args()
 
-	if not gid_list:
-		lvalert_data = json.loads(sys.stdin.read())
-		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
-		logging.info("lvalert data: %s" % repr(lvalert_data))
-		filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
-		if filename not in (u"ranking_data.xml.gz",):
-			logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
-			sys.exit()
-		gid_list = [str(lvalert_data["uid"])]
-
 	return options, gid_list
 
 
@@ -149,6 +139,17 @@ def plot_snrchisq(instrument, coinc_param_distributions, plot_type, max_snr, snr
 
 
 options, gid_list = parse_command_line()
+
+
+if not gid_list:
+	lvalert_data = json.loads(sys.stdin.read())
+	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+	logging.info("lvalert data: %s" % repr(lvalert_data))
+	filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+	if filename not in (u"ranking_data.xml.gz",):
+		logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
+		sys.exit()
+	gid_list = [str(lvalert_data["uid"])]
 
 
 #
