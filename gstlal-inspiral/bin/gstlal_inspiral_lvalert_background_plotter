@@ -73,6 +73,13 @@ def parse_command_line():
 
 	options, gid_list = parser.parse_args()
 
+	# can only call basicConfig once (otherwise need to switch to more
+	# complex logging configuration)
+	if options.verbose:
+		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+	else:
+		logging.basicConfig(format = "%(asctime)s:%(message)s")
+
 	return options, gid_list
 
 
@@ -199,7 +206,9 @@ for gid in gid_list:
 			if not options.no_upload:
 				lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
 			if options.output_path is not None:
-				fig.savefig(os.path.join(options.output_path, filename))
+				filename = os.path.join(options.output_path, filename)
+				logging.info("writing %s ..." % filename)
+				fig.savefig(filename)
 
 
 	# function returns None if it can't make a plot, e.g., if there are
@@ -213,7 +222,9 @@ for gid in gid_list:
 		if not options.no_upload:
 			lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "%s SNR PDF" % ", ".join(sorted(sngl_inspirals.keys())), tagname = "background")
 		if options.output_path is not None:
-			fig.savefig(os.path.join(options.output_path, filename))
+			filename = os.path.join(options.output_path, filename)
+			logging.info("writing %s ..." % filename)
+			fig.savefig(filename)
 
 
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
@@ -226,7 +237,9 @@ for gid in gid_list:
 	if not options.no_upload:
 		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
 	if options.output_path is not None:
-		fig.savefig(os.path.join(options.output_path, filename))
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
 
 
 	fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_inspiral.end - 14400., coinc_inspiral.end), tref = coinc_inspiral.end)
@@ -234,4 +247,6 @@ for gid in gid_list:
 	if not options.no_upload:
 		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
 	if options.output_path is not None:
-		fig.savefig(os.path.join(options.output_path, filename))
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
