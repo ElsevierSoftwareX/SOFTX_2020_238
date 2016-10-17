@@ -234,3 +234,13 @@ for gid in gid_list:
 		filename = os.path.join(options.output_path, filename)
 		logging.info("writing %s ..." % filename)
 		fig.savefig(filename)
+
+
+	fig = plotfar.plot_rates(coinc_param_distributions)
+	filename = "%s_rates.png" % gid
+	if not options.no_upload:
+		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
+	if options.output_path is not None:
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
