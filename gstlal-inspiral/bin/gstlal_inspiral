@@ -121,7 +121,7 @@
 # ### Command line interface
 #
 #	+ `--local-frame-caching`
-#	+ `--psd-fft-length` [s] (int): FFT length, default 16s.
+#	+ `--psd-fft-length` [s] (int): The length of the FFT used to used to whiten the data (default 32 s).
 #	+ `--veto-segments-file` [filename]: Set the name of the LIGO light-weight XML file from which to load vetoes (optional).
 #	+ `--veto-segments-name` [name]: Set the name of the segments to extract from the segment tables and use as the veto list, default = "vetoes".
 #	+ `--nxydump-segment` [start:stop]: Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time."
@@ -266,7 +266,7 @@ def parse_command_line():
 	# local caching to help with I/O for offline running
 	parser.add_option("--local-frame-caching", action = "store_true", help = "blah")
 
-	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+	parser.add_option("--psd-fft-length", metavar = "s", default = 32, type = "int", help = "The length of the FFT used to used to whiten the data (default 32 s).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
