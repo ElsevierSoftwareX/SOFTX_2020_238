@@ -138,6 +138,7 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 		axes.set_title(r"$\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise})$ in %s" % instrument)
 	else:
 		raise ValueError(tag)
+	fig.tight_layout(pad = .8)
 	return fig
 
 
@@ -274,6 +275,7 @@ def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, max_snr, ifo_snr 
 	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
 	axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
 	axes.set_title(r"$\ln P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
+	fig.tight_layout(pad = .8)
 
 	return fig
 	
