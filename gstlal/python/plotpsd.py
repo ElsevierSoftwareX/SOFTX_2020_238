@@ -77,7 +77,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 	FigureCanvas(fig)
 	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / plotutil.golden_ratio)) / float(fig.get_dpi()))
 	axes = fig.gca()
-	axes.grid(True)
+	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
 
 	min_psds, max_psds = [], []
 	min_fs, max_fs = [], []
