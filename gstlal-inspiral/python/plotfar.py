@@ -33,6 +33,14 @@ import matplotlib
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 300,
+	"savefig.dpi": 300,
 	"text.usetex": True
 })
 import numpy

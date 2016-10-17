@@ -55,14 +55,14 @@ from ligo.gracedb import rest as gracedb
 
 
 plotpsd.matplotlib.rcParams.update({
-	"font.size": 8.0,
+	"font.size": 10.0,
 	"axes.titlesize": 10.0,
 	"axes.labelsize": 10.0,
 	"xtick.labelsize": 8.0,
 	"ytick.labelsize": 8.0,
 	"legend.fontsize": 8.0,
-	"figure.dpi": 175,
-	"savefig.dpi": 175,
+	"figure.dpi": 300,
+	"savefig.dpi": 300,
 	"text.usetex": True,
 	"path.simplify": True
 })
@@ -146,7 +146,7 @@ for graceid in graceids:
 	psds = get_psds(gracedb_client, graceid, ignore_404 = options.skip_404)
 	if psds is None:
 		continue
-	fig = plotpsd.plot_psds(psds, lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid), plot_width = 1280)
+	fig = plotpsd.plot_psds(psds, lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid), plot_width = 2400)
 	try:
 		fig.tight_layout()
 	except AttributeError:

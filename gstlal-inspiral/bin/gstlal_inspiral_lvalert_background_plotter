@@ -36,8 +36,6 @@ import os
 import sys
 
 os.environ["MPLCONFIGDIR"] = "/tmp"
-import matplotlib
-matplotlib.use('Agg')
 
 
 from glue.ligolw import lsctables
