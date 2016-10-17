@@ -73,6 +73,11 @@ def parse_command_line():
 
 	options, gid_list = parser.parse_args()
 
+	if not gid_list:
+		# FIXME:  lvalert_listen doesn't allow command-line
+		# options, enable logging for online analysis
+		options.verbose = True
+
 	# can only call basicConfig once (otherwise need to switch to more
 	# complex logging configuration)
 	if options.verbose:
