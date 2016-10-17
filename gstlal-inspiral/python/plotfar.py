@@ -338,23 +338,29 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios
 	fig.tight_layout(pad = .8)
 	return fig
 
-def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo,thi), tbins, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
-	tlo, thi = float(tlo), float(thi)
-
-	horizon_history = coinc_param_distributions.horizon_history
-
+def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo, thi), masses = (1.4, 1.4), tref = None):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
-	t = numpy.linspace(tlo, thi, tbins)
-	yhi = 0
-	for ifo in horizon_history.keys():
-		y = numpy.array([horizon_history[ifo][seg] for seg in t])
-		axes.plot(t, y, color = colours[ifo], label = '%s' % ifo)
-		yhi = max(y.max()+5., yhi)
-	axes.set_ylim((0,yhi))
-	axes.set_xlim((round(tlo), round(thi)))
+	axes.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1800.))
+	axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5.))
+	axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50.))
+
+	yhi = 1.
+	for instrument, history in coinc_param_distributions.horizon_history.items():
+		x = numpy.array([t for t in history.keys() if tlo <= t < thi])
+		y = list(map(history.__getitem__, x))
+		if tref is not None:
+			x -= float(tref)
+		axes.plot(x, y, color = plotutil.colour_from_instruments([instrument]), label = '%s' % instrument)
+		yhi = max(max(y), yhi)
+	if tref is not None:
+		axes.set_xlabel('Time From GPS %.2f (s)' % float(tref))
+	else:
+		axes.set_xlim((math.floor(tlo), math.ceil(thi)))
+		axes.set_xlabel('GPS Time (s)')
+	axes.set_ylim((0., math.ceil(yhi / 10.) * 10.))
 	axes.set_ylabel('Horizon Distance (Mpc)')
-	axes.set_xlabel('GPS Time (s)')
-	axes.set_title('Horizon Distance vs.\ Time')
+	axes.set_title(r'Horizon Distance for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ vs.\ Time' % masses)
+	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
 	axes.legend(loc = "lower left")
 	fig.tight_layout(pad = .8)
 	return fig

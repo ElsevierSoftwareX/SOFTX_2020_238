@@ -228,7 +228,7 @@ for gid in gid_list:
 		fig.savefig(os.path.join(options.output_path, filename))
 
 
-	fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_inspiral.end - 14400., coinc_inspiral.end), 241)
+	fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_inspiral.end - 14400., coinc_inspiral.end), tref = coinc_inspiral.end)
 	filename = "%s_horizon_distances.png" % gid
 	if not options.no_upload:
 		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
