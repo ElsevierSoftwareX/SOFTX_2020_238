@@ -1,3 +1,9 @@
+gstlal-ugly (1.0.0-1) unstable; urgency=low
+
+  * 1.0.0 release, ER10
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Tue, 18 Sep 2016 18:52:05 +0900
+
 gstlal-ugly (0.99.2-1) unstable; urgency=low
 
   * accumulated ER9 fixes
