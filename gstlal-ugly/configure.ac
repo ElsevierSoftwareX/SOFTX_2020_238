@@ -98,6 +98,10 @@ GSTLAL_DOXYGEN([$MIN_DOXYGEN_VERSION])
 AM_CONDITIONAL([COND_DOXYGEN], [test "x$HAVE_DOXYGEN" == "xyes"])
 AC_SUBST([MIN_DOXYGEN_VERSION])
 
+MIN_GTK_DOC_VERSION="1.11"
+GTK_DOC_CHECK(["$MIN_GTK_DOC_VERSION"], [--flavour no-tmpl])
+AC_SUBST([MIN_GTK_DOC_VERSION])
+
 
 #
 # Check for Python
@@ -243,6 +247,26 @@ AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE} >= ${MIN_GSTREAMER_AUDIO_VERSION}])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
+
+
+#
+# Check for GObject Introspection
+#
+
+
+AC_SUBST([MIN_GOBJECT_INTROSPECTION_VERSION], [1.30.0])
+GOBJECT_INTROSPECTION_CHECK([${MIN_GOBJECT_INTROSPECTION_VERSION}])
+AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
+AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
+AS_IF([test "x$found_introspection" = "xyes"], [
+	AC_SUBST([girdir], ["\${datadir}/gir-1.0"])
+	AC_SUBST([typelibdir], ["\${libdir}/girepository-1.0"])
+	AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gobject introspection typelib search path, you might need to add the directory
+
+	$typelibdir
+
+to your GI_TYPELIB_PATH environment variable.])
+])
 
 
 #
