@@ -67,11 +67,13 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 		if mass1 < mass2:
 			mass1, mass2 = mass2, mass1
 		end_time = coinc_inspiral.end
+		on_instruments = coinc_inspiral.ifos
 		logging.info("%g Msun -- %g Msun event in %s at %.2f GPS" % (mass1, mass2, ", ".join(sorted(sngl_inspirals)), float(end_time)))
 	else:
 		# Use the cannonical BNS binary for horizon distance if an event wasn't given
 		sngl_inspirals = {}
 		mass1, mass2, end_time = 1.4, 1.4, None
+		on_instruments = set(psds)
 
 	fig = figure.Figure()
 	FigureCanvas(fig)
@@ -89,8 +91,17 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 		logging.info("found PSD for %s spanning [%g Hz, %g Hz]" % (instrument, f[0], f[-1]))
 		min_fs.append(f[0])
 		max_fs.append(f[-1])
-		#FIXME: Horizon distance stopped at 0.9 max frequency due to low pass filter messing up the end of the PSD
-		axes.loglog(f, psd_data, color = plotutil.colour_from_instruments([instrument]), alpha = 0.8, label = "%s (%.4g Mpc Horizon)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f))))
+		# FIXME: Horizon distance stopped at 0.9 max frequency due
+		# to low pass filter messing up the end of the PSD
+		if instrument in on_instruments:
+			alpha = 0.8
+			linestyle = "-"
+			label = "%s (%.4g Mpc Horizon)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f)))
+		else:
+			alpha = 0.6
+			linestyle = ":"
+			label = "%s (off, last seen at %.4g Mpc Horizon)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f)))
+		axes.loglog(f, psd_data, color = plotutil.colour_from_instruments([instrument]), alpha = alpha, linestyle = linestyle, label = label)
 		if instrument in sngl_inspirals:
 			logging.info("found %s event with SNR %g" % (instrument, sngl_inspirals[instrument].snr))
 			inspiral_spectrum = [None, None]
