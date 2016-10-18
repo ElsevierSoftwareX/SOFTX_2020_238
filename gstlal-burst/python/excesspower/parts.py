@@ -56,7 +56,7 @@ from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
 from glue.lal import Cache, CacheEntry
 
 from pylal import snglcluster
-from lalburst import ligolw_bucluster
+from pylal import ligolw_bucluster
 
 from pylal import datatypes as laltypes
 from pylal.xlal.datatypes.snglburst import SnglBurst

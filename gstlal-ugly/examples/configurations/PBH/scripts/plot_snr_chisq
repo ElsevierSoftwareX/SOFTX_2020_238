@@ -7,7 +7,7 @@ matplotlib.use('Agg')
 import pylab
 import numpy
 from glue.ligolw import utils
-from lalburst import ligolw_burca_tailor
+from pylal import ligolw_burca_tailor
 
 coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([sys.argv[1]], u"gstlal_inspiral_likelihood", verbose = True)
 #coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([sys.argv[1]], verbose = True)

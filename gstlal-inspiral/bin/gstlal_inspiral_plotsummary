@@ -60,7 +60,7 @@ from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.lal import CacheEntry
 from pylal import git_version
-from lalburst import SimBurstUtils
+from pylal import SimBurstUtils
 from gstlal import far
 from gstlal import inspiral_pipe
 
