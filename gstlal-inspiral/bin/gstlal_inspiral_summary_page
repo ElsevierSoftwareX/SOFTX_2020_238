@@ -1,41 +1,11 @@
-#!/usr/bin/env python
-#
-# Copyright (C) 2011 Chad Hanna
-#
-# This program is free software; you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation; either version 2 of the License, or (at your
-# option) any later version.
-#
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
-# Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#!/usr/bin/python
 
-## @file
-# This program makes a summary web page of a gstlal inspiral analysis.
-
-import sys, os, socket, re
-import glob, math, shutil
-import numpy
-from glue import cbcwebpage
-from glue import lal
-from glue import segments
+import sys, os, glob
+import webpage
 from optparse import OptionParser
 
-from gstlal import inspiral_pipe
-from pylal import git_version
-__author__ = "Chad Hanna <channa@ligo.caltech.edu>"
-__version__ = "git id %s" % git_version.id
-__date__ = git_version.date
-
-
 def parse_command_line():
-	parser = OptionParser(version = git_version.verbose_msg, usage = "%prog [options] [file ...]", description = "%prog summary web page")
+	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog summary web page")
 	parser.add_option("--webserver-dir", help = "Set the directory for the webserver.  Required.  Example /archive/home/channa/public_html/highmass_months_23-24_summary_page")
 	parser.add_option("--open-box", action = "store_true", help = "Produce open box page")
 	parser.add_option("--output-user-tag", action = "append", metavar = "name", help = "Set the basename for image search")
@@ -45,393 +15,290 @@ def parse_command_line():
 	opts, filenames = parser.parse_args()
 	return opts, filenames
 
-# PARSE THE COMMAND LINE
+
+#
+# Setup
+#
+
+
 opts, files = parse_command_line()
-
-# INITIALIZE THE PAGE OBJECT
-page = cbcwebpage.cbcpage(title=opts.title)
-
-# add external frames
-for f in files:
-	page.add_external_frame(f, f)
-
-# WELCOME MESSAGE PAGE
-page.front = "<big>Welcome</big>"
-
-### Summary info. 
-page.add_subpage("summary", "Summary information", "Summary information")
-page.subpages["summary"].div("""
-Summary information: This page provides a summary of the analysis, including the parameters specified in generating the workflow, where the analysis was run, number of triggers, analyzed live time and horizon distance.
-""")
-
-# Add links to Makefiles that were used to generate the analysis.  It
-# is assumed that the relevant Makefiles have already been copied over
-# to the destinatation web-server directory.
-page.subpages["summary"].add_section("Pipeline Configuration","Analysis Configuration")
-makefiles = glob.glob(opts.webserver_dir + "/Makefile*")
-page.subpages["summary"].sections["Pipeline Configuration"].add("<table><tr><td>Makefiles</td></tr>")
-if len(makefiles) == 0:
-	page.subpages["summary"].sections["Pipeline Configuration"].add("<tr><td>None found!</td></tr>")
-for f in makefiles:
-	f = f.split("/")[-1]
-	page.subpages["summary"].sections["Pipeline Configuration"].add("<tr><td><a href=%s>%s</a></td></tr>" % (f,f))
-page.subpages["summary"].sections["Pipeline Configuration"].add("</table>")
-
-# cluster and run directory
-page.subpages["summary"].sections["Pipeline Configuration"].add("""
-<table>
-    <tr><td colspan=2>Analysis Location</td></tr>
-    <tr><td>Cluster</td><td> %s </td></tr>
-    <tr><td>Run directory</td><td> %s </td></tr>
-</table>
-""" % (socket.getfqdn(), os.getcwd()))
-
-# code versions
-page.subpages["summary"].sections["Pipeline Configuration"].add("""
-<table>
-    <tr><td>Code</td> <td>Version</td></tr>
-    <tr><td>%s</td><td> %s </td></tr>
-</table>
-""" % (os.path.basename(__file__), __version__))
-
-# number of triggers
-page.subpages["summary"].add_section("Search Information", "Search Information")
-tab, name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%snum_trigs_table.txt' % opts.output_user_tag[0]))
-if tab:
-	page.subpages["summary"].sections["Search Information"].add_table(tab[0], "Coinc events summary", "This table gives the number of coincident events")
-
-# livetime
-tab, name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%slive_time_table.txt' % opts.output_user_tag[0]))
-if tab:
-	page.subpages["summary"].sections["Search Information"].add_table(tab[0], "Live time summary", "This table gives the summary of the live time")
-
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*HORIZON*.png'))
-page.subpages["summary"].sections["Search Information"].add_table(imgtable, "Horizon Distance", "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form. ")
-
-### INJ PARAM PAGE ###
-page.add_subpage("injection_params","Injection Parameters", "Injection Parameters")
-
-page.subpages["injection_params"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-Injections are the addition of simulated signals into the gravitational wave strain data.  They are useful 
-for diagnosing the pipeline and measuring the sensitivity.  Care is taken to ensure that the input 
-distribution is sensible.  The remaining sections describe the input distributions for the injections.  
-They are not necessarily what is analyzed since the analyzed segments are not used for determining the
-injection sets (i.e. injections may be scheduled for times when a detector is not even functioning).
-<br><br>The following plots are typically produced by injection waveform type.  Several injection runs
-of the same waveform (with different random seeds) are often done.  Here all runs of the same waveform type
-are shown together.
-""")
-
-page.subpages["injection_params"].add_section("m1_m2","Injected Parameters m1 and m2")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_m1_m2*.png'))
-page.subpages["injection_params"].sections["m1_m2"].add_table(imgtable, "Injected mass1, mass2", "Above are the injected mass parameters for the simulations done.  Typically injections are done uniformally in component mass unless the waveform approximant cannot support certain mass ratios.")
-
-page.subpages["injection_params"].add_section("time_dist","Injected Parameters time and distance")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_time_distance*.png'))
-page.subpages["injection_params"].sections["time_dist"].add_table(imgtable, "Injection time and distance", "Unless doing a directed search injections are uniform in time.  Although the correct distance distribution would be uniform in volume typically logarithmic injections are done")
-
-page.subpages["injection_params"].add_section("ra_dec","Injected Parameters RA and DEC")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_ra_dec*.png'))
-page.subpages["injection_params"].sections["ra_dec"].add_table(imgtable, "Injection RA and DEC", "Unless doing a directed search injections are uniform on the sky.")
-
-page.subpages["injection_params"].add_section("inc_pol","Injected Parameters inclination and polarization")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_inc_pol*.png'))
-page.subpages["injection_params"].sections["inc_pol"].add_table(imgtable, "Injection Inclination and polarization", "Unless doing a directed search injections are uniform in sin(inclination) and polarizations.")
-
-page.subpages["injection_params"].add_section("spin","Injected Parameters Z component spin")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_spin1z_spin2z*.png'))
-page.subpages["injection_params"].sections["spin"].add_table(imgtable, "Injection spin 1z and spin2z", "The Z component spins of the injection set.  Often injections are done without spin, so don't be surprised if these are zero.")
+opts.glob_path = "plots"
+# Setup an page and navigation bar
+thispage = webpage.page()
+nav = webpage.tabs()
 
 
-### INJ ACC PAGE ###
-page.add_subpage("injection_params_acc","Injection Parameters Accuracy", "Injection Accuracy")
-page.subpages["injection_params_acc"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-The accuracy of recovered parameters aids at diagnosing the performance of the pipeline as well as
-hinting at the possibility of measuring certain parameters.  Mass parameters for the low mass search 
-are often recovered better than mass parameters for the high mass search.  
-""")
+#
+# Add the page tabs first
+#
 
-page.subpages["injection_params_acc"].add_section("mchirp_param_acc","Mchirp Parameter Accuracy")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_mchirp_acc_frac_scatter*.png'))
-page.subpages["injection_params_acc"].sections["mchirp_param_acc"].add_table(imgtable, "Mchirp Accuracy", "Accuracy of chirp mass.")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_mchirp_acc_frac_hist*.png'))
-page.subpages["injection_params_acc"].sections["mchirp_param_acc"].add_table(imgtable, "Mchirp Accuracy", "Accuracy of chirp mass.")
 
-page.subpages["injection_params_acc"].add_section("eta_param_acc","Eta Parameter Accuracy")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_eta_acc_frac_scatter*.png'))
-page.subpages["injection_params_acc"].sections["eta_param_acc"].add_table(imgtable, "Eta Accuracy", "Accuracy of eta")
+summary = webpage.tab("summary", "Summary information", "Summary information")
+injparams = webpage.tab("injection_params","Injection Parameters", "Injection Parameters")
+injacc = webpage.tab("injection_params_acc","Injection Parameters Accuracy", "Injection Accuracy")
+missed_found = webpage.tab("missed_found","Missed Found", "Missed Found")
+sens = webpage.tab("search_sensitivity","Search Sensitivity", "Search Sensitivity")
+back = webpage.tab("background","Background", "Background")
+chisq = webpage.tab("chisq","Chi-squared", "Chi-squared")
+money = webpage.tab("money","Money Plots", "Money Plots")
 
-page.subpages["injection_params_acc"].add_section("mtotal_param_acc","Total Mass Parameter Accuracy")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_mtotal_acc_frac_*.png'))
-page.subpages["injection_params_acc"].sections["mtotal_param_acc"].add_table(imgtable, "Total Mass Accuracy", "Accuracy of total mass")
 
-page.subpages["injection_params_acc"].add_section("time_param_acc","Time Parameter Accuracy")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_t_acc_scatter*.png'))
+#
+# add the sections to the nav bar and the nav bar to the page
+#
 
-page.subpages["injection_params_acc"].sections["time_param_acc"].add_table(imgtable, "Time Accuracy", "Accuracy of time")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_t_acc_hist*.png'))
-page.subpages["injection_params_acc"].sections["time_param_acc"].add_table(imgtable, "Time Accuracy", "Accuracy of time")
 
-page.subpages["injection_params_acc"].add_section("deff_param_acc","Effective Distance Accuracy")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_deff_acc_frac_scatter*.png'))
-page.subpages["injection_params_acc"].sections["deff_param_acc"].add_table(imgtable, "Effective Distance Accuracy", "Accuracy of effective distance")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_deff_acc_frac_hist*.png'))
-page.subpages["injection_params_acc"].sections["deff_param_acc"].add_table(imgtable, "Effective Distance Accuracy", "Accuracy of effective distance")
+nav+=[summary, injparams, injacc, missed_found, sens, back, chisq, money]
+thispage+=nav
 
-page.subpages["injection_params_acc"].add_section("spin_param_acc","Effective Spin Accuracy")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_chi_acc_scatter*.png'))
-page.subpages["injection_params_acc"].sections["spin_param_acc"].add_table(imgtable, "Effective Spin Accuracy", "Accuracy of mass-weighted spin")
 
-page.subpages["injection_params_acc"].add_section("snr_recovery","SNR Recovery")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*2_snr_rec_scatter*.png'))
-page.subpages["injection_params_acc"].sections["snr_recovery"].add_table(imgtable, "SNR Recovery", "Injected expected SNR vs recovered SNR")
+#
+# Add summary page content to the summary page tab
+#
 
-### MISSED FOUND ###
-page.add_subpage("missed_found","Missed Found", "Missed Found")
-#page.subpages["missed_found"].add_section("overview","Missed found injections overview")
-page.subpages["missed_found"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-Measuring the found and missed injections as a function of various parameters aids in diagnosing the 
-pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in
-this section show the missed and found injections as a for the various IFO times for coincident triggers.
-We allow double coincident events so some categories can have multiple types of found injections (for
- example H1L1 and H1H2L1 triggers in H1H2L1 time).  Because of ambiguity concerning the time of an 
-injection and the injection window it is occasionally possible to find an injection in more detectors
-than what the "time" refers to.  For example, an injection's geocentric end time might be in H1L1 time
-but that might occur near a boundary where H2 was also on.  Thus one could find an H1L1 injection in
-H1H2L1 time.
-""")
 
-page.subpages["missed_found"].add_section("found_missed_mchirp","Found / Missed Chirp Mass")
-page.subpages["missed_found"].add_section("found_missed_mtotal","Found / Missed Total Mass")
-page.subpages["missed_found"].add_section("found_missed_eta","Found / Missed Eta")
-page.subpages["missed_found"].add_section("found_missed_time","Found / Missed Time")
-page.subpages["missed_found"].add_section("found_missed_chi","Found / Missed Spin")
-page.subpages["missed_found"].add_section("found_missed_expsnr","Found / Missed Expected SNR")
-page.subpages["missed_found"].add_section("found_missed_table","Missed Table")
+summary_about = webpage.elem("p", ["Summary information: This page provides a summary of theanalysis, including the parameters specified in generating the workflow, where the analysis was run, number of triggers, analyzed live time and horizon distance."])
+summary_config = webpage.elem("details", [webpage.elem("summary", ["Analysis Configuration"])])
+summary_config += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
+
+summary_div = summary([summary_about, summary_config])
+
+
+#
+# Add injection parameter content
+#
+
+
+inj_params_about = webpage.elem("p", ["Injections are the addition of simulated signals into the gravitational wave strain data.  They are useful for diagnosing the pipeline and measuring the sensitivity.  Care is taken to ensure that the input distribution is sensible.  The remaining sections describe the input distributions for the injections.  They are not necessarily what is analyzed since the analyzed segments are not used for determining the injection sets (i.e. injections may be scheduled for times when a detector is not even functioning).  <br><br>The following plots are typically produced by injection waveform type.  Several injection runs of the same waveform (with different random seeds) are often done.  Here all runs of the same waveform type are shown together."])
+
+inj_params_m1m2 = webpage.section("Injected Parameters (m1 and m2)")
+inj_params_m1m2 += webpage.image_glob('%s/*6_sim_dist_m1_m2*.png' % opts.glob_path, "Above are the injected mass parameters for the simulations done.  Typically injections are done uniformally in component mass unless the waveform approximant cannot support certain mass ratios.")
+
+inj_params_time_dist = webpage.section("Injected Parameters time and distance")
+inj_params_time_dist += webpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_time_distance*.png'), "Unless doing a directed search injections are uniform in time.  Although the correct distance distribution would be uniform in volume typically logarithmic injections are done")
+
+inj_params_ra_dec = webpage.section("Injected Parameters RA and DEC")
+inj_params_ra_dec += webpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_ra_dec*.png'), "Unless doing a directed search injections are uniform on the sky.")
+
+inj_params_inc_pol = webpage.section("Injected Parameters inclination and polarization")
+inj_params_inc_pol += webpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_inc_pol*.png'), "Unless doing a directed search injections are uniform in sin(inclination) and polarizations.")
+
+inj_params_spin1z_spin2z = webpage.section("Injected Parameters Z component spin")
+inj_params_spin1z_spin2z += webpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_spin1z_spin2z*.png'), "The Z component spins of the injection set.  Often injections are done without spin, so don't be surprised if these are zero.")
+
+inj_params_div = injparams([inj_params_about, inj_params_m1m2, inj_params_time_dist, inj_params_ra_dec, inj_params_inc_pol, inj_params_spin1z_spin2z])
+
+
+#
+# Add injection accuracy content
+#
+
+
+inj_acc_about = webpage.elem("p", ["The accuracy of recovered parameters aids at diagnosing the performance of the pipeline as well as hinting at the possibility of measuring certain parameters.  Mass parameters for the low mass search are often recovered better than mass parameters for the high mass search."])
+
+inj_acc_mchirp = webpage.section("Mchirp Parameter Accuracy")
+inj_acc_mchirp += webpage.image_glob(os.path.join(opts.glob_path, '*2_mchirp_acc_frac_*.png'), "Accuracy of chirp mass.")
+
+inj_acc_eta = webpage.section("Eta Parameter Accuracy")
+inj_acc_eta += webpage.image_glob(os.path.join(opts.glob_path, '*2_eta_acc_frac_*.png'), "Accuracy of eta")
+
+inj_acc_mtotal = webpage.section("Total Mass Parameter Accuracy")
+inj_acc_mtotal += webpage.image_glob(os.path.join(opts.glob_path, '*2_mtotal_acc_frac_*.png'), "Accuracy of total mass")
+
+inj_acc_time = webpage.section("Time Parameter Accuracy")
+inj_acc_time += webpage.image_glob(os.path.join(opts.glob_path, '*2_t_acc_*.png'), "Accuracy of time")
+
+inj_acc_eff_dist = webpage.section("Effective Distance Accuracy")
+inj_acc_eff_dist += webpage.image_glob(os.path.join(opts.glob_path, '*2_deff_acc_frac_*.png'), "Accuracy of effective distance")
+
+inj_acc_spin = webpage.section("Effective Spin Accuracy")
+inj_acc_spin += webpage.image_glob(os.path.join(opts.glob_path, '*2_chi_acc_scatter*.png'), "Accuracy of mass-weighted spin")
+
+inj_acc_snr = webpage.section("SNR Recovery")
+inj_acc_snr += webpage.image_glob(os.path.join(opts.glob_path, '*2_snr_rec_scatter*.png'), "Injected expected SNR vs recovered SNR")
+
+inj_acc_div = injacc([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_eff_dist, inj_acc_spin, inj_acc_snr])
+
+
+#
+# Add injection missed / found content
+#
+
+
+missed_found_about = webpage.elem("p", ["""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections as a for the various IFO times for coincident triggers. We allow double coincident events so some categories can have multiple types of found injections (for  example H1L1 and H1H2L1 triggers in H1H2L1 time).  Because of ambiguity concerning the time of an injection and the injection window it is occasionally possible to find an injection in more detectors than what the "time" refers to.  For example, an injection's geocentric end time might be in H1L1 time but that might occur near a boundary where H2 was also on.  Thus one could find an H1L1 injection in H1H2L1 time."""])
+
+fm_tab = webpage.section("Found / Missed Summary Table")
+fm_mc = webpage.section("Found / Missed Chirp Mass")
+fm_mt = webpage.section("Found / Missed Total Mass")
+fm_eta = webpage.section("Found / Missed Eta")
+fm_time = webpage.section("Found / Missed Time")
+fm_spin = webpage.section("Found / Missed Spin")
+fm_snr = webpage.section("Found / Missed Expected SNR")
+fm_mtab = webpage.section("Missed Table")
 
 for tag in opts.output_user_tag:
-	tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%sinjection_summary.txt' % tag))
-	page.subpages["missed_found"].add_table(tab[0], "Injection Summary Table: %s" % tag, "Summary of missed and found injections broken up by detector time")
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sinjection_summary.json' % tag), "%sinjection_summary" % tag))
+	fm_tab += [webpage.elem("p", ["Summary of missed and found injections broken up by detector time for %s" % tag])]
+	fm_tab += [webpage.elem("div", [], "id=%sinjection_summary" % tag)]
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_d_vs_mchirp_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_mchirp"].add_table(imgtable, "Missed Found Distance vs Mchirp: %s" % tag, "Distance of found and missed injections as a function of chirp mass")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mchirp_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_mchirp"].add_table(imgtable, "Missed Found Effective Distance vs Mchirp: %s" % tag, "Effective distance of found and missed injections as a function of chirp mass")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_mchirp_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_mchirp"].add_table(imgtable, "Missed Found Chirp Distance vs Mchirp: %s" % tag, "Chirp distance of found and missed injections as a function of chirp mass.  For low mass systems the chirp mass scales out of the expected amplitude.  The chirp distance utilizes this and rescales the distance to be appropriate for a NS-NS binary.  At low total mass the missed/found barrier should be flat on this plot.")
+	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_d_vs_mchirp_*.png' % tag), "Distance of found and missed injections as a function of chirp mass: %s" % tag)
+	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mchirp_*.png' % tag), "Effective distance of found and missed injections as a function of chirp mass: %s" % tag)
+	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_mchirp_*.png' % tag), "Chirp distance of found and missed injections as a function of chirp mass.  For low mass systems the chirp mass scales out of the expected amplitude.  The chirp distance utilizes this and rescales the distance to be appropriate for a NS-NS binary.  At low total mass the missed/found barrier should be flat on this plot: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mtotal_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_mtotal"].add_table(imgtable, "Missed Found Effective Distance vs M total: %s" % tag, "Effective distance of found and missed injections as a function of total mass")
+	fm_mt += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mtotal_*.png' % tag), "Effective distance of found and missed injections as a function of total mass: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_eta_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_eta"].add_table(imgtable, "Missed Found Chirp Distance vs Eta: %s" % tag, "Effective distance of found and missed injections as a function of symmetric mass ratio eta")
+	fm_eta += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_eta_*.png' % tag), "Effective distance of found and missed injections as a function of symmetric mass ratio eta: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_t_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_time"].add_table(imgtable, "Missed Found vs Time: %s" % tag, "Effective distance of found and missed injections as a function of time")
+	fm_time += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_t_*.png' % tag), "Effective distance of found and missed injections as a function of time: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_chi_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_chi"].add_table(imgtable, "Missed Found vs Spin: %s" % tag, "Effective distance of found and missed injections as a function of mass-weighted spin")
+	fm_spin += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_chi_*.png' % tag), "Effective distance of found and missed injections as a function of mass-weighted spin: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_expsnr"].add_table(imgtable, "Missed Found Expected SNR vs Mchirp: %s" % tag, "Expected SNR of found and missed injections as a function of chirp mass.")
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % tag), "Expected SNR of found and missed injections as a function of chirp mass.: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mtotal_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_expsnr"].add_table(imgtable, "Missed Found Expected SNR vs M total: %s" % tag, "Expected SNR of found and missed injections as a function of total mass")
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mtotal_*.png' % tag), "Expected SNR of found and missed injections as a function of total mass: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_eta_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_expsnr"].add_table(imgtable, "Missed Found Expected SNR vs Eta: %s" % tag, "Expected SNR of found and missed injections as a function of symmetric mass ratio eta")
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_eta_*.png' % tag), "Expected SNR of found and missed injections as a function of symmetric mass ratio eta: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_chi_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_expsnr"].add_table(imgtable, "Missed Found Expected SNR vs Chi: %s" % tag, "Expected SNR of found and missed injections as a function of mass-weighted spin")
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_chi_*.png' % tag), "Expected SNR of found and missed injections as a function of mass-weighted spin: %s" % tag)
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag))
-	page.subpages["missed_found"].sections["found_missed_expsnr"].add_table(imgtable, "Missed Found Expected SNR vs Time: %s" % tag, "Expected SNR of found and missed injections as a function of time")
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag), "Expected SNR of found and missed injections as a function of time")
 
-tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%smissed_summary.txt' % opts.output_user_tag[0]))
-page.subpages["missed_found"].sections["found_missed_table"].add_table(tab[0], "Nearby Missed Injection Summary Table", "Top 10 injections that were reported as missed as ranked by decisive chirp distance.")
+# FIXME stupid convention to rely on the first tag being all of them.
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%smissed_summary.json' % opts.output_user_tag[0]), "%smissed_summary" % opts.output_user_tag[0]))
+fm_mtab += [webpage.elem("p", ["Missed Injection Table"])]
+fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % opts.output_user_tag[0])]
+missed_found_div = missed_found([missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
 
-# SEARCH SENSITIVITY PLOTS #
-page.add_subpage("search_sensitivity","Search Sensitivity", "Search Sensitivity")
-page.subpages["search_sensitivity"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of total mass and component mass.
-""")
-page.subpages["search_sensitivity"].add_section("chirp_mass","Binned by chirp mass")
-page.subpages["search_sensitivity"].add_section("total_mass","Binned by total mass")
-page.subpages["search_sensitivity"].add_section("mass1_mass2","Binned by mass1-mass2")
-page.subpages["search_sensitivity"].add_section("aligned_spin","Binned by aligned spin")
-page.subpages["search_sensitivity"].add_section("mass_ratio","Binned by mass ratio")
+
+#
+# Add sensitivity content
+#
+
+
+sens_about = webpage.elem("p", ["""This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of total mass and component mass."""])
+
+sens_chirp = webpage.section("Binned by chirp mass")
+sens_total = webpage.section("Binned by total mass")
+sens_m1m2 = webpage.section("Binned by mass1-mass2")
+sens_spin = webpage.section("Binned by aligned spin")
+sens_eta = webpage.section("Binned by mass ratio")
 
 for tag in opts.output_user_tag:
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*FAR_BINNED_BY_CHIRP_MASS*.png' % tag))
-	page.subpages["search_sensitivity"].sections["chirp_mass"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by chirp mass")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*SNR_BINNED_BY_CHIRP_MASS*.png' % tag))
-	page.subpages["search_sensitivity"].sections["chirp_mass"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by chirp mass")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*FAR_BINNED_BY_TOTAL_MASS*.png' % tag))
-	page.subpages["search_sensitivity"].sections["total_mass"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by total mass")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*SNR_BINNED_BY_TOTAL_MASS*.png' % tag))
-	page.subpages["search_sensitivity"].sections["total_mass"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by total mass")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*FAR_BINNED_BY_MASS1_MASS2*.png' % tag))
-	page.subpages["search_sensitivity"].sections["mass1_mass2"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by component mass")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*SNR_BINNED_BY_MASS1_MASS2*.png' % tag))
-	page.subpages["search_sensitivity"].sections["mass1_mass2"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by component mass")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*FAR_BINNED_BY_ALIGNED_SPIN*.png' % tag))
-	page.subpages["search_sensitivity"].sections["aligned_spin"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by aligned spin")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*SNR_BINNED_BY_ALIGNED_SPIN*.png' % tag))
-	page.subpages["search_sensitivity"].sections["aligned_spin"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by aligned spin")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*FAR_BINNED_BY_MASS_RATIO*.png' % tag))
-	page.subpages["search_sensitivity"].sections["mass_ratio"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by mass ratio")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*%s*SNR_BINNED_BY_MASS_RATIO*.png' % tag))
-	page.subpages["search_sensitivity"].sections["mass_ratio"].add_table(imgtable, "Sensitive volume (V*T) and mean sensitive distance: %s" % tag, "Binned by mass ratio")
+        sens_chirp += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_CHIRP_MASS*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
+        sens_total += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_TOTAL_MASS*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
+        sens_m1m2 += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_MASS1_MASS2*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
+        sens_spin += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_ALIGNED_SPIN*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s")
+        sens_eta += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_MASS_RATIO*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
 
-
-# BACKGROUND#
-page.add_subpage("background","Background", "Background")
-page.subpages["background"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-This page shows the ingredients that go into ranking events and determining the False alarm probability.
-""")
-page.subpages["background"].add_section("snrchi","SNR and chi-squared")
+sens_div = sens([sens_about, sens_chirp, sens_total, sens_m1m2, sens_spin, sens_eta])
 
 
 #
-# CLOSED BOX
+# Add sensitivity content
 #
 
-if not opts.open_box:
 
-	page.subpages["background"].sections["snrchi"].div("This section gives the SNR / Chisq background statistics.")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'))
-	page.subpages["background"].sections["snrchi"].add_table(imgtable, "Single Detector Background SNR-chisq Distributions","")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'))
-	page.subpages["background"].sections["snrchi"].add_table(imgtable, "Single Detector Signal Chisq (Conditional) Distributions","")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*LR_SNRCHI2*.png'))
-	page.subpages["background"].sections["snrchi"].add_table(imgtable, "Single Detector Likelihood Ratios","")
+back_about = webpage.elem("p", ["This page shows the ingredients that go into ranking events and determining the False alarm probability."])
 
-	page.subpages["background"].add_section("background triggers","Background Triggers")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_eta_vs_snr_*.png'))
-	page.subpages["background"].sections["background triggers"].add_table(imgtable, "","Single detector triggers coincident in time-shifted analyses.")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_chieff_vs_snr*.png'))
-	page.subpages["background"].sections["background triggers"].add_table(imgtable, "","Single detector triggers coincident in time-shifted analyses.")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_tau0_vs_tau3_vs_snr*.png'))
-	page.subpages["background"].sections["background triggers"].add_table(imgtable, "","Single detector triggers coincident in time-shifted analyses.")
+back_snrchi = webpage.section("SNR and chi-squared")
+back_trigs = webpage.section("Background Triggers")
+back_ratio = webpage.section("SNR ratios")
+back_rate = webpage.section("Rates")
 
-	### CHISQ ###
-	page.add_subpage("chisq","Chi-squared", "Chi-squared")
-	page.subpages["chisq"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-The chi-squared test checks that the snr accumulated matches expectation. 
-	""")
-	page.subpages["chisq"].add_section("chisq","Chi-squared Distributions")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'))
-	page.subpages["chisq"].sections["chisq"].add_table(imgtable, "Chi-squared Vs SNR", "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'), "Single Detector Background SNR-chisq Distributions")
+back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions")
+back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*LR_SNRCHI2*.png'), "Single Detector Likelihood Ratios")
 
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_mc_vs_rho_*closedbox*.png'))
-	page.subpages["chisq"].sections["chisq"].add_table(imgtable, "Reduced chi-squared Vs Chirp Mass", "Chi-squared vs chirp mass for single detectors after coincidence.")
+back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_eta_vs_snr_*.png'), "Single detector triggers coincident in time-shifted analyses.")
+back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_chieff_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
+back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_tau0_vs_tau3_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
 
-	page.subpages["chisq"].add_section("snr","Signal-to-Noise Ratio")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'))
-	page.subpages["chisq"].sections["snr"].add_table(imgtable, "Signal-to-Noise Ratio", "Comparison of SNR in pairs of detectors.")
+back_ratio += webpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'), "")
 
-	page.subpages["chisq"].add_section("deff","Effective Distance")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*closedbox*.png'))
-	page.subpages["chisq"].sections["deff"].add_table(imgtable, "Effective Distance", "Comparison of effective distance in pairs of detectors.")
+back_rate +=  webpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'), "")
 
-	### Money Plots ###
-	page.add_subpage("money","Money Plots", "Money Plots")
-	page.subpages["money"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-This section provides the detection statistic plots and a summary of the loudest event.
-""")
-	page.subpages["money"].add_section("ifar","Rate vs. Threshold")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'))
-	page.subpages["money"].sections["ifar"].add_table(imgtable, "Rate vs. Threshold", "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	page.subpages["money"].add_section("table","Loudest Table")
-	tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%sbgsummary_table.txt' % opts.output_user_tag[0]))
-	page.subpages["money"].sections["table"].add_table(tab[0], "Closed Box Summary Table", "Loudest Events")
+back_div = back([back_about, back_snrchi, back_trigs, back_ratio, back_rate])
+
 
 #
-# OPEN BOX
+# Add chisq content
 #
 
-else:
-	print >>sys.stderr, "WARNING: OPENING THE BOX"
 
-	page.subpages["background"].sections["snrchi"].div("This section gives the SNR / Chisq background statistics.")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'))
-	page.subpages["background"].sections["snrchi"].add_table(imgtable, "Single Detector Background SNR-chisq Distributions","")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'))
-	page.subpages["background"].sections["snrchi"].add_table(imgtable, "Single Detector Foreground SNR-chisq Distributions","")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'))
-	page.subpages["background"].sections["snrchi"].add_table(imgtable, "Single Detector Signal Chisq (Conditional) Distributions","")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*LR_SNRCHI2*.png'))
-	page.subpages["background"].sections["snrchi"].add_table(imgtable, "Single Detector Likelihood Ratios","")
+chisq_about = webpage.elem("p", ["The chi-squared test checks that the snr accumulated matches expectation."])
 
-	### CHISQ ###
-	page.add_subpage("chisq","Chi-squared", "Chi-squared")
-	page.subpages["chisq"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-The chi-squared test checks that the snr accumulated matches expectation. 
-FIXME
-	""")
-	page.subpages["chisq"].add_section("chisq","Chi-squared vs SNR")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'))
-	page.subpages["chisq"].sections["chisq"].add_table(imgtable, "Chi-squared Vs SNR", "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+chisq_dist = webpage.section("Chi-squared Distributions")
+chisq_snr = webpage.section("Signal-to-Noise Ratio")
+chisq_deff = webpage.section("Effective Distance")
 
-	page.subpages["chisq"].add_section("snr","Signal-to-Noise Ratio")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*openbox*.png'))
-	page.subpages["chisq"].sections["snr"].add_table(imgtable, "Signal-to-Noise Ratio", "Comparison of SNR in pairs of detectors.")
+chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_mc_vs_rho_*closedbox*.png'), "Chi-squared vs chirp mass for single detectors after coincidence.")
 
-	page.subpages["chisq"].add_section("deff","Effective Distance")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*openbox*.png'))
-	page.subpages["chisq"].sections["deff"].add_table(imgtable, "Effective Distance", "Comparison of effective distance in pairs of detectors.")
+chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'), "Comparison of SNR in pairs of detectors.")
 
-	### Money Plots ###
-	page.add_subpage("money","Money Plots", "Money Plots")
-	page.subpages["money"].div("""
-<big><b>OVERVIEW:</b></big><br><br>
-This section provides the detection statistic plots and a summary of the loudest event.
-""")
-	page.subpages["money"].add_section("ifar","Rate vs. Threshold")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'))
-	page.subpages["money"].sections["ifar"].add_table(imgtable, "Rate vs. Threshold", "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	page.subpages["money"].add_section("table","Loudest Table")
-	tab,name = cbcwebpage.wiki_table_parse(os.path.join(opts.glob_path, '%ssummary_table.txt' % opts.output_user_tag[0]))
-	page.subpages["money"].sections["table"].add_table(tab[0], "Summary Table", "Loudest Events")
+chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*closedbox*.png'), "Comparison of effective distance in pairs of detectors.")
 
-# BACKGROUND CONTD. FIXME this is a stupid way to make open vs. closed plots
-page.subpages["background"].add_section("snrsnr","SNR ratios")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'))
-page.subpages["background"].sections["snrsnr"].add_table(imgtable, "","")
+chisq_div = chisq([chisq_about, chisq_dist, chisq_snr, chisq_deff])
 
-page.subpages["background"].add_section("rates","Rates")
-imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'))
-page.subpages["background"].sections["rates"].add_table(imgtable, "","")
+
+#
+# Add results content
+#
+
+
+money_about = webpage.elem("p", ["This section provides the detection statistic plots and a summary of the loudest event."])
+money_ifar = webpage.section("Rate vs. Threshold")
+money_table = webpage.section("Loudest Table")
+
+money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "%sbgsummary_table" % opts.output_user_tag[0]))
+money_table += [webpage.elem("p", ["Closed Box Summary Table"])]
+money_table += [webpage.elem("div", [], "id=%sbgsummary_table" % opts.output_user_tag[0])]
+
+money_div = money([money_about, money_ifar, money_table])
+
+
+#
+# Open Box plots
+#
+
 
 if opts.open_box:
-	page.subpages["background"].add_section("rankingstat","Ranking Statistic Models")
-	page.subpages["background"].sections["rankingstat"].div("This section shows the ranking statistic (log likelihood ratio) PDFs and CCDFs for the noise and signal models.")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*NOISE_LIKELIHOOD_RATIO_CCDF_openbox*.png'))
-	page.subpages["background"].sections["rankingstat"].add_table(imgtable, "","")
-	page.write("%s_openbox" % opts.output_user_tag[0])
-else:
-	page.subpages["background"].add_section("rankingstat","Ranking Statistic Models")
-	page.subpages["background"].sections["rankingstat"].div("This section shows the ranking statistic (log likelihood ratio) PDFs and CCDFs for the noise and signal models.")
-	imgtable = cbcwebpage.image_glob(os.path.join(opts.glob_path, '*NOISE_LIKELIHOOD_RATIO_CCDF_closedbox*.png'))
-	page.subpages["background"].sections["rankingstat"].add_table(imgtable, "","")
-	page.write("%s_closebox" % opts.output_user_tag[0])
-	
-# copy the output
-if opts.webserver_dir:
-	for f in page.external_frames:
-		shutil.copy(f[0], opts.webserver_dir)
-	for f in page.fnames: 
-		shutil.copy(f,opts.webserver_dir)
-	#FIXME not the best way to do this, I should explicitely save file names
-	try: os.mkdir(opts.webserver_dir+'/Images')
-	except: pass
-	for f in glob.glob('Images/*.png'):
-		shutil.copy(f,opts.webserver_dir+'/Images')
+
+	back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
+
+	chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+
+	chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*openbox*.png'), "Comparison of SNR in pairs of detectors.")
+
+	chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
+
+	money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "%ssummary_table" % opts.output_user_tag[0]))
+	money_table += [webpage.elem("p", ["Open Box Summary Table"])]
+	money_table += [webpage.elem("div", [], "id=%ssummary_table" % opts.output_user_tag[0])]
+
+
+#
+# add all the content from each tab to the pages
+#
+
+
+thispage += [summary_div, inj_params_div, inj_acc_div, missed_found_div, sens_div, back_div, chisq_div, money_div]
+
+
+#
+# write the result
+#
+
+
+try:
+	os.makedirs(opts.webserver_dir)
+except IOError:
+	pass
+
+f = open("%s/index.html" % opts.webserver_dir, "w")
+
+shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir, os.path.split(opts.glob_path)[1]))
+
+thispage.write(f)
