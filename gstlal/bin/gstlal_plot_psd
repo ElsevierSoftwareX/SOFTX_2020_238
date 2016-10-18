@@ -16,14 +16,29 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import sys
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot
-import numpy
+
+from optparse import OptionParser
+import os
+
+
 import lal
 from glue.ligolw import utils as ligolw_utils
-from gstlal import reference_psd
+from gstlal import plotpsd
+
+
+plotpsd.matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 300,
+	"savefig.dpi": 300,
+	"text.usetex": True,
+	"path.simplify": True
+})
+
 
 ## @file
 # A program to plot reference psds; see gstlal_plot_psd for more info
@@ -39,26 +54,39 @@ from gstlal import reference_psd
 #		gstlal_plot_psd psd.png psd.xml.gz
 #
 
-if len(sys.argv) < 3:
-	print "USAGE gstlal_plot_psd OUTPUT-NAME PSD-FILE-1 PSD-FILE-2 ..."
-	sys.exit()
 
-outname = sys.argv[1]
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("-o", "--output", help = "Set plot filename (default = replace input file's extension with .png).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
 
-for fname in sys.argv[2:]:
-	psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(fname, verbose = True, contenthandler = lal.series.PSDContentHandler))
-	for k,v in psds.items():
-		# compute horizon up to 90% of nyquist to avoid roll off
-		h = reference_psd.horizon_distance(v, 1.4, 1.4, 8, 10, len(v.data.data) * v.deltaF * 0.90)
-		if len(sys.argv[2:]) > 1:
-			flabel = fname
-		else:
-			flabel = ""
-		pyplot.loglog(v.deltaF * numpy.arange(len(v.data.data)), v.data.data, label = '%s %s: %0.f Mpc' % (flabel, k, h), alpha=0.75)
-		pyplot.xlabel('Frequency (Hz)')
-		pyplot.ylabel('Strain^2/Hz')
-pyplot.legend()
-pyplot.grid()
-pyplot.ylim([1e-50, 1e-30])
-pyplot.xlim([1, 1e4])
-pyplot.savefig(outname)
+	if not filenames:
+		raise ValueError("must supply at least one input filename")
+	if options.output and len(filenames) > 1:
+		raise ValueError("must supply only one input file when setting --output")
+
+	return options, filenames
+
+
+options, filenames = parse_command_line()
+
+
+for fname in filenames:
+	if options.output:
+		outname = options.output
+	else:
+		outname = os.path.join(os.path.splitext(fname)[0], ".png")
+
+	fig = plotpsd.plot_psds(
+		lal.series.read_psd_xmldoc(
+			ligolw_utils.load_filename(
+				fname,
+				verbose = options.verbose,
+				contenthandler = lal.series.PSDContentHandler
+			)
+		),
+		plot_width = 2400
+	)
+
+	fig.savefig(outname)
