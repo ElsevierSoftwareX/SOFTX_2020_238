@@ -100,7 +100,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 		else:
 			alpha = 0.6
 			linestyle = ":"
-			label = "%s (off, last seen at %.4g Mpc Horizon)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f)))
+			label = "%s (Off, Last Seen With %.4g Mpc Horizon)" % (instrument, horizon_distance(psd, mass1, mass2, 8, 10, f_max = 0.9 * max(f)))
 		axes.loglog(f, psd_data, color = plotutil.colour_from_instruments([instrument]), alpha = alpha, linestyle = linestyle, label = label)
 		if instrument in sngl_inspirals:
 			logging.info("found %s event with SNR %g" % (instrument, sngl_inspirals[instrument].snr))
