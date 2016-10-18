@@ -1,3 +1,9 @@
+gstlal-inspiral (1.0.1-1) unstable; urgency=low
+
+  * 1.0.1 release (oops), ER10
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Tue, 18 Sep 2016 19:20:50 +0900
+
 gstlal-inspiral (1.0.0-1) unstable; urgency=low
 
   * 1.0.0 release, ER10
