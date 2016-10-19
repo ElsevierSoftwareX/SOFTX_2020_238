@@ -14,6 +14,7 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 import h5py
+import logging
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -43,7 +44,7 @@ class PSDHandler(simplehandler.Handler):
 		self.horizon_history_time = deque(maxlen = 10000)
 		self.noisedeq = deque(maxlen = 10000)
 		self.timedeq = deque(maxlen = 10000)
-
+		self.last_reduce_time = None
 	def do_on_message(self, bus, message):
 		if message.type == Gst.MessageType.ELEMENT and message.get_structure().get_name() == "spectrum":
 			self.psd = pipeio.parse_spectrum_message(message)
@@ -52,7 +53,9 @@ class PSDHandler(simplehandler.Handler):
 
 	def bufhandler(self,elem):
 		buf = elem.emit("pull-sample").get_buffer()
-		buftime = buf.pts / 1e9
+		buftime = int(buf.pts / 1e9)
+		if self.last_reduce_time is None:
+			self.last_reduce_time = int(round(buftime,-2))
 		(result, mapinfo) = buf.map(Gst.MapFlags.READ)
 		thisdir = os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime))
 		for typ in ("min", "median", "max"):
@@ -97,11 +100,9 @@ class PSDHandler(simplehandler.Handler):
 		#
 
 		# Only reduce every 100s
-		if not (buftime % 100):
-			# The PSD is special, we just record it. No min/median/max
-			psd_name = "%s-PSD-%d0-100.hdf5" % (self.instrument, int(buftime / 100))
-			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data})
-			print >> sys.stderr, "writing %s at %d" % (psd_name, int(aggregator.now()))
+		if (buftime - self.last_reduce_time) >= 100:
+			logging.info("reducing data and writing PSD snaphot for %d @ %d" % (buftime, int(aggregator.now()))) 
+			self.last_reduce_time = int(round(buftime,-2))
 			for typ, func in (("min", min), ("median", aggregator.median), ("max", max)):
 				for route in ("noise", "horizon_history"):
 					for level in range(0, aggregator.DIRS-1):
@@ -112,6 +113,9 @@ class PSDHandler(simplehandler.Handler):
 						next_fname, next_x, next_y = aggregator.get_dataset(nextdir, route)
 						xarr, yarr = aggregator.reduce_data(this_x + next_x, this_y + next_y, func, level = level + 1)
 						self.to_hdf5(next_fname, {"time": numpy.array(xarr), "data": numpy.array(yarr)})
+			# The PSD is special, we just record it. No min/median/max
+			psd_name = "%s-PSD-%d0-100.hdf5" % (self.instrument, int(round(buftime,-2)))
+			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data})
 
 		buf.unmap(mapinfo)
 		del buf
@@ -137,6 +141,8 @@ class PSDHandler(simplehandler.Handler):
 #
 
 options, filenames = parse_command_line()
+
+logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
 
 # parse the generic "source" options, check for inconsistencies is done inside
 # the class init method
@@ -166,13 +172,6 @@ head = pipeparts.mkgeneric(pipeline, head, "lal_nxydump")
 sink = pipeparts.mkappsink(pipeline, head, max_buffers = 1, sync = False)
 sink.connect("new-sample", handler.bufhandler)
 sink.connect("new-preroll", handler.prehandler)
-
-#
-# setup signal handler to shutdown pipeline for live data
-#
-
-if gw_data_source_info.data_source in ("lvshm", "framexmit"):# FIXME what about nds online?
-	simplehandler.OneTimeSignalHandler(pipeline)
 
 #
 # process segment
