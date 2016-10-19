@@ -60,12 +60,20 @@ from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.lal import CacheEntry
 from pylal import git_version
-from pylal import SimBurstUtils
 from gstlal import far
 from gstlal import inspiral_pipe
+from gstlal import gviz_api
 
 
 golden_ratio = (1. + math.sqrt(5.)) / 2.
+
+
+def to_google_json(fname, description, data):
+	json = open(fname,"w")
+	data_table = gviz_api.DataTable(description)
+	data_table.LoadData(data)
+	print >> json, data_table.ToJSon()
+	json.close()
 
 
 class SimInspiral(lsctables.SimInspiral):
@@ -164,7 +172,7 @@ def parse_command_line():
 
 
 class CoincDatabase(object):
-	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, wiki = None, base = None, program_name = "gstlal_inspiral"):
+	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, plotsummary_json = None, base = None, program_name = "gstlal_inspiral"):
 		"""
 		Compute and record some summary information about the
 		database.
@@ -263,21 +271,21 @@ class CoincDatabase(object):
 				for description, n in cursor.execute("SELECT description, COUNT(*) FROM coinc_definer NATURAL JOIN coinc_event GROUP BY coinc_def_id"):
 					print >>sys.stderr, "\t%s: %d" % (description, n)
 
-		if wiki:
-			wiki.write("database overview:\n\n")
+		if plotsummary_json:
+			data = []
 			for on_instruments in self.on_instruments_combos:
-				wiki.write("||zero-lag livetime for %s||%f s||\n" % ("+".join(sorted(on_instruments)), self.zerolag_livetime[on_instruments]))
-				wiki.write("||background livetime for %s ||%f s||\n" % ("+".join(sorted(on_instruments)), self.background_livetime[on_instruments]))
+				data.append(["zero-lag livetime for %s" % ("+".join(sorted(on_instruments))), str(self.zerolag_livetime[on_instruments])])
+				data.append(["background livetime for %s" % ("+".join(sorted(on_instruments))), str(self.background_livetime[on_instruments])])
 			if self.sngl_inspiral_table is not None:
-				wiki.write("||inspiral events|| %d||\n" % len(self.sngl_inspiral_table))
+				data.append(["inspiral events", str(len(self.sngl_inspiral_table))])
 			if self.sim_inspiral_table is not None:
-				wiki.write("||injections|| %d||\n" % len(self.sim_inspiral_table))
+				data.append(["injections", str(len(self.sim_inspiral_table))])
 			if self.time_slide_table is not None:
-				wiki.write("||time slides|| %d||\n" % cursor.execute("SELECT COUNT(DISTINCT(time_slide_id)) FROM time_slide").fetchone()[0])
+				data.append(["time slides", str(cursor.execute("SELECT COUNT(DISTINCT(time_slide_id)) FROM time_slide").fetchone()[0])])
 			if self.coinc_def_table is not None:
 				for description, n in cursor.execute("SELECT description, COUNT(*) FROM coinc_definer NATURAL JOIN coinc_event GROUP BY coinc_def_id"):
-					wiki.write("||%s||%d||\n" % (description, n) )
-
+					data.append([description, str(n)])
+			to_google_json("%s_%s_%s" % (self.base, plotsummary_json, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
 
 #
 # =============================================================================
@@ -334,34 +342,49 @@ def create_sim_coinc_view(connection):
 
 	connection.cursor().execute("""
 CREATE TEMPORARY TABLE
-	sim_coinc_map
+	sim_coinc_map_helper
 AS
-	SELECT
-		sim_inspiral.simulation_id AS simulation_id,
-		(
-			SELECT
-				coinc_event.coinc_event_id
-			FROM
-				coinc_event_map AS a
-				JOIN coinc_event_map AS b ON (
-					b.coinc_event_id == a.coinc_event_id
-				)
-				JOIN coinc_event ON (
-					b.table_name == 'coinc_event'
-					AND b.event_id == coinc_event.coinc_event_id
-				)
-			WHERE
-				a.table_name == 'sim_inspiral'
-				AND a.event_id == sim_inspiral.simulation_id
-				AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0)
-			ORDER BY
-				coinc_event.likelihood DESC
-			LIMIT 1
-		) AS coinc_event_id
-	FROM
-		sim_inspiral
-	WHERE
-		coinc_event_id IS NOT NULL
+	SELECT a.event_id as sid,
+		coinc_event.coinc_event_id as cid,
+		coinc_event.likelihood as lr
+	FROM coinc_event_map as a
+		JOIN coinc_event_map AS b ON (b.coinc_event_id == a.coinc_event_id)
+		JOIN coinc_event ON (coinc_event.coinc_event_id == b.event_id)
+	WHERE a.table_name == 'sim_inspiral'
+		AND b.table_name == 'coinc_event'
+		AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0);
+	""")
+
+	connection.cursor().execute("""
+CREATE INDEX IF NOT EXISTS sim_coinc_map_helper_index ON sim_coinc_map_helper (sid, cid);
+	""")
+
+	connection.cursor().execute("""
+CREATE TEMPORARY TABLE
+        sim_coinc_map
+AS
+        SELECT
+                sim_inspiral.simulation_id AS simulation_id,
+                (
+                        SELECT
+                                cid
+                        FROM
+				sim_coinc_map_helper
+                        WHERE
+                                sid = simulation_id
+                        ORDER BY
+                                lr
+                        LIMIT 1
+                ) AS coinc_event_id
+        FROM
+                sim_inspiral
+        WHERE
+                coinc_event_id IS NOT NULL;
+
+	""")
+
+	connection.cursor().execute("""
+DROP INDEX sim_coinc_map_helper_index;
 	""")
 
 
@@ -483,46 +506,46 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 		for on_instruments, livetime in contents.zerolag_livetime.items():
 			self.livetime[on_instruments] += livetime
 
-	def write_wiki_string(self, l, f, lt):
-		f.write("|| Rank || FAR (Hz) || FAP || ln &Lambda; || Combined SNR || GPS End Time || <i>M</i><sub>total</sub> / M<sub>&#x2299;</sub> || <i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub> || Participating Instruments                   || On Instruments                              ||\n")
-		f.write("||      ||          ||     ||             ||              || Instrument   || SNR                                             || &chi;<sup>2</sup>/DOF                           || <i>m</i><sub>1</sub> / M<sub>&#x2299;</sub> || <i>m</i><sub>2</sub> / M<sub>&#x2299;</sub> ||\n")
-		for rank, values in enumerate(l, 1):
-			values = tuple(values)
-			f.write('|| %d || %.2e || %.3g || %.3g || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % ((rank,) + values[:9]))
+	def write_candidate_json(self, candidates, fname):
+		data = []
+		# FIXME generalize for virgo
+		description = [
+			("Rank", "number"),
+			("FAR (Hz)", "number"),
+			("FAP", "number"),
+			("ln &Lambda;", "number"),
+			("&rho;", "number"),
+			("<i>t</i>", "number"),
+			("<i>M</i><sub>total</sub> / M<sub>&#x2299;</sub>", "number"),
+			("<i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub>", "number"),
+			("Participating<br>Instruments", "string"),
+			("On<br>Instruments", "string"),
+			("H1 &rho;", "string"),
+			("H1 &chi;<sup>2</sup>", "number"),
+			("H1 m<sub>1</sub>", "number"),
+			("H1 m<sub>2</sub>", "number"),
+			("L1 &rho;", "string"),
+			("L1 &chi;<sup>2</sup>", "number"),
+			("L1 m<sub>1</sub>", "number"),
+			("L1 m<sub>2</sub>", "number")
+		]
+		for rank, values in enumerate(candidates, 1):
+			row = [rank] + [float(v) for v in values[:7]] + list(values[7:9])
+			# values[9] is a string that is e.g., H1:4.8993754:1.0139208:2.061641:1.145543 L1:8.2582664:1.1890973:2.061641:1.145543
+			ifodict = {"H1": [-1,-1,-1,-1], "L1": [-1,-1,-1,-1]}
 			for ifo_row in values[9].split():
-				ifo_row = ifo_row.split(":")
-				ifo_row[1:] = map(float, ifo_row[1:])
-				f.write('|| || || || || || %s || %.2f || %.2f || %.2f || %.2f ||\n' % tuple(ifo_row) )
+				ifodata = ifo_row.split(":")
+				ifodict[ifodata[0]] = [float(v) for v in ifodata[1:]]
+			row.extend(ifodict["H1"])
+			row.extend(ifodict["L1"])
+			data.append(row)
+		to_google_json(fname, description, data)
 
 	def finish(self):
 		self.candidates.sort()
-		f = open(self.base+'summary_table.txt','w')
-		f.write("=== Open box loudest 10 summary table ===\n")
-		self.write_wiki_string(self.candidates[:11], f, self.livetime)
-		f.close()
-
-		f = open(self.base+'num_trigs_table.txt','w')
-		f.write("||<b>DETECTORS</b>||<b># COINC EVENTS</b>||\n")
-		for inst in self.livetime.keys(): 
-			f.write("||%s||" % ("".join(sorted(inst)),))
-			try:
-				num = self.num_trigs[inst]
-			except:
-				num = 0
-			f.write("%d||\n" % (num,))
-		f.close()
-
-		f = open(self.base+'live_time_table.txt','w')
-		f.write("||<b>DETECTORS ON</b>||<b>LIVETIME (s) (d) (yr)</b>||\n")
-		for inst in self.livetime.keys(): 
-			f.write("||%s||%.2f %.2f %.2f||\n" % ("".join(sorted(inst)), self.livetime[inst],self.livetime[inst]/86400.0,self.livetime[inst]/31556926.0))
-		f.close()
-
+		self.write_candidate_json(self.candidates[:101], self.base+'summary_table.json')
 		self.bgcandidates.sort()
-		f = open(self.base+'bgsummary_table.txt','w')
-		f.write("=== Closed box loudest 10 summary table ===\n")
-		self.write_wiki_string(self.bgcandidates[:11], f, self.livetime)
-		f.close()
+		self.write_candidate_json(self.bgcandidates[:101], self.base+'bgsummary_table.json')
 		yield None, None, None
 
 #
@@ -592,10 +615,11 @@ FROM
 
 class MissedFoundPlots(object):
 	class MissedFound(object):
-		def __init__(self, on_instruments, far_thresh):
+		def __init__(self, on_instruments, far_thresh, missed_found_plots):
 			self.on_instruments = on_instruments
 			self.far_thresh = far_thresh
 			self.found_in = {}
+			self.missed_found_plots = missed_found_plots
 
 		def add_contents(self, contents):
 			self.base = contents.base
@@ -630,8 +654,6 @@ FROM
 						self.found_in[participating_instruments] = [sim]
 
 		def finish(self):
-			f1 = open(self.base + "injection_summary.txt", "a")
-			f2 = open(self.base + "missed_summary.txt", "a")
 			missed = self.found_in.pop(None, [])
 
 			# Define decisive distance even if there is one instrument
@@ -655,25 +677,25 @@ FROM
 				legend = []
 				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
 					if cnt == 0:
-						f1.write("||%s||%s||FOUND: %d||\n" % ("".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)))
+						self.missed_found_plots.injection_summary_data.append(["Found", "".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)])
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
 					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, participating_instruments) for sim in sims], ".")
 				if missed:
 					if cnt == 0:
-						f1.write("||%s||%s||MISSED: %d||\n" % ("".join(sorted(self.on_instruments)), "---", len(missed)))
+						self.missed_found_plots.injection_summary_data.append(["Missed", "".join(sorted(self.on_instruments)), "---", len(missed)])
 						def sort_func(row):
 							return sorted([row.alpha3, row.alpha4])[1]
 						tmplt_list0 = sorted(missed, key=sort_func, reverse=True)
 						def sort_dec_func(row):
 							return sorted([row.alpha3, row.alpha4])[0]
 						tmplt_list = sorted(tmplt_list0, key=sort_dec_func, reverse=True)
-						for rank, sim in enumerate(tmplt_list[:25], 1):
-							f2.write('|| %d || %s || %f || %f || %f || %f || %f || %f || %f || %f ||\n' % (rank, sim.waveform, sim.time_at_instrument("H1", {"H1": 0.0}), sim.mass1, sim.spin1x, sim.spin1y, sim.spin1z, sim.distance, sim.inclination, sim.alpha3))
-							f2.write('|| || || %f || %f || %f || %f || %f || %f || %f || %f ||\n' % (sim.time_at_instrument("L1", {"L1": 0.0}), sim.mass2, sim.spin2x, sim.spin2y, sim.spin2z, sorted([sim.get_chirp_eff_dist("h1"), sim.get_chirp_eff_dist("l1")])[1], sim.mchirp, sim.alpha4))
+						for rank, sim in enumerate(tmplt_list[:1000], 1):
+							self.missed_found_plots.missed_summary_data.append([rank, "H1", sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, sim.inclination, sim.alpha3])
+							self.missed_found_plots.missed_summary_data.append([rank, "L1", sim.waveform, float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, sim.inclination, sim.alpha4])
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
-				f1.close()
-				f2.close()
+
+
 				if legend:
 					axes.legend(legend)
 				axes.set_title(title)
@@ -708,6 +730,8 @@ FROM
 	def __init__(self, far_thresh):
 		self.far_thresh = far_thresh
 		self.plots = {}
+		self.injection_summary_data = []
+		self.missed_summary_data = []
 
 	def add_contents(self, contents):
 		self.base = contents.base
@@ -716,20 +740,16 @@ FROM
 			return
 		for on_instruments in contents.on_instruments_combos:
 			if on_instruments not in self.plots:
-				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh)
+				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh, self)
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
-		f1 = open(self.base + "injection_summary.txt", "w")
-		f1.write("||<b>ON INSTRUMENTS</b>||<b> PARTICIPATING INSTRUMENTS</b>||<b>MISSED/FOUND</b||\n")
-		f1.close()
-		f2 = open(self.base + "missed_summary.txt", "w")
-		f2.write("|| <b>Rank</b> || <b>Waveform</b> || <b>H1 End Time</b> || <b>Mass1</b> || <b>Spin1x</b> || <b>Spin1y</b> || <b>Spin1z</b> || <b>Dist (Mpc)</b> || <b>Inclination</b> ||\n")
-		f2.write("||      ||          || <b>L1 End Time</b> || <b>Mass2</b> || <b>Spin2x</b> || <b>Spin2y</b> || <b>Spin2z</b> || <b>Decisive D<sub>chirp</sub> (Mpc)</b> || <b><i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub></b> ||\n")
-		f2.close()
 		for on_instruments, plot in self.plots.items():
 			for fig, filename_fragment, is_open_box in plot.finish():
 				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box
+
+		to_google_json(self.base + "injection_summary.json", [("Found||Missed", "string"), ("On Instruments", "string"), ("Participating Instruments", "string"), ("count", "number")], self.injection_summary_data)
+		to_google_json(self.base + "missed_summary.json", [("Rank", "number"), ("IFO", "string"), ("Waveform", "string"), ("H1/L1 <i>t</i>", "number"), ("<i>m</i><sub>1</sub>", "number"), ("<i>m</i><sub>2</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>1y</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("<i>s</i><sub>2y</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("D (Mpc)", "number"), ("Inclination", "number"), ("&rho;", "number")], self.missed_summary_data)
 
 
 #
@@ -1644,15 +1664,13 @@ if options.plot_group is None:
 #
 
 
-wiki = open(os.path.join(options.output_dir, "%s_%s" % (options.user_tag, "plotsummary.txt")),"w")
 
 for n, filename in enumerate(filenames):
 	if options.verbose:
 		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
-	wiki.write("=== %d/%d: %s ===\n\n" % (n + 1, len(filenames), filename))
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki = wiki, base = os.path.join(options.output_dir, options.user_tag))
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = filename.replace(".sqlite",""), base = os.path.join(options.output_dir, options.user_tag))
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	for n, plot in zip(options.plot_group, plots):
