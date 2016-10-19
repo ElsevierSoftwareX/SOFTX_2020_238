@@ -1,7 +1,8 @@
 #!/usr/bin/python
 
-import sys, os, glob
-import webpage
+import sys, os, glob, shutil
+import subprocess
+from gstlal import webpage
 from optparse import OptionParser
 
 def parse_command_line():
@@ -58,10 +59,16 @@ thispage+=nav
 
 
 summary_about = webpage.elem("p", ["Summary information: This page provides a summary of theanalysis, including the parameters specified in generating the workflow, where the analysis was run, number of triggers, analyzed live time and horizon distance."])
-summary_config = webpage.elem("details", [webpage.elem("summary", ["Analysis Configuration"])])
-summary_config += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
 
-summary_div = summary([summary_about, summary_config])
+makefile = [f for f in glob.glob("Makefile*") if f != "Makefile.offline_analysis_rules"][0]
+
+summary_make = webpage.section("Analysis Makefile")
+summary_make += [webpage.elem("pre", [webpage.elem("code", [open(makefile).read()])])]
+summary_commands = webpage.section("Commands run")
+summary_commands += [webpage.elem("pre", [webpage.elem("samp", ["\n".join(["\t %s" % x for x in  subprocess.check_output(["make", "-B", "-n", "-f", makefile]).split("\n") ])])])]
+
+
+summary_div = summary([summary_about, summary_make, summary_commands])
 
 
 #
@@ -127,6 +134,7 @@ inj_acc_div = injacc([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal
 
 missed_found_about = webpage.elem("p", ["""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections as a for the various IFO times for coincident triggers. We allow double coincident events so some categories can have multiple types of found injections (for  example H1L1 and H1H2L1 triggers in H1H2L1 time).  Because of ambiguity concerning the time of an injection and the injection window it is occasionally possible to find an injection in more detectors than what the "time" refers to.  For example, an injection's geocentric end time might be in H1L1 time but that might occur near a boundary where H2 was also on.  Thus one could find an H1L1 injection in H1H2L1 time."""])
 
+horizon = webpage.section("Horizon distance")
 fm_tab = webpage.section("Found / Missed Summary Table")
 fm_mc = webpage.section("Found / Missed Chirp Mass")
 fm_mt = webpage.section("Found / Missed Total Mass")
@@ -135,6 +143,8 @@ fm_time = webpage.section("Found / Missed Time")
 fm_spin = webpage.section("Found / Missed Spin")
 fm_snr = webpage.section("Found / Missed Expected SNR")
 fm_mtab = webpage.section("Missed Table")
+
+horizon += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
 
 for tag in opts.output_user_tag:
 	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sinjection_summary.json' % tag), "%sinjection_summary" % tag))
@@ -167,7 +177,7 @@ for tag in opts.output_user_tag:
 thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%smissed_summary.json' % opts.output_user_tag[0]), "%smissed_summary" % opts.output_user_tag[0]))
 fm_mtab += [webpage.elem("p", ["Missed Injection Table"])]
 fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % opts.output_user_tag[0])]
-missed_found_div = missed_found([missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
+missed_found_div = missed_found([horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
 
 
 #
@@ -294,11 +304,12 @@ thispage += [summary_div, inj_params_div, inj_acc_div, missed_found_div, sens_di
 
 try:
 	os.makedirs(opts.webserver_dir)
-except IOError:
+except OSError:
 	pass
 
 f = open("%s/index.html" % opts.webserver_dir, "w")
+thispage.write(f)
+f.close()
 
 shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir, os.path.split(opts.glob_path)[1]))
 
-thispage.write(f)
