@@ -337,7 +337,7 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios
 
 	if ln_likelihood_ratio_markers is not None:
 		for ln_likelihood_ratio in ln_likelihood_ratio_markers:
-			axes.axvline(ln_likelihood_ratio, ylo, yhi)
+			axes.axvline(ln_likelihood_ratio)
 
 	axes.set_xlim((xlo, xhi))
 	axes.set_ylim((ylo, yhi))
