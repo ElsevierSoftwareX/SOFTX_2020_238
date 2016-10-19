@@ -313,14 +313,17 @@ listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.g
 # get urls job 
 urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
-# aggregator job
+# FIXME find a bigger computer for this or run several instancnes on the cluster.  aggregator and state job
 aggJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_aggregator",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+
+# Run this on the cluster
+analysisStateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_state", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"})) 
 
 # Summary page job
 pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
 # DQ job
-dqJob = inspiral_pipe.generic_job("gstlal_ll_dq",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+dqJob = inspiral_pipe.generic_job("gstlal_ll_dq", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 
 if options.injection_file:
 	# Sensitivity plots job
@@ -454,6 +457,7 @@ margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files =
 # FIXME by default the inspiral jobs advertise the current directory as their
 # job tag, but this should be made to be more flexible
 aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags)})
+analysisStateNode = inspiral_pipe.generic_node(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2})
 
 # summary page
 if options.injection_file:
