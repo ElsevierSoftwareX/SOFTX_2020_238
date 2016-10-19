@@ -69,8 +69,8 @@ class PSDHandler(simplehandler.Handler):
 			self.horizon_history.append(reference_psd.horizon_distance(self.psd, 1.4, 1.4, 8, 20))
 
 			# The PSD
-			psd_freq = numpy.arange(self.psd.data.length / 32) * self.psd.deltaF * 32
-			psd_data = signal.decimate(self.psd.data.data[:], 32, ftype='fir')[:-1]**.5
+			psd_freq = numpy.arange(self.psd.data.length / 4) * self.psd.deltaF * 4
+			psd_data = signal.decimate(self.psd.data.data[:], 4, ftype='fir')[:-1]**.5
 		else:
 			# First noise
 			self.timedeq.append(buftime)
@@ -84,9 +84,6 @@ class PSDHandler(simplehandler.Handler):
 			psd_data = numpy.zeros(1024)
 
 
-		# The PSD is special, we just record it. No min/median/max
-		psd_name = "%s-PSD-%d0-10.hdf5" % (self.instrument, int(buftime / 10))
-		self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data})
 		# Save a "latest"
 		psd_name = "psd.hdf5"
 		self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data})
@@ -101,6 +98,10 @@ class PSDHandler(simplehandler.Handler):
 
 		# Only reduce every 100s
 		if not (buftime % 100):
+			# The PSD is special, we just record it. No min/median/max
+			psd_name = "%s-PSD-%d0-100.hdf5" % (self.instrument, int(buftime / 100))
+			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data})
+			print >> sys.stderr, "writing %s at %d" % (psd_name, int(aggregator.now()))
 			for typ, func in (("min", min), ("median", aggregator.median), ("max", max)):
 				for route in ("noise", "horizon_history"):
 					for level in range(0, aggregator.DIRS-1):
@@ -155,8 +156,8 @@ pipeline = Gst.Pipeline(name="DQ")
 handler = PSDHandler(mainloop, pipeline, out_path = options.out_path, instrument = instrument)
 
 head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
-#head = pipeparts.mkresample(pipeline, head, quality = 9)
-#head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.sample_rate)
+head = pipeparts.mkresample(pipeline, head, quality = 9)
+head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.sample_rate)
 head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
 head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, fft_length = options.psd_fft_length, average_samples = 64, median_samples = 7, expand_gaps = True)
 head = pipeparts.mkqueue(pipeline, head)
