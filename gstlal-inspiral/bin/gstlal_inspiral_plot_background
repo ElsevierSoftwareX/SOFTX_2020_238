@@ -300,7 +300,6 @@ fig.savefig(plotname)
 
 
 # SNR PDFs
-# FIXME: this won't scale.
 for (instruments, horizon_distances) in sorted(coinc_params_distributions.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
 	# they're stored as a frozen set of quantized key/value pairs, need
 	# to unquantize them and get a dictionary back
