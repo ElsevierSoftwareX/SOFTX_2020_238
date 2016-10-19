@@ -375,6 +375,11 @@ class SNRPDF(object):
 		return frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
 
 
+	def get_snr_joint_pdf_binnedarray(self, instruments, horizon_distances):
+		pdf, binnedarray, age = self.snr_joint_pdf_cache[self.snr_joint_pdf_keyfunc(instruments, horizon_distances)]
+		return binnedarray
+
+
 	def get_snr_joint_pdf(self, instruments, horizon_distances):
 		pdf, binnedarray, age = self.snr_joint_pdf_cache[self.snr_joint_pdf_keyfunc(instruments, horizon_distances)]
 		return pdf
