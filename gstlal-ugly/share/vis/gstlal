@@ -48,6 +48,10 @@ print "	google.charts.setOnLoadCallback(function(){ drawNoise(%s,%s,%d) });" % (
 print "	google.charts.setOnLoadCallback(function(){ drawPSD(%s,%s,%d) });" % (gps, duration, refresh)
 print "	google.charts.setOnLoadCallback(function(){ drawNoiseGauge(%s,%s,%d) });" % (gps, duration, refresh)
 print "	google.charts.setOnLoadCallback(function(){ drawRangeGauge(%s,%s,%d) });" % (gps, duration, refresh)
+print "	google.charts.setOnLoadCallback(function(){ drawUpTime(%s,%s,%d) });" % (gps, duration, refresh)
+print "	google.charts.setOnLoadCallback(function(){ drawDroppedData(%s,%s,%d) });" % (gps, duration, refresh)
+print "	google.charts.setOnLoadCallback(function(){ drawRAMStatus(%s,%s,%d) });" % (gps, duration, refresh)
+print "	google.charts.setOnLoadCallback(function(){ drawTimeSinceLast(%s,%s,%d) });" % (gps, duration, refresh)
 
 print '''
 	</script>
@@ -67,6 +71,8 @@ print '''
 			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity', horizon_wrapper, psd_wrapper)">Sensitivity</a></li>
 			<li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency', latency_status_by_nodes_wrapper, latency_history_wrapper)">Latency</a></li>
 			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper)">SNR</a></li>
+			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Status</a></li>
+			<li><a href="#summary" class="tablinks" onclick="openGstlalTab(event, 'Summary')">Summary</a></li>
 			<li>
 '''				
 print '			<input type="text" name="GPS" value="%s" size=8 style="margin: 7px 5px 5px 5px;"><input type="submit" value="GPS" style="margin: 7px 5px 5px 5px;">' % (gps,)
@@ -135,6 +141,17 @@ print '''
 	<div id="SNR" class="tabcontent">
 		<div id="snr_status_by_nodes_wrapper"></div>
 		<div id="snr_history_wrapper"></div>
+	</div>
+
+	<div id="Status" class="tabcontent">
+		<div id="time_since_last_wrapper"></div>
+		<div id="up_time_wrapper"></div>
+		<div id="dropped_wrapper"></div>
+		<div id="ram_status_wrapper"></div>
+		<iframe src="https://ldas-gridmon.ligo.caltech.edu/ganglia/mobile_helper.php?show_host_metrics=1&h=cbc.ldas.cit&c=Servers&r=hour&cs=&ce=" width=100%></iframe>
+	</div>
+	<div id="Summary" class="tabcontent">
+		<iframe src="https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/engineering/10/ALL_LLOID_COMBINED_openbox.html" width=100% height=675></iframe>
 	</div>
 </body>
 </html>
