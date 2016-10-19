@@ -39,6 +39,11 @@ var noise_wrapper;
 var noise_table_wrapper;
 var noise_gauge_wrapper;
 
+var up_time_wrapper;
+var dropped_wrapper;
+var ram_status_wrapper;
+var time_since_last_wrapper;
+
 default_options = {
 	title: 'Figure', 
 	hAxis: { gridlines: {color:'#FFFFFF'}},
@@ -392,4 +397,73 @@ function drawNoiseGauge(gps, duration, refresh) {
 	});
 
 	noise_gauge_wrapper.draw();
+}
+
+
+/*
+ * Charts about analysis state
+ */
+
+
+function drawUpTime(gps, duration, refresh) {
+	var these_options = clone(default_options);
+	these_options.title = 'Up Time';
+	these_options.vAxis = {textPosition: 'out', viewWindowMode:'explicit', gridlines: {color:'#FFFFFF'}, scaleType: 'log', minValue:1, maxValue:100000000, format: 'scientific'}
+	up_time_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'ColumnChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1000'  + '&gpstime='  + gps + '&duration=' + duration,
+		query: 'select state_vector_on_off_gap where status by node',
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'up_time_wrapper',
+	});
+	up_time_wrapper.draw();
+}
+
+function drawDroppedData(gps, duration, refresh) {
+	var these_options = clone(default_options);
+	these_options.title = 'Dropped Data';
+	these_options.vAxis = {textPosition: 'out', viewWindowMode:'explicit', gridlines: {color:'#FFFFFF'}, scaleType: 'log', minValue:1, maxValue:100000000, format: 'scientific'}
+	dropped_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'ColumnChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1100'  + '&gpstime='  + gps + '&duration=' + duration,
+		query: 'select strain_add_drop where status by node',
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'dropped_wrapper',
+	});
+	dropped_wrapper.draw();
+}
+
+function drawRAMStatus(gps, duration, refresh) {
+	var these_options = clone(default_options);
+	these_options.vAxis = {scaleType: 'log', minValue:1, maxValue:16, textPosition: 'out', ticks: [1,2,4,8,16] };
+	these_options.title = 'RAM';
+
+	ram_status_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'ColumnChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1200'  + '&gpstime='  + gps + '&duration=' + duration,
+		query: 'select ram_history where status by node',
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'ram_status_wrapper',
+	});
+	ram_status_wrapper.draw();
+}
+
+
+function drawTimeSinceLast(gps, duration, refresh) {
+	var these_options = clone(default_options);
+	these_options.vAxis = {scaleType: 'log', minValue:1, maxValue:1000000, textPosition: 'out', ticks: [1,10,100,1000,10000,100000], format: 'scientific'};
+	these_options.title = 'Time Since Last Heartbeat';
+
+	time_since_last_wrapper = new google.visualization.ChartWrapper({
+		chartType: 'ColumnChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1300'  + '&gpstime='  + gps + '&duration=' + duration,
+		query: 'select time_since_last where status by node',
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'time_since_last_wrapper',
+	});
+	time_since_last_wrapper.draw();
 }
