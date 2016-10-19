@@ -52,7 +52,16 @@ class image_glob(elem):
 		self.content = [cap, tr]
 			
 class page(object):
-	def __init__(self, title="cbc web page", path='./', css=["./jquery.fancybox.css", "./gstlal.css"], script=["./jquery-3.1.1.min.js", "./jquery.fancybox.pack.js?v=2.1.5", "https://www.gstatic.com/charts/loader.js", "gstlal.js"], content = [], header_content = [], verbose=False):
+	def __init__(self, title="cbc web page", path='./',
+		css=["//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/gstlal.css", 
+			"//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/jquery.fancybox.css"
+			], 
+		script=["//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/jquery-3.1.1.min.js",
+			"//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/jquery.fancybox.pack.js?v=2.1.5",
+			"https://www.gstatic.com/charts/loader.js",
+			"//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/gstlal.js"
+			], 
+		content = [], header_content = [], verbose=False):
 		self.title = title; self.path = path; self.css = css; self.script = script; self.content = content; self.verbose = verbose; self.header_content = header_content
 
 	def __iadd__(self, content):
