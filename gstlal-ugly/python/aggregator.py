@@ -66,10 +66,16 @@ def get_url(url,d):
 	specific route.  FIXME it assumes that the routes end in .txt
 	"""
 	jobdata = urllib2.urlopen("%s%s.txt" % (url, d)).read().split("\n")
-	jobtime = numpy.array([float(x.split()[0]) for x in jobdata if x])
-	jobdata = numpy.array([float(x.split()[1]) for x in jobdata if x])
-	assert len(jobdata) == len(jobtime)
-	return jobtime, jobdata
+	data = []
+	for line in jobdata:
+		if line:
+			data.append([float(x) for x in line.split()])
+	data = numpy.array(data)
+	out = []
+	if data.shape != (0,):
+		for i in range(data.shape[1]):
+			out.append(data[:,i])
+	return out
 
 
 def reduce_data(xarr, yarr, func, level = 0):
@@ -225,7 +231,6 @@ def update_lowest_level_data_by_job_type_and_route(job, route, start, end, typ, 
 	this_data = list(jobdata[this_time_ix]) + prev_data
 	# shortcut if there are no updates
 	if len(this_time) == len(prev_times) and len(this_data) == len(prev_data):
-		print "shortcutting"
 		return []
 	reduced_time, reduced_data = reduce_data(this_time, this_data, func, level = 0)
 	#logging.info("processing job %s for data %s in span [%d,%d] of type %s: found %d" % (job, route, start, end, typ, len(reduced_time)))
@@ -301,14 +306,18 @@ def get_data_from_job_and_reduce((job, job_tag, routes, datatypes, prevdataspan,
 	dataspan = set()
 	for route in routes:
 		logging.info("processing job %s for route %s" % (job, route))
-		jobtime, jobdata = get_url(url, route)
+		# FIXME assumes always two columns
+		full_data = get_url(url, route)
+		if full_data:
+			jobtime, jobdata = full_data[0], full_data[1]
+		else:
+			jobtime, jobdata = [], []
 		gps1, gps2 = gps_range(jobtime)
 		for start, end in zip(gps1, gps2):
 			# shortcut to not reprocess data that has already been
 			# processed.  Dataspan was the only thing that was
 			# previously determined to be needing to be updated
 			# anything before that is pointless
-			if prevdataspan: print end, min(prevdataspan)
 			if prevdataspan and end < min(prevdataspan):
 				continue
 			for (typ, func) in datatypes:
@@ -321,5 +330,5 @@ def get_data_from_job_and_reduce((job, job_tag, routes, datatypes, prevdataspan,
 				for level in range(1,DIRS):
 					reduce_data_from_lower_level_by_job_type_and_route(level, base_dir, job, typ, route, func, start, end)
 				reduce_time.append(time.time()-now)
-	print "Updated %d with average time %f; Reduced %d with average time %f" % (len(update_time), numpy.mean(update_time), len(reduce_time), numpy.mean(reduce_time))
+	#print "Updated %d with average time %f; Reduced %d with average time %f" % (len(update_time), numpy.mean(update_time), len(reduce_time), numpy.mean(reduce_time))
 	return dataspan
