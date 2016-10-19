@@ -266,3 +266,95 @@ if "psd" in query:
 	data_table = gviz_api.DataTable(description)
 	data_table.LoadData(out_data)
 	print data_table.ToJSonResponse(req_id = reqId)
+
+for route, label in (("state_vector_on_off_gap", "(s)"), ("strain_add_drop", "(s)")):
+	if route in query:
+		path = base_path + "/aggregator/by_job"
+
+		if "status by node" in query:
+			out_data = []
+			max_time = 0.
+			for job in os.listdir(path):
+				this_data = {"H1": numpy.array([]), "L1": numpy.array([])}
+				this_time = {"H1": numpy.array([]), "L1": numpy.array([])}
+				for ifo in ("H1", "L1"):
+					try:
+						fname = "%s/%s/%s_%s.hdf5" % (path, job, ifo, route)
+						f = f = h5py.File(fname, "r")
+						this_data[ifo] = numpy.hstack((this_data[ifo], numpy.array(f["data"])))
+						this_time[ifo] = numpy.hstack((this_time[ifo], numpy.array(f["time"])))
+						max_time = max(this_time[ifo][0], max_time)
+						f.close()
+					except IOError:
+						pass
+				# FIXME the 16 comes from the 16 Hz sample rate
+				# used for state vectors in ALIGO. if that
+				# changes this needs to change too
+				out_data.append([job, float(this_data["H1"][0]) / 16., float(this_data["L1"][0]) / 16.])
+			description = [
+				("job", "string"),
+				("H1 %d" % max_time, "number"),
+				("L1 %d" % max_time, "number"),
+				]
+			data_table = gviz_api.DataTable(description)
+			data_table.LoadData(out_data)
+			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+			sys.exit()
+
+for route, label in (("ram_history", "(GB)"),):
+	if route in query:
+		path = base_path + "/aggregator/by_job"
+
+		if "status by node" in query:
+			out_data = []
+			max_time = 0.
+			for job in os.listdir(path):
+				try:
+					fname = "%s/%s/%s.hdf5" % (path, job, route)
+					f = f = h5py.File(fname, "r")
+					this_data = numpy.array(f["data"])[0]
+					this_time = numpy.array(f["time"])[0]
+					max_time = max(this_time, max_time)
+					out_data.append([job, this_data])
+					f.close()
+				except IOError:
+					# FIXME the 16 comes from the 16 Hz sample rate
+					# used for state vectors in ALIGO. if that
+					# changes this needs to change too
+					out_data.append([job, 0])
+			description = [
+				("job", "string"),
+				("RAM %d" % max_time, "number"),
+				]
+			data_table = gviz_api.DataTable(description)
+			data_table.LoadData(out_data)
+			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+			sys.exit()
+
+if "time_since_last" in query:
+	path = base_path + "/aggregator/by_job"
+
+	if "status by node" in query:
+		out_data = []
+		nowtime = int(now())
+		for job in os.listdir(path):
+			try:
+				fname = "%s/%s/%s.hdf5" % (path, job, "ram_history")
+				f = h5py.File(fname, "r")
+				this_time = numpy.array(f["time"])[0]
+				out_data.append([job, nowtime - this_time])
+				f.close()
+			except IOError:
+				# FIXME the 16 comes from the 16 Hz sample rate
+				# used for state vectors in ALIGO. if that
+				# changes this needs to change too
+				out_data.append([job, 1e8])
+		description = [
+			("job", "string"),
+			("Time since %d" % nowtime, "number"),
+			]
+		data_table = gviz_api.DataTable(description)
+		data_table.LoadData(out_data)
+		print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+		sys.exit()
+
