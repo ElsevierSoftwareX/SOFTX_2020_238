@@ -216,39 +216,40 @@ def plot_rates(coinc_param_distributions):
 	return fig
 
 
-def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, max_snr, ifo_snr = {}, sngls = None):
-	if len(instruments) > 2:
-		# FIXME:  figure out how to plot 3D PDFs
-		return None
-	if len(instruments) < 2:
-		# FIXME:  figure out how to plot 1D PDFs
-		return None
-	ignored, binnedarray, ignored = snrpdf.snr_joint_pdf_cache[snrpdf.snr_joint_pdf_keyfunc(instruments, horizon_distances)]
+def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, max_snr, sngls = None):
+	if len(instruments) < 1:
+		raise ValueError("len(instruments) must be >= 1")
+
+	# retrieve the PDF in binned array form (not the interpolator)
+	binnedarray = snrpdf.get_snr_joint_pdf_binnedarray(instruments, horizon_distances)
+
+	# the range of the axes
+	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, max_snr
+	mask = binnedarray.bins[(slice(xlo, xhi),) * len(instruments)]
+
+	# axes are in alphabetical order
 	instruments = sorted(instruments)
-	horizon_distances = dict(horizon_distances)
-	fig, axes = init_plot((5, 4))
-	x = binnedarray.bins[0].centres()
-	y = binnedarray.bins[1].centres()
+
+	# sngls is a sequence of {instrument: (snr, chisq)} dictionaries,
+	# digest into co-ordinate tuples for a sngls scatter plot
+	if sngls is not None:
+		# NOTE:  the PDFs are computed subject to the constraint
+		# that the candidate is observed in precisely that set of
+		# instruments, so we need to restrict ourselves, here, to
+		# coincs that involve the combination of instruments in
+		# question otherwise we'll be overlaying a scatter plot
+		# that we don't believe to have been drawn from the PDF
+		# we're showing.
+		sngls = numpy.array([tuple(sngl[instrument][0] for instrument in instruments) for sngl in sngls if sorted(sngl) == instruments])
+
+	x = [binning.centres() for binning in binnedarray.bins]
 	z = binnedarray.array
 	if numpy.isnan(z).any():
 		warnings.warn("%s SNR PDF for %s contains NaNs" % (", ".join(instruments), ", ".join("%s=%g" % instdist for instdist in sorted(horizon_distances.items()))))
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
 
-	# sngls is a sequence of {instrument: (snr, chisq)} dictionaries,
-	# obtain the co-ordinates for a sngls scatter plot for the
-	# instruments from that.  need to handle case in which there are no
-	# singles for this instrument
-	if sngls is not None:
-		sngls = numpy.array([(sngl[instruments[0]][0], sngl[instruments[1]][0]) for sngl in sngls if sorted(sngl) == instruments])
-		if not len(sngls):
-			sngls = None
-
-	# the range of the plots
-	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, max_snr
-
-	x = x[binnedarray.bins[xlo:xhi, xlo:xhi][0]]
-	y = y[binnedarray.bins[xlo:xhi, xlo:xhi][1]]
-	z = z[binnedarray.bins[xlo:xhi, xlo:xhi]]
+	x = [coords[m] for coords, m in zip(x, mask)]
+	z = z[mask]
 
 	# one last check for craziness to make error messages more
 	# meaningful
@@ -259,32 +260,61 @@ def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, max_snr, ifo_snr 
 	with numpy.errstate(divide = "ignore"):
 		z = numpy.log(z)
 
-	# FIXME:  hack to allow all-0 PDFs to be plotted.  remove when we
-	# have a version of matplotlib that doesn't crash, whatever version
-	# of matplotlib that is
-	if numpy.isinf(z).all():
-		z[:,:] = -60.
-		z[0,0] = -55.
+	if len(instruments) == 1:
+		# 1D case
+		fig, axes = init_plot((5., 5. / plotutil.golden_ratio))
 
-	norm = matplotlib.colors.Normalize(vmin = -40., vmax = max(0., z.max()))
+		# FIXME:  hack to allow all-0 PDFs to be plotted.  remove
+		# when we have a version of matplotlib that doesn't crash,
+		# whatever version of matplotlib that is
+		if numpy.isinf(z).all():
+			z[:] = -60.
+			z[0] = -55.
 
-	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z.T, 50, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
-	if ifo_snr:
-		axes.plot(ifo_snr[instruments[0]], ifo_snr[instruments[1]], 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
-	if sngls is not None:
-		axes.plot(sngls[:,0], sngls[:,1], "b.", alpha = .2)
-	axes.loglog()
-	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
-	#axes.set_xlim((xlo, xhi))
-	#axes.set_ylim((xlo, xhi))
-	fig.colorbar(mesh, ax = axes)
-	# co-ordinates are in alphabetical order
-	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
-	axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
-	axes.set_title(r"$\ln P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
+		axes.semilogx(x[0], z, color = "k")
+		ylo, yhi = -40., max(0., z.max())
+		if sngls is not None and len(sngls) == 1:
+			axes.axvline(sngls[0, 0])
+		axes.set_xlim((xlo, xhi))
+		axes.set_ylim((ylo, yhi))
+		axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
+		axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
+		axes.set_ylabel(r"$\ln P(\mathrm{SNR}_{\mathrm{%s}})$" % instruments[0])
+
+	elif len(instruments) == 2:
+		# 2D case
+		fig, axes = init_plot((5., 4.))
+
+		# FIXME:  hack to allow all-0 PDFs to be plotted.  remove
+		# when we have a version of matplotlib that doesn't crash,
+		# whatever version of matplotlib that is
+		if numpy.isinf(z).all():
+			z[:,:] = -60.
+			z[0,0] = -55.
+
+		norm = matplotlib.colors.Normalize(vmin = -40., vmax = max(0., z.max()))
+
+		mesh = axes.pcolormesh(x[0], x[1], z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
+		axes.contour(x[0], x[1], z.T, 50, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
+
+		if sngls is not None and len(sngls) == 1:
+			axes.plot(sngls[0, 0], sngls[0, 1], "ko", mfc = "None", mec = "g", ms = 14, mew=4)
+		elif sngls is not None:
+			axes.plot(sngls[:,0], sngls[:,1], "b.", alpha = .2)
+
+		axes.loglog()
+		axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
+		fig.colorbar(mesh, ax = axes)
+		# co-ordinates are in alphabetical order
+		axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
+		axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
+
+	else:
+		# FIXME:  figure out how to plot 3+D PDFs
+		return None
+
+	axes.set_title(r"$\ln P(%s | \{%s\}, \mathrm{signal})$" % (", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments), ", ".join("{D_{\mathrm{H}}}_{\mathrm{%s}}=%.3g" % item for item in sorted(horizon_distances.items()))))
 	fig.tight_layout(pad = .8)
-
 	return fig
 	
 
