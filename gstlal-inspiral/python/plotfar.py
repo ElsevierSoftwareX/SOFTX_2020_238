@@ -128,7 +128,7 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	else:
 		axes.contour(x, y, z.T, levels, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
 	if event_snr is not None and event_chisq is not None:
-		axes.plot(event_snr, event_chisq / event_snr / event_snr, 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
+		axes.plot(event_snr, event_chisq / event_snr / event_snr, "ko", mfc = "None", mec = "g", ms = 14, mew=4)
 	if sngls is not None:
 		axes.plot(sngls[:,0], sngls[:,1] / sngls[:,0]**2., "b.", alpha = .2)
 	axes.loglog()
@@ -316,6 +316,7 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	fig.tight_layout(pad = .8)
 	return fig
 
+
 def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios = None, is_open_box = False, ln_likelihood_ratio_markers = None):
 	assert xlo < xhi
 
@@ -348,6 +349,7 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios
 	fig.tight_layout(pad = .8)
 	return fig
 
+
 def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo, thi), masses = (1.4, 1.4), tref = None):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	axes.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1800.))
@@ -360,16 +362,16 @@ def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo, thi), masses 
 		y = list(map(history.__getitem__, x))
 		if tref is not None:
 			x -= float(tref)
-		axes.plot(x, y, color = plotutil.colour_from_instruments([instrument]), label = '%s' % instrument)
+		axes.plot(x, y, color = plotutil.colour_from_instruments([instrument]), label = "%s" % instrument)
 		yhi = max(max(y), yhi)
 	if tref is not None:
-		axes.set_xlabel('Time From GPS %.2f (s)' % float(tref))
+		axes.set_xlabel("Time From GPS %.2f (s)" % float(tref))
 	else:
 		axes.set_xlim((math.floor(tlo), math.ceil(thi)))
-		axes.set_xlabel('GPS Time (s)')
+		axes.set_xlabel("GPS Time (s)")
 	axes.set_ylim((0., math.ceil(yhi / 10.) * 10.))
-	axes.set_ylabel('Horizon Distance (Mpc)')
-	axes.set_title(r'Horizon Distance for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ vs.\ Time' % masses)
+	axes.set_ylabel("Horizon Distance (Mpc)")
+	axes.set_title(r"Horizon Distance for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ vs.\ Time" % masses)
 	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
 	axes.legend(loc = "lower left")
 	fig.tight_layout(pad = .8)
