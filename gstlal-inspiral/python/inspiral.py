@@ -572,7 +572,7 @@ class Data(object):
 		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
 		self.latency_history = deque(maxlen = 1000)
 		self.snr_history = deque(maxlen = 1000)
-		self.ram_history = deque(maxlen = 1000)
+		self.ram_history = deque(maxlen = 2)
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -993,8 +993,8 @@ class Data(object):
 			self.__do_gracedb_alerts()
 
 	def __update_eye_candy(self):
+		self.ram_history.append((float(lal.UTCToGPS(time.gmtime())), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
 		if self.stream_thinca.last_coincs:
-			self.ram_history.append((time.time(), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
 			latency_val = None
 			snr_val = (0,0)
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
