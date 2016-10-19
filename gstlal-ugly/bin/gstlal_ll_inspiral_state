@@ -79,13 +79,13 @@ def get_data_from_route((job, job_tag, routes, basedir)):
         for route in routes:
                 logging.info("processing job %s for route %s" % (job, route))
                 data = aggregator.get_url(url, route)
-		if "ram_history" in route:
-			jobtime, jobdata = aggregator.get_url(url, route)
-		if "strain_add_drop" in route:
-			jobtime, jobdata = aggregator.get_url(url, route)[0:2]
-		if "state_vector_on_off_gap" in route:
-			jobtime, ontime, offtime = aggregator.get_url(url, route)[0:3]
-			print ontime.shape, offtime.shape
+		jobtime, jobdata = numpy.array([]), numpy.array([])
+		if data and "ram_history" in route:
+			jobtime, jobdata = data[0], data[1]
+		if data and "strain_add_drop" in route:
+			jobtime, jobdata = data[0], data[1]
+		if data and "state_vector_on_off_gap" in route:
+			jobtime, ontime, offtime = data[0], data[1], data[2]
 			jobdata = ontime + offtime
 		path = "%s/by_job/%s" % (basedir, job)
 		fname = aggregator.create_new_dataset(path, route.replace("/","_"), timedata = jobtime, data = jobdata, tmp = True)
