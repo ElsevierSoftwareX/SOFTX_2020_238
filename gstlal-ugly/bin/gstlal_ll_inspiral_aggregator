@@ -99,10 +99,10 @@ if __name__ == '__main__':
 		# Then reduce the data across jobs at each level
 		mapargs = []
 		for start, end in zip(*aggregator.job_expanse(dataspan)):
+			logging.info("processing reduced data in span [%d,%d] at level %d" % (start, end))
 			# FIXME don't hardcode this range
 			for level in range(DIRS):
 				this_level_dir = "/".join([options.base_dir, aggregator.gps_to_leaf_directory(start, level = level)])
-				logging.info("processing reduced data in span [%d,%d] at level %d" % (start, end, level))
 				mapargs = []
 				for route in routes:
 					for (typ,func) in datatypes:
