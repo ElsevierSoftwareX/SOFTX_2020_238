@@ -107,12 +107,12 @@ gsl_vector_float** kernel(int half_length_at_original_rate, int f) {
 	/* the domain should be the kernel_length divided by two */
 	int c = kernel_length / 2;
 
-	gsl_vector_float **vecs = malloc(sizeof(gsl_vector_float *) * f);
+	gsl_vector_float **vecs = malloc(sizeof(*vecs) * f);
 	for (int i = 0; i < f; i++)
 		vecs[i] = gsl_vector_float_calloc(sub_kernel_length);
 
-	float *out = fftwf_malloc(sizeof(float) * kernel_length);
-	memset(out, 0, kernel_length * sizeof(float));
+	float *out = fftwf_malloc(sizeof(*out) * kernel_length);
+	memset(out, 0, kernel_length * sizeof(*out));
 
 
 	for (int i = 0; i < kernel_length; i++) {
@@ -182,7 +182,7 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 	 */
 
 	if (!nongap) {
-		memset(output, 0, sizeof(float) * blockstrideout * channels);
+		memset(output, 0, sizeof(*output) * blockstrideout * channels);
 		return;
 	}
 	guint kernel_offset, output_offset, input_offset;
@@ -646,7 +646,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			 */
 
 			if (element->need_pretend) {
-				memset(element->workspace->data, 0, sizeof(float) * element->workspace->size1 * element->workspace->size2);
+				memset(element->workspace->data, 0, sizeof(*element->workspace->data) * element->workspace->size1 * element->workspace->size2);
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
 			}
 			else
