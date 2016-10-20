@@ -331,13 +331,12 @@ def effective_distance_factor(inclination, fp, fc):
 
 def psd_to_fir_kernel(psd):
 	"""
-	Compute an acausal finite impulse-response filter kernel from a power
-	spectral density conforming to the LAL normalization convention,
-	such that if zero-mean unit-variance Gaussian random noise is fed
-	into an FIR filter using the kernel the filter's output will
-	possess the given PSD.  The PSD must be provided as a
-	REAL8FrequencySeries object (see
-	pylal.xlal.datatypes.real8frequencyseries).
+	Compute an acausal finite impulse-response filter kernel from a
+	power spectral density conforming to the LAL normalization
+	convention, such that if zero-mean unit-variance Gaussian random
+	noise is fed into an FIR filter using the kernel the filter's
+	output will possess the given PSD.  The PSD must be provided as a
+	REAL8FrequencySeries object (see lal's swig binding documentation).
 
 	The return value is the tuple (kernel, latency, sample rate).  The
 	kernel is a numpy array containing the filter kernel, the latency
