@@ -1,4 +1,9 @@
-# Copyright (C) 2009--2013  LIGO Scientific Collaboration
+# Copyright (C) 2009--2016  Kipp Cannon
+# Copyright (C) 2016  Chad Hanna
+# Copyright (C) 2016  Patrick Brockill
+# Copyright (C) 2016  Sarah Caudill
+# Copyright (C) 2015  Ryan Everett
+# Copyright (C) 2010  Leo Singer
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -42,7 +47,6 @@ Gst.init(None)
 
 
 import lal
-from pylal import datatypes as laltypes
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -214,7 +218,7 @@ def parse_framesrc_tags(taglist):
 	except KeyError:
 		channel_name = None
 	if "units" in taglist:
-		sample_units = laltypes.LALUnit(taglist["units"].strip())
+		sample_units = lal.Unit(taglist["units"].strip())
 	else:
 		sample_units = None
 	return {
