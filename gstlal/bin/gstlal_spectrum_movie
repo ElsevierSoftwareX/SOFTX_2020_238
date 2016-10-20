@@ -42,7 +42,6 @@ from gstlal import datasource
 
 
 from glue import segments
-from pylal.datatypes import LIGOTimeGPS
 
 
 #
