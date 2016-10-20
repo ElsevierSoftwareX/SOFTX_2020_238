@@ -28,7 +28,6 @@ Requires: numpy
 Requires: orc >= @MIN_ORC_VERSION@
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
-Requires: python-pylal >= @MIN_PYLAL_VERSION@
 Requires: scipy
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
 BuildRequires: fftw-devel >= 3
