@@ -31,7 +31,6 @@ import numpy
 import math
 
 import lal
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 
 #
 # =============================================================================
@@ -48,8 +47,7 @@ def factors_to_fir_kernel(coh_facs):
 	such that if zero-mean unit-variance Gaussian random noise is fed
 	into an FIR filter using the kernel the filter's output will
 	possess the given PSD.  The PSD must be provided as a
-	REAL8FrequencySeries object (see
-	pylal.xlal.datatypes.real8frequencyseries).
+	REAL8FrequencySeries object (see lal's swig binding documentation).
 
 	The return value is the tuple (kernel, latency, sample rate).  The
 	kernel is a numpy array containing the filter kernel, the latency
@@ -65,7 +63,7 @@ def factors_to_fir_kernel(coh_facs):
 	# extract the PSD bins and determine sample rate for kernel
 	#
 
-	data = coh_facs.data
+	data = coh_facs.data.data
 	sample_rate = 2 * int(round(coh_facs.f0 + len(data) * coh_facs.deltaF))
 
 	#
@@ -104,28 +102,32 @@ def factors_to_fir_kernel(coh_facs):
 	return kernel, latency, sample_rate
 
 def psd_to_impulse_response(PSD1, PSD2):
-	
+
 	assert PSD1.f0 == PSD2.f0
 	assert PSD1.deltaF == PSD2.deltaF
-	assert len(PSD1.data) == len(PSD2.data)
+	assert len(PSD1.data.data) == len(PSD2.data.data)
 
-	coh_facs_H1 = REAL8FrequencySeries()
-	coh_facs_H1.f0 = PSD1.f0
-	coh_facs_H1.deltaF = PSD1.deltaF
-	coh_facs_H1.data = PSD2.data/(PSD1.data + PSD2.data)
-	# work around referencing vs. copying structure
-	data = coh_facs_H1.data
-	data[0] = data[-1] = 0.0
-	coh_facs_H1.data = data
+	coh_facs_H1 = lal.CreateREAL8FrequencySeries(
+		name = "",
+		epoch = PSD1.epoch,
+		f0 = PSD1.f0,
+		deltaF = PSD1.deltaF,
+		sampleUnits = lal.DimensionlessUnit,
+		length = len(PSD1.data.data)
+	)
+	coh_facs_H1.data.data = PSD2.data.data / (PSD1.data.data + PSD2.data.data)
+	coh_facs_H1.data.data[0] = coh_facs_H1.data.data[-1] = 0.0
 
-	coh_facs_H2 = REAL8FrequencySeries()
-	coh_facs_H2.f0 = PSD2.f0
-	coh_facs_H2.deltaF = PSD2.deltaF
-	coh_facs_H2.data = PSD1.data/(PSD1.data + PSD2.data)
-	# work around referencing vs. copying structure
-	data = coh_facs_H2.data
-	data[0] = data[-1] = 0.0
-	coh_facs_H2.data = data
+	coh_facs_H2 = lal.REAL8FrequencySeries(
+		name = "",
+		epoch = PSD2.epoch,
+		f0 = PSD2.f0,
+		deltaF = PSD2.deltaF,
+		sampleUnits = lal.DimensionlessUnit,
+		length = len(PSD2.data.data)
+	)
+	coh_facs_H2.data = PSD1.data.data / (PSD1.data.data + PSD2.data.data)
+	coh_facs_H2.data[0] = coh_facs_H2.data[-1] = 0.0
 
 	#
 	# set up fir filter
