@@ -233,6 +233,7 @@ def parse_command_line():
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
 	parser.add_option("--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
+	parser.add_option("--local-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 	parser.add_option("--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
 	parser.add_option("--injection-file", help = "The injection xml file that corresponds to the low latency injections: only used for making missed found plots.")
 	parser.add_option("--state-backup-destination", metavar = "URL", help = "Location to back state up to, e.g. gstlalcbc@ldas-pcdev1.ligo.caltech.edu.")
@@ -305,33 +306,34 @@ else:
 		gstlalInspiralInjJob = inspiral_pipe.generic_job('gstlal_inspiral', tag_base = "gstlal_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 
 # A local universe job that will run in a loop marginalizing all of the likelihoods
-margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 # an lvalert_listen job
-listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.gracedb_service_url, gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, inj_progs = options.inj_lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command), inj_gracedb_service_url = options.inj_gracedb_service_url, inj_gracedb_group = options.inj_gracedb_group, inj_gracedb_search = options.inj_gracedb_search, inj_gracedb_pipeline = options.inj_gracedb_pipeline, injections = True if inj_channel_dict else False)
+listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.gracedb_service_url, gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, inj_progs = options.inj_lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command), inj_gracedb_service_url = options.inj_gracedb_service_url, inj_gracedb_group = options.inj_gracedb_group, inj_gracedb_search = options.inj_gracedb_search, inj_gracedb_pipeline = options.inj_gracedb_pipeline, injections = True if inj_channel_dict else False)
 
+# This restores default behavior if you uncomment
 # get urls job 
-urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+#urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 # FIXME find a bigger computer for this or run several instancnes on the cluster.  aggregator and state job
-aggJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_aggregator",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+aggJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_aggregator",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 # Run this on the cluster
-analysisStateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_state", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"})) 
+analysisStateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_state", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command)) 
 
 # Summary page job
 pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
 # DQ job
-dqJob = inspiral_pipe.generic_job("gstlal_ll_dq", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+dqJob = inspiral_pipe.generic_job("gstlal_ll_dq", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
 if options.injection_file:
 	# Sensitivity plots job
-	sensJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_calculate_range", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+	sensJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_calculate_range", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 if options.state_backup_destination:
 	# State saving job 
-	stateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_save_state", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+	stateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_save_state", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 listenNode = lvalert_listen_node(listenJob, dag)
 
@@ -450,20 +452,26 @@ def groups(l, n):
 	for i in xrange(0, len(l), n):
 		yield l[i:i+n]
 
-for g in groups(jobTags, 10):
-	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
+#for g in groups(jobTags, 10):
+#	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
+
 margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 
+#
 # FIXME by default the inspiral jobs advertise the current directory as their
 # job tag, but this should be made to be more flexible
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags)})
+#
+
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "route": ["H1_snr_history", "L1_snr_history", "snr_history"]})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "route": ["far_history", "latency_history", "likelihood_history"]})
+
 analysisStateNode = inspiral_pipe.generic_node(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2})
 
 # summary page
 if options.injection_file:
 
-	for g in groups(inj_jobTags, 10):
-		urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
+	#for g in groups(inj_jobTags, 10):
+	#	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
 
 	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
