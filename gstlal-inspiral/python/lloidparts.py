@@ -911,7 +911,10 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# this) isn't quite smart enough to negotiate a
 			# common format among its upstream peers so the
 			# capsfilter is still required.
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw, rate=%d" % next_rate[rate])
+			# NOTE uncomment this line to restore audioresample for
+			# upsampling
+			#branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw, rate=%d" % next_rate[rate])
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, branch_heads[rate]), "audio/x-raw, rate=%d" % next_rate[rate])
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_to_%d_snr_resampler" % (logname, rate, next_rate[rate]))
 
 		#
