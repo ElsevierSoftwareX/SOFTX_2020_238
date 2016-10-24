@@ -7,7 +7,7 @@
 # time make logs/gstlal.txt -f Makefile.ligosoftware_icc_deb8_gstreamer-1.0 1> make.out 2> make.err
 
 # albert.einstein for git checkout
-USER=duncan.meacher
+USER=alexander.pace
 
 # Set directories and paths
 SRC_DIR:=${PWD}/src
@@ -19,7 +19,7 @@ LALSUITE_REPO:=${PWD}/git/lalsuite
 INSTALL_DIR:=${LAL_PATH}
 
 # Set to build from git (0 = repo, 1 = git)
-LALSUITE_GIT=0
+LALSUITE_GIT=1
 GSTLAL_GIT=1
 
 # Set package release versions
@@ -150,26 +150,31 @@ env.sh :
 	@echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
 	@echo 'unset LD_LIBRARY_PATH LIBRARY_PATH LD_PRELOAD' >> $@
 	@echo 'LAL_PATH=${PWD}/opt' >> $@
-	@echo 'export CFLAGS="-O3 -march=native -lfftw3f -lfftw3 -lm -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings -lirc -limf"' >> $@
+	@echo 'export CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings -lirc -limf"' >> $@
 	@if [ ${CLUSTER} = "ligo.caltech.edu" ] ; then \
 		echo "source ${ICC_CIT} intel64" >> $@ ; \
-		echo 'export LDFLAGS="-L${MKLROOT}/lib/intel64"' >> $@ ; \
+		echo 'LDFLAGS_INTEL="-L${MKLROOT}/lib/intel64"' >> $@ ; \
 	elif [ ${CLUSTER} = "nemo.uwm.edu" ] ; then \
 		echo "source ${ICC_UWM} intel64" >> $@ ; \
-		echo 'export LDFLAGS="-L/opt/intel/composer_xe_2015.5.223/mkl/lib/intel64"' >> $@ ; \
+		echo 'LDFLAGS_INTEL="-L/opt/intel/composer_xe_2015.5.223/mkl/lib/intel64"' >> $@ ; \
 	elif [ ${CLUSTER} = "atlas.local" ] ; then \
 		echo "source ${ICC_ATLAS} intel64" >> $@ ; \
-		echo 'export LDFLAGS="-L/opt/intel/2015/lib/intel64 -L/opt/intel/2015/mkl/lib/intel64"' >> $@ ; \
+		echo 'LDFLAGS_INTEL="-L/opt/intel/2015/lib/intel64 -L/opt/intel/2015/mkl/lib/intel64"' >> $@ ; \
 	fi
-	@echo '#export LD_PRELOAD="${PWD}/opt/lib/libfftw3.so:${PWD}/opt/lib/libfftw3f.so"' >> $@
 	@echo 'export CC="icc"' >> $@
 	@echo 'export CXX="icpc"' >> $@
+	@echo '# Force explicit linking of optimized FFTW libraries:' >> $@
+	@echo 'LDFLAGS="$${LDFLAGS_INTEL} -Wl,-rpath,${PWD}/opt/lib -L${PWD}/opt/lib -lfftw3f"' >> $@
+	@echo 'LDFLAGS="$${LDFLAGS} -Wl,-rpath,${PWD}/opt/lib -L${PWD}/opt/lib -lfftw3"' >> $@
+	@echo 'LDFLAGS="$${LDFLAGS} -Wl,-rpath,${PWD}/opt/lib -L${PWD}/opt/lib -lfftw3f_threads"' >> $@
+	@echo 'LDFLAGS="$${LDFLAGS} -Wl,-rpath,${PWD}/opt/lib -L${PWD}/opt/lib -lfftw3_threads"' >> $@
+	@echo 'LDFLAGS="$${LDFLAGS} -lm"' >> $@
 	@echo '# These are environment variables that do get exported' >> $@
 	@echo 'PATH=$${LAL_PATH}/bin:$${PATH}' >> $@
 	@echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
 	@echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages' >> $@
 	@echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0' >> $@
-	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH' >> $@
+	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL' >> $@
 
 
 #	if [ ${CLUSTER} != "ligo.caltech.edu" ||  ${CLUSTER} != "nemo.uwm.edu" || ${CLUSTER} != *"atlas"* ]
@@ -342,11 +347,13 @@ $(GLUE_TARGET) : $(LALAPPS_TARGET)
 $(LALAPPS_TARGET) : $(LALSTOCH_TARGET)
 	echo $(LALAPPS) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalapps && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalapps && ./configure --enable-gcc-flags=no --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalapps && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALAPPS).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALAPPS) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALAPPS) && ./configure --enable-gcc-flags=no --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALAPPS) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -355,11 +362,13 @@ $(LALAPPS_TARGET) : $(LALSTOCH_TARGET)
 $(LALSTOCH_TARGET) : $(LALINFER_TARGET)
 	echo $(LALSTOCHASTIC) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalstochastic && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalstochastic && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalstochastic && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALSTOCHASTIC).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALSTOCHASTIC) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALSTOCHASTIC) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALSTOCHASTIC) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -368,11 +377,13 @@ $(LALSTOCH_TARGET) : $(LALINFER_TARGET)
 $(LALINFER_TARGET) : $(LALPULSAR_TARGET)
 	echo $(LALINFERENCE) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalinference && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalinference && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)  CC="gcc" CXX="g++" CFLAGS="-fPIC -O3 -march=native" ; \
 		cd $(LALSUITE_REPO)/lalinference && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALINFERENCE).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALINFERENCE) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALINFERENCE) && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)  CC="gcc" CXX="g++" CFLAGS="-fPIC -O3 -march=native" ; \
 		cd $(SRC_DIR)/$(LALINFERENCE) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -381,11 +392,13 @@ $(LALINFER_TARGET) : $(LALPULSAR_TARGET)
 $(LALPULSAR_TARGET) : $(LALINSPIRAL_TARGET)
 	echo $(LALPULSAR) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalpulsar && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalpulsar && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)  CC="gcc" CXX="g++" CFLAGS="-fPIC -O3 -march=native" ; \
 		cd $(LALSUITE_REPO)/lalpulsar && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALPULSAR).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALPULSAR) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALPULSAR) && ./configure --enable-swig-python --disable-lalxml --prefix=$(INSTALL_DIR)  CC="gcc" CXX="g++" CFLAGS="-fPIC -O3 -march=native" ; \
 		cd $(SRC_DIR)/$(LALPULSAR) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -394,11 +407,13 @@ $(LALPULSAR_TARGET) : $(LALINSPIRAL_TARGET)
 $(LALINSPIRAL_TARGET) : $(LALDETCHAR_TARGET)
 	echo $(LALINSPIRAL) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalinspiral && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalinspiral && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalinspiral && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalinspiral && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALINSPIRAL).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALINSPIRAL) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALINSPIRAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -407,11 +422,13 @@ $(LALINSPIRAL_TARGET) : $(LALDETCHAR_TARGET)
 $(LALDETCHAR_TARGET) : $(LALBURST_TARGET)
 	echo $(LALDETCHAR) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/laldetchar && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/laldetchar && ./00boot ; \
 		cd $(LALSUITE_REPO)/laldetchar && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/laldetchar && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALDETCHAR).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALDETCHAR) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALDETCHAR) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALDETCHAR) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -420,11 +437,13 @@ $(LALDETCHAR_TARGET) : $(LALBURST_TARGET)
 $(LALBURST_TARGET) : $(LALSIM_TARGET)
 	echo $(LALBURST) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalburst && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalburst && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalburst && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalburst && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALBURST).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALBURST) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALBURST) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALBURST) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -433,11 +452,13 @@ $(LALBURST_TARGET) : $(LALSIM_TARGET)
 $(LALSIM_TARGET) : $(LALMETAIO_TARGET)
 	echo $(LALSIMULATION) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalsimulation && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalsimulation && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalsimulation && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalsimulation && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALSIMULATION).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALSIMULATION) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALSIMULATION) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -446,11 +467,13 @@ $(LALSIM_TARGET) : $(LALMETAIO_TARGET)
 $(LALMETAIO_TARGET) : $(LALFRAME_TARGET)
 	echo $(LALMETAIO) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalmetaio && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalmetaio && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalmetaio && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalmetaio && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALMETAIO).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALMETAIO) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALMETAIO) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALMETAIO) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -459,11 +482,13 @@ $(LALMETAIO_TARGET) : $(LALFRAME_TARGET)
 $(LALFRAME_TARGET) : $(LAL_TARGET)
 	echo $(LALFRAME) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalframe && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalframe && ./00boot ; \
 		cd $(LALSUITE_REPO)/lalframe && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalframe && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALFRAME).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALFRAME) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LALFRAME) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALFRAME) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -472,11 +497,13 @@ $(LALFRAME_TARGET) : $(LAL_TARGET)
 $(LAL_TARGET) : $(LOGS_DIR)/git.txt $(OPROFILE_TARGET) $(LIBFRAME_TARGET) $(METAIO_TARGET) $(SWIG_TARGET) $(LDASTOOLSAL_TARGET)  $(LDASTOOLSFRAMECPP_TARGET) $(GDS_TARGET)
 	echo $(LAL) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lal && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lal && ./00boot ; \
 		cd $(LALSUITE_REPO)/lal && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lal && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LAL).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LAL) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
 		cd $(SRC_DIR)/$(LAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -619,9 +646,9 @@ $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 	echo $(FFTW) 1>&2
 	tar -xzf $(TAR_DIR)/$(FFTW).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(FFTW) && \
-		./configure CFLAGS="${CFLAGS}" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
+		./configure CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES) && make clean && \
-		./configure CFLAGS="${CFLAGS}" --enable-shared --enable-sse2 --enable-avx --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
+		./configure CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse2 --enable-avx --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES)
 
 #########################
