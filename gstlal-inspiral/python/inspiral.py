@@ -508,6 +508,11 @@ class Data(object):
 		bottle.route("/latency_histogram.txt")(self.web_get_latency_histogram)
 		bottle.route("/latency_history.txt")(self.web_get_latency_history)
 		bottle.route("/snr_history.txt")(self.web_get_snr_history)
+		# FIXME don't hardcode the ifos
+		bottle.route("/H1_snr_history.txt")(self.web_get_H1_snr_history)
+		bottle.route("/L1_snr_history.txt")(self.web_get_L1_snr_history)
+		bottle.route("/likelihood_history.txt")(self.web_get_likelihood_history)
+		bottle.route("/far_history.txt")(self.web_get_far_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
 		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
 		bottle.route("/zero_lag_ranking_stats.xml")(self.web_get_zero_lag_ranking_stats_file)
@@ -572,7 +577,11 @@ class Data(object):
 		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
 		self.latency_history = deque(maxlen = 1000)
 		self.snr_history = deque(maxlen = 1000)
+		self.likelihood_history = deque(maxlen = 1000)
+		self.far_history = deque(maxlen = 1000)
 		self.ram_history = deque(maxlen = 2)
+		# FIXME don't hardcode
+		self.ifo_snr_history = {"H1": deque(maxlen = 10000), "L1": deque(maxlen = 10000)}
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -599,6 +608,11 @@ class Data(object):
 				if mapinfo.data:
 					events.extend(streamthinca.SnglInspiral.from_buffer(mapinfo.data))
 				memory.unmap(mapinfo)
+			# Find max SNR sngles
+			if events:
+				max_snr_event = max(events, key = lambda t: t.snr)
+				self.ifo_snr_history[max_snr_event.ifo].append((float(max_snr_event.end_time) + 1e-9 * float(max_snr_event.end_time_ns), max_snr_event.snr))
+
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_", 1)[0]
 
@@ -997,7 +1011,10 @@ class Data(object):
 		if self.stream_thinca.last_coincs:
 			latency_val = None
 			snr_val = (0,0)
+			like_val = (0,0)
+			far_val = (0,0)
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
+			coinc_event_index = self.stream_thinca.last_coincs.coinc_event_index
 			for coinc_event_id, coinc_inspiral in coinc_inspiral_index.items():
 				# FIXME:  update when a proper column is available
 				latency = coinc_inspiral.minimum_duration
@@ -1009,10 +1026,20 @@ class Data(object):
 				if snr >= snr_val[1]:
 					t = float(coinc_inspiral_index[coinc_event_id].end)
 					snr_val = (t, snr)
+			for coinc_event_id, coinc_inspiral in coinc_event_index.items():
+				like = coinc_event_index[coinc_event_id].likelihood
+				if like >= like_val[1]:
+					t = float(coinc_inspiral_index[coinc_event_id].end)
+					like_val = (t, like)
+					far_val = (t, coinc_inspiral_index[coinc_event_id].combined_far)
 			if latency_val is not None:
 				self.latency_history.append(latency_val)
 			if snr_val != (0,0):
 				self.snr_history.append(snr_val)
+			if like_val != (0,0):
+				self.likelihood_history.append(like_val)
+			if far_val != (0,0):
+				self.far_history.append(far_val)
 
 	def update_eye_candy(self):
 		with self.lock:
@@ -1034,6 +1061,31 @@ class Data(object):
 			# first one in the list is sacrificed for a time stamp
 			for time, snr in self.snr_history:
 				yield "%f %e\n" % (time, snr)
+
+	# FIXME, don't hardcode these routes
+	def web_get_H1_snr_history(self):
+		with self.lock:
+			# first one in the list is sacrificed for a time stamp
+			for time, snr in self.ifo_snr_history["H1"]:
+				yield "%f %e\n" % (time, snr)
+
+	def web_get_L1_snr_history(self):
+		with self.lock:
+			# first one in the list is sacrificed for a time stamp
+			for time, snr in self.ifo_snr_history["L1"]:
+				yield "%f %e\n" % (time, snr)
+
+	def web_get_likelihood_history(self):
+		with self.lock:
+			# first one in the list is sacrificed for a time stamp
+			for time, like in self.likelihood_history:
+				yield "%f %e\n" % (time, like)
+
+	def web_get_far_history(self):
+		with self.lock:
+			# first one in the list is sacrificed for a time stamp
+			for time, far in self.far_history:
+				yield "%f %e\n" % (time, far)
 
 	def web_get_ram_history(self):
 		with self.lock:
