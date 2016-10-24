@@ -70,7 +70,7 @@ if __name__ == '__main__':
 	# Some data reduction happens in parallel
 	#
 
-	pool = Pool(20)
+	pool = Pool(8)
 
 	#
 	# Parse command line
@@ -233,7 +233,17 @@ if __name__ == '__main__':
 	#
 
 	try:
-		subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "%s" % os.path.join(options.directory, "plots"), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
+		webserverplotdir = os.path.join(options.web_dir, "plots")
+		if os.path.exists(webserverplotdir):
+			newdir = os.path.join(options.web_dir, str(int(aggregator.now())))
+			aggregator.makedir(newdir)
+			shutil.move(webserverplotdir, newdir)
+			try:
+				shutil.move(os.path.join(options.web_dir, "index.html"), newdir)
+			except IOError:
+				pass
+
+		subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "plots", "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
