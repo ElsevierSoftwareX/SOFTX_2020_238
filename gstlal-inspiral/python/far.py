@@ -1094,7 +1094,7 @@ WHERE
 					ranks[rank_range],
 					zero_lag_compcumcount.compress(rank_range),
 					sigma = zero_lag_compcumcount.compress(rank_range)**.5,
-					p0 = [1e-4, max(zero_lag_compcumcount)]
+					p0 = [3e-4, max(zero_lag_compcumcount)]
 				)
 
 				N_ratio, total_num = precluster_normalization
