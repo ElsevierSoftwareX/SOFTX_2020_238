@@ -189,7 +189,8 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 	for (guint samp = 0; samp < blockstrideout; samp++) {
 		kernel_offset = samp % factor;
 		output_offset = samp * channels;
-		input_offset = samp / factor * channels;
+		input_offset = samp / factor;
+		input_offset *= channels;
 
 		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
 	}
