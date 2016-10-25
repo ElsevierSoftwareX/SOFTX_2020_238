@@ -614,34 +614,22 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
 		base_params = {"instruments": (frozenset(instruments),)}
-		instruments = list(instruments)
-		# FIXME For > 2 IFOs, it's currently possible to randomly
-		# generate end times which would not be involved in a
-		# coincidence. e.g. if H1_end_time is 1000000000, L1_end_time
-		# could be 999999999.99565 and V1_end_time could be
-		# 1000000000.0232099, but V1_end_time - L1_end_time =
-		# 0.02755996766526434 > light_travel_time("L1","V1") =
-		# 0.026448341016726495
-		base_params.update({"%s_end_time" % instruments[-1]: 1000000000., "%s_coa_phase" % instruments[-1]: 0.})
 		horizongen = iter(self.horizon_history.randhorizons()).next
 		# P(horizons) = 1/livetime
 		log_P_horizons = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey())
-		log_P_dt_dphi = inspiral_extrinsics.lnP_dt_dphi_uniform(base_params["instruments"], self.delta_t)
 		coordgens = tuple(iter(self.binnings[key].randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next for key in keys)
-		random_uniform = random.uniform
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = CoincParams(zip(keys, seq[0::2]))
 			params.update(base_params)
-			params.update(("%s_end_time" % instrument, 1000000000 + random_uniform(-self.delta_t-light_travel_time(instrument, instrument), self.delta_t+light_travel_time(instrument, instrument))) for instrument in instruments[:-1])
-			params.update(("%s_coa_phase" % instrument, random_uniform(0., 2*math.pi)) for instrument in instruments[:-1])
+			params.update(inspiral_extrinsics.random_time_phase_params(list(instruments), self.delta_t))
 			params.horizons = horizongen()
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
 			# it to be (only that it be correct up to an
 			# unknown constant) and I've not checked that it is
 			# so the documentation doesn't promise that it is.
-			yield params, sum(seq[1::2], log_P_horizons + log_P_dt_dphi)
+			yield params, sum(seq[1::2], log_P_horizons + inspiral_extrinsics.lnP_dt_dphi_uniform(params, self.delta_t))
 
 	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0, coinc_only = True):
 		"""

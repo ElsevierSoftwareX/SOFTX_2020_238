@@ -693,10 +693,26 @@ class SNRPDF(object):
 #
 # =============================================================================
 #
-#                                   SNR PDF
+#                                 dt dphi PDF
 #
 # =============================================================================
 #
+
+
+def random_time_phase_params(instruments, delta_t):
+	# FIXME For > 2 IFOs, it's currently possible to randomly
+	# generate end times which would not be involved in a
+	# coincidence. e.g. if H1_end_time is 1000000000, L1_end_time
+	# could be 999999999.99565 and V1_end_time could be
+	# 1000000000.0232099, but V1_end_time - L1_end_time =
+	# 0.02755996766526434 > light_travel_time("L1","V1") =
+	# 0.026448341016726495
+	params = {"%s_end_time" % instruments[-1]: 1000000000., "%s_coa_phase" % instruments[-1]: 0.}
+
+	params.update(("%s_end_time" % instrument, 1000000000 + random.uniform(-delta_t-light_travel_time(instrument, instrument), delta_t+light_travel_time(instrument, instrument))) for instrument in instruments[:-1])
+	params.update(("%s_coa_phase" % instrument, random.uniform(0., 2*math.pi)) for instrument in instruments[:-1])
+
+	return params
 
 
 def __dphi_calc_A(combined_snr, delta_t):
@@ -757,8 +773,9 @@ def lnP_dt_signal(dt, snr_ratio):
 	return numpy.polynomial.chebyshev.chebval(dt/0.015013, x) - numpy.log(norm)
 
 
-def lnP_dt_dphi_uniform(instruments, coincidence_window):
-	# FIXME Dont hardcode IFOs
+def lnP_dt_dphi_uniform(params, coincidence_window):
+	# NOTE Currently hardcoded for H1L1
+	# FIXME Dont hardcode
 	return math.log(1 / 0.015013 * 1 / (2*math.pi))
 
 
