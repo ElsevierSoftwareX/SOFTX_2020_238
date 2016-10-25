@@ -51,6 +51,7 @@ import lal
 import lalsimulation
 from pylal import rate
 from pylal import snglcoinc
+from pylal.inject import light_travel_time
 
 
 # FIXME:  caution, this information might get organized differently later.
@@ -688,3 +689,102 @@ class SNRPDF(object):
 		if fileobj is None:
 			fileobj = open(cls.DEFAULT_FILENAME)
 		return cls.from_xml(ligolw_utils.load_fileobj(fileobj, gz = True, contenthandler = cls.LIGOLWContentHandler)[0])
+
+#
+# =============================================================================
+#
+#                                   SNR PDF
+#
+# =============================================================================
+#
+
+
+def __dphi_calc_A(combined_snr, delta_t):
+        B = -10.840765 * numpy.abs(delta_t) + 1.072866
+        M = 46.403738 * numpy.abs(delta_t) - 0.160205
+        nu = 0.009032 * numpy.abs(delta_t) + 0.001150
+        return (1.0 / (1.0 + math.exp(-B*(combined_snr - M)))**(1.0/nu))
+
+
+def __dphi_calc_mu(combined_snr, delta_t):
+        if delta_t >= 0.0:
+                A = 76.234617*delta_t + 0.001639
+                B = 0.290863
+                C = 4.775688
+                return (3.145953 - A* math.exp(-B*(combined_snr-C)))
+        elif delta_t < 0.0:
+                A = -130.877663*delta_t - 0.002814
+                B = 0.31023
+                C = 3.184671
+                return (3.145953 + A* math.exp(-B*(combined_snr-C)))
+
+
+def __dphi_calc_kappa(combined_snr, delta_t):
+        K = -176.540199*numpy.abs(delta_t) + 7.4387
+        B = -7.599585*numpy.abs(delta_t) + 0.215074
+        M = -1331.386835*numpy.abs(delta_t) - 35.309173
+        nu = 0.012225*numpy.abs(delta_t) + 0.000066
+        return (K / (1.0 + math.exp(-B*(combined_snr - M)))**(1.0/nu))
+
+
+def lnP_dphi_signal(delta_phi, delta_t, combined_snr):
+	# Compute von mises parameters
+	A_param = __dphi_calc_A(combined_snr, delta_t)
+	mu_param = __dphi_calc_mu(combined_snr, delta_t)
+	kappa_param = __dphi_calc_kappa(combined_snr, delta_t)
+	C_param = 1.0 - A_param
+
+	return math.log(A_param*stats.vonmises.pdf(delta_phi, kappa_param, loc=mu_param) + C_param/(2*math.pi))
+
+
+def lnP_dt_signal(dt, snr_ratio):
+	# FIXME Work out correct model
+
+	# Fits below an snr ratio of 0.33 are not reliable
+	if snr_ratio < 0.33:
+		snr_ratio = 0.33
+	x = numpy.zeros(13)
+
+	x[0] = numpy.poly1d([-597.94227757949329, 2132.773853473127, -2944.126306979932, 1945.3033368083029, -603.91576991927593, 70.322754873993347])(snr_ratio)
+	x[2] = numpy.poly1d([-187.50681052710425, 695.84172327044325, -1021.0688423797938, 744.3266490236075, -272.12853221391498, 35.542404632554508])(snr_ratio)
+	x[4] = numpy.poly1d([52.128579054466599, -198.32054234352267, 301.34865541080791, -230.8522943433488, 90.780611645135437, -16.310130528927655])(snr_ratio)
+	x[6] = numpy.poly1d([48.216566165393878, -171.70632176976451, 238.48370471322843, -159.65005032451785, 50.122296925755677, -5.5466740894321367])(snr_ratio)
+	x[8] = numpy.poly1d([-34.030336093450863, 121.44714070928059, -169.91439486329773, 115.86873916702386, -38.08411813067778, 4.7396784315927816])(snr_ratio)
+	x[10] = numpy.poly1d([3.4576823675810178, -12.362609260376738, 17.3300203922424, -11.830868787176165, 3.900284020272442, -0.47157315012399248])(snr_ratio)
+	x[12] = numpy.poly1d([4.0423239651315113, -14.492611904657275, 20.847419746265583, -15.033846689362553, 5.3953159232942216, -0.78132676885883601])(snr_ratio)
+	norm = numpy.poly1d([-348550.84040194791, 2288151.9147818103, -6623881.5646601757, 11116243.157047395, -11958335.1384027, 8606013.1361163966, -4193136.6690072878, 1365634.0450674745, -284615.52077054407, 34296.855844416605, -1815.7135263788341])(snr_ratio)
+
+	return numpy.polynomial.chebyshev.chebval(dt/max_dt, x) - numpy.log(norm)
+
+
+def lnP_dt_dphi_uniform(instruments, coincidence_window):
+	# FIXME Dont hardcode IFOs
+	return math.log(1 / 0.015013 * 1 / (2*math.pi))
+
+
+def lnP_dt_dphi(param_dict, coincidence_window, model = "noise"):
+	# Return P(dt, dphi|{rho_{IFO}}, signal)
+	dt_dphi_keys = sorted([key for key in param_dict if key.endswith("_end_time") or key.endswith("_coa_phase")])
+
+	if model == "noise":
+		# FIXME Insert actual noise models
+		return lnP_dt_dphi_uniform(param_dict["instruments"], coincidence_window), dt_dphi_keys
+	elif model == "signal":
+		# FIXME Insert actual signal models
+		if dt_dphi_keys == ["H1_coa_phase", "H1_end_time", "L1_coa_phase", "L1_end_time"]:
+			delta_t = param_dict["H1_end_time"] - param_dict["L1_end_time"]
+			delta_phi = (param_dict["H1_coa_phase"] - param_dict["L1_coa_phase"]) % (2*math.pi)
+			combined_snr = math.sqrt(param_dict["H1_snr_chi"][0]**2. + param_dict["L1_snr_chi"][0]**2.)
+			if param_dict["H1_snr_chi"][0] > param_dict["L1_snr_chi"][0]:
+				snr_ratio = param_dict["L1_snr_chi"][0] / param_dict["H1_snr_chi"][0]
+			else:
+				snr_ratio = param_dict["H1_snr_chi"][0] / param_dict["L1_snr_chi"][0]
+			return lnP_dt_signal(abs(delta_t), snr_ratio) + lnP_dphi_signal(delta_phi, delta_t, combined_snr), dt_dphi_keys
+		else:
+			# IFOs != {H1,L1} case, thus just return uniform
+			# distribution so that dt/dphi terms dont affect
+			# likelihood ratio
+			# FIXME Work out general N detector case
+			return lnP_dt_dphi_uniform(param_dict["instruments"], coincidence_window), dt_dphi_keys
+	else:
+		raise ValueError("invalid data model '%s'" % mode)

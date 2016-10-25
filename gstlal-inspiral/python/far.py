@@ -72,6 +72,7 @@ import lal
 import lalsimulation
 from pylal import rate
 from pylal import snglcoinc
+from pylal.inject import light_travel_time
 
 
 from gstlal import stats as gstlalstats
@@ -218,6 +219,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if len(events) < self.min_instruments:
 				raise ValueError("candidates require >= %d events in ranking mode" % self.min_instruments)
 			params["instruments"] = (frozenset(event.ifo for event in events),)
+			params.update(("%s_end_time" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo]) for event in events)
+			params.update(("%s_coa_phase" % event.ifo, event.coa_phase) for event in events)
 		elif mode == "counting":
 			if len(events) != 1:
 				raise ValueError("only singles are allowed in counting mode")
@@ -257,6 +260,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		return params
 
+	def lnP_noise(self, params):
+		# evaluate dt and dphi parameters
+		lnP_dt_dphi_noise, dt_dphi_keys = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "noise")
+		# clean params up for parent class's lnP_noise method
+		clean_params = params.copy()
+		for key in dt_dphi_keys:
+			del clean_params[key]
+
+		return lnP_dt_dphi_noise + super(ThincaCoincParamsDistributions, self).lnP_noise(clean_params)
+
 	def lnP_signal(self, params):
 		# NOTE:  lnP_signal() and lnP_noise() (not shown here) both
 		# omit the factor P(horizon distance) = 1/T because it is
@@ -268,7 +281,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# instrument-->snr mapping
 		snrs = dict((name.split("_", 1)[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
 		# evaluate SNR PDF
-		lnP_signal = self.SNRPDF.lnP_snrs(snrs, params.horizons)
+		lnP_snr_signal = self.SNRPDF.lnP_snrs(snrs, params.horizons)
+
+		# evaluate dt and dphi parameters
+		lnP_dt_dphi_signal, dt_dphi_keys = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "signal")
+		# clean params up for parent class's lnP_signal method
+		clean_params = params.copy()
+		for key in dt_dphi_keys:
+			del clean_params[key]
 
 		# FIXME:  P(instruments | signal) needs to depend on
 		# horizon distances.  here we're assuming whatever
@@ -276,7 +296,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# probabilities to is OK.  we probably need to cache these
 		# and save them in the XML file, too, like P(snrs | signal,
 		# instruments)
-		return lnP_signal + super(ThincaCoincParamsDistributions, self).lnP_signal(params)
+		return lnP_snr_signal + lnP_dt_dphi_signal + super(ThincaCoincParamsDistributions, self).lnP_signal(clean_params)
 
 	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
 		if verbose:
@@ -375,10 +395,18 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
+	def add_zero_lag(self, param_dict):
+		# FIXME Do we want to histogram dt and dphi for zerolag?
+		for key in [k for k in param_dict if k.endswith("_end_time") or k.endswith("_coa_phase")]:
+			del param_dict[key]
+		super(ThincaCoincParamsDistributions, self).add_zero_lag(param_dict)
+
 	def _rebuild_interpolators(self):
 		keys = set(self.zero_lag_rates)
 		keys.remove("instruments")
 		keys.remove("singles")
+		keys -= set("%s_end_time" % instrument for instrument in ["H1", "L1", "V1"])
+		keys -= set("%s_coa_phase" % instrument for instrument in ["H1", "L1", "V1"])
 		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators(keys)
 
 		#
@@ -586,21 +614,34 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
 		base_params = {"instruments": (frozenset(instruments),)}
+		instruments = list(instruments)
+		# FIXME For > 2 IFOs, it's currently possible to randomly
+		# generate end times which would not be involved in a
+		# coincidence. e.g. if H1_end_time is 1000000000, L1_end_time
+		# could be 999999999.99565 and V1_end_time could be
+		# 1000000000.0232099, but V1_end_time - L1_end_time =
+		# 0.02755996766526434 > light_travel_time("L1","V1") =
+		# 0.026448341016726495
+		base_params.update({"%s_end_time" % instruments[-1]: 1000000000., "%s_coa_phase" % instruments[-1]: 0.})
 		horizongen = iter(self.horizon_history.randhorizons()).next
 		# P(horizons) = 1/livetime
 		log_P_horizons = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey())
+		log_P_dt_dphi = inspiral_extrinsics.lnP_dt_dphi_uniform(base_params["instruments"], self.delta_t)
 		coordgens = tuple(iter(self.binnings[key].randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next for key in keys)
+		random_uniform = random.uniform
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = CoincParams(zip(keys, seq[0::2]))
 			params.update(base_params)
+			params.update(("%s_end_time" % instrument, 1000000000 + random_uniform(-self.delta_t-light_travel_time(instrument, instrument), self.delta_t+light_travel_time(instrument, instrument))) for instrument in instruments[:-1])
+			params.update(("%s_coa_phase" % instrument, random_uniform(0., 2*math.pi)) for instrument in instruments[:-1])
 			params.horizons = horizongen()
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
 			# it to be (only that it be correct up to an
 			# unknown constant) and I've not checked that it is
 			# so the documentation doesn't promise that it is.
-			yield params, sum(seq[1::2], log_P_horizons)
+			yield params, sum(seq[1::2], log_P_horizons + log_P_dt_dphi)
 
 	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0, coinc_only = True):
 		"""
@@ -635,6 +676,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		be used to form an importance weighted sampler of the log
 		likelihood ratios.
 		"""
+		# FIXME need to add dt and dphi 
 		#
 		# retrieve horizon distance from history if not given
 		# explicitly.  retrieve SNR threshold from class attribute
