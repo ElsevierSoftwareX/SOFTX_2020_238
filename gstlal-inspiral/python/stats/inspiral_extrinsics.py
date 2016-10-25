@@ -754,7 +754,7 @@ def lnP_dt_signal(dt, snr_ratio):
 	x[12] = numpy.poly1d([4.0423239651315113, -14.492611904657275, 20.847419746265583, -15.033846689362553, 5.3953159232942216, -0.78132676885883601])(snr_ratio)
 	norm = numpy.poly1d([-348550.84040194791, 2288151.9147818103, -6623881.5646601757, 11116243.157047395, -11958335.1384027, 8606013.1361163966, -4193136.6690072878, 1365634.0450674745, -284615.52077054407, 34296.855844416605, -1815.7135263788341])(snr_ratio)
 
-	return numpy.polynomial.chebyshev.chebval(dt/max_dt, x) - numpy.log(norm)
+	return numpy.polynomial.chebyshev.chebval(dt/0.015013, x) - numpy.log(norm)
 
 
 def lnP_dt_dphi_uniform(instruments, coincidence_window):
@@ -772,7 +772,7 @@ def lnP_dt_dphi(param_dict, coincidence_window, model = "noise"):
 	elif model == "signal":
 		# FIXME Insert actual signal models
 		if dt_dphi_keys == ["H1_coa_phase", "H1_end_time", "L1_coa_phase", "L1_end_time"]:
-			delta_t = param_dict["H1_end_time"] - param_dict["L1_end_time"]
+			delta_t = float(param_dict["H1_end_time"] - param_dict["L1_end_time"])
 			delta_phi = (param_dict["H1_coa_phase"] - param_dict["L1_coa_phase"]) % (2*math.pi)
 			combined_snr = math.sqrt(param_dict["H1_snr_chi"][0]**2. + param_dict["L1_snr_chi"][0]**2.)
 			if param_dict["H1_snr_chi"][0] > param_dict["L1_snr_chi"][0]:
