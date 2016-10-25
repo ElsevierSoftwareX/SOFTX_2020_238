@@ -1670,7 +1670,7 @@ for n, filename in enumerate(filenames):
 		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = filename.replace(".sqlite",""), base = os.path.join(options.output_dir, options.user_tag))
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(filename)[-1].replace(".sqlite",""), base = os.path.join(options.output_dir, options.user_tag))
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	for n, plot in zip(options.plot_group, plots):
