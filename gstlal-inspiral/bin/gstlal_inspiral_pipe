@@ -405,8 +405,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						continue
 
 					output_paths = [subdir_path([output_seg_inj_path, '%04d' % (i + numchunks * chunk_counter,)]) for i, s in enumerate(svd_bank_strings)]
-					output_names = [inspiral_pipe.T050017_filename(ifos, '%04d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
-					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%04d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%04d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings) if i not in ignore]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%04d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings) if i not in ignore]
 					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, chunk_counter, injection = True)) if i / len(ifos) not in ignore]
 
 					# setup injection node
