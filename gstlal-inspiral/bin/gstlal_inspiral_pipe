@@ -125,6 +125,62 @@ def flatten(lst):
     return list(itertools.chain.from_iterable(lst))
 
 #
+# Organization Scheme functions
+#
+
+def create_cache_directories(svdJob, gstlalInspiralJob, gstlalInspiralInjJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, toSqliteJob, marginalizeJob, options):
+	# Create cache file directories
+	try:
+		os.mkdir(os.path.join(svdJob.tag_base, 'cache'))
+	except:
+		pass
+
+	try:
+		os.mkdir(os.path.join(gstlalInspiralJob.tag_base, 'cache'))
+	except:
+		pass
+
+
+	try:
+		os.mkdir(os.path.join(calcRankPDFsJob.tag_base, 'cache'))
+	except:
+		pass
+
+	try:
+		os.mkdir(os.path.join(calcLikelihoodJob.tag_base, 'cache'))
+	except:
+		pass
+
+	try:
+		os.mkdir(os.path.join(toSqliteJob.tag_base, 'cache'))
+	except:
+		pass
+
+	try:
+		os.mkdir(os.path.join(marginalizeJob.tag_base, 'cache'))
+	except:
+		pass
+
+	if options.injections:
+		try:
+			os.mkdir(os.path.join(gstlalInspiralInjJob.tag_base, 'cache'))
+		except:
+			pass
+
+		try:
+			os.mkdir(os.path.join(calcLikelihoodJobInj.tag_base, 'cache'))
+		except:
+			pass
+
+def subdir_path(dirlist):
+	output_path = '/'.join(dirlist)
+	try:
+		os.mkdir(output_path)
+	except:
+		pass
+	return output_path
+
+#
 # get a dictionary of all the disjoint 2+ detector combination segments
 #
 
@@ -163,12 +219,13 @@ def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
 						"frame-segments-name": options.frame_segments_name},
 					input_files = {	"frame-cache":options.frame_cache,
 							"frame-segments-file":options.frame_segments_file},
-					output_files = {"write-psd":inspiral_pipe.T050017_filename(ifos, "REFERENCE_PSD", int(seg[0]), int(seg[1]), '.xml.gz', path = refPSDJob.output_path)}
+					output_files = {"write-psd":inspiral_pipe.T050017_filename(ifos, "REFERENCE_PSD", int(seg[0]), int(seg[1]), '.xml.gz', path = subdir_path([refPSDJob.output_path, str(int(seg[0]))[:5]]))}
 				)
 	return psd_nodes
 
 def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
 	svd_nodes = {}
+	output_path = subdir_path([svdJob.output_path, str(int(seg[0]))[:5]])
 	for i, bank_group in enumerate(bank_groups):
 		for ifo, files in bank_group.items():
 			# First sort out the clipleft, clipright options
@@ -181,7 +238,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg):
 				clipright.append(options.overlap / 2)
 				ids.append("%d_%d" % (i, n))
 
-			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%04d_SVD' % (i,), int(seg[0]), int(seg[1]), '.xml.gz', path = svdJob.output_path)
+			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%04d_SVD' % (i,), int(seg[0]), int(seg[1]), '.xml.gz', path = output_path)
 
 			svd_nodes.setdefault(ifo, []).append(
 				inspiral_pipe.generic_node(svdJob, dag,
@@ -245,6 +302,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 		numchunks = 10
 
 		for seg in segsdict[ifos]:
+			output_seg_path = subdir_path([gstlalInspiralJob.output_path, str(int(seg[0]))[:5]])
+			if options.injections:
+				output_seg_inj_path = subdir_path([gstlalInspiralInjJob.output_path, str(int(seg[0]))[:5]])
 			
 			# only use a channel dict with the relevant channels
 			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
@@ -254,8 +314,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
 				# setup output names
-				output_names = [inspiral_pipe.T050017_filename(ifos, '%04d_LLOID' % (i + numchunks * chunk_counter,), int(seg[0]), int(seg[1]), '.xml.gz', path = gstlalInspiralJob.output_path) for i, s in enumerate(svd_bank_strings)]
-				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%04d_DIST_STATS' % (i + numchunks * chunk_counter,), int(seg[0]), int(seg[1]), '.xml.gz', path = gstlalInspiralJob.output_path) for i,s in enumerate(svd_bank_strings)]
+				output_paths = [subdir_path([output_seg_path, '%04d' % (i + numchunks * chunk_counter,)]) for i, s in enumerate(svd_bank_strings)]
+				output_names = [inspiral_pipe.T050017_filename(ifos, '%04d_LLOID' % (i + numchunks * chunk_counter,), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
+				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%04d_DIST_STATS' % (i + numchunks * chunk_counter,), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i,s in enumerate(svd_bank_strings)]
 
 				# FIXME do better with svd node parents?
 				# non injection node
@@ -306,8 +367,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 				
 					# setup output names	
 					sim_name = sim_tag_from_inj_file(injections)
-					output_names = [inspiral_pipe.T050017_filename(ifos, '%04d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
-					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%04d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = gstlalInspiralInjJob.output_path) for i, s in enumerate(svd_bank_strings)]
+					output_paths = [subdir_path([output_seg_inj_path, '%04d' % (i + numchunks * chunk_counter,)]) for i, s in enumerate(svd_bank_strings)]
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%04d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%04d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
 
 					# setup injection node
 					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
@@ -388,6 +450,8 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 	outnodes = {}
 	instruments = "".join(sorted(instrument_set))
 	margnodes = []
+	output_seg_prior_path = subdir_path([createPriorDistStatsJob.output_path, str(int(boundary_seg[0]))[:5]])
+	output_seg_calcrank_path = subdir_path([calcRankPDFsJob.output_path, str(int(boundary_seg[0]))[:5]])
 	# Here n counts the bins
 	# first non-injections
 	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
@@ -400,7 +464,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = [],
 				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1, "min-instruments":options.min_instruments},
-				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
+				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = subdir_path([output_seg_prior_path, '%04d' % n]))}
 			)
 		# Create a file that has the priors *and* all of the diststats
 		# for a given bin marginalized over time. This is all that will
@@ -415,7 +479,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
 				parent_nodes = [diststats_per_bin_node],
 				input_files = {"":diststats_per_bin_node.output_files["output"]},
-				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)}
+				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = subdir_path([output_seg_calcrank_path, '%04d' % n]))}
 			)
 		margnodes.append(diststats_per_bin_node)
 		rankpdf_nodes.append(calcranknode)
@@ -471,6 +535,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			# Merging all the dbs from the same sub bank
 			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
 				db = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
+				db = os.path.join(subdir_path([subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(db).segment[0]))[:5]]), CacheEntry.from_T050017(db).description[:4]]), db)
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
 					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_cache_files = {"input-cache":inputs},
@@ -497,6 +562,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 			# Merging all the dbs from the same sub bank and injection run
 			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
 				injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
+				injdb = os.path.join(subdir_path([subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(injdb).segment[0]))[:5]]), CacheEntry.from_T050017(injdb).description[:4]]), injdb)
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
 					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_cache_files = {"input-cache":inputs},
@@ -519,10 +585,12 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		vetoes = [options.vetoes]
 
 	chunk_nodes = []
+	dbs_to_delete = []
 	# Process the chirp mass bins in chunks to paralellize the merging process
 	for chunk, dbs in enumerate(chunks([node.input_files[""] for node in innodes[None]], 20)):
 		# Merge the final non injection database into chunks
 		noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite')
+		noninjdb = os.path.join(subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(noninjdb).segment[0]))[:5]]), noninjdb)
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = innodes[None],
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 			input_cache_files = {"input-cache": dbs},
@@ -536,6 +604,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 			input_files = {"":noninjdb}
 		)
 		chunk_nodes.append(noninjsqlitenode)
+		dbs_to_delete.append(noninjdb)
 
 	# Merge the final non injection database
 	noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID', int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
@@ -566,6 +635,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 			# Setup the final output names, etc.
 			injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite')
+			injdb = os.path.join(subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(injdb).segment[0]))[:5]]), injdb)
 
 
 			# merge
@@ -582,6 +652,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 				input_files = {"":injdb}
 			)
 			chunk_nodes.append(clusternode)
+			dbs_to_delete.append(injdb)
 
 
 		# Setup the final output names, etc.
@@ -630,7 +701,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 			
 		outnodes.append(sqlitenode)
 
-	return injdbs, noninjdb, outnodes
+	return injdbs, noninjdb, outnodes, dbs_to_delete
 
 def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, injdbs, noninjdb, final_sqlite_nodes):
 	# compute FAPs and FARs
@@ -658,7 +729,7 @@ def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJo
 		input_files = {"background-bins-file":"marginalized_likelihood.xml.gz", "injection-db":injdbs, "non-injection-db":noninjdb}
 	)
 	
-	return farnode
+	return farnode, margout
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -787,6 +858,7 @@ for f in $@;do mkdir -p $(dirname $f)/raw;cp $f $(dirname $f)/raw/$(basename $f)
 f.close()
 os.chmod("store_raw.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
 
+
 #
 # setup the job classes
 #
@@ -815,6 +887,13 @@ openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base
 pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 plotbackgroundJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_background", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+rmJob = inspiral_pipe.generic_job("rm", tag_base = "rm_intermediate_merger_products", "want_graceful_removal":"True", "kill_sig":"15")
+
+#
+# Create cache directories
+#
+
+create_cache_directories(svdJob, gstlalInspiralJob, gstlalInspiralInjJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, toSqliteJob, marginalizeJob, options)
 
 #
 # Get the analysis segments
@@ -858,7 +937,7 @@ if options.reference_psd is None:
 		inspiral_pipe.generic_node(medianPSDJob, dag,
 			parent_nodes = psd_nodes.values(),
 			input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
-			output_files = {"output-name": inspiral_pipe.T050017_filename(instruments, "REFERENCE_PSD", int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = medianPSDJob.output_path)}
+			output_files = {"output-name": inspiral_pipe.T050017_filename(instruments, "REFERENCE_PSD", int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = subdir_path([medianPSDJob.output_path, str(int(boundary_seg[0]))[:5]]))}
 		)
 
 	ref_psd = median_psd_node.output_files["output-name"]
@@ -914,13 +993,13 @@ rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankP
 # after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
 #
 
-injdbs, noninjdb, final_sqlite_nodes = finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, outnodes, injsnrnodes, options, instruments)
+injdbs, noninjdb, final_sqlite_nodes, dbs_to_delete = finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, outnodes, injsnrnodes, options, instruments)
 
 #
 # Compute FAP
 #
 
-farnode = compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, injdbs, noninjdb, final_sqlite_nodes)
+farnode, margfiles_to_delete = compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, injdbs, noninjdb, final_sqlite_nodes)
 
 # make summary plots
 plotnodes = []
@@ -957,6 +1036,19 @@ inspiral_pipe.generic_node(pageJob, dag, parent_nodes = plotnodes,
 inspiral_pipe.generic_node(pageJob, dag, parent_nodes = plotnodes, 
 	opts = {"title":"gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_LLOID_COMBINED"] + [injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs]}
 )
+
+#
+# rm intermediate merger products
+#
+for db in dbs_to_delete:
+	inspiral_pipe.generic_node(rmJob, dag, parent_nodes = plotnodes,
+		input_files = {"": db}
+	)
+
+for margfile in margfiles_to_delete:
+	inspiral_pipe.generic_node(rmJob, dag, parent_nodes = plotnodes,
+		input_files = {"": margfile}
+	)
 
 #
 # all done
