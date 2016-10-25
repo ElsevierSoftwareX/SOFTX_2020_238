@@ -154,7 +154,7 @@
 #	+ `--gracedb-pipeline`: gracedb pipeline (default is gstlal).
 #	+ `--gracedb-group`: gracedb group (default is Test).
 #	+ `--gracedb-service-url`: gracedb service url (default is https://gracedb.ligo.org/api/)
-#	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 4s.
+#	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 30s.
 #	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = +inf, i.e., don't retain singles).
 #
 # ### Review Status
@@ -305,7 +305,7 @@ def parse_command_line():
 	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb pipeline, default is gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "gracedb service url, default is https://gracedb.ligo.org/api/")
-	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 4.0, help = "Set the thinca interval, default = 4s")
+	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
 	# NOTE:  the clustering SQL scripts search for this option in the
 	# process_params table to determine the threshold below which it
 	# can delete uninteresting singles after the coincs are ranked.  if
