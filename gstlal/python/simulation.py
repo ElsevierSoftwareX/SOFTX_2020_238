@@ -70,7 +70,7 @@ def sim_inspiral_to_segment_list(fname, pad=1, verbose=False):
 
 	for row in lsctables.SimInspiralTable.get_table(xmldoc):
 		t = LIGOTimeGPS(row.get_time_geocent())
-		seglist.append(segments.segment(int(math.floor(t-pad)), int(math.ceil(t+pad))))
+		seglist.append(segments.segment(LIGOTimeGPS(int(math.floor(t-pad))), LIGOTimeGPS(int(math.ceil(t+pad)))))
 
 	# help the garbage collector
 
