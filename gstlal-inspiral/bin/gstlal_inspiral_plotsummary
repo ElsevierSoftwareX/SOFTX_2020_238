@@ -355,9 +355,7 @@ AS
 		AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0);
 	""")
 
-	connection.cursor().execute("""
-CREATE INDEX IF NOT EXISTS sim_coinc_map_helper_index ON sim_coinc_map_helper (sid, cid);
-	""")
+	connection.cursor().execute("CREATE INDEX IF NOT EXISTS sim_coinc_map_helper_index ON sim_coinc_map_helper (sid, cid);")
 
 	connection.cursor().execute("""
 CREATE TEMPORARY TABLE
@@ -383,10 +381,57 @@ AS
 
 	""")
 
-	connection.cursor().execute("""
-DROP INDEX sim_coinc_map_helper_index;
+	connection.cursor().execute("DROP INDEX sim_coinc_map_helper_index;")
+
+	contents.connection.cursor().execute("""
+CREATE TEMPORARY TABLE
+	sim_id_combined_far
+AS
+	SELECT
+		coinc_inspiral.combined_far AS far, sim_coinc_map.simulation_id AS sim_id
+	FROM
+		sim_coinc_map
+		JOIN coinc_inspiral ON ( coinc_inspiral.coinc_event_id == sim_coinc_map.coinc_event_id  )
 	""")
 
+	contents.connection.cursor().execute("""
+CREATE TEMPORARY TABLE
+	sim_id_sngl_id
+	AS
+		SELECT
+			sim_coinc_map.simulation_id AS sim_id, sngl_inspiral.event_id AS sngl_id
+		FROM
+			sim_coinc_map
+		JOIN coinc_event_map as mapA ON ( mapA.coinc_event_id == sim_coinc_map.coinc_event_id )
+		JOIN sngl_inspiral ON ( sngl_inspiral.event_id == mapA.event_id )
+	""")
+
+	contents.connection.cursor().execute("CREATE INDEX IF NOT EXISTS sim_id_combined_far_index ON sim_id_combined_far (far, sim_id)")
+	contents.connection.cursor().execute("CREATE INDEX IF NOT EXISTS sim_id_sngl_id_index ON sim_id_sngl_id (sim_id, sngl_id)")
+
+	contents.connection.cursor().execute("""
+CREATE TEMPORARY TABLE
+	sim_sngl_far
+	AS
+		SELECT
+			sim_inspiral.*,
+			sngl_inspiral.*,
+			sim_id_combined_far.far
+		FROM
+			sim_inspiral
+			JOIN sim_id_sngl_id ON (
+				sim_inspiral.simulation_id == sim_id_sngl_id.sim_id
+			)
+			JOIN sngl_inspiral ON (
+				sngl_inspiral.event_id == sim_id_sngl_id.sngl_id
+			)
+			JOIN sim_id_combined_far ON (
+				sim_id_combined_far.sim_id == sim_id_sngl_id.sim_id
+			)
+	""")
+
+	contents.connection.cursor().execute("DROP INDEX sim_id_combined_far_index")
+	contents.connection.cursor().execute("DROP INDEX sim_id_sngl_id_index")
 
 #
 # =============================================================================
@@ -770,40 +815,15 @@ class ParameterAccuracyPlots(object):
 			# not an injections file
 			return
 		n_simcolumns = len(contents.sim_inspiral_table.columnnames)
-		for values in contents.connection.cursor().execute("""
-SELECT
-	sim_inspiral.*,
-	sngl_inspiral.*,
-	(
-		SELECT
-			coinc_inspiral.combined_far
-		FROM
-			sim_coinc_map
-			JOIN coinc_inspiral ON (
-				coinc_inspiral.coinc_event_id == sim_coinc_map.coinc_event_id  )
-		WHERE
-			sim_coinc_map.simulation_id == sim_inspiral.simulation_id
-	)
-FROM
-	sim_inspiral
-	JOIN sim_coinc_map ON (
-		sim_coinc_map.simulation_id == sim_inspiral.simulation_id
-	)
-	JOIN coinc_event_map ON (
-		coinc_event_map.coinc_event_id == sim_coinc_map.coinc_event_id
-	)
-	JOIN sngl_inspiral ON (
-		coinc_event_map.table_name == 'sngl_inspiral'
-		AND coinc_event_map.event_id == sngl_inspiral.event_id
-	)
-	WHERE sngl_inspiral.snr > 8.0
-		"""):
+
+		for values in contents.connection.cursor().execute("SELECT * FROM sim_sngl_far"):
 			sim = contents.sim_inspiral_table.row_from_cols(values)
 			sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
 			far = values[-1]
 			del sim.process_id, sim.source, sim.simulation_id
 			del sngl.process_id, sngl.event_id
 			self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl, far))
+
 
 	def finish(self):
 
@@ -1002,28 +1022,18 @@ WHERE
 					self.zerolag[instrument].end_time.append(float(sngl.end))
 		else:
 			# injections file
-			for values in contents.connection.cursor().execute("""
-SELECT
-	sngl_inspiral.*,
-	sim.spin1x * sim.spin1x + sim.spin1y * sim.spin1y + sim.spin1z * sim.spin1z + sim.spin2x * sim.spin2x + sim.spin2y * sim.spin2y + sim.spin2z * sim.spin2z
-FROM
-	sim_coinc_map
-	JOIN coinc_event_map ON (
-		coinc_event_map.coinc_event_id == sim_coinc_map.coinc_event_id
-	)
-	JOIN sngl_inspiral ON (
-		coinc_event_map.table_name == 'sngl_inspiral'
-		AND coinc_event_map.event_id == sngl_inspiral.event_id
-	)
-	JOIN sim_inspiral AS sim ON sim.simulation_id == sim_coinc_map.simulation_id
-			"""):
-				sngl = contents.sngl_inspiral_table.row_from_cols(values)
+			n_simcolumns = len(contents.sim_inspiral_table.columnnames)
+			for values in contents.connection.cursor().execute("SELECT * FROM sim_sngl_far"):
+				sim = contents.sim_inspiral_table.row_from_cols(values)
+				sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
+				far = values[-1]
 				eta = sngl.mass1 * sngl.mass2 / (sngl.mass1 + sngl.mass2)**2
 				mtot = sngl.mass1 + sngl.mass2
 				chieff = (sngl.mass1 * sngl.spin1z + sngl.mass2 * sngl.spin2z) / mtot
 				instrument = sngl.ifo
 				end_time = sngl.end
-				spin = values[-1]
+				# FIXME, what should this be?
+				spin = (sim.mass1 * (sim.spin1x**2 + sim.spin1y**2 + sim.spin1z**2)**.5 + sim.mass2 * (sim.spin1x**2 + sim.spin1y**2 + sim.spin1**2)**.5 ) / (sim.mass1 + sim.mass2)
 				if end_time in contents.seglists[instrument]:
 					if instrument not in self.injections:
 						self.injections[instrument] = self.Points()
@@ -1033,7 +1043,7 @@ FROM
 					self.injections[instrument].mchirp.append(mtot * eta**(3. / 5))
 					self.injections[instrument].eta.append(eta)
 					self.injections[instrument].chieff.append(chieff)
-					self.injections[instrument].spin.append((spin / 2.)**.5)
+					self.injections[instrument].spin.append(spin)
 
 	def finish(self):
 		for instrument in set(self.injections) | set(self.background) | set(self.zerolag):
@@ -1045,10 +1055,7 @@ FROM
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s (Closed Box)" % instrument)
 
-			for (spinstart, spinstop) in [(0,0.1), (0.1,0.2), (0.2,0.3), (0.3,0.4), (0.4,0.5), (0.5, 0.6), (0.6, 1.0)][::-1]:
-				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
-				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
-				axes.loglog(injsnr, injchi2, '.', label = "Inj $|s|$=%.1f" % spinstart)
+			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, '.', label = "Inj")
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.legend(loc = "upper left")
 			axes.set_xlim((self.snr_min, None))
@@ -1056,10 +1063,7 @@ FROM
 
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s" % instrument)
-			for (spinstart, spinstop) in [(0,0.1), (0.1,0.2), (0.2,0.3), (0.3,0.4), (0.4,0.5), (0.5, 0.6), (0.6, 1.0)][::-1]:
-				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
-				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
-				axes.loglog(injsnr, injchi2, '.', label = "Inj $|s|$=%.1f" % spinstart)
+			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, '.', label = "Inj")
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].chi2, "bx", label = "Zero-lag")
 			axes.legend(loc = "upper left")
@@ -1210,26 +1214,14 @@ WHERE
 			# injections file
 			for values in contents.connection.cursor().execute("""
 SELECT
-	sngl_inspiral_x.*,
-	sngl_inspiral_y.*
+        sngl_inspiral_x.*,
+        sngl_inspiral_y.*
 FROM
-	sim_coinc_map
-	JOIN coinc_event_map AS coinc_event_map_x ON (
-		coinc_event_map_x.coinc_event_id == sim_coinc_map.coinc_event_id
-	)
-	JOIN sngl_inspiral AS sngl_inspiral_x ON (
-		coinc_event_map_x.table_name == 'sngl_inspiral'
-		AND coinc_event_map_x.event_id == sngl_inspiral_x.event_id
-	)
-	JOIN coinc_event_map AS coinc_event_map_y ON (
-		coinc_event_map_y.coinc_event_id == sim_coinc_map.coinc_event_id
-	)
-	JOIN sngl_inspiral AS sngl_inspiral_y ON (
-		coinc_event_map_y.table_name == 'sngl_inspiral'
-		AND coinc_event_map_y.event_id == sngl_inspiral_y.event_id
-	)
+	sngl_inspiral AS sngl_inspiral_x
+		JOIN sim_id_sngl_id AS sim_id_sngl_id_x ON sim_id_sngl_id_x.sngl_id == sngl_inspiral_x.event_id
+		JOIN sngl_inspiral AS sngl_inspiral_y JOIN sim_id_sngl_id AS sim_id_sngl_id_y ON sim_id_sngl_id_y.sngl_id == sngl_inspiral_y.event_id
 WHERE
-	sngl_inspiral_x.ifo > sngl_inspiral_y.ifo
+	sim_id_sngl_id_x.sim_id == sim_id_sngl_id_y.sim_id AND sngl_inspiral_x.ifo > sngl_inspiral_y.ifo;
 			"""):
 				x = contents.sngl_inspiral_table.row_from_cols(values)
 				y = contents.sngl_inspiral_table.row_from_cols(values[len(contents.sngl_inspiral_table.columnnames):])
@@ -1670,7 +1662,7 @@ for n, filename in enumerate(filenames):
 		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(filename)[-1].replace(".sqlite",""), base = os.path.join(options.output_dir, options.user_tag))
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = filename.replace(".sqlite",""), base = os.path.join(options.output_dir, options.user_tag))
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	for n, plot in zip(options.plot_group, plots):
