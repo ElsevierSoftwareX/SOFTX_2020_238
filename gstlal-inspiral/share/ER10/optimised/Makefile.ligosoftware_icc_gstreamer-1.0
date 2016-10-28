@@ -7,7 +7,7 @@
 # time make logs/gstlal.txt -f Makefile.ligosoftware_icc_deb8_gstreamer-1.0 1> make.out 2> make.err
 
 # albert.einstein for git checkout
-USER=alexander.pace
+USER=duncan.meacher
 
 # Set directories and paths
 SRC_DIR:=${PWD}/src
@@ -16,10 +16,12 @@ LOGS_DIR:=logs
 PATCH_DIR:=${PWD}/patches
 GSTLAL_REPO:=${PWD}/git/gstlal
 LALSUITE_REPO:=${PWD}/git/lalsuite
+LALSUITE_EXTRA_REPO:=${PWD}/git/lalsuite-extra
 INSTALL_DIR:=${LAL_PATH}
 
 # Set to build from git (0 = repo, 1 = git)
-LALSUITE_GIT=1
+LALSUITE_EXTRA_SVN=1
+LALSUITE_GIT=0
 GSTLAL_GIT=1
 
 # Set package release versions
@@ -150,7 +152,7 @@ env.sh :
 	@echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
 	@echo 'unset LD_LIBRARY_PATH LIBRARY_PATH LD_PRELOAD' >> $@
 	@echo 'LAL_PATH=${PWD}/opt' >> $@
-	@echo 'export CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings -lirc -limf"' >> $@
+	@echo 'export CFLAGS="-O3 -march=native -lfftw3 -lfftw3f -lfftw3_threads -lfftw3f_threads -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib"' >> $@
 	@if [ ${CLUSTER} = "ligo.caltech.edu" ] ; then \
 		echo "source ${ICC_CIT} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L${MKLROOT}/lib/intel64"' >> $@ ; \
@@ -161,70 +163,20 @@ env.sh :
 		echo "source ${ICC_ATLAS} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L/opt/intel/2015/lib/intel64 -L/opt/intel/2015/mkl/lib/intel64"' >> $@ ; \
 	fi
+	@echo 'export LD_LIBRARY_PATH=$${LAL_PATH}/lib:$${LD_LIBRARY_PATH}' >> $@
 	@echo 'export CC="icc"' >> $@
 	@echo 'export CXX="icpc"' >> $@
 	@echo '# Force explicit linking of optimized FFTW libraries:' >> $@
-	@echo 'LDFLAGS="$${LDFLAGS_INTEL} -Wl,-rpath,${PWD}/opt/lib -L${PWD}/opt/lib -lfftw3f"' >> $@
-	@echo 'LDFLAGS="$${LDFLAGS} -Wl,-rpath,${PWD}/opt/lib -L${PWD}/opt/lib -lfftw3"' >> $@
-	@echo 'LDFLAGS="$${LDFLAGS} -Wl,-rpath,${PWD}/opt/lib -L${PWD}/opt/lib -lfftw3f_threads"' >> $@
-	@echo 'LDFLAGS="$${LDFLAGS} -Wl,-rpath,${PWD}/opt/lib -L${PWD}/opt/lib -lfftw3_threads"' >> $@
-	@echo 'LDFLAGS="$${LDFLAGS} -lm"' >> $@
+	@echo 'LDFLAGS="$${LDFLAGS_INTEL} -L${PWD}/opt/lib "' >> $@
 	@echo '# These are environment variables that do get exported' >> $@
 	@echo 'PATH=$${LAL_PATH}/bin:$${PATH}' >> $@
 	@echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
 	@echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages' >> $@
+	@echo 'LAL_DATA_PATH=$${LAL_PATH}/share/lalsimulation' >> $@
 	@echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0' >> $@
 	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL' >> $@
 
-
-#	if [ ${CLUSTER} != "ligo.caltech.edu" ||  ${CLUSTER} != "nemo.uwm.edu" || ${CLUSTER} != *"atlas"* ]
-#		$(error Unknown cluster. You are on your own!) ; \
-#	fi
-
-#ICC_CIT:=/ldcg/intel/2016u1/bin/compilervars.sh
-#ICC_UWM:=/opt/intel/bin/compilervars.sh
-#ICC_ATLAS:=/opt/intel/2015/intel.sh
-#ICC_SOURCE=dsadsadasda
-#
-#all : $(GSTINSPIRAL_TARGET) $(LOGS_DIR)/gstlal.txt
-#
-######################
-## Environment setup #
-######################
-#
-#env.sh :
-#	@echo "Cluster = ${CLUSTER}"
-#	@if [ ${CLUSTER} = "ligo.caltech.edu" ] ; then \
-#		echo "Running on cit"; \
-#		ICC_SOURCE=${ICC_CIT} ; \
-#	elif [ ${CLUSTER} = "nemo.uwm.edu" ] ; then \
-#		echo "Running on uwm"; \
-#		ICC_SOURCE=${ICC_UWM} ; \
-#	elif [ ${CLUSTER} = "atlas.local" ] ; then \
-#		echo "Running on atlas"; \
-#		echo "${ICC_ATLAS}"; \
-#		test=thisisatest ; \
-#		echo ${test}; \
-#	else \
-#		echo "Unknown cluster. You're on your own!"; \
-#		ICC_SOURCE='Unknown file location. FIXME' ; \
-#	fi
-#	@echo "icc source file = ${ICC_SOURCE}"
-#	@echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
-#	@echo 'unset LD_LIBRARY_PATH LIBRARY_PATH LD_PRELOAD' >> $@
-#	@echo 'LAL_PATH=${PWD}/opt' >> $@
-#	@echo 'export CFLAGS="-O3 -march=native -lfftw3f -lfftw3 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings -lirc -limf"' >> $@
-#	@echo "source ${ICC_SOURCE} intel64" >> $@
-#	@echo 'export LDFLAGS="-L${MKLROOT}/lib/intel64"' >> $@
-#	@echo '#export LD_PRELOAD="${PWD}/opt/lib/libfftw3.so:${PWD}/opt/lib/libfftw3f.so"' >> $@
-#	@echo 'export CC="icc"' >> $@
-#	@echo 'export CXX="icpc"' >> $@
-#	@echo '# These are environment variables that do get exported' >> $@
-#	@echo 'PATH=$${LAL_PATH}/bin:$${PATH}' >> $@
-#	@echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
-#	@echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages' >> $@
-#	@echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0' >> $@
-#	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH' >> $@
+#@echo '#export LD_PRELOAD="$${LAL_PATH}/lib/libfftw3.so:$${LAL_PATH}/lib/libfftw3f.so:$${LAL_PATH}/lib/libfftw3_threads.so:$${LAL_PATH}/lib/libfftw3f_threads.so"' >> $@
 
 #####################
 # Check time stamps #
@@ -312,9 +264,15 @@ logs/lalsuite-extra.txt : $(LOGS_DIR)/lalsuite.txt $(LALEXTRA_TARGET)
 
 $(LALEXTRA_TARGET) : $(GLUE_TARGET) $(PYLAL_TARGET)
 	echo $(LALSUITEEXTRA) 1>&2
-	tar -xf $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LALSUITEEXTRA) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LALSUITEEXTRA) && make -j$(CORES) && make install -j$(CORES)
+	if [ "${LALSUITE_EXTRA_SVN}" = "1" ]; then \
+		cd $(LALSUITE_EXTRA_REPO) && ./00boot ; \
+		cd $(LALSUITE_EXTRA_REPO) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_EXTRA_REPO) && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALSUITEEXTRA) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALSUITEEXTRA) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
 
 # lalsuite
 logs/lalsuite.txt : $(LOGS_DIR)/gds.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALDETCHAR_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALSTOCH_TARGET) $(LALAPPS_TARGET) $(GLUE_TARGET) $(PYLAL_TARGET)
@@ -515,7 +473,7 @@ logs/gds.txt : $(LOGS_DIR)/ldas-tools-framecpp.txt $(GDS_TARGET)
 $(GDS_TARGET) : $(LDASTOOLSFRAMECPP_TARGET)
 	echo $(GDS) 1>&2
 	tar -xzf $(TAR_DIR)/$(GDS).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(GDS) && ./configure --enable-online --prefix=$(INSTALL_DIR) CC="gcc" CXX="g++" CFLAGS="-fPIC -O3 -march=native -lfftw3_threads -lfftw3f_threads"
+	cd $(SRC_DIR)/$(GDS) && ./configure --enable-online --prefix=$(INSTALL_DIR) CC="gcc" CXX="g++" CFLAGS="-fPIC -O3 -march=native -lfftw3_threads -lfftw3f_threads" LDFLAGS=""
 	cd $(SRC_DIR)/$(GDS) && make && make install
 
 # ldas-tools-framecpp
@@ -646,9 +604,9 @@ $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 	echo $(FFTW) 1>&2
 	tar -xzf $(TAR_DIR)/$(FFTW).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(FFTW) && \
-		./configure CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
+		./configure CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES) && make clean && \
-		./configure CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse2 --enable-avx --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
+		./configure CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse2 --enable-avx --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES)
 
 #########################
@@ -790,6 +748,7 @@ $(LALSUITE_GIT_TARGET) : $(LOGS_DIR)
 		mkdir -p $(LALSUITE_REPO) ; \
 		ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER) ; \
 		git clone https://versions.ligo.org/git/lalsuite.git $(LALSUITE_REPO) ; \
+		cd git && svn checkout https://svn.ligo.caltech.edu/svn/lalsuite-extra ; \
 	fi ;
 
 $(LOGS_DIR) :
