@@ -179,6 +179,28 @@ def pipeline_channel_list_from_channel_dict_with_node_range(channel_dict, node =
 
 	return outstr
 
+def injection_dict_from_channel_list_with_node_range(injection_list):
+	"""!
+	Given a list of injection xml files with a range of mass bins, produce a
+	dictionary keyed by bin number:
+
+	The list here typically comes from an option parser with options that
+	specify the "append" action.
+
+	Examples:
+		>>> injection_dict_from_channel_list_with_node_range(["0000:0002:Injection_1.xml", "0002:0004:Injection_2.xml"])
+		{'0000' : 'Injection_1.xml',
+		 '0001' : 'Injection_1.xml',
+		 '0002' : 'Injection_2.xml',
+		 '0003' : 'Injection_2.xml'}
+	"""
+	outdict = {}
+	for injection_name in injection_list:
+		injection_name_split = injection_name.split(':')
+		for ii in range(int(injection_name_split[0]),int(injection_name_split[1])):
+			outdict[str(ii).zfill(4)] = injection_name_split[2]
+	return outdict
+
 ## #### Default dictionary of state vector on/off bits by ifo
 # Used as the default argument to state_vector_on_off_dict_from_bit_lists()
 state_vector_on_off_dict = {
