@@ -235,7 +235,7 @@ def parse_command_line():
 	parser.add_option("--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 	parser.add_option("--local-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 	parser.add_option("--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
-	parser.add_option("--injection-file", help = "The injection xml file that corresponds to the low latency injections: only used for making missed found plots.")
+	parser.add_option("--injection-file", metavar = "filename", default = [], action = "append", help = "The injection xml files that corresponds to the low latency injections for given mass bins: only used for making missed found plots. 0000:0002:Injection_1.xml, 0002:0004:Injection_2.xml")
 	parser.add_option("--state-backup-destination", metavar = "URL", help = "Location to back state up to, e.g. gstlalcbc@ldas-pcdev1.ligo.caltech.edu.")
 	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
@@ -248,12 +248,8 @@ def parse_command_line():
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
 
-	min_max_inj_dist_list = []
 	if options.injection_file:
-		# FIXME Dont hardcode program name
-		inj_xmldoc = ligolw_utils.load_filename(options.injection_file, contenthandler = ligolwcontenthandler)
-		min_max_inj_dist_list.append(str(ligolw_process.get_process_params(inj_xmldoc, "inspinj", "--min-distance")[0]/1000.))
-		min_max_inj_dist_list.append(str(ligolw_process.get_process_params(inj_xmldoc, "inspinj", "--max-distance")[0]/1000.))
+		inj_name_dict = datasource.injection_dict_from_channel_list_with_node_range(options.injection_file)
 
 	#FIXME add consistency check?
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
@@ -275,7 +271,7 @@ def parse_command_line():
 	options.likelihood_files = [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
 	options.zerolag_likelihood_files = [lal.CacheEntry(line).url for line in open(options.zerolag_likelihood_cache)]
 
-	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, min_max_inj_dist_list
+	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict
 
 
 #
@@ -283,7 +279,7 @@ def parse_command_line():
 #
 
 
-options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, min_max_inj_dist_list = parse_command_line()
+options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -326,10 +322,6 @@ pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  uni
 
 # DQ job
 dqJob = inspiral_pipe.generic_job("gstlal_ll_dq", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
-
-if options.injection_file:
-	# Sensitivity plots job
-	sensJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_calculate_range", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 if options.state_backup_destination:
 	# State saving job 
@@ -407,7 +399,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			}
 		)
 
-	if inj_channel_dict:
+	if str("%04d" %num_insp_nodes) in inj_channel_dict:
 		# FIXME The node number for injection jobs currently follows the same
 		# numbering system as non-injection jobs, except instead of starting at
 		# 0000 the numbering starts at 1000. There is probably a better way to
@@ -474,8 +466,6 @@ if options.injection_file:
 	#	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
 
 	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
-
-	sensNode = inspiral_pipe.generic_node(sensJob, dag, [], opts = {}, input_files = {"":[options.injection_file, "%s/0000/cumulative_segments.xml" % os.getcwd(), options.marginalized_likelihood_file,  options.inj_gracedb_service_url, options.inj_gracedb_pipeline, options.inj_gracedb_group, options.inj_gracedb_search, min_max_inj_dist_list[0], min_max_inj_dist_list[1]]}, output_files = {})
 
 else:
 
