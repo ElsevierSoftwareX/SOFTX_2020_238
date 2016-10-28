@@ -22,10 +22,11 @@
 """Meta program to generate offline style summary pages from online runs."""
 
 
-import sys, os, subprocess, re, time, glob
+import sys, os, subprocess, re, time, glob, shutil
 from optparse import OptionParser
 from glue.text_progress_bar import ProgressBar
 from pylal.datatypes import LIGOTimeGPS
+from gstlal import aggregator
 import lal
 from multiprocessing import Pool
 from gstlal import inspiral_pipe
@@ -241,7 +242,7 @@ if __name__ == '__main__':
 	try:
 		webserverplotdir = os.path.join(options.web_dir, "plots")
 		if os.path.exists(webserverplotdir):
-			newdir = os.path.join(options.web_dir, str(int(aggregator.now())))
+			newdir = os.path.join(options.web_dir, str(int(now())))
 			aggregator.makedir(newdir)
 			shutil.move(webserverplotdir, newdir)
 			try:
