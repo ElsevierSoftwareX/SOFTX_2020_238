@@ -65,7 +65,11 @@ def get_url(url,d):
 	A function to pull data from @param url where @param d specifies a
 	specific route.  FIXME it assumes that the routes end in .txt
 	"""
-	jobdata = urllib2.urlopen("%s%s.txt" % (url, d)).read().split("\n")
+	try:
+		jobdata = urllib2.urlopen("%s%s.txt" % (url, d)).read().split("\n")
+	except urllib2.HTTPError as e:
+		logging.error("%s : %s" % (url, str(e)))
+		return
 	data = []
 	for line in jobdata:
 		if line:
