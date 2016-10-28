@@ -57,7 +57,7 @@ class PSDHandler(simplehandler.Handler):
 		if self.last_reduce_time is None:
 			self.last_reduce_time = int(round(buftime,-2))
 		(result, mapinfo) = buf.map(Gst.MapFlags.READ)
-		thisdir = os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime))
+		thisdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime)), self.instrument)
 		for typ in ("min", "median", "max"):
 			aggregator.makedir(os.path.join(thisdir, typ))
 		if mapinfo.data:
@@ -75,16 +75,9 @@ class PSDHandler(simplehandler.Handler):
 			psd_freq = numpy.arange(self.psd.data.length / 4) * self.psd.deltaF * 4
 			psd_data = signal.decimate(self.psd.data.data[:], 4, ftype='fir')[:-1]**.5
 		else:
-			# First noise
-			self.timedeq.append(buftime)
-			self.noisedeq.append(0.0)
-
-			# Then range
-			self.horizon_history.append(0.0)
-
-			# Then PSD
-			psd_freq = numpy.arange(1024) * 2
-			psd_data = numpy.zeros(1024)
+			buf.unmap(mapinfo)
+			del buf
+			return Gst.FlowReturn.OK
 
 
 		# Save a "latest"
@@ -106,14 +99,15 @@ class PSDHandler(simplehandler.Handler):
 			for typ, func in (("min", min), ("median", aggregator.median), ("max", max)):
 				for route in ("noise", "horizon_history"):
 					for level in range(0, aggregator.DIRS-1):
-						thisdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime, level = level)), typ)
-						nextdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime, level = level+1)), typ)
+						thisdir = os.path.join(os.path.join(self.out_path, os.path.join(aggregator.gps_to_leaf_directory(buftime, level = level)), self.instrument), typ)
+						nextdir = os.path.join(os.path.join(self.out_path, os.path.join(aggregator.gps_to_leaf_directory(buftime, level = level+1)), self.instrument), typ)
 						aggregator.makedir(nextdir)
 						this_fname, this_x, this_y = aggregator.get_dataset(thisdir, route)
 						next_fname, next_x, next_y = aggregator.get_dataset(nextdir, route)
 						xarr, yarr = aggregator.reduce_data(this_x + next_x, this_y + next_y, func, level = level + 1)
 						self.to_hdf5(next_fname, {"time": numpy.array(xarr), "data": numpy.array(yarr)})
 			# The PSD is special, we just record it. No min/median/max
+			thisdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime)), self.instrument)
 			psd_name = "%s-PSD-%d0-100.hdf5" % (self.instrument, int(round(buftime,-2)))
 			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data})
 
