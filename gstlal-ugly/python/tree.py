@@ -199,12 +199,16 @@ class HyperCube(object):
 
 	def vertices(self):
 		vertices = []
-		for n in range (0, len(self.boundaries)):
-			paramOne = self.boundaries[0][n]
-			for m in range (0, len(self.boundaries[n])):
-				paramTwo = self.boundaries[1][m]
-				vertices.append([paramOne, paramTwo])
+		#for n in range (0, len(self.boundaries)):
+		#	paramOne = self.boundaries[0][n]
+		#	for m in range (0, len(self.boundaries[n])):
+		#		paramTwo = self.boundaries[1][m]
+		#		vertices.append([paramOne, paramTwo])
 		#print 'VERTICES:', vertices
+		vlist = itertools.product(*self.boundaries)
+		for vertex in vlist:
+			vertices.append(vertex)
+		print 'VERTICES:', vertices
 		return vertices
 
 	def returnneighbors(self):
