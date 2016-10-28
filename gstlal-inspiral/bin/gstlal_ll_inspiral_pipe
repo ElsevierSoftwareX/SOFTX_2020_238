@@ -331,7 +331,7 @@ listenNode = lvalert_listen_node(listenJob, dag)
 
 # dq with default options
 for ifo in channel_dict:
-	outpath = "dq/%s" % ifo
+	outpath = "dq"
 	try:
 		os.makedirs(outpath)
 	except OSError:
