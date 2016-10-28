@@ -28,6 +28,8 @@ from glue.text_progress_bar import ProgressBar
 from pylal.datatypes import LIGOTimeGPS
 import lal
 from multiprocessing import Pool
+from gstlal import inspiral_pipe
+from copy import copy
 
 def now():
 	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
@@ -78,10 +80,12 @@ if __name__ == '__main__':
 
 	parser = OptionParser()
 	parser.add_option("--directory", default = ".", help = "directory to start looking for results")
-	parser.add_option("--injection-file", help = "The injection xml file that corresponds to the low latency injections")
+	parser.add_option("--injection-file", metacar = "filename", default = [], action = "append", help = "The injection xml files that corresponds to the low latency injections for given mass bins. 0000:0002:Injection_1.xml, 0002:0004:Injection_2.xml")
 	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
 	options, massbins = parser.parse_args()
 
+	# FIXME hardcoded instruments
+	instruments = "H1L1"
 
 	# FIXME should be more clever than this
 	# Match 5 digit directories
@@ -90,7 +94,14 @@ if __name__ == '__main__':
 	seg_files = glob.glob('%s/total_cumulative_segments.xml.gz' % options.directory)
 
 	noninj_files_to_merge = []
-	inj_files_to_merge = []
+	inj_files_to_merge = {}
+	inj_file_bins = {}
+	injdball = {}
+
+	for injection_file in options.injection_file:
+		inj_file_split = injection_file.split(':')
+		for massbin in range(int(inj_file_split[0]),int(inj_file_split[1])):
+			inj_file_bins.setdefault(inj_file_split[2],[]).append(str(massbin).zfill(4))
 
 	# FIXME assume that the correct low latency cluster file is in the working
 	# directory. Perhaps this should be a command line argument.
@@ -105,33 +116,28 @@ if __name__ == '__main__':
 	for n, d in enumerate(result_dirs):
 
 		noninjdball = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite' % (d,))
-		if options.injection_file:
-			injdball = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID_INJ-%s00000-100000.sqlite' % (d,))
-			# see if this directory has been processed and is old enough to not have to worry about it any more
-			if float(now()) - float("%s00000" % d) > 125000 and os.path.exists(injdball) and os.path.exists(noninjdball):
-				print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
-				noninj_files_to_merge.append(noninjdball)
-				inj_files_to_merge.append(injdball)
+		for injection_file in inj_file_bins:
+			inj_file_name = inspiral_pipe.T050017_filename(instruments, "ALL_LLOID_"+injection_file.split('.')[0], int('%s00000' % (d,)), int('%d00000' % (int(d)+1,)), '.sqlite')
+			injdball[injection_file] = inj_file_name
+
+		if float(now()) - float("%s00000" % d) > 125000 and all([os.path.exists(injdball.values())]+[os.path.exists(noninjdball)]):
+			print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
+			noninj_files_to_merge.append(noninjdball)
+			#for name in options.injection_file:
+			for injection_file in inj_file_bins:
+				inj_files_to_merge.setdefault(injection_file,[]).append(injdball[injection_file])
 				continue
-		else:
-			if float(now()) - float("%s00000" % d) > 125000 and os.path.exists(noninjdball):
-				print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
-				noninj_files_to_merge.append(noninjdball)
 
 		# Parallel process the data reduction
 		args = ([massbin, result_dirs, n, d, options, "ALL_LLOID", 0, cluster_file] for massbin in massbins)
-		mass_bin_files_to_merge = list(pool.map(process_mass_bin, args))
-		if options.injection_file:
-			args = ([massbin, result_dirs, n, d, options, "ALL_LLOID_INJ", 1, cluster_file] for massbin in massbins)
-			inj_mass_bin_files_to_merge = list(pool.map(process_mass_bin, args))
-
 		# Merge the files of this directory
-		subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % noninjdball] + mass_bin_files_to_merge)
+		subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % noninjdball] + list(pool.map(process_mass_bin, args)))
 		noninj_files_to_merge.append(noninjdball)
 
-		if options.injection_file:
-			subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % injdball] + inj_mass_bin_files_to_merge)	
-			inj_files_to_merge.append(injdball)
+		for injection_file in inj_file_bins:
+			args = ([massbin, result_dirs, n, d, options, "ALL_LLOID_"+injection_file.split('.')[0], 1, cluster_file] for massbin in inj_file_bins[injection_file])
+			subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % [injdball[injection_file]] + list(pool.map(process_mass_bin, args)))
+			inj_files_to_merge.setdefault(injection_file,[]).append(injdball[injection_file])
 
 	#
 	# Do top level data reduction
@@ -139,15 +145,17 @@ if __name__ == '__main__':
 
 	# FIXME only add *new* files
 	noninjdb = os.path.join(options.directory, 'H1L1-ALL_LLOID-0-2000000000.sqlite.tmp')
-	if options.injection_file:
-		injdb = os.path.join(options.directory, 'H1L1-ALL_LLOID_INJ-0-2000000000.sqlite.tmp')
-	else:
-		injdb = ""
+
+        injdb = {}
+	for injection_file in inj_file_bins:
+		injdb[injection_file] = os.path.join(options.directory, 'H1L1-ALL_LLOID_%s-0-2000000000.sqlite.tmp' % (injection_file.split('.')[0]))
 
 	if os.path.exists(noninjdb):
 		os.remove(noninjdb)
-	if os.path.exists(injdb):
-		os.remove(injdb)
+
+	for injection_file in injdb:
+		if os.path.exists(injdb[injection_file]):
+			os.remove(injdb[injection_file])
 
 	progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files))
 	for f in noninj_files_to_merge + seg_files:
@@ -160,29 +168,28 @@ if __name__ == '__main__':
 		progressbar.increment()
 	del progressbar
 
-	if options.injection_file:
-		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge) + len(seg_files))
-		for f in inj_files_to_merge + seg_files:
+	for injection_file in inj_file_bins:
+		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge[injection_file]) + len(seg_files))
+		for f in inj_files_to_merge[injection_file] + seg_files:
 			subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "%s" % f])
 			# Do not cluster! the online analysis doesn't do a global clustering stage!!
 			try:
-				subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % injdb])
+				subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % injdb[injection_file]])
 			except subprocess.CalledProcessError as runsqlite_error:
-				print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, injdb, f)
+				print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, injdb[injection_file], f)
 			progressbar.increment()
 		del progressbar
 
 		# Find injections
 		progressbar = ProgressBar("Find injections", 4)
-		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "%s" % options.injection_file])
+		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb[injection_file], "%s" % injection_file])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "--extract", "%s.xml" % injdb])
+		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb[injection_file], "--extract", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_inspinjfind", "%s.xml" % injdb])
+		subprocess.check_call(["ligolw_inspinjfind", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "--replace", "%s.xml" % injdb])
+		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb[injection_file], "--replace", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
-
 
 	#
 	# Make plots and such
@@ -198,8 +205,6 @@ if __name__ == '__main__':
 	#	if m:
 	#		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
 
-
-
 	#
 	# Plot background
 	#
@@ -209,24 +214,25 @@ if __name__ == '__main__':
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
-	#
-	# Plot summary
-	#
+	for injection_file in injdb:
+		#
+		# Plot summary
+		#
 
-	try:
-		subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb])
-	except subprocess.CalledProcessError as plot_error:
-		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
-
-	#
-	# Plot sensitivity
-	#
-
-	if options.injection_file:
 		try:
-			subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb])
+			subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb[injection_file]])
 		except subprocess.CalledProcessError as plot_error:
 			print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
+
+		#
+		# Plot sensitivity
+		#
+
+		if options.injection_file:
+			try:
+				subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb[injection_file]])
+			except subprocess.CalledProcessError as plot_error:
+				print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
 	#
 	# Summary page
@@ -249,7 +255,8 @@ if __name__ == '__main__':
 
 
 	# copy the working files back
-	os.rename(noninjdb, noninjdb.replace(".tmp",""))
-	if options.injection_file:
-		os.rename(injdb, injdb.replace(".tmp",""))
+	for injection_file in injdb:
+		os.rename(noninjdb, noninjdb.replace(".tmp",""))
+		if options.injection_file:
+			os.rename(injdb[injection_file], injdb[injection_file].replace(".tmp",""))
 
