@@ -66,6 +66,8 @@ def process_mass_bin(args):
 
 	return dbfinal	
 
+def injtag(injection_file):
+	return os.path.split(injection_file)[1].split('.')[0].replace("-","_")
 
 if __name__ == '__main__':
 
@@ -81,7 +83,7 @@ if __name__ == '__main__':
 
 	parser = OptionParser()
 	parser.add_option("--directory", default = ".", help = "directory to start looking for results")
-	parser.add_option("--injection-file", metacar = "filename", default = [], action = "append", help = "The injection xml files that corresponds to the low latency injections for given mass bins. 0000:0002:Injection_1.xml, 0002:0004:Injection_2.xml")
+	parser.add_option("--injection-file", default = [], action = "append", help = "The injection xml files that corresponds to the low latency injections for given mass bins. 0000:0002:Injection_1.xml, 0002:0004:Injection_2.xml")
 	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
 	options, massbins = parser.parse_args()
 
@@ -118,16 +120,14 @@ if __name__ == '__main__':
 
 		noninjdball = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite' % (d,))
 		for injection_file in inj_file_bins:
-			inj_file_name = inspiral_pipe.T050017_filename(instruments, "ALL_LLOID_"+injection_file.split('.')[0], int('%s00000' % (d,)), int('%d00000' % (int(d)+1,)), '.sqlite')
-			injdball[injection_file] = inj_file_name
+			injdball[injection_file] = os.path.join(os.path.join(options.directory, d), inspiral_pipe.T050017_filename(instruments, "ALL_LLOID_%s" % injtag(injection_file) , int('%s00000' % (d,)), int('%d00000' % (int(d)+1,)), '.sqlite'))
 
 		if float(now()) - float("%s00000" % d) > 125000 and all([os.path.exists(injdball.values())]+[os.path.exists(noninjdball)]):
 			print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
 			noninj_files_to_merge.append(noninjdball)
-			#for name in options.injection_file:
 			for injection_file in inj_file_bins:
 				inj_files_to_merge.setdefault(injection_file,[]).append(injdball[injection_file])
-				continue
+			continue
 
 		# Parallel process the data reduction
 		args = ([massbin, result_dirs, n, d, options, "ALL_LLOID", 0, cluster_file] for massbin in massbins)
@@ -136,8 +136,8 @@ if __name__ == '__main__':
 		noninj_files_to_merge.append(noninjdball)
 
 		for injection_file in inj_file_bins:
-			args = ([massbin, result_dirs, n, d, options, "ALL_LLOID_"+injection_file.split('.')[0], 1, cluster_file] for massbin in inj_file_bins[injection_file])
-			subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % [injdball[injection_file]] + list(pool.map(process_mass_bin, args)))
+			args = ([massbin, result_dirs, n, d, options, injtag(injection_file), 1, cluster_file] for massbin in inj_file_bins[injection_file])
+			subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % injdball[injection_file]] + list(pool.map(process_mass_bin, args)))
 			inj_files_to_merge.setdefault(injection_file,[]).append(injdball[injection_file])
 
 	#
@@ -149,7 +149,7 @@ if __name__ == '__main__':
 
         injdb = {}
 	for injection_file in inj_file_bins:
-		injdb[injection_file] = os.path.join(options.directory, 'H1L1-ALL_LLOID_%s-0-2000000000.sqlite.tmp' % (injection_file.split('.')[0]))
+		injdb[injection_file] = os.path.join(options.directory, 'H1L1-ALL_LLOID_%s-0-2000000000.sqlite.tmp' % (injtag(injection_file)))
 
 	if os.path.exists(noninjdb):
 		os.remove(noninjdb)
@@ -172,7 +172,7 @@ if __name__ == '__main__':
 	for injection_file in inj_file_bins:
 		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge[injection_file]) + len(seg_files))
 		for f in inj_files_to_merge[injection_file] + seg_files:
-			subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb, "%s" % f])
+			subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb[injection_file], "%s" % f])
 			# Do not cluster! the online analysis doesn't do a global clustering stage!!
 			try:
 				subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % injdb[injection_file]])
