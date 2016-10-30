@@ -54,6 +54,7 @@ def parse_command_line():
 
 	# directory to put everything in
 	parser.add_argument("--base-dir", action="store", default="aggregator", help="Specify output path")
+	parser.add_argument("--job-start", type=int, help="job id to start aggregating from")
 	parser.add_argument("--route", action="append", help="Specify routes to download. Can be given multiple times.")
 	parser.add_argument("--dump-period", type = float, default = 180., help = "Wait this many seconds between dumps of the  URLs (default = 180., set to 0 to disable)")
 	parser.add_argument("--num-jobs", action="store", type=int, default=10, help="number of running jobs")
@@ -79,7 +80,7 @@ if __name__ == '__main__':
 	options = parse_command_line()
 	# FIXME don't hardcode some of these?
 	datatypes = [("min", min), ("max", max), ("median", aggregator.median)]
-	jobs = ["%04d" % b for b in numpy.arange(0, options.num_jobs)]
+	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.num_jobs)]
 	routes = options.route
 
 	logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
