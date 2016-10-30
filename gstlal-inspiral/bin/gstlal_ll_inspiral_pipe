@@ -271,7 +271,7 @@ def parse_command_line():
 	options.likelihood_files = [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
 	options.zerolag_likelihood_files = [lal.CacheEntry(line).url for line in open(options.zerolag_likelihood_cache)]
 
-	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict
+	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, inj_name_dict
 
 
 #
@@ -279,7 +279,7 @@ def parse_command_line():
 #
 
 
-options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict = parse_command_line()
+options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, inj_name_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -454,8 +454,8 @@ margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files =
 # job tag, but this should be made to be more flexible
 #
 
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "route": ["H1_snr_history", "L1_snr_history", "snr_history"]})
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "route": ["far_history", "latency_history", "likelihood_history"]})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["H1_snr_history", "L1_snr_history", "snr_history"]})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["far_history", "latency_history", "likelihood_history"]})
 
 analysisStateNode = inspiral_pipe.generic_node(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2})
 
@@ -467,9 +467,14 @@ if options.injection_file:
 
 	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
+	aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"inj_aggregator", "job-tag": os.getcwd(), "job-start": 1000, "num-jobs": len(jobTags), "route": ["far_history", "likelihood_history"]})
+
 else:
 
-	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
+	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "base-dir":"aggregator", "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
+
+
+	
 
 if options.state_backup_destination:
 	stateNode = inspiral_pipe.generic_node(stateJob, dag, [], opts = {}, input_files = {"":[options.state_backup_destination, options.marginalized_likelihood_file] + options.likelihood_files}, output_files = {})
