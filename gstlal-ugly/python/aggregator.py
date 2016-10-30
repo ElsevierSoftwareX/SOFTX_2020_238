@@ -70,6 +70,9 @@ def get_url(url,d):
 	except urllib2.HTTPError as e:
 		logging.error("%s : %s" % (url, str(e)))
 		return
+	except urllib2.URLError as e:
+		logging.error("%s : %s" % (url, str(e)))
+		return
 	data = []
 	for line in jobdata:
 		if line:
