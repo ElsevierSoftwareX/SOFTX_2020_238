@@ -309,7 +309,7 @@ listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.g
 
 # This restores default behavior if you uncomment
 # get urls job 
-#urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
+urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 # FIXME find a bigger computer for this or run several instancnes on the cluster.  aggregator and state job
 aggJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_aggregator",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
@@ -444,8 +444,8 @@ def groups(l, n):
 	for i in xrange(0, len(l), n):
 		yield l[i:i+n]
 
-#for g in groups(jobTags, 10):
-#	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
+for g in groups(jobTags, 10):
+	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
 
 margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 
@@ -462,8 +462,8 @@ analysisStateNode = inspiral_pipe.generic_node(analysisStateJob, dag, [], opts =
 # summary page
 if options.injection_file:
 
-	#for g in groups(inj_jobTags, 10):
-	#	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
+	for g in groups(inj_jobTags, 10):
+		urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
 
 	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
