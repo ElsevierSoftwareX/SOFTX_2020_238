@@ -9,12 +9,15 @@ import time
 
 if "GPS" in form:
 	gps = form["GPS"][0]
-	refresh =     1000000
-	longrefresh = 1000000
 else:
 	gps = "-1"
+
+if gps == "-1":
 	refresh = 5
-	longrefresh = 30
+	longrefresh = 60
+else:
+	refresh =     0
+	longrefresh = 0
 
 if "Duration" in form:
 	duration = form["Duration"][0]
@@ -54,15 +57,20 @@ print "	google.charts.setOnLoadCallback(function(){ drawLatencyGauge(%s,%s,%d,'%
 print ""
 print "	google.charts.setOnLoadCallback(function(){ drawSNRStatusByNodes(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawSNRHistory(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawLikelihoodStatusByNodes(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawLikelihoodHistory(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawFARStatusByNodes(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawFARHistory(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print ""
 print "	google.charts.setOnLoadCallback(function(){ drawHorizon(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawNoise(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawPSD(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawPSD(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawNoiseGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawRangeGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawUpTime(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawDroppedData(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawRAMStatus(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawUpTime(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawUpTimeGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawDroppedData(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawRAMStatus(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawTimeSinceLast(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
 
 print '''
@@ -75,16 +83,16 @@ print '''
 		<ul class="tab">
 			<li><img style="width: 100px; margin: 5px 5px 5px 5px;" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png"></li>
 			<!-- <li><a href="#ldg" class="tablinks" onclick="openGstlalTab(event, 'LDG')">LDG</a></li> -->
-			<li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard', noise_gauge_wrapper, latency_gauge_wrapper, range_gauge_wrapper)">Dashboard</a></li>
+			<!-- <li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard')">Dashboard</a></li>-->
 			<!-- <li><a href="#events" class="tablinks" onclick="openGstlalTab(event, 'Events')">Events</a></li> -->
+			<li><a href="#summary" class="tablinks" onclick="openGstlalTab(event, 'Summary')">Results</a></li>
+			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Live Status</a></li>
+			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity', horizon_wrapper, psd_wrapper)">Live Sensitivity</a></li>
+			<li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise', noise_wrapper)">Live Noise</a></li>
+			<li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency', latency_status_by_nodes_wrapper, latency_history_wrapper)">Live Latency</a></li>
+			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper, likelihood_status_by_nodes_wrapper, likelihood_history_wrapper, far_status_by_nodes_wrapper, far_history_wrapper)">Live SNR</a></li>
 			<li><a href="#detchar" class="tablinks" onclick="openGstlalTab(event, 'Detchar')">Detchar</a></li>
 			<li><a href="#logs" class="tablinks" onclick="openGstlalTab(event, 'Logs')">Logs</a></li>
-			<li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise', noise_wrapper)">Noise</a></li>
-			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity', horizon_wrapper, psd_wrapper)">Sensitivity</a></li>
-			<li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency', latency_status_by_nodes_wrapper, latency_history_wrapper)">Latency</a></li>
-			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper)">SNR</a></li>
-			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Status</a></li>
-			<li><a href="#summary" class="tablinks" onclick="openGstlalTab(event, 'Summary')">Summary</a></li>
 			<li>
 '''				
 print '			<input type="text" name="GPS" value="%s" size=8 style="margin: 7px 5px 5px 5px;"><input type="submit" value="GPS" style="margin: 7px 5px 5px 5px;">' % (gps,)
@@ -104,9 +112,11 @@ print '''
 	-->
 
 	<div id="Dashboard" class="tabcontent">
-		<div id="noise_gauge_wrapper"></div>
 		<div id="range_gauge_wrapper"></div>
-		<div id="latency_gauge_wrapper"></div>
+		<div id="noise_gauge_wrapper"></div>
+		<table><tr>	<td><div id="uptime_gauge_wrapper"></div></td>
+				<td><div id="latency_gauge_wrapper"></div></td>
+		</tr></table>
 	</div>
 
 	<div id="Logs" class="tabcontent">
@@ -153,6 +163,10 @@ print '''
 	<div id="SNR" class="tabcontent">
 		<div id="snr_status_by_nodes_wrapper"></div>
 		<div id="snr_history_wrapper"></div>
+		<div id="likelihood_status_by_nodes_wrapper"></div>
+		<div id="likelihood_history_wrapper"></div>
+		<div id="far_status_by_nodes_wrapper"></div>
+		<div id="far_history_wrapper"></div>
 	</div>
 
 	<div id="Status" class="tabcontent">
