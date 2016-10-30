@@ -23,7 +23,6 @@ def parse_command_line():
 
 
 opts, files = parse_command_line()
-opts.glob_path = "plots"
 # Setup an page and navigation bar
 thispage = webpage.page()
 nav = webpage.tabs()
