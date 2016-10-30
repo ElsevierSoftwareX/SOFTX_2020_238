@@ -122,7 +122,7 @@ if __name__ == '__main__':
 		for injection_file in inj_file_bins:
 			injdball[injection_file] = os.path.join(os.path.join(options.directory, d), inspiral_pipe.T050017_filename(instruments, "ALL_LLOID_%s" % injtag(injection_file) , int('%s00000' % (d,)), int('%d00000' % (int(d)+1,)), '.sqlite'))
 
-		if float(now()) - float("%s00000" % d) > 125000 and all([os.path.exists(injdball.values())]+[os.path.exists(noninjdball)]):
+		if float(now()) - float("%s00000" % d) > 125000 and all([os.path.exists(f) for f in injdball.values()]+[os.path.exists(noninjdball)]):
 			print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
 			noninj_files_to_merge.append(noninjdball)
 			for injection_file in inj_file_bins:
