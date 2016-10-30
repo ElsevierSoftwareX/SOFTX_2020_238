@@ -79,6 +79,7 @@ def parse_command_line():
 	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "When plotting ranking statistic PDFs and CCDFs, discard everything below this threshold and renormalize accordingly (default = plot PDFs and CCDFs as found).")
 	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the adjustable component of the description fields in the output filenames (default = \"ALL\").")
+	parser.add_option("--plot-snr-snr-pdfs", action = "store_true", help = "Plot the full cache of snr-snr-pdfs")
 	parser.add_option("--dont-apply-extinction", action = "store_true", help = "Don't apply the extinction model")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -300,16 +301,17 @@ fig.savefig(plotname)
 
 
 # SNR PDFs
-for (instruments, horizon_distances) in sorted(coinc_params_distributions.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
-	# they're stored as a frozen set of quantized key/value pairs, need
-	# to unquantize them and get a dictionary back
-	horizon_distances = coinc_params_distributions.SNRPDF.quantized_horizon_distances(horizon_distances)
-	fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions.SNRPDF, instruments, horizon_distances, options.max_snr, sngls = sngls)
-	if fig is not None:
-		plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
-		if options.verbose:
-			print >>sys.stderr, "writing %s" % plotname
-		fig.savefig(plotname)
+if options.plot_snr_snr_pdfs:
+	for (instruments, horizon_distances) in sorted(coinc_params_distributions.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
+		# they're stored as a frozen set of quantized key/value pairs, need
+		# to unquantize them and get a dictionary back
+		horizon_distances = coinc_params_distributions.SNRPDF.quantized_horizon_distances(horizon_distances)
+		fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions.SNRPDF, instruments, horizon_distances, options.max_snr, sngls = sngls)
+		if fig is not None:
+			plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+			if options.verbose:
+				print >>sys.stderr, "writing %s" % plotname
+			fig.savefig(plotname)
 
 
 # ranking statistic PDFs and CCDFs
