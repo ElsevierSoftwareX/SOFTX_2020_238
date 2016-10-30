@@ -1016,7 +1016,7 @@ else:
 injsnrnodes = []
 if not options.disable_calc_inj_snr:
 	for inj in options.injections:
-		inj = inj.split(':')
+		inj = inj.split(':')[-1]
 		injsnrnodes.append(inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes,
 			opts = {"flow":options.flow},
 			input_files = {"injection-file":inj, "reference-psd-cache":"reference_psd.cache"}
