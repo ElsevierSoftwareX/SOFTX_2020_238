@@ -1,4 +1,4 @@
-import sys, os, glob
+import sys, os, glob, time
 
 class elem(object):
 	def __init__(self, tag, content, attributes = ""):
@@ -23,6 +23,7 @@ class tabs(elem):
 	def __init__(self, content = []):
 		elem.__init__(self, tag="ul", content = [] + content, attributes = 'class="tab"')
 		self.content += [elem("li", [elem("img", [], """ style="width: 100px; margin: 5px 5px 5px 5px;" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+		self.content += [elem("li", [elem("div", [time.strftime("%Y-%m-%d %H:%M")])])]
 
 	def __iadd__(self, content):
 		try:
