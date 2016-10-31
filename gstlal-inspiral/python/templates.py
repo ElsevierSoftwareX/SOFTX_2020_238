@@ -68,7 +68,7 @@ __date__ = "FIXME"
 
 gstlal_FD_approximants = set((
 	'IMRPhenomC',
-	'SEOBNRv4_ROM_DoubleSpin',
+	'SEOBNRv4_ROM',
 	'SEOBNRv2_ROM_DoubleSpin',
 	'TaylorF2',
 	'TaylorF2RedSpin',
@@ -84,7 +84,7 @@ gstlal_TD_approximants = set((
 gstlal_IMR_approximants = set((
 	'EOBNRv2',
 	'IMRPhenomC',
-	'SEOBNRv4_ROM_DoubleSpin',
+	'SEOBNRv4_ROM',
 	'SEOBNRv2_ROM_DoubleSpin'
 ))
 gstlal_approximants = gstlal_FD_approximants | gstlal_TD_approximants
