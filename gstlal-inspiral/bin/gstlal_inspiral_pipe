@@ -106,7 +106,7 @@ def sim_tag_from_inj_file(injections):
 		return None
 	return injections.replace('.xml', '').replace('.gz', '').replace('-','_')
 
-def get_bank_params(bank_cache, verbose = False):
+def get_bank_params(bank_cache, options, verbose = False):
 	max_time = 0
 	template_mchirp_dict = {}
 	cache = Cache.fromfilenames([bank_cache.values()[0]])
@@ -114,7 +114,7 @@ def get_bank_params(bank_cache, verbose = False):
 		xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
 		snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
 		max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-		template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')), max(snglinspiraltable.getColumnByName('mchirp'))]
+		template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2])]
 		xmldoc.unlink()
 
 	return max_time, template_mchirp_dict
@@ -944,7 +944,7 @@ create_cache_directories(svdJob, gstlalInspiralJob, gstlalInspiralInjJob, calcRa
 # Get mchirp boundaries of banks and maximum duration of templates
 #
 
-max_time, template_mchirp_dict = get_bank_params(bank_cache)
+max_time, template_mchirp_dict = get_bank_params(bank_cache, options)
 #
 # Get the analysis segments
 #
