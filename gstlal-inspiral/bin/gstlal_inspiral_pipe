@@ -470,11 +470,9 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 					lloid_diststats.setdefault((j,i) ,[]).append(f)
 			for inj in options.injections:
 				inj = inj.split(':')[-1]
-				#print inspiral_nodes.items()
 				for j, injnode in enumerate(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg]):
 					if injnode is None:
 						continue
-					#injnode = inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg][j]
 					for i,f in enumerate(injnode.output_files["output-cache"]):
 						# Store the output files and the node and injnode for use as a parent dependencies
 						lloid_output[sim_tag_from_inj_file(inj)].setdefault((j,i), []).append((f, lloid_output[None][(j,i)][-1][1]+[injnode]))
@@ -482,8 +480,7 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 	# Pad injection output with Nones to match shape of non-injection output
 	for key in lloid_output[None].keys():
 		for inj in options.injections:
-			inj = inj.split(':')[-1]
-			lloid_output[sim_tag_from_inj_file(inj)].setdefault(key, None)
+			lloid_output[sim_tag_from_inj_file(inj.split(':')[-1])].setdefault(key, None)
 
 	return lloid_output, lloid_diststats
 
