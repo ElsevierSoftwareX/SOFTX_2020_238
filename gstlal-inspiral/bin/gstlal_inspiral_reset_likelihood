@@ -52,7 +52,9 @@ def parse_command_line():
 	)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--background-ranking-file", metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file.")
+
 	parser.add_option("--zerolag-ranking-file", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
+	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("--segment-and-horizon", action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
 	options, filenames = parser.parse_args()
 
@@ -81,6 +83,11 @@ if options.verbose:
 like_cpd, like_rd, like_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 
 _, zlike_rd, zlike_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.zerolag_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+
+# optionally add the zero lag SNR/chi counts to the background
+if options.add_zerolag_to_background:
+	for instrument in like_segs:
+		like_cpd.background_rates["%s_snr_chi" % instrument].array += like_cpd.zero_lag_rates["%s_snr_chi" % instrument].array
 
 # replace thae live time with the user specified live time
 new_like_segs = segs
