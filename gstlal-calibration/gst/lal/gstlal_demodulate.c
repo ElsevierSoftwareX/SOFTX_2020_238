@@ -66,27 +66,31 @@
  */
 
 
-static void demodulate_float(const float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const double frequency)
+static void demodulate_float(const float *src, gsize src_size, float complex *dst, guint64 t_reduced, gint rate, const double frequency)
 {
 	const float *src_end;
+	guint64 i = 0;
+	guint64 t;
 	for(src_end = src + src_size; src < src_end; src++, dst++) {
-		*dst = *src * cexpf(-2. * M_PI * I * frequency * t / 1000000000);
-		t += 1000000000 / rate;
+		t = t_reduced + gst_util_uint64_scale_int_round(i, 1000000000, rate);
+		*dst = *src * cexpf(-2. * M_PI * I * frequency * t / 1000000000.0);
 	}
 }
 
 
-static void demodulate_double(const double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const double frequency)
+static void demodulate_double(const double *src, gsize src_size, double complex *dst, guint64 t_reduced, gint rate, const double frequency)
 {
 	const double *src_end;
-	for(src_end = src + src_size; src < src_end; src++, dst++) {
-		*dst = *src * cexp(-2. * M_PI * I * frequency * t / 1000000000);
-		t += 1000000000 / rate;
+	guint64 i = 0;
+	guint64 t;
+	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
+		t = t_reduced + gst_util_uint64_scale_int_round(i, 1000000000, rate);
+		*dst = *src * cexp(-2. * M_PI * I * frequency * t / 1000000000.0);
 	}
 }
 
 
-static void demodulate(const void *src, gsize src_size, void *dst, gsize dst_size, guint64 t, gint rate, gint unit_size, const double frequency)
+static void demodulate(const void *src, gsize src_size, void *dst, gsize dst_size, guint64 t_reduced, gint rate, gint unit_size, const double frequency)
 {
 	g_assert_cmpuint(src_size % unit_size, ==, 0);
 	g_assert_cmpuint(dst_size % unit_size, ==, 0);
@@ -97,10 +101,10 @@ static void demodulate(const void *src, gsize src_size, void *dst, gsize dst_siz
 
 	switch(unit_size) {
 	case 4:
-		demodulate_float(src, src_size, dst, t, rate, frequency);
+		demodulate_float(src, src_size, dst, t_reduced, rate, frequency);
 		break;
 	case 8:
-		demodulate_double(src, src_size, dst, t, rate, frequency);
+		demodulate_double(src, src_size, dst, t_reduced, rate, frequency);
 		break;
 	default:
 		g_assert_not_reached();
@@ -436,8 +440,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
-		guint64 t0 = GST_BUFFER_TIMESTAMP(inbuf);
-		demodulate(inmap.data, inmap.size, outmap.data, outmap.size, t0, element->rate, element->unit_size, element->line_frequency);
+		guint64 t_reduced = GST_BUFFER_TIMESTAMP(inbuf) - element->t0;
+		demodulate(inmap.data, inmap.size, outmap.data, outmap.size, t_reduced, element->rate, element->unit_size, element->line_frequency);
 		set_metadata(element, outbuf, outmap.size / (2 * element->unit_size), FALSE);
 		gst_buffer_unmap(outbuf, &outmap);
 		gst_buffer_unmap(inbuf, &inmap);
