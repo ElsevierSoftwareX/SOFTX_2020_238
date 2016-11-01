@@ -81,8 +81,7 @@ class PSDHandler(simplehandler.Handler):
 
 
 		# Save a "latest"
-		psd_name = "psd.hdf5"
-		self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data})
+		self.to_hdf5(os.path.join(os.path.join(self.out_path, self.instrument), "psd.hdf5"), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
 		# write out all of the file types
 		for typ in ("min", "median", "max"):
 			self.to_hdf5(os.path.join("%s/%s" % (thisdir, typ), "noise.hdf5"), {"time": numpy.array(self.timedeq), "data": numpy.array(self.noisedeq)})
@@ -109,7 +108,7 @@ class PSDHandler(simplehandler.Handler):
 			# The PSD is special, we just record it. No min/median/max
 			thisdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime)), self.instrument)
 			psd_name = "%s-PSD-%d0-100.hdf5" % (self.instrument, int(round(buftime,-2)))
-			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data})
+			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
 
 		buf.unmap(mapinfo)
 		del buf
@@ -145,6 +144,7 @@ gw_data_source_info = datasource.GWDataSourceInfo(options)
 # only support one channel
 instrument = gw_data_source_info.channel_dict.keys()[0]
 
+aggregator.makedir(os.path.join(self.out_path, self.instrument))
 #
 # build pipeline
 #
