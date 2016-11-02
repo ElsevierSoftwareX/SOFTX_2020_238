@@ -144,7 +144,8 @@ gw_data_source_info = datasource.GWDataSourceInfo(options)
 # only support one channel
 instrument = gw_data_source_info.channel_dict.keys()[0]
 
-aggregator.makedir(os.path.join(self.out_path, self.instrument))
+aggregator.makedir(os.path.join(options.out_path, instrument))
+
 #
 # build pipeline
 #
