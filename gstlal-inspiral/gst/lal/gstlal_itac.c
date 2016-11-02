@@ -304,6 +304,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 				g_free(itac->channel_name);
 				itac->channel_name = channel_name;
 				g_mutex_lock(&itac->bank_lock);
+				gstlal_set_min_offset_in_snglinspiral_array(itac->bankarray, itac->channels, &(itac->difftime));
 				gstlal_set_channel_in_snglinspiral_array(itac->bankarray, itac->channels, itac->channel_name);
 				gstlal_set_instrument_in_snglinspiral_array(itac->bankarray, itac->channels, itac->instrument);
 				g_mutex_unlock(&itac->bank_lock);
@@ -368,10 +369,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		g_mutex_lock(&element->bank_lock);
 		element->bank_filename = g_value_dup_string(value);
 		element->channels = gstlal_snglinspiral_array_from_file(element->bank_filename, &(element->bankarray));
+		gstlal_set_min_offset_in_snglinspiral_array(element->bankarray, element->channels, &(element->difftime));
 		if (element->instrument && element->channel_name) {
 			gstlal_set_instrument_in_snglinspiral_array(element->bankarray, element->channels, element->instrument);
 			gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
-			gstlal_set_min_offset_in_snglinspiral_array(element->bankarray, element->channels, &element->difftime);
 		}
 		g_mutex_unlock(&element->bank_lock);
 		break;
@@ -522,7 +523,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static void update_state(GSTLALItac *element, GstBuffer *srcbuf)
 {
 	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
-	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) + GST_BUFFER_DURATION(srcbuf);
+	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) + GST_BUFFER_DURATION(srcbuf) - element->difftime;
 }
 
 static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
@@ -994,6 +995,7 @@ static void gstlal_itac_init(GSTLALItac *element)
 	
 	/* internal data */
 	element->rate = 0;
+	element->difftime = 0;
 	element->snr_thresh = 0;
 	reset_time_and_offset(element);
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);

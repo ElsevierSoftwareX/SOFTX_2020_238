@@ -136,7 +136,7 @@ int gstlal_set_min_offset_in_snglinspiral_array(SnglInspiralTable *bankarray, in
 {
 	int i;
 	gint64 gpsns = 0;
-	guint64 offset = 0;
+	gint64 offset = 0;
 	for (i = 0; i < length; i++) {
 		offset = XLALGPSToINT8NS(&(bankarray[i].end));
 		if (offset < gpsns)
