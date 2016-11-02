@@ -132,7 +132,21 @@ int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 	return 0;
 }
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view)
+int gstlal_set_min_offset_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, GstClockTimeDiff *timediff)
+{
+	int i;
+	gint64 gpsns = 0;
+	guint64 offset = 0;
+	for (i = 0; i < length; i++) {
+		offset = XLALGPSToINT8NS(&(bankarray[i].end));
+		if (offset < gpsns)
+			gpsns = offset;
+	}
+	*timediff = gpsns;
+	return 0;
+}
+
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff timediff)
 {
 	GstBuffer *srcbuf = gst_buffer_new();
 	LALUnit snr_units;	
@@ -150,7 +164,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
         GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
 
         /* set the time stamps */
-        GST_BUFFER_PTS(srcbuf) = time;
+        GST_BUFFER_PTS(srcbuf) = time + timediff;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	if (input->num_events) {

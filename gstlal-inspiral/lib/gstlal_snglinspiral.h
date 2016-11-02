@@ -45,11 +45,12 @@ int gstlal_snglinspiral_array_from_file(const char *bank_filename, SnglInspiralT
 int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *channel);
 int gstlal_set_instrument_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *instrument);
 int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, double *sigmasq);
+int gstlal_set_min_offset_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, GstClockTimeDiff *difftime);
 
 /*
  * FIXME: only support single precision SNR snippets at the moment
  */
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view);
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff);
 
 
 G_END_DECLS

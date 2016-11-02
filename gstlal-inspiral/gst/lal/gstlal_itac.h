@@ -92,6 +92,7 @@ typedef struct {
 	 * precision mode
 	 */
 	gsl_matrix_complex_float_view snr_matrix_view;
+	GstClockTimeDiff difftime;
 	
 	GMutex bank_lock;
 } GSTLALItac;

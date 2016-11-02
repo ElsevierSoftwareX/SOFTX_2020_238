@@ -371,6 +371,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		if (element->instrument && element->channel_name) {
 			gstlal_set_instrument_in_snglinspiral_array(element->bankarray, element->channels, element->instrument);
 			gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
+			gstlal_set_min_offset_in_snglinspiral_array(element->bankarray, element->channels, &element->difftime);
 		}
 		g_mutex_unlock(&element->bank_lock);
 		break;
@@ -540,7 +541,7 @@ static GstFlowReturn push_gap(GSTLALItac *element, guint samps)
 	/* Clearing the max data structure causes the resulting buffer to be a GAP */
 	gstlal_peak_state_clear(element->maxdata);
 	/* create the output buffer */
-	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL, NULL);
+	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
 	/* push the result */
@@ -590,7 +591,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 			gstlal_double_complex_series_around_peak(element->maxdata, dataptr.as_double_complex, (double complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			/* create the output buffer */
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL, element->difftime);
 			}
 		else if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
@@ -598,13 +599,13 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			/* create the output buffer */
 			/* FIXME snr snippets not supported for double precision yet */
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view));
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view), element->difftime);
 			}
 		else
 			g_assert_not_reached();
 		}
 	else
-		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL, NULL);
+		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
 		
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
