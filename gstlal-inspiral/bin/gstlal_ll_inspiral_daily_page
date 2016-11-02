@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
 	progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files))
 	for f in noninj_files_to_merge + seg_files:
-		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % noninjdb, "%s" % f])
+		subprocess.check_call(["ligolw_sqlite", "--database", "--verbose", "%s" % noninjdb, "%s" % f])
 		# Do not cluster! the online analysis doesn't do a global clustering stage!!
 		try:
 			subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % noninjdb])
@@ -172,7 +172,7 @@ if __name__ == '__main__':
 	for injection_file in inj_file_bins:
 		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge[injection_file]) + len(seg_files))
 		for f in inj_files_to_merge[injection_file] + seg_files:
-			subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb[injection_file], "%s" % f])
+			subprocess.check_call(["ligolw_sqlite", "--database", "--verbose", "%s" % injdb[injection_file], "%s" % f])
 			# Do not cluster! the online analysis doesn't do a global clustering stage!!
 			try:
 				subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % injdb[injection_file]])
@@ -183,13 +183,13 @@ if __name__ == '__main__':
 
 		# Find injections
 		progressbar = ProgressBar("Find injections", 4)
-		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb[injection_file], "%s" % injection_file])
+		subprocess.check_call(["ligolw_sqlite", "--database", "--verbose", "%s" % injdb[injection_file], "%s" % injection_file])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb[injection_file], "--extract", "%s.xml" % injdb[injection_file]])
+		subprocess.check_call(["ligolw_sqlite", "--database", "--verbose", "%s" % injdb[injection_file], "--extract", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_inspinjfind", "%s.xml" % injdb[injection_file]])
+		subprocess.check_call(["ligolw_inspinjfind", "--verbose", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_sqlite", "--database", "%s" % injdb[injection_file], "--replace", "%s.xml" % injdb[injection_file]])
+		subprocess.check_call(["ligolw_sqlite", "--database", "--verbose", "%s" % injdb[injection_file], "--replace", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
 
 	#
@@ -256,8 +256,7 @@ if __name__ == '__main__':
 
 
 	# copy the working files back
+	os.rename(noninjdb, noninjdb.replace(".tmp",""))
 	for injection_file in injdb:
-		os.rename(noninjdb, noninjdb.replace(".tmp",""))
-		if options.injection_file:
-			os.rename(injdb[injection_file], injdb[injection_file].replace(".tmp",""))
+		os.rename(injdb[injection_file], injdb[injection_file].replace(".tmp",""))
 
