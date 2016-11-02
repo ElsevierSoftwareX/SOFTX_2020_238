@@ -846,8 +846,8 @@ def parse_command_line():
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the marginalized likelihood file (required iff running injection-only analysis)")
 
 	# Condor commands
-	parser.add_option("--request-cpu", default = "8", metavar = "integer", help = "set the inspiral CPU count, default = 4")
-	parser.add_option("--request-memory", default = "15GB", metavar = "integer", help = "set the inspiral memory, default = 7GB")
+	parser.add_option("--request-cpu", default = "4", metavar = "integer", help = "set the inspiral CPU count, default = 4")
+	parser.add_option("--request-memory", default = "7GB", metavar = "integer", help = "set the inspiral memory, default = 7GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 
 	options, filenames = parser.parse_args()
