@@ -89,7 +89,7 @@ from optparse import OptionParser
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 import numpy
-from gstlal import datasource
+from gstlal import datasource, svd_bank
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -106,18 +106,35 @@ def sim_tag_from_inj_file(injections):
 		return None
 	return injections.replace('.xml', '').replace('.gz', '').replace('-','_')
 
-def get_bank_params(bank_cache, options, verbose = False):
+def get_bank_params(bank_cache, options, verbose = False, svd = False):
 	max_time = 0
 	template_mchirp_dict = {}
-	cache = Cache.fromfilenames([bank_cache.values()[0]])
-	for f in cache.pfnlist():
-		xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
-		snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
-		max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-		template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2])]
-		xmldoc.unlink()
+	if svd:
+		# injection-only run
+		svd_nodes = {}
+		for ce in sorted([CacheEntry(f) for f in open(bank_cache)], cmp = lambda x,y: cmp(int(x.description.split("_")[0]), int(y.description.split("_")[0]))):
+			svd_nodes.setdefault(ce.observatory, []).append(ce.path)
+			if not template_mchirp_dict.setdefault(ce.description.split("_")[0], []):
+				min_mchirp, max_mchirp = numpy.inf, 0
+				xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
+				for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+					snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
+					mchirp_column = snglinspiraltable.getColumnByName('mchirp')
+					min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
+					max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
+				template_mchirp_dict[ce.description.split("_")[0]] = (min_mchirp, max_mchirp)
+				xmldoc.unlink()
+		return max_time, template_mchirp_dict, svd_nodes
+	else:
+		cache = Cache.fromfilenames([bank_cache.values()[0]])
+		for f in cache.pfnlist():
+			xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
+			snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
+			max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
+			template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2])]
+			xmldoc.unlink()
 
-	return max_time, template_mchirp_dict
+		return max_time, template_mchirp_dict
 
 def chunks(l, n):
 	for i in xrange(0, len(l), n):
@@ -126,54 +143,6 @@ def chunks(l, n):
 def flatten(lst):
     "Flatten one level of nesting"
     return list(itertools.chain.from_iterable(lst))
-
-#
-# Organization Scheme functions
-#
-
-def create_cache_directories(svdJob, gstlalInspiralJob, gstlalInspiralInjJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, toSqliteJob, marginalizeJob, options):
-	# Create cache file directories
-	try:
-		os.mkdir(os.path.join(svdJob.tag_base, 'cache'))
-	except:
-		pass
-
-	try:
-		os.mkdir(os.path.join(gstlalInspiralJob.tag_base, 'cache'))
-	except:
-		pass
-
-
-	try:
-		os.mkdir(os.path.join(calcRankPDFsJob.tag_base, 'cache'))
-	except:
-		pass
-
-	try:
-		os.mkdir(os.path.join(calcLikelihoodJob.tag_base, 'cache'))
-	except:
-		pass
-
-	try:
-		os.mkdir(os.path.join(toSqliteJob.tag_base, 'cache'))
-	except:
-		pass
-
-	try:
-		os.mkdir(os.path.join(marginalizeJob.tag_base, 'cache'))
-	except:
-		pass
-
-	if options.injections:
-		try:
-			os.mkdir(os.path.join(gstlalInspiralInjJob.tag_base, 'cache'))
-		except:
-			pass
-
-		try:
-			os.mkdir(os.path.join(calcLikelihoodJobInj.tag_base, 'cache'))
-		except:
-			pass
 
 def subdir_path(dirlist):
 	output_path = '/'.join(dirlist)
@@ -226,9 +195,24 @@ def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
 				)
 	return psd_nodes
 
+def inj_psd_node_gen(segsdict, options):
+	psd_nodes = {}
+	psd_cache_files = {}
+	for line in open(options.psd_cache):
+		ce = CacheEntry(line)
+		psd_cache_files.setdefault(frozenset(lsctables.instrument_set_from_ifos(ce.observatory)), []).append((ce.segment, ce.path))
+	for ifos in segsdict:
+		reference_psd_files = sorted(psd_cache_files[ifos], key = lambda (s, p): s)
+		ref_psd_file_num = 0
+		for seg in segsdict[ifos]:
+			while int(reference_psd_files[ref_psd_file_num][0][0]) < int(seg[0]):
+				ref_psd_file_num += 1
+			psd_nodes[(ifos, seg)] = reference_psd_files[ref_psd_file_num][1]
+	ref_psd_parent_nodes = []
+	return psd_nodes, ref_psd_parent_nodes
+
 def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, template_mchirp_dict):
 	svd_nodes = {}
-	output_path = subdir_path([svdJob.output_path, str(int(seg[0]))[:5]])
 	new_template_mchirp_dict = {}
 	for i, bank_group in enumerate(bank_groups):
 		for ifo, files in bank_group.items():
@@ -245,7 +229,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, temp
 				if f in template_mchirp_dict:
 					mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
 
-			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%04d_SVD' % (i,), int(seg[0]), int(seg[1]), '.xml.gz', path = output_path)
+			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%04d_SVD' % (i,), int(seg[0]), int(seg[1]), '.xml.gz', path = svdJob.output_path)
 			if '%04d' %i not in new_template_mchirp_dict and mchirp_interval != (numpy.inf, 0):
 				new_template_mchirp_dict['%04d' % i] = mchirp_interval
 
@@ -271,6 +255,24 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, temp
 			)
 	return svd_nodes, new_template_mchirp_dict
 
+def inj_svd_node_gen(svd_bank_cache):
+	svd_nodes = {}
+	template_mchirp_dict = {}
+	max_time = 0
+	for ce in sorted([CacheEntry(f) for f in open(svd_bank_cache)], cmp = lambda x,y: cmp(int(x.description.split("_")[0]), int(y.description.split("_")[0]))):
+		svd_nodes.setdefault(ce.observatory, []).append(ce.path)
+		if not template_mchirp_dict.setdefault(ce.description.split("_")[0], []):
+			min_mchirp, max_mchirp = numpy.inf, 0
+			xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
+			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
+				mchirp_column = snglinspiraltable.getColumnByName('mchirp')
+				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
+				max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
+			template_mchirp_dict[ce.description.split("_")[0]] = (min_mchirp, max_mchirp)
+			xmldoc.unlink()
+	return svd_nodes, template_mchirp_dict
+
 def create_svd_bank_strings(svd_nodes, instruments = None):
 	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
 	outstrings = []
@@ -279,12 +281,15 @@ def create_svd_bank_strings(svd_nodes, instruments = None):
 		for ifo in svd_nodes:
 			if instruments is not None and ifo not in instruments:
 				continue
-			svd_bank_string += "%s:%s," % (ifo, svd_nodes[ifo][i].output_files["write-svd"])
+			try:
+				svd_bank_string += "%s:%s," % (ifo, svd_nodes[ifo][i].output_files["write-svd"])
+			except AttributeError:
+				svd_bank_string += "%s:%s," % (ifo, svd_nodes[ifo][i])
 		svd_bank_string = svd_bank_string.strip(",")
 		outstrings.append(svd_bank_string)
 	return outstrings
 
-def svd_bank_cache_maker(svd_bank_strings, counter, injection = False):
+def svd_bank_cache_maker(svd_bank_strings, injection = False):
 	if injection:
 		dir_name = "gstlal_inspiral_inj"
 	else:
@@ -304,109 +309,122 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 		# setup dictionaries to hold the inspiral nodes
 		inspiral_nodes[(ifos, None)] = {}	
+		ignore = {}
 		for injections in options.injections:
-			if injections is not None:
-				injections = injections.split(':')[-1]
+			min_chirp_mass, max_chirp_mass, injections = injections.split(':')
+			min_chirp_mass, max_chirp_mass = float(min_chirp_mass), float(max_chirp_mass)
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
-		
+			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda (k,v): int(k)):
+				if max_chirp_mass <= bounds[0]:
+					ignore.setdefault(injections, []).extend(range(int(bgbin_index),len(template_mchirp_dict.values())))
+					# NOTE putting a break here assumes that the min chirp mass
+					# in a subbank increases with bin number, i.e. XXXX+1 has a
+					# greater minimum chirpmass than XXXX, for all XXXX. Note
+					# that the reverse is not true, bin XXXX+1 may have a lower
+					# max chirpmass than bin XXXX.
+					break
+				elif min_chirp_mass > bounds[1]:
+					ignore.setdefault(injections, []).append(int(bgbin_index))
+
+		# Replace mchirplo:mchirphi:inj.xml with inj.xml
+		options.injections = [inj.split(':')[-1] for inj in options.injections]
+
 		# FIXME choose better splitting?
 		numchunks = 10
 
+		# only use a channel dict with the relevant channels
+		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
+
+		# get the svd bank strings
+		svd_bank_strings_full = create_svd_bank_strings(svd_nodes, instruments = this_channel_dict.keys())
+
+		# get a mapping between chunk counter and bgbin for setting priorities
+		bgbin_chunk_map = {}
+
 		for seg in segsdict[ifos]:
-			output_seg_path = subdir_path([gstlalInspiralJob.output_path, str(int(seg[0]))[:5]])
 			if options.injections:
 				output_seg_inj_path = subdir_path([gstlalInspiralInjJob.output_path, str(int(seg[0]))[:5]])
 			
-			# only use a channel dict with the relevant channels
-			this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
+			if gstlalInspiralJob is None:
+				# injection-only run
+				inspiral_nodes[(ifos, None)].setdefault(seg, [None])
 
-			# get the svd bank strings
-			svd_bank_strings_full = create_svd_bank_strings(svd_nodes, instruments = this_channel_dict.keys())
-
-			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
-				# setup output names
-				output_paths = [subdir_path([output_seg_path, '%04d' % (i + numchunks * chunk_counter,)]) for i, s in enumerate(svd_bank_strings)]
-				output_names = [inspiral_pipe.T050017_filename(ifos, '%04d_LLOID' % (i + numchunks * chunk_counter,), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
-				dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%04d_DIST_STATS' % (i + numchunks * chunk_counter,), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i,s in enumerate(svd_bank_strings)]
-
-				# FIXME do better with svd node parents?
-				# non injection node
-				noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
-						opts = {"psd-fft-length":options.psd_fft_length,
-							"ht-gate-threshold":options.ht_gate_threshold,
-							"frame-segments-name":options.frame_segments_name,
-							"gps-start-time":int(seg[0]),
-							"gps-end-time":int(seg[1]),
-							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-							"tmp-space":inspiral_pipe.condor_scratch_space(),
-							"track-psd":"",
-							"control-peak-time":options.control_peak_time,
-							"coincidence-threshold":options.coincidence_threshold,
-							"singles-threshold":options.singles_threshold,
-							"fir-stride":options.fir_stride,
-							"data-source":"frames",
-							"local-frame-caching":"",
-							"min-instruments":options.min_instruments,
-							"min-log-L":options.min_log_L,
-							"reference-likelihood-file":options.reference_likelihood_file
-							},
-						input_files = {	"time-slide-file":options.time_slide_file,
-								"frame-cache":options.frame_cache,
-								"frame-segments-file":options.frame_segments_file,
-								"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
-								"blind-injections":options.blind_injections,
-								"veto-segments-file":options.vetoes,
-							},
-						input_cache_files = {"svd-bank-cache":svd_bank_cache_maker(svd_bank_strings, chunk_counter)},
-						output_cache_files = {
-								"output-cache":output_names,
-								"likelihood-file-cache":dist_stat_names
-							}
-						)
-				# Set a post script to check for file integrity
-				if options.gzip_test:
-					noninjnode.set_post_script("gzip_test.sh")
-					noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
-				# impose a priority to help with depth first submission
-				noninjnode.set_priority(chunk_counter+15)
-				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
-
-			for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
-				mchirp_boundaries = [template_mchirp_dict['%04d' % (i + numchunks * chunk_counter)] for i, s in enumerate(svd_bank_strings)]
-
-				# process injections
-				for injections in options.injections:
-					min_chirp_mass, max_chirp_mass, injections = injections.split(':')
-					min_chirp_mass, max_chirp_mass = float(min_chirp_mass), float(max_chirp_mass)
-					ignore = []
-					for i, bounds in enumerate(mchirp_boundaries):
-						if max_chirp_mass <= bounds[0]:
-							ignore.extend(range(i,len(svd_bank_strings)))
-							# NOTE putting a break here assumes that the min chirp mass
-							# in a subbank increases with bin number, i.e. XXXX+1 has a
-							# greater minimum chirpmass than XXXX, for all XXXX. Note
-							# that the reverse is not true, bin XXXX+1 may have a lower
-							# max chirpmass than bin XXXX.
-							break
-						elif min_chirp_mass > bounds[1]:
-							ignore.append(i)
-				
+			else:
+				output_seg_path = subdir_path([gstlalInspiralJob.output_path, str(int(seg[0]))[:5]])
+				for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
+					bgbin_indices = ['%04d' % (i + numchunks * chunk_counter,) for i,s in enumerate(svd_bank_strings)]
 					# setup output names
-					sim_name = sim_tag_from_inj_file(injections)
+					output_paths = [subdir_path([output_seg_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%s_LLOID' % (bgbin_indices[i],), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%s_DIST_STATS' % (bgbin_indices[i],), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i,s in enumerate(svd_bank_strings)]
 
-					if ignore == range(len(svd_bank_strings)):
-						# All of the subbanks represented by svd_bank_strings contain
-						# chirp masses below or above the interval we care about
-						inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(None)
-						continue
+					for bgbin in bgbin_indices:
+						bgbin_chunk_map.setdefault(bgbin, chunk_counter)
 
-					output_paths = [subdir_path([output_seg_inj_path, '%04d' % (i + numchunks * chunk_counter,)]) for i, s in enumerate(svd_bank_strings)]
-					output_names = [inspiral_pipe.T050017_filename(ifos, '%04d_LLOID_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings) if i not in ignore]
-					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%04d_DIST_STATS_%s' % (i + numchunks * chunk_counter, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings) if i not in ignore]
-					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, chunk_counter, injection = True)) if i / len(ifos) not in ignore]
+					# FIXME do better with svd node parents?
+					# non injection node
+					noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
+							opts = {"psd-fft-length":options.psd_fft_length,
+								"ht-gate-threshold":options.ht_gate_threshold,
+								"frame-segments-name":options.frame_segments_name,
+								"gps-start-time":int(seg[0]),
+								"gps-end-time":int(seg[1]),
+								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+								"tmp-space":inspiral_pipe.condor_scratch_space(),
+								"track-psd":"",
+								"control-peak-time":options.control_peak_time,
+								"coincidence-threshold":options.coincidence_threshold,
+								"singles-threshold":options.singles_threshold,
+								"fir-stride":options.fir_stride,
+								"data-source":"frames",
+								"local-frame-caching":"",
+								"min-instruments":options.min_instruments,
+								"min-log-L":options.min_log_L,
+								"reference-likelihood-file":options.reference_likelihood_file
+								},
+							input_files = {	"time-slide-file":options.time_slide_file,
+									"frame-cache":options.frame_cache,
+									"frame-segments-file":options.frame_segments_file,
+									"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
+									"blind-injections":options.blind_injections,
+									"veto-segments-file":options.vetoes,
+								},
+							input_cache_files = {"svd-bank-cache":svd_bank_cache_maker(svd_bank_strings)},
+							output_cache_files = {
+									"output-cache":output_names,
+									"likelihood-file-cache":dist_stat_names
+								}
+							)
+					# Set a post script to check for file integrity
+					if options.gzip_test:
+						noninjnode.set_post_script("gzip_test.sh")
+						noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
+					# impose a priority to help with depth first submission
+					noninjnode.set_priority(chunk_counter+15)
+					inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
+
+			# process injections
+			for injections in options.injections:
+				# setup output names
+				sim_name = sim_tag_from_inj_file(injections)
+
+				bgbin_svd_bank_strings = [index_bank_string_tuple for i, index_bank_string_tuple in enumerate(zip(sorted(template_mchirp_dict.keys()), svd_bank_strings_full)) if i not in ignore[injections]]
+
+				for chunk_counter, (bgbin_indices, svd_bank_strings) in enumerate(chunks(zip(*bgbin_svd_bank_strings), numchunks)):
+					output_paths = [subdir_path([output_seg_inj_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
+					output_names = [inspiral_pipe.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_indices[i], sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%s_DIST_STATS_%s' % (bgbin_indices[i], sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
+					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, injection = True))]
+					try:
+						reference_psd = psd_nodes[(ifos, seg)].output_files["write-psd"]
+						parents = sum(svd_nodes.values(),[])
+					except AttributeError:
+						# injection-only run
+						reference_psd = psd_nodes[(ifos, seg)]
+						parents = []
 
 					# setup injection node
-					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
+					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = parents,
 							opts = {"psd-fft-length":options.psd_fft_length,
 								"ht-gate-threshold":options.ht_gate_threshold,
 								"frame-segments-name":options.frame_segments_name,
@@ -428,7 +446,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 							input_files = {	"time-slide-file":options.inj_time_slide_file,
 									"frame-cache":options.frame_cache,
 									"frame-segments-file":options.frame_segments_file,
-									"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
+									"reference-psd":reference_psd,
 									"veto-segments-file":options.vetoes,
 									"injections": injections
 								},
@@ -444,7 +462,10 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						injnode.set_post_script("gzip_test.sh")
 						injnode.add_post_script_arg(" ".join(output_names))
 					# impose a priority to help with depth first submission
-					injnode.set_priority(chunk_counter)
+					if bgbin_chunk_map:
+						injnode.set_priority(bgbin_chunk_map[bgbin_indices[-1]])
+					else:
+						injnode.set_priority(chunk_counter)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
 
 	return inspiral_nodes
@@ -454,33 +475,34 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 	# first get the previous output in a usable form
 	lloid_output = {}
 	for inj in options.injections + [None]:
-		if inj is not None:
-			inj = inj.split(':')[-1]
 		lloid_output[sim_tag_from_inj_file(inj)] = {}
 	lloid_diststats = {}
+	if options.dist_stats_cache:
+		for ce in [CacheEntry(f) for f in open(options.dist_stats_cache)]:
+			lloid_diststats[ce.description.split("_")[0]] = [ce.path]
 	for ifos in segsdict:
 		for seg in segsdict[ifos]:
 			# iterate over the mass space chunks for each segment
-			for j, node in enumerate(inspiral_nodes[(ifos, None)][seg]):
+			for node in inspiral_nodes[(ifos, None)][seg]:
+				if node is None:
+					break
 				len_out_files = len(node.output_files["output-cache"])
-				for i,f in enumerate(node.output_files["output-cache"]):
+				for f in node.output_files["output-cache"]:
 					# Store the output files and the node for use as a parent dependency
-					lloid_output[None].setdefault((j,i), []).append((f, [node]))
-				for i,f in enumerate(node.output_files["likelihood-file-cache"]):
-					lloid_diststats.setdefault((j,i) ,[]).append(f)
+					lloid_output[None].setdefault(CacheEntry.from_T050017(f).description.split("_")[0], []).append((f, [node]))
+				for f in node.output_files["likelihood-file-cache"]:
+					lloid_diststats.setdefault(CacheEntry.from_T050017(f).description.split("_")[0] ,[]).append(f)
 			for inj in options.injections:
-				inj = inj.split(':')[-1]
-				for j, injnode in enumerate(inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg]):
+				for injnode in inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg]:
 					if injnode is None:
 						continue
-					for i,f in enumerate(injnode.output_files["output-cache"]):
+					for f in injnode.output_files["output-cache"]:
 						# Store the output files and the node and injnode for use as a parent dependencies
-						lloid_output[sim_tag_from_inj_file(inj)].setdefault((j,i), []).append((f, lloid_output[None][(j,i)][-1][1]+[injnode]))
-
-	# Pad injection output with Nones to match shape of non-injection output
-	for key in lloid_output[None].keys():
-		for inj in options.injections:
-			lloid_output[sim_tag_from_inj_file(inj.split(':')[-1])].setdefault(key, None)
+						bgbin_index = CacheEntry.from_T050017(f).description.split("_")[0]
+						try:
+							lloid_output[sim_tag_from_inj_file(inj)].setdefault(bgbin_index, []).append((f, lloid_output[None][bgbin_index][-1][1]+[injnode]))
+						except KeyError:
+							lloid_output[sim_tag_from_inj_file(inj)].setdefault(bgbin_index, []).append((f, [injnode]))
 
 	return lloid_output, lloid_diststats
 
@@ -490,12 +512,13 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 	rankpdf_nodes = []
 	outnodes = {}
 	instruments = "".join(sorted(instrument_set))
-	margnodes = []
-	output_seg_prior_path = subdir_path([createPriorDistStatsJob.output_path, str(int(boundary_seg[0]))[:5]])
-	output_seg_calcrank_path = subdir_path([calcRankPDFsJob.output_path, str(int(boundary_seg[0]))[:5]])
+	margnodes = {}
 	# Here n counts the bins
-	# first non-injections
+	# first non-injections, which will get skipped if this is an injections-only run
 	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
+		output_seg_prior_path = subdir_path([createPriorDistStatsJob.output_path, str(int(boundary_seg[0]))[:5]])
+		output_seg_calcrank_path = subdir_path([calcRankPDFsJob.output_path, str(int(boundary_seg[0]))[:5]])
+
 		inputs = [o[0] for o in outputs]
 		parents = []
 		[parents.extend(o[1]) for o in outputs]
@@ -522,7 +545,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				input_files = {"":diststats_per_bin_node.output_files["output"]},
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = subdir_path([output_seg_calcrank_path, '%04d' % n]))}
 			)
-		margnodes.append(diststats_per_bin_node)
+		margnodes['%04d' %(n,)] = diststats_per_bin_node
 		rankpdf_nodes.append(calcranknode)
 
 		
@@ -538,19 +561,23 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 
 	# then injections
 	for inj in options.injections:
-		inj = inj.split(':')[-1]
-		for n, (outputs, diststats) in enumerate((lloid_output[sim_tag_from_inj_file(inj)][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
+		for n, (outputs, diststats, bgbin_index) in enumerate((lloid_output[sim_tag_from_inj_file(inj)][key], lloid_diststats[key], key) for key in sorted(lloid_output[sim_tag_from_inj_file(inj)].keys())):
 			if outputs is None:
 				continue
 			inputs = [o[0] for o in outputs]
 			parents = []
 			[parents.extend(o[1]) for o in outputs]
+			if margnodes:
+				parents.append(margnodes[bgbin_index])
+				likelihood_url = margnodes[bgbin_index].output_files["output"]
+			else:
+				likelihood_url = diststats[0]
 			# Break up the likelihood jobs into chunks to process fewer files, e.g., 250
 			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
 				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
-					parent_nodes = parents + [margnodes[n]],
+					parent_nodes = parents,
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-					input_files = {"likelihood-url":margnodes[n].output_files["output"]},
+					input_files = {"likelihood-url":likelihood_url},
 					input_cache_files = {"input-cache":chunked_inputs}
 					) for chunked_inputs in chunks(inputs, 250)]
 				)
@@ -619,6 +646,9 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 				)
 				outnodes.setdefault(sim_tag_from_inj_file(inj), []).append(sqlitenode)
 
+	# make sure outnodes has a None key, even if its value is an empty list
+	outnodes.setdefault(None, [])
+
 	return rankpdf_nodes, outnodes
 
 def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, innodes, injsnrnodes, options, instruments):
@@ -651,27 +681,30 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		dbs_to_delete.append(noninjdb)
 
 	# Merge the final non injection database
-	noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID', int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
-	sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
-		opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
-		input_files = {"": (vetoes + [options.frame_segments_file])},
-		input_cache_files = {"input-cache": [node.input_files[""] for node in chunk_nodes]},
-		output_files = {"database":noninjdb},
-		input_cache_file_name = os.path.join(os.path.join(toSqliteJob.output_path, 'cache'), noninjdb).replace('.sqlite','.cache')
-	)
-
-	# cluster the final non injection database
-	noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-		opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
-		input_files = {"":noninjdb}
-	)
-
+	outnodes = []
 	injdbs = []
-	outnodes = [noninjsqlitenode]
+	if options.non_injection_db:
+		# injection-only run
+		noninjdb = options.non_injection_db
+
+	else:
+		noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID', int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
+		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"": (vetoes + [options.frame_segments_file])},
+			input_cache_files = {"input-cache": [node.input_files[""] for node in chunk_nodes]},
+			output_files = {"database":noninjdb},
+			input_cache_file_name = os.path.join(os.path.join(toSqliteJob.output_path, 'cache'), noninjdb).replace('.sqlite','.cache')
+		)
+
+		# cluster the final non injection database
+		noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"":noninjdb}
+		)
+		outnodes.append(noninjsqlitenode)
 
 	for injections, far_injections in zip(options.injections, options.far_injections):
-		injections = injections.split(':')[-1]
-
 		# extract only the nodes that were used for injections
 		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
 		chunk_nodes = []
@@ -763,15 +796,24 @@ def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJo
 			input_cache_file_name = os.path.join(os.path.join(os.path.dirname(margout[-1]), 'cache'), os.path.basename(margout[-1])).replace('.xml.gz','.cache')
 		))
 
-	margnode = inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = margnodes,
-		output_files = {"output":"marginalized_likelihood.xml.gz"},
-		input_cache_files = {"likelihood-cache":margout},
-		input_cache_file_name = os.path.join(marginalizeJob.output_path, "cache/marginalized_likelihood.cache")
-	)
+	if options.marginalized_likelihood_file:
+		# injection-only run
+		parents = final_sqlite_nodes
+		marginalized_likelihood_file = options.marginalized_likelihood_file
+
+	else:
+		margnode = inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = margnodes,
+			output_files = {"output":"marginalized_likelihood.xml.gz"},
+			input_cache_files = {"likelihood-cache":margout},
+			input_cache_file_name = os.path.join(marginalizeJob.output_path, "cache/marginalized_likelihood.cache")
+		)
+		parents = [margnode]
+		marginalized_likelihood_file = margnode.output_files["output"]
 	
-	farnode = inspiral_pipe.generic_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = [margnode],
+	
+	farnode = inspiral_pipe.generic_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = parents,
 		opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-		input_files = {"background-bins-file":"marginalized_likelihood.xml.gz", "injection-db":injdbs, "non-injection-db":noninjdb}
+		input_files = {"background-bins-file":marginalized_likelihood_file, "injection-db":injdbs, "non-injection-db":noninjdb}
 	)
 	
 	return farnode, margout
@@ -825,19 +867,40 @@ def parse_command_line():
 	parser.remove_option("--injections")
 	parser.add_option("--injections", action = "append", help = "append injection files to analyze. Must prepend filename with X:Y:, where X and Y are floats, e.g. 1.2:3.1:filename, so that the injections are only searched for in regions of the template bank with X <= chirp mass < Y.")
 
+	# Data from a zero lag run in the case of an injection-only run.
+	parser.add_option("--dist-stats-cache", metavar = "filename", help = "Set the cache file for dist stats (required iff running injection-only analysis)")
+	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Set the cache file for dist stats (required iff running injection-only analysis)")
+	parser.add_option("--psd-cache", metavar = "filename", help = "Set the cache file for psd (required iff running injection-only analysis)")
+	parser.add_option("--non-injection-db", metavar = "filename", help = "Set the non injection data base file (required iff running injection-only analysis)")
+	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the marginalized likelihood file (required iff running injection-only analysis)")
+
 	# Condor commands
 	parser.add_option("--request-cpu", default = "8", metavar = "integer", help = "set the inspiral CPU count, default = 4")
 	parser.add_option("--request-memory", default = "15GB", metavar = "integer", help = "set the inspiral memory, default = 7GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 
 	options, filenames = parser.parse_args()
-	options.num_banks = [int(v) for v in options.num_banks.split(",")]
+	if options.num_banks:
+		options.num_banks = [int(v) for v in options.num_banks.split(",")]
 	
 	if options.overlap % 2:
 		raise ValueError("overlap must be even")
 
+	missing_injection_options = []
+	for option in ("dist_stats_cache", "svd_bank_cache", "psd_cache", "non_injection_db", "marginalized_likelihood_file"):
+		if getattr(options, option) is None:
+			missing_injection_options.append(option)
+	if len(missing_injection_options) > 0 and len(missing_injection_options) < 5:
+		raise ValueError("missing injection-only options %s." % ", ".join([option for option in missing_injection_options]))
+	if len(missing_injection_options) == 0 and options.num_banks:
+		raise ValueError("cant specify --num-banks in injection-only run")
+
 	fail = ""
-	for option in ("bank_cache", "reference_likelihood_file"):
+	required_options = ["reference_likelihood_file"]
+	if len(missing_injection_options) == 5:
+		required_options.append("bank_cache")
+
+	for option in required_options:
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
@@ -846,6 +909,7 @@ def parse_command_line():
 		raise ValueError("number of injection files and far injection files must be equal")
 	if options.far_injections is None:
 		options.far_injections = [None for inj in options.injections]
+
 
 	#FIXME a hack to find the sql paths
 	share_path = os.path.split(inspiral_pipe.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
@@ -863,8 +927,9 @@ options, filenames = parse_command_line()
 bank_cache = inspiral_pipe.parse_cache_str(options.bank_cache)
 detectors = datasource.GWDataSourceInfo(options)
 channel_dict = detectors.channel_dict
-instruments = "".join(sorted(bank_cache.keys()))
-instrument_set = bank_cache.keys()
+if bank_cache:
+	instruments = "".join(sorted(bank_cache.keys()))
+	instrument_set = bank_cache.keys()
 boundary_seg = detectors.seg
 
 output_dir = "plots"
@@ -908,16 +973,28 @@ os.chmod("store_raw.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXG
 # setup the job classes
 #
 
-refPSDJob = inspiral_pipe.generic_job("gstlal_reference_psd", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
-medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
+if not options.dist_stats_cache:
+	# set up jobs only needed for zerolag run
+	refPSDJob = inspiral_pipe.generic_job("gstlal_reference_psd", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
+	medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
+	createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"1", "want_graceful_removal":"True", "kill_sig":"15"}))
+	calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+
+else:
+	# injection-only run
+	gstlalInspiralJob = None
+	createPriorDistStatsJob = None
+	calcRankPDFsJob = None
+	calcLikelihoodJob = None
+	marginalizeJob = None
+
 gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
 gstlalInjSnrJob = inspiral_pipe.generic_job("gstlal_inspiral_injection_snr", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"8GB", "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
-createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"1", "want_graceful_removal":"True", "kill_sig":"15"}))
-calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
@@ -930,29 +1007,25 @@ plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_
 plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 plotbackgroundJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_background", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 rmJob = inspiral_pipe.generic_job("rm", tag_base = "rm_intermediate_merger_products", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 
 #
-# Create cache directories
+# Get mchirp boundaries of banks, maximum duration of templates, and analysis segments
 #
 
-create_cache_directories(svdJob, gstlalInspiralJob, gstlalInspiralInjJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, toSqliteJob, marginalizeJob, options)
+if options.bank_cache:
+	max_time, template_mchirp_dict = get_bank_params(bank_cache, options)
+	segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
 
-#
-# Get mchirp boundaries of banks and maximum duration of templates
-#
+if options.psd_cache:
+	max_time, template_mchirp_dict, svd_nodes = get_bank_params(options.svd_bank_cache, options, svd = True)
+	segsdict = analysis_segments(set(svd_nodes.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
+	psd_nodes, ref_psd_parent_nodes = inj_psd_node_gen(segsdict, options)
+	instruments = "".join(sorted(svd_nodes.keys()))
+	instrument_set = svd_nodes.keys()
 
-max_time, template_mchirp_dict = get_bank_params(bank_cache, options)
-#
-# Get the analysis segments
-#
-
-segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
-
-if options.reference_psd is None:
-
+elif options.reference_psd is None:
 	#
 	# Compute the PSDs for each segment
 	#
@@ -1009,17 +1082,17 @@ else:
 injsnrnodes = []
 if not options.disable_calc_inj_snr:
 	for inj in options.injections:
-		inj = inj.split(':')[-1]
 		injsnrnodes.append(inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes,
 			opts = {"flow":options.flow},
-			input_files = {"injection-file":inj, "reference-psd-cache":"reference_psd.cache"}
+			input_files = {"injection-file":inj.split(':')[-1], "reference-psd-cache":"reference_psd.cache"}
 		))
 
 #
 # Compute SVD banks
 #
 
-svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
+if not options.svd_bank_cache:
+	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
 
 
 #	

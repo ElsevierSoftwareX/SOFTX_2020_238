@@ -248,10 +248,14 @@ class generic_node(InspiralNode):
 		# Create cache files for long command line arguments and store them in the job's subdirectory. NOTE the svd-bank string
 		# is handled by gstlal_inspiral_pipe directly
 
+		cache_dir = os.path.join(job.tag_base, 'cache')
+
 		for opt, val in input_cache_files.items():
+			if not os.path.isdir(cache_dir):
+				os.mkdir(cache_dir)
 			cache_entries = [lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in val]
 			if input_cache_file_name is None:
-				cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = os.path.join(job.tag_base, 'cache'))
+				cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = cache_dir)
 			else:
 				cache_file_name = input_cache_file_name
 			with open(cache_file_name, "w") as cache_file:
@@ -261,8 +265,10 @@ class generic_node(InspiralNode):
 			self.cache_inputs.setdefault(opt, []).append(cache_file_name)
 
 		for opt, val in output_cache_files.items():
+			if not os.path.isdir(cache_dir):
+				os.mkdir(cache_dir)
 			cache_entries = [lal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in val]
-			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = os.path.join(job.tag_base, 'cache'))
+			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = cache_dir)
 			with open(cache_file_name, "w") as cache_file:
 				lal.Cache(cache_entries).tofile(cache_file)
 			self.add_var_opt(opt, cache_file_name)
