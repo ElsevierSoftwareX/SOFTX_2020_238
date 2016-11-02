@@ -140,7 +140,7 @@ def subdir_path(dirlist):
 
 def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_template_length, min_instruments = 2):
 	segsdict = segments.segmentlistdict()
-	# 512 seconds for the whitener to settle + the maximum template_length
+	# 512 seconds for the whitener to settle + the maximum template_length FIXME don't hard code
 	start_pad = 512 + max_template_length
 	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
 	segment_length = int(20 * start_pad)
@@ -152,8 +152,8 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 			#	continue
 			segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
 			segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
-			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(start_pad) #FIXME don't hard code
-			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], segment_length, start_pad) #FIXME don't hardcode
+			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(start_pad)
+			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], segment_length, start_pad)
 			if not segsdict[frozenset(ifo_combos)]:
 				del segsdict[frozenset(ifo_combos)]
 	return segsdict
