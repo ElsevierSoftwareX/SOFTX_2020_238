@@ -50,7 +50,7 @@
 #	+ `--ht-gate-threshold [float]: set a threshold on whitened h(t) to veto glitches
 #	+ `--inspiral-executable [str]: Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral
 #	+ `--blind-injections [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.
-#	+ `--far-injections` [filename]: Injection files with injections too far away to be seen that are not filtered. Must be 1:1 with --injections if given at all. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.
+#	+ `--far-injections` [filename]: Injection files with injections too far away to be seen that are not filtered. Must be 1:1 with --injections if given at all. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example. (CURRENTLY BROKEN)
 #	+ `--disable-calc-inj-snr`: Disable injection SNR calculation (default = False)
 #	+ `--request-cpu`: Set inspiral CPU count, default 8
 #	+ `--request-memory`: Set inspiral memory, default 15GB
@@ -668,7 +668,9 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		)
 		outnodes.append(noninjsqlitenode)
 
-	for injections, far_injections in zip(options.injections, options.far_injections):
+	# FIXME far-injections currently doesnt work, either fix it or delete it
+	#for injections, far_injections in zip(options.injections, options.far_injections):
+	for injections in options.injections:
 		# extract only the nodes that were used for injections
 		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
 		chunk_nodes = []
@@ -702,11 +704,15 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		injdbs.append(injdb)
 		injxml = injdb.replace('.sqlite','.xml.gz')
 
+		# FIXME far-injections currently doesnt work, either fix it or delete it
+		'''
 		# If there are injections that are too far away to be seen in a separate file, add them now. 
 		if far_injections is not None:
 			xml_input = [injxml] + [far_injections]
 		else:
 			xml_input = injxml
+		'''
+		xml_input = injxml
 
 		# merge
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes + injsnrnodes,
@@ -820,7 +826,8 @@ def parse_command_line():
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
 	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
-	parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
+	# FIXME far-injections currently doesnt work, either fix it or delete it
+	#parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
 	parser.add_option("--singles-threshold", default=8, action = "store", metavar="THRESH", help = "Record all (including non-coincident) single detector triggers above the specified SNR threshold (by default = 8).")
 	parser.add_option("--copy-raw-results", default=False, action = "store_true", help = "Copy raw gstlal_inspiral results before applying clustering and other lossy operations.")
 	parser.add_option("--gzip-test", default=False, action = "store_true", help = "Perform gzip --test on all output files.")
@@ -869,10 +876,13 @@ def parse_command_line():
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
 
+	# FIXME far-injections currently doesnt work, either fix it or delete it
+	'''
 	if options.far_injections is not None and len(options.injections) != len(options.far_injections):
 		raise ValueError("number of injection files and far injection files must be equal")
 	if options.far_injections is None:
 		options.far_injections = [None for inj in options.injections]
+	'''
 
 
 	#FIXME a hack to find the sql paths
