@@ -39,7 +39,8 @@
 import sys, os
 import subprocess, socket, tempfile, copy, doctest
 from glue import pipeline, lal
-from glue.ligolw import utils, lsctables, array
+from glue.ligolw import utils, lsctables, array, ligolw
+from gstlal import svd_bank
 
 
 #
@@ -444,3 +445,27 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 	else:
 		print >>sys.stderr, "ERROR: first and last file of cache file do not match known pattern, cannot name group file under T050017 convention. \nFile 1: %s\nFile 2: %s" % (cache_entries[0].path, cache_entries[-1].path)
 		raise ValueError
+
+def get_svd_bank_params(svd_bank_cache, online = False):
+	if not online:
+		bgbin_file_map = {}
+		max_time = 0
+	template_mchirp_dict = {}
+	for ce in sorted([lal.CacheEntry(f) for f in open(svd_bank_cache)], cmp = lambda x,y: cmp(int(x.description.split("_")[0]), int(y.description.split("_")[0]))):
+		if not online:
+			bgbin_file_map.setdefault(ce.observatory, []).append(ce.path)
+		if not template_mchirp_dict.setdefault(ce.description.split("_")[0], []):
+			min_mchirp, max_mchirp = float("inf"), 0
+			xmldoc = utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
+			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root), ligolw
+				mchirp_column = snglinspiraltable.getColumnByName("mchirp")
+				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
+				if not online:
+					max_time = max(max_time, max(snglinspiraltable.getColumnByName("template_duration")))
+			template_mchirp_dict[ce.description.split("_")[0]] = (min_mchirp, max_mchirp)
+			xmldoc.unlink()
+	if not online:
+		return template_mchirp_dict, bgbin_file_map, max_time
+	else:
+		return template_mchirp_dict

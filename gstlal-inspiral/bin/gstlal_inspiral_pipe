@@ -88,8 +88,7 @@ import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
-import numpy
-from gstlal import datasource, svd_bank
+from gstlal import datasource
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -106,35 +105,18 @@ def sim_tag_from_inj_file(injections):
 		return None
 	return injections.replace('.xml', '').replace('.gz', '').replace('-','_')
 
-def get_bank_params(bank_cache, options, verbose = False, svd = False):
+def get_bank_params(bank_cache, options, verbose = False):
 	max_time = 0
 	template_mchirp_dict = {}
-	if svd:
-		# injection-only run
-		svd_nodes = {}
-		for ce in sorted([CacheEntry(f) for f in open(bank_cache)], cmp = lambda x,y: cmp(int(x.description.split("_")[0]), int(y.description.split("_")[0]))):
-			svd_nodes.setdefault(ce.observatory, []).append(ce.path)
-			if not template_mchirp_dict.setdefault(ce.description.split("_")[0], []):
-				min_mchirp, max_mchirp = numpy.inf, 0
-				xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
-				for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
-					snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
-					mchirp_column = snglinspiraltable.getColumnByName('mchirp')
-					min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
-					max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-				template_mchirp_dict[ce.description.split("_")[0]] = (min_mchirp, max_mchirp)
-				xmldoc.unlink()
-		return max_time, template_mchirp_dict, svd_nodes
-	else:
-		cache = Cache.fromfilenames([bank_cache.values()[0]])
-		for f in cache.pfnlist():
-			xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
-			snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
-			max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-			template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2])]
-			xmldoc.unlink()
+	cache = Cache.fromfilenames([bank_cache.values()[0]])
+	for f in cache.pfnlist():
+		xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
+		snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
+		max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
+		template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2])]
+		xmldoc.unlink()
 
-		return max_time, template_mchirp_dict
+	return max_time, template_mchirp_dict
 
 def chunks(l, n):
 	for i in xrange(0, len(l), n):
@@ -220,7 +202,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, temp
 			clipleft = []
 			clipright = []
 			ids = []
-			mchirp_interval = (numpy.inf, 0)
+			mchirp_interval = (float("inf"), 0)
 			for n, f in enumerate(files):
 				# handle template bank clipping
 				clipleft.append(options.overlap / 2)
@@ -230,7 +212,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, temp
 					mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
 
 			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%04d_SVD' % (i,), int(seg[0]), int(seg[1]), '.xml.gz', path = svdJob.output_path)
-			if '%04d' %i not in new_template_mchirp_dict and mchirp_interval != (numpy.inf, 0):
+			if '%04d' %i not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
 				new_template_mchirp_dict['%04d' % i] = mchirp_interval
 
 			svd_nodes.setdefault(ifo, []).append(
@@ -254,24 +236,6 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, temp
 				)
 			)
 	return svd_nodes, new_template_mchirp_dict
-
-def inj_svd_node_gen(svd_bank_cache):
-	svd_nodes = {}
-	template_mchirp_dict = {}
-	max_time = 0
-	for ce in sorted([CacheEntry(f) for f in open(svd_bank_cache)], cmp = lambda x,y: cmp(int(x.description.split("_")[0]), int(y.description.split("_")[0]))):
-		svd_nodes.setdefault(ce.observatory, []).append(ce.path)
-		if not template_mchirp_dict.setdefault(ce.description.split("_")[0], []):
-			min_mchirp, max_mchirp = numpy.inf, 0
-			xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
-			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
-				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
-				mchirp_column = snglinspiraltable.getColumnByName('mchirp')
-				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
-				max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-			template_mchirp_dict[ce.description.split("_")[0]] = (min_mchirp, max_mchirp)
-			xmldoc.unlink()
-	return svd_nodes, template_mchirp_dict
 
 def create_svd_bank_strings(svd_nodes, instruments = None):
 	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
@@ -1019,7 +983,7 @@ if options.bank_cache:
 	segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
 
 if options.psd_cache:
-	max_time, template_mchirp_dict, svd_nodes = get_bank_params(options.svd_bank_cache, options, svd = True)
+	template_mchirp_dict, svd_nodes, max_time = inspiral_pipe.get_svd_bank_params(options.svd_bank_cache)
 	segsdict = analysis_segments(set(svd_nodes.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
 	psd_nodes, ref_psd_parent_nodes = inj_psd_node_gen(segsdict, options)
 	instruments = "".join(sorted(svd_nodes.keys()))
