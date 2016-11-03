@@ -51,7 +51,7 @@ ul.tab li a:focus, .active {background-color: #ccc;}
 }
 
 div.tabcontent {
-	width: 100%;
+	width: 95%;
 	height: 20%;
 }
 

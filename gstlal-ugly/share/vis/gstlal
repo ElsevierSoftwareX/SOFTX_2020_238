@@ -13,8 +13,8 @@ else:
 	gps = "-1"
 
 if gps == "-1":
-	refresh = 5
-	longrefresh = 60
+	refresh = 0
+	longrefresh = 0
 else:
 	refresh =     0
 	longrefresh = 0
@@ -48,7 +48,7 @@ print '''
 	<script type="text/javascript" src="../jquery-3.1.1.min.js"></script>
 	<script type="text/javascript" src="../gstlal.js"></script>
 	<script type="text/javascript">
-	google.charts.load('current', {'packages':['corechart', 'table']});
+	google.charts.load('current', {'packages':['corechart', 'table', 'gauge']});
 '''
 
 print "	google.charts.setOnLoadCallback(function(){ drawLatencyStatusByNodes(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
@@ -72,12 +72,13 @@ print "	google.charts.setOnLoadCallback(function(){ drawUpTimeGauge(%s,%s,%d,'%s
 print "	google.charts.setOnLoadCallback(function(){ drawDroppedData(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawRAMStatus(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawTimeSinceLast(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
+print "	google.charts.setOnLoadCallback(function(){ drawTimeSinceTrigger(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 
 print '''
 	</script>
 </head>
 
-<body>
+<body style="background-color: #2c3e50;">
 	<form>
 	<!-- <div class=topbox> -->
 		<ul class="tab">
@@ -86,13 +87,14 @@ print '''
 			<!-- <li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard')">Dashboard</a></li>-->
 			<!-- <li><a href="#events" class="tablinks" onclick="openGstlalTab(event, 'Events')">Events</a></li> -->
 			<li><a href="#summary" class="tablinks" onclick="openGstlalTab(event, 'Summary')">Results</a></li>
-			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Live Status</a></li>
+			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, time_since_trigger_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Live Status</a></li>
 			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity', horizon_wrapper, psd_wrapper)">Live Sensitivity</a></li>
 			<li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise', noise_wrapper)">Live Noise</a></li>
 			<li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency', latency_status_by_nodes_wrapper, latency_history_wrapper)">Live Latency</a></li>
 			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper, likelihood_status_by_nodes_wrapper, likelihood_history_wrapper, far_status_by_nodes_wrapper, far_history_wrapper)">Live SNR</a></li>
 			<li><a href="#detchar" class="tablinks" onclick="openGstlalTab(event, 'Detchar')">Detchar</a></li>
 			<li><a href="#logs" class="tablinks" onclick="openGstlalTab(event, 'Logs')">Logs</a></li>
+			<li><a href="#doc" class="tablinks" onclick="openGstlalTab(event, 'Doc')">Run Documentation</a></li>
 			<li>
 '''				
 print '			<input type="text" name="GPS" value="%s" size=8 style="margin: 7px 5px 5px 5px;"><input type="submit" value="GPS" style="margin: 7px 5px 5px 5px;">' % (gps,)
@@ -138,6 +140,10 @@ else:
 print '''
 	</div>
 
+	<div id="Doc" class="tabcontent">
+		<iframe src="https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/gstlal/O2searchPlan"></iframe>
+	</div>
+
 	<!--
 	<div id="Events" class="tabcontent">
 		<iframe src="https://gracedb.ligo.org/latest/?query=gstlal" width=100% height=675></iframe>
@@ -145,34 +151,35 @@ print '''
 	-->
 
 	<div id="Noise" class="tabcontent">
-		<div id="noise_wrapper"></div>
+		<div id="noise_wrapper"></div><br>
 		<div id="noise_table_wrapper"></div>
 	</div>
 
 	<div id="Sensitivity" class="tabcontent">
-		<div id="horizon_wrapper"></div>
-		<div id="psd_wrapper"></div>
+		<div id="horizon_wrapper"></div><br>
+		<div id="psd_wrapper"></div><br>
 		<div id="horizon_table_wrapper"></div>
 	</div>
 
 	<div id="Latency" class="tabcontent">
-		<div id="latency_status_by_nodes_wrapper"></div>
+		<div id="latency_status_by_nodes_wrapper"></div><br>
 		<div id="latency_history_wrapper"></div>
 	</div>
 
 	<div id="SNR" class="tabcontent">
-		<div id="snr_status_by_nodes_wrapper"></div>
-		<div id="snr_history_wrapper"></div>
-		<div id="likelihood_status_by_nodes_wrapper"></div>
-		<div id="likelihood_history_wrapper"></div>
-		<div id="far_status_by_nodes_wrapper"></div>
+		<div id="snr_status_by_nodes_wrapper"></div><br>
+		<div id="snr_history_wrapper"></div><br>
+		<div id="likelihood_status_by_nodes_wrapper"></div><br>
+		<div id="likelihood_history_wrapper"></div><br>
+		<div id="far_status_by_nodes_wrapper"></div><br>
 		<div id="far_history_wrapper"></div>
 	</div>
 
 	<div id="Status" class="tabcontent">
-		<div id="time_since_last_wrapper"></div>
-		<div id="up_time_wrapper"></div>
-		<div id="dropped_wrapper"></div>
+		<div id="time_since_last_wrapper"></div><br>
+		<div id="time_since_trigger_wrapper"></div><br>
+		<div id="up_time_wrapper"></div><br>
+		<div id="dropped_wrapper"></div><br>
 		<div id="ram_status_wrapper"></div>
 	</div>
 	<div id="Summary" class="tabcontent">
