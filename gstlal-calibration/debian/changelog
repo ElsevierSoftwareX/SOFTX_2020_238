@@ -1,3 +1,11 @@
+gstlal-calibration (1.0.7-1) unstable; urgency=low
+
+  * Bug fixes to demodulation routine
+  * Addition of six new channels to h(t) frames (non-gated kappa channels)
+  * Removal of two channels from h(t) frames (deprecated kappa_a channels)
+
+ -- Madeline Wade <madeline.wade@ligo.org> Fri, 04 Nov 2016 13:22:00 +0000
+
 gstlal-calibration (1.0.5-1) unstable; urgency=low
   
   * Potential bug fix for discontinuities leading to production of overlapping
