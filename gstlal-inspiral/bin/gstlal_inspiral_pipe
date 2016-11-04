@@ -292,8 +292,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 			min_chirp_mass, max_chirp_mass = float(min_chirp_mass), float(max_chirp_mass)
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
 			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda (k,v): int(k)):
+				ignore[injections] = []
 				if max_chirp_mass <= bounds[0]:
-					ignore.setdefault(injections, []).extend(range(int(bgbin_index),len(template_mchirp_dict.values())))
+					ignore[injections].extend(range(int(bgbin_index),len(template_mchirp_dict.values())))
 					# NOTE putting a break here assumes that the min chirp mass
 					# in a subbank increases with bin number, i.e. XXXX+1 has a
 					# greater minimum chirpmass than XXXX, for all XXXX. Note
@@ -301,7 +302,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					# max chirpmass than bin XXXX.
 					break
 				elif min_chirp_mass > bounds[1]:
-					ignore.setdefault(injections, []).append(int(bgbin_index))
+					ignore[injections].append(int(bgbin_index))
 
 		# FIXME choose better splitting?
 		numchunks = 10
