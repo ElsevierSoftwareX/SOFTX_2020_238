@@ -16,23 +16,20 @@ LOGS_DIR:=logs
 PATCH_DIR:=${PWD}/patches
 GSTLAL_REPO:=${PWD}/git/gstlal
 LALSUITE_REPO:=${PWD}/git/lalsuite
-LALSUITE_EXTRA_REPO:=${PWD}/git/lalsuite-extra
 INSTALL_DIR:=${LAL_PATH}
 
 # Set to build from git (0 = repo, 1 = git)
-LALSUITE_EXTRA_SVN=1
 LALSUITE_GIT=0
-GSTLAL_GIT=1
+GSTLAL_GIT=0
 
 # Set package release versions
-GSTLALINSPIRAL=gstlal-inspiral-0.99.0
-GSTLALCALIBRATION=gstlal-calibration-0.99.1
-GSTLALUGLY=gstlal-ugly-0.99.2
-GSTLAL=gstlal-0.99.6
+GSTLALINSPIRAL=gstlal-inspiral-1.1.0
+GSTLALCALIBRATION=gstlal-calibration-1.0.6
+GSTLALUGLY=gstlal-ugly-1.1.0
+GSTLAL=gstlal-1.1.0
 DOXYGEN=doxygen-1.8.9.1
-LALSUITEEXTRA=lalsuite-extra-1.1.0
-PYLAL=pylal-0.11.0
-GLUE=glue-1.52.0
+PYLAL=pylal-0.12.0
+GLUE=glue-1.53.0
 LALAPPS=lalapps-6.20.0
 LALSTOCHASTIC=lalstochastic-1.1.19
 LALINFERENCE=lalinference-1.8.0
@@ -45,11 +42,11 @@ LALMETAIO=lalmetaio-1.3.0
 LALFRAME=lalframe-1.4.2
 LAL=lal-6.17.0
 GDS=gds-2.17.10
-LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.5.3
-LDASTOOLSAL=ldas-tools-al-2.5.4
+LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.5.4
+LDASTOOLSAL=ldas-tools-al-2.5.5
 SWIG=swig-3.0.7
 METAIO=metaio-8.4.0
-LIBFRAME=libframe-8.21
+LIBFRAME=libframe-8.30
 OPROFILE=oprofile-1.1.0
 GSTPYTHON=gst-python-1.4.0
 GSTPLUGINSGOOD=gst-plugins-good-1.4.5
@@ -65,7 +62,6 @@ GSTLALCALIB_TARGET=$(INSTALL_DIR)/bin/gstlal_compute_strain
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
 DOXYGEN_TARGET=$(INSTALL_DIR)/bin/doxygen
-LALEXTRA_TARGET=$(INSTALL_DIR)/share/lalsimulation/SEOBNRv2ROM_SS_Phase_ciall.dat
 PYLAL_TARGET=$(INSTALL_DIR)/etc/pylal-user-env.sh
 GLUE_TARGET=$(INSTALL_DIR)/bin/dmtdq_seg_insert
 LALAPPS_TARGET=$(INSTALL_DIR)/bin/lalapps_psinject
@@ -100,7 +96,6 @@ GSTLALCALIB_TAR_TARGET=$(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz
 GSTLALUGLY_TAR_TARGET=$(TAR_DIR)/$(GSTLALUGLY).tar.gz
 GSTLAL_TAR_TARGET=$(TAR_DIR)/$(GSTLAL).tar.gz
 DOXYGEN_TAR_TARGET=$(TAR_DIR)/$(DOXYGEN).src.tar.gz
-LALEXTRA_TAR_TARGET=$(TAR_DIR)/$(LALSUITEEXTRA).tar.gz
 PYLAL_TAR_TARGET=$(TAR_DIR)/$(PYLAL).tar.gz
 GLUE_TAR_TARGET=$(TAR_DIR)/$(GLUE).tar.gz
 LALAPPS_TAR_TARGET=$(TAR_DIR)/$(LALAPPS).tar.xz
@@ -172,11 +167,12 @@ env.sh :
 	@echo 'PATH=$${LAL_PATH}/bin:$${PATH}' >> $@
 	@echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
 	@echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages' >> $@
-	@echo 'LAL_DATA_PATH=$${LAL_PATH}/share/lalsimulation' >> $@
+	@echo 'LAL_DATA_PATH=/home/cbc/ROM_data' >> $@
 	@echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0' >> $@
-	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL' >> $@
+	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH' >> $@
 
 #@echo '#export LD_PRELOAD="$${LAL_PATH}/lib/libfftw3.so:$${LAL_PATH}/lib/libfftw3f.so:$${LAL_PATH}/lib/libfftw3_threads.so:$${LAL_PATH}/lib/libfftw3f_threads.so"' >> $@
+#@echo 'LAL_DATA_PATH=$${LAL_PATH}/share/lalsimulation' >> $@
 
 #####################
 # Check time stamps #
@@ -236,7 +232,7 @@ $(GSTLALUGLY_TARGET) : $(GSTLAL_TARGET)
 	fi ;
 
 # gstlal
-$(GSTLAL_TARGET) : $(LALEXTRA_TARGET) $(DOXYGEN_TARGET) $(GSTLAL_GIT_TARGET)
+$(GSTLAL_TARGET) : $(DOXYGEN_TARGET) $(GSTLAL_GIT_TARGET)
 	echo gstlal 1>&2
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		cd $(GSTLAL_REPO)/gstlal && echo | ./00init.sh ; \
@@ -249,30 +245,14 @@ $(GSTLAL_TARGET) : $(LALEXTRA_TARGET) $(DOXYGEN_TARGET) $(GSTLAL_GIT_TARGET)
 	fi ;
 
 # doxygen
-logs/doxygen.txt : $(LOGS_DIR)/lalsuite-extra.txt $(DOXYGEN_TARGET)
+logs/doxygen.txt : $(LOGS_DIR)/lalsuite.txt $(DOXYGEN_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-$(DOXYGEN_TARGET) : $(LALEXTRA_TARGET)
+$(DOXYGEN_TARGET) : $(GLUE_TARGET) $(PYLAL_TARGET)
 	echo $(DOXYGEN) 1>&2
 	tar -xf $(TAR_DIR)/$(DOXYGEN).src.tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(DOXYGEN) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(DOXYGEN) && make -j$(CORES) && make install -j$(CORES)
-
-# lalsuite extra
-logs/lalsuite-extra.txt : $(LOGS_DIR)/lalsuite.txt $(LALEXTRA_TARGET)
-	echo $^ | sed -e "s@ @\n@g" > $@
-
-$(LALEXTRA_TARGET) : $(GLUE_TARGET) $(PYLAL_TARGET)
-	echo $(LALSUITEEXTRA) 1>&2
-	if [ "${LALSUITE_EXTRA_SVN}" = "1" ]; then \
-		cd $(LALSUITE_EXTRA_REPO) && ./00boot ; \
-		cd $(LALSUITE_EXTRA_REPO) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
-		cd $(LALSUITE_EXTRA_REPO) && make -j$(CORES) && make install -j$(CORES) ; \
-	else \
-		tar -xf $(TAR_DIR)/$(LALSUITEEXTRA).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(LALSUITEEXTRA) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) ; \
-		cd $(SRC_DIR)/$(LALSUITEEXTRA) && make -j$(CORES) && make install -j$(CORES) ; \
-	fi ;
 
 # lalsuite
 logs/lalsuite.txt : $(LOGS_DIR)/gds.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALDETCHAR_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALSTOCH_TARGET) $(LALAPPS_TARGET) $(GLUE_TARGET) $(PYLAL_TARGET)
@@ -452,7 +432,7 @@ $(LALFRAME_TARGET) : $(LAL_TARGET)
 	fi ;
 
 # lal
-$(LAL_TARGET) : $(LOGS_DIR)/git.txt $(OPROFILE_TARGET) $(LIBFRAME_TARGET) $(METAIO_TARGET) $(SWIG_TARGET) $(LDASTOOLSAL_TARGET)  $(LDASTOOLSFRAMECPP_TARGET) $(GDS_TARGET)
+$(LAL_TARGET) : $(OPROFILE_TARGET) $(LIBFRAME_TARGET) $(METAIO_TARGET) $(SWIG_TARGET) $(LDASTOOLSAL_TARGET)  $(LDASTOOLSFRAMECPP_TARGET) $(GDS_TARGET)
 	echo $(LAL) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lal && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
@@ -618,7 +598,7 @@ logs/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 #tarballs
-logs/tar.txt : $(LOGS_DIR)/git.txt $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(OPROFILE_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(LALEXTRA_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
+logs/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(OPROFILE_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(GSTLALINSPIRAL_TAR_TARGET) : $(GSTLALCALIB_TAR_TARGET)
@@ -633,11 +613,8 @@ $(GSTLALUGLY_TAR_TARGET) : $(GSTLAL_TAR_TARGET)
 $(GSTLAL_TAR_TARGET) : $(DOXYGEN_TAR_TARGET)
 	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
-$(DOXYGEN_TAR_TARGET) : $(LALEXTRA_TAR_TARGET)
+$(DOXYGEN_TAR_TARGET) : $(PYLAL_TAR_TARGET)
 	wget --no-check-certificate ftp://ftp.stack.nl/pub/users/dimitri/$(DOXYGEN).src.tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALEXTRA_TAR_TARGET) : $(PYLAL_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(LALSUITEEXTRA).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(PYLAL_TAR_TARGET) : $(GLUE_TAR_TARGET)
 	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(PYLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
@@ -717,13 +694,10 @@ $(GSL_TAR_TARGET) : $(ORC_TAR_TARGET)
 $(ORC_TAR_TARGET) : $(FFTW_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/orc/$(ORC).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
-$(FFTW_TAR_TARGET) : $(GSTLAL_GIT_TARGET)
+$(FFTW_TAR_TARGET) : $(LOGS_DIR)
 	wget --no-check-certificate http://www.fftw.org/$(FFTW).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 # git repos
-logs/git.txt : $(LALSUITE_GIT_TARGET) $(GSTLAL_GIT_TARGET)
-	echo $^ | sed -e "s@ @\n@g" > $@
-
 git-pull :
 	if [ -f $(LALSUITE_TARGET) ] ; then \
 		ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER) ; \
@@ -733,22 +707,26 @@ git-pull :
 		cd $(GSTLAL_REPO) && git clean -dxf && git pull --rebase ; \
 	fi ;
 
-$(GSTLAL_GIT_TARGET) : $(LALSUITE_GIT_TARGET)
-	if [ -f $@ ] ; then \
-		echo "Gstlal git repo exists" ; \
-	else \
-		mkdir -p $(GSTLAL_REPO) ; \
-		git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO) ; \
+$(GSTLAL_GIT_TARGET) : $(LOGS_DIR)
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "Gstlal git repo exists" ; \
+		else \
+			mkdir -p $(GSTLAL_REPO) ; \
+			git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO) ; \
+		fi ;
 	fi ;
 
-$(LALSUITE_GIT_TARGET) : $(LOGS_DIR)
-	if [ -f $@ ] ; then \
-		echo "Lalsuite git repo exists" ; \
-	else \
-		mkdir -p $(LALSUITE_REPO) ; \
-		ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER) ; \
-		git clone https://versions.ligo.org/git/lalsuite.git $(LALSUITE_REPO) ; \
-		cd git && svn checkout https://svn.ligo.caltech.edu/svn/lalsuite-extra ; \
+$(LALSUITE_GIT_TARGET) : $(LOGS_DIR)                                            
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \                                                    
+			echo "Lalsuite git repo exists" ; \                              
+		else \                                                                   
+			mkdir -p $(LALSUITE_REPO) ; \                                    
+			ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER) ; \
+			git clone https://versions.ligo.org/git/lalsuite.git $(LALSUITE_REPO) ; \
+			cd git && svn checkout https://svn.ligo.caltech.edu/svn/lalsuite-extra ; \
+		fi ;
 	fi ;
 
 $(LOGS_DIR) :
@@ -771,9 +749,6 @@ clean-gstlal :
 
 clean-doxygen :
 	rm -rf logs/doxygen.txt $(DOXYGEN_TARGET)
-
-clean-lalsuite_extra :
-	rm -rf logs/lalsuite-extra.txt $(LALEXTRA_TARGET)
 
 clean-lalsuite :
 	rm -rf logs/lalsuite.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALDETCHAR_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALSTOCH_TARGET) $(LALAPPS_TARGET) $(GLUE_TARGET) $(PYLAL_TARGET)
