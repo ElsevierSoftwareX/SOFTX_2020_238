@@ -82,7 +82,7 @@ print '''
 	<form>
 	<!-- <div class=topbox> -->
 		<ul class="tab">
-			<li><img style="width: 100px; margin: 5px 5px 5px 5px;" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png"></li>
+			<li><img style="width: 100px; margin: 5px 5px 5px 5px;" src="../gstlal.png"></li>
 			<!-- <li><a href="#ldg" class="tablinks" onclick="openGstlalTab(event, 'LDG')">LDG</a></li> -->
 			<!-- <li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard')">Dashboard</a></li>-->
 			<!-- <li><a href="#events" class="tablinks" onclick="openGstlalTab(event, 'Events')">Events</a></li> -->
@@ -94,7 +94,6 @@ print '''
 			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper, likelihood_status_by_nodes_wrapper, likelihood_history_wrapper, far_status_by_nodes_wrapper, far_history_wrapper)">Live SNR</a></li>
 			<li><a href="#detchar" class="tablinks" onclick="openGstlalTab(event, 'Detchar')">Detchar</a></li>
 			<li><a href="#logs" class="tablinks" onclick="openGstlalTab(event, 'Logs')">Logs</a></li>
-			<li><a href="#doc" class="tablinks" onclick="openGstlalTab(event, 'Doc')">Run Documentation</a></li>
 			<li>
 '''				
 print '			<input type="text" name="GPS" value="%s" size=8 style="margin: 7px 5px 5px 5px;"><input type="submit" value="GPS" style="margin: 7px 5px 5px 5px;">' % (gps,)
@@ -107,11 +106,6 @@ print '''
 	<!-- </div> -->
 	</form>
 
-	<!--
-	<div id="LDG" class="tabcontent">
-		<iframe src="https://monitor.ligo.org/gwstatus" width=100% height=675></iframe>
-	</div>
-	-->
 
 	<div id="Dashboard" class="tabcontent">
 		<div id="range_gauge_wrapper"></div>

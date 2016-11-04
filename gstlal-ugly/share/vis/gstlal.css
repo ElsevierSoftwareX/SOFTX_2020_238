@@ -1,15 +1,16 @@
 body {
 	font: 10pt verdana;
+	color: white;
+}
+
+table {
+	color: black;
 }
 
 /* Style the list */
 ul.tab {
     list-style-type: none;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid #ccc;
-    background-color: #f1f1f1;
+    padding: 5px 5px 15px 5px;
 }
 
 /* Float the list items side by side */
@@ -18,7 +19,7 @@ ul.tab li {float: left;}
 /* Style the links inside the list items */
 ul.tab li a {
     display: inline-block;
-    color: black;
+    color: white;
     text-align: center;
     padding: 10px 12px;
     text-decoration: none;
@@ -37,7 +38,7 @@ ul.tab li input {
 }
 
 /* Change background color of links on hover */
-ul.tab li a:hover {background-color: #ddd;}
+ul.tab li a:hover {background-color: #f1c40f;}
 
 /* Create an active/current tablink class */
 ul.tab li a:focus, .active {background-color: #ccc;}
@@ -45,15 +46,8 @@ ul.tab li a:focus, .active {background-color: #ccc;}
 /* Style the tab content */
 .tabcontent {
     display: none;
-    padding: 6px 12px;
-    border: 1px solid #ccc;
-    border-top: none;
 }
 
-div.tabcontent {
-	width: 95%;
-	height: 20%;
-}
 
 .tabcontent {
     -webkit-animation: fadeEffect 1s;
@@ -70,13 +64,3 @@ div.tabcontent {
     to {opacity: 1;}
 }
 
-.topbox {
-	/*font: 10pt arial, sans-serif;*/
-	font: 12pt verdana;
-	border-radius: 25px;
-	border: 2px solid gray;
-	background: white;
-	padding: 10px; 
-	width: 97%;
-	box-shadow: 10px 10px 5px #888888;
-}
