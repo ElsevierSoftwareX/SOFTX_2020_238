@@ -285,8 +285,10 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 		# setup dictionaries to hold the inspiral nodes
 		inspiral_nodes[(ifos, None)] = {}	
 		ignore = {}
+		injection_files = []
 		for injections in options.injections:
 			min_chirp_mass, max_chirp_mass, injections = injections.split(':')
+			injection_files.append(injections)
 			min_chirp_mass, max_chirp_mass = float(min_chirp_mass), float(max_chirp_mass)
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
 			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda (k,v): int(k)):
@@ -301,9 +303,6 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 				elif min_chirp_mass > bounds[1]:
 					ignore.setdefault(injections, []).append(int(bgbin_index))
 
-		# Replace mchirplo:mchirphi:inj.xml with inj.xml
-		options.injections = [inj.split(':')[-1] for inj in options.injections]
-
 		# FIXME choose better splitting?
 		numchunks = 10
 
@@ -317,7 +316,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 		bgbin_chunk_map = {}
 
 		for seg in segsdict[ifos]:
-			if options.injections:
+			if injection_files:
 				output_seg_inj_path = subdir_path([gstlalInspiralInjJob.output_path, str(int(seg[0]))[:5]])
 			
 			if gstlalInspiralJob is None:
@@ -379,7 +378,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
 			# process injections
-			for injections in options.injections:
+			for injections in injection_files:
 				# setup output names
 				sim_name = sim_tag_from_inj_file(injections)
 
@@ -443,6 +442,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						injnode.set_priority(chunk_counter)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
 
+	# Replace mchirplo:mchirphi:inj.xml with inj.xml
+	options.injections = [inj.split(':')[-1] for inj in options.injections]
 	return inspiral_nodes
 
 def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
