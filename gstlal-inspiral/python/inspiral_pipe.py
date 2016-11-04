@@ -458,7 +458,7 @@ def get_svd_bank_params(svd_bank_cache, online = False):
 			min_mchirp, max_mchirp = float("inf"), 0
 			xmldoc = utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
 			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
-				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root), ligolw
+				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
 				mchirp_column = snglinspiraltable.getColumnByName("mchirp")
 				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
 				if not online:
