@@ -312,7 +312,7 @@ def get_data_from_job_and_reduce((job, job_tag, routes, datatypes, prevdataspan,
 	reduce_time = []
 	dataspan = set()
 	for route in routes:
-		logging.info("processing job %s for route %s" % (job, route))
+		#logging.info("processing job %s for route %s" % (job, route))
 		# FIXME assumes always two columns
 		full_data = get_url(url, route)
 		if full_data:
