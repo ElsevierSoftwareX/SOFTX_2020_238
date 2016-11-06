@@ -56,10 +56,10 @@ def parse_command_line():
 	parser.add_argument("--base-dir", action="store", default="aggregator", help="Specify output path")
 	parser.add_argument("--job-start", type=int, help="job id to start aggregating from")
 	parser.add_argument("--route", action="append", help="Specify routes to download. Can be given multiple times.")
-	parser.add_argument("--dump-period", type = float, default = 180., help = "Wait this many seconds between dumps of the  URLs (default = 180., set to 0 to disable)")
+	parser.add_argument("--dump-period", type = float, default = 1., help = "Wait this many seconds between dumps of the  URLs (default = 1., set to 0 to disable)")
 	parser.add_argument("--num-jobs", action="store", type=int, default=10, help="number of running jobs")
 	parser.add_argument("--job-tag", help = "Collect URLs for jobs reporting this job tag (default = collect all gstlal_inspiral URLs).")
-	parser.add_argument("--num-threads", type = int, default = 8, help = "Number of threads to use concurrently, default 8.")
+	parser.add_argument("--num-threads", type = int, default = 16, help = "Number of threads to use concurrently, default 8.")
 
 	args = parser.parse_args()
 
@@ -80,7 +80,7 @@ if __name__ == '__main__':
 	options = parse_command_line()
 	# FIXME don't hardcode some of these?
 	datatypes = [("min", min), ("max", max), ("median", aggregator.median)]
-	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.num_jobs)]
+	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.job_start + options.num_jobs)]
 	routes = options.route
 
 	logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
@@ -111,7 +111,7 @@ if __name__ == '__main__':
 						mapargs.append((jobs, this_level_dir, typ, route, func, level, start, end))
 				pool.map(aggregator.reduce_across_jobs, mapargs)
 				#map(aggregator.reduce_across_jobs, mapargs)
-		logging.info("processed reduced data up to %d" % int(aggregator.now()))
+			logging.info("processed reduced data in [%d %d) at %d" % (int(start), int(end), int(aggregator.now())))
 
 	#
 	# always end on an error so that condor won't think we're done and will
