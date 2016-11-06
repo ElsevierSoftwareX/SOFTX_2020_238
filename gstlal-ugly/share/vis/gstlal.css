@@ -1,11 +1,19 @@
 body {
 	font: 10pt verdana;
-	color: white;
+	color: #ecf0f1;
 	background-color: #2c3e50;
 }
 
 table {
 	color: black;
+}
+
+caption {
+	color: #ecf0f1;
+}
+
+img {
+	box-shadow: 10px 10px;
 }
 
 /* Style the list */
@@ -20,7 +28,7 @@ ul.tab li {float: left;}
 /* Style the links inside the list items */
 ul.tab li a {
     display: inline-block;
-    color: white;
+    color: #ecf0f1;
     text-align: center;
     padding: 10px 12px;
     text-decoration: none;
