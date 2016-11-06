@@ -12,12 +12,8 @@ if "GPS" in form:
 else:
 	gps = "-1"
 
-if gps == "-1":
-	refresh = 0
-	longrefresh = 0
-else:
-	refresh =     0
-	longrefresh = 0
+refresh =     0
+longrefresh = 0
 
 if "Duration" in form:
 	duration = form["Duration"][0]
@@ -86,7 +82,7 @@ print '''
 			<!-- <li><a href="#ldg" class="tablinks" onclick="openGstlalTab(event, 'LDG')">LDG</a></li> -->
 			<!-- <li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard')">Dashboard</a></li>-->
 			<!-- <li><a href="#events" class="tablinks" onclick="openGstlalTab(event, 'Events')">Events</a></li> -->
-			<li><a href="#summary" class="tablinks" onclick="openGstlalTab(event, 'Summary')">Results</a></li>
+			<li><a href="#summary" class="tablinks" onclick="openGstlalTab(event, 'Summary')">Live Results</a></li>
 			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, time_since_trigger_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Live Status</a></li>
 			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity', horizon_wrapper, psd_wrapper)">Live Sensitivity</a></li>
 			<li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise', noise_wrapper)">Live Noise</a></li>
@@ -94,6 +90,9 @@ print '''
 			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper, likelihood_status_by_nodes_wrapper, likelihood_history_wrapper, far_status_by_nodes_wrapper, far_history_wrapper)">Live SNR</a></li>
 			<li><a href="#detchar" class="tablinks" onclick="openGstlalTab(event, 'Detchar')">Detchar</a></li>
 			<li><a href="#logs" class="tablinks" onclick="openGstlalTab(event, 'Logs')">Logs</a></li>
+			<li><a href="#bank" class="tablinks" onclick="openGstlalTab(event, 'Bank')">Bank</a></li>
+			<li><a href="#doc" class="tablinks" onclick="openGstlalTab(event, 'Doc')">Doc</a></li>
+			<li><a href="#shifts" class="tablinks" onclick="openGstlalTab(event, 'Shifts')">Shifts</a></li>
 			<li>
 '''				
 print '			<input type="text" name="GPS" value="%s" size=8 style="margin: 7px 5px 5px 5px;"><input type="submit" value="GPS" style="margin: 7px 5px 5px 5px;">' % (gps,)
@@ -126,21 +125,17 @@ print '''
 '''
 
 if gps =="-1":
-	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/" width=100% height=675></iframe>'''
+	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/" width=100% height=87%></iframe>'''
 else: 
 	date = "%04d%02d%02d" % time.gmtime(int(gps)+ 315964785)[0:3]
-	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/day/%s/" width=100%% height=675></iframe>''' % (date,)
+	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/day/%s/" width=100%% height=87%%></iframe>''' % (date,)
 
 print '''
 	</div>
 
-	<div id="Doc" class="tabcontent">
-		<iframe src="https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/gstlal/O2searchPlan"></iframe>
-	</div>
-
 	<!--
 	<div id="Events" class="tabcontent">
-		<iframe src="https://gracedb.ligo.org/latest/?query=gstlal" width=100% height=675></iframe>
+		<iframe src="https://gracedb.ligo.org/latest/?query=gstlal" width=100% height=87%></iframe>
 	</div>
 	-->
 
@@ -174,10 +169,23 @@ print '''
 		<div id="time_since_trigger_wrapper"></div><br>
 		<div id="up_time_wrapper"></div><br>
 		<div id="dropped_wrapper"></div><br>
-		<div id="ram_status_wrapper"></div>
+		<div id="ram_status_wrapper"></div><br>
+		<div><iframe style="background-color:#ecf0f1;" width=100% height=1000 src="https://ldas-jobs.ligo.caltech.edu/~patrick.brockill/llstatus-gstlal/index_auto_reload.html"></iframe></div>
 	</div>
 	<div id="Summary" class="tabcontent">
-		<iframe src="https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/engineering/10/" width=100% height=675></iframe>
+		<iframe src="https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/engineering/10/" width=100% height=87%></iframe>
+	</div>
+
+	<div id="Bank" class="tabcontent">
+		<iframe width=100% height=87% src="https://docs.google.com/document/d/1BCZrQQfii2cpIFSM6TdAteg3eAdpk_lncW0I-0rpIgc/pub?embedded=true"></iframe>
+	</div>
+
+	<div id="Doc" class="tabcontent">
+		<iframe width=100% height=87% src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true"></iframe>
+	</div>
+
+	<div id="Shifts" class="tabcontent">
+<iframe src="https://calendar.google.com/calendar/embed?src=ligo.org_070l9orc9lisqgcf2q1arp1ig0%40group.calendar.google.com&ctz=America/New_York" style="border: 0" width=100% height=87% frameborder="0" scrolling="no"></iframe>
 	</div>
 </body>
 </html>

@@ -54,16 +54,17 @@ var charts = [];
 
 var H1="#e74c3c";
 var L1="#2ecc71";
+var white="#ecf0f1";
 
 default_options = {
 	title: 'Figure', 
-	hAxis: { gridlines: {color:'white'}, textStyle: {color:'white'} },
-	vAxis: { textStyle: {color: 'white'}, textPosition: 'out', viewWindowMode:'explicit', viewWindow:{min:0, max:100}, gridlines: {color:'white'}},
+	hAxis: { gridlines: {color:white}, textStyle: {color:white} },
+	vAxis: { textStyle: {color: white}, textPosition: 'out', viewWindowMode:'explicit', viewWindow:{min:0, max:100}, gridlines: {color:white}},
 	chartArea: {left:50, top:15, width:'95%', height:'70%', backgroundColor:'#2c3e50;'},
 	titlePosition: 'in',
 	titleTextStyle: {color: "white"},
 	series: {0: {color: H1}, 1: {color:L1}},
-	legend: {position: "in", textStyle: {color: 'white'}},
+	legend: {position: "in", textStyle: {color: white}},
 	explorer: {actions: ['dragToZoom', 'rightClickToReset']},
 	dataOpacity: "0.5",
 	curveType: "none",
@@ -294,7 +295,7 @@ function ChartWrapper(obj) {
 
 function drawLatencyStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] };
 	these_options.title = 'Latency';
 
 	latency_status_by_nodes_wrapper = new ChartWrapper({
@@ -312,7 +313,7 @@ function drawLatencyStatusByNodes(gps, duration, refresh, analysis_path, job_ids
 
 function drawLatencyHistory(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] };
 	these_options.title = 'Latency';
 
 	latency_history_wrapper = new ChartWrapper({
@@ -359,7 +360,7 @@ function drawLatencyGauge(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawSNRStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'SNR';
 
 	snr_status_by_nodes_wrapper = new ChartWrapper({
@@ -377,7 +378,7 @@ function drawSNRStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawSNRHistory(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'SNR';
 
 	snr_history_wrapper = new ChartWrapper({
@@ -395,7 +396,7 @@ function drawSNRHistory(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawLikelihoodStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'Likelihood';
 
 	likelihood_status_by_nodes_wrapper = new ChartWrapper({
@@ -413,7 +414,7 @@ function drawLikelihoodStatusByNodes(gps, duration, refresh, analysis_path, job_
 
 function drawLikelihoodHistory(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'Likelihood';
 
 	likelihood_history_wrapper = new ChartWrapper({
@@ -431,7 +432,7 @@ function drawLikelihoodHistory(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawFARStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:0.00000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:0.00000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
 	these_options.title = 'FAR';
 
 	far_status_by_nodes_wrapper = new ChartWrapper({
@@ -449,7 +450,7 @@ function drawFARStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawFARHistory(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:0.0000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:0.0000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
 	these_options.title = 'FAR';
 
 	far_history_wrapper = new ChartWrapper({
@@ -470,7 +471,7 @@ function drawFARHistory(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawHorizon(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, minValue:0, maxValue:250, textPosition: 'out'};
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:32, maxValue:512, textPosition: 'out', ticks: [32,64,128,256,512] };
 	these_options.title = 'Horizon';
 
 	horizon_wrapper = new ChartWrapper({
@@ -501,8 +502,8 @@ function drawHorizon(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawPSD(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', textPosition: 'out', viewWindowMode:'explicit', viewWindow:{max:1e-18, min:1e-24}, format: 'scientific'};
-	these_options.hAxis = {textStyle: {color: 'white'}, scaleType: 'log', textPosition: 'out', viewWindowMode:'explicit', viewWindow:{min:10, max:2048}};
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', textPosition: 'out', viewWindowMode:'explicit', viewWindow:{max:1e-18, min:1e-24}, format: 'scientific'};
+	these_options.hAxis = {textStyle: {color: white}, scaleType: 'log', textPosition: 'out', viewWindowMode:'explicit', viewWindow:{min:10, max:2048}};
 	these_options.title = 'Amplitude Spectral Density';
 	these_options.interpolateNulls = true;
 
@@ -552,6 +553,7 @@ function drawNoise(gps, duration, refresh, analysis_path, job_ids) {
 	// Setup the custom options
 	var these_options = clone(default_options);
 	these_options.title = "Whitened h(t)";
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:2, maxValue:100, textPosition: 'out', ticks: [2,4,8,16,32,64] };
 
 	noise_wrapper = new ChartWrapper({
 		chartType: 'LineChart',
@@ -610,7 +612,7 @@ function drawNoiseGauge(gps, duration, refresh, analysis_path, job_ids) {
 function drawUpTime(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
 	these_options.title = 'Up Time';
-	these_options.vAxis = {textStyle: {color: 'white'}, textPosition: 'out', viewWindowMode:'explicit', gridlines: {color:'#FFFFFF'}, scaleType: 'log', minValue:1, maxValue:100000000, format: 'scientific'}
+	these_options.vAxis = {textStyle: {color: white}, textPosition: 'out', viewWindowMode:'explicit', gridlines: {color:'#FFFFFF'}, scaleType: 'log', minValue:1, maxValue:100000000, format: 'scientific'}
 	up_time_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1000'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
@@ -649,7 +651,7 @@ function drawUpTimeGauge(gps, duration, refresh, analysis_path, job_ids) {
 function drawDroppedData(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
 	these_options.title = 'Dropped Data';
-	these_options.vAxis = {textStyle: {color: 'white'}, textPosition: 'out', viewWindowMode:'explicit', gridlines: {color:'#FFFFFF'}, scaleType: 'log', minValue:1, maxValue:100000000, format: 'scientific'}
+	these_options.vAxis = {textStyle: {color: white}, textPosition: 'out', viewWindowMode:'explicit', gridlines: {color:'#FFFFFF'}, scaleType: 'log', minValue:1, maxValue:100000000, format: 'scientific'}
 	dropped_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1100'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
@@ -664,7 +666,7 @@ function drawDroppedData(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawRAMStatus(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:1, maxValue:16, textPosition: 'out', ticks: [1,2,4,8,16] };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:1, maxValue:16, textPosition: 'out', ticks: [1,2,4,8,16] };
 	these_options.title = 'RAM';
 
 	ram_status_wrapper = new ChartWrapper({
@@ -682,7 +684,7 @@ function drawRAMStatus(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawTimeSinceLast(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:1, maxValue:1000000, textPosition: 'out', ticks: [1,10,100,1000,10000,100000], format: 'scientific'};
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:1, maxValue:1000000, textPosition: 'out', ticks: [1,10,100,1000,10000,100000], format: 'scientific'};
 	these_options.title = 'Time Since Last Heartbeat';
 
 	time_since_last_wrapper = new ChartWrapper({
@@ -700,7 +702,7 @@ function drawTimeSinceLast(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawTimeSinceTrigger(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: 'white'}, scaleType: 'log', minValue:1, maxValue:1000000, textPosition: 'out', ticks: [1,10,100,1000,10000,100000], format: 'scientific'};
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:1, maxValue:1000000, textPosition: 'out', ticks: [1,10,100,1000,10000,100000], format: 'scientific'};
 	these_options.title = 'Time Since Last Trigger';
 
 	time_since_trigger_wrapper = new ChartWrapper({
