@@ -304,7 +304,6 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 				g_free(itac->channel_name);
 				itac->channel_name = channel_name;
 				g_mutex_lock(&itac->bank_lock);
-				gstlal_set_min_offset_in_snglinspiral_array(itac->bankarray, itac->channels, &(itac->difftime));
 				gstlal_set_channel_in_snglinspiral_array(itac->bankarray, itac->channels, itac->channel_name);
 				gstlal_set_instrument_in_snglinspiral_array(itac->bankarray, itac->channels, itac->instrument);
 				g_mutex_unlock(&itac->bank_lock);
@@ -523,7 +522,8 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static void update_state(GSTLALItac *element, GstBuffer *srcbuf)
 {
 	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
-	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) + GST_BUFFER_DURATION(srcbuf) - element->difftime;
+	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) - element->difftime;
+	element->next_output_timestamp += GST_BUFFER_DURATION(srcbuf);
 }
 
 static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
