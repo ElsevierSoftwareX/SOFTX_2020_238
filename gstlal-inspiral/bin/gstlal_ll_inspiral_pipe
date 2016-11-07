@@ -309,16 +309,16 @@ listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.g
 
 # This restores default behavior if you uncomment
 # get urls job 
-urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
+# urlsJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_get_urls",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 # FIXME find a bigger computer for this or run several instancnes on the cluster.  aggregator and state job
-aggJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_aggregator",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
+aggJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_aggregator",  condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
 # Run this on the cluster
 analysisStateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_state", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command)) 
 
 # Summary page job
-pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
 
 # DQ job
 dqJob = inspiral_pipe.generic_job("gstlal_ll_dq", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
@@ -366,6 +366,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 
 	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, [],
 		opts = {"psd-fft-length":options.psd_fft_length,
+			"reference-psd":options.reference_psd,
 			"ht-gate-threshold":options.ht_gate_threshold,
 			"channel-name":datasource.pipeline_channel_list_from_channel_dict(channel_dict),
 			"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(dq_channel_dict, opt = "dq-channel-name"),
@@ -408,6 +409,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 		inj_jobTags.append("%04d" % (num_insp_nodes + 1000))
 		inspInjNode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, [],
 			opts = {"psd-fft-length":options.psd_fft_length,
+				"reference-psd":options.reference_psd,
 				"ht-gate-threshold":options.ht_gate_threshold,
 				"channel-name":datasource.pipeline_channel_list_from_channel_dict_with_node_range(inj_channel_dict, node = jobTags[-1]),
 				"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(inj_dq_channel_dict, opt = "dq-channel-name"),
@@ -444,8 +446,8 @@ def groups(l, n):
 	for i in xrange(0, len(l), n):
 		yield l[i:i+n]
 
-for g in groups(jobTags, 10):
-	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
+#for g in groups(jobTags, 10):
+	#urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
 
 margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 
@@ -454,24 +456,25 @@ margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files =
 # job tag, but this should be made to be more flexible
 #
 
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["H1_snr_history", "L1_snr_history", "snr_history"]})
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["far_history", "latency_history", "likelihood_history"]})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": ["H1_snr_history"]})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": ["L1_snr_history"]})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["far_history", "latency_history", "likelihood_history", "snr_history"], "data-type":["max", "min"]})
 
 analysisStateNode = inspiral_pipe.generic_node(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2})
 
 # summary page
 if options.injection_file:
-
-	for g in groups(inj_jobTags, 10):
-		urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
+	# we don't really need these at the moment
+	#for g in groups(inj_jobTags, 10):
+	#	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
 
 	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
-	aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"inj_aggregator", "job-tag": os.getcwd(), "job-start": 1000, "num-jobs": len(jobTags), "route": ["far_history", "likelihood_history"]})
+	aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"inj_aggregator", "job-tag": os.getcwd(), "job-start": 1000, "num-jobs": len(jobTags), "route": ["far_history", "likelihood_history", "snr_history"], "data-type":["max", "min"]})
 
 else:
 
-	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "base-dir":"aggregator", "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
+	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
 
 	
