@@ -56,6 +56,7 @@ def parse_command_line():
 	parser.add_argument("--base-dir", action="store", default="aggregator", help="Specify output path")
 	parser.add_argument("--job-start", type=int, help="job id to start aggregating from")
 	parser.add_argument("--route", action="append", help="Specify routes to download. Can be given multiple times.")
+	parser.add_argument("--data-type", action="append", help="Specify datatypes to aggregate from 'min', 'max', 'median'. Can be given multiple times. Default all")
 	parser.add_argument("--dump-period", type = float, default = 1., help = "Wait this many seconds between dumps of the  URLs (default = 1., set to 0 to disable)")
 	parser.add_argument("--num-jobs", action="store", type=int, default=10, help="number of running jobs")
 	parser.add_argument("--job-tag", help = "Collect URLs for jobs reporting this job tag (default = collect all gstlal_inspiral URLs).")
@@ -63,6 +64,9 @@ def parse_command_line():
 
 	args = parser.parse_args()
 
+	#FIXME do error checking
+	if args.data_type is None:
+		args.data_type = ["min", "max", "median"]
 	return args
 
 
@@ -79,7 +83,8 @@ if __name__ == '__main__':
 
 	options = parse_command_line()
 	# FIXME don't hardcode some of these?
-	datatypes = [("min", min), ("max", max), ("median", aggregator.median)]
+
+	datatypes = [x for x in [("min", min), ("max", max), ("median", aggregator.median)] if x[0] in options.data_type]
 	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.job_start + options.num_jobs)]
 	routes = options.route
 
