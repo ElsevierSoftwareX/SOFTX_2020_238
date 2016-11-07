@@ -59,7 +59,7 @@ thispage+=nav
 
 summary_about = webpage.elem("p", ["Summary information: This page provides a summary of theanalysis, including the parameters specified in generating the workflow, where the analysis was run, number of triggers, analyzed live time and horizon distance."])
 
-makefile = [f for f in glob.glob("Makefile*") if f != "Makefile.offline_analysis_rules"][0]
+makefile = [f for f in glob.glob("Makefile*") if "Makefile.offline_analysis_rules" not in f][0]
 
 summary_make = webpage.section("Analysis Makefile")
 summary_make += [webpage.elem("pre", [webpage.elem("code", [open(makefile).read()])])]
