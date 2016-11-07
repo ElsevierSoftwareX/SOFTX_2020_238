@@ -66,7 +66,7 @@ default_options = {
 	series: {0: {color: H1}, 1: {color:L1}},
 	legend: {position: "in", textStyle: {color: white}},
 	explorer: {actions: ['dragToZoom', 'rightClickToReset']},
-	dataOpacity: "0.5",
+	dataOpacity: "0.9",
 	curveType: "none",
 	fontName: "verdana",
 	fontSize: 12,
@@ -183,6 +183,7 @@ function updateClock ( )
 $(document).ready(function()
 {
 	setInterval('updateClock()', 1000);
+	$(".fancybox").fancybox();
 	//openGstlalTab(event, 'Status', time_since_last_wrapper, time_since_trigger_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper);
 });
 
@@ -299,7 +300,7 @@ function drawLatencyStatusByNodes(gps, duration, refresh, analysis_path, job_ids
 	these_options.title = 'Latency';
 
 	latency_status_by_nodes_wrapper = new ChartWrapper({
-		chartType: 'CandlestickChart',
+		chartType: 'ColumnChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:0&gpstime=' + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
 		query: 'select latency_history where status by node',
 		refreshInterval: refresh,
@@ -364,7 +365,7 @@ function drawSNRStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 	these_options.title = 'SNR';
 
 	snr_status_by_nodes_wrapper = new ChartWrapper({
-		chartType: 'CandlestickChart',
+		chartType: 'ColumnChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:300'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
 		query: 'select snr_history where status by node',
 		refreshInterval: refresh,
@@ -380,11 +381,14 @@ function drawSNRHistory(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'SNR';
+	these_options.pointShape = 'star';
+	these_options.lineWidth = 0;
+	these_options.dataOpacity =  "1.0",
 
 	snr_history_wrapper = new ChartWrapper({
-		chartType: 'LineChart',
+		chartType: 'ScatterChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:400'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
-		query: 'select snr_history where node is all',
+		query: 'select snr_history where scatter by node',
 		refreshInterval: refresh,
 		options: these_options,
 		containerId: 'snr_history_wrapper',
@@ -400,7 +404,7 @@ function drawLikelihoodStatusByNodes(gps, duration, refresh, analysis_path, job_
 	these_options.title = 'Likelihood';
 
 	likelihood_status_by_nodes_wrapper = new ChartWrapper({
-		chartType: 'CandlestickChart',
+		chartType: 'ColumnChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:301'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
 		query: 'select likelihood_history where status by node',
 		refreshInterval: refresh,
@@ -414,11 +418,16 @@ function drawLikelihoodStatusByNodes(gps, duration, refresh, analysis_path, job_
 
 function drawLikelihoodHistory(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
+	//these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
+	//these_options.title = 'Likelihood';
 	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'Likelihood';
+	these_options.pointShape = 'star';
+	these_options.lineWidth = 0;
+	these_options.dataOpacity =  "1.0",
 
 	likelihood_history_wrapper = new ChartWrapper({
-		chartType: 'LineChart',
+		chartType: 'ScatterChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:401'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
 		query: 'select likelihood_history where node is all',
 		refreshInterval: refresh,
@@ -436,7 +445,7 @@ function drawFARStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 	these_options.title = 'FAR';
 
 	far_status_by_nodes_wrapper = new ChartWrapper({
-		chartType: 'CandlestickChart',
+		chartType: 'ColumnChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:302'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
 		query: 'select far_history where status by node',
 		refreshInterval: refresh,
@@ -450,11 +459,16 @@ function drawFARStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawFARHistory(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:0.0000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
+	//these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:0.0000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
+	//these_options.title = 'FAR';
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:0.00000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1] };
 	these_options.title = 'FAR';
+	these_options.pointShape = 'star';
+	these_options.lineWidth = 0;
+	these_options.dataOpacity =  "1.0",
 
 	far_history_wrapper = new ChartWrapper({
-		chartType: 'LineChart',
+		chartType: 'ScatterChart',
 		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:402'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
 		query: 'select far_history where node is all',
 		refreshInterval: refresh,
