@@ -291,8 +291,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 			injection_files.append(injections)
 			min_chirp_mass, max_chirp_mass = float(min_chirp_mass), float(max_chirp_mass)
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
+			ignore[injections] = []
 			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda (k,v): int(k)):
-				ignore[injections] = []
 				if max_chirp_mass <= bounds[0]:
 					ignore[injections].extend(range(int(bgbin_index),len(template_mchirp_dict.values())))
 					# NOTE putting a break here assumes that the min chirp mass
@@ -385,7 +385,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 				bgbin_svd_bank_strings = [index_bank_string_tuple for i, index_bank_string_tuple in enumerate(zip(sorted(template_mchirp_dict.keys()), svd_bank_strings_full)) if i not in ignore[injections]]
 
-				for chunk_counter, (bgbin_indices, svd_bank_strings) in enumerate(chunks(zip(*bgbin_svd_bank_strings), numchunks)):
+				for chunk_counter, bgbin_list in enumerate(chunks(bgbin_svd_bank_strings, numchunks)):
+					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
 					output_paths = [subdir_path([output_seg_inj_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
 					output_names = [inspiral_pipe.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_indices[i], sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
 					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%s_DIST_STATS_%s' % (bgbin_indices[i], sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
