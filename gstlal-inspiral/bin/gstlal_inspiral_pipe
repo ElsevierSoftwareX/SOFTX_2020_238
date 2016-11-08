@@ -51,6 +51,7 @@
 #	+ '--num-banks' [str] : The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.
 #	+ '--max-inspiral-jobs' [int] : Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.
 #	+ '--ht-gate-threshold' [float] : Set a threshold on whitened h(t) to veto glitches
+#	+ '--ht-gate-threshold-linear' [string] : Set threshold on whitened h(t) on a linear scale based on the maximum mchirp of the svd bin. set as mchirp_min:ht_gate_threshold_min-mchirp_max:ht_gate_threshold_max (example: --ht-gate-threshold-linear 0.8:12.0-45.0:100.0)
 #	+ '--inspiral-executable' [str] : Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral
 #	+ '--blind-injections' [filename] : Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.
 #	+ '--singles-threshold' [float] : Record all (including non-coincident) single detector triggers above the specified SNR threshold (by default = 8).
@@ -336,11 +337,23 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					for bgbin in bgbin_indices:
 						bgbin_chunk_map.setdefault(bgbin, chunk_counter)
 
+					# Calculate the appropriate ht-gate-threshold values according to the scale given
+					threshold_values = None
+					if options.ht_gate_threshold_linear is not None:
+						# A scale is given
+						mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
+						# use max mchirp in a given svd bank to decide gate threshold
+						bank_mchirps = [template_mchirp_dict['%04d' % (i + numchunks * chunk_counter,)][1] for i, s in enumerate(svd_bank_strings)]
+						threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
+					else:
+						if options.ht_gate_threshold is not None:
+							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
+
 					# FIXME do better with svd node parents?
 					# non injection node
 					noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
 							opts = {"psd-fft-length":options.psd_fft_length,
-								"ht-gate-threshold":options.ht_gate_threshold,
+								"ht-gate-threshold":threshold_values,
 								"frame-segments-name":options.frame_segments_name,
 								"gps-start-time":int(seg[0]),
 								"gps-end-time":int(seg[1]),
@@ -399,10 +412,22 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						reference_psd = psd_nodes[(ifos, seg)]
 						parents = []
 
+					# Calculate the appropriate ht-gate-threshold values according to the scale given
+					threshold_values = None
+					if options.ht_gate_threshold_linear is not None:
+						# A scale is given
+						mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
+						# use max mchirp in a given svd bank to decide gate threshold
+						bank_mchirps = [template_mchirp_dict['%04d' % (i + numchunks * chunk_counter,)][1] for i, s in enumerate(svd_bank_strings)]
+						threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
+					else:
+						if options.ht_gate_threshold is not None:
+							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
+
 					# setup injection node
 					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = parents,
 							opts = {"psd-fft-length":options.psd_fft_length,
-								"ht-gate-threshold":options.ht_gate_threshold,
+								"ht-gate-threshold":threshold_values,
 								"frame-segments-name":options.frame_segments_name,
 								"gps-start-time":int(seg[0]),
 								"gps-end-time":int(seg[1]),
@@ -838,6 +863,7 @@ def parse_command_line():
 	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
+	parser.add_option("--ht-gate-threshold-linear", metavar = "mchirp_min:ht_gate_threshold_min-mchirp_max:ht_gate_threshold_max", type="string", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal) with a linear scale of mchirp")
 	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
 	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
 	# FIXME far-injections currently doesnt work, either fix it or delete it

@@ -446,6 +446,20 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 		print >>sys.stderr, "ERROR: first and last file of cache file do not match known pattern, cannot name group file under T050017 convention. \nFile 1: %s\nFile 2: %s" % (cache_entries[0].path, cache_entries[-1].path)
 		raise ValueError
 
+def get_svd_bank_params_online(svd_bank_cache):
+	template_mchirp_dict = {}
+	for ce in [lal.CacheEntry(f) for f in open(svd_bank_cache)]:
+		if not template_mchirp_dict.setdefault("%04d" % int(ce.description.split("_")[3]), []):
+			min_mchirp, max_mchirp = float("inf"), 0
+			xmldoc = utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
+			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
+				mchirp_column = snglinspiraltable.getColumnByName("mchirp")
+				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
+			template_mchirp_dict["%04d" % int(ce.description.split("_")[3])] = (min_mchirp, max_mchirp)
+			xmldoc.unlink()
+	return template_mchirp_dict
+
 def get_svd_bank_params(svd_bank_cache, online = False):
 	if not online:
 		bgbin_file_map = {}

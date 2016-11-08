@@ -132,7 +132,7 @@
 #	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets (required).
 #	+ `--control-peak-time` [time] (int): Set a time window in seconds to find peaks in the control signal.
 #	+ `--fir-stride` [time] (int): Set the length of the fir filter stride in seconds, default = 8.
-#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal), default = infinity.
+#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal), default = infinity. Should be given per bank file.
 #	+ `--chisq-type" [type]: Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.
 #	+ `--coincidence-threshold` [value] (float): Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.
 #	+ `--min-instruments` [count] (int): Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).
@@ -280,6 +280,7 @@ def parse_command_line():
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
+	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", action = "append", default = [], help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
@@ -431,6 +432,13 @@ def parse_command_line():
 		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(None, options.reference_likelihood_file)]
 	else:
 		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file, None) for likelihood_file in options.likelihood_file]
+
+	# Checking options.ht_gate_threshold
+	# If no gate threshold is given, use threshold of infinity
+	if options.ht_gate_threshold == []:
+		options.ht_gate_threshold = [float("inf")]*len(svd_banks)
+	if not (len(options.ht_gate_threshold) == len(svd_banks)):
+		raise ValueError("must have equal numbers of svd banks (%d) and ht-gate-threshold values (%d)" % (len(svd_banks), len(options.ht_gate_threshold)))
 
 	if not (len(svd_banks) == len(options.output) == len(likelihood_url_namedtuples_list)):
 		raise ValueError("must have equal numbers of svd banks (%d), output files (%d) and likelihood files (%d)" % (len(svd_banks), len(options.output), len(likelihood_url_namedtuples_list)))
@@ -587,7 +595,7 @@ else:
 #
 
 
-for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtuple, zero_lag_ranking_stats_file) in enumerate(zip(svd_banks, options.output, likelihood_url_namedtuples_list, options.zero_lag_ranking_stat_file)):
+for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtuple, zero_lag_ranking_stats_file, ht_gate_threshold) in enumerate(zip(svd_banks, options.output, likelihood_url_namedtuples_list, options.zero_lag_ranking_stat_file, options.ht_gate_threshold)):
 	#
 	# Checkpointing only supported for gzip files in offline analysis
 	# FIXME Is there a better way to check if a file is corrupted? Implement a means by which to check for sqlite file validity
@@ -687,7 +695,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		banks = banks,
 		psd = psd,
 		psd_fft_length = options.psd_fft_length,
-		ht_gate_threshold = options.ht_gate_threshold,
+		ht_gate_threshold = ht_gate_threshold,
 		veto_segments = veto_segments,
 		verbose = options.verbose,
 		nxydump_segment = options.nxydump_segment,

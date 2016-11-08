@@ -97,6 +97,7 @@ lsctables.use_in(ligolwcontenthandler)
 #		"--inj-framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
 #		"--inj-framexmit-iface", metavar = "name", default "10.14.0.1", action = "append", help = "Set the interface address to process for injections (required if --inj-channel-name set). default 10.14.0.1")
 #		"--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
+#		"--ht-gate-threshold-linear", metavar = "string", help = "Set the scale for h(t) gate threshold to reject glitches", type="string". set as mchirp_min:ht_gate_threshold_min-mchirp_max:ht_gate_threshold_max (example: --ht-gate-threshold-linear 0.8:12.0-45.0:100.0)
 #		"--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 #		"--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
 #		"--likelihood-cache", help = "set the cache containin likelihood files")	
@@ -203,6 +204,7 @@ def parse_command_line():
 	parser.add_option("--inj-framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
 	parser.add_option("--inj-framexmit-iface", metavar = "name", action = "append", help = "Set the interface address to process for injections (required if --inj-channel-name set).")
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
+	parser.add_option("--ht-gate-threshold-linear", metavar = "mchirp_min:ht_gate_threshold_min-mchirp_max:ht_gate_threshold_max", type="string", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal) with a linear scale of mchirp")
 	parser.add_option("--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
 	parser.add_option("--likelihood-cache", help = "set the cache containin likelihood files")	
@@ -364,10 +366,23 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 	svd_bank_string = ",".join([":".join([k, v[0]]) for k,v in svd_banks.items()])
 	jobTags.append("%04d" % num_insp_nodes)
 
+	# Calculate the appropriate ht-gate-threshold value
+	threshold_values = None
+	if options.ht_gate_threshold_linear is not None:
+		template_mchirp_dict = inspiral_pipe.get_svd_bank_params_online(bank_cache.values()[0])
+		# Linear scale specified
+		mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
+		# use max mchirp in a given svd bank to decide gate threshold
+		bank_mchirps = [template_mchirp_dict["%04d" % int(os.path.basename(svd_file).split("-")[1].split("_")[3])][1] for svd_file in svd_banks.items()[0][1]]
+		threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
+	else:
+		if options.ht_gate_threshold is not None:
+			threshold_values = [options.ht_gate_threshold] * len(svd_banks.items()[0][1]) # Use the ht-gate-threshold value given
+
 	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, [],
 		opts = {"psd-fft-length":options.psd_fft_length,
 			"reference-psd":options.reference_psd,
-			"ht-gate-threshold":options.ht_gate_threshold,
+			"ht-gate-threshold":threshold_values,
 			"channel-name":datasource.pipeline_channel_list_from_channel_dict(channel_dict),
 			"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(dq_channel_dict, opt = "dq-channel-name"),
 			"state-vector-on-bits":options.state_vector_on_bits,
@@ -410,7 +425,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 		inspInjNode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, [],
 			opts = {"psd-fft-length":options.psd_fft_length,
 				"reference-psd":options.reference_psd,
-				"ht-gate-threshold":options.ht_gate_threshold,
+				"ht-gate-threshold":threshold_values,
 				"channel-name":datasource.pipeline_channel_list_from_channel_dict_with_node_range(inj_channel_dict, node = jobTags[-1]),
 				"dq-channel-name":datasource.pipeline_channel_list_from_channel_dict(inj_dq_channel_dict, opt = "dq-channel-name"),
 				"state-vector-on-bits":options.inj_state_vector_on_bits,
