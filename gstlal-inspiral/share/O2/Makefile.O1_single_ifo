@@ -98,7 +98,8 @@ ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES
 # Change as appropriate, whitespace is important
 # NOTE This uses gstlal_injections_by_local_rate for this example, but you might want to use lalapps_inspinj since it is reviewed etc.
 # specify the seeds and number of injections.  The should be <seed>_injections.xml.  The same rule will be applied to each target.  For a more heterogeneous injection plan more work has to go into this Makefile but it is straight forward.
-INJECTIONS := 1_injections.xml
+# MCHIRP_INJECTIONS follows the format MCHIRPLO:MCHIRPHI:INJECTIONFILE, where MCHIRPLO and MCHIRPHI are the desired min and max chirp mass intervals for the injection jobs
+MCHIRP_INJECTIONS := 0.9:1.5:1_injections.xml
 # Maximum injection distance in Mpc
 INJ_MAX_DIST = 200
 # Minimum component mass 1 for injections
