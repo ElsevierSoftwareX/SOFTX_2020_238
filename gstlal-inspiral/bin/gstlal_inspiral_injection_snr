@@ -118,7 +118,7 @@ def calc_expected_snr(inj):
 	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
 
 	try:
-		h1snr = lalsimulation.MeasureSNR(h,chosenPSD['H1'],options.flow,-1)
+		h1snr = lalsimulation.MeasureSNR(h,chosenPSD['H1'],options.flow,0.85*(sample_rate/2.))
 	except KeyError:
 		h1snr = 0.0
 
@@ -126,7 +126,7 @@ def calc_expected_snr(inj):
 	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
 
 	try:
-		l1snr = lalsimulation.MeasureSNR(h,chosenPSD['L1'],options.flow,-1)
+		l1snr = lalsimulation.MeasureSNR(h,chosenPSD['L1'],options.flow,0.85*(sample_rate/2.))
 	except KeyError:
 		l1snr = 0.0
 
