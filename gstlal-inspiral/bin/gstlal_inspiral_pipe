@@ -61,7 +61,7 @@
 #	+ '--disable-calc-inj-snr' : Disable injection SNR calculation
 #	+ '--injections' [filename] : append injection files to analyze. Must prepend filename with X:Y:, where X and Y are floats, e.g. 1.2:3.1:filename, so that the injections are only searched for in regions of the template bank with X <= chirp mass < Y.
 #	+ '--dist-stats-cache' [filename] : Set the cache file for dist stats (required iff running injection-only analysis)
-#	+ '--svd-bank-cache' [filename] : Set the cache file for dist stats (required iff running injection-only analysis)
+#	+ '--svd-bank-cache' [filename] : Set the cache file for svd banks (required iff running injection-only analysis)
 #	+ '--psd-cache' [filename] : Set the cache file for psd (required iff running injection-only analysis)
 #	+ '--non-injection-db' [filename] : Set the non injection data base file (required iff running injection-only analysis)
 #	+ '--marginalized-likelihood-file' [filename] : Set the marginalized likelihood file (required iff running injection-only analysis)
@@ -880,7 +880,7 @@ def parse_command_line():
 
 	# Data from a zero lag run in the case of an injection-only run.
 	parser.add_option("--dist-stats-cache", metavar = "filename", help = "Set the cache file for dist stats (required iff running injection-only analysis)")
-	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Set the cache file for dist stats (required iff running injection-only analysis)")
+	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Set the cache file for svd banks (required iff running injection-only analysis)")
 	parser.add_option("--psd-cache", metavar = "filename", help = "Set the cache file for psd (required iff running injection-only analysis)")
 	parser.add_option("--non-injection-db", metavar = "filename", help = "Set the non injection data base file (required iff running injection-only analysis)")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the marginalized likelihood file (required iff running injection-only analysis)")
