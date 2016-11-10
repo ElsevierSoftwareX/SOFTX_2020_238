@@ -49,7 +49,7 @@ def parse_form(form):
 	if "type" in form:
 		datatype = form["type"]
 	else:
-		datatype = "median"
+		datatype = "max"
 
 	# FIXME don't hard code, get from URL
 	#base_path = "/home/gstlalcbctest/engineering/10/S6/bns"
@@ -105,6 +105,7 @@ def read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs 
 				f = h5py.File(fname, "r")
 				this_data = numpy.hstack((this_data, numpy.array(f["data"])))
 				this_time = numpy.hstack((this_time, numpy.array(f["time"])))
+				f.close()
 				#print fname, len(this_data), len(this_time)
 			except IOError:
 				pass
@@ -125,11 +126,11 @@ def read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs 
 # latency, SNR, FAR, likelihood
 #
 
-for route, label in (("latency_history", "Latency (s)"), ("far_history", "FAR (Hz)"), ("likelihood_history", "L")):
+for route, label, thisdatatype in (("latency_history", "Latency (s)", "max"), ("far_history", "FAR (Hz)", "min"), ("likelihood_history", "L", "max")):
 	if route in query:
-		if "status by node" in query:
+		if "stats by node" in query:
 			# get the max time and the stats on the data
-			data = [(max(x[1]), x[0].split("/")[-1], stats_on_data(x[2])) for x in read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs, datatype = "median")]
+			data = [(max(x[1]), x[0].split("/")[-1], stats_on_data(x[2])) for x in read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs, datatype = thisdatatype)]
 			description = [
 				("job", "string"),
 				("%d" % float(max(data)[0]), "number"),
@@ -143,8 +144,22 @@ for route, label in (("latency_history", "Latency (s)"), ("far_history", "FAR (H
 			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
 			sys.exit()
 
+		if "status by node" in query:
+			# get the max time and the stats on the data
+			data = [(float(x[1][-1]), x[0].split("/")[-1], float(x[2][-1])) for x in read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs, datatype = thisdatatype)]
+			description = [
+				("job", "string"),
+				("%d" % float(max(data)[0]), "number")
+				]
+			
+			data_table = gviz_api.DataTable(description)
+			data_table.LoadData([[x[1], x[2]] for x in data])
+			print [[x[1], x[2]] for x in data]
+			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+			sys.exit()
+
 		if "where node is all" in query:
-			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = "median").next()
+			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = thisdatatype).next()
 			out_data = [[float(t),float(d)] for t,d in zip(this_time, this_data)]
 			description = [("time", "number"), ("%d" % float(this_time[-1]), "number")]
 			data_table = gviz_api.DataTable(description)
@@ -153,7 +168,7 @@ for route, label in (("latency_history", "Latency (s)"), ("far_history", "FAR (H
 			sys.exit()
 
 		if "now" in query:
-			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = "median").next()
+			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = thisdatatype).next()
 			description = [(label, "number")]
 			data_table = gviz_api.DataTable(description)
 			data_table.LoadData([[float(this_data[-1])]])
@@ -168,12 +183,12 @@ for route, label in (("latency_history", "Latency (s)"), ("far_history", "FAR (H
 
 for route, label in (("snr_history", "SNR"),):
 	if route in query:
-		if "status by node" in query:
+		if "stats by node" in query:
 			data = {}
 			for ifo in ("", "H1_", "L1_"):
 				thisroute = "%s%s" % (ifo, route)
 				# get the max time and the stats on the data
-				data[ifo] = [(max(x[1]), x[0].split("/")[-1], stats_on_data(x[2])) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "median")]
+				data[ifo] = [(max(x[1]), x[0].split("/")[-1], stats_on_data(x[2])) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "max")]
 			description = [
 				("job", "string"),
 				("H1 %d" % float(max(data["H1_"])[0]), "number"),
@@ -196,8 +211,51 @@ for route, label in (("snr_history", "SNR"),):
 			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
 			sys.exit()
 
+		if "status by node" in query:
+			data = {}
+			for ifo in ("", "H1_", "L1_"):
+				thisroute = "%s%s" % (ifo, route)
+				# get the max time and the stats on the data
+				data[ifo] = [(float(x[1][-1]), x[0].split("/")[-1], float(x[2][-1])) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "max")]
+			description = [
+				("job", "string"),
+				("H1 %d" % float(max(data["H1_"])[0]), "number"),
+				("L1 %d" % float(max(data["L1_"])[0]), "number"),
+				("combined %d" % float(max(data[""])[0]), "number")
+				]
+			
+			data_table = gviz_api.DataTable(description)
+			thisdata = [ [x[1], x[2], y[2], z[2]] for x,y,z in zip(data["H1_"], data["L1_"], data[""])]
+			data_table.LoadData(thisdata)
+			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+			sys.exit()
+
+		if "scatter by node" in query:
+			data = {}
+			for ifo in ("", "H1_", "L1_"):
+				thisroute = "%s%s" % (ifo, route)
+				# get the max time and the stats on the data
+				#data[ifo] = [(x[1], x[0].split("/")[-1], x[2], x[1][-1]) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "max")]
+				data[ifo] = [(x[1], x[0].split("/")[-1], x[2], x[1][-1]) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, [""], datatype = "max")]
+			description = [
+				("time", "number"),
+				("H1", "number"),
+				("L1", "number")
+				]
+			
+			data_table = gviz_api.DataTable(description)
+			thisdata = []
+			#FIXME make tootips bin number
+			for (this_time, this_job, this_data, max_time) in data["H1_"]:
+				thisdata.extend([[float(t),float(d),None] for t,d in zip(this_time, this_data)])
+			for (this_time, this_job, this_data, max_time) in data["L1_"]:
+				thisdata.extend([[float(t),None,float(d)] for t,d in zip(this_time, this_data)])
+			data_table.LoadData(thisdata)
+			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+			sys.exit()
+
 		if "where node is all" in query:
-			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = "median").next()
+			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = "max").next()
 			out_data = [[float(t),float(d)] for t,d in zip(this_time, this_data)]
 			description = [("time", "number"), ("%d" % float(this_time[-1]), "number")]
 			data_table = gviz_api.DataTable(description)
@@ -206,7 +264,7 @@ for route, label in (("snr_history", "SNR"),):
 			sys.exit()
 
 		if "now" in query:
-			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = "median").next()
+			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = "max").next()
 			description = [(label, "number")]
 			data_table = gviz_api.DataTable(description)
 			data_table.LoadData([[float(this_data[-1])]])
@@ -389,7 +447,7 @@ if "time_since_trigger" in query:
 	for ifo in ("", "H1_", "L1_"):
 		thisroute = "%s%s" % (ifo, route)
 		# get the max time and the stats on the data
-		data[ifo] = [(float(max(x[1])), x[0].split("/")[-1]) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "median", age = 1e6)]
+		data[ifo] = [(float(max(x[1])), x[0].split("/")[-1]) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "max", age = 1e6)]
 	print data["H1_"]
 	description = [
 		("job", "string"),
