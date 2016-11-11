@@ -34,9 +34,12 @@ class tabs(elem):
 	
 
 class tab(elem):
-	def __init__(self, href, div, text):
+	def __init__(self, href, div, text, charts=[]):
 		self.href = href; self.div = div; self.text = text;
-		elem.__init__(self, tag="li", content = [elem("a", [text], """ href=#%s class="tablinks" onclick="openGstlalTab(event, '%s')" """ % (href, div) )], attributes = "")
+		if len(charts) > 0:
+			elem.__init__(self, tag="li", content = [elem("a", [text], """ href=#%s class="tablinks" onclick="openGstlalTab(event, '%s',%s)" """ % (href, div, ",".join(charts)) )], attributes = "")
+		else:
+			elem.__init__(self, tag="li", content = [elem("a", [text], """ href=#%s class="tablinks" onclick="openGstlalTab(event, '%s')" """ % (href, div) )], attributes = "")
 	
 	def __call__(self, content=[]):
 		return elem("div", content, """ id="%s" class="tabcontent" """ % self.div)
@@ -62,7 +65,7 @@ class page(object):
 			"https://www.gstatic.com/charts/loader.js",
 			"//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/gstlal.js"
 			], 
-		content = [], header_content = [], verbose=False):
+		content = [], header_content = ["""<script type="text/javascript">google.charts.load('current', {'packages':['table', 'timeline']});</script>"""], verbose=False):
 		self.title = title; self.path = path; self.css = css; self.script = script; self.content = content; self.verbose = verbose; self.header_content = header_content
 
 	def __iadd__(self, content):
@@ -87,15 +90,47 @@ def googleTableFromJson(fname, div_id = 'table_div'):
 	f = open(fname)
 	out = """
 		<script type="text/javascript">
-		google.charts.load('current', {'packages':['table']});
-		google.charts.setOnLoadCallback(drawTable);
 
-		function drawTable() {
+		function draw_%s() {
 		var data = new google.visualization.DataTable(%s);
 		var table = new google.visualization.Table(document.getElementById('%s'));
 		table.draw(data, {showRowNumber: true, width: '100%%', allowHtml: true, page: "enable"});
 		}
+		google.charts.setOnLoadCallback(draw_%s);
 		</script>
-	""" % (f.read(), div_id)
+	""" % (div_id, f.read(), div_id, div_id)
+	f.close()
+	return out
+
+def googleTimelineFromJson(fname, div_id = 'timeline_div'):
+	f = open(fname)
+	out = """
+		<script type="text/javascript">
+
+		var %s_wrapper;
+
+		function draw_%s() {
+			var data = new google.visualization.DataTable();
+
+			data.addColumn('string', 'name');
+			data.addColumn('string', 'label');
+			data.addColumn({ type: 'string', role: 'tooltip' });
+			data.addColumn('number', 'start');
+			data.addColumn('number', 'end');
+			data.addRows(%s);
+
+			%s_wrapper = new google.visualization.ChartWrapper({
+				chartType: 'Timeline',
+				dataTable: data,
+				options: {width:'95%%', height:400},
+				containerId: '%s'
+			});
+			%s_wrapper.draw();
+		}
+
+		google.charts.setOnLoadCallback(draw_%s);
+
+		</script>
+	""" % (div_id, div_id, f.read(), div_id, div_id, div_id, div_id)
 	f.close()
 	return out
