@@ -461,7 +461,7 @@ function drawFARHistory(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
 	//these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:0.0000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
 	//these_options.title = 'FAR';
-	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:0.00000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1] };
+	these_options.vAxis = {textStyle: {color: white}, scaleType: 'log', minValue:0.00000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific'};
 	these_options.title = 'FAR';
 	these_options.pointShape = 'star';
 	these_options.lineWidth = 0;

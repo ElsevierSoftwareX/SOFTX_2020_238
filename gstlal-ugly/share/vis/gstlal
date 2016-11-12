@@ -48,7 +48,7 @@ print '''
 '''
 
 print "	google.charts.setOnLoadCallback(function(){ drawLatencyStatusByNodes(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawLatencyHistory(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+#print "	google.charts.setOnLoadCallback(function(){ drawLatencyHistory(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawLatencyGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print ""
 print "	google.charts.setOnLoadCallback(function(){ drawSNRStatusByNodes(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
@@ -83,10 +83,9 @@ print '''
 			<!-- <li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard')">Dashboard</a></li>-->
 			<!-- <li><a href="#events" class="tablinks" onclick="openGstlalTab(event, 'Events')">Events</a></li> -->
 			<li><a href="#summary" class="tablinks" onclick="openGstlalTab(event, 'Summary')">Live Results</a></li>
-			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, time_since_trigger_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Live Status</a></li>
+			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, latency_status_by_nodes_wrapper, time_since_trigger_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Live Status</a></li>
 			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity', horizon_wrapper, psd_wrapper)">Live Sensitivity</a></li>
 			<li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise', noise_wrapper)">Live Noise</a></li>
-			<li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency', latency_status_by_nodes_wrapper, latency_history_wrapper)">Live Latency</a></li>
 			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper, likelihood_status_by_nodes_wrapper, likelihood_history_wrapper, far_status_by_nodes_wrapper, far_history_wrapper)">Live SNR</a></li>
 			<li><a href="#detchar" class="tablinks" onclick="openGstlalTab(event, 'Detchar')">Detchar</a></li>
 			<li><a href="#logs" class="tablinks" onclick="openGstlalTab(event, 'Logs')">Logs</a></li>
@@ -150,11 +149,6 @@ print '''
 		<div id="horizon_table_wrapper"></div>
 	</div>
 
-	<div id="Latency" class="tabcontent">
-		<div id="latency_status_by_nodes_wrapper"></div><br>
-		<div id="latency_history_wrapper"></div>
-	</div>
-
 	<div id="SNR" class="tabcontent">
 		<div id="snr_status_by_nodes_wrapper"></div><br>
 		<div id="snr_history_wrapper"></div><br>
@@ -166,6 +160,7 @@ print '''
 
 	<div id="Status" class="tabcontent">
 		<div id="time_since_last_wrapper"></div><br>
+		<div id="latency_status_by_nodes_wrapper"></div><br>
 		<div id="time_since_trigger_wrapper"></div><br>
 		<div id="up_time_wrapper"></div><br>
 		<div id="dropped_wrapper"></div><br>
