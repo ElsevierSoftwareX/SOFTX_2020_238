@@ -219,7 +219,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if len(events) < self.min_instruments:
 				raise ValueError("candidates require >= %d events in ranking mode" % self.min_instruments)
 			params["instruments"] = (frozenset(event.ifo for event in events),)
-			params.update(("%s_end_time" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo]) for event in events)
+			# FIXME Is there a better way to do this?
+			coinc_end_time = sorted([(event.ifo, event.end_time + 1e-9*event.end_time_ns) for event in events])[0][-1]
+			params.update(("%s_t_offset" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo] - coinc_end_time) for event in events)
 			params.update(("%s_coa_phase" % event.ifo, event.coa_phase) for event in events)
 		elif mode == "counting":
 			if len(events) != 1:
@@ -616,20 +618,32 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		base_params = {"instruments": (frozenset(instruments),)}
 		horizongen = iter(self.horizon_history.randhorizons()).next
 		# P(horizons) = 1/livetime
-		log_P_horizons = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey())
+		log_P_horizons_dt_dphi = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey()) + inspiral_extrinsics.lnP_dt_dphi_uniform_H1L1(self.delta_t)
 		coordgens = tuple(iter(self.binnings[key].randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next for key in keys)
+		# FIXME This only works for H1L1 cas
+		coinc_window = inspiral_extrinsics.coinc_window(self.delta_t, list(instruments))
+		random_uniform = random.uniform
+		twopi = 2*numpy.pi
+		dt_keys = tuple("%s_t_offset" % instrument for instrument in instruments)
+		dphi_keys = tuple("%s_coa_phase" % instrument for instrument in instruments)
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = CoincParams(zip(keys, seq[0::2]))
 			params.update(base_params)
-			params.update(inspiral_extrinsics.random_time_phase_params(list(instruments), self.delta_t))
+			# FIXME This will only work for 2 (and maybe 1) detector cases
+			# NOTE Actual (2-detector) coincidences will have one
+			# offset equal to 0 and the other offset equal to the
+			# time between them, the coincidence end time is set by
+			# the first detector alphabetically
+			params.update(zip(dt_keys, tuple((-1)**i * dt/2 for dt in [random_uniform(-coinc_window,coinc_window)] for i, instrument in enumerate(instruments))))
+			params.update(zip(dphi_keys, tuple(random_uniform(0, twopi) for instrument in instruments)))
 			params.horizons = horizongen()
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
 			# it to be (only that it be correct up to an
 			# unknown constant) and I've not checked that it is
 			# so the documentation doesn't promise that it is.
-			yield params, sum(seq[1::2], log_P_horizons + inspiral_extrinsics.lnP_dt_dphi_uniform(params, self.delta_t))
+			yield params, sum(seq[1::2], log_P_horizons_dt_dphi)
 
 	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0, coinc_only = True):
 		"""

@@ -699,20 +699,12 @@ class SNRPDF(object):
 #
 
 
-def random_time_phase_params(instruments, delta_t):
-	# FIXME For > 2 IFOs, it's currently possible to randomly
-	# generate end times which would not be involved in a
-	# coincidence. e.g. if H1_end_time is 1000000000, L1_end_time
-	# could be 999999999.99565 and V1_end_time could be
-	# 1000000000.0232099, but V1_end_time - L1_end_time =
-	# 0.02755996766526434 > light_travel_time("L1","V1") =
-	# 0.026448341016726495
-	params = {"%s_end_time" % instruments[-1]: 1000000000., "%s_coa_phase" % instruments[-1]: 0.}
-
-	params.update(("%s_end_time" % instrument, 1000000000 + random.uniform(-delta_t-light_travel_time(instrument, instrument), delta_t+light_travel_time(instrument, instrument))) for instrument in instruments[:-1])
-	params.update(("%s_coa_phase" % instrument, random.uniform(0., 2*math.pi)) for instrument in instruments[:-1])
-
-	return params
+def coinc_window(delta_t, instruments):
+	if len(instruments) == 1:
+		return 0.
+	if sorted(instruments) != ["H1","L1"]:
+		raise ValueError("H1L1 only ifo combo currently supported")
+	return light_travel_time(instruments[0], instruments[1]) + delta_t
 
 
 def __dphi_calc_A(combined_snr, delta_t):
@@ -772,24 +764,30 @@ def lnP_dt_signal(dt, snr_ratio):
 
 	return numpy.polynomial.chebyshev.chebval(dt/0.015013, x) - numpy.log(norm)
 
-
-def lnP_dt_dphi_uniform(params, coincidence_window):
-	# NOTE Currently hardcoded for H1L1
+def lnP_dt_dphi_uniform_H1L1(coincidence_window_extension):
 	# FIXME Dont hardcode
-	return math.log(1 / 0.015013 * 1 / (2*math.pi))
+	# NOTE This assumes the standard delta t
+	return math.log(1 / (light_travel_time("H1","L1")+coincidence_window_extension) * 1 / (2*math.pi))
 
 
-def lnP_dt_dphi(param_dict, coincidence_window, model = "noise"):
+def lnP_dt_dphi_uniform(params, coincidence_window_extension):
+	# NOTE Currently hardcoded for H1L1
+	# NOTE this is future proofed so that in > 2 ifo scenarios, the
+	# appropriate length can be chosen for the uniform dt distribution
+	return lnP_dt_dphi_uniform_H1L1(coincidence_window_extension)
+
+
+def lnP_dt_dphi(param_dict, coincidence_window_extension, model = "noise"):
 	# Return P(dt, dphi|{rho_{IFO}}, signal)
-	dt_dphi_keys = sorted([key for key in param_dict if key.endswith("_end_time") or key.endswith("_coa_phase")])
+	dt_dphi_keys = sorted([key for key in param_dict if key.endswith("_t_offset") or key.endswith("_coa_phase")])
 
 	if model == "noise":
 		# FIXME Insert actual noise models
-		return lnP_dt_dphi_uniform(param_dict["instruments"], coincidence_window), dt_dphi_keys
+		return lnP_dt_dphi_uniform(param_dict["instruments"], coincidence_window_extension), dt_dphi_keys
 	elif model == "signal":
 		# FIXME Insert actual signal models
-		if dt_dphi_keys == ["H1_coa_phase", "H1_end_time", "L1_coa_phase", "L1_end_time"]:
-			delta_t = float(param_dict["H1_end_time"] - param_dict["L1_end_time"])
+		if dt_dphi_keys == ["H1_coa_phase", "H1_t_offset", "L1_coa_phase", "L1_t_offset"]:
+			delta_t = float(param_dict["H1_t_offset"] - param_dict["L1_t_offset"])
 			delta_phi = (param_dict["H1_coa_phase"] - param_dict["L1_coa_phase"]) % (2*math.pi)
 			combined_snr = math.sqrt(param_dict["H1_snr_chi"][0]**2. + param_dict["L1_snr_chi"][0]**2.)
 			if param_dict["H1_snr_chi"][0] > param_dict["L1_snr_chi"][0]:
@@ -802,6 +800,6 @@ def lnP_dt_dphi(param_dict, coincidence_window, model = "noise"):
 			# distribution so that dt/dphi terms dont affect
 			# likelihood ratio
 			# FIXME Work out general N detector case
-			return lnP_dt_dphi_uniform(param_dict["instruments"], coincidence_window), dt_dphi_keys
+			return lnP_dt_dphi_uniform(param_dict["instruments"], coincidence_window_extension), dt_dphi_keys
 	else:
 		raise ValueError("invalid data model '%s'" % mode)
