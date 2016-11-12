@@ -97,7 +97,7 @@ from gstlal.stats import inspiral_extrinsics
 class CoincParams(dict):
 	# place-holder class to allow params dictionaries to carry
 	# attributes as well
-	__slots__ = ("horizons",)
+	__slots__ = ("horizons","t_offset","coa_phase")
 
 
 class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
@@ -219,16 +219,24 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if len(events) < self.min_instruments:
 				raise ValueError("candidates require >= %d events in ranking mode" % self.min_instruments)
 			params["instruments"] = (frozenset(event.ifo for event in events),)
-			# FIXME Is there a better way to do this?
-			coinc_end_time = sorted([(event.ifo, event.end_time + 1e-9*event.end_time_ns) for event in events])[0][-1]
-			params.update(("%s_t_offset" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo] - coinc_end_time) for event in events)
-			params.update(("%s_coa_phase" % event.ifo, event.coa_phase) for event in events)
 		elif mode == "counting":
 			if len(events) != 1:
 				raise ValueError("only singles are allowed in counting mode")
 			params["singles"] = (events[0].ifo,)
 		else:
 			raise ValueError("invalid mode '%s'" % mode)
+
+		# record coa_phase and offset from end_time, where offset is
+		# the difference between a sngl inspiral's end time and the
+		# coinc inspiral's end time. Since the coinc inspiral's end
+		# time is just the end time of the first sngl inspiral
+		# alphabetically, non-coinc sngl inspirals will have offsets of
+		# 0, and the first sngl inspiral in a coinc will have an offset
+		# of 0
+		# FIXME This doesnt work for more tan two detectors
+		zero_offset = sorted([(event.ifo, event.end_time + 1e-9*event.end_time_ns) for event in events])[0][-1]
+		params.t_offset = dict(("%s" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo] - zero_offset) for event in events)
+		params.coa_phase = dict(("%s" % event.ifo, event.coa_phase) for event in events)
 
 		#
 		# record the horizon distances.  pick one trigger at random
@@ -264,13 +272,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 	def lnP_noise(self, params):
 		# evaluate dt and dphi parameters
-		lnP_dt_dphi_noise, dt_dphi_keys = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "noise")
-		# clean params up for parent class's lnP_noise method
-		clean_params = params.copy()
-		for key in dt_dphi_keys:
-			del clean_params[key]
+		lnP_dt_dphi_noise = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "noise")
 
-		return lnP_dt_dphi_noise + super(ThincaCoincParamsDistributions, self).lnP_noise(clean_params)
+		return lnP_dt_dphi_noise + super(ThincaCoincParamsDistributions, self).lnP_noise(params)
 
 	def lnP_signal(self, params):
 		# NOTE:  lnP_signal() and lnP_noise() (not shown here) both
@@ -286,11 +290,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		lnP_snr_signal = self.SNRPDF.lnP_snrs(snrs, params.horizons)
 
 		# evaluate dt and dphi parameters
-		lnP_dt_dphi_signal, dt_dphi_keys = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "signal")
-		# clean params up for parent class's lnP_signal method
-		clean_params = params.copy()
-		for key in dt_dphi_keys:
-			del clean_params[key]
+		lnP_dt_dphi_signal = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "signal")
 
 		# FIXME:  P(instruments | signal) needs to depend on
 		# horizon distances.  here we're assuming whatever
@@ -298,7 +298,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# probabilities to is OK.  we probably need to cache these
 		# and save them in the XML file, too, like P(snrs | signal,
 		# instruments)
-		return lnP_snr_signal + lnP_dt_dphi_signal + super(ThincaCoincParamsDistributions, self).lnP_signal(clean_params)
+		return lnP_snr_signal + lnP_dt_dphi_signal + super(ThincaCoincParamsDistributions, self).lnP_signal(params)
 
 	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
 		if verbose:
@@ -397,18 +397,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
-	def add_zero_lag(self, param_dict):
-		# FIXME Do we want to histogram dt and dphi for zerolag?
-		for key in [k for k in param_dict if k.endswith("_end_time") or k.endswith("_coa_phase")]:
-			del param_dict[key]
-		super(ThincaCoincParamsDistributions, self).add_zero_lag(param_dict)
-
 	def _rebuild_interpolators(self):
 		keys = set(self.zero_lag_rates)
 		keys.remove("instruments")
 		keys.remove("singles")
-		keys -= set("%s_end_time" % instrument for instrument in ["H1", "L1", "V1"])
-		keys -= set("%s_coa_phase" % instrument for instrument in ["H1", "L1", "V1"])
 		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators(keys)
 
 		#
@@ -624,8 +616,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		coinc_window = inspiral_extrinsics.coinc_window(self.delta_t, list(instruments))
 		random_uniform = random.uniform
 		twopi = 2*numpy.pi
-		dt_keys = tuple("%s_t_offset" % instrument for instrument in instruments)
-		dphi_keys = tuple("%s_coa_phase" % instrument for instrument in instruments)
+		ifo_keys = tuple("%s" % instrument for instrument in instruments)
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = CoincParams(zip(keys, seq[0::2]))
@@ -635,8 +626,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# offset equal to 0 and the other offset equal to the
 			# time between them, the coincidence end time is set by
 			# the first detector alphabetically
-			params.update(zip(dt_keys, tuple((-1)**i * dt/2 for dt in [random_uniform(-coinc_window,coinc_window)] for i, instrument in enumerate(instruments))))
-			params.update(zip(dphi_keys, tuple(random_uniform(0, twopi) for instrument in instruments)))
+			params.t_offset = dict(zip(ifo_keys, tuple((-1)**i * dt/2 for dt in [random_uniform(-coinc_window,coinc_window)] for i, instrument in enumerate(instruments))))
+			params.coa_phase = dict(zip(ifo_keys, tuple(random_uniform(0, twopi) for instrument in instruments)))
 			params.horizons = horizongen()
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires

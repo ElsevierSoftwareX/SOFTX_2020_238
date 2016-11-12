@@ -777,29 +777,32 @@ def lnP_dt_dphi_uniform(params, coincidence_window_extension):
 	return lnP_dt_dphi_uniform_H1L1(coincidence_window_extension)
 
 
-def lnP_dt_dphi(param_dict, coincidence_window_extension, model = "noise"):
+def lnP_dt_dphi(params, coincidence_window_extension, model = "noise"):
 	# Return P(dt, dphi|{rho_{IFO}}, signal)
-	dt_dphi_keys = sorted([key for key in param_dict if key.endswith("_t_offset") or key.endswith("_coa_phase")])
-
 	if model == "noise":
 		# FIXME Insert actual noise models
-		return lnP_dt_dphi_uniform(param_dict["instruments"], coincidence_window_extension), dt_dphi_keys
+		return lnP_dt_dphi_uniform(params["instruments"], coincidence_window_extension)
+
 	elif model == "signal":
 		# FIXME Insert actual signal models
-		if dt_dphi_keys == ["H1_coa_phase", "H1_t_offset", "L1_coa_phase", "L1_t_offset"]:
-			delta_t = float(param_dict["H1_t_offset"] - param_dict["L1_t_offset"])
-			delta_phi = (param_dict["H1_coa_phase"] - param_dict["L1_coa_phase"]) % (2*math.pi)
-			combined_snr = math.sqrt(param_dict["H1_snr_chi"][0]**2. + param_dict["L1_snr_chi"][0]**2.)
-			if param_dict["H1_snr_chi"][0] > param_dict["L1_snr_chi"][0]:
-				snr_ratio = param_dict["L1_snr_chi"][0] / param_dict["H1_snr_chi"][0]
+		if sorted(params.t_offset.keys()) == ["H1", "L1"]:
+			delta_t = float(params.t_offset["H1"] - params.t_offset["L1"])
+			delta_phi = (params.coa_phase["H1"] - params.coa_phase["L1"]) % (2*math.pi)
+			combined_snr = math.sqrt(params["H1_snr_chi"][0]**2. + params["L1_snr_chi"][0]**2.)
+			if params["H1_snr_chi"][0] > params["L1_snr_chi"][0]:
+				snr_ratio = params["L1_snr_chi"][0] / params["H1_snr_chi"][0]
+
 			else:
-				snr_ratio = param_dict["H1_snr_chi"][0] / param_dict["L1_snr_chi"][0]
-			return lnP_dt_signal(abs(delta_t), snr_ratio) + lnP_dphi_signal(delta_phi, delta_t, combined_snr), dt_dphi_keys
+				snr_ratio = params["H1_snr_chi"][0] / params["L1_snr_chi"][0]
+
+			return lnP_dt_signal(abs(delta_t), snr_ratio) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
+
 		else:
 			# IFOs != {H1,L1} case, thus just return uniform
 			# distribution so that dt/dphi terms dont affect
 			# likelihood ratio
 			# FIXME Work out general N detector case
-			return lnP_dt_dphi_uniform(param_dict["instruments"], coincidence_window_extension), dt_dphi_keys
+			return lnP_dt_dphi_uniform(params["instruments"], coincidence_window_extension)
+
 	else:
 		raise ValueError("invalid data model '%s'" % mode)
