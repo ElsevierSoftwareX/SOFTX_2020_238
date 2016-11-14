@@ -20,6 +20,11 @@ NEW_NONINJ_DIR=
 NEW_INJ_DIR=
 NEW_CALC_RANK_DIR=
 
+# number of files per background bin only needs to be set to a value other than
+# 1 if starting with output of an analysis before the naming convention update
+# (commit 5efd78fee6b371c999f510d07be33ec64f385695)
+NUM_FILES_PER_BACKGROUND_BIN=1
+
 # replace example list
 INJECTIONS := U_dVdzo1pz_bns_normal_high_spin_injections_v1.xml.gz U_dVdzo1pz_bns_normal_low_spin_injections_v1.xml.gz U_dVdzo1pz_bns_uniform_low_spin_injections_v1.xml.gz
 INJECTION_STR = $(shell j=1; TMPSTR=""; for INJ in $(INJECTIONS); do TMPSTR="$${TMPSTR} --injections-for-merger $${INJ} --inj-lloid-cache inj_lloid_$${j}.cache" && j=$$((j+1)); done && echo $${TMPSTR})
@@ -40,7 +45,7 @@ $(WEBDIR) : $(MAKEFILE_LIST)
 	cp $(MAKEFILE_LIST) $@
 
 dag : segments.xml.gz vetoes.xml.gz tisi.xml plots $(WEBDIR) lloid.cache rank_pdfs.cache inj_cache_map.txt
-	gstlal_inspiral_pipe  --frame-segments-file segments.xml.gz  --vetoes vetoes.xml.gz  --frame-segments-name datasegments   --web-dir $(WEBDIR)  --time-slide-file tisi.xml  --inj-time-slide-file tisi.xml  --lloid-cache lloid.cache  --rank-pdf-cache rank_pdfs.cache  --injections-for-merger U_dVdzo1pz_bns_normal_high_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_1.cache  --injections-for-merger U_dVdzo1pz_bns_normal_low_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_2.cache  --injections-for-merger U_dVdzo1pz_bns_uniform_low_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_3.cache  --num-files-per-background-bin 10 $(CONDOR_COMMANDS)  
+	gstlal_inspiral_pipe  --frame-segments-file segments.xml.gz  --vetoes vetoes.xml.gz  --frame-segments-name datasegments   --web-dir $(WEBDIR)  --time-slide-file tisi.xml  --inj-time-slide-file tisi.xml  --lloid-cache lloid.cache  --rank-pdf-cache rank_pdfs.cache  --injections-for-merger U_dVdzo1pz_bns_normal_high_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_1.cache  --injections-for-merger U_dVdzo1pz_bns_normal_low_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_2.cache  --injections-for-merger U_dVdzo1pz_bns_uniform_low_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_3.cache  --num-files-per-background-bin $(NUM_FILES_PER_BACKGROUND_BIN) $(CONDOR_COMMANDS)  
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
 
 inj_cache_map.txt : $(INJECTIONS)
