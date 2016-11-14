@@ -258,7 +258,7 @@ class generic_node(InspiralNode):
 			if input_cache_file_name is None:
 				cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = cache_dir)
 			else:
-				cache_file_name = input_cache_file_name
+				cache_file_name = os.path.join(cache_dir, input_cache_file_name)
 			with open(cache_file_name, "w") as cache_file:
 				lal.Cache(cache_entries).tofile(cache_file)
 			self.add_var_opt(opt, cache_file_name)
