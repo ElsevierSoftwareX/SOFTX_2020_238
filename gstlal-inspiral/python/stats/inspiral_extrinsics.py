@@ -789,11 +789,26 @@ def lnP_dt_dphi(params, coincidence_window_extension, model = "noise"):
 			delta_t = float(params.t_offset["H1"] - params.t_offset["L1"])
 			delta_phi = (params.coa_phase["H1"] - params.coa_phase["L1"]) % (2*math.pi)
 			combined_snr = math.sqrt(params["H1_snr_chi"][0]**2. + params["L1_snr_chi"][0]**2.)
-			if params["H1_snr_chi"][0] > params["L1_snr_chi"][0]:
-				snr_ratio = params["L1_snr_chi"][0] / params["H1_snr_chi"][0]
+			if params.horizons["H1"] != 0 and params.horizons["L1"] != 0:
+				# neither are zero, proceed as normal
+				H1_snr_over_horizon = params["H1_snr_chi"][0] / params.horizons["H1"]
+				L1_snr_over_horizon = params["L1_snr_chi"][0] / params.horizons["L1"]
+
+			elif params.horizons["H1"] == params.horizons["L1"]:
+				# both are zero, treat as equal
+				H1_snr_over_horizon = params["H1_snr_chi"][0]
+				L1_snr_over_horizon = params["L1_snr_chi"][0]
 
 			else:
-				snr_ratio = params["H1_snr_chi"][0] / params["L1_snr_chi"][0]
+				# one of them is zero, treat snr_ratio as 0, which will get changed to 0.33 in lnP_dt_signal
+				# FIXME is this the right thing to do?
+				return lnP_dt_signal(abs(delta_t), 0.33) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
+
+			if H1_snr_over_horizon > L1_snr_over_horizon:
+				snr_ratio = L1_snr_over_horizon / H1_snr_over_horizon
+
+			else:
+				snr_ratio = H1_snr_over_horizon / L1_snr_over_horizon
 
 			return lnP_dt_signal(abs(delta_t), snr_ratio) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
 
