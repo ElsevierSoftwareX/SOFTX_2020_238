@@ -1,0 +1,131 @@
+#!/usr/bin/env python
+
+from optparse import OptionParser
+
+from glue.ligolw import ilwd, ligolw, lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import ligolw_add
+
+import numpy
+
+class ligolwcontenthandler(ligolw.LIGOLWContentHandler):
+	pass
+
+lsctables.use_in(ligolwcontenthandler)
+lsctables.table.RowBuilder = lsctables.table.InterningRowBuilder
+
+def mchirp_bounds(mchirp, which):
+	if mchirp < 10:
+		return {'lower': 0.65*mchirp, 'upper': 1.35*mchirp}[which]
+	elif mchirp < 20:
+		return {'lower': 0.5*mchirp, 'upper': 1.5*mchirp}[which]
+	else:
+		return {'lower': 0.5*mchirp, 'upper': 2*mchirp}[which]
+
+
+def mchirp_injection_str(keys, name):
+	# FIXME this could be done better by just looking for values that cross
+	# the boundaries defined in mchirp_bounds
+	lower_mchirp_bound = min([mchirp_bounds(mchirp, 'lower') for mchirp in keys])
+	upper_mchirp_bound = max([mchirp_bounds(mchirp, 'upper') for mchirp in keys])
+	return '%.2f:%.2f:%s ' % ( lower_mchirp_bound, upper_mchirp_bound, name )
+
+
+def create_split_injection(processmap, process_params_dict, endtimesim_tuples, min_mchirp, max_mchirp, name, options):
+
+	xmldoc = ligolw.Document()
+	xmldoc.appendChild(ligolw.LIGO_LW())
+
+	processtable = lsctables.New(lsctables.ProcessTable)
+	processparamstable = lsctables.New(lsctables.ProcessParamsTable)
+	siminspiraltable = lsctables.New(lsctables.SimInspiralTable)
+
+	xmldoc.childNodes[-1].appendChild(processtable)
+	xmldoc.childNodes[-1].appendChild(processparamstable)
+	xmldoc.childNodes[-1].appendChild(siminspiraltable)
+
+	# FIXME add this to process params table
+	#process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral_split_injections", param_dict)
+	
+	process_ids = {}
+	siminspiraltimemap = {}
+	end_times = numpy.array([])
+
+	for end_time, sim in sorted(endtimesim_tuples, key = lambda (k,v): k):
+		siminspiraltable.append(sim)
+		end_times = numpy.append(end_times, end_time)
+		process_ids.setdefault(sim.process_id, []).append(sim.simulation_id)
+
+	for procid in sorted(process_ids.keys()):
+		processtable.append(processmap[procid])
+		for param in process_params_dict[procid]:
+			processparamstable.append(param)
+
+	dt = end_times[1:] - end_times[:-1]
+	print '%s: avg injection rate = %f, min mchirp = %f, max mchirp = %f, min dt = %f' % (name, 1./dt.mean(), min_mchirp, max_mchirp, dt.min())
+	ligolw_utils.write_filename(xmldoc, name)
+
+def parse_command_line():
+	parser = OptionParser()
+
+	#parser.add_option("--num-output", "-n", metavar = "int", type = "int", default = 2, help = "Number of files to split input files into")
+	parser.add_option("--target-injection-rate", "-r", metavar = "s^-1", type = "float", default = 0.1, help = "Desired injection rate of output files (default: 0.01)")
+	parser.add_option("--injection-rate-tolerance", type = "float", default = 0.1, help = "Acceptable tolerance for target injection rate, files will be written to disk once a splitting has been found such that the injection rate is target-injection-rate +- (injection-rate-tolerance*target-injection-rate) (default: 0.1)")
+
+	# FIXME Add option checking so num-output and target-injection-rate cannot both be provided
+
+	options, filenames = parser.parse_args()
+
+	target_inj_rate_interval = (options.target_injection_rate - options.injection_rate_tolerance * options.target_injection_rate, options.target_injection_rate + options.injection_rate_tolerance * options.target_injection_rate)
+
+	return options, filenames, target_inj_rate_interval
+
+options, filenames, target_inj_rate_interval = parse_command_line()
+
+# set up xmldoc structure to contain all of the injections
+xmldoc = ligolw.Document()
+
+# add all files together and create mappings needed to split the files up while
+# conserving process ids
+xmldoc = ligolw_add.ligolw_add(xmldoc, filenames, verbose = True, contenthandler = ligolwcontenthandler)
+processmap = dict((proc.process_id, proc) for proc in lsctables.ProcessTable.get_table(xmldoc))
+siminspiralmap = dict((sim.mchirp, (sim.geocent_end_time + 1e-9*sim.geocent_end_time_ns, sim)) for sim in lsctables.SimInspiralTable.get_table(xmldoc))
+siminspiralmchirps = sorted(siminspiralmap.keys())
+
+process_params_dict = {}
+for param in lsctables.ProcessParamsTable.get_table(xmldoc):
+	process_params_dict.setdefault(param.process_id, []).append(param)
+
+# close original xmldoc
+xmldoc.unlink()
+
+# split injections up into X files with roughly equal injections each
+num_output = 1
+avg_inj_rate = numpy.inf
+i=0
+
+while avg_inj_rate > target_inj_rate_interval[1]:# or avg_inj_rate < target_inj_rate_interval[0]:
+
+	num_output += 1
+	split_keys = numpy.array_split(siminspiralmchirps, num_output)
+	avg_dts = []
+	for keys in split_keys:
+		sorted_times = numpy.sort([siminspiralmap[key][0] for key in keys])
+		if len(sorted_times) < 2:
+			raise ValueError("files need to be split too finely to hit target injection rate, try increasing target rate or tolerance (last splitting attempt: %d files)" % num_output)
+		avg_dts.append((sorted_times[1:] - sorted_times[:-1]).mean())
+	avg_inj_rate = 1/numpy.mean(avg_dts)
+
+	if avg_inj_rate < target_inj_rate_interval[0]:
+		print avg_inj_rate, num_output
+		# the average injection rate cannot increase with more splittings, thus we can't hit this injection rate interval
+		raise ValueError("target injection rate not attainable, either increase the tolerance or decrease the target rate")
+		
+
+mchirp_str = ''
+for i, keys in enumerate(split_keys):
+	create_split_injection(processmap, process_params_dict, [siminspiralmap[key] for key in keys], keys[0], keys[-1], 'split_injections_%04d.xml' % i, options)
+	mchirp_str += mchirp_injection_str(keys, 'split_injections_%04d.xml' % i)
+
+print 'MCHIRP_INJECTIONS := %s' % mchirp_str[:-1]
