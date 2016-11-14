@@ -65,6 +65,11 @@
 #	+ '--psd-cache' [filename] : Set the cache file for psd (required iff running injection-only analysis)
 #	+ '--non-injection-db' [filename] : Set the non injection data base file (required iff running injection-only analysis)
 #	+ '--marginalized-likelihood-file' [filename] : Set the marginalized likelihood file (required iff running injection-only analysis)
+#	+ '--lloid-cache' [filename] : Set the cache file for lloid (required iff starting an analysis at the merger step)
+#	+ '--inj-lloid-cache' [filename] : Set the cache file for injection lloid files (required iff starting an analysis at the merger step) (can be given multiple times, should be given once per injection file)
+#	+ '--rank-pdf-cache [filename] : Set the cache file for rank pdfs (required iff starting an analysis at the merger step)
+#	+ '--num-files-per-background-bin [int] : Set the number of files per background bin for analyses which start at the merger step but are seeded by runs not following the current naming conventions
+#	+ '--injections-for-merger [filename] : append injection files used in previous run, must be provided in same order as corresponding inj-lloid-cache (required iff starting an analysis at the merger step)
 #	+ '--request-cpu' [int] : set the inspiral CPU count, default = 4
 #	+ '--request-memory' [int] : set the inspiral memory, default = 7GB
 #	+ '--condor-command' : set condor commands of the form command=value; can be given multiple times
@@ -509,7 +514,7 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 
 	return lloid_output, lloid_diststats
 
-def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set):
+def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set):
 
 	likelihood_nodes = {}
 	rankpdf_nodes = []
@@ -654,6 +659,109 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 
 	return rankpdf_nodes, outnodes
 
+def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
+	rankpdf_nodes = sorted([CacheEntry(f).path for f in open(options.rank_pdf_cache)], key = lambda s: int(os.path.basename(s).split('-')[1].split('_')[0]))
+	outnodes = {}
+	if options.num_files_per_background_bin == 1:
+		bgbin_lloid_map = {}
+		# Get list of all files for each background bin (will be same length for each bin)
+		for ce in [CacheEntry(f) for f in open(options.lloid_cache)]:
+			bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
+
+		if len(bgbin_lloid_map.values()[0]) == 1:
+			# Starting with 1:1 mapping between files and bins,
+			# thus no merging is needed yet
+			outnodes[None] = [dbs[0] for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k))]
+			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
+				outnodes[sim_tag_from_inj_file(options.injections_for_merger[i])] = [CacheEntry(f).path for f in open(inj_lloid_cache)]
+
+		else:
+			for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
+				noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
+				# merge all of the dbs from the same subbank
+				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
+					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_cache_files = {"input-cache":dbs},
+					output_files = {"database":noninjdb},
+					input_cache_file_name = os.path.join(os.path.join(toSqliteJob.output_path, 'cache'), os.path.basename(noninjdb)).replace('.sqlite','.cache')
+				)
+
+				sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"":noninjdb}
+				)
+
+				outnodes.setdefault(None, []).append(sqlitenode)
+			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
+				bgbin_lloid_map = {}
+				for ce in [CacheEntry(f) for f in open(inj_lloid_cache)]:
+					bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
+
+				for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
+					injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
+					# merge all of the dbs from the same subbank
+					sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
+						opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+						input_cache_files = {"input-cache":dbs},
+						output_files = {"database":injdb},
+						input_cache_file_name = os.path.join(os.path.join(toSqliteJob.output_path, 'cache'), os.path.basename(injdb)).replace('.sqlite','.cache')
+					)
+
+					sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+						opts = {"sql-file":options.injection_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+						input_files = {"":injdb}
+					)
+
+					outnodes.setdefault(sim_tag_from_inj_file(options.injections_for_merger[i]), []).append(sqlitenode)
+
+	else:
+		# Starting with output of analysis before naming convention
+		# update (commit 5efd78fee6b371c999f510d07be33ec64f385695),
+		# so all lloid files contain gps times for entire run, and are
+		# numbered by iterating through segments in a given bin first
+		# (e.g. files 0000 to 0009 may all belong to bin 0000, then
+		# files 0010 to 0019 would all belong to bin 0001, etc)
+		for ce_list in chunks([CacheEntry(f) for f in open(options.lloid_cache)], options.num_files_per_background_bin):
+			hi_index = ce_list[-1].description.split('_')[0]
+			noninjdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
+
+			# merge all of the dbs from the same subbank
+			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
+				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+				input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
+				output_files = {"database":noninjdb},
+				input_cache_file_name = os.path.join(os.path.join(toSqliteJob.output_path, 'cache'), os.path.basename(noninjdb)).replace('.sqlite','.cache')
+			)
+
+			sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				input_files = {"":noninjdb}
+			)
+
+			outnodes.setdefault(None, []).append(sqlitenode)
+
+		for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
+			for ce_list in chunks([CacheEntry(f) for f in open(inj_lloid_cache)], options.num_files_per_background_bin):
+				hi_index = ce_list[-1].description.split('_')[0]
+				injdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
+
+				# merge all of the dbs from the same subbank
+				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
+					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
+					output_files = {"database":injdb},
+					input_cache_file_name = os.path.join(os.path.join(toSqliteJob.output_path, 'cache'), os.path.basename(injdb)).replace('.sqlite','.cache')
+				)
+
+				sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+					input_files = {"":injdb}
+				)
+
+				outnodes.setdefault(sim_tag_from_inj_file(options.injections_for_merger[i]), []).append(sqlitenode)
+
+	return rankpdf_nodes, outnodes
+
 def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, innodes, injsnrnodes, options, instruments):
 
 	if options.vetoes is None:
@@ -664,11 +772,22 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 	chunk_nodes = []
 	dbs_to_delete = []
 	# Process the chirp mass bins in chunks to paralellize the merging process
-	for chunk, dbs in enumerate(chunks([node.input_files[""] for node in innodes[None]], 20)):
+	for chunk, nodes in enumerate(chunks(innodes[None], 20)):
+		try:
+			dbs = [node.input_files[""] for node in nodes]
+			parents = nodes
+
+		except AttributeError:
+			# analysis started at merger step but seeded by lloid files which
+			# have already been merged into one file per background
+			# bin, thus the analysis will begin at this point
+			dbs = nodes
+			parents = []
+
 		# Merge the final non injection database into chunks
 		noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite')
 		noninjdb = os.path.join(subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(noninjdb).segment[0]))[:5]]), noninjdb)
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = innodes[None],
+		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parents,
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 			input_cache_files = {"input-cache": dbs},
 			output_files = {"database":noninjdb},
@@ -709,12 +828,22 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 	# FIXME far-injections currently doesnt work, either fix it or delete it
 	#for injections, far_injections in zip(options.injections, options.far_injections):
-	for injections in options.injections:
+	if options.injections:
+		iterable_injections = options.injections
+	else:
+		iterable_injections = options.injections_for_merger
+
+	for injections in iterable_injections:
 		# extract only the nodes that were used for injections
-		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
 		chunk_nodes = []
 
-		for chunk, dbs in enumerate(chunks([node.input_files[""] for node in thisinjnodes], 20)):
+		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], 20)):
+			try:
+				dbs = [injnode.input_files[""] for injnode in injnodes]
+				parents = injnodes
+			except AttributeError:
+				dbs = injnodes
+				parents = []
 
 			# Setup the final output names, etc.
 			injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite')
@@ -722,7 +851,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 
 			# merge
-			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = thisinjnodes,
+			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parents,
 				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 				input_cache_files = {"input-cache":dbs},
 				output_files = {"database":injdb},
@@ -793,13 +922,19 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 def compute_FAP(marginalizeJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, injdbs, noninjdb, final_sqlite_nodes):
 	# compute FAPs and FARs
 	# split up the marginilization into groups of 10
-	margin = [node.output_files["output"] for node in rankpdf_nodes]
+	try:
+		margin = [node.output_files["output"] for node in rankpdf_nodes]
+		parents = final_sqlite_nodes + rankpdf_nodes
+	except AttributeError:
+		# analysis started at merger step
+		margin = rankpdf_nodes
+		parents = final_sqlite_nodes
 	margout = []
 	margnodes = []
 	margnum = 16
 	for i,n in enumerate(range(0, len(margin), margnum)):
 		margout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz', path = marginalizeJob.output_path))
-		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = final_sqlite_nodes + rankpdf_nodes,
+		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = parents,
 			output_files = {"output":margout[-1]}, 
 			input_cache_files = {"likelihood-cache":margin[n:n+margnum]},
 			input_cache_file_name = os.path.join(os.path.join(os.path.dirname(margout[-1]), 'cache'), os.path.basename(margout[-1])).replace('.xml.gz','.cache')
@@ -885,6 +1020,13 @@ def parse_command_line():
 	parser.add_option("--non-injection-db", metavar = "filename", help = "Set the non injection data base file (required iff running injection-only analysis)")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the marginalized likelihood file (required iff running injection-only analysis)")
 
+	# Data from a previous run in the case of a run that starts at the merger step
+	parser.add_option("--lloid-cache", metavar = "filename", help = "Set the cache file for lloid (required iff starting an analysis at the merger step)")
+	parser.add_option("--inj-lloid-cache", metavar = "filename", action = "append", default = [], help = "Set the cache file for injection lloid files (required iff starting an analysis at the merger step) (can be given multiple times, should be given once per injection file)")
+	parser.add_option("--rank-pdf-cache", metavar = "filename", help = "Set the cache file for rank pdfs (required iff starting an analysis at the merger step)")
+	parser.add_option("--num-files-per-background-bin", metavar = "int", type = "int", default = 1, help = "Set the number of files per background bin for analyses which start at the merger step but are seeded by runs not following the current naming conventions")
+	parser.add_option("--injections-for-merger", metavar = "filename", action = "append", help = "append injection files used in previous run, must be provided in same order as corresponding inj-lloid-cache (required iff starting an analysis at the merger step)")
+
 	# Condor commands
 	parser.add_option("--request-cpu", default = "4", metavar = "integer", help = "set the inspiral CPU count, default = 4")
 	parser.add_option("--request-memory", default = "7GB", metavar = "integer", help = "set the inspiral memory, default = 7GB")
@@ -906,10 +1048,22 @@ def parse_command_line():
 	if len(missing_injection_options) == 0 and options.num_banks:
 		raise ValueError("cant specify --num-banks in injection-only run")
 
+	missing_merger_options = []
+	for option in ("lloid_cache", "inj_lloid_cache", "rank_pdf_cache"):
+		if getattr(options, option) is None:
+			missing_merger_options.append(option)
+	if len(missing_injection_options) > 0 and len(missing_injection_options) < 3:
+		raise ValueError("missing merger-run options %s." % ", ".join([option for option in missing_injection_options]))
+	if len(missing_injection_options) == 0 and options.num_banks:
+		raise ValueError("cant specify --num-banks in a run starting at the merger step")
+
+
 	fail = ""
-	required_options = ["reference_likelihood_file"]
-	if len(missing_injection_options) == 5:
-		required_options.append("bank_cache")
+	required_options = []
+	if len(missing_merger_options) == 3:
+		required_options.append("reference_likelihood_file")
+		if len(missing_injection_options) == 5:
+			required_options.append("bank_cache")
 
 	for option in required_options:
 		if getattr(options, option) is None:
@@ -938,13 +1092,21 @@ def parse_command_line():
 #
 
 options, filenames = parse_command_line()
-bank_cache = inspiral_pipe.parse_cache_str(options.bank_cache)
-detectors = datasource.GWDataSourceInfo(options)
-channel_dict = detectors.channel_dict
-if bank_cache:
-	instruments = "".join(sorted(bank_cache.keys()))
-	instrument_set = bank_cache.keys()
-boundary_seg = detectors.seg
+
+if options.bank_cache or options.svd_bank_cache:
+	bank_cache = inspiral_pipe.parse_cache_str(options.bank_cache)
+	detectors = datasource.GWDataSourceInfo(options)
+	channel_dict = detectors.channel_dict
+	if bank_cache:
+		instruments = "".join(sorted(bank_cache.keys()))
+		instrument_set = bank_cache.keys()
+	boundary_seg = detectors.seg
+
+else:
+	with open(options.rank_pdf_cache) as f:
+		ce = CacheEntry(f.readline())
+	boundary_seg = ce.segment
+	instruments = ce.observatory
 
 output_dir = "plots"
 
@@ -987,7 +1149,19 @@ os.chmod("store_raw.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXG
 # setup the job classes
 #
 
-if not options.dist_stats_cache:
+if options.dist_stats_cache:
+	# injection-only run
+	gstlalInspiralJob = None
+	createPriorDistStatsJob = None
+	calcRankPDFsJob = None
+	calcLikelihoodJob = None
+	marginalizeJob = None
+
+elif options.lloid_cache:
+	# analysis starting at merger step
+	marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+
+else:
 	# set up jobs only needed for zerolag run
 	refPSDJob = inspiral_pipe.generic_job("gstlal_reference_psd", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
 	medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
@@ -998,14 +1172,6 @@ if not options.dist_stats_cache:
 	calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"1", "want_graceful_removal":"True", "kill_sig":"15"}))
 	calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-
-else:
-	# injection-only run
-	gstlalInspiralJob = None
-	createPriorDistStatsJob = None
-	calcRankPDFsJob = None
-	calcLikelihoodJob = None
-	marginalizeJob = None
 
 gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
 gstlalInjSnrJob = inspiral_pipe.generic_job("gstlal_inspiral_injection_snr", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"8GB", "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
@@ -1038,6 +1204,10 @@ if options.psd_cache:
 	psd_nodes, ref_psd_parent_nodes = inj_psd_node_gen(segsdict, options)
 	instruments = "".join(sorted(svd_nodes.keys()))
 	instrument_set = svd_nodes.keys()
+
+elif options.lloid_cache:
+	# starting analysis at merger step, nothing to do here
+	pass
 
 elif options.reference_psd is None:
 	#
@@ -1094,38 +1264,46 @@ else:
 #
 
 injsnrnodes = []
-if not options.disable_calc_inj_snr:
+
+if not options.lloid_cache and not options.disable_calc_inj_snr:
 	for inj in options.injections:
 		injsnrnodes.append(inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes,
 			opts = {"flow":options.flow},
 			input_files = {"injection-file":inj.split(':')[-1], "reference-psd-cache":"reference_psd.cache"}
 		))
 
-#
-# Compute SVD banks
-#
-
-if not options.svd_bank_cache:
+if options.bank_cache:
+	#
+	# Compute SVD banks
+	#
 	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
 
 
-#	
-# Inspiral jobs by segment
-#
+if not options.lloid_cache:
+	#
+	# Inspiral jobs by segment
+	#
 
-inspiral_nodes = inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)
+	inspiral_nodes = inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)
 
-#
-# Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
-#
+	#
+	# Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
+	#
 
-lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
+	lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
 
-#
-# Setup likelihood jobs, clustering and merging
-#
+	#
+	# Setup likelihood jobs, clustering and/or merging
+	#
 
-rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, inspiral_nodes, lloid_output, lloid_diststats, segsdict, options, boundary_seg, instrument_set)
+	rankpdf_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set)
+
+else:
+	#
+	# Merge lloid files into 1 file per bin if not already 1 file per bin
+	#
+
+	rankpdf_nodes, outnodes = merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options)
 
 #
 # after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
