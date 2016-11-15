@@ -573,25 +573,27 @@ for bin_type in opts.bin_types:
                 label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
             labels.append(label)
 
+            # NOTE create regular plots, and define log x,y scales below
+            #      since otherwise, fill_between allocates too many blocks and crashes
             # sensitivity vs far
             center = numpy.array([v[mmid] for v in vols_far])
             lo = numpy.array([v[mmid] for v in vols_lo_far])
             hi = numpy.array([v[mmid] for v in vols_hi_far])
-            line, = ax_far.loglog( fars, center, label=label, linewidth=2 )
+            line, = ax_far.plot( fars, center, label=label, linewidth=2 )
             ax_far.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
 
             # range vs far
             center = (center/(4*math.pi*UL.livetime[instr]/3))**(1./3)
             lo = (lo/(4*math.pi*UL.livetime[instr]/3))**(1./3)
             hi = (hi/(4*math.pi*UL.livetime[instr]/3))**(1./3)
-            line, = ax_far_range.semilogx( fars, center, label=label, linewidth=2 )
+            line, = ax_far_range.plot( fars, center, label=label, linewidth=2 )
             ax_far_range.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
 
             # sensitivity vs snr
             center = numpy.array([v[mmid] for v in vols_snr])
             lo = numpy.array([v[mmid] for v in vols_lo_snr])
             hi = numpy.array([v[mmid] for v in vols_hi_snr])
-            line, = ax_snr.semilogy( snrs, center, label=label, linewidth=2 )
+            line, = ax_snr.plot( snrs, center, label=label, linewidth=2 )
             ax_snr.fill_between( snrs, lo, hi, alpha=0.5, color=line.get_color())
 
             # plot fiducial efficiency
@@ -612,6 +614,8 @@ for bin_type in opts.bin_types:
 
         ax_far.set_xlabel("Combined FAR (Hz)")
         ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
+        ax_far.set_xscale("log")
+        ax_far.set_yscale("log")
         ax_far.set_xlim([min(fars), max(fars)])
         ax_far.invert_xaxis()
         ax_far.legend(loc="upper right")
@@ -620,6 +624,7 @@ for bin_type in opts.bin_types:
         # range vs far
         ax_far_range.set_xlabel("Combined FAR (Hz)")
         ax_far_range.set_ylabel("Range (Mpc)")
+        ax_far_range.set_xscale("log")
         ax_far_range.set_xlim([min(fars), max(fars)])
         ax_far_range.invert_xaxis()
         ax_far_range.legend(loc="upper right")
@@ -634,6 +639,7 @@ for bin_type in opts.bin_types:
 
         ax_snr.set_xlabel("Network SNR")
         ax_snr.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
+        ax_snr.set_yscale("log")
         ax_snr.set_xlim([min(snrs), max(snrs)])
         ax_snr.set_ylim(ymin=0)
         ax_snr.legend(loc="upper right")
