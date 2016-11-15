@@ -526,9 +526,6 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 	# Here n counts the bins
 	# first non-injections, which will get skipped if this is an injections-only run
 	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
-		output_seg_prior_path = subdir_path([createPriorDistStatsJob.output_path, str(int(boundary_seg[0]))[:5]])
-		output_seg_calcrank_path = subdir_path([calcRankPDFsJob.output_path, str(int(boundary_seg[0]))[:5]])
-
 		inputs = [o[0] for o in outputs]
 		parents = []
 		[parents.extend(o[1]) for o in outputs]
@@ -538,7 +535,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = [],
 				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1, "min-instruments":options.min_instruments},
-				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = subdir_path([output_seg_prior_path, '%04d' % n]))}
+				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		# Create a file that has the priors *and* all of the diststats
 		# for a given bin marginalized over time. This is all that will
@@ -553,14 +550,14 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
 				parent_nodes = [diststats_per_bin_node],
 				input_files = {"":diststats_per_bin_node.output_files["output"]},
-				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = subdir_path([output_seg_calcrank_path, '%04d' % n]))}
+				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 
 		calcrankzerolagnode = inspiral_pipe.generic_node(calcRankPDFsWithZerolagJob, dag,
 				parent_nodes = [diststats_per_bin_node],
 				opts = {"add-zerolag-to-background":""},
 				input_files = {"":diststats_per_bin_node.output_files["output"]},
-				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS_WZL' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = subdir_path([output_seg_calcrank_path, '%04d' % n]))}
+				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS_WZL' % (n,), int(boundary_seg[0]), int(boundary_seg[1]), '.xml.gz', path = calcRankPDFsWithZerolagJob.output_path)}
 			)
 
 		margnodes['%04d' %(n,)] = diststats_per_bin_node
@@ -623,8 +620,8 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 
 			# Merging all the dbs from the same sub bank
 			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
-				db = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
-				db = os.path.join(subdir_path([subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(db).segment[0]))[:5]]), CacheEntry.from_T050017(db).description[:4]]), db)
+				db = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite') 
+				db = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(db).description[:4]]), db)
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
 					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_cache_files = {"input-cache":inputs},
@@ -651,7 +648,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 			# Merging all the dbs from the same sub bank and injection run
 			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
 				injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
-				injdb = os.path.join(subdir_path([subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(injdb).segment[0]))[:5]]), CacheEntry.from_T050017(injdb).description[:4]]), injdb)
+				injdb = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(injdb).description[:4]]), injdb)
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
 					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_cache_files = {"input-cache":inputs},
@@ -796,8 +793,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 			parents = []
 
 		# Merge the final non injection database into chunks
-		noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite')
-		noninjdb = os.path.join(subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(noninjdb).segment[0]))[:5]]), noninjdb)
+		noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parents,
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 			input_cache_files = {"input-cache": dbs},
@@ -862,8 +858,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 				parents = []
 
 			# Setup the final output names, etc.
-			injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite')
-			injdb = os.path.join(subdir_path([toSqliteJob.output_path, str(int(CacheEntry.from_T050017(injdb).segment[0]))[:5]]), injdb)
+			injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 
 
 			# merge
