@@ -168,6 +168,8 @@ l1snr = []
 for h1sim, l1sim in pool.map(calc_expected_snr,[inj for idx, inj in enumerate(sim_inspiral_table)]):
 	h1snr.append(h1sim)
 	l1snr.append(l1sim)
+pool.close()
+pool.join()
 
 for idx, inj in enumerate(sim_inspiral_table):
 	inj.alpha3 = h1snr[idx]
