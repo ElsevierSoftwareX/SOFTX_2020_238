@@ -358,6 +358,11 @@ for ifo in channel_dict:
 jobTags = []
 inj_jobTags = []
 
+if options.ht_gate_threshold_linear is not None:
+	# Linear scale specified
+	template_mchirp_dict = inspiral_pipe.get_svd_bank_params_online(bank_cache.values()[0])
+	mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
+
 bank_groups = list(inspiral_pipe.build_bank_groups(bank_cache, [1], options.max_jobs - 1))
 if len(options.likelihood_files) != len(bank_groups):
 	raise ValueError("Likelihood files must correspond 1:1 with bank files")
@@ -369,9 +374,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 	# Calculate the appropriate ht-gate-threshold value
 	threshold_values = None
 	if options.ht_gate_threshold_linear is not None:
-		template_mchirp_dict = inspiral_pipe.get_svd_bank_params_online(bank_cache.values()[0])
 		# Linear scale specified
-		mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
 		# use max mchirp in a given svd bank to decide gate threshold
 		bank_mchirps = [template_mchirp_dict["%04d" % int(os.path.basename(svd_file).split("-")[1].split("_")[3])][1] for svd_file in svd_banks.items()[0][1]]
 		threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
