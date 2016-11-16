@@ -235,7 +235,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# of 0
 		# FIXME This doesnt work for more tan two detectors
 		zero_offset = sorted([(event.ifo, event.end_time + 1e-9*event.end_time_ns) for event in events])[0][-1]
-		params.t_offset = dict(("%s" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo] - zero_offset) for event in events)
+		params.t_offset = dict(("%s" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo] - zero_offset if offsetvector else event.end_time + 1e-9*event.end_time_ns - zero_offset) for event in events)
 		params.coa_phase = dict(("%s" % event.ifo, event.coa_phase) for event in events)
 
 		#
