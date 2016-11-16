@@ -891,8 +891,10 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			g_object_notify(G_OBJECT(element), "frame-library-version");
 		}
 		if(g_strcmp0(ifs.FrameLibraryName().c_str(), element->frame_library_name)) {
+			GST_OBJECT_LOCK(element);
 			g_free(element->frame_library_name);
 			element->frame_library_name = g_strdup(ifs.FrameLibraryName().c_str());
+			GST_OBJECT_UNLOCK(element);
 			g_object_notify(G_OBJECT(element), "frame-library-name");
 		}
 
