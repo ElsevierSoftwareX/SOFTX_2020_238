@@ -1,4 +1,29 @@
 #!/usr/bin/env python
+#
+# Copyright (C) 2016  Cody Messick
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# A program to split a set of injections up into a smaller set of files grouped together by chirp mass
+#
+# ### Command line interface
+#
+#	+ `--target-injection-rate` [float] : Desired injection rate of output files (default: 0.01)
+#	+ `--injection-rate-tolerance` [float] : Acceptable tolerance for target injection rate, files will be written to disk once a splitting has been found such that the injection rate is target-injection-rate +- (injection-rate-tolerance*target-injection-rate) (default: 0.1)
+
 
 from optparse import OptionParser
 
@@ -69,7 +94,6 @@ def create_split_injection(processmap, process_params_dict, endtimesim_tuples, m
 def parse_command_line():
 	parser = OptionParser()
 
-	#parser.add_option("--num-output", "-n", metavar = "int", type = "int", default = 2, help = "Number of files to split input files into")
 	parser.add_option("--target-injection-rate", "-r", metavar = "s^-1", type = "float", default = 0.1, help = "Desired injection rate of output files (default: 0.01)")
 	parser.add_option("--injection-rate-tolerance", type = "float", default = 0.1, help = "Acceptable tolerance for target injection rate, files will be written to disk once a splitting has been found such that the injection rate is target-injection-rate +- (injection-rate-tolerance*target-injection-rate) (default: 0.1)")
 
