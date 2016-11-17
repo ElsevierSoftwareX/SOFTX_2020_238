@@ -219,10 +219,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if len(events) < self.min_instruments:
 				raise ValueError("candidates require >= %d events in ranking mode" % self.min_instruments)
 			params["instruments"] = (frozenset(event.ifo for event in events),)
+			# FIXME This doesnt work for more tan two detectors
+			zero_offset = sorted([(event.ifo, event.end_time + 1e-9*event.end_time_ns) for event in events])[0][-1]
+			params.t_offset = dict(("%s" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo] - zero_offset) for event in events)
 		elif mode == "counting":
 			if len(events) != 1:
 				raise ValueError("only singles are allowed in counting mode")
 			params["singles"] = (events[0].ifo,)
+			params.t_offset = {events[0].ifo: 0}
 		else:
 			raise ValueError("invalid mode '%s'" % mode)
 
@@ -233,9 +237,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# alphabetically, non-coinc sngl inspirals will have offsets of
 		# 0, and the first sngl inspiral in a coinc will have an offset
 		# of 0
-		# FIXME This doesnt work for more tan two detectors
-		zero_offset = sorted([(event.ifo, event.end_time + 1e-9*event.end_time_ns) for event in events])[0][-1]
-		params.t_offset = dict(("%s" % event.ifo, event.end_time + 1e-9*event.end_time_ns + offsetvector[event.ifo] - zero_offset) for event in events)
 		params.coa_phase = dict(("%s" % event.ifo, event.coa_phase) for event in events)
 
 		#
