@@ -68,7 +68,9 @@ def get_partial_paths_to_aggregated_data(query_time, duration):
 	if query_time is None:
 		yield ""
 	else:
-		level = 9 - int(numpy.ceil(numpy.log10(duration)))
+		level = 10 - int(numpy.ceil(numpy.log10(duration)))
+		if level > 6:
+			level = 6
 		for n in count():
 			this_time = query_time - n * 10**(10-level)
 			if this_time > 0:
