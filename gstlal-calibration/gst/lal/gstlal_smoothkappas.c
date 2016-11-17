@@ -157,53 +157,36 @@ static void get_new_median(double new_element, double *fifo_array, double *curre
 	}
 
 	int j, number_less, number_greater, number_equal;
-	double first_greater, second_greater, first_less, second_less;
+	double greater, less;
 	number_less = 0;
 	number_equal = 0;
 	number_greater = 0;
-	first_greater = G_MAXDOUBLE;
-	second_greater = G_MAXDOUBLE;
-	first_less = -G_MAXDOUBLE;
-	second_less = -G_MAXDOUBLE;
+	greater = G_MAXDOUBLE;
+	less = -G_MAXDOUBLE;
 	for(j = 0; j < array_size; j++) {
 		if(fifo_array[j] < *current_median) {
 			number_less++;
-			if(fifo_array[j] > first_less) {
-				second_less = first_less;
-				first_less = fifo_array[j];
-			} else if(fifo_array[j] > second_less)
-				second_less = fifo_array[j];
+			if(fifo_array[j] > less)
+				less = fifo_array[j];
 		}
 		else if(fifo_array[j] == *current_median)
 			number_equal++;
 		else if(fifo_array[j] > *current_median) {
 			number_greater++;
-			if(fifo_array[j] < first_greater) {
-				second_greater = first_greater;
-				first_greater = fifo_array[j];
-			} else if(fifo_array[j] < second_greater)
-				second_greater = fifo_array[j];
+			if(fifo_array[j] < greater)
+				greater = fifo_array[j];
 		}
 		else
 			g_assert_not_reached();
 	}
 
 	g_assert_cmpint(number_less + number_equal + number_greater, ==, array_size);
+	g_assert(array_size % 2);
 
-	if((!(array_size % 2)) && (number_less == array_size / 2) && (number_greater == array_size / 2))
-		*current_median = (first_greater + first_less) / 2;
-	else if((!(array_size % 2)) && (number_greater > array_size / 2))
-		*current_median = (first_greater + second_greater) / 2;
-	else if((!(array_size % 2)) && (number_less > array_size / 2))
-		*current_median = (first_less + second_less) / 2;
-	else if((!(array_size % 2)) && (number_greater == array_size / 2) && (number_less < array_size / 2))
-		*current_median = (*current_median + first_greater) / 2;
-	else if((!(array_size % 2)) && (number_less == array_size / 2) && (number_greater < array_size / 2))
-		*current_median = (*current_median + first_less) / 2;
-	else if((array_size % 2) && (number_greater > array_size / 2))
-		*current_median = first_greater;
-	else if((array_size % 2) && (number_less > array_size / 2))
-		*current_median = first_less;
+	if(number_greater > array_size / 2)
+		*current_median = greater;
+	else if(number_less > array_size / 2)
+		*current_median = less;
 
 	return;
 }
@@ -248,10 +231,21 @@ static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint 
 		get_new_median(new_element, fifo_array, current_median, array_size, index_re, index_im, FALSE); \
 		*dst = (DTYPE) get_average(*current_median, avg_array, avg_array_size, avg_index_re, avg_index_im, FALSE); \
 		if (track_bad_kappa) { \
-                        if (*dst == default_kappa) \
-                                *dst = 0.0; \
-                        else \
-                                *dst = 1.0; \
+			if(default_to_median) { \
+				double check = 1e-12 * (fabs(*current_median) + 1); \
+				double diff = fabs((double) *dst - *current_median); \
+				if(diff < check) \
+					*dst = 0.0; \
+				else \
+					*dst = 1.0; \
+			} else { \
+				double check = 1e-12 * (fabs(default_kappa) + 1); \
+				double diff = fabs((double) *dst - default_kappa); \
+				if(diff < check) \
+					*dst = 0; \
+				else \
+					*dst = 1; \
+			} \
 		} \
 		src++; \
 		dst++; \
@@ -286,14 +280,33 @@ static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, D
 		get_new_median(new_element_im, fifo_array_im, current_median_im, array_size, index_re, index_im, TRUE); \
 		*dst = (DTYPE) get_average(*current_median_re, avg_array_re, avg_array_size, avg_index_re, avg_index_im, FALSE) + I * (DTYPE) get_average(*current_median_im, avg_array_im, avg_array_size, avg_index_re, avg_index_im, TRUE); \
 		if(track_bad_kappa) { \
-			if((creal((double complex) *dst) == default_kappa_re) && (cimag((double complex) *dst) == default_kappa_im)) \
-				*dst = 0.0; \
-			else if(cimag((double complex) *dst) == default_kappa_im) \
-				*dst = 1.0; \
-			else if(creal((double complex) *dst) == default_kappa_re) \
-				*dst = I; \
-			else \
-				*dst = 1.0 + I; \
+			if(default_to_median) { \
+				double re_check = 1e-12 * (fabs(*current_median_re) + 1); \
+				double im_check = 1e-12 * (fabs(*current_median_im) + 1); \
+				double re_diff = fabs(creal((double complex) *dst) - *current_median_re); \
+				double im_diff = fabs(cimag((double complex) *dst) - *current_median_im); \
+				if(re_diff < re_check && im_diff < im_check) \
+					*dst = 0.0; \
+				else if(im_diff < im_check) \
+					*dst = 1.0; \
+				else if(re_diff < re_check) \
+					*dst = I; \
+				else \
+					*dst = 1.0 + I; \
+			} else { \
+				double re_check = 1e-12 * (fabs(default_kappa_re) + 1); \
+				double im_check = 1e-12 * (fabs(default_kappa_im) + 1); \
+				double re_diff = fabs(creal((double complex) *dst) - default_kappa_re); \
+				double im_diff = fabs(cimag((double complex) *dst) - default_kappa_im); \
+				if(re_diff < re_check && im_diff < im_check) \
+					*dst = 0.0; \
+				else if(im_diff < im_check) \
+					*dst = 1.0; \
+				else if(re_diff < re_check) \
+					*dst = I; \
+				else \
+					*dst = 1.0 + I; \
+			} \
 		} \
 		src++; \
 		dst++; \
@@ -510,7 +523,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	switch (prop_id) {
 	case ARG_ARRAY_SIZE:
-		element->array_size = g_value_get_int(value);
+		element->array_size = g_value_get_int(value) % 2 ? g_value_get_int(value) : g_value_get_int(value) + 1;
 		break;
 	case ARG_AVG_ARRAY_SIZE:
 		element->avg_array_size = g_value_get_int(value);
@@ -639,8 +652,9 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 		g_param_spec_int(
 			"array-size",
 			"Median array size",
-			"Size of the array of values from which the median is calculated",
-			G_MININT, G_MAXINT, 2048,
+			"Size of the array of values from which the median is calculated.\n\t\t\t"
+			"If an even number is chosen, 1 is added to make it odd.",
+			G_MININT, G_MAXINT, 2049,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -690,7 +704,7 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 			"Maximum acceptable real kappa offset",
 			"Maximum acceptable offset of unsmoothed real kappa from default-kappa-re\n\t\t\t"
 			"to be entered into real array from which median is calculated.",
-			0, G_MAXDOUBLE, G_MAXDOUBLE / 2,
+			0, G_MAXDOUBLE, G_MAXFLOAT / 2,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -702,7 +716,7 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 			"Maximum acceptable imaginary kappa offset",
 			"Maximum acceptable offset of unsmoothed imaginary kappa from default-kappa-im\n\t\t\t"
 			"to be entered into imaginary-part array from which median is calculated.",
-			0, G_MAXDOUBLE, G_MAXDOUBLE / 2,
+			0, G_MAXDOUBLE, G_MAXFLOAT / 2,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
