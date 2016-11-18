@@ -79,6 +79,8 @@ struct _GSTLALInsertGap {
 	guint64 last_sinkbuf_ets;
         guint64 last_sinkbuf_offset_end;
         guint64 discont_offset;
+	guint64 discont_time;
+	guint64 empty_bufs;
 
 	/* properties */
 
