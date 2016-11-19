@@ -215,25 +215,23 @@ if __name__ == '__main__':
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
-	for injection_file in injdb:
-		#
-		# Plot summary
-		#
+	#
+	# Plot summary
+	#
 
-		try:
-			subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb, "%s" % injdb[injection_file]])
-		except subprocess.CalledProcessError as plot_error:
-			print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
+	try:
+		subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb] + injdb.values())
+	except subprocess.CalledProcessError as plot_error:
+		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
-		#
-		# Plot sensitivity
-		#
+	#
+	# Plot sensitivity
+	#
 
-		if options.injection_file:
-			try:
-				subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments", injdb[injection_file]])
-			except subprocess.CalledProcessError as plot_error:
-				print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
+	try:
+		subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments"] + injdb.values())
+	except subprocess.CalledProcessError as plot_error:
+		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
 	#
 	# Summary page
