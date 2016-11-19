@@ -31,6 +31,10 @@ img {
 	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
 
+div.gchart {
+	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
 div.google-visualization-tooltip {
 	color: black;
 }
@@ -69,13 +73,15 @@ ul.tab li div {
 }
 
 /* Style the form inside the list items */
-ul.tab li input {
+input {
     display: inline-block;
-    color: black;
-    text-align: center;
-    text-decoration: none;
-    transition: 0.3s;
+    color: #2c3e50;
     font-size: 10pt;
+    vertical-align: middle;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    margin-left: 0px;
+    margin-right: 0px;
 }
 
 /* Change background color of links on hover */

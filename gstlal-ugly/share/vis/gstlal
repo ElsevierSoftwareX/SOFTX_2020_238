@@ -9,16 +9,22 @@ import time
 
 if "GPS" in form:
 	gps = form["GPS"][0]
+	if float(gps) > 0:
+		refresh =     0
+		longrefresh = 0
+	else:
+		refresh =     5
+		longrefresh = 5
 else:
 	gps = "-1"
+	refresh =     5
+	longrefresh = 5
 
-refresh =     0
-longrefresh = 0
 
 if "Duration" in form:
 	duration = form["Duration"][0]
 else:
-	duration = "600"
+	duration = "3600"
 
 if "dir" in form:
 	analysis_path = form["dir"][0]
@@ -40,16 +46,17 @@ print '''
 <head>
 	<title>gstlal CBC Latency</title>
 	<link rel="stylesheet" type="text/css" href="../gstlal.css">
+	<script type="text/javascript">var refresh=%f;</script>
 	<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 	<script type="text/javascript" src="../jquery-3.1.1.min.js"></script>
 	<script type="text/javascript" src="../gstlal.js"></script>
 	<script type="text/javascript">
 	google.charts.load('current', {'packages':['corechart', 'table', 'gauge']});
-'''
+''' % refresh
 
 print "	google.charts.setOnLoadCallback(function(){ drawLatencyStatusByNodes(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 #print "	google.charts.setOnLoadCallback(function(){ drawLatencyHistory(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawLatencyGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+#print "	google.charts.setOnLoadCallback(function(){ drawLatencyGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print ""
 print "	google.charts.setOnLoadCallback(function(){ drawSNRStatusByNodes(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawSNRHistory(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
@@ -61,10 +68,10 @@ print ""
 print "	google.charts.setOnLoadCallback(function(){ drawHorizon(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawNoise(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawPSD(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawNoiseGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawRangeGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
+#print "	google.charts.setOnLoadCallback(function(){ drawNoiseGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
+#print "	google.charts.setOnLoadCallback(function(){ drawRangeGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawUpTime(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
-print "	google.charts.setOnLoadCallback(function(){ drawUpTimeGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
+#print "	google.charts.setOnLoadCallback(function(){ drawUpTimeGauge(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawDroppedData(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawRAMStatus(%s,%s,%d,'%s','%s') });" % (gps, duration, longrefresh, analysis_path, job_ids)
 print "	google.charts.setOnLoadCallback(function(){ drawTimeSinceLast(%s,%s,%d,'%s','%s') });" % (gps, duration, refresh, analysis_path, job_ids)
@@ -74,18 +81,13 @@ print '''
 	</script>
 </head>
 
-<body style="background-color: #2c3e50;">
+<body>
 	<form>
-	<!-- <div class=topbox> -->
 		<ul class="tab">
-			<li><img style="width: 100px; margin: 5px 5px 5px 5px;" src="../gstlal.png"></li>
-			<!-- <li><a href="#ldg" class="tablinks" onclick="openGstlalTab(event, 'LDG')">LDG</a></li> -->
-			<!-- <li><a href="#dashboard" class="tablinks" onclick="openGstlalTab(event, 'Dashboard')">Dashboard</a></li>-->
-			<!-- <li><a href="#events" class="tablinks" onclick="openGstlalTab(event, 'Events')">Events</a></li> -->
+			<li><img style="margin-left:-40px; margin-top:5px; width:100" src="../gstlal.png"></li>
 			<li><a href="#summary" class="tablinks" onclick="openGstlalTab(event, 'Summary')">Live Results</a></li>
 			<li><a href="#status" class="tablinks" onclick="openGstlalTab(event, 'Status', time_since_last_wrapper, latency_status_by_nodes_wrapper, time_since_trigger_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper)">Live Status</a></li>
-			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Sensitivity', horizon_wrapper, psd_wrapper)">Live Sensitivity</a></li>
-			<li><a href="#noise" class="tablinks" onclick="openGstlalTab(event, 'Noise', noise_wrapper)">Live Noise</a></li>
+			<li><a href="#sens" class="tablinks" onclick="openGstlalTab(event, 'Data', horizon_wrapper, psd_wrapper, noise_wrapper)">Live Data</a></li>
 			<li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR', snr_status_by_nodes_wrapper, snr_history_wrapper, likelihood_status_by_nodes_wrapper, likelihood_history_wrapper, far_status_by_nodes_wrapper, far_history_wrapper)">Live SNR</a></li>
 			<li><a href="#detchar" class="tablinks" onclick="openGstlalTab(event, 'Detchar')">Detchar</a></li>
 			<li><a href="#logs" class="tablinks" onclick="openGstlalTab(event, 'Logs')">Logs</a></li>
@@ -94,29 +96,19 @@ print '''
 			<li><a href="#shifts" class="tablinks" onclick="openGstlalTab(event, 'Shifts')">Shifts</a></li>
 			<li>
 '''				
-print '			<input type="text" name="GPS" value="%s" size=8 style="margin: 7px 5px 5px 5px;"><input type="submit" value="GPS" style="margin: 7px 5px 5px 5px;">' % (gps,)
-print '			<input type="text" name="Duration" value="%s" size=4 style="margin: 7px 5px 5px 5px;">' % (duration,)
-print '			<input type="submit" value="Duration" style="margin: 7px 5px 5px 5px;">'
+print '			<input type="text" name="GPS" value="%s" size=8 ><input type="submit" value="GPS" >' % (gps,)
+print '			<input type="text" name="Duration" value="%s" size=4 >' % (duration,)
+print '			<input type="submit" value="Duration" >'
 print '''			
 			</li>
-			<div id="clock" style="text-align: right; margin: 7px 5px 5px 5px;"></div>
+			<div id="clock" style="padding-top: 15px; text-align: right;"></div>
 		</ul>
-	<!-- </div> -->
 	</form>
-
-
-	<div id="Dashboard" class="tabcontent">
-		<div id="range_gauge_wrapper"></div>
-		<div id="noise_gauge_wrapper"></div>
-		<table><tr>	<td><div id="uptime_gauge_wrapper"></div></td>
-				<td><div id="latency_gauge_wrapper"></div></td>
-		</tr></table>
-	</div>
 
 	<div id="Logs" class="tabcontent">
 		<table width=100%>
-			<tr><td><iframe src="https://alog.ligo-wa.caltech.edu/aLOG/iframeSrc.php?authExpired=&content=1&step=&callRep=&startPage=&preview=&printCall=&callUser=&addCommentTo=&callHelp=&callFileType=#&reportSection=8&reportTask=General" width=100% height=675></iframe></td>
-			<td><iframe src="https://alog.ligo-la.caltech.edu/aLOG/iframeSrc.php?authExpired=&content=1&step=&callRep=&startPage=&preview=&printCall=&callUser=&addCommentTo=&callHelp=&callFileType=#&reportSection=6&reportTask=General" width=100% height=675></iframe></td></tr>
+			<tr><td><iframe src="https://alog.ligo-wa.caltech.edu/aLOG/iframeSrc.php?authExpired=&content=1&step=&callRep=&startPage=&preview=&printCall=&callUser=&addCommentTo=&callHelp=&callFileType=#&reportSection=8&reportTask=General" width=100% height=100%></iframe></td>
+			<td><iframe src="https://alog.ligo-la.caltech.edu/aLOG/iframeSrc.php?authExpired=&content=1&step=&callRep=&startPage=&preview=&printCall=&callUser=&addCommentTo=&callHelp=&callFileType=#&reportSection=6&reportTask=General" width=100% height=100%></iframe></td></tr>
 		</table>
 	</div>
 
@@ -124,63 +116,54 @@ print '''
 '''
 
 if gps =="-1":
-	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/" width=100% height=87%></iframe>'''
+	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/" width=100% height=100%></iframe>'''
 else: 
 	date = "%04d%02d%02d" % time.gmtime(int(gps)+ 315964785)[0:3]
-	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/day/%s/" width=100%% height=87%%></iframe>''' % (date,)
+	print '''		<iframe src="https://ldas-jobs.ligo.caltech.edu/~detchar/summary/day/%s/" width=100%% height=100%%></iframe>''' % (date,)
 
 print '''
 	</div>
 
-	<!--
-	<div id="Events" class="tabcontent">
-		<iframe src="https://gracedb.ligo.org/latest/?query=gstlal" width=100% height=87%></iframe>
-	</div>
-	-->
-
-	<div id="Noise" class="tabcontent">
+	<div id="Data" class="tabcontent">
+		<div class=gchart id="horizon_wrapper"></div><br>
+		<div class=gchart id="psd_wrapper"></div><br>
 		<div id="noise_wrapper"></div><br>
-		<div id="noise_table_wrapper"></div>
-	</div>
-
-	<div id="Sensitivity" class="tabcontent">
-		<div id="horizon_wrapper"></div><br>
-		<div id="psd_wrapper"></div><br>
-		<div id="horizon_table_wrapper"></div>
+		<!-- <div id="noise_table_wrapper"></div> -->
 	</div>
 
 	<div id="SNR" class="tabcontent">
-		<div id="snr_status_by_nodes_wrapper"></div><br>
-		<div id="snr_history_wrapper"></div><br>
-		<div id="likelihood_status_by_nodes_wrapper"></div><br>
-		<div id="likelihood_history_wrapper"></div><br>
-		<div id="far_status_by_nodes_wrapper"></div><br>
-		<div id="far_history_wrapper"></div>
+		<div class=gchart id="snr_status_by_nodes_wrapper"></div><br>
+		<div class=gchart id="snr_history_wrapper"></div><br>
+		<div class=gchart id="likelihood_status_by_nodes_wrapper"></div><br>
+		<div class=gchart id="likelihood_history_wrapper"></div><br>
+		<div class=gchart id="far_status_by_nodes_wrapper"></div><br>
+		<div class=gchart id="far_history_wrapper"></div>
 	</div>
 
 	<div id="Status" class="tabcontent">
-		<div id="time_since_last_wrapper"></div><br>
-		<div id="latency_status_by_nodes_wrapper"></div><br>
-		<div id="time_since_trigger_wrapper"></div><br>
-		<div id="up_time_wrapper"></div><br>
-		<div id="dropped_wrapper"></div><br>
-		<div id="ram_status_wrapper"></div><br>
+		<div class=gchart id="time_since_last_wrapper"></div><br>
+		<div class=gchart id="latency_status_by_nodes_wrapper"></div><br>
+		<div class=gchart id="time_since_trigger_wrapper"></div><br>
+		<div class=gchart id="up_time_wrapper"></div><br>
+		<div class=gchart id="dropped_wrapper"></div><br>
+		<div class=gchart id="ram_status_wrapper"></div><br>
 		<div><iframe style="background-color:#ecf0f1;" width=100% height=1000 src="https://ldas-jobs.ligo.caltech.edu/~patrick.brockill/llstatus-gstlal/index_auto_reload.html"></iframe></div>
 	</div>
+
 	<div id="Summary" class="tabcontent">
-		<iframe src="https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/engineering/10/" width=100% height=87%></iframe>
+		<iframe src="https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/engineering/10/" width=100% height=100%></iframe>
 	</div>
 
 	<div id="Bank" class="tabcontent">
-		<iframe width=100% height=87% src="https://docs.google.com/document/d/1BCZrQQfii2cpIFSM6TdAteg3eAdpk_lncW0I-0rpIgc/pub?embedded=true"></iframe>
+		<iframe width=100% height=100% src="https://docs.google.com/document/d/1BCZrQQfii2cpIFSM6TdAteg3eAdpk_lncW0I-0rpIgc/pub?embedded=true"></iframe>
 	</div>
 
 	<div id="Doc" class="tabcontent">
-		<iframe width=100% height=87% src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true"></iframe>
+		<iframe width=100% height=100% src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true"></iframe>
 	</div>
 
 	<div id="Shifts" class="tabcontent">
-<iframe src="https://calendar.google.com/calendar/embed?src=ligo.org_070l9orc9lisqgcf2q1arp1ig0%40group.calendar.google.com&ctz=America/New_York" style="border: 0" width=100% height=87% frameborder="0" scrolling="no"></iframe>
+<iframe src="https://calendar.google.com/calendar/embed?src=ligo.org_070l9orc9lisqgcf2q1arp1ig0%40group.calendar.google.com&ctz=America/New_York" style="border: 0" width=100% height=100% frameborder="0" scrolling="no"></iframe>
 	</div>
 </body>
 </html>
