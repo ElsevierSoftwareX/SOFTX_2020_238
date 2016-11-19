@@ -22,8 +22,8 @@ class elem(object):
 class tabs(elem):
 	def __init__(self, content = []):
 		elem.__init__(self, tag="ul", content = [] + content, attributes = 'class="tab"')
-		self.content += [elem("li", [elem("img", [], """ style="width: 100px; margin: 5px 5px 5px 5px;" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
-		self.content += [elem("li", [elem("div", [time.strftime("%Y-%m-%d %H:%M")])])]
+		# self.content += [elem("li", [elem("img", [], """ style="width: 100px; margin: 5px 5px 5px 5px;" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+		#self.content += [elem("li", [elem("div", [time.strftime("%Y-%m-%d %H:%M")])])]
 
 	def __iadd__(self, content):
 		try:
@@ -52,7 +52,7 @@ class image_glob(elem):
 		td = elem("td", [])
 		tr = elem("tr", [td])
 		for img in glob.glob(globpat):
-			td += [elem("a", [elem("img", [], """ src="%s" width=400 """ % img)], """ class="fancybox" href="%s" rel="group" """ % img)]
+			td += [elem("a", [elem("img", [], """ src="%s" width=500 """ % img)], """ class="fancybox" href="%s" rel="group" """ % img)]
 		self.content = [cap, tr]
 			
 class page(object):
@@ -84,7 +84,7 @@ class page(object):
 			print >>f, c
 
 def section(text):
-	return elem("details", [elem("summary", [text])])
+	return elem("details", [elem("summary", [text])], "")
 
 def googleTableFromJson(fname, div_id = 'table_div'):
 	f = open(fname)
@@ -122,7 +122,7 @@ def googleTimelineFromJson(fname, div_id = 'timeline_div'):
 			%s_wrapper = new google.visualization.ChartWrapper({
 				chartType: 'Timeline',
 				dataTable: data,
-				options: {width:'95%%', height:400},
+				options: {width:'95%%', height:400, textStyle: {color: '#ecf0f1'}},
 				containerId: '%s'
 			});
 			%s_wrapper.draw();
