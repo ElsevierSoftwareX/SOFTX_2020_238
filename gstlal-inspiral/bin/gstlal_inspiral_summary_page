@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, os, glob, shutil
+import sys, os, glob, shutil, time
 import subprocess
 from gstlal import webpage
 from optparse import OptionParser
@@ -33,13 +33,14 @@ nav = webpage.tabs()
 #
 
 
-summary = webpage.tab("summary", "Summary information", "Summary information")
+summary = webpage.tab("summary", "Summary information", "Summary information", ["segments_div_wrapper"])
 injparams = webpage.tab("injection_params","Injection Parameters", "Injection Parameters")
-injacc = webpage.tab("injection_params_acc","Injection Parameters Accuracy", "Injection Accuracy")
-missed_found = webpage.tab("missed_found","Missed Found", "Missed Found")
+#injacc = webpage.tab("injection_params_acc","Injection Parameters Accuracy", "Injection Accuracy")
+#missed_found = webpage.tab("missed_found","Missed Found", "Missed Found")
+injrecovery = webpage.tab("injection_recovery","Injection Recovery", "Injection Recovery")
 sens = webpage.tab("search_sensitivity","Search Sensitivity", "Search Sensitivity")
 back = webpage.tab("background","Background", "Background")
-chisq = webpage.tab("chisq","Chi-squared", "Chi-squared")
+#chisq = webpage.tab("chisq","Chi-squared", "Chi-squared")
 money = webpage.tab("money","Money Plots", "Money Plots")
 
 
@@ -47,27 +48,42 @@ money = webpage.tab("money","Money Plots", "Money Plots")
 # add the sections to the nav bar and the nav bar to the page
 #
 
-
-nav+=[summary, injparams, injacc, missed_found, sens, back, chisq, money]
+nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+nav+=[summary, injparams, injrecovery, sens, back, money]
+nav+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
 thispage+=nav
-
+thispage+=webpage.elem("br",[])
 
 #
 # Add summary page content to the summary page tab
 #
 
 
-summary_about = webpage.elem("p", ["Summary information: This page provides a summary of theanalysis, including the parameters specified in generating the workflow, where the analysis was run, number of triggers, analyzed live time and horizon distance."])
+summary_about = webpage.elem("p", ["This page was generated on %s by %s in the working directory <code>%s</code>." % (time.strftime("%Y-%m-%d %H:%M"), os.environ["USER"], os.environ["PWD"])])
 
+
+
+
+#FIXME assumes the zero lag database is the first tag
+summary_seg = webpage.section("Segments")
+thispage.header_content.append(webpage.googleTimelineFromJson(os.path.join(opts.glob_path, '%s_segments.json' % opts.output_user_tag[0]), "segments_div"))
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.output_user_tag[0]), "segment_table_div"))
+summary_seg += [webpage.elem("div", [], "id=segments_div width=100% height=500")]
+summary_seg += [webpage.elem("div", [], "id=segment_table_div width=100% height=500")]
+
+summary_env = webpage.section("Environment")
 makefile = [f for f in glob.glob("Makefile*") if "Makefile.offline_analysis_rules" not in f][0]
+tmpcontent = ["\n".join(["%s=%s" % (k, os.environ[k]) for k in ("PATH", "PYTHONPATH", "PKG_CONFIG_PATH", "GST_PLUGIN_PATH")])]
+summary_env += [webpage.elem("pre", tmpcontent)]
 
 summary_make = webpage.section("Analysis Makefile")
 summary_make += [webpage.elem("pre", [webpage.elem("code", [open(makefile).read()])])]
+
 summary_commands = webpage.section("Commands run")
 summary_commands += [webpage.elem("pre", [webpage.elem("samp", ["\n".join(["\t %s" % x for x in  subprocess.check_output(["make", "-B", "-n", "-f", makefile]).split("\n") ])])])]
 
 
-summary_div = summary([summary_about, summary_make, summary_commands])
+summary_div = summary([summary_about, summary_seg, summary_env, summary_make, summary_commands])
 
 
 #
@@ -123,7 +139,6 @@ inj_acc_spin += webpage.image_glob(os.path.join(opts.glob_path, '*2_chi_acc_scat
 inj_acc_snr = webpage.section("SNR Recovery")
 inj_acc_snr += webpage.image_glob(os.path.join(opts.glob_path, '*2_snr_rec_scatter*.png'), "Injected expected SNR vs recovered SNR")
 
-inj_acc_div = injacc([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_eff_dist, inj_acc_spin, inj_acc_snr])
 
 
 #
@@ -146,7 +161,7 @@ fm_mtab = webpage.section("Missed Table")
 horizon += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
 
 for tag in opts.output_user_tag:
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sinjection_summary.json' % tag), "%sinjection_summary" % tag))
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_injection_summary.json' % tag), "%sinjection_summary" % tag))
 	fm_tab += [webpage.elem("p", ["Summary of missed and found injections broken up by detector time for %s" % tag])]
 	fm_tab += [webpage.elem("div", [], "id=%sinjection_summary" % tag)]
 
@@ -173,10 +188,11 @@ for tag in opts.output_user_tag:
 	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag), "Expected SNR of found and missed injections as a function of time")
 
 # FIXME stupid convention to rely on the first tag being all of them.
-thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%smissed_summary.json' % opts.output_user_tag[0]), "%smissed_summary" % opts.output_user_tag[0]))
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]), "%smissed_summary" % opts.output_user_tag[0]))
 fm_mtab += [webpage.elem("p", ["Missed Injection Table"])]
 fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % opts.output_user_tag[0])]
-missed_found_div = missed_found([horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
+
+inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_eff_dist, inj_acc_spin, inj_acc_snr, horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
 
 
 #
@@ -188,18 +204,18 @@ sens_about = webpage.elem("p", ["""This page shows plots that characterize the o
 
 sens_chirp = webpage.section("Binned by chirp mass")
 sens_total = webpage.section("Binned by total mass")
-sens_m1m2 = webpage.section("Binned by mass1-mass2")
-sens_spin = webpage.section("Binned by aligned spin")
-sens_eta = webpage.section("Binned by mass ratio")
+#sens_m1m2 = webpage.section("Binned by mass1-mass2")
+#sens_spin = webpage.section("Binned by aligned spin")
+#sens_eta = webpage.section("Binned by mass ratio")
 
 for tag in opts.output_user_tag:
         sens_chirp += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_CHIRP_MASS*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
         sens_total += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_TOTAL_MASS*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
-        sens_m1m2 += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_MASS1_MASS2*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
-        sens_spin += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_ALIGNED_SPIN*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s")
-        sens_eta += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_MASS_RATIO*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
+        #sens_m1m2 += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_MASS1_MASS2*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
+        #sens_spin += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_ALIGNED_SPIN*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s")
+        #sens_eta += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_MASS_RATIO*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
 
-sens_div = sens([sens_about, sens_chirp, sens_total, sens_m1m2, sens_spin, sens_eta])
+sens_div = sens([sens_about, sens_chirp, sens_total])
 
 
 #
@@ -211,7 +227,7 @@ back_about = webpage.elem("p", ["This page shows the ingredients that go into ra
 
 back_snrchi = webpage.section("SNR and chi-squared")
 back_trigs = webpage.section("Background Triggers")
-back_ratio = webpage.section("SNR ratios")
+#back_ratio = webpage.section("SNR ratios")
 back_rate = webpage.section("Rates")
 
 back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'), "Single Detector Background SNR-chisq Distributions")
@@ -222,11 +238,10 @@ back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchir
 back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_chieff_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
 back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_tau0_vs_tau3_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
 
-back_ratio += webpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'), "")
+#back_ratio += webpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'), "")
 
 back_rate +=  webpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'), "")
 
-back_div = back([back_about, back_snrchi, back_trigs, back_ratio, back_rate])
 
 
 #
@@ -243,11 +258,12 @@ chisq_deff = webpage.section("Effective Distance")
 chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
 chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_mc_vs_rho_*closedbox*.png'), "Chi-squared vs chirp mass for single detectors after coincidence.")
 
-chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'), "Comparison of SNR in pairs of detectors.")
+#chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'), "Comparison of SNR in pairs of detectors.")
 
 chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*closedbox*.png'), "Comparison of effective distance in pairs of detectors.")
 
-chisq_div = chisq([chisq_about, chisq_dist, chisq_snr, chisq_deff])
+#back_div = back([back_about, back_snrchi, back_trigs, back_ratio, back_rate, chisq_about, chisq_dist, chisq_deff])
+back_div = back([back_about, back_snrchi, back_trigs, back_rate, chisq_about, chisq_dist, chisq_deff])
 
 
 #
@@ -293,7 +309,7 @@ if opts.open_box:
 #
 
 
-thispage += [summary_div, inj_params_div, inj_acc_div, missed_found_div, sens_div, back_div, chisq_div, money_div]
+thispage += [summary_div, inj_params_div, inj_recovery_div, sens_div, back_div, money_div]
 
 
 #
