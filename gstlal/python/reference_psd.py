@@ -650,7 +650,7 @@ def polyfit(psd, minsample, maxsample, order, verbose = False):
 	if verbose:
 		print >> sys.stderr, "\nFit polynomial is: \n\nlog(PSD) = \n", p, "\n\nwhere x = f / f_min\n"
 	data = numpy.exp(p(numpy.log(f)))
-	olddata = psd.data
+	olddata = psd.data.data
 	olddata[minsample:maxsample] = data
 	psd = lal.CreateREAL8FrequencySeries(
 		name = psd.name,
