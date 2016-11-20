@@ -349,7 +349,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						# A scale is given
 						mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
 						# use max mchirp in a given svd bank to decide gate threshold
-						bank_mchirps = [template_mchirp_dict['%04d' % (i + numchunks * chunk_counter,)][1] for i, s in enumerate(svd_bank_strings)]
+						bank_mchirps = [template_mchirp_dict[bgbin_index][1] for bgbin_index in bgbin_indices]
 						threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
 					else:
 						if options.ht_gate_threshold is not None:
@@ -408,6 +408,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
 					output_paths = [subdir_path([output_seg_inj_path, bgbin_index]) for bgbin_index in bgbin_indices]
 					output_names = [inspiral_pipe.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_index, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, bgbin_index in enumerate(bgbin_indices)]
+A
 					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%s_DIST_STATS_%s' % (bgbin_index, sim_name), int(seg[0]), int(seg[1]), '.xml.gz', path = output_paths[i]) for i, bgbin_index in enumerate(bgbin_indices)]
 					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, injection = True))]
 					try:
@@ -424,7 +425,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						# A scale is given
 						mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
 						# use max mchirp in a given svd bank to decide gate threshold
-						bank_mchirps = [template_mchirp_dict['%04d' % (i + numchunks * chunk_counter,)][1] for i, s in enumerate(svd_bank_strings)]
+						bank_mchirps = [template_mchirp_dict[bgbin_index][1] for bgbin_index in bgbin_indices]
 						threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
 					else:
 						if options.ht_gate_threshold is not None:
