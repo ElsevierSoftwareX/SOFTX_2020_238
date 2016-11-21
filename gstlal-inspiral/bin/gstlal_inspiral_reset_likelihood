@@ -55,6 +55,7 @@ def parse_command_line():
 
 	parser.add_option("--zerolag-ranking-file", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
 	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
+	parser.add_option("--skip-seg-and-rd-reset", action = "store_true", help = "Skip adjusting the segments and ranking data. This would make the entire use of this program a no op unless --add-zerolag-to-background is used.  So you have to do that.")
 	parser.add_option("--segment-and-horizon", action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
 	options, filenames = parser.parse_args()
 
@@ -70,6 +71,9 @@ def parse_command_line():
 	if options.segment_and_horizon is None:
 		raise ValueError("--segment-and-horizon required")
 	seglistdict = parse_segment_and_horizon(options)
+
+	if options.skip_seg_and_rd_reset and not options.add_zerolag_to_background:
+		raise ValueError("if using --skip-seg-and-rd-reset you must use --add-zerolag-to-background or else this program will do nothing")
 
 	return options, process_params, seglistdict
 
@@ -89,25 +93,24 @@ if options.add_zerolag_to_background:
 	for instrument in like_segs:
 		like_cpd.background_rates["%s_snr_chi" % instrument].array += like_cpd.zero_lag_rates["%s_snr_chi" % instrument].array
 
-# replace thae live time with the user specified live time
-new_like_segs = segs
-new_zlike_segs = segs
+if not options.skip_seg_and_rd_reset:
+	# replace thae live time with the user specified live time
+	new_like_segs = segs
+	new_zlike_segs = segs
 
-
-
-# Make the observed counts match the background sample but with the correct normalization
-for instruments in zlike_rd.background_likelihood_rates:
-	num_zero_lag = zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() * float(abs(new_like_segs.extent_all())) / float(abs(like_segs.extent_all()))
-	if num_zero_lag <= 100 or numpy.isnan(num_zero_lag):
-		warnings.warn("found %f zero lag counts, replacing with 100" % num_zero_lag)
-		num_zero_lag = 100
-	zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:]
-	zlike_rd.zero_lag_likelihood_rates[instruments].array /= zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()
-	zlike_rd.zero_lag_likelihood_rates[instruments].array *= num_zero_lag
-	# make the counts integers
-	zlike_rd.zero_lag_likelihood_rates[instruments].array[zlike_rd.zero_lag_likelihood_rates[instruments].array < 1.] = 0.
-	if options.verbose:
-		print >> sys.stderr, "replacing %s with %f zero lag counts" % (str(instruments), zlike_rd.zero_lag_likelihood_rates[instruments].array.sum())
+	# Make the observed counts match the background sample but with the correct normalization
+	for instruments in zlike_rd.background_likelihood_rates:
+		num_zero_lag = zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() * float(abs(new_like_segs.extent_all())) / float(abs(like_segs.extent_all()))
+		if num_zero_lag <= 100 or numpy.isnan(num_zero_lag):
+			warnings.warn("found %f zero lag counts, replacing with 100" % num_zero_lag)
+			num_zero_lag = 100
+		zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:]
+		zlike_rd.zero_lag_likelihood_rates[instruments].array /= zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()
+		zlike_rd.zero_lag_likelihood_rates[instruments].array *= num_zero_lag
+		# make the counts integers
+		zlike_rd.zero_lag_likelihood_rates[instruments].array[zlike_rd.zero_lag_likelihood_rates[instruments].array < 1.] = 0.
+		if options.verbose:
+			print >> sys.stderr, "replacing %s with %f zero lag counts" % (str(instruments), zlike_rd.zero_lag_likelihood_rates[instruments].array.sum())
 
 
 # write out the background file
