@@ -319,9 +319,14 @@ class StreamThinca(object):
 
 		# define once-off ntuple_comparefunc() so we can pass the
 		# coincidence segment in as a default value for the seg
-		# keyword argument
+		# keyword argument and so that we can cut out single detector
+		# events with an SNR less than 5.  Less than SNR 5 triggers
+		# will never produce an LR greater than 4, so we can safely
+		# discard them.
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - coincidence_back_off, boundary - coincidence_back_off)):
 			# False/0 = keep, True/non-0 = discard
+			if len(events) == 1 and event[0].snr < 5:
+				return True
 			return min(event.end for event in events) not in seg
 
 		# find coincs.  NOTE:  do not pass veto segments to this
