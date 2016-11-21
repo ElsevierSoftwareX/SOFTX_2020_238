@@ -174,9 +174,6 @@ class lvalert_listen_node(pipeline.CondorDAGNode):
 	"""
 	def __init__(self, job, dag):
 		pipeline.CondorDAGNode.__init__(self,job)
-		self.add_var_opt("username", raw_input("lvalert username: "))
-		self.add_var_opt("password", raw_input("lvalert password: "))
-		self.add_var_opt("server", "lvalert.cgca.uwm.edu")
 		self.add_var_opt("config-file", "lvalert.ini")
 		self.add_var_opt("resource", "%s:%s" % (socket.getfqdn(), os.getcwd()))
 		self.add_var_opt("dont-wait", "")
@@ -263,6 +260,12 @@ def parse_command_line():
 	inj_dq_channel_dict = datasource.channel_dict_from_channel_list(options.inj_dq_channel_name)
 	inj_framexmit_dict = datasource.framexmit_dict_from_framexmit_list(options.inj_framexmit_addr)
 
+	inj_range_dict = {}
+	for tag, channel in inj_name_dict.items():
+		inj_range_dict.setdefault(channel, []).append(tag)
+	for k,v in inj_range_dict.items():
+		inj_range_dict[k] = sorted(v)
+
 	if inj_channel_dict:
 		for nodes in inj_channel_dict.keys():
 			if not ( set(inj_channel_dict[nodes].keys()) == set(channel_dict.keys()) ):
@@ -273,7 +276,7 @@ def parse_command_line():
 	options.likelihood_files = [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
 	options.zerolag_likelihood_files = [lal.CacheEntry(line).url for line in open(options.zerolag_likelihood_cache)]
 
-	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, inj_name_dict
+	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, inj_name_dict, inj_range_dict
 
 
 #
@@ -281,7 +284,7 @@ def parse_command_line():
 #
 
 
-options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, inj_name_dict = parse_command_line()
+options, filenames, bank_cache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, inj_name_dict, inj_range_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -488,7 +491,8 @@ if options.injection_file:
 
 	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
-	aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"inj_aggregator", "job-tag": os.getcwd(), "job-start": 1000, "num-jobs": len(jobTags), "route": ["far_history", "likelihood_history", "snr_history"], "data-type":["max", "min"]})
+	for injfile, jobrange in inj_range_dict.items():
+		aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"%s_aggregator" % injfile.split(".")[0], "job-tag": os.getcwd(), "job-start": int(min(jobrange))+1000, "num-jobs": len(jobrange), "route": ["far_history", "likelihood_history", "snr_history"], "data-type":["max", "min"]})
 
 else:
 
