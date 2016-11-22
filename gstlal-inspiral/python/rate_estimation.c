@@ -149,8 +149,9 @@ static double log_posterior(const double *ln_f_over_b, int n, double Rf, double 
 	if(i) {
 		/*
 		 * for these entries, compute the sum of log(Rf f / (Rb b)
-		 * + 1) by approximating it with a numerical integration
-		 * of the exact addend
+		 * + 1) by approximating it with a numerical integration of
+		 * the addend (evaluated using the approximations described
+		 * above)
 		 */
 		gsl_function _integrand = {
 			.function = integrand,
@@ -163,9 +164,8 @@ static double log_posterior(const double *ln_f_over_b, int n, double Rf, double 
 	}
 
 	/*
-	 * now compute the sum of log(Rf f / (Rb b) + 1) for the remaining
-	 * entries with an explicit loop but using approximations
-	 * (described above) for cases in which the addend is large
+	 * now explicitly compute the sum of log(Rf f / (Rb b) + 1) for the
+	 * remaining entries
 	 */
 
 	for(; i < n; i++) {
