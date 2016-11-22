@@ -94,8 +94,7 @@ if __name__ == '__main__':
 	# Match 5 digit directories
 	dir_pattern = re.compile('[0-9]{5}')
 
-	seg_files = glob.glob('%s/total_cumulative_segments.xml.gz' % options.directory)
-
+	seg_files_to_merge = []
 	noninj_files_to_merge = []
 	inj_files_to_merge = {}
 	inj_file_bins = {}
@@ -118,13 +117,15 @@ if __name__ == '__main__':
 	result_dirs = sorted([d for d in os.listdir(options.directory) if dir_pattern.match(d)])
 	for n, d in enumerate(result_dirs):
 
+		cumulative_segments = os.path.join(os.path.join(options.directory, d), 'H1L1-0000_SEGMENTS-%s00000-100000.xml.gz' % (d,))
 		noninjdball = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite' % (d,))
 		for injection_file in inj_file_bins:
 			injdball[injection_file] = os.path.join(os.path.join(options.directory, d), inspiral_pipe.T050017_filename(instruments, "ALL_LLOID_%s" % injtag(injection_file) , int('%s00000' % (d,)), int('%d00000' % (int(d)+1,)), '.sqlite'))
 
-		if float(now()) - float("%s00000" % d) > 125000 and all([os.path.exists(f) for f in injdball.values()]+[os.path.exists(noninjdball)]):
+		if float(now()) - float("%s00000" % d) > 125000 and all([os.path.exists(f) for f in injdball.values()]+[os.path.exists(noninjdball), os.path.exists(cumulative_segments)]):
 			print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"
 			noninj_files_to_merge.append(noninjdball)
+			seg_files_to_merge.append(cumulative_segments)
 			for injection_file in inj_file_bins:
 				inj_files_to_merge.setdefault(injection_file,[]).append(injdball[injection_file])
 			continue
@@ -134,6 +135,12 @@ if __name__ == '__main__':
 		# Merge the files of this directory
 		subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % noninjdball] + list(pool.map(process_mass_bin, args)))
 		noninj_files_to_merge.append(noninjdball)
+		seg_files = glob.glob("%s/%s/H1L1-0000_SEGMENTS-*.xml.gz" % (options.directory, d))
+		if len(seg_files) >= 2:
+			subprocess.check_call(["gstlal_segments_operations", "--union", "--verbose", "--segment-name", "statevectorsegments", "--segment-name", "whitehtsegments", "--output-segment-name", "statevectorsegments", "--output-segment-name", "whitehtsegments", "--output-file", "%s" % cumulative_segments] + seg_files)
+			seg_files_to_merge.append(cumulative_segments)
+		elif len(seg_files) == 1:
+			seg_files_to_merge.append(seg_files[0])
 
 		for injection_file in inj_file_bins:
 			args = ([massbin, result_dirs, n, d, options, injtag(injection_file), 1, cluster_file] for massbin in inj_file_bins[injection_file])
@@ -158,24 +165,24 @@ if __name__ == '__main__':
 		if os.path.exists(injdb[injection_file]):
 			os.remove(injdb[injection_file])
 
-	progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files))
-	for f in noninj_files_to_merge + seg_files:
+	progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files_to_merge))
+	for f in noninj_files_to_merge + seg_files_to_merge:
 		subprocess.check_call(["ligolw_sqlite", "--verbose", "--database", "%s" % noninjdb, "%s" % f])
 		# Do not cluster! the online analysis doesn't do a global clustering stage!!
 		try:
-			subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % noninjdb])
+			subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", simplify_file,  "%s" % noninjdb])
 		except subprocess.CalledProcessError as runsqlite_error:
 			print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, noninjdb, f)
 		progressbar.increment()
 	del progressbar
 
 	for injection_file in inj_file_bins:
-		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge[injection_file]) + len(seg_files))
-		for f in inj_files_to_merge[injection_file] + seg_files:
+		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge[injection_file]) + len(seg_files_to_merge))
+		for f in inj_files_to_merge[injection_file] + seg_files_to_merge:
 			subprocess.check_call(["ligolw_sqlite", "--verbose", "--database", "%s" % injdb[injection_file], "%s" % f])
 			# Do not cluster! the online analysis doesn't do a global clustering stage!!
 			try:
-				subprocess.check_call(["lalapps_run_sqlite", "--sql-file", simplify_file,  "%s" % injdb[injection_file]])
+				subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", simplify_file,  "%s" % injdb[injection_file]])
 			except subprocess.CalledProcessError as runsqlite_error:
 				print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, injdb[injection_file], f)
 			progressbar.increment()
