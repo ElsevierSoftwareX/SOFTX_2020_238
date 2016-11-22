@@ -1,0 +1,538 @@
+
+#ER10
+#START = 1161957376
+#STOP = 1162957376 # 1000000 seconds
+
+# O1 chunk 1
+START = 1126051217
+STOP = 1127271617
+
+# One injection every 100s with 25s window
+TIME_STEP = 100
+TIME_INT = 1
+
+# 100 / 13 ~ 7 (7.7)
+DT = 7 # Must be int
+
+START_01 = $(shell echo $$(( $(START) + $(DT) )) )
+START_02 = $(shell echo $$(( $(START_01) + $(DT) )) )
+START_03 = $(shell echo $$(( $(START_02) + $(DT) )) )
+START_04 = $(shell echo $$(( $(START_03) + $(DT) )) )
+START_05 = $(shell echo $$(( $(START_04) + $(DT) )) )
+START_06 = $(shell echo $$(( $(START_05) + $(DT) )) )
+START_07 = $(shell echo $$(( $(START_06) + $(DT) )) )
+START_08 = $(shell echo $$(( $(START_07) + $(DT) )) )
+START_09 = $(shell echo $$(( $(START_08) + $(DT) )) )
+START_10 = $(shell echo $$(( $(START_09) + $(DT) )) )
+START_11 = $(shell echo $$(( $(START_10) + $(DT) )) )
+START_12 = $(shell echo $$(( $(START_11) + $(DT) )) )
+START_13 = $(shell echo $$(( $(START_12) + $(DT) )) )
+
+# all-injections (except imbh for distance)
+# Choose injections according to the (1.4-1.4) chirp-weighted distance. Inject uniformly between 30 and 300 Mpc
+MIN_DIST = 5000  # 5 Mpc
+MAX_DIST = 300000 # 300 Mpc
+
+# IMBH distance
+MIN_DIST_IMBH = 30000  # 30 Mpc
+MAX_DIST_IMBH = 7500000 # 7.5 Gpc
+
+# Injection generation starts at 15Hz
+F_LOWER = 15
+
+# Random seed is needed in all cases, but must be unique
+SEED_01 = 72338
+SEED_02 = 92456
+SEED_03 = 98247
+SEED_04 = 32582
+SEED_05 = 84522
+SEED_06 = 24529
+SEED_07 = 52780
+SEED_08 = 90245
+SEED_09 = 52872
+SEED_10 = 14083
+SEED_11 = 28452
+SEED_12 = 20137
+SEED_13 = 23509
+
+# BNS 1
+# bns-injection-1
+BNS_INJECTION_1 = bns_inj_1.xml
+BNS_WF_1 = SpinTaylorT2threePointFivePN
+
+# BNS 2
+# bns-injection-2
+BNS_INJECTION_2 = bns_inj_2.xml
+BNS_WF_2 = SpinTaylorT4threePointFivePN
+
+# NSBH 1
+# nsbh-template-bank-aligned-injections
+NSBH_INJECTION_1 = nsbh_inj_1.xml
+NSBH_WF_1 = SEOBNRv4pseudoFourPN
+
+# NSBH 2
+# nsbh-aligned-other-imr-injections
+NSBH_INJECTION_2 = nsbh_inj_2.xml
+NSBH_WF_2 = IMRPhenomDpseudoFourPN
+
+# NSBH 3
+# nsbh-precessing-inspiral-only-injections
+NSBH_INJECTION_3 = nsbh_inj_3.xml
+NSBH_WF_3 = SpinTaylorT4threePointFivePN
+
+# NSBH 4
+# nsbh-imr-precessing-approxone-injections
+NSBH_INJECTION_4 = nsbh_inj_4.xml
+NSBH_WF_4 = SEOBNRv3_optpseudoFourPN
+
+# BBH 1
+# bbh-aligned-injections
+BBH_INJECTION_1 = bbh_inj_1.xml
+BBH_WF_1 = SEOBNRv4pseudoFourPN
+
+# BBH 2
+# bbh-aligned-otherapprox-injections
+BBH_INJECTION_2 = bbh_inj_2.xml
+BBH_WF_2 = IMRPhenomDpseudoFourPN
+
+# BBH 3
+# bbh-precessing-injections
+BBH_INJECTION_3 = bbh_inj_3.xml
+BBH_WF_3 = SEOBNRv3_optpseudoFourPN
+
+# IMBH 1
+# imbh-aligned-injections
+IMBH_INJECTION_1 = imbh_inj_1.xml
+IMBH_WF_1 = SEOBNRv4pseudoFourPN
+
+# IMBH 2
+# imbh-aligned-otherapprox-injections
+IMBH_INJECTION_2 = imbh_inj_2.xml
+IMBH_WF_2 = IMRPhenomDpseudoFourPN
+
+# IMBH 3
+# imbh-precessing-injections
+IMBH_INJECTION_3 = imbh_inj_3.xml
+IMBH_WF_3 = SEOBNRv3_optpseudoFourPN
+
+# IMBH 4
+# imbh-higherordermode-injections
+IMBH_INJECTION_4 = imbh_inj_4.xml
+IMBH_WF_4 = EOBNRv2HMpseudoFourPN
+
+all : split
+
+split : $(BNS_INJECTION_1) $(BNS_INJECTION_2) $(NSBH_INJECTION_1) $(NSBH_INJECTION_2) $(NSBH_INJECTION_3) $(NSBH_INJECTION_4) $(BBH_INJECTION_1) $(BBH_INJECTION_2) $(BBH_INJECTION_3) $(IMBH_INJECTION_1) $(IMBH_INJECTION_2) $(IMBH_INJECTION_3) $(IMBH_INJECTION_4)
+	gstlal_inspiral_split_injections $^ -r 0.065
+
+# BNS 1
+$(BNS_INJECTION_1) :
+	lalapps_inspinj \
+		--m-distr componentMass \
+		--min-mass1 1 \
+		--max-mass1 3 \
+		--min-mass2 1 \
+		--max-mass2 3 \
+		--min-mtotal 2 \
+		--max-mtotal 6 \
+		--gps-start-time $(START_01) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--min-spin1 0 \
+		--max-spin1 0.4 \
+		--min-spin2 0 \
+		--max-spin2 0.4 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(BNS_WF_1) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection startend \
+		--seed $(SEED_01) \
+		--output $@
+
+# BNS 2
+$(BNS_INJECTION_2) :
+	lalapps_inspinj \
+		--m-distr componentMass \
+		--min-mass1 1 \
+		--max-mass1 3 \
+		--min-mass2 1 \
+		--max-mass2 3 \
+		--min-mtotal 2 \
+		--max-mtotal 6 \
+		--gps-start-time $(START_02) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--min-spin1 0 \
+		--max-spin1 0.4 \
+		--min-spin2 0 \
+		--max-spin2 0.4 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(BNS_WF_2) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection startend \
+		--seed $(SEED_02) \
+		--output $@
+
+# NSBH 1
+$(NSBH_INJECTION_1) :
+	lalapps_inspinj \
+		--m-distr    componentMass \
+		--min-mass1  2 \
+		--max-mass1  97 \
+		--min-mass2  1 \
+		--max-mass2  3 \
+		--min-mtotal 3 \
+		--max-mtotal 100 \
+		--gps-start-time $(START_03) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.998 \
+		--min-spin2 0 \
+		--max-spin2 0.4 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(NSBH_WF_1) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_03) \
+		--output $@
+
+# NSBH 2
+$(NSBH_INJECTION_2) :
+	lalapps_inspinj \
+		--m-distr    componentMass \
+		--min-mass1  2 \
+		--max-mass1  97 \
+		--min-mass2  1 \
+		--max-mass2  3 \
+		--min-mtotal 3 \
+		--max-mtotal 100 \
+		--gps-start-time $(START_04) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.85 \
+		--min-spin2 0 \
+		--max-spin2 0.4 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(NSBH_WF_2) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_04) \
+		--output $@
+ 
+# NSBH 3
+$(NSBH_INJECTION_3) :
+	lalapps_inspinj \
+		--m-distr    componentMass \
+		--min-mass1  2 \
+		--max-mass1  16 \
+		--min-mass2  1 \
+		--max-mass2  3 \
+		--min-mtotal 3 \
+		--max-mtotal 19 \
+		--gps-start-time $(START_05) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--min-spin1 0 \
+		--max-spin1 0.998 \
+		--min-spin2 0 \
+		--max-spin2 0.4 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(NSBH_WF_3) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection startend \
+		--seed $(SEED_05) \
+		--output $@
+
+# NSBH 4
+$(NSBH_INJECTION_4) :
+	lalapps_inspinj \
+		--m-distr    componentMass \
+		--min-mass1  2 \
+		--max-mass1  97 \
+		--min-mass2  1 \
+		--max-mass2  3 \
+		--min-mtotal 3 \
+		--max-mtotal 100 \
+		--gps-start-time $(START_06) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.9899 \
+		--min-spin2 0 \
+		--max-spin2 0.4 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(NSBH_WF_4) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_06) \
+		--output $@
+
+# BBH 1
+$(BBH_INJECTION_1) :
+	lalapps_inspinj \
+		--m-distr    totalMass \
+		--min-mass1  2 \
+		--max-mass1  98 \
+		--min-mass2  2 \
+		--max-mass2  98 \
+		--min-mtotal 4 \
+		--max-mtotal 100 \
+		--gps-start-time $(START_07) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.998 \
+		--min-spin2 0 \
+		--max-spin2 0.998 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(BBH_WF_1) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_07) \
+		--output $@
+
+# BBH 2
+$(BBH_INJECTION_2) :
+	lalapps_inspinj \
+		--m-distr    totalMass \
+		--min-mass1  2 \
+		--max-mass1  98 \
+		--min-mass2  2 \
+		--max-mass2  98 \
+		--min-mtotal 4 \
+		--max-mtotal 100 \
+		--gps-start-time $(START_08) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.85 \
+		--min-spin2 0 \
+		--max-spin2 0.85 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(BBH_WF_2) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_08) \
+		--output $@
+
+# BBH 3
+$(BBH_INJECTION_3) :
+	lalapps_inspinj \
+		--m-distr    totalMass \
+		--min-mass1  2 \
+		--max-mass1  98 \
+		--min-mass2  2 \
+		--max-mass2  98 \
+		--min-mtotal 4 \
+		--max-mtotal 100 \
+		--gps-start-time $(START_09) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.9899 \
+		--min-spin2 0 \
+		--max-spin2 0.9899 \
+		--dchirp-distr uniform \
+		--min-distance $(MIN_DIST) \
+		--max-distance $(MAX_DIST) \
+		--waveform $(BBH_WF_3) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_09) \
+		--output $@
+
+# IMBH 1
+$(IMBH_INJECTION_1) :
+	lalapps_inspinj \
+		--m-distr    totalMass \
+		--min-mass1  50 \
+		--max-mass1  550 \
+		--min-mass2  50 \
+		--max-mass2  550 \
+		--min-mtotal 100 \
+		--max-mtotal 600 \
+		--gps-start-time $(START_10) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.998 \
+		--min-spin2 0 \
+		--max-spin2 0.998 \
+		--d-distr uniform \
+		--min-distance $(MIN_DIST_IMBH) \
+		--max-distance $(MAX_DIST_IMBH) \
+		--waveform $(IMBH_WF_1) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_10) \
+		--output $@
+
+# IMBH 2
+$(IMBH_INJECTION_2) :
+	lalapps_inspinj \
+		--m-distr    totalMass \
+		--min-mass1  50 \
+		--max-mass1  550 \
+		--min-mass2  50 \
+		--max-mass2  550 \
+		--min-mtotal 100 \
+		--max-mtotal 600 \
+		--gps-start-time $(START_11) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.85 \
+		--min-spin2 0 \
+		--max-spin2 0.85 \
+		--d-distr uniform \
+		--min-distance $(MIN_DIST_IMBH) \
+		--max-distance $(MAX_DIST_IMBH) \
+		--waveform $(IMBH_WF_2) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_11) \
+		--output $@
+
+# IMBH 3
+$(IMBH_INJECTION_3) :
+	lalapps_inspinj \
+		--m-distr    totalMass \
+		--min-mass1  50 \
+		--max-mass1  550 \
+		--min-mass2  50 \
+		--max-mass2  550 \
+		--min-mtotal 100 \
+		--max-mtotal 600 \
+		--gps-start-time $(START_12) \
+		--gps-end-time $(STOP) \
+		--enable-spin \
+		--aligned \
+		--min-spin1 0 \
+		--max-spin1 0.9899 \
+		--min-spin2 0 \
+		--max-spin2 0.9899 \
+		--d-distr uniform \
+		--min-distance $(MIN_DIST_IMBH) \
+		--max-distance $(MAX_DIST_IMBH) \
+		--waveform $(IMBH_WF_3) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_12) \
+		--output $@
+
+# IMBH 4
+$(IMBH_INJECTION_4) :
+	lalapps_inspinj \
+		--m-distr    totalMass \
+		--min-mass1  50 \
+		--max-mass1  550 \
+		--min-mass2  50 \
+		--max-mass2  550 \
+		--min-mtotal 100 \
+		--max-mtotal 600 \
+		--gps-start-time $(START_13) \
+		--gps-end-time $(STOP) \
+		--disable-spin \
+		--d-distr uniform \
+		--min-distance $(MIN_DIST_IMBH) \
+		--max-distance $(MAX_DIST_IMBH) \
+		--waveform $(IMBH_WF_3) \
+		--f-lower $(F_LOWER) \
+		--i-distr uniform \
+		--l-distr random \
+		--t-distr uniform \
+		--time-step $(TIME_STEP) \
+		--time-interval $(TIME_INT) \
+		--taper-injection start \
+		--seed $(SEED_13) \
+		--output $@
+
+clean :
+	rm $(BNS_INJECTION_1) $(BNS_INJECTION_2) $(NSBH_INJECTION_1) $(NSBH_INJECTION_2) $(NSBH_INJECTION_3) $(NSBH_INJECTION_4) $(BBH_INJECTION_1) $(BBH_INJECTION_2) $(BBH_INJECTION_3) $(IMBH_INJECTION_1) $(IMBH_INJECTION_2) $(IMBH_INJECTION_3) $(IMBH_INJECTION_4)
+
