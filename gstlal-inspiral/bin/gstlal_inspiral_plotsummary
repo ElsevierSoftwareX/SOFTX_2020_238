@@ -379,6 +379,7 @@ AS
                                 sid = simulation_id
                         ORDER BY
                                 lr
+			DESC
                         LIMIT 1
                 ) AS coinc_event_id
         FROM
