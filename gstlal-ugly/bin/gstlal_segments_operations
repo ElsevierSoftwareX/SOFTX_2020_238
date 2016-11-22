@@ -25,6 +25,7 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
 from optparse import OptionParser
+import os
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -32,60 +33,75 @@ lsctables.use_in(LIGOLWContentHandler)
 
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("--segment-file1", metavar = "file", help = "Set the first segment file")
-	parser.add_option("--segment-file2", metavar = "file", help = "Set the first segment file")
-	parser.add_option("--segment-name1", metavar = "name", default = "datasegments", help = "Set the name of segments default datasegments")
-	parser.add_option("--segment-name2", metavar = "name", default = "datasegments", help = "Set the name of segments default datasegments")
-	parser.add_option("--intersection", action = "store_true", help = "intersection of --segment-name1 in segment-file1 and --segment-name2 in segment-file2")
-	parser.add_option("--union", action = "store_true", help = "union of --segment-name1 in segment-file1 and --segment-name2 in segment-file2")
-	parser.add_option("--diff", action = "store_true", help = "diff of --segment-name1 in segment-file1 and --segment-name2 in segment-file2")
+	parser.add_option("--segment-name", metavar = "name", action = "append", help = "Set the name of segments default datasegments (can be given multiple times)")
+	parser.add_option("--intersection", action = "store_true", help = "intersection of --segment-name across provided segment files")
+	parser.add_option("--union", action = "store_true", help = "union of --segment-name across provided segment files")
+	parser.add_option("--diff", action = "store_true", help = "diff of --segment-name across provided segment files (cannot provide more than 2 segment files if invoking --diff)")
 	parser.add_option("--output-file", metavar = "file", help = "Set the name of the output file")
-	parser.add_option("--output-segment-name", metavar = "name", default = "datasegments", help = "Set the name of output segments default datasegments")
+	parser.add_option("--output-segment-name", metavar = "name", action = "append", help = "Set the name of output segments default datasegments (can be given multiple times)")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 	
 	if len([op for op in (options.intersection, options.union, options.diff) if op is not None]) != 1:
 		raise ValueError("must specify exactly one of --intersection, --union or --diff")
 
+	assert len(options.output_segment_name) == len(options.segment_name), "must provide same number of input and output segment names"
+
+	for option in ("segment_name", "output_segment_name"):
+		if not getattr(options, option):
+			setattr(options, option, ["datasegments"])
+
+	if options.diff:
+		assert len(filenames) == 2, "must provide exactly 2 segment files for diff operation"
+	else:
+		assert len(filenames) >= 2, "must provide at least 2 segment files, %d provided" % len(filenames)
+
 	return options, filenames
 
 options, filenames = parse_command_line()
 
-def extract_segs(fname, segname):
-	xmldoc = ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler)
-	return ligolw_segments.segmenttable_get_by_name(xmldoc, segname).coalesce()
+def extract_segs(fname, segnames):
+	llwsegments = ligolw_segments.LigolwSegments(ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler))
+	return dict((segname, llwsegments.get_by_name(segname).coalesce()) for segname in segnames)
 
-segs1 = extract_segs(options.segment_file1, options.segment_name1)
-segs2 = extract_segs(options.segment_file2, options.segment_name2)
-
-if options.verbose:
-	print "segs 1 live time: ", abs(segs1) 
-	print "segs 2 live time: ", abs(segs2) 
-	print "two or more detectors on segs1: ", abs(segmentsUtils.vote(segs1.values(), 2))
-	print "two or more detectors on segs2: ", abs(segmentsUtils.vote(segs2.values(), 2))
-
-if options.diff:
-	segs = segs1 - segs2
-if options.intersection:
-	segs = segs1 & segs2
-if options.union:
-	segs = segs1 | segs2
+segsdicts = {}
+for segfile in filenames:
+	segsdicts[segfile] = extract_segs(segfile, options.segment_name)
 
 if options.verbose:
-	print "segs  live time: ", abs(segs) 
-	print "two or more detectors on segs: ", abs(segmentsUtils.vote(segs.values(), 2))
+	for segfile in filenames:
+		print "\n%s" % segfile
+		for segname, segslist in segsdicts[segfile].items():
+			print "%s live time: %s, two or more detectors on: %f" % (segname, abs(segslist), abs(segmentsUtils.vote(segslist.values(), 2)))
+
+segslist = []
+for segname in options.segment_name:
+	segslist.append(segsdicts[filenames[0]][segname])
+	for segfile in filenames[1:]:
+		if options.union:
+			segslist[-1] |= segsdicts[segfile][segname]
+		elif options.intersection:
+			segslist[-1] &= segsdicts[segfile][segname]
+		elif options.diff:
+			segslist[-1] -= segsdicts[segfile][segname]
+
+if options.verbose:
+	print "\nresults"
+	for i, segs in enumerate(segslist):
+		print "%s live time: %s, two or more detectors on: %f" % (options.output_segment_name[i], abs(segs), abs(segmentsUtils.vote(segs.values(), 2)))
 
 if options.output_file:
 	xmldoc = ligolw.Document()
 	xmldoc.appendChild(ligolw.LIGO_LW())
 
 	process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], options.__dict__)
-	ligolw_process.set_process_end_time(process)
 
 	lwseglists = ligolw_segments.LigolwSegments(xmldoc)
-	lwseglists.insert_from_segmentlistdict(segs, options.output_segment_name)
+	for i, segs in enumerate(segslist):
+		lwseglists.insert_from_segmentlistdict(segs, options.output_segment_name[i])
 	lwseglists.optimize()
 	lwseglists.finalize(process)
 
+	ligolw_process.set_process_end_time(process)
 	ligolw_utils.write_filename(xmldoc, options.output_file, verbose = options.verbose, gz = options.output_file.endswith('.gz'))
 
