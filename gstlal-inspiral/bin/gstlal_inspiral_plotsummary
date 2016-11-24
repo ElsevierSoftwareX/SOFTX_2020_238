@@ -715,12 +715,32 @@ FROM
 					return sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1]
 				else:
 					return sim.get_eff_dist(list(instruments)[0])
+			def decisive_chirp_distance(sim, instruments):
+				if len(instruments) > 1:
+					return sorted(sim.get_chirp_eff_dist(instrument) for instrument in instruments)[1]
+				else:
+					return sim.get_chirp_eff_dist(list(instruments)[0])
+
+			def decisive_charsnr(sim, oninstruments, partinstruments):
+				if len(oninstruments) == 2:
+					if len(partinstruments) == 2:
+						return sorted([sim.alpha3, sim.alpha4])[0]
+					if len(partinstruments) == 1:
+						ifo, = partinstruments
+						if ifo == 'H1':
+							return sim.alpha3
+						if ifo == 'L1':
+							return sim.alpha4
+				if len(oninstruments) == 1:
+					return sorted([sim.alpha3, sim.alpha4])[1]
+				else:
+					raise ValueError("More than 2 instruments not supported for injection snr calculation at this time.")
 
 			for cnt, (title, x_label, x_func, y_label, y_func, filename_fragment) in enumerate((
 				(r"$\textrm{Distance vs.\ Chirp Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$D$ ($\mathrm{Mpc}$)", lambda sim, instruments: sim.distance, "d_vs_mchirp"),
 				(r"$\textrm{Decisive Distance vs.\ Chirp Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_mchirp"),
-				(r"$\textrm{Chirp Decisive Distance vs.\ Chirp Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{chirp}}$ ($\mathrm{Mpc}$)", decisive_distance, "chirpdist_vs_mchirp"),
-				(r"$\textrm{Chirp Decisive Distance vs.\ Eta (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"$\mathrm{Decisive} D_{\mathrm{chirp}}$ ($\mathrm{Mpc}$)", decisive_distance, "chirpdist_vs_eta"),
+				(r"$\textrm{Chirp Decisive Distance vs.\ Chirp Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{chirp, eff}}$ ($\mathrm{Mpc}$)", decisive_chirp_distance, "chirpdist_vs_mchirp"),
+				(r"$\textrm{Chirp Decisive Distance vs.\ Eta (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"$\mathrm{Decisive} D_{\mathrm{chirp, eff}}$ ($\mathrm{Mpc}$)", decisive_chirp_distance, "chirpdist_vs_eta"),
 				(r"$\textrm{Decisive Distance vs.\ Total Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_mtotal"),
 				(r"$\textrm{Decisive Distance vs.\ Effective Spin (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_chi"),
 				(r"$\textrm{Decisive Distance vs.\ Time (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_t")
@@ -755,26 +775,20 @@ FROM
 				yield fig, filename_fragment, False
 
 			for cnt, (title, x_label, x_func, y_label, y_func, filename_fragment) in enumerate((
-				(r"Decisive Characteristic SNR vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"Decisive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_mchirp"),
-				(r"Decisive Characteristic SNR vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"Decisive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_mtotal"),
-				(r"Decisive Characteristic SNR vs.\ Eta (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"Decisive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_eta"),
-				(r"Decisive Characteristic SNR vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"Decisive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_chi"),
-				(r"Decisive Characteristic SNR vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"Decisivive Characteristic SNR", lambda sim: sorted([sim.alpha3, sim.alpha4])[1], "dec_expsnr_vs_t")
+				(r"Decisive Characteristic SNR vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"Decisive Characteristic SNR", decisive_charsnr, "dec_expsnr_vs_mchirp"),
+				(r"Decisive Characteristic SNR vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"Decisive Characteristic SNR", decisive_charsnr, "dec_expsnr_vs_mtotal"),
+				(r"Decisive Characteristic SNR vs.\ Eta (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"Decisive Characteristic SNR", decisive_charsnr, "dec_expsnr_vs_eta"),
+				(r"Decisive Characteristic SNR vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"Decisive Characteristic SNR", decisive_charsnr, "dec_expsnr_vs_chi"),
+				(r"Decisive Characteristic SNR vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"Decisivive Characteristic SNR", decisive_charsnr, "dec_expsnr_vs_t")
 			)):
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
 				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
-					if max([sim.alpha3 for sim in sims]) > 20:
-						axes.semilogy([x_func(sim) for sim in sims], [y_func(sim) for sim in sims], c="cornflowerblue", marker=".", linestyle="None")
-					else:
-						axes.plot([x_func(sim) for sim in sims], [y_func(sim) for sim in sims], c="cornflowerblue", marker=".", linestyle="None")
+					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, self.on_instruments, participating_instruments) for sim in sims], ".")
 				if missed:
 					legend.append("Missed")
-					if max([sim.alpha3 for sim in missed]) > 20:
-						axes.semilogy([x_func(sim) for sim in missed], [y_func(sim) for sim in missed], "k.")
-					else:
-						axes.plot([x_func(sim) for sim in missed], [y_func(sim) for sim in missed], "k.")
+					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments, participating_instruments) for sim in missed], "k.")
 				if legend:
 					axes.legend(legend)
 				axes.set_title(title)
