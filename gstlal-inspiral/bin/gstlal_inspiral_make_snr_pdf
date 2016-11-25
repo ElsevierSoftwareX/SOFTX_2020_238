@@ -32,11 +32,11 @@
 #
 
 
+import itertools
 from optparse import OptionParser
 import sys
 
 
-from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.text_progress_bar import ProgressBar
@@ -154,7 +154,7 @@ snrpdf = inspiral_extrinsics.SNRPDF(snr_cutoff = 4.)
 
 for horizon_distances in options.horizon_distances:
 	for n in range(options.min_instruments, len(horizon_distances) + 1):
-		for instruments in iterutils.choices(horizon_distances, n):
+		for instruments in itertools.combinations(horizon_distances, n):
 			snrpdf.add_to_cache(instruments, horizon_distances, verbose = options.verbose)
 
 

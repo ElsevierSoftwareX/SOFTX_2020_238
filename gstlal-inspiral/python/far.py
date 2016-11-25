@@ -59,7 +59,6 @@ from scipy import stats
 import sys
 
 
-from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import param as ligolw_param
@@ -840,7 +839,7 @@ class RankingData(object):
 		else:
 			instruments = tuple(instruments)
 
-		for key in [frozenset(ifos) for n in range(coinc_params_distributions.min_instruments, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
+		for key in [frozenset(ifos) for n in range(coinc_params_distributions.min_instruments, len(instruments) + 1) for ifos in itertools.combinations(instruments, n)]:
 			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])

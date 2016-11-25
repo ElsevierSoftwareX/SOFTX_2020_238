@@ -42,9 +42,10 @@
 #
 
 
-import sys
+import itertools
 import os
 import shutil
+import sys
 from gstlal import far
 from gstlal import inspiral_pipe
 from gstlal.stats import horizonhistory
@@ -53,7 +54,6 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw import ligolw
 from glue import segments
-from glue import iterutils
 from glue.lal import CacheEntry
 from lal import LIGOTimeGPS
 from pylal import rate
@@ -183,7 +183,7 @@ diststats.horizon_history.update(horizon_history)
 #
 
 for i in range(options.min_instruments, len(options.instruments) + 1):
-	for ifos in [frozenset(x) for x in iterutils.choices(tuple(options.instruments), i)]:
+	for ifos in [frozenset(x) for x in itertools.combinations(tuple(options.instruments), i)]:
 		diststats.zero_lag_rates["instruments"][ifos,] = min(n_zerolag[ifo] for ifo in ifos) / 50.**(i-1)
 		if options.verbose:
 			print "setting number of zerolag events for %s to %d" % (ifos, diststats.zero_lag_rates["instruments"][ifos,])

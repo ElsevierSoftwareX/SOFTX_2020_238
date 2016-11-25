@@ -32,6 +32,7 @@ except ImportError:
 	NaN = float("nan")
 	NegInf = float("-inf")
 	PosInf = float("+inf")
+import itertools
 import math
 import numpy
 import os
@@ -40,7 +41,6 @@ from scipy import stats
 import sys
 
 
-from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import array as ligolw_array
@@ -153,7 +153,7 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instrume
 
 	# initialize output.  dictionary mapping instrument combination to
 	# probability (initially all 0).
-	result = dict.fromkeys((frozenset(instruments) for n in xrange(min_instruments, len(names) + 1) for instruments in iterutils.choices(names, n)), 0.0)
+	result = dict.fromkeys((frozenset(instruments) for n in xrange(min_instruments, len(names) + 1) for instruments in itertools.combinations(names, n)), 0.0)
 	if not result:
 		raise ValueError("not enough instruments in horizon_history to satisfy min_instruments")
 

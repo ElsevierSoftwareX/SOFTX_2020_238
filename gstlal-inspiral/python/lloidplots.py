@@ -27,8 +27,11 @@ __organization__ = ["LIGO", "California Institute of Technology"]
 __copyright__    = "Copyright 2010, Leo Singer"
 
 
-import gstlal.pipeutil # FIXME: needed because we have GStreamer stuff mixed in where it shouldn't be
+import itertools
 import pylab
+
+
+import gstlal.pipeutil # FIXME: needed because we have GStreamer stuff mixed in where it shouldn't be
 
 """Dictionary of strings for useful units."""
 units = {
@@ -126,7 +129,6 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	import numpy as np
 	import lal
 	import lalsimulation
-	from glue.iterutils import choices
 
 
 	# Some useful functions
@@ -185,7 +187,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 
 	# Draw time delay loci, if arrival times were provided.
 	if arrival_times is not None:
-		for sites in choices(arrival_times.keys(), 2):
+		for sites in itertools.combinations(arrival_times.keys(), 2):
 			site0_location = location_for_site(sites[0])
 			site1_location = location_for_site(sites[1])
 			site_separation = site0_location - site1_location

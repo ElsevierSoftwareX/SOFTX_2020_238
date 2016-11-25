@@ -29,6 +29,7 @@
 
 
 import bisect
+import itertools
 import math
 import matplotlib
 import matplotlib.figure
@@ -55,7 +56,6 @@ import sys
 
 import lal
 
-from glue import iterutils
 from glue import segments
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
@@ -1648,7 +1648,7 @@ class Segments(object):
 
 			analyzable_instruments_set = set(segs.keys())
 			for n in range(1, 1 + len(segs)):
-				for ifo_combos in iterutils.choices(list(analyzable_instruments_set), n):
+				for ifo_combos in itertools.combinations(list(analyzable_instruments_set), n):
 					this = segs.intersection(ifo_combos) - segs.union(analyzable_instruments_set - set(ifo_combos))
 					if len(this) > 0:
 						self.table.append([name, ",".join(ifo_combos), float(this.extent()[0]), float(this.extent()[1]), float(abs(this))])

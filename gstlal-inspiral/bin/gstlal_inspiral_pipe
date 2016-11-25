@@ -95,7 +95,6 @@ import itertools
 # import the modules we need to build the pipeline
 import lal
 import lal.series
-from glue import iterutils
 from glue import pipeline
 from glue.lal import Cache, CacheEntry
 from glue import segments
@@ -163,7 +162,7 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
 	segment_length = int(20 * start_pad)
 	for n in range(min_instruments, 1 + len(analyzable_instruments_set)):
-		for ifo_combos in iterutils.choices(list(analyzable_instruments_set), n):
+		for ifo_combos in itertools.combinations(list(analyzable_instruments_set), n):
 			# never analyze H1H2 or H2L1 times
 			#if set(ifo_combos) == set(('H1', 'H2')) or set(ifo_combos) == set(('L1', 'H2')):
 			#	print >> sys.stderr, "not analyzing: ", ifo_combos, " only time"
