@@ -268,7 +268,7 @@ static void *receive_thread(void *arg)
 
 		len = FRAMERCV(element)->receive(data, 0, &sequence, &timestamp, &duration);
 		if(len < 0) {
-			free(data);
+			delete_wrapper(data);
 			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameRecv.receive() failed"));
 			g_mutex_lock(&element->buffer_lock);
 			element->recv_status = GST_FLOW_ERROR;
