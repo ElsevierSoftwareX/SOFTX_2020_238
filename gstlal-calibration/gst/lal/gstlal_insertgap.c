@@ -27,13 +27,13 @@
  * that data as a gap, replacing it with a specified value, or both. The
  * criteria for bad data is specified by the property #bad_data_intervals,
  * which is an array of at most 16 elements. Array indices 0, 2, 4, etc.,
- * represent minima, and array indices 1, 3, 5, etc., represent the 
- * corresponding maxima. For example, if 
- * #bad_data_intervals = [0, 1, 9, 10],
- * then any values that fall either in the closed interval [0, 1] or in 
- * the closed interval [9, 10] will be rejected and gapped and/or replaced
+ * represent maxima, and array indices 1, 3, 5, etc., represent the 
+ * corresponding minima. For example, if 
+ * #bad_data_intervals = [0, 1, 2, 3],
+ * then any values that fall in one of the closed intervals [-inf, 0],
+ * [1, 2], or [3, inf] will be rejected and gapped and/or replaced
  * as specified by the user. To reject a single value, say zero,
- * #bad_data_intervals should be chosen to be [0, 0].
+ * #bad_data_intervals should be [-max_double, 0, 0, max_double].
  * If the data stream is complex, the real and and imaginary parts of
  * each input is tested, and if either is bad, the value is rejected.
  * The #bad_data_intervals and #replace_value properties are applied to
@@ -149,7 +149,9 @@ static gboolean check_data(double complex data, double *bad_data_intervals, gint
 	gint i;
 	if(complex_data){
 		double data_im = cimag(data);
-		for(i = 0; i < array_length; i += 2) {
+		if(data_re <= bad_data_intervals[0] || data_re >= bad_data_intervals[array_length - 1] || data_im <= bad_data_intervals[0] || data_im >= bad_data_intervals[array_length - 1])
+			return TRUE;
+		for(i = 1; i < array_length - 1; i += 2) {
 			if((data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1]) || (data_im >= bad_data_intervals[i] && data_im <= bad_data_intervals[i + 1]))
 				return TRUE;
 		}
@@ -158,7 +160,9 @@ static gboolean check_data(double complex data, double *bad_data_intervals, gint
 		if(remove_inf && (isinf(data_re) || isinf(data_im)))
 			return TRUE;
 	} else {
-		for(i = 0; i < array_length; i += 2) {
+		if(data_re <= bad_data_intervals[0] || data_re >= bad_data_intervals[array_length - 1])
+			return TRUE;
+		for(i = 1; i < array_length - 1; i += 2) {
 			if(data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1])
 				return TRUE;
 		}
@@ -818,8 +822,8 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 			"Bad data intervals",
 			"Array of at most 16 elements containing minima and maxima of closed intervals\n\t\t\t"
 			"in which data is considered unacceptable and will be replaced with gaps and/or\n\t\t\t"
-			"the replace-value. Array indices 0, 2, 4, etc., represent minima, and\n\t\t\t"
-			"array indices 1, 3, 5, etc., represent the corresponding maxima.",
+			"the replace-value. Array indices 0, 2, 4, etc., represent maxima, and\n\t\t\t"
+			"array indices 1, 3, 5, etc., represent the corresponding minima.",
 			g_param_spec_double(
 				"coefficient",
 				"Coefficient",

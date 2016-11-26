@@ -216,7 +216,7 @@ static double get_average(double new_element, double *fifo_array, gint array_siz
 
 
 #define DEFINE_SMOOTH_BUFFER(DTYPE) \
-static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint buffer_size, double *fifo_array, double *avg_array, double default_kappa, double *current_median, double maximum_offset, gint array_size, gint avg_array_size, int *index_re, int *index_im, int *avg_index_re, int *avg_index_im, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa) { \
+static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint buffer_size, double *fifo_array, double *avg_array, double default_kappa, double *current_median, double maximum_offset, gint array_size, gint avg_array_size, int *index_re, int *index_im, int *avg_index_re, int *avg_index_im, int *num_bad_in_avg_re, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa) { \
 	gint i; \
 	double new_element; \
 	for(i = 0; i < buffer_size; i++) { \
@@ -224,28 +224,22 @@ static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint 
 			if(default_to_median) \
 				new_element = *current_median; \
 			else \
-				new_element = default_kappa; \
-		} else \
+			new_element = default_kappa; \
+ \
+			if(*num_bad_in_avg_re <= avg_array_size) \
+				(*num_bad_in_avg_re)++; \
+		} else { \
 			new_element = (double) *src; \
+			*num_bad_in_avg_re = 0; \
+		} \
  \
 		get_new_median(new_element, fifo_array, current_median, array_size, index_re, index_im, FALSE); \
 		*dst = (DTYPE) get_average(*current_median, avg_array, avg_array_size, avg_index_re, avg_index_im, FALSE); \
 		if (track_bad_kappa) { \
-			if(default_to_median) { \
-				double check = 1e-12 * (fabs(*current_median) + 1); \
-				double diff = fabs((double) *dst - *current_median); \
-				if(diff < check) \
-					*dst = 0.0; \
-				else \
-					*dst = 1.0; \
-			} else { \
-				double check = 1e-12 * (fabs(default_kappa) + 1); \
-				double diff = fabs((double) *dst - default_kappa); \
-				if(diff < check) \
-					*dst = 0; \
-				else \
-					*dst = 1; \
-			} \
+			if((*current_median == default_kappa) || (default_to_median && *num_bad_in_avg_re >= avg_array_size)) \
+				*dst = 0.0; \
+			else \
+				*dst = 1.0; \
 		} \
 		src++; \
 		dst++; \
@@ -255,7 +249,7 @@ static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint 
 
 
 #define DEFINE_SMOOTH_COMPLEX_BUFFER(DTYPE) \
-static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, DTYPE complex *dst, gint buffer_size, double *fifo_array_re, double *fifo_array_im, double *avg_array_re, double *avg_array_im, double default_kappa_re, double default_kappa_im, double *current_median_re, double *current_median_im, double maximum_offset_re, double maximum_offset_im, gint array_size, gint avg_array_size, int *index_re, int *index_im, int *avg_index_re, int *avg_index_im, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa) { \
+static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, DTYPE complex *dst, gint buffer_size, double *fifo_array_re, double *fifo_array_im, double *avg_array_re, double *avg_array_im, double default_kappa_re, double default_kappa_im, double *current_median_re, double *current_median_im, double maximum_offset_re, double maximum_offset_im, gint array_size, gint avg_array_size, int *index_re, int *index_im, int *avg_index_re, int *avg_index_im, int *num_bad_in_avg_re, int *num_bad_in_avg_im, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa) { \
 	gint i; \
 	double new_element_re, new_element_im; \
 	for(i = 0; i < buffer_size; i++) { \
@@ -265,48 +259,37 @@ static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, D
 				new_element_re = *current_median_re; \
 			else \
 				new_element_re = default_kappa_re; \
+ \
+			if(*num_bad_in_avg_re <= avg_array_size) \
+				(*num_bad_in_avg_re)++; \
 		} else { \
 			new_element_re = creal(doublesrc); \
+			*num_bad_in_avg_re = 0; \
 		} \
 		if(gap || cimag(doublesrc) > default_kappa_im + maximum_offset_im || cimag(doublesrc) < default_kappa_im - maximum_offset_im || isnan(cimag(doublesrc)) || isinf(cimag(doublesrc)) || cimag(doublesrc) == 0) { \
 			if(default_to_median) \
 				new_element_im = *current_median_im; \
 			else \
 				new_element_im = default_kappa_im; \
+ \
+			if(*num_bad_in_avg_im <= avg_array_size) \
+				(*num_bad_in_avg_im)++; \
 		} else { \
 			new_element_im = cimag(doublesrc); \
+			*num_bad_in_avg_im = 0; \
 		} \
 		get_new_median(new_element_re, fifo_array_re, current_median_re, array_size, index_re, index_im, FALSE); \
 		get_new_median(new_element_im, fifo_array_im, current_median_im, array_size, index_re, index_im, TRUE); \
 		*dst = (DTYPE) get_average(*current_median_re, avg_array_re, avg_array_size, avg_index_re, avg_index_im, FALSE) + I * (DTYPE) get_average(*current_median_im, avg_array_im, avg_array_size, avg_index_re, avg_index_im, TRUE); \
 		if(track_bad_kappa) { \
-			if(default_to_median) { \
-				double re_check = 1e-12 * (fabs(*current_median_re) + 1); \
-				double im_check = 1e-12 * (fabs(*current_median_im) + 1); \
-				double re_diff = fabs(creal((double complex) *dst) - *current_median_re); \
-				double im_diff = fabs(cimag((double complex) *dst) - *current_median_im); \
-				if(re_diff < re_check && im_diff < im_check) \
-					*dst = 0.0; \
-				else if(im_diff < im_check) \
-					*dst = 1.0; \
-				else if(re_diff < re_check) \
-					*dst = I; \
-				else \
-					*dst = 1.0 + I; \
-			} else { \
-				double re_check = 1e-12 * (fabs(default_kappa_re) + 1); \
-				double im_check = 1e-12 * (fabs(default_kappa_im) + 1); \
-				double re_diff = fabs(creal((double complex) *dst) - default_kappa_re); \
-				double im_diff = fabs(cimag((double complex) *dst) - default_kappa_im); \
-				if(re_diff < re_check && im_diff < im_check) \
-					*dst = 0.0; \
-				else if(im_diff < im_check) \
-					*dst = 1.0; \
-				else if(re_diff < re_check) \
-					*dst = I; \
-				else \
-					*dst = 1.0 + I; \
-			} \
+			if((*current_median_re == default_kappa_re || (default_to_median && *num_bad_in_avg_re >= avg_array_size)) && (*current_median_im == default_kappa_im || (default_to_median && *num_bad_in_avg_im >= avg_array_size))) \
+				*dst = 0.0; \
+			else if(*current_median_im == default_kappa_im || (default_to_median && *num_bad_in_avg_im >= avg_array_size)) \
+				*dst = 1.0; \
+			else if(*current_median_re == default_kappa_re || (default_to_median && *num_bad_in_avg_re >= avg_array_size)) \
+				*dst = I; \
+			else \
+				*dst = 1.0 + I; \
 		} \
 		src++; \
 		dst++; \
@@ -461,16 +444,16 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if(element->data_type == GSTLAL_SMOOTHKAPPAS_F32) {
 		gint buffer_size = outmap.size / element->unit_size;
-		result = smooth_buffer_float((const float *) inmap.data, (float *) outmap.data, buffer_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, gap, element->default_to_median, element->track_bad_kappa);
+		result = smooth_buffer_float((const float *) inmap.data, (float *) outmap.data, buffer_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, gap, element->default_to_median, element->track_bad_kappa);
 	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_F64) {
 		gint buffer_size = outmap.size / element->unit_size;
-		result = smooth_buffer_double((const double *) inmap.data, (double *) outmap.data, buffer_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, gap, element->default_to_median, element->track_bad_kappa);
+		result = smooth_buffer_double((const double *) inmap.data, (double *) outmap.data, buffer_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, gap, element->default_to_median, element->track_bad_kappa);
 	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_Z64) {
 		gint buffer_size = outmap.size / element->unit_size;
-		result = smooth_complex_buffer_float((const float complex *) inmap.data, (float complex *) outmap.data, buffer_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, gap, element->default_to_median, element->track_bad_kappa);
+		result = smooth_complex_buffer_float((const float complex *) inmap.data, (float complex *) outmap.data, buffer_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, &element->num_bad_in_avg_im, gap, element->default_to_median, element->track_bad_kappa);
 	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_Z128) { 
 		gint buffer_size = outmap.size / element->unit_size;
-		result = smooth_complex_buffer_double((const double complex *) inmap.data, (double complex *) outmap.data, buffer_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, gap, element->default_to_median, element->track_bad_kappa);
+		result = smooth_complex_buffer_double((const double complex *) inmap.data, (double complex *) outmap.data, buffer_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, &element->num_bad_in_avg_im, gap, element->default_to_median, element->track_bad_kappa);
 	} else {
 		g_assert_not_reached();
 	}
@@ -770,6 +753,8 @@ static void gstlal_smoothkappas_init(GSTLALSmoothKappas *element)
 	element->index_im = 0;
 	element->avg_index_re = 0;
 	element->avg_index_im = 0;
+	element->num_bad_in_avg_re = G_MAXINT;
+	element->num_bad_in_avg_im = G_MAXINT;
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }

@@ -528,7 +528,7 @@ def connect_notify_datavalid_signal(demux, pad):
 if options.data_source == "frames":
 	demux.connect("pad-added", connect_notify_datavalid_signal)
 
-# Get everything hooked up and blocked off to no more than 1 second buffers
+# Get everything hooked up
 for key, chan in zip(headkeys, channel_list):
 	head_dict[key] = calibration_parts.hook_up(pipeline, demux, chan[1], instrument)
 
@@ -1046,7 +1046,7 @@ if not options.no_dq_vector:
 	if not options.no_kappac or not options.no_kappatst or not options.no_kappapu or not options.no_fcc:	
 		smoothingok = pipeparts.mkbitvectorgen(pipeline, calibration_parts.mkqueue(pipeline, obsreadytee), bit_vector=1024, threshold=4)
 		smoothingok = pipeparts.mkcapsfilter(pipeline, smoothingok, calibstate_caps)
-		smoothingok = pipeparts.mkgate(pipeline, smoothingok, control = pipeparts.mkqueue(pipeline, obsreadytee), threshold = 4, attack_length =-(median_smoothing_samples+factors_average_samples+68*16))
+		smoothingok = pipeparts.mkgate(pipeline, smoothingok, control = pipeparts.mkqueue(pipeline, obsreadytee), threshold = 4, attack_length =-(median_smoothing_samples+factors_average_samples + int(options.compute_factors_sr * options.demodulation_filter_settle_time)))
 		smoothingok = pipeparts.mkbitvectorgen(pipeline, smoothingok, bit_vector = 1024, nongap_is_control = True)
 		smoothingok = pipeparts.mkcapsfilter(pipeline, smoothingok, calibstate_caps)
 
@@ -1109,9 +1109,6 @@ if not options.no_dq_vector:
 	# First combine higher order bits to determine h(t)-OK
 	higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, filtersok, htproduced, obsreadytee, noinvalidinput))
 	htok_threshold = 28+33554432
-	if options.apply_kappatst or options.apply_kappapu or options.apply_kappac:
-		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, smoothingok))
-		htok_threshold += 1024
 	if options.apply_kappatst:
 		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, ktstSmoothInRange))
 		htok_threshold += 2048
@@ -1150,8 +1147,7 @@ if not options.no_dq_vector:
 
 	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, nogap, higherbitstee, obsintenttee, htok, hwinjcbc, hwinjburst, hwinjdetchar, hwinjstoch))
 	if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
-		if not options.apply_kappatst and not options.apply_kappapu and not options.apply_kappac:
-			calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, smoothingok))
+		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, smoothingok))
 		if not options.no_coherence:
 			calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, coherence_bits))
 	if not options.no_kappatst:
@@ -1290,9 +1286,9 @@ if options.data_source == "frames":
 elif options.data_source == "lvshm":
 	tm = time.gmtime()
 	start = int(lal.UTCToGPS(tm))
-# start writing frame files that only start after the desired start time + filter latency + kappa settling (if computing kappas)
+# start time of first frame file is the desired start time + either filter latency or kappa settling (if computing kappas), whichever is bigger
 if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
-	output_start = start + int(filter_settle_time) + options.median_smoothing_time + options.factors_averaging_time  + 68 # 68 additional seconds seem necessary to make sure the low-pass filter for demodulation is also settled (I think that's the cause at least)
+	output_start = start + max(int(filter_settle_time), options.demodulation_filter_settle_time + options.median_smoothing_time + options.factors_averaging_time)
 else:
 	output_start = start + int(filter_settle_time)
 
