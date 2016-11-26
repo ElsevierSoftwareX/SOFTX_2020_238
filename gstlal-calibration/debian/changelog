@@ -1,3 +1,11 @@
+gstlal-calibration (1.0.9-1) unstable; urgency=low
+
+  * Changed calib_state_vector calculation to better accommodate changes
+    in kappa smoothing.
+  * Added check for overflow input to pipeline.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sat, 26 Nov 2016 13:39:09 -0600
+
 gstlal-calibration (1.0.8-1) unstable; urgency=low
 
   * Addition of option --kappas-default-to-median to replace rejected
