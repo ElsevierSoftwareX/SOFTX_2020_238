@@ -829,7 +829,8 @@ FROM
 
 
 class ParameterAccuracyPlots(object):
-	def __init__(self):
+	def __init__(self, far_thresh):
+		self.far_thresh = far_thresh
 		self.sim_sngl_pairs = {}
 
 	def add_contents(self, contents):
@@ -839,12 +840,13 @@ class ParameterAccuracyPlots(object):
 		n_simcolumns = len(contents.sim_inspiral_table.columnnames)
 
 		for values in contents.connection.cursor().execute("SELECT * FROM sim_sngl_far"):
-			sim = contents.sim_inspiral_table.row_from_cols(values)
-			sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
-			far = values[-1]
-			del sim.process_id, sim.source, sim.simulation_id
-			del sngl.process_id, sngl.event_id
-			self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl, far))
+			if values[-1] <= self.far_thresh:
+				sim = contents.sim_inspiral_table.row_from_cols(values)
+				sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
+				far = values[-1]
+				del sim.process_id, sim.source, sim.simulation_id
+				del sngl.process_id, sngl.event_id
+				self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl, far))
 
 
 	def finish(self):
@@ -858,7 +860,7 @@ class ParameterAccuracyPlots(object):
 		for (waveform, instrument), pairs in self.sim_sngl_pairs.items():
 			fig, axes = create_plot(r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)")
 			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [sngl.mchirp - sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [sngl.mchirp - sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-6, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "mchirp_acc_abs_scatter_%s_%s" % (waveform, instrument), False
 
@@ -869,7 +871,7 @@ class ParameterAccuracyPlots(object):
 
 			fig, axes = create_plot(r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$) / Inj. $M_{\mathrm{chirp}}$")
 			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-6, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "mchirp_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
@@ -880,7 +882,7 @@ class ParameterAccuracyPlots(object):
 
 			fig, axes = create_plot(r"Inj. $M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$")
 			axes.set_title(r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			cb = axes.scatter([sim.mtotal for sim, sngl, far in pairs], [(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			cb = axes.scatter([sim.mtotal for sim, sngl, far in pairs], [(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-6, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "mtotal_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
@@ -891,7 +893,7 @@ class ParameterAccuracyPlots(object):
 
 			fig, axes = create_plot(r"Inj. $\eta$", r"Rec. $\eta$ - Inj. $\eta$")
 			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [sngl.eta - sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [sngl.eta - sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-6, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "eta_acc_abs_scatter_%s_%s" % (waveform, instrument), False
 
@@ -902,7 +904,7 @@ class ParameterAccuracyPlots(object):
 
 			fig, axes = create_plot(r"Inj. $\eta$", r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$")
 			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-6, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "eta_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
@@ -1702,7 +1704,7 @@ def new_plots(plots = None, far_thresh = None):
 	l = (
 		SummaryTable(),
 		MissedFoundPlots(far_thresh = far_thresh),
-		ParameterAccuracyPlots(),
+		ParameterAccuracyPlots(far_thresh = far_thresh),
 		BackgroundVsInjectionPlots(snr_min = snr_min),
 		BackgroundVsInjectionPlotsMulti(snr_min = snr_min),
 		RateVsThreshold(fapfar = fapfar, snr_min = snr_min),
