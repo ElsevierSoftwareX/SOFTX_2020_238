@@ -21,7 +21,7 @@
 #
 # ### Usage:
 # Takes an injection xml and a cache of reference PSDs and calculated characteristic SNRs. The values
-# will be written to the alpha3 and alpha4 columns in the sim_inspiral table.
+# will be written to the alpha1 and alpha2 columns in the sim_inspiral table.
 #
 # ### Command line options
 #	+ `--reference-psd-cache[filename]: Set the reference PSD cache file.
@@ -172,7 +172,7 @@ pool.close()
 pool.join()
 
 for idx, inj in enumerate(sim_inspiral_table):
-	inj.alpha3 = h1snr[idx]
-	inj.alpha4 = l1snr[idx]
+	inj.alpha1 = h1snr[idx]
+	inj.alpha2 = l1snr[idx]
 
 ligolw_utils.write_filename(simxmldoc,options.injection_file,verbose = True)

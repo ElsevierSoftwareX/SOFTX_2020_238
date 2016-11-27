@@ -724,15 +724,15 @@ FROM
 			def decisive_charsnr(sim, oninstruments, partinstruments):
 				if len(oninstruments) == 2:
 					if len(partinstruments) == 2:
-						return sorted([sim.alpha3, sim.alpha4])[0]
+						return sorted([sim.alpha1, sim.alpha2])[0]
 					if len(partinstruments) == 1:
 						ifo, = partinstruments
 						if ifo == 'H1':
-							return sim.alpha3
+							return sim.alpha1
 						if ifo == 'L1':
-							return sim.alpha4
+							return sim.alpha2
 				if len(oninstruments) == 1:
-					return sorted([sim.alpha3, sim.alpha4])[1]
+					return sorted([sim.alpha1, sim.alpha2])[1]
 				else:
 					raise ValueError("More than 2 instruments not supported for injection snr calculation at this time.")
 
@@ -757,14 +757,14 @@ FROM
 					if cnt == 0:
 						self.missed_found_plots.injection_summary_data.append(["Missed", "".join(sorted(self.on_instruments)), "---", len(missed)])
 						def sort_func(row):
-							return sorted([row.alpha3, row.alpha4])[1]
+							return sorted([row.alpha1, row.alpha2])[1]
 						tmplt_list0 = sorted(missed, key=sort_func, reverse=True)
 						def sort_dec_func(row):
-							return sorted([row.alpha3, row.alpha4])[0]
+							return sorted([row.alpha1, row.alpha2])[0]
 						tmplt_list = sorted(tmplt_list0, key=sort_dec_func, reverse=True)
 						for rank, sim in enumerate(tmplt_list[:1000], 1):
-							self.missed_found_plots.missed_summary_data.append([rank, "H1", sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, sim.inclination, sim.alpha3])
-							self.missed_found_plots.missed_summary_data.append([rank, "L1", sim.waveform, float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, sim.inclination, sim.alpha4])
+							self.missed_found_plots.missed_summary_data.append([rank, "H1", sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, sim.inclination, sim.alpha1])
+							self.missed_found_plots.missed_summary_data.append([rank, "L1", sim.waveform, float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, sim.inclination, sim.alpha2])
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
 
@@ -946,19 +946,19 @@ class ParameterAccuracyPlots(object):
 			if instrument == 'H1':
 				fig, axes = create_plot(r"Inj. H1 SNR", r"Rec. H1 SNR")
 				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
-				if max([sim.alpha3 for sim, sngl, far in pairs]) > 20:
-					axes.loglog([sim.alpha3 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				if max([sim.alpha1 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha1 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
 				else:
-					axes.plot([sim.alpha3 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+					axes.plot([sim.alpha1 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
 				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
 			if instrument == 'L1':
 				fig, axes = create_plot(r"Inj. L1 SNR", r"Rec. L1 SNR")
 				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
-				if max([sim.alpha4 for sim, sngl, far in pairs]) > 20:
-					axes.loglog([sim.alpha4 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				if max([sim.alpha2 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha2 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
 				else:
-					axes.plot([sim.alpha4 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+					axes.plot([sim.alpha2 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
 				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
 #
