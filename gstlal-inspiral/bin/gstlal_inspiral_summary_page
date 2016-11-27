@@ -187,10 +187,10 @@ for tag in opts.output_user_tag:
 
 	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag), "Expected SNR of found and missed injections as a function of time")
 
-# FIXME stupid convention to rely on the first tag being all of them.
-thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]), "%smissed_summary" % opts.output_user_tag[0]))
-fm_mtab += [webpage.elem("p", ["Missed Injection Table"])]
-fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % opts.output_user_tag[0])]
+	# FIXME stupid convention to rely on the first tag being all of them. Note, previously we just used opts.output_user_tag[0] here.
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag), "%smissed_summary" % tag))
+	fm_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % tag])]
+	fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % tag)]
 
 inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_eff_dist, inj_acc_spin, inj_acc_snr, horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
 

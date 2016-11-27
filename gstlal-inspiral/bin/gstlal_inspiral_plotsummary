@@ -756,15 +756,8 @@ FROM
 				if missed:
 					if cnt == 0:
 						self.missed_found_plots.injection_summary_data.append(["Missed", "".join(sorted(self.on_instruments)), "---", len(missed)])
-						def sort_func(row):
-							return sorted([row.alpha1, row.alpha2])[1]
-						tmplt_list0 = sorted(missed, key=sort_func, reverse=True)
-						def sort_dec_func(row):
-							return sorted([row.alpha1, row.alpha2])[0]
-						tmplt_list = sorted(tmplt_list0, key=sort_dec_func, reverse=True)
-						for rank, sim in enumerate(tmplt_list[:1000], 1):
-							self.missed_found_plots.missed_summary_data.append([rank, "H1", sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, sim.inclination, sim.alpha1])
-							self.missed_found_plots.missed_summary_data.append([rank, "L1", sim.waveform, float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, sim.inclination, sim.alpha2])
+						for rank, sim in enumerate(missed):
+							self.missed_found_plots.missed_summary_data.append(["".join(sorted(self.on_instruments)), sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, decisive_chirp_distance(sim, participating_instruments), sim.inclination, sim.alpha1, sim.alpha2, decisive_charsnr(sim, participating_instruments, self.on_instruments)])
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
 
@@ -816,7 +809,7 @@ FROM
 				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box
 
 		to_google_json(self.base + "_injection_summary.json", [("Found||Missed", "string"), ("On Instruments", "string"), ("Participating Instruments", "string"), ("count", "number")], self.injection_summary_data)
-		to_google_json(self.base + "_missed_summary.json", [("Rank", "number"), ("IFO", "string"), ("Waveform", "string"), ("H1/L1 <i>t</i>", "number"), ("<i>m</i><sub>1</sub>", "number"), ("<i>m</i><sub>2</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>1y</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("<i>s</i><sub>2y</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("D (Mpc)", "number"), ("Inclination", "number"), ("&rho;", "number")], self.missed_summary_data)
+		to_google_json(self.base + "_missed_summary.json", [("On Instruments", "string"), ("Waveform", "string"), ("H1 <i>t</i>", "number"), ("L1 <i>t</i>", "number"), ("<i>m</i><sub>1</sub>", "number"), ("<i>m</i><sub>2</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>1y</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("<i>s</i><sub>2y</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("D (Mpc)", "number"), ("Decisive D<sub>chirp,eff</sub> (Mpc)" , "number"), ("Inclination", "number"), ("H1 &rho;", "number"), ("L1 &rho;", "number"), ("Decisive &rho;", "number")], self.missed_summary_data)
 
 
 #
