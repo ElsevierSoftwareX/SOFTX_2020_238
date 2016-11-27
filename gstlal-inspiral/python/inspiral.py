@@ -866,7 +866,6 @@ class Data(object):
 
 		gracedb_client = gracedb.rest.GraceDb(self.gracedb_service_url)
 		gracedb_ids = []
-		common_messages = []
 		coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 
 		# This appears to be a silly for loop since
@@ -881,37 +880,6 @@ class Data(object):
 
 			if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far is None or coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
 				continue
-
-			#
-			# retrieve PSDs and ranking data
-			#
-
-			if not common_messages and self.upload_auxiliary_data_to_gracedb:
-				if self.verbose:
-					print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
-				psddict = {}
-				for instrument in self.seglistdicts["triggersegments"]:
-					elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
-					data = numpy.array(elem.get_property("mean-psd"))
-					psddict[instrument] = lal.CreateREAL8FrequencySeries(
-						name = "PSD",
-						epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
-						f0 = 0.0,
-						deltaF = elem.get_property("delta-f"),
-						sampleUnits = lal.Unit("s strain^2"),	# FIXME:  don't hard-code this
-						length = len(data)
-					)
-					psddict[instrument].data.data = data
-				fobj = StringIO.StringIO()
-				reference_psd.write_psd_fileobj(fobj, psddict, gz = True)
-				common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
-
-				if self.verbose:
-					print >>sys.stderr, "generating ranking_data.xml.gz ..."
-				fobj = StringIO.StringIO()
-				ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True)
-				common_messages.append(("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue()))
-				del fobj
 
 			#
 			# fake a filename for end-user convenience
@@ -982,25 +950,57 @@ class Data(object):
 				proc.stdin.close()
 			message.close()
 
-		#
-		# do PSD and ranking data file uploads
-		#
+		if gracedb_ids and self.upload_auxiliary_data_to_gracedb:
+			#
+			# retrieve and upload PSDs
+			#
 
-		while common_messages:
-			message, filename, tag, contents = common_messages.pop()
-			for gracedb_id in gracedb_ids:
-				for attempt in range(1, retries + 1):
-					try:
-						resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
-					except gracedb.rest.HTTPError as resp:
-						pass
-					else:
-						if resp.status == httplib.CREATED:
-							break
-					print >>sys.stderr, "gracedb upload of %s for ID %s failed on attempt %d/%d: %d: %s"  % (filename, gracedb_id, attempt, retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
-					time.sleep(random.lognormal(math.log(retry_delay), .5))
+			if self.verbose:
+				print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
+			psddict = {}
+			for instrument in self.seglistdicts["triggersegments"]:
+				elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
+				data = numpy.array(elem.get_property("mean-psd"))
+				psddict[instrument] = lal.CreateREAL8FrequencySeries(
+					name = "PSD",
+					epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
+					f0 = 0.0,
+					deltaF = elem.get_property("delta-f"),
+					sampleUnits = lal.Unit("s strain^2"),	# FIXME:  don't hard-code this
+					length = len(data)
+				)
+				psddict[instrument].data.data = data
+			fobj = StringIO.StringIO()
+			reference_psd.write_psd_fileobj(fobj, psddict, gz = True)
+			message, filename, tag, contents = ("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue())
+			self.__upload_gracedb_aux_data(message, filename, tag, contents, gracedb_ids, retries, gracedb_client)
+
+			#
+			# retrieve and upload Ranking Data
+			#
+
+			if self.verbose:
+				print >>sys.stderr, "generating ranking_data.xml.gz ..."
+			fobj = StringIO.StringIO()
+			ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True)
+			message, filename, tag, contents = ("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue())
+			del fobj
+			self.__upload_gracedb_aux_data(message, filename, tag, contents, gracedb_ids, retries, gracedb_client)
+
+	def __upload_gracedb_aux_data(self, message, filename, tag, contents, gracedb_ids, retries, gracedb_client):
+		for gracedb_id in gracedb_ids:
+			for attempt in range(1, retries + 1):
+				try:
+					resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
+				except gracedb.rest.HTTPError as resp:
+					pass
 				else:
-					print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
+					if resp.status == httplib.CREATED:
+						break
+				print >>sys.stderr, "gracedb upload of %s for ID %s failed on attempt %d/%d: %d: %s"  % (filename, gracedb_id, attempt, retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
+				time.sleep(random.lognormal(math.log(retry_delay), .5))
+			else:
+				print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
 
 	def do_gracedb_alerts(self):
 		with self.lock:
