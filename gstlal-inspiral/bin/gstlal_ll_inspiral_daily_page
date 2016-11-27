@@ -133,7 +133,7 @@ if __name__ == '__main__':
 		# Parallel process the data reduction
 		args = ([massbin, result_dirs, n, d, options, "ALL_LLOID", 0, cluster_file] for massbin in massbins)
 		# Merge the files of this directory
-		subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % noninjdball] + list(pool.map(process_mass_bin, args)))
+		subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--replace", "--verbose", "--database", "%s" % noninjdball] + list(pool.map(process_mass_bin, args)))
 		noninj_files_to_merge.append(noninjdball)
 		seg_files = glob.glob("%s/%s/H1L1-0000_SEGMENTS-*.xml.gz" % (options.directory, d))
 		if len(seg_files) >= 2:
@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
 		for injection_file in inj_file_bins:
 			args = ([massbin, result_dirs, n, d, options, injtag(injection_file), 1, cluster_file] for massbin in inj_file_bins[injection_file])
-			subprocess.check_call(["ligolw_sqlite", "--replace", "--verbose", "--database", "%s" % injdball[injection_file]] + list(pool.map(process_mass_bin, args)))
+			subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--replace", "--verbose", "--database", "%s" % injdball[injection_file]] + list(pool.map(process_mass_bin, args)))
 			inj_files_to_merge.setdefault(injection_file,[]).append(injdball[injection_file])
 
 	#
@@ -167,7 +167,7 @@ if __name__ == '__main__':
 
 	progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge) + len(seg_files_to_merge))
 	for f in noninj_files_to_merge + seg_files_to_merge:
-		subprocess.check_call(["ligolw_sqlite", "--verbose", "--database", "%s" % noninjdb, "%s" % f])
+		subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % noninjdb, "%s" % f])
 		# Do not cluster! the online analysis doesn't do a global clustering stage!!
 		try:
 			subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", simplify_file,  "%s" % noninjdb])
@@ -179,7 +179,7 @@ if __name__ == '__main__':
 	for injection_file in inj_file_bins:
 		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge[injection_file]) + len(seg_files_to_merge))
 		for f in inj_files_to_merge[injection_file] + seg_files_to_merge:
-			subprocess.check_call(["ligolw_sqlite", "--verbose", "--database", "%s" % injdb[injection_file], "%s" % f])
+			subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "%s" % f])
 			# Do not cluster! the online analysis doesn't do a global clustering stage!!
 			try:
 				subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", simplify_file,  "%s" % injdb[injection_file]])
@@ -190,13 +190,13 @@ if __name__ == '__main__':
 
 		# Find injections
 		progressbar = ProgressBar("Find injections", 4)
-		subprocess.check_call(["ligolw_sqlite", "--verbose", "--database", "%s" % injdb[injection_file], "%s" % injection_file])
+		subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "%s" % injection_file])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_sqlite", "--verbose", "--database", "%s" % injdb[injection_file], "--extract", "%s.xml" % injdb[injection_file]])
+		subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "--extract", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
 		subprocess.check_call(["ligolw_inspinjfind", "--verbose", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_sqlite", "--verbose", "--database", "%s" % injdb[injection_file], "--replace", "%s.xml" % injdb[injection_file]])
+		subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "--replace", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
 
 	#
@@ -236,7 +236,7 @@ if __name__ == '__main__':
 	#
 
 	try:
-		subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-chirp-mass", "--zero-lag-database", noninjdb, "--dist-bins", "200", "--bin-by-total-mass",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--bin-by-mass-ratio",  "--bin-by-mass1-mass2",  "--data-segments-name", "statevectorsegments"] + injdb.values())
+		subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-source-type", "--zero-lag-database", noninjdb, "--dist-bins", "200",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--data-segments-name", "statevectorsegments"] + injdb.values())
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
