@@ -1653,7 +1653,13 @@ class Segments(object):
 				for ifo_combos in itertools.combinations(list(analyzable_instruments_set), n):
 					this = segs.intersection(ifo_combos) - segs.union(analyzable_instruments_set - set(ifo_combos))
 					if len(this) > 0:
-						self.table.append([name, ",".join(ifo_combos), float(this.extent()[0]), float(this.extent()[1]), float(abs(this))])
+						#FIXME inf is not handled properly
+						start = float(this.extent()[0])
+						end = float(this.extent()[1])
+						if end == float("inf"):
+							end = 2000000000.
+						duration = end - start
+						self.table.append([name, ",".join(ifo_combos), start, end, duration])
 
 			self.table.insert(0, ["all", "all", float(self.extent[0]), float(self.extent[1]), float(abs(self.extent))])
 			f = open("%s_segments.json" % self.base, "w")
