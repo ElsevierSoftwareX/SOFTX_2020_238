@@ -57,6 +57,11 @@ var L1="#2ecc71";
 var white="#ecf0f1";
 var darkblue="#2c3e50";
 
+/* Despite what mathematicians claim, 2 billion really is the biggest number */
+/* FIXME, this works around an occasional "inf" coming in from unbounded
+ * segments: do something smarter */
+var inf = 2000000000;
+
 default_options = {
 	title: 'Figure', 
 	hAxis: { gridlines: {color:darkblue}, textStyle: {color:darkblue} },
