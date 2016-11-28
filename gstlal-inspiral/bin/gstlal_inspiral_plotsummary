@@ -776,16 +776,19 @@ FROM
 			)):
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
-				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
-					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
-					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, self.on_instruments, participating_instruments) for sim in sims], ".")
-				if missed:
-					legend.append("Missed")
-					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments, participating_instruments) for sim in missed], "k.")
-				if legend:
-					axes.legend(legend)
-				axes.set_title(title)
-				yield fig, filename_fragment, False
+				try:
+					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
+						legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
+						axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, self.on_instruments, participating_instruments) for sim in sims], ".")
+					if missed:
+						legend.append("Missed")
+						axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments, participating_instruments) for sim in missed], "k.")
+					if legend:
+						axes.legend(legend)
+					axes.set_title(title)
+					yield fig, filename_fragment, False
+				except ValueError:
+					print >> sys.stderr, "Cannot create expected SNR plots, no positive values, probably the SNRs are not set"
 
 	def __init__(self, far_thresh):
 		self.far_thresh = far_thresh
