@@ -65,7 +65,7 @@ def source_type_distance_chirp_mass_bins_from_sims(sims, distbins = 200):
     bins.
     """
     dist_mchirp_vals = map(imr_utils.sim_to_distance_chirp_mass_bins_function, sims)
-    
+
     distances = [tup[0] for tup in dist_mchirp_vals]
 
     return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.8, 2.0, 4.5, 100.])])
