@@ -38,7 +38,7 @@
 
 import sys, os
 import subprocess, socket, tempfile, copy, doctest
-from glue import pipeline, lal
+from glue import pipeline
 from glue.ligolw import lsctables, ligolw
 from glue.ligolw import utils as ligolw_utils
 from gstlal import svd_bank
@@ -261,8 +261,7 @@ class generic_node(InspiralNode):
 				cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = cache_dir)
 			else:
 				cache_file_name = os.path.join(cache_dir, input_cache_file_name)
-			with open(cache_file_name, "w") as cache_file:
-				lal.Cache(cache_entries).tofile(cache_file)
+			open(cache_file_name, "w").write("\n".join(map(str, cache_entries)))
 			self.add_var_opt(opt, cache_file_name)
 			# Keep track of the cache files being created
 			self.cache_inputs.setdefault(opt, []).append(cache_file_name)
@@ -272,8 +271,7 @@ class generic_node(InspiralNode):
 				os.mkdir(cache_dir)
 			cache_entries = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in val]
 			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = cache_dir)
-			with open(cache_file_name, "w") as cache_file:
-				lal.Cache(cache_entries).tofile(cache_file)
+			open(cache_file_name, "w").write("\n".join(map(str, cache_entries)))
 			self.add_var_opt(opt, cache_file_name)
 			# Keep track of the cache files being created
 			self.cache_outputs.setdefault(opt, []).append(cache_file_name)
