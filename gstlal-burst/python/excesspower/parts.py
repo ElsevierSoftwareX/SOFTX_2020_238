@@ -42,6 +42,10 @@ import numpy
 from scipy.stats import chi2
 
 import lal
+from lal.utils import CacheEntry
+
+from lalburst import snglcluster
+from lalburst import ligolw_bucluster
 
 from glue import datafind
 
@@ -53,10 +57,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 
 from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
-from glue.lal import Cache, CacheEntry
-
-from pylal import snglcluster
-from pylal import ligolw_bucluster
+from glue.lal import Cache
 
 from pylal import datatypes as laltypes
 from pylal.xlal.datatypes.snglburst import SnglBurst
