@@ -199,8 +199,8 @@ Gst.init(None)
 
 import lal
 from lal import LIGOTimeGPS
+from lal.utils import CacheEntry
 
-from glue.lal import CacheEntry
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw

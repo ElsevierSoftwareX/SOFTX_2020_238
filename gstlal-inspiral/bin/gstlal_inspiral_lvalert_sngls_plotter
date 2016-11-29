@@ -49,11 +49,11 @@ matplotlib.rcParams.update({
 
 import lal
 from lal import LIGOTimeGPS
+from lal.utils import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import table
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
-from glue import lal as gluelal
 from gstlal import lvalert_helper
 from ligo.gracedb import rest as gracedb
 from pylal import rate
@@ -143,7 +143,7 @@ subprocess.call(["ls %s/* | lalapps_path2cache >> %s/%s.cache" % (str(gps + 1000
 # FIXME don't hard code this regex
 pattern = re.compile("0[0-9]{3}_LLOID$")
 pool = multiprocessing.Pool(8)
-ce = [gluelal.CacheEntry(l) for l in open("%s/%s.cache" % (wd, str(gps)))]
+ce = [CacheEntry(l) for l in open("%s/%s.cache" % (wd, str(gps)))]
 sngl = []
 for res in pool.map(parse, [c for c in ce if gps in c.segment and pattern.match(c.description)]):
 	sngl.extend(res)

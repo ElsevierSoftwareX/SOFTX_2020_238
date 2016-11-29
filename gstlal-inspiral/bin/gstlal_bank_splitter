@@ -27,11 +27,11 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
-from lal import MSUN_SI
-from glue import lal as gluelal
 from gstlal import templates
 from gstlal import inspiral_pipe
 from gstlal import chirptime
+import lal
+from lal.utils import CacheEntry
 
 ## @file gstlal_bank_splitter
 #
@@ -199,7 +199,7 @@ for bank_count, (_, rows) in enumerate(outputrows):
 
 	for row in rows:
 		# Chirptime uses SI
-		m1_SI, m2_SI = MSUN_SI * row.mass1, MSUN_SI * row.mass2
+		m1_SI, m2_SI = lal.MSUN_SI * row.mass1, lal.MSUN_SI * row.mass2
 		# Find the total spin magnitudes
 		spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
 
@@ -226,7 +226,7 @@ for bank_count, (_, rows) in enumerate(outputrows):
 
 	sngl_inspiral_table[:] = rows
 	output = inspiral_pipe.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
-	output_cache_file.write("%s\n" % gluelal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
+	output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
 	ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 
 output_cache_file.close()

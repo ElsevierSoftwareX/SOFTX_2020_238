@@ -87,22 +87,22 @@ __author__ = 'Chad Hanna <chad.hanna@ligo.org>'
 
 ##############################################################################
 # import standard modules and append the lalapps prefix to the python path
-import sys, os, copy, math, stat
-import subprocess, socket, tempfile
+import sys, os, stat
 import itertools
+from optparse import OptionParser
 
 ##############################################################################
 # import the modules we need to build the pipeline
 import lal
 import lal.series
+from lal.utils import CacheEntry
 from glue import pipeline
-from glue.lal import Cache, CacheEntry
+from glue.lal import Cache
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 import glue.ligolw.utils as ligolw_utils
 import glue.ligolw.utils.segments as ligolw_segments
-from optparse import OptionParser
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 from gstlal import datasource

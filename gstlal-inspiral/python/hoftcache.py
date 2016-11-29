@@ -55,10 +55,10 @@ from gstlal import simplehandler
 
 class tempcache(list):
 	"""
-	List-like object to hold lal.CacheEntry objects, and run
-	os.unlink() on the .path of each as they are removed from the list
-	or when the list is garbage collected.  All errors during file
-	removal are ignored.
+	List-like object to hold CacheEntry objects, and run os.unlink() on
+	the .path of each as they are removed from the list or when the
+	list is garbage collected.  All errors during file removal are
+	ignored.
 
 	Note that there is no way to remove a CacheEntry from this list
 	without the file it represents being deleted.  If, after adding a
@@ -69,7 +69,7 @@ class tempcache(list):
 
 	Example:
 
-	>>> from glue.lal import CacheEntry
+	>>> from lal.utils import CacheEntry
 	>>> # create a cache, and add an entry
 	>>> cache = tempcache()
 	>>> cache.append(CacheEntry("- - - - file://localhost/tmp/blah.txt"))

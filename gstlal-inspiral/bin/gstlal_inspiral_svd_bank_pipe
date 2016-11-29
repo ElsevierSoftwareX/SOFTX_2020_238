@@ -23,24 +23,20 @@ This program makes a dag to generate svd banks
 __author__ = 'Chad Hanna <chad.hanna@ligo.org>'
 
 #
-# import standard modules and append the lalapps prefix to the python path
+# import standard modules
 #
 
-import sys, os, copy, math
-import subprocess, socket, tempfile
+import sys, os, math
+from optparse import OptionParser
 
 #
 # import the modules we need to build the pipeline
 #
 
-from glue import iterutils
-from glue import pipeline
-from glue import lal
-from glue.ligolw import lsctables
 from glue import segments
-from optparse import OptionParser
 from gstlal import inspiral_pipe
 from gstlal import far 
+from lal.utils import CacheEntry
 
 ## @file gstlal_inspiral_svd_bank_pipe
 # This program will make a HTCondor DAG to automate the creation of svd bank files; see gstlal_inspiral_svd_bank_pipe for more information
@@ -146,7 +142,7 @@ except:
 dag = inspiral_pipe.DAG(options.output_name)
 svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", tag_base = "gstlal_svd_bank_%s" % ifo, condor_commands = {"request_memory":"1999"})
 # Assumes cache is sorted by chirpmass or whatever the SVD sorting algorithm that was chosen
-files = [lal.CacheEntry(line).path for line in open(options.bank_cache)]
+files = [CacheEntry(line).path for line in open(options.bank_cache)]
 
 
 #
@@ -162,7 +158,7 @@ for i, f in enumerate(groups):
 	bank_ids = range(bank_ids[-1] + 1, bank_ids[-1] + 1 + len(f))
 	svd_bank_name = inspiral_pipe.T050017_filename(ifo, "GSTLAL_SVD_BANK_%d" % i, 0, 0, ".xml.gz", path = svdJob.output_path)
 	svd_bank_name = os.path.join(os.getcwd(), svd_bank_name)
-	dag.output_cache.append(lal.CacheEntry(ifo, "GSTLAL_SVD_BANK_%d" % i, segments.segment(0, 0), "file://localhost%s" % (svd_bank_name,)))
+	dag.output_cache.append(CacheEntry(ifo, "GSTLAL_SVD_BANK_%d" % i, segments.segment(0, 0), "file://localhost%s" % (svd_bank_name,)))
 	
 	svdNode = inspiral_pipe.generic_node(svdJob, dag, [],
 		opts = {"snr-threshold":far.ThincaCoincParamsDistributions.snr_min,

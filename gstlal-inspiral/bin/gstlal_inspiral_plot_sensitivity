@@ -42,10 +42,10 @@ from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import array as ligolw_array
 from glue import segmentsUtils
-from glue.lal import CacheEntry
 from glue import iterutils
 
 import lal
+from lal.utils import CacheEntry
 
 from pylal import rate
 from pylal import imr_utils

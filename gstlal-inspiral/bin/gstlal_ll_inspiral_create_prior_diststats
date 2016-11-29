@@ -54,8 +54,8 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw import ligolw
 from glue import segments
-from glue.lal import CacheEntry
 from lal import LIGOTimeGPS
+from lal.utils import CacheEntry
 from pylal import rate
 from optparse import OptionParser
 

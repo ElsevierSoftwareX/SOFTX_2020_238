@@ -24,7 +24,6 @@ from optparse import OptionParser
 import sqlite3
 from time import gmtime
 
-from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
@@ -33,8 +32,9 @@ from glue.offsetvector import offsetvector
 from glue import segments
 from gstlal import inspiral
 from gstlal import far
-from lal import UTCToGPS
-from pylal import ligolw_burca2
+import lal
+from lal.utils import CacheEntry
+from lalburst import ligolw_burca2
 from pylal import snglcoinc
 
 # FIXME Need to add entries to process and process_params tables
@@ -105,7 +105,7 @@ class Connections:
 		self.verbose = options.verbose
 		for n, database in enumerate(databases):
 			working_filename = dbtables.get_connection_filename(database, tmp_path = options.tmp_space, verbose = self.verbose)
-			self.connection_id_map['connection_id:%d' % n] = namedtuple('ConnectionNamedTuple', 'database, working_filename, connection, process_start_time')('%s' % database, '%s' % working_filename, sqlite3.connect(working_filename), '%d' % UTCToGPS(gmtime()))
+			self.connection_id_map['connection_id:%d' % n] = namedtuple('ConnectionNamedTuple', 'database, working_filename, connection, process_start_time')('%s' % database, '%s' % working_filename, sqlite3.connect(working_filename), '%d' % lal.UTCToGPS(gmtime()))
 
 		#
 		# Create dictionaries keyed by the connection_id value set

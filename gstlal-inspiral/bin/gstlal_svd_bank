@@ -35,7 +35,7 @@ import uuid
 
 import lal
 import lal.series
-from glue.lal import CacheEntry
+from lal.utils import CacheEntry
 from glue.ligolw import utils as ligolw_utils
 from gstlal import svd_bank
 from gstlal.far import ThincaCoincParamsDistributions

@@ -29,34 +29,21 @@ __author__ = 'Chad Hanna <channa@caltech.edu>'
 # import standard modules and append the lalapps prefix to the python path
 #
 
-import sys, os, copy, stat
+import sys, os, stat
 import shutil
 import socket
+from optparse import OptionParser
 
 #
 # import the modules we need to build the pipeline
 #
 
 from glue import pipeline
-from glue import lal
-from glue.ligolw import lsctables
-from glue.ligolw.ligolw import LIGOLWContentHandler
-import glue.ligolw.utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
-from optparse import OptionParser
 from gstlal import inspiral
 from gstlal import inspiral_pipe
 from gstlal import dagparts
 from gstlal import datasource
-
-#
-# set up a content handler to open the injection file
-#
-
-class ligolwcontenthandler(LIGOLWContentHandler):
-	pass
-
-lsctables.use_in(ligolwcontenthandler)
+from lal.utils import CacheEntry
 
 ##
 # ### Graph of the HTCondor DAG
@@ -273,8 +260,8 @@ def parse_command_line():
 
 	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
 
-	options.likelihood_files = [lal.CacheEntry(line).url for line in open(options.likelihood_cache)]
-	options.zerolag_likelihood_files = [lal.CacheEntry(line).url for line in open(options.zerolag_likelihood_cache)]
+	options.likelihood_files = [CacheEntry(line).url for line in open(options.likelihood_cache)]
+	options.zerolag_likelihood_files = [CacheEntry(line).url for line in open(options.zerolag_likelihood_cache)]
 
 	return options, filenames, bankcache, channel_dict, dq_channel_dict, framexmit_dict, inj_channel_dict, inj_dq_channel_dict, inj_framexmit_dict, inj_name_dict, inj_range_dict
 

@@ -41,11 +41,11 @@ from optparse import OptionParser
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
-from glue.lal import CacheEntry
 from glue.lal import Cache
 from glue.ligolw import utils as ligolw_utils
-from lal.series import *
 import lal
+from lal.series import *
+from lal.utils import CacheEntry
 import lalsimulation
 
 import multiprocessing

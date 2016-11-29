@@ -53,10 +53,10 @@ import sqlite3
 import sys
 
 
-from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue import segmentsUtils
+from lal.utils import CacheEntry
 from pylal import ligolw_thinca
 
 
