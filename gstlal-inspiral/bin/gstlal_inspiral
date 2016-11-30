@@ -602,8 +602,8 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 	if options.data_source not in ("lvshm", "framexmit") and output_url.endswith('.gz'):
 		try:
-			subprocess.check_call(["gzip", "--test", output_url])
-			subprocess.check_call(["gzip", "--test", likelihood_url_namedtuple[0]])
+			subprocess.check_call(["gzip", "--test", ligolw_utils.local_path_from_url(output_url)])
+			subprocess.check_call(["gzip", "--test", ligolw_utils.local_path_from_url(likelihood_url_namedtuple[0])])
 			# File is OK and there is no need to process it, skip ahead in the loop
 			continue
 		except subprocess.CalledProcessError:
