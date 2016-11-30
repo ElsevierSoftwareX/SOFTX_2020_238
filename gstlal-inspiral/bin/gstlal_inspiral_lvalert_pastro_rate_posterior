@@ -283,7 +283,7 @@ def plot_rates(rv, credible_intervals = None):
 	signal_axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
 	signal_axes.loglog()
 
-	signal_axes.set_ylim((1e-8, 1.))
+	signal_axes.set_ylim((1e-3, 1.))
 
 	if credible_intervals is not None:
 		alpha = 1.0 / (1.0 + len(credible_intervals))
@@ -335,9 +335,12 @@ if not graceids:
         graceids = [str(lvalert_data["uid"])]
 
 gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
-trigger_databases = []
-for i in range(len(options.trigger_database_glob)):
-        trigger_databases.append(glob.glob(options.trigger_database_glob[i]))
+if len(options.trigger_database_glob)>1:
+        trigger_databases = []
+        for i in range(len(options.trigger_database_glob)):
+                trigger_databases.append(glob.glob(options.trigger_database_glob[i]))
+else:
+        trigger_databases = glob.glob(options.trigger_database_glob[0])
 
 for graceid in graceids:
         #load ranking statistic PDFs and compute event log likelihood ratio
@@ -399,6 +402,5 @@ for graceid in graceids:
         logging.info("finished processing %s" % graceid)                   
         if options.verbose:
 	        print >> sys.stderr, "done"
-                print >> sys.stderr, "elapsed time:", time.time()-start_time
         
 
