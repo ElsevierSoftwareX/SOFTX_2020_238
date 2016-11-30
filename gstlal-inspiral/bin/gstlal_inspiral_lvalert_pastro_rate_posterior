@@ -1,0 +1,404 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2016 Kipp Cannon, Jolien Creighton, Heather Fong
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#                                                                                                                                                
+# You should have received a copy of the GNU General Public License along                                                                        
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+# @file gstlal_inspiral_lvalert_pastro
+# A program to calculate P(astro) from a running gstlal_inspiral job
+# based on gracedb submissions notified by lvalert, plots rate posteriors
+# and writes P(astro), the credible interval values to file
+
+# Details:
+# Compute p_terrestrial (1-p_astro) for an event - given graceid
+# Calculate the rate posteriors and uploads a plot of the posteriors for the event
+# Default threshold of log likelihood = 6
+# Default confidence intervals = [0.68, 0.9, 0.99]
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+# 
+
+import logging
+from optparse import OptionParser
+import os.path
+import sys
+import urlparse
+import json
+import sqlite3
+import glob
+from operator import methodcaller
+
+import lal
+
+from gstlal import far
+from gstlal import rate_estimation
+
+from glue import segments
+from glue.lal import CacheEntry
+from glue.ligolw import ligolw
+from glue.ligolw import dbtables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw import lsctables
+from glue.ligolw.utils import process as ligolw_process
+from glue.text_progress_bar import ProgressBar
+
+from pylal import ligolw_thinca
+from gstlal import lvalert_helper
+from ligo.gracedb import rest as gracedb
+
+import bisect
+try:
+	from fpconst import NegInf
+except ImportError:
+	NegInf = float("-inf")
+import h5py
+import numpy
+import scipy
+import math
+import matplotlib
+from matplotlib import figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+matplotlib.rcParams.update({
+        "font.size": 10.0,
+        "axes.titlesize": 10.0,
+        "axes.labelsize": 10.0,
+        "xtick.labelsize": 8.0,
+        "ytick.labelsize": 8.0,
+        "legend.fontsize": 8.0,
+        "figure.dpi": 300,
+        "savefig.dpi": 300,
+        "text.usetex": True,
+        "path.simplify": True
+})
+
+golden_ratio = (1. + math.sqrt(5.)) / 2.
+
+#
+# =============================================================================
+#
+#                                   Library
+#
+# =============================================================================
+#    
+
+def lvalert_load_ranking_data(gracedb_client, graceid, ln_likelihood_ratio_threshold, filename = "ranking_data.xml.gz", ignore_404 = False, verbose = False):
+        response = lvalert_helper.get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
+        ranking_data_xmldoc = ligolw_utils.load_fileobj(response, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler)[0]
+        coinc_param_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ranking_data_xmldoc)
+
+	# affect the zeroing of the PDFs below threshold by hacking the
+	# histograms before running .finish().  do the indexing ourselves
+	# to not 0 the bin @ threshold
+	if ln_likelihood_ratio_threshold is not None:
+		for binnedarray in ranking_data.background_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		for binnedarray in ranking_data.signal_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
+			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+
+	ranking_data.finish(verbose = verbose)
+
+        return ranking_data
+
+def lvalert_event_ln_likelihood_ratio_endtime_mass(gracedb_client, graceid, ignore_404 = False):
+        coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
+        coinc_event, = lsctables.CoincTable.get_table(coinc_xmldoc)
+        coinc_inspiral, = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
+        return coinc_event.likelihood, coinc_inspiral.end_time, coinc_inspiral.mass
+        
+#
+# ============================================================================= 
+#
+#                                 Command Line
+#
+# =============================================================================
+# 
+
+def parse_command_line():
+        parser = OptionParser()
+        parser.add_option("--no-upload", action = "store_true", help = "Write plots to disk.")
+        parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
+        parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+        parser.add_option("-c", "--credible-intervals", metavar = "credibility[,...]", default = "0.68,0.90,0.99", help = "Compute and report credible intervals in the signal count for these credibilities (default = \".68,.90,.99\", clear to disable).")
+        parser.add_option("--trigger-database-glob", metavar = "filename", default = "H1L1-ALL_LLOID-0-2000000000.sqlite", help = "trigger database files (sqlite)")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+        parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", default = 6, help = "Derive the rate posterior by considering only events ranked at or above this value of the log likelihood ratio ranking statistic (default = use all events).")
+        parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+        options, graceids = parser.parse_args()
+
+	options.credible_intervals = map(float, options.credible_intervals.split(","))
+        options.trigger_database_glob = map(methodcaller("split", ","), [options.trigger_database_glob])[0]
+
+        if not graceids:
+                # FIXME:  lvalert_listen doesn't allow command-line  
+                # options, enable logging for online analysis     
+                options.verbose = True
+
+        # can only call basicConfig once (otherwise need to switch to more  
+        # complex logging configuration)   
+        if options.verbose:
+                logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+        else:
+                logging.basicConfig(format = "%(asctime)s:%(message)s")
+
+        return options, graceids
+
+#
+# =============================================================================
+#
+#                              Support Functions
+#
+# =============================================================================
+#
+
+class count_ratio_lnposterior(scipy.stats.rv_continuous):
+
+	def __init__(self, ln_f_over_b, ln_prior=None):
+		super(count_ratio_lnposterior, self).__init__(a=1e-10, b=100.0/len(ln_f_over_b))
+                self.ln_f_over_b = numpy.sort(ln_f_over_b)
+		if ln_prior is None:
+			self.ln_prior = lambda x: -0.5*numpy.log(x) # Jeffrey's prior
+		else:
+			self.ln_prior = ln_prior
+		self.Rb = len(ln_f_over_b)
+                self.norm = 1.0
+		self.norm = 1.0 / scipy.integrate.quad(self.pdf, self.a, self.b)[0]
+		self._mode = None
+
+	def _pdf(self, Rr):
+		Rf = Rr * self.Rb
+                x = self.ln_f_over_b + numpy.log(Rr)
+                i = numpy.searchsorted(x, 33)
+                ln_L = -Rf + numpy.sum(numpy.log1p(numpy.exp(x[:i]))) + numpy.sum(x[i:])
+                ln_P = ln_L + self.ln_prior(Rf)
+                return numpy.exp(numpy.log(self.norm) + ln_P)
+
+	def _munp(self, n, *args):
+		return scipy.integrate.quad(lambda x: x**n * self.pdf(x), self.a, self.b)[0]
+
+	def mode(self):
+		if self._mode is None:
+			self._mode = scipy.optimize.fminbound(lambda x: -self.pdf(x), self.a, self.b)
+		return self._mode
+
+def hpd_credible_interval(alpha, rv):
+	# computes the highest posterior density bayesian credible interval
+	def err(p):
+		def pdf_above_p(x):
+			pp = rv.pdf(x)
+			return pp if pp > p else 0.
+		prob1, _ = scipy.integrate.quad(pdf_above_p, rv.a, rv.mode())
+		prob2, _ = scipy.integrate.quad(pdf_above_p, rv.mode(), rv.b)
+		return prob1 + prob2 - alpha
+	pmax = rv.pdf(rv.mode())
+	p = scipy.optimize.brentq(err, 0.0, pmax)
+	if rv.pdf(rv.a) > p: # upper limit
+		a = 0.0
+	else:
+		a = scipy.optimize.brentq(lambda x: rv.pdf(x) - p, rv.a, rv.mode())
+	b = scipy.optimize.brentq(lambda x: rv.pdf(x) - p, rv.mode(), rv.b)
+	return a, b
+
+def false_alarm_probability(event_f_over_b, rv):
+	p, _ = scipy.integrate.quad(lambda x: rv.pdf(x)/(1.0 + x * event_f_over_b), rv.a, rv.b)
+	return p
+
+def load_search_results(filenames, end_time, mass, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
+	background_ln_likelihood_ratios = []
+	zerolag_ln_likelihood_ratios = []
+
+	for n, filename in enumerate(filenames, 1):
+		if verbose:
+			print >>sys.stderr, "%d/%d: %s" % (n, len(filenames), filename)
+		working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, verbose = verbose)
+		connection = sqlite3.connect(working_filename)
+
+		xmldoc = dbtables.get_xml(connection)
+		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+
+		for ln_likelihood_ratio, is_background in connection.cursor().execute("""
+SELECT
+	coinc_event.likelihood,
+	EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	)
+FROM
+	coinc_event
+	JOIN coinc_inspiral ON (
+		coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
+	)
+WHERE
+	coinc_event.coinc_def_id == ?
+	AND coinc_event.likelihood >= ?
+        AND coinc_inspiral.end_time != ?
+        AND coinc_inspiral.mass != ?"""
+	, (definer_id, (ln_likelihood_ratio_threshold if ln_likelihood_ratio_threshold is not None else NegInf), end_time, mass)):
+			if is_background:
+				background_ln_likelihood_ratios.append(ln_likelihood_ratio)
+			else:
+				zerolag_ln_likelihood_ratios.append(ln_likelihood_ratio)
+
+		connection.close()
+		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
+
+	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
+
+
+def plot_rates(rv, credible_intervals = None):
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches((4., 4. / golden_ratio))
+	signal_axes = fig.gca()
+
+	x = numpy.logspace(-4., 2.) # FIXME: don't hardcode
+	y = numpy.array([rv.pdf(xx / rv.Rb) / rv.Rb for xx in x])
+	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
+	signal_axes.set_title("Event Rate Posterior")
+	signal_axes.set_xlabel("Event Rate ($\mathrm{signals} / \mathrm{experiment}$)")
+	signal_axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
+	signal_axes.loglog()
+
+	signal_axes.set_ylim((1e-8, 1.))
+
+	if credible_intervals is not None:
+		alpha = 1.0 / (1.0 + len(credible_intervals))
+		for lo, hi in credible_intervals.values():
+
+			x = numpy.logspace(numpy.log10(lo), numpy.log10(hi)) * rv.Rb
+			y = numpy.array([rv.pdf(xx / rv.Rb) / rv.Rb for xx in x])
+			signal_axes.fill_between(x, y, 1e-8, color = "k", alpha = alpha)
+
+	try:
+		fig.tight_layout()
+	except AttributeError:
+		# old matplotlib. auto-layout not available
+		pass
+	return fig
+
+def get_ln_f_over_b(ranking_data, ln_likelihood_ratios):
+        if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
+                raise ValueError("NaN log likelihood ratio encountered")
+
+        f = ranking_data.signal_likelihood_pdfs[None]
+        b = ranking_data.background_likelihood_pdfs[None]
+        ln_f_over_b = numpy.array([numpy.log(f[ln_lr,])-numpy.log(b[ln_lr,]) for ln_lr in ln_likelihood_ratios])
+        if numpy.isnan(numpy.exp(ln_f_over_b)).any():
+                raise ValueError("NaN encountered in ranking statistic PDF ratios")
+        if numpy.isinf(numpy.exp(ln_f_over_b)).any():
+                raise ValueError("infinity encountered in ranking statistic PDF ratios")
+        return ln_f_over_b
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+# 
+
+options, graceids = parse_command_line()
+
+if not graceids:
+        lvalert_data = json.loads(sys.stdin.read())
+        logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+        logging.info("lvalert data: %s" % repr(lvalert_data))
+        filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+        if filename not in (u"ranking_data.xml.gz",):
+                logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
+                sys.exit()
+        graceids = [str(lvalert_data["uid"])]
+
+gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
+trigger_databases = []
+for i in range(len(options.trigger_database_glob)):
+        trigger_databases.append(glob.glob(options.trigger_database_glob[i]))
+
+for graceid in graceids:
+        #load ranking statistic PDFs and compute event log likelihood ratio
+        ranking_data = lvalert_load_ranking_data(gracedb_client, graceid, options.threshold, ignore_404 = options.skip_404, verbose = options.verbose)
+        event_ln_likelihood_ratio, event_endtime, event_mass = lvalert_event_ln_likelihood_ratio_endtime_mass(gracedb_client, graceid, ignore_404 = options.skip_404)
+        # load search results
+        background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(trigger_databases, event_endtime, event_mass, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
+
+        # file names
+        filename1 = "%s_rate_posteriors.png" % graceid
+        filename2 = "%s_p_terrestrial.txt" % graceid
+        txt_file = open(filename2, "w")
+
+        # calculate rate posteriors
+        if options.verbose:
+                print >> sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_ln_likelihood_ratios)
+        txt_file.write("calculating rate posteriors using %d likelihood ratios ...\n" % len(zerolag_ln_likelihood_ratios))
+        ln_f_over_b = get_ln_f_over_b(ranking_data, zerolag_ln_likelihood_ratios)
+        event_ln_f_over_b = get_ln_f_over_b(ranking_data, [event_ln_likelihood_ratio])
+        if options.verbose:
+                print >> sys.stderr, "adding event to zerolag events"
+        txt_file.write("adding event to zerolag events\n")
+        ln_f_over_b = numpy.append(ln_f_over_b, event_ln_f_over_b)
+        ln_f_over_b.sort()
+        # rate posterior
+        Rr_posterior = count_ratio_lnposterior(ln_f_over_b)
+        # terrestrial probabilities
+        p_terrestrial = [false_alarm_probability(x, Rr_posterior) for x in numpy.exp(event_ln_f_over_b)]
+        txt_file.write("terrestrial probability of event = %g\n" % p_terrestrial[0])
+        if options.verbose:
+                print >> sys.stderr, "terrestrial probability of event = %g" % p_terrestrial[0]
+        # find credible intervals
+        if options.credible_intervals:
+                if options.verbose:
+                        print >> sys.stderr, "determining credible intervals ..."
+                credible_intervals = dict((cred, hpd_credible_interval(cred, Rr_posterior)) for cred in options.credible_intervals)
+        else:
+	        credible_intervals = None
+        if credible_intervals is not None:
+                txt_file.write("rate posterior mean = %g signals/experiment\n" % (Rr_posterior.mean() * Rr_posterior.Rb))
+                txt_file.write("rate posterior median = %g signals/experiment\n" % (Rr_posterior.median() * Rr_posterior.Rb))
+                txt_file.write("maximum-likelihood rate = %g signals/experiment\n" % (Rr_posterior.mode() * Rr_posterior.Rb))
+                if options.verbose:
+	                print >>sys.stderr, "rate posterior mean = %g signals/experiment" % (Rr_posterior.mean() * Rr_posterior.Rb)
+	                print >>sys.stderr, "rate posterior median = %g signals/experiment" % (Rr_posterior.median() * Rr_posterior.Rb)
+	                # all modes are the same, pick one and report it
+	                print >>sys.stderr, "maximum-likelihood rate = %g signals/experiment" % (Rr_posterior.mode() * Rr_posterior.Rb)
+	        for cred, (lo, hi) in sorted(credible_intervals.items()):
+		        print >> sys.stderr, "%g%% credible interval = [%g, %g] signals/experiment" % (cred * 100., lo * Rr_posterior.Rb, hi * Rr_posterior.Rb)
+                        txt_file.write("%g%% credible interval = [%g, %g] signals/experiment\n" % (cred * 100., lo * Rr_posterior.Rb, hi * Rr_posterior.Rb))
+        txt_file.close()
+        fig = plot_rates(Rr_posterior, credible_intervals = credible_intervals)
+        if options.no_upload:
+                logging.info("writing %s ..." % filename1)
+	        fig.savefig(filename1)
+        else:
+                lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename1, log_message = "rate posteriors plot")
+                lvalert_helper.upload_file(gracedb_client, graceid, filename = filename2, log_message = "p_terrestrial = %g" % p_terrestrial[0])
+        logging.info("finished processing %s" % graceid)                   
+        if options.verbose:
+	        print >> sys.stderr, "done"
+                print >> sys.stderr, "elapsed time:", time.time()-start_time
+        
+

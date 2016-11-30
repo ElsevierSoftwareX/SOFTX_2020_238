@@ -14,6 +14,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_injection_snr \
 	gstlal_inspiral_lvalert_background_plotter \
 	gstlal_inspiral_lvalert_omegascan \
+	gstlal_inspiral_lvalert_pastro_rate_posterior \
 	gstlal_inspiral_lvalert_psd_plotter \
 	gstlal_inspiral_lvalert_sngls_plotter \
 	gstlal_inspiral_make_snr_pdf \
