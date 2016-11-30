@@ -22,7 +22,7 @@
 # and writes P(astro), the credible interval values to file
 
 # Details:
-# Compute p_terrestrial (1-p_astro) for an event - given graceid
+# Compute P(terrestrial) (1-P(astro)) for an event - given graceid
 # Calculate the rate posteriors and uploads a plot of the posteriors for the event
 # Default threshold of log likelihood = 6
 # Default confidence intervals = [0.68, 0.9, 0.99]
@@ -397,8 +397,8 @@ for graceid in graceids:
                 logging.info("writing %s ..." % filename1)
 	        fig.savefig(filename1)
         else:
-                lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename1, log_message = "rate posteriors plot")
-                lvalert_helper.upload_file(gracedb_client, graceid, filename = filename2, log_message = "p_terrestrial = %g" % p_terrestrial[0])
+                lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename1, log_message = "Rate posteriors plot", tagname = None)
+                lvalert_helper.upload_file(gracedb_client, graceid, filename = filename2, log_message = "P(terrestrial) = %g" % p_terrestrial[0])
         logging.info("finished processing %s" % graceid)                   
         if options.verbose:
 	        print >> sys.stderr, "done"
