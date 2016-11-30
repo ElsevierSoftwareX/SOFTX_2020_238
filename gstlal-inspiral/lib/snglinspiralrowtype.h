@@ -54,13 +54,15 @@ G_BEGIN_DECLS
 
 struct GSTLALSnglInspiral {
 	SnglInspiralTable parent;
-	COMPLEX8TimeSeries *snr;
+	LIGOTimeGPS epoch;
+	double deltaT;
+	size_t length;
+	float complex snr[];
 };
 
 
-struct GSTLALSnglInspiral *gstlal_snglinspiral_new(void);
+struct GSTLALSnglInspiral *gstlal_snglinspiral_new(size_t length);
 void gstlal_snglinspiral_free(struct GSTLALSnglInspiral *row);
-struct GSTLALSnglInspiral *gstlal_snglinspiral_set_snr(struct GSTLALSnglInspiral *row, COMPLEX8TimeSeries *snr);
 
 
 G_END_DECLS

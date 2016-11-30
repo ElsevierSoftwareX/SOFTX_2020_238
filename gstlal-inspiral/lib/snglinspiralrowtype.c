@@ -44,9 +44,11 @@
  */
 
 
-struct GSTLALSnglInspiral *gstlal_snglinspiral_new(void)
+struct GSTLALSnglInspiral *gstlal_snglinspiral_new(size_t length)
 {
-	struct GSTLALSnglInspiral *row = calloc(1, sizeof(*row));
+	struct GSTLALSnglInspiral *row = calloc(1, sizeof(*row) + length * sizeof(row->snr[0]));
+	if (row)
+		row->length = length;
 
 	return row;
 }
@@ -60,27 +62,5 @@ struct GSTLALSnglInspiral *gstlal_snglinspiral_new(void)
 
 void gstlal_snglinspiral_free(struct GSTLALSnglInspiral *row)
 {
-	if(row) {
-		XLALDestroyCOMPLEX8TimeSeries(row->snr);
-		row->snr = NULL;
-	}
 	free(row);
-}
-
-
-/**
- * Set the snr pointer of a struct GSTLALSnglInspiral.  Deallocates any
- * previously set snr COMPLEX8TimeSeries and takes ownership of the
- * COMPLEX8TimeSeries passed to this function.  Do not free the
- * COMPLEX8TimeSeries afterwards.  Passing NULL for the snr pointer is OK.
- *
- * returns:  pointer to the struct GSTLALSnglInspiral.
- */
-
-
-struct GSTLALSnglInspiral *gstlal_snglinspiral_set_snr(struct GSTLALSnglInspiral *row, COMPLEX8TimeSeries *snr)
-{
-	XLALDestroyCOMPLEX8TimeSeries(row->snr);
-	row->snr = snr;
-	return row;
 }

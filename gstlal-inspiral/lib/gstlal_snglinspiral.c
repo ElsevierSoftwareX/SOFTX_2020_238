@@ -195,7 +195,24 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 			 * allocate new event structure
 			 */
 
-			event = gstlal_snglinspiral_new();
+
+			/*
+			 * Populate the SNR snippet if available
+			 * FIXME: only supported for single precision at the moment
+			 */
+			if (snr_matrix_view)
+			{
+				/* Get the column of SNR we are interested in */
+				gsl_vector_complex_float_view snr_vector_view = gsl_matrix_complex_float_column(&(snr_matrix_view->matrix), channel);
+				/* Allocate an empty time series to hold it. The event takes ownership, so no need to free it*/
+				event = gstlal_snglinspiral_new(snr_vector_view.vector.size);
+				/* Make a GSL view of the time series array data */
+				gsl_vector_complex_float_view snr_series_view = gsl_vector_complex_float_view_array((float *) event->snr, event->length);
+				/* Use BLAS to do the copy */
+				gsl_blas_ccopy (&(snr_vector_view.vector), &(snr_series_view.vector));
+			} else
+				event = gstlal_snglinspiral_new(0);
+
 			parent = (SnglInspiralTable *) event;
 			if (!event) {
 				/* FIXME handle error */
@@ -209,12 +226,14 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 			parent->snr = cabs(maxdata_channel);
 			parent->coa_phase = carg(maxdata_channel);
 
+			XLALINT8NSToGPS(&event->epoch, time);
 			{
-			LIGOTimeGPS end_time;
-			XLALINT8NSToGPS(&end_time, time);
+			LIGOTimeGPS end_time = event->epoch;
 			XLALGPSAdd(&end_time, (double) input->interpsamples[channel] / rate);
 			XLALGPSAddGPS(&parent->end, &end_time);
 			}
+			XLALGPSAdd(&event->epoch, (double) (input->samples[channel] - input->pad) / rate);
+			event->deltaT = 1. / rate;
 
 			parent->end_time_gmst = XLALGreenwichMeanSiderealTime(&parent->end);
 			parent->eff_distance = gstlal_effective_distance(parent->snr, parent->sigmasq);
@@ -235,25 +254,6 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
 				}
 
-			/* 
-			 * Populate the SNR snippet if available 
-			 * FIXME: only supported for single precision at the moment
-			 * FIXME: We still have segfaults when actually using gstlal_snglinspiral_set_snr()
-			 */
-#if 0
-			if (snr_matrix_view)
-			{
-				/* Get the column of SNR we are interested in */
-				gsl_vector_complex_float_view snr_vector_view = gsl_matrix_complex_float_column(&(snr_matrix_view->matrix), channel);
-				/* Allocate an empty time series to hold it. The event takes ownership, so no need to free it*/
-				COMPLEX8TimeSeries *snr_series = XLALCreateCOMPLEX8TimeSeries("snr", (const LIGOTimeGPS *) &(parent->end), 0, 1. / rate, &snr_units, snr_vector_view.vector.size);
-				/* Make a GSL view of the time series array data */
-				gsl_vector_complex_float_view snr_series_view = gsl_vector_complex_float_view_array((float *) snr_series->data->data, snr_series->data->length);
-				/* Use BLAS to do the copy */
-				gsl_blas_ccopy (&(snr_vector_view.vector), &(snr_series_view.vector));
-				gstlal_snglinspiral_set_snr(event, snr_series);
-			}
-#endif
 			/*
 			 * add to buffer
 			 */
@@ -263,9 +263,9 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				gst_memory_new_wrapped(
 					GST_MEMORY_FLAG_READONLY | GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS,
 					event,
-					sizeof(*event),
+					sizeof(*event) + sizeof(event->snr[0]) * event->length,
 					0,
-					sizeof(*event),
+					sizeof(*event) + sizeof(event->snr[0]) * event->length,
 					event,
 					(GDestroyNotify) gstlal_snglinspiral_free
 				)

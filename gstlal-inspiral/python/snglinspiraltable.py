@@ -58,7 +58,7 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 			# C interface raises ValueError if the internal snr
 			# pointer is NULL
 			return None
-		series = lal.CreateCOMPLEX16TimeSeries(
+		series = lal.CreateCOMPLEX8TimeSeries(
 			name,
 			lal.LIGOTimeGPS(self._snr_epoch_gpsSeconds, self._snr_epoch_gpsNanoSeconds),
 			self._snr_f0,
