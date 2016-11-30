@@ -45,11 +45,11 @@ def parse_command_line():
 	if len([op for op in (options.intersection, options.union, options.diff) if op is not None]) != 1:
 		raise ValueError("must specify exactly one of --intersection, --union or --diff")
 
-	assert len(options.output_segment_name) == len(options.segment_name), "must provide same number of input and output segment names"
-
 	for option in ("segment_name", "output_segment_name"):
 		if not getattr(options, option):
 			setattr(options, option, ["datasegments"])
+
+	assert len(options.output_segment_name) == len(options.segment_name), "must provide same number of input and output segment names"
 
 	if options.diff:
 		assert len(filenames) == 2, "must provide exactly 2 segment files for diff operation"
