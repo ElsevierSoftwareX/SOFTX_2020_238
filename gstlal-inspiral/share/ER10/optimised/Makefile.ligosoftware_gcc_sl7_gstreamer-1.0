@@ -575,9 +575,9 @@ $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 	echo $(FFTW) 1>&2
 	tar -xzf $(TAR_DIR)/$(FFTW).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(FFTW) && \
-                ./configure CFLAGS="-fPIC -O3 -march=native" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --prefix=$(INSTALL_DIR) && \
+                ./configure CFLAGS="-fPIC -O3 -march=native -lsatlas -ltatlas" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --prefix=$(INSTALL_DIR) && \
                 make -j$(CORES) && make install -j$(CORES) && make clean && \
-                ./configure CFLAGS="-fPIC -O3 -march=native" --enable-shared --enable-sse2 --enable-avx --prefix=$(INSTALL_DIR) && \
+                ./configure CFLAGS="-fPIC -O3 -march=native -lsatlas -ltatlas" --enable-shared --enable-sse2 --enable-avx --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES)
 
 #########################
