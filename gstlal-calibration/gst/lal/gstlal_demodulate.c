@@ -30,7 +30,9 @@
  *  stuff from the C library
  */
 
-
+#include <float.h>
+#include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include <complex.h>
 #include <math.h>
@@ -66,31 +68,33 @@
  */
 
 
-static void demodulate_float(const float *src, gsize src_size, float complex *dst, guint64 t_reduced, gint rate, const double frequency)
+static void demodulate_float(const float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const int frequency)
 {
 	const float *src_end;
 	guint64 i = 0;
-	guint64 t;
-	for(src_end = src + src_size; src < src_end; src++, dst++) {
-		t = t_reduced + gst_util_uint64_scale_int_round(i, 1000000000, rate);
-		*dst = *src * cexpf(-2. * M_PI * I * frequency * t / 1000000000.0);
+	__uint128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
+		t_scaled = 32 * t + i * scale / rate;
+		integer_arg = (t_scaled * frequency) % (100 * scale);
+		*dst = *src * cexpf(-2. * M_PI * I * integer_arg / (100.0 * scale));
 	}
 }
 
 
-static void demodulate_double(const double *src, gsize src_size, double complex *dst, guint64 t_reduced, gint rate, const double frequency)
+static void demodulate_double(const double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const int frequency)
 {
 	const double *src_end;
 	guint64 i = 0;
-	guint64 t;
+	__uint128_t t_scaled, integer_arg, scale = 32000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
-		t = t_reduced + gst_util_uint64_scale_int_round(i, 1000000000, rate);
-		*dst = *src * cexp(-2. * M_PI * I * frequency * t / 1000000000.0);
+		t_scaled = 32 * t + i * scale / rate;
+		integer_arg = (t_scaled * frequency) % (100 * scale);
+		*dst = *src * cexp(-2. * M_PI * I * integer_arg / (100.0 * scale));
 	}
 }
 
 
-static void demodulate(const void *src, gsize src_size, void *dst, gsize dst_size, guint64 t_reduced, gint rate, gint unit_size, const double frequency)
+static void demodulate(const void *src, gsize src_size, void *dst, gsize dst_size, guint64 t, gint rate, gint unit_size, const int frequency)
 {
 	g_assert_cmpuint(src_size % unit_size, ==, 0);
 	g_assert_cmpuint(dst_size % unit_size, ==, 0);
@@ -101,10 +105,10 @@ static void demodulate(const void *src, gsize src_size, void *dst, gsize dst_siz
 
 	switch(unit_size) {
 	case 4:
-		demodulate_float(src, src_size, dst, t_reduced, rate, frequency);
+		demodulate_float(src, src_size, dst, t, rate, frequency);
 		break;
 	case 8:
-		demodulate_double(src, src_size, dst, t_reduced, rate, frequency);
+		demodulate_double(src, src_size, dst, t, rate, frequency);
 		break;
 	default:
 		g_assert_not_reached();
@@ -422,7 +426,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
-		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+		element->t0 = GST_BUFFER_PTS(inbuf);
 		element->offset0 = element->next_out_offset = GST_BUFFER_OFFSET(inbuf);
 		element->need_discont = TRUE;
 	}
@@ -440,8 +444,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
-		guint64 t_reduced = GST_BUFFER_TIMESTAMP(inbuf) - element->t0;
-		demodulate(inmap.data, inmap.size, outmap.data, outmap.size, t_reduced, element->rate, element->unit_size, element->line_frequency);
+		demodulate(inmap.data, inmap.size, outmap.data, outmap.size, GST_BUFFER_PTS(inbuf), element->rate, element->unit_size, element->line_frequency);
 		set_metadata(element, outbuf, outmap.size / (2 * element->unit_size), FALSE);
 		gst_buffer_unmap(outbuf, &outmap);
 		gst_buffer_unmap(inbuf, &inmap);
@@ -493,7 +496,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	switch (prop_id) {
 	case ARG_LINE_FREQUENCY:
-		element->line_frequency = g_value_get_double(value);
+		element->line_frequency = 100 * g_value_get_double(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -512,7 +515,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	switch (prop_id) {
 	case ARG_LINE_FREQUENCY:
-		g_value_set_double(value, element->line_frequency);
+		g_value_set_double(value, element->line_frequency / 100.0);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);

@@ -643,6 +643,11 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 		if not options.no_dq_vector or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
 			sus_coh = pipeparts.mktee(pipeline, sus_coh)
 		ktst = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktst), control = calibration_parts.mkqueue(pipeline, sus_coh), threshold = options.coherence_uncertainty_threshold, attack_length = -int(options.compute_factors_sr * options.demodulation_filter_settle_time), invert_control = True)
+		# Gate kappa_tst with the coherence of the DARM line
+		darm_coh = calibration_parts.caps_and_progress(pipeline, head_dict["darm_coh"], coh_caps, "darm_coh", replace_zeros = True)
+		if not options.no_dq_vector or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+			darm_coh = pipeparts.mktee(pipeline, darm_coh)
+		ktst = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, ktst), control = calibration_parts.mkqueue(pipeline, darm_coh), threshold = options.coherence_uncertainty_threshold, attack_length = -int(options.compute_factors_sr * options.demodulation_filter_settle_time), invert_control = True)
 
 	ktsttee = pipeparts.mktee(pipeline, ktst)
 
@@ -695,9 +700,6 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 	if not options.no_dq_vector:
 		kpu = pipeparts.mkgate(pipeline, kpu, control = pipeparts.mkqueue(pipeline, obsreadystatevec), threshold = 1, attack_length = -int(options.compute_factors_sr * options.demodulation_filter_settle_time))
 	if not options.no_coherence:
-		darm_coh = calibration_parts.caps_and_progress(pipeline, head_dict["darm_coh"], coh_caps, "darm_coh", replace_zeros = True)
-		if not options.no_dq_vector or not options.no_kappac or not options.no_fcc:
-			darm_coh = pipeparts.mktee(pipeline, darm_coh)
 		# Gate kappa_pu with the coherence of the DARM line
 		kpu = pipeparts.mkgate(pipeline, kpu, control = calibration_parts.mkqueue(pipeline, darm_coh), threshold = options.coherence_uncertainty_threshold, attack_length = -int(options.compute_factors_sr * options.demodulation_filter_settle_time), invert_control = True)
 		# Gate kappa_pu with the coherence of the PCALY_line1 line

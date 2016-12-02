@@ -73,7 +73,7 @@ struct _GSTLALDemodulate {
         gboolean need_discont;
 
 	/* properties */
-	double line_frequency;
+	int line_frequency; /* in centihertz */
 };
 
 
