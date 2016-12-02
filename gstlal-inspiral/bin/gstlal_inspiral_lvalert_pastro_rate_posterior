@@ -285,7 +285,7 @@ def plot_rates(rv, credible_intervals = None):
 
 	signal_axes.set_ylim((1e-3, 1.))
 
-        textstr = "mean: %.3g\nmedian: %.3g\nmax likelihood: %.3g" % (rv.mean()*rv.Rb, rv.median()*rv.Rb, rv.mode()*rv.Rb)
+        textstr = "mean: %.3g\nmedian: %.3g\nmode: %.3g" % (rv.mean()*rv.Rb, rv.median()*rv.Rb, rv.mode()*rv.Rb)
         signal_axes.text(0.03,0.95,textstr,transform=signal_axes.transAxes,fontsize=8,verticalalignment='top',bbox=props)
 
 	if credible_intervals is not None:
