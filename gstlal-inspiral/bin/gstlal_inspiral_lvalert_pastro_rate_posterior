@@ -285,8 +285,8 @@ def plot_rates(rv, credible_intervals = None):
 
 	signal_axes.set_ylim((1e-3, 1.))
 
-        textstr = "mean: %.3g\nmedian: %.3g\nmax likelihood rate: %.3g" % (rv.mean()*rv.Rb, rv.median()*rv.Rb, rv.mode()*rv.Rb)
-        signal_axes.text(0.05,0.95,textstr,transform=signal_axes.transAxes,fontsize=8,verticalalignment='top',bbox=props)
+        textstr = "mean: %.3g\nmedian: %.3g\nmax likelihood: %.3g" % (rv.mean()*rv.Rb, rv.median()*rv.Rb, rv.mode()*rv.Rb)
+        signal_axes.text(0.03,0.95,textstr,transform=signal_axes.transAxes,fontsize=8,verticalalignment='top',bbox=props)
 
 	if credible_intervals is not None:
 		alpha = 1.0 / (1.0 + len(credible_intervals))
@@ -316,7 +316,16 @@ def get_ln_f_over_b(ranking_data, ln_likelihood_ratios):
                 raise ValueError("infinity encountered in ranking statistic PDF ratios")
         return ln_f_over_b
 
-
+def build_trigger_database(trigger_databases):
+        if len(trigger_databases)>1:
+                filelist = []
+                for i in range(len(trigger_databases)):
+                        filelist.append(glob.glob(trigger_databases[i]))
+                assert (len(filelist)==len(trigger_databases)), "Files not found in directory!"
+        else:
+                filelist = glob.glob(trigger_databases[0])
+                assert (len(filelist)>0), "File not found in directory!"
+        return filelist
 #
 # =============================================================================
 #
@@ -338,12 +347,7 @@ if not graceids:
         graceids = [str(lvalert_data["uid"])]
 
 gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
-if len(options.trigger_database_glob)>1:
-        trigger_databases = []
-        for i in range(len(options.trigger_database_glob)):
-                trigger_databases.append(glob.glob(options.trigger_database_glob[i]))
-else:
-        trigger_databases = glob.glob(options.trigger_database_glob[0])
+trigger_databases = build_trigger_database(options.trigger_database_glob)
 
 for graceid in graceids:
         #load ranking statistic PDFs and compute event log likelihood ratio
