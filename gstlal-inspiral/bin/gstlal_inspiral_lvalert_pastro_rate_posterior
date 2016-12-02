@@ -175,10 +175,11 @@ class count_ratio_lnposterior(scipy.stats.rv_continuous):
 	def __init__(self, ln_f_over_b, ln_prior=None):
 		super(count_ratio_lnposterior, self).__init__(a=1e-10, b=100.0/len(ln_f_over_b))
                 self.ln_f_over_b = numpy.sort(ln_f_over_b)
-		if ln_prior is None:
-			self.ln_prior = lambda x: -0.5*numpy.log(x) # Jeffrey's prior
-		else:
-			self.ln_prior = ln_prior
+                #FIXME: Jeffrey's prior already hardcoded in LogPosterior
+		#if ln_prior is None:
+	        #        self.ln_prior = lambda Rf: -0.5*numpy.log(Rf) # Jeffrey's prior
+		#else:
+		#	self.ln_prior = ln_prior
 		self.Rb = len(ln_f_over_b)
                 self.norm = 1.0
 		self.norm = 1.0 / scipy.integrate.quad(self.pdf, self.a, self.b)[0]
@@ -186,11 +187,9 @@ class count_ratio_lnposterior(scipy.stats.rv_continuous):
 
 	def _pdf(self, Rr):
 		Rf = Rr * self.Rb
-                x = self.ln_f_over_b + numpy.log(Rr)
-                i = numpy.searchsorted(x, 33)
-                ln_L = -Rf + numpy.sum(numpy.log1p(numpy.exp(x[:i]))) + numpy.sum(x[i:])
-                ln_P = ln_L + self.ln_prior(Rf)
-                return numpy.exp(numpy.log(self.norm) + ln_P)
+                logposterior = rate_estimation.LogPosterior(self.ln_f_over_b) # initialize
+                logp = lambda Rf: logposterior((Rf, self.Rb)) - logposterior((1., self.Rb)) # turn into lambda function to integrate over
+                return numpy.exp(logp(Rf))*self.norm
 
 	def _munp(self, n, *args):
 		return scipy.integrate.quad(lambda x: x**n * self.pdf(x), self.a, self.b)[0]
@@ -199,13 +198,6 @@ class count_ratio_lnposterior(scipy.stats.rv_continuous):
 		if self._mode is None:
 			self._mode = scipy.optimize.fminbound(lambda x: -self.pdf(x), self.a, self.b)
 		return self._mode
-
-def posterior(ln_f_over_b):
-        logposterior = rate_estimation.LogPosterior(ln_f_over_b) # initialize
-        logp = lambda Rf: logposterior((Rf, len(ln_f_over_b))) - 40000 # turn into lambda function to integrate over
-        p = lambda Rf: numpy.exp(logposterior((Rf, len(ln_f_over_b))) - 40000)
-        p_norm = scipy.integrate.quad(p, 1e-10,100./len(ln_f_over_b))[0]
-        return lambda Rf: numpy.exp(logposterior((Rf, len(ln_f_over_b))) - 40000)/p_norm * numpy.exp(40000)
         
 def hpd_credible_interval(alpha, rv):
 	# computes the highest posterior density bayesian credible interval
