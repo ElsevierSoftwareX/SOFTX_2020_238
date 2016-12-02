@@ -200,6 +200,13 @@ class count_ratio_lnposterior(scipy.stats.rv_continuous):
 			self._mode = scipy.optimize.fminbound(lambda x: -self.pdf(x), self.a, self.b)
 		return self._mode
 
+def posterior(ln_f_over_b):
+        logposterior = rate_estimation.LogPosterior(ln_f_over_b) # initialize
+        logp = lambda Rf: logposterior((Rf, len(ln_f_over_b))) - 40000 # turn into lambda function to integrate over
+        p = lambda Rf: numpy.exp(logposterior((Rf, len(ln_f_over_b))) - 40000)
+        p_norm = scipy.integrate.quad(p, 1e-10,100./len(ln_f_over_b))[0]
+        return lambda Rf: numpy.exp(logposterior((Rf, len(ln_f_over_b))) - 40000)/p_norm * numpy.exp(40000)
+        
 def hpd_credible_interval(alpha, rv):
 	# computes the highest posterior density bayesian credible interval
 	def err(p):
@@ -270,12 +277,13 @@ WHERE
 
 
 def plot_rates(rv, credible_intervals = None):
+        props = dict(boxstyle='round',facecolor='white')
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((4., 4. / golden_ratio))
 	signal_axes = fig.gca()
-
-	x = numpy.logspace(-4., 2.) # FIXME: don't hardcode
+        
+	x = numpy.logspace(numpy.log10(min(credible_intervals.values())[0]*rv.Rb), numpy.log10(max(credible_intervals.values())[1]*rv.Rb)+1.0)
 	y = numpy.array([rv.pdf(xx / rv.Rb) / rv.Rb for xx in x])
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
 	signal_axes.set_title("Event Rate Posterior")
@@ -284,6 +292,9 @@ def plot_rates(rv, credible_intervals = None):
 	signal_axes.loglog()
 
 	signal_axes.set_ylim((1e-3, 1.))
+
+        textstr = "mean: %.3g\nmedian: %.3g\nmax likelihood rate: %.3g" % (rv.mean()*rv.Rb, rv.median()*rv.Rb, rv.mode()*rv.Rb)
+        signal_axes.text(0.05,0.95,textstr,transform=signal_axes.transAxes,fontsize=8,verticalalignment='top',bbox=props)
 
 	if credible_intervals is not None:
 		alpha = 1.0 / (1.0 + len(credible_intervals))
