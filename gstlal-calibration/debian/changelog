@@ -1,3 +1,11 @@
+gstlal-calibration (1.0.10-1) unstable; urgency=low
+
+  * Bug fix to make primary and redundant pipelines produce identical
+    output.
+  * Added DARM line coherence gating to kappa_tst.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sat, 03 Dec 2016 09:23:45 -0600
+
 gstlal-calibration (1.0.9-1) unstable; urgency=low
 
   * Changed calib_state_vector calculation to better accommodate changes
