@@ -1,4 +1,4 @@
-gstlal-calibration (1.0.10-1) unstable; urgency=low
+gstlal-calibration (1.1.0-1) unstable; urgency=low
 
   * Bug fix to make primary and redundant pipelines produce identical
     output.
