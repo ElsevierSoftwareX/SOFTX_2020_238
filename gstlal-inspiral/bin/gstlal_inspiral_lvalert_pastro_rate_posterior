@@ -170,10 +170,10 @@ def parse_command_line():
 # =============================================================================
 #
 
-class count_ratio_lnposterior(scipy.stats.rv_continuous):
+class count_ratio_posterior(scipy.stats.rv_continuous):
 
 	def __init__(self, ln_f_over_b, ln_prior=None):
-		super(count_ratio_lnposterior, self).__init__(a=1e-10, b=100.0/len(ln_f_over_b))
+		super(count_ratio_posterior, self).__init__(a=1e-10, b=100.0/len(ln_f_over_b))
                 self.ln_f_over_b = numpy.sort(ln_f_over_b)
                 #FIXME: Jeffrey's prior already hardcoded in LogPosterior
 		#if ln_prior is None:
@@ -269,7 +269,7 @@ WHERE
 
 
 def plot_rates(rv, credible_intervals = None):
-        props = dict(boxstyle='round',facecolor='white')
+        props = dict(boxstyle='round',facecolor='white',alpha=0.5)
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((4., 4. / golden_ratio))
@@ -353,12 +353,13 @@ for graceid in graceids:
         #load ranking statistic PDFs and compute event log likelihood ratio
         ranking_data = lvalert_load_ranking_data(gracedb_client, graceid, options.threshold, ignore_404 = options.skip_404, verbose = options.verbose)
         event_ln_likelihood_ratio, event_endtime, event_mass = lvalert_event_ln_likelihood_ratio_endtime_mass(gracedb_client, graceid, ignore_404 = options.skip_404)
+
         # load search results
         background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(trigger_databases, event_endtime, event_mass, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
 
         # file names
         filename1 = "%s_rate_posteriors.png" % graceid
-        filename2 = "%s_p_terrestrial.txt" % graceid
+        filename2 = "%s_rate_posteriors.txt" % graceid
         txt_file = open(filename2, "w")
 
         # calculate rate posteriors
@@ -372,13 +373,16 @@ for graceid in graceids:
         txt_file.write("adding event to zerolag events\n")
         ln_f_over_b = numpy.append(ln_f_over_b, event_ln_f_over_b)
         ln_f_over_b.sort()
+
         # rate posterior
-        Rr_posterior = count_ratio_lnposterior(ln_f_over_b)
+        Rr_posterior = count_ratio_posterior(ln_f_over_b)
+
         # terrestrial probabilities
         p_terrestrial = [false_alarm_probability(x, Rr_posterior) for x in numpy.exp(event_ln_f_over_b)]
         txt_file.write("terrestrial probability of event = %g\n" % p_terrestrial[0])
         if options.verbose:
                 print >> sys.stderr, "terrestrial probability of event = %g" % p_terrestrial[0]
+
         # find credible intervals
         if options.credible_intervals:
                 if options.verbose:
@@ -399,13 +403,15 @@ for graceid in graceids:
 		        print >> sys.stderr, "%g%% credible interval = [%g, %g] signals/experiment" % (cred * 100., lo * Rr_posterior.Rb, hi * Rr_posterior.Rb)
                         txt_file.write("%g%% credible interval = [%g, %g] signals/experiment\n" % (cred * 100., lo * Rr_posterior.Rb, hi * Rr_posterior.Rb))
         txt_file.close()
+
+        # plot posterior
         fig = plot_rates(Rr_posterior, credible_intervals = credible_intervals)
         if options.no_upload:
                 logging.info("writing %s ..." % filename1)
 	        fig.savefig(filename1)
         else:
-                lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename1, log_message = "Rate posteriors plot", tagname = None)
-                lvalert_helper.upload_file(gracedb_client, graceid, filename = filename2, log_message = "P(terrestrial) = %g" % p_terrestrial[0])
+                lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename1, log_message = "Rate posteriors plot", tagname = 'pe')
+                lvalert_helper.upload_file(gracedb_client, graceid, filename = filename2, log_message = "P(terrestrial) = %g" % p_terrestrial[0], tagname = 'pe')
         logging.info("finished processing %s" % graceid)                   
         if options.verbose:
 	        print >> sys.stderr, "done"
