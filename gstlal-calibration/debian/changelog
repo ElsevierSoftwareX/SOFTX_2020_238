@@ -1,3 +1,10 @@
+gstlal-calibration (1.1.1-1) unstable; urgency=low
+
+  * Second bug fix to make primary and redundant pipelines produce
+    identical output.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Wed, 07 Dec 2016 11:26:43 -0600
+
 gstlal-calibration (1.1.0-1) unstable; urgency=low
 
   * Bug fix to make primary and redundant pipelines produce identical
