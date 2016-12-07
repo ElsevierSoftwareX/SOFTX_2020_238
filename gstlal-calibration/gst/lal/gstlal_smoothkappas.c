@@ -342,6 +342,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
 	gboolean success = TRUE;
 	gsize unit_size;
+	gint rate_in, rate_out;
 
 	/*
 	 * parse the caps
@@ -351,6 +352,9 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GstStructure *str = gst_caps_get_structure(incaps, 0);
 	const gchar *name = gst_structure_get_string(str, "format");
 	success &= (name != NULL);
+	success &= gst_structure_get_int(gst_caps_get_structure(incaps, 0), "rate", &rate_in);
+	success &= gst_structure_get_int(gst_caps_get_structure(outcaps, 0), "rate", &rate_out);
+	success &= (rate_in == rate_out);
 
 	if(!success)
 		GST_ERROR_OBJECT(element, "unable to parse caps %" GST_PTR_FORMAT, incaps);
@@ -376,6 +380,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 			g_assert_not_reached();
 
 		element->unit_size = unit_size;
+		element->rate = rate_in;
 	}
 
 	return success;
@@ -400,20 +405,14 @@ static gboolean start(GstBaseTransform *trans)
 	element->avg_array_im = g_malloc(sizeof(double) * element->avg_array_size);
 
 	int i;
-	for(i = 0; i < element->array_size; i++, (element->fifo_array_re)++, (element->fifo_array_im)++) { 
-		*(element->fifo_array_re) = element->default_kappa_re;
-		*(element->fifo_array_im) = element->default_kappa_im;
+	for(i = 0; i < element->array_size; i++) { 
+		(element->fifo_array_re)[i] = element->default_kappa_re;
+		(element->fifo_array_im)[i] = element->default_kappa_im;
 	}
-	for(i = 0; i < element->avg_array_size; i++, (element->avg_array_re)++, (element->avg_array_im)++) {
-		*(element->avg_array_re) = element->default_kappa_re;
-		*(element->avg_array_im) = element->default_kappa_im;
+	for(i = 0; i < element->avg_array_size; i++) {
+		(element->avg_array_re)[i] = element->default_kappa_re;
+		(element->avg_array_im)[i] = element->default_kappa_im;
 	}
-
-	(element->fifo_array_re) -= element->array_size;
-	(element->fifo_array_im) -= element->array_size;
-
-	(element->avg_array_re) -= element->avg_array_size;
-	(element->avg_array_im) -= element->avg_array_size;
 
 	return TRUE;
 }
@@ -429,6 +428,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
 	GstMapInfo inmap, outmap;
 	GstFlowReturn result;
+
+	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf))) {
+		element->avg_index_re = ((GST_BUFFER_PTS(inbuf) * element->rate) / 1000000000) % element->avg_array_size;
+		element->avg_index_im = ((GST_BUFFER_PTS(inbuf) * element->rate) / 1000000000) % element->avg_array_size;
+	}
 
 	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
@@ -743,6 +747,7 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 static void gstlal_smoothkappas_init(GSTLALSmoothKappas *element)
 {
 	element->unit_size = 0;
+	element->rate = 0;
 	element->array_size = 0;
 	element->avg_array_size = 0;
 	element->fifo_array_re = NULL;

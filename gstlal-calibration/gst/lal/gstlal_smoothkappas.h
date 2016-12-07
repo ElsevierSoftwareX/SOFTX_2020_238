@@ -61,6 +61,7 @@ struct _GSTLALSmoothKappas {
 	GstBaseTransform element;
 
 	gint unit_size;
+	gint rate;
 	double current_median_re;
 	double current_median_im;
 	double *fifo_array_re;
