@@ -105,10 +105,28 @@ def calc_expected_snr(inj):
 	# FIXME have better scheme for calculating the needed sample_rate
 	sample_rate = 16384.0
 
-	approximant = lalsimulation.GetApproximantFromString(str(inj.waveform))
-	pn_order = lalsimulation.GetOrderFromString(str(inj.waveform))
+	parameters = {}
+	parameters['m1'] = inj.mass1*lal.MSUN_SI
+	parameters['m2'] = inj.mass2*lal.MSUN_SI
+	parameters['S1x'] = inj.spin1x
+	parameters['S1y'] = inj.spin1y
+	parameters['S1z'] = inj.spin1z
+	parameters['S2x'] = inj.spin2x
+	parameters['S2y'] = inj.spin2y
+	parameters['S2z'] = inj.spin2z
+	parameters['distance'] = inj.distance*1e6*lal.PC_SI
+	parameters['inclination'] = inj.inclination
+	parameters['phiRef'] = inj.coa_phase
+	parameters['longAscNodes'] = 0.0
+	parameters['eccentricity'] = 0.0
+	parameters['meanPerAno'] = 0.0
+	parameters['deltaT'] = 1.0 / sample_rate
+	parameters['f_min'] = options.flow
+	parameters['f_ref'] = 0.0
+	parameters['LALparams'] = None
+	parameters['approximant'] = lalsimulation.GetApproximantFromString(str(inj.waveform))
 
-	h_plus, h_cross = lalsimulation.SimInspiralTD(inj.coa_phase, 1.0 / sample_rate, inj.mass1*lal.MSUN_SI, inj.mass2*lal.MSUN_SI, inj.spin1x, inj.spin1y, inj.spin1z, inj.spin2x, inj.spin2y, inj.spin2z, options.flow, 0.0, inj.distance*1e6*lal.PC_SI, 0.0, inj.inclination, 0.0, 0.0, None, None, inj.amp_order, pn_order, approximant)
+	h_plus, h_cross = lalsimulation.SimInspiralTD(**parameters)
 
 	h_plus.epoch += inj.geocent_end_time
 	h_cross.epoch += inj.geocent_end_time
