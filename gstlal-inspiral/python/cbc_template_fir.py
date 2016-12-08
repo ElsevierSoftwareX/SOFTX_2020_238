@@ -101,31 +101,29 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	# We don't here because it is not guaranteed to be orthogonal
 	# and we add orthogonal phase later
 
-	hplus, hcross = lalsim.SimInspiralFD(
-		0., # phase
-		1.0 / duration, # sampling interval
-		lal.MSUN_SI * template_bank_row.mass1,
-		lal.MSUN_SI * template_bank_row.mass2,
-		template_bank_row.spin1x,
-		template_bank_row.spin1y,
-		template_bank_row.spin1z,
-		template_bank_row.spin2x,
-		template_bank_row.spin2y,
-		template_bank_row.spin2z,
-		f_low,
-		f_high,
-		0., #FIXME chosen until suitable default value for f_ref is defined
-		1.e6 * lal.PC_SI, # distance
-		0., # redshift
-		0., # inclination
-		0., # tidal deformability lambda 1
-		0., # tidal deformability lambda 2
-		None, # waveform flags
-		None, # Non GR params
-		amporder,
-		order,
-		lalsim.GetApproximantFromString(str(approximant))
-		)
+	parameters = {}
+	parameters['m1'] = lal.MSUN_SI * template_bank_row.mass1
+	parameters['m2'] = lal.MSUN_SI * template_bank_row.mass2
+	parameters['S1x'] = template_bank_row.spin1x
+	parameters['S1y'] = template_bank_row.spin1y
+	parameters['S1z'] = template_bank_row.spin1z
+	parameters['S2x'] = template_bank_row.spin2x
+	parameters['S2y'] = template_bank_row.spin2y
+	parameters['S2z'] = template_bank_row.spin2z
+	parameters['distance'] = 1.e6 * lal.PC_SI
+	parameters['inclination'] = 0.
+	parameters['phiRef'] = 0.
+	parameters['longAscNodes'] = 0.
+	parameters['eccentricity'] = 0.
+	parameters['meanPerAno'] = 0.
+	parameters['deltaF'] = 1.0 / duration
+	parameters['f_min'] = f_low
+	parameters['f_max'] = f_high
+	parameters['f_ref'] = 0.
+	parameters['LALparams'] = None
+	parameters['approximant'] = lalsim.GetApproximantFromString(str(approximant))
+
+	hplus, hcross = lalsim.SimInspiralFD(**parameters)
 	# NOTE assumes fhigh is the Nyquist frequency!!!
 	assert len(hplus.data.data) == int(round(sample_rate * duration))//2 +1
 	return hplus
