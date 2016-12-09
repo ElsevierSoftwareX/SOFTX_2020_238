@@ -54,8 +54,8 @@ def parse_form(form):
 	# FIXME don't hard code, get from URL
 	#base_path = "/home/gstlalcbctest/engineering/10/S6/bns"
 	#jobdirs = ["by_job/%04d" % i for i in range(10)]
-	base_path = "/home/gstlalcbctest/engineering/10/trigs"
-	jobdirs = ["by_job/%04d" % i for i in range(163)]
+	base_path = "/home/gstlalcbc/observing/2/online/trigs"
+	jobdirs = ["by_job/%04d" % i for i in range(191)]
 
 	return reqId, query, query_time, duration, datatype, base_path, jobdirs
 
@@ -477,7 +477,9 @@ if "nagios" in query:
 	
 	import json
 	delay = [x[1] for x in out_data]
-	status = [x for x in delay if x > 300.]
+	# under some circumstances this can take up to 600 seconds...(though it
+	# really should be much faster
+	status = [x for x in delay if x > 600.]
 	if len(status) > 0:
 		print  json.dumps({"nagios_shib_scraper_ver": 0.1, "status_intervals":[{"num_status": 2, "txt_status": "%d jobs more than 3 mins behind" % len(status)}]}, sort_keys=True, indent=4, separators=(',', ': '))
 	else:
