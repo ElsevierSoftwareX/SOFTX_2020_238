@@ -1,3 +1,10 @@
+gstlal-calibration (1.1.2-1) unstable; urgency=low
+
+  * Bug fix to allow offline version of GDS pipeline to produce output
+    with recent updates
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sun, 11 Dec 2016 15:55:13 -0600
+
 gstlal-calibration (1.1.1-1) unstable; urgency=low
 
   * Second bug fix to make primary and redundant pipelines produce
