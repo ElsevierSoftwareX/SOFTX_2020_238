@@ -260,17 +260,17 @@ def split_into_real(pipeline, complex_chan):
 	pipeparts.src_deferred_link(elem, "src_1", imag.get_static_pad("sink"))
 	return real, imag
 
-def demodulate(pipeline, head, freq, td, caps, integration_samples):
+def demodulate(pipeline, head, freq, td, caps, integration_samples, latency):
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq)
 	headR, headI = split_into_real(pipeline, head)
 	headR = pipeparts.mkresample(pipeline, headR)
 	headR = pipeparts.mkcapsfilter(pipeline, headR, caps)
-	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples + 1)], time_domain = td)
+	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples + 1)], time_domain = td, latency = latency)
 	headI = pipeparts.mkresample(pipeline, headI)
         headI = pipeparts.mkcapsfilter(pipeline, headI, caps)
-	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples + 1)], time_domain = td)
+	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples + 1)], time_domain = td, latency = latency)
 	head = merge_into_complex(pipeline, headR, headI)
 
 	# headR, headI = split_into_real(pipeline, headtee)
