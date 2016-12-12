@@ -1322,7 +1322,7 @@ if not options.lloid_cache and not options.disable_calc_inj_snr:
 	for inj in options.injections:
 		injsnrnodes.append(inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes,
 			opts = {"flow":options.flow},
-			input_files = {"injection-file":inj.split(':')[-1], "reference-psd-cache":"reference_psd.cache"}
+			input_files = {"injection-file":inj.split(':')[-1], "reference-psd-cache":options.psd_cache}
 		))
 
 if options.bank_cache:
