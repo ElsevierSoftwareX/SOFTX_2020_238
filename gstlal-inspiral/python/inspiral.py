@@ -608,6 +608,7 @@ class Data(object):
 				if mapinfo.data:
 					events.extend(streamthinca.SnglInspiral.from_buffer(mapinfo.data))
 				memory.unmap(mapinfo)
+
 			# Find max SNR sngles
 			if events:
 				max_snr_event = max(events, key = lambda t: t.snr)
@@ -622,6 +623,9 @@ class Data(object):
 			buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
 			self.coincs_document.add_to_search_summary_outseg(buf_seg)
 			self.seglistdicts["triggersegments"][instrument] |= segments.segmentlist((buf_seg,))
+
+			# safety check end times
+			assert all(event.end in buf_seg for event in events)
 
 			# set metadata on triggers.  because this uses the
 			# ID generator attached to the database-backed
@@ -710,14 +714,7 @@ class Data(object):
 			# single-detector times from contaminating our
 			# noise model, so it's not necessary for this test
 			# to be super precisely defined.
-			# FIXME FIXME FIXME buf_timestamp - 1.0 is used to
-			# be the maximum offset a template can have within
-			# a buffer that would cause its end time to be
-			# before the true buffer boundary start.  This
-			# comes from the largest negative offset in any
-			# given SVD bank.  ITAC should be patched to do
-			# this once synchronization issues are sorted
-			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp - 1.0, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
+			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
 
 				if len(self.seglistdicts["whitehtsegments"].keys_at(event.end)) > 1:
 					self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
