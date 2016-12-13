@@ -212,6 +212,15 @@ class StreamThinca(object):
 		return 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI
 
 
+	@property
+	def discard_boundary(self):
+		"""
+		After invoking .run_coincidence(), triggers prior to this
+		time are no longer required.
+		"""
+		return self.last_boundary - self.coincidence_back_off
+
+
 	def add_events(self, xmldoc, process_id, events, boundary, fapfar = None):
 		# invalidate the coinc extractor in case all that follows
 		# is a no-op
@@ -228,6 +237,10 @@ class StreamThinca(object):
 			# so we can watch for it changing
 			assert self._xmldoc is None
 			self._xmldoc = xmldoc
+			# How far apart two singles can be and still be
+			# coincident, including time slide offsets.
+			offsetvectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
+			self.coincidence_back_off = max(map(abs, offsetvectors.values())) + self.max_dt
 
 		# append the new row objects to our sngl_inspiral table
 		for event in events:
@@ -289,11 +302,6 @@ class StreamThinca(object):
 		if self.last_boundary + self.thinca_interval > boundary or self.sngl_inspiral_table is None:
 			return []
 
-		# how far apart two singles can be and still be coincident,
-		# including time slide offsets.
-		offsetvectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
-		coincidence_back_off = max(map(abs, offsetvectors.values())) + self.max_dt
-
 		# we need our own copies of these other tables because
 		# sometimes ligolw_thinca wants to modify the attributes of
 		# a row object after appending it to a table, which isn't
@@ -323,7 +331,7 @@ class StreamThinca(object):
 		# events with an SNR less than 5.  Less than SNR 5 triggers
 		# will never produce an log LR greater than 4, so we can
 		# safely discard them.
-		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - coincidence_back_off, boundary - coincidence_back_off)):
+		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - self.coincidence_back_off, boundary - self.coincidence_back_off)):
 			# False/0 = keep, True/non-0 = discard
 			if len(events) == 1 and events[0].snr < 5:
 				return True
@@ -410,7 +418,7 @@ class StreamThinca(object):
 		# remove triggers that are too old to be useful from our
 		# internal sngl_inspiral table.  save any that were never
 		# used in coincidences
-		discard_boundary = self.last_boundary - coincidence_back_off
+		discard_boundary = self.discard_boundary
 		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.end < discard_boundary and row.event_id not in self.event_ids]
 		iterutils.inplace_filter(lambda row: row.end >= discard_boundary, self.sngl_inspiral_table)
 
