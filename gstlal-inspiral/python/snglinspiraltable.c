@@ -309,6 +309,7 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 		}
 
 		PyList_Append(result, item);
+		Py_DECREF(item);
 	}
 
 	if (data != end)
