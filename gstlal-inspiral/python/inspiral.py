@@ -526,6 +526,7 @@ class Data(object):
 		#
 
 		self.coincs_document = CoincsDocument(url, process_params, comment, coinc_params_distributions.instruments, seg, offsetvectors, injection_filename = injection_filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+		self.snr_time_series_cleanup_index = 0
 
 		#
 		# attach a StreamThinca instance to ourselves
@@ -751,16 +752,18 @@ class Data(object):
 				self.__do_gracedb_alerts()
 				self.__update_eye_candy()
 
-			# no longer need per-trigger SNR data for the
-			# triggers that were used in coincs in this
-			# iteration (they can't participate in any more
-			# coincs and will not be used for gracedb alerts).
-			# triggers that never participate in any coincs
-			# will eventually be removed from memory altogether
-			# so we don't need to worry about those.
-			for coinc_event_id in self.stream_thinca.last_coincs:
-				for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
-					del event.snr_time_series
+			# after doing alerts, no longer need per-trigger
+			# SNR data for the triggers that are too old to be
+			# used to form candidates.  to avoid searching the
+			# entire list of triggers each time, we stop when
+			# we encounter the first trigger whose SNR series
+			# might still be needed, save its index, and start
+			# the search from there next time
+			discard_boundary = self.stream_thinca.discard_boundary
+			for self.snr_time_series_cleanup_index, event in enumerate(self.coincs_document.sngl_inspiral_table[self.snr_time_series_cleanup_index:], self.snr_time_series_cleanup_index):
+				if event.end >= discard_boundary:
+					break
+				del event.snr_time_series
 
 	def __get_likelihood_file(self):
 		# generate a coinc parameter distribution document.  NOTE:
@@ -837,20 +840,21 @@ class Data(object):
 				if coinc_event.likelihood is not None and not any(offset_vector.values()):
 					self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
 
-
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
 			self.__do_gracedb_alerts()
 
-		# no longer need per-trigger SNR data for the triggers that
-		# were used in coincs in this iteration (they can't
-		# participate in any more coincs and will not be used for
-		# gracedb alerts).  triggers that never participate in any
-		# coincs will eventually be removed from memory altogether
-		# so we don't need to worry about those.
-		for coinc_event_id in self.stream_thinca.last_coincs:
-			for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
-				del event.snr_time_series
+		# after doing alerts, no longer need per-trigger SNR data
+		# for the triggers that are too old to be used to form
+		# candidates.  to avoid searching the entire list of
+		# triggers each time, we stop when we encounter the first
+		# trigger whose SNR series might still be needed, save its
+		# index, and start the search from there next time
+		discard_boundary = self.stream_thinca.discard_boundary
+		for self.snr_time_series_cleanup_index, event in enumerate(self.coincs_document.sngl_inspiral_table[self.snr_time_series_cleanup_index:], self.snr_time_series_cleanup_index):
+			if event.end >= discard_boundary:
+				break
+			del event.snr_time_series
 
 	def flush(self):
 		with self.lock:
@@ -1194,3 +1198,4 @@ class Data(object):
 			# can't be used anymore
 			del self.coincs_document
 			self.coincs_document = coincs_document
+			self.snr_time_series_cleanup_index = 0
