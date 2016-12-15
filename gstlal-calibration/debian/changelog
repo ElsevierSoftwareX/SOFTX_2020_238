@@ -1,3 +1,9 @@
+gstlal-calibration (1.1.3-1) unstable; urgency=low
+
+  * Added queues before gates to prevent pipeline from hanging.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Thu, 15 Dec 2016 14:54:48 -0600
+
 gstlal-calibration (1.1.2-1) unstable; urgency=low
 
   * Bug fix to allow offline version of GDS pipeline to produce output
