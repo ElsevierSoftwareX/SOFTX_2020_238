@@ -478,7 +478,6 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 			if len(bank_list) != 1:
 				raise ValueError("%s instrument: number of banks is not equal to 1, can not do coherent analysis" % instrument)
 		autocorrelation_fname = autocorrelation_fname.rstrip(',')
-		print autocorrelation_fname
 		autocorrelation_fname_list.append(autocorrelation_fname)
 
 	for instrument in banks[0].keys():
@@ -574,6 +573,8 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 				sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		if verbose:
+		  print "%s: max rate of all banks %d Hz" % (instrument, sngl_max_rate)
 		if veto_segments is not None:		
 			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
@@ -729,7 +730,6 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 			if len(bank_list) != 1:
 				raise valueerror("%s instrument: number of banks is not equal to other banks, can not do coherent analysis" % instrument)
 		autocorrelation_fname = autocorrelation_fname.rstrip(',')
-		print autocorrelation_fname
 		autocorrelation_fname_list.append(autocorrelation_fname)
 
 	for instrument in banks[0].keys():

@@ -355,16 +355,23 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     xns[icombo+4*ncombo].data = &(array_cdf[icombo]);
   }
 
-  printf("before parse\n");
+  printf("before parse stats file\n");
   parseFile(filename, xns, nnode);
 
   // FIXME: need sanity check that number of rows and columns are the same
   // with the struct of BackgroundStats
   /* load to stats */
 
+  printf( "after parse stats file\n" );
   int x_nbin = stats[0]->pdf->x_nbin, y_nbin = stats[0]->pdf->y_nbin;
   int x_size = sizeof(double) * x_nbin, y_size = sizeof(double) * y_nbin;
   int xy_size = sizeof(double) * x_nbin * y_nbin;
+
+  /* make sure the dimensions of the acquired array is consistent 
+   * with the dimensions we can read set in the .h file
+   */
+  g_assert(array_lgsnr_bins[0].dim[0] == x_nbin);
+  g_assert(array_lgchisq_bins[0].dim[0] == y_nbin);
 
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
@@ -375,7 +382,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     memcpy(((gsl_matrix *)cur_stats->pdf->data)->data, array_pdf[icombo].data, xy_size);
     memcpy(((gsl_matrix *)cur_stats->cdf->data)->data, array_cdf[icombo].data, xy_size);
   }
-  printf("done memcpy\n");
+
   for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_lgsnr_bins + icombo);
     freeArray(array_lgchisq_bins + icombo);
