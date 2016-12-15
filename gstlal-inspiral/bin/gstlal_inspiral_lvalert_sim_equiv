@@ -1,0 +1,255 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2013--2016  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+## @file gstlal_inspiral_lvalert_sim_equiv
+# A program to listen to lvalerts, download the candidate data from gstlal gracedb events, and upload XML documents containing sim_inspiral entries to reproduce simulations of the candidates
+#
+# ### Command line interface
+#
+#	+ `--no-upload`: Write plots to disk.
+#	+ `--skip-404`: Skip events that give 404 (file not found) errors (default is to abort)
+#	+ `--gracedb-service-url`: GraceDb service url to upload (default is gracedb.DEFAULT_SERVICE_URL)
+#	+ `--verbose`: Be verbose.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import logging
+import math
+import numpy
+from optparse import OptionParser
+import sys
+import json
+
+
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import coincs as ligolw_coincs
+from glue.ligolw.utils import process as ligolw_process
+from gstlal import lvalert_helper
+import lal
+from ligo.gracedb import rest as gracedb
+from pylal import spawaveform
+
+
+#
+# =============================================================================
+#
+#                                   Library
+#
+# =============================================================================
+#
+
+
+comment_text = """This document provides injections (sim_inspiral rows) to generate waveforms corresponding to each of the triggers in the candidate.  There is one injection per trigger, and each is optimally oriented above its respective instrument.  NOTE that this is not an attempt to provide a coherent reconstruction of the signal, the injections are not, in general, consistent with one another;  the objective is allow the waveform implied by each trigger to be reconstructed for the purpose of plotting the time series, generating spectrograms, and so on.  The injections are linked to their corresponding triggers using coinc_event entries from the 'gstlal_inspiral_lvalert_sim_equiv' search (the name of the program that generated this document)."""
+
+
+def make_sim_xmldoc(xmldoc):
+	xmldoc.childNodes[-1].insertBefore(ligolw.Comment(), xmldoc.childNodes[-1].childNodes[0]).pcdata = comment_text
+	coinc_event_table = lsctables.CoincTable.get_table(xmldoc)
+	coinc_event_table.sync_next_id()
+	if len(coinc_event_table) != 1:
+		raise ValueError("ooops:  more than one candidate found in this document, cannot process")
+	coinc_event_map_table = lsctables.CoincMapTable.get_table(xmldoc)
+	sim_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SimInspiralTable, [
+		"process_id",
+		"waveform",
+		"geocent_end_time", "geocent_end_time_ns",
+		"end_time_gmst",
+		"mass1", "mass2",
+		"mchirp", "eta",
+		"distance",
+		"longitude", "latitude",
+		"inclination",
+		"coa_phase",
+		"polarization",
+		"spin1x", "spin1y", "spin1z",
+		"spin2x", "spin2y", "spin2z",
+		"simulation_id"
+	]))
+
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_lvalert_sim_equiv", {})
+	coinc_def_id = ligolw_coincs.get_coinc_def_id(xmldoc, u"gstlal_inspiral_lvalert_sim_equiv", 0, description = u"injections to emulate triggers")
+	time_slide_id = coinc_event_table[0].time_slide_id
+	offsetvector = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()[time_slide_id]
+
+	for event in lsctables.SnglInspiralTable.get_table(xmldoc):
+		#
+		# some info about the detector
+		#
+
+		detector = lal.cached_detector_by_prefix[event.ifo]
+		lng = detector.frDetector.vertexLongitudeRadians
+		lat = detector.frDetector.vertexLatitudeRadians
+		r = math.sqrt(numpy.dot(detector.location, detector.location)) / lal.C_SI
+
+		#
+		# initialize injection
+		#
+
+		sim = sim_inspiral_table.RowType()
+		sim.process_id = process.process_id
+
+		#
+		# waveform
+		#
+
+		sim.mass1, sim.mass2 = event.mass1, event.mass2
+		sim.eta = spawaveform.eta(sim.mass1, sim.mass2)
+		sim.mchirp = (sim.mass1 + sim.mass2) * sim.eta**.6
+		sim.spin1, sim.spin2 = event.spin1, event.spin2
+		# FIXME:  hard-coded = bad bad bad
+		if sim.mchirp < 1.73:
+			sim.waveform = u"TaylorF2"
+		else:
+			sim.waveform = u"SEOBNRv4_ROM"
+
+		#
+		# time and location
+		#
+		# the objective is to construct an injection that will
+		# reproduce this trigger.  we want to be able to generate
+		# the waveform using lal and see what it looks like in the
+		# time domain, as a spectrogram, and so on.  this is not
+		# the same as reconstructing a description of the best
+		# guess at the signal that passed through the Earth, we are
+		# not attempting to construct something that is consistent
+		# across instruments.
+		#
+		# for each detector we construct an equivalent optimally
+		# oriented source
+		#
+
+		sim.time_geocent = event.end + offsetvector[event.ifo] + r
+		sim.distance = event.eff_distance * 1000. # kpc / Mpc
+		sim.ra_dec = (-lng - sim.end_time_gmst) % (2. * math.pi), lat
+		sim.inclination = 0.
+		sim.coa_phase = event.coa_phase
+		sim.polarization = 0.
+
+		#
+		# add to table
+		#
+
+		sim.simulation_id = sim_inspiral_table.get_next_id()
+		sim_inspiral_table.append(sim)
+
+		#
+		# link to trigger
+		#
+
+		coinc = coinc_event_table.RowType()
+		coinc.process_id = process.process_id
+		coinc.coinc_event_id = coinc_event_table.get_next_id()
+		coinc.coinc_def_id = coinc_def_id
+		coinc.insts = event.ifo,
+		coinc.nevents = 1
+		coinc.time_slide_id = time_slide_id
+		coinc.likelihood = None
+		coinc_event_table.append(coinc)
+
+		coinc_event_map = coinc_event_map_table.RowType()
+		coinc_event_map.table_name = u"sngl_inspiral"
+		coinc_event_map.event_id = event.event_id
+		coinc_event_map.coinc_event_id = coinc.coinc_event_id
+		coinc_event_map_table.append(coinc_event_map)
+
+		coinc_event_map = coinc_event_map_table.RowType()
+		coinc_event_map.table_name = u"sim_inspiral"
+		coinc_event_map.event_id = sim.simulation_id
+		coinc_event_map.coinc_event_id = coinc.coinc_event_id
+		coinc_event_map_table.append(coinc_event_map)
+
+	return xmldoc
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--no-upload", action = "store_true", help = "Write plots to disk.")
+	parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
+	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, graceids = parser.parse_args()
+
+	if not graceids:
+		# FIXME:  lvalert_listen doesn't allow command-line
+		# options, enable logging for online analysis
+		options.verbose = True
+
+	# can only call basicConfig once (otherwise need to switch to more
+	# complex logging configuration)
+	if options.verbose:
+		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+	else:
+		logging.basicConfig(format = "%(asctime)s:%(message)s")
+
+	return options, graceids
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+options, graceids = parse_command_line()
+
+
+if not graceids:
+	lvalert_data = json.loads(sys.stdin.read())
+	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+	logging.info("lvalert data: %s" % repr(lvalert_data))
+	if lvalert_data["alert_type"] != "new":
+		logging.info("alert is not new, ignoring")
+		sys.exit()
+	graceids = [str(lvalert_data["uid"])]
+
+
+gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
+
+
+for graceid in graceids:
+	xmldoc = make_sim_xmldoc(lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid))
+	filename = "%s_sim_equiv.xml.gz" % graceid
+	if options.no_upload:
+		logging.info("writing %s ..." % filename)
+		ligolw_utils.write_filename(xmldoc, filename, gz = True, verbose = options.verbose)
+	else:
+		lvalert_helper.upload_xmldoc(gracedb_client, graceid, filename, xmldoc, log_message = "injections to emulate triggers", tagname = "pe")
+	logging.info("finished processing %s" % graceid)
