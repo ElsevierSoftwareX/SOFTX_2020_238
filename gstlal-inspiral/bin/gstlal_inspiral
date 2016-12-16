@@ -420,6 +420,8 @@ def parse_command_line():
 
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+	if options.psd_fft_length < 32:
+		raise ValueError("--psd-fft-length cannot be less than 32")
 	if options.local_frame_caching and not options.data_source == "frames":
 		raise ValueError('--local-frame-caching can only be used if --data-source = "frames"')
 	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
