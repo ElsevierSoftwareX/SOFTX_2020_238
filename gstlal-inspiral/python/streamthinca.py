@@ -241,6 +241,7 @@ class StreamThinca(object):
 			# coincident, including time slide offsets.
 			offsetvectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
 			self.coincidence_back_off = max(map(abs, offsetvectors.values())) + self.max_dt
+			self.zero_lag_time_slide_ids = frozenset(time_slide_id for time_slide_id, offsetvector in offsetvectors.items() if not any(offsetvector.values()))
 
 		# append the new row objects to our sngl_inspiral table
 		for event in events:
@@ -394,8 +395,7 @@ class StreamThinca(object):
 			self.event_ids |= newids
 
 			# find multi-instrument zero-lag coinc event IDs
-			zero_lag_time_slide_ids = set(time_slide_id for time_slide_id, offsetvector in offsetvectors.items() if not any(offsetvector.values()))
-			zero_lag_multi_instrument_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.nevents >= 2 and row.time_slide_id in zero_lag_time_slide_ids)
+			zero_lag_multi_instrument_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.nevents >= 2 and row.time_slide_id in self.zero_lag_time_slide_ids)
 
 			# singles used in coincs but not in zero-lag coincs
 			# with two or more instruments.  these will be added to
