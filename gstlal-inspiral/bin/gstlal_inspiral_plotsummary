@@ -473,7 +473,7 @@ SELECT
 	coinc_inspiral.ifos,
 	coinc_event.instruments,
 	(SELECT
-		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2, " ")
+		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2 || ":" || sngl_inspiral.spin1z || ":" || sngl_inspiral.spin2z, " ")
 	FROM
 		sngl_inspiral
 		JOIN coinc_event_map ON (
@@ -513,7 +513,7 @@ SELECT
 	coinc_inspiral.ifos,
 	coinc_event.instruments,
 	(SELECT
-		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2, " ")
+		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2 || ":" || sngl_inspiral.spin1z || ":" || sngl_inspiral.spin2z, " ")
 	FROM
 		sngl_inspiral
 		JOIN coinc_event_map ON (
@@ -576,15 +576,19 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 			("H1 &chi;<sup>2</sup>", "number"),
 			("H1 m<sub>1</sub>", "number"),
 			("H1 m<sub>2</sub>", "number"),
+			("H1 s<sub>1z</sub>", "number"),
+			("H1 s<sub>2z</sub>", "number"),
 			("L1 &rho;", "string"),
 			("L1 &chi;<sup>2</sup>", "number"),
 			("L1 m<sub>1</sub>", "number"),
-			("L1 m<sub>2</sub>", "number")
+			("L1 m<sub>2</sub>", "number"),
+			("L1 s<sub>1z</sub>", "number"),
+			("L1 s<sub>2z</sub>", "number")
 		]
 		for rank, values in enumerate(candidates, 1):
 			row = [rank] + [float(v) for v in values[:7]] + list(values[7:9])
 			# values[9] is a string that is e.g., H1:4.8993754:1.0139208:2.061641:1.145543 L1:8.2582664:1.1890973:2.061641:1.145543
-			ifodict = {"H1": [-1,-1,-1,-1], "L1": [-1,-1,-1,-1]}
+			ifodict = {"H1": [-1,-1,-1,-1,-1,-1], "L1": [-1,-1,-1,-1,-1,-1]}
 			for ifo_row in values[9].split():
 				ifodata = ifo_row.split(":")
 				ifodict[ifodata[0]] = [float(v) for v in ifodata[1:]]
