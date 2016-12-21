@@ -928,14 +928,14 @@ class ParameterAccuracyPlots(object):
 			hist(numpy.array([(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs]), axes)
 			yield fig, "eta_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Rec. End Time - Injection End Time (s)")
+			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Rec. End Time - Injection End Time (ms)")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], [sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], "kx")
+			axes.plot([sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], [(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs], "kx")
 			yield fig, "t_acc_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Rec. End Time - Injection End Time (s)", "Number")
+			fig, axes = create_plot(r"Rec. End Time - Injection End Time (ms)", "Number")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([float(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0})) for sim, sngl, far in pairs]), axes)
+			hist(numpy.array([float(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs]), axes)
 			yield fig, "t_acc_hist_%s_%s" % (waveform, instrument), False
 
 			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Rec. $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
@@ -1094,7 +1094,7 @@ WHERE
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s (Closed Box)" % instrument)
 
-			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, '.', label = "Inj")
+			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, 'r.', label = "Inj")
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.legend(loc = "upper left")
 			axes.set_xlim((self.snr_min, None))
@@ -1102,7 +1102,7 @@ WHERE
 
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s" % instrument)
-			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, '.', label = "Inj")
+			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, 'r.', label = "Inj")
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].chi2, "bx", label = "Zero-lag")
 			axes.legend(loc = "upper left")
@@ -1138,8 +1138,8 @@ WHERE
 				# background parameter distributions
 				fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\eta$")
 				axes.set_title(r"Background Events in %s (Closed Box)" % instrument)
-				coll = axes.scatter(bg_mcs, bg_etas, c = bg_snrs, linewidth = 0.2, alpha = 0.8)
-				fig.colorbar(coll, ax = axes).set_label("SNR in %s" % instrument)
+				coll = axes.scatter(bg_mcs, bg_etas, c = numpy.log10(bg_snrs), linewidth = 0.2, alpha = 0.8)
+				fig.colorbar(coll, ax = axes).set_label("log(SNR) in %s" % instrument)
 				yield fig, "bgparams_mchirp_vs_eta_vs_snr_%s" % instrument, False
 
 				# background parameter distributions
@@ -1150,15 +1150,15 @@ WHERE
 				a3 = numpy.pi / (8 * (numpy.pi * flow)**(5./3) )
 				bg_tau0s = a0 * (lal.MTSUN_SI * bg_mcs)**(-5./3)
 				bg_tau3s = (a3 / bg_etas) * (bg_etas * bg_tau0s / a0)**(2./5)
-				coll = axes.scatter(bg_tau0s, bg_tau3s, c = bg_snrs, linewidth = 0.2, alpha = 0.8)
-				fig.colorbar(coll, ax=axes).set_label("SNR in %s" % instrument)
+				coll = axes.scatter(bg_tau0s, bg_tau3s, c = numpy.log10(bg_snrs), linewidth = 0.2, alpha = 0.8)
+				fig.colorbar(coll, ax=axes).set_label("log(SNR) in %s" % instrument)
 				yield fig, "bgparams_tau0_vs_tau3_vs_snr_%s" % instrument, False
 
 				# background parameter distributions
 				fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\chi_\mathrm{eff}$")
 				axes.set_title(r"Background Events in %s (Closed Box)" % instrument)
-				coll = axes.scatter(bg_mcs, bg_chieffs, c = bg_snrs, linewidth = 0.2, alpha = 0.8)
-				fig.colorbar(coll, ax=axes).set_label("SNR in %s" % instrument)
+				coll = axes.scatter(bg_mcs, bg_chieffs, c = numpy.log10(bg_snrs), linewidth = 0.2, alpha = 0.8)
+				fig.colorbar(coll, ax=axes).set_label("log(SNR) in %s" % instrument)
 				yield fig, "bgparams_mchirp_vs_chieff_vs_snr_%s" % instrument, False
 
 
@@ -1300,14 +1300,14 @@ WHERE
 
 			fig, axes = create_plot(r"$D_{\mathrm{eff}}$ in %s" % x_instrument, r"$D_{\mathrm{eff}}$ in %s" % y_instrument, aspect = 1.0)
 			axes.set_title(r"Effective Distance in %s vs.\ %s (Closed Box)" % (y_instrument, x_instrument))
-			axes.loglog([x for x, y in points.injections_deff], [y for x, y in points.injections_deff], "rx")
+			axes.loglog([x for x, y in points.injections_deff], [y for x, y in points.injections_deff], "r.")
 			axes.loglog([x for x, y in points.background_deff], [y for x, y in points.background_deff], "kx")
 			axes.legend(("Injections", "Background"), loc = "lower right")
 			yield fig, "deff_%s_vs_%s" % (y_instrument, x_instrument), False
 
 			fig, axes = create_plot(r"$D_{\mathrm{eff}}$ in %s" % x_instrument, r"$D_{\mathrm{eff}}$ in %s" % y_instrument, aspect = 1.0)
 			axes.set_title(r"Effective Distance in %s vs.\ %s" % (y_instrument, x_instrument))
-			axes.loglog([x for x, y in points.injections_deff], [y for x, y in points.injections_deff], "rx")
+			axes.loglog([x for x, y in points.injections_deff], [y for x, y in points.injections_deff], "r.")
 			axes.loglog([x for x, y in points.background_deff], [y for x, y in points.background_deff], "kx")
 			axes.loglog([x for x, y in points.zerolag_deff], [y for x, y in points.zerolag_deff], "bx")
 			axes.legend(("Injections", "Background", "Zero-lag"), loc = "lower right")
