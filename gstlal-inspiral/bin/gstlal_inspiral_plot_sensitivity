@@ -126,12 +126,12 @@ class upper_limit(object):
                 self.total_injections.setdefault(inst,[])
 
                 # get sim-far relationships
-                found, total, missed = imr_utils.get_min_far_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
+                found, total, missed = imr_utils.get_min_far_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral")
                 self.found_injections_fars[inst] += found
                 self.total_injections[inst] += total
 
                 # get sim-snr relationships
-                found, total, missed = imr_utils.get_max_snr_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
+                found, total, missed = imr_utils.get_max_snr_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral")
                 self.found_injections_snrs[inst] += found
 
             dbtables.discard_connection_filename(f, working_filename, verbose = self.opts.verbose)
@@ -180,7 +180,7 @@ class upper_limit(object):
             ifos |= inst
 
         # retrieve single-ifo segments
-        segs = imr_utils.get_segments( connection, dbtables.get_xml(connection), "%s:table" % opts.coinc_table_name, opts.live_time_program, opts.veto_segments_name, opts.data_segments_name)
+        segs = imr_utils.get_segments( connection, dbtables.get_xml(connection), opts.coinc_table_name, opts.live_time_program, opts.veto_segments_name, opts.data_segments_name)
 
         for ifo in ifos:
             self.segments.setdefault(ifo,segments.segmentlist())
