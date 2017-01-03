@@ -534,18 +534,19 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			self.background_rates["instruments"][instruments,] = count
 
 		#
-		# populate signal instrument combination rates
+		# populate signal instrument combination rates  =
+		# self.signal_rate * probability that a signal is
+		# detectable by each of the instrument combinations.
+		# because the horizon distance is 0'ed when an instrument
+		# is off, this marginalization over horizon distance
+		# histories also accounts for duty cycles
 		#
 
-		# probability that a signal is detectable by each of the
-		# instrument combinations.  because the horizon distance is
-		# 0'ed when an instrument is off, this marginalization over
-		# horizon distance histories also accounts for duty cycles
-		P = inspiral_extrinsics.P_instruments_given_signal(self.horizon_history, min_instruments = self.min_instruments)
-
-		# populate binning from probabilities
 		self.injection_rates["instruments"].array[:] = 0.
-		for instruments, p in P.items():
+		for instruments, p in inspiral_extrinsics.P_instruments_given_signal(
+			self.horizon_history,
+			min_instruments = self.min_instruments
+		).items():
 			self.injection_rates["instruments"][instruments,] = self.signal_rate * p
 
 		#
