@@ -140,6 +140,7 @@ if __name__ == '__main__':
 			subprocess.check_call(["gstlal_segments_operations", "--union", "--verbose", "--segment-name", "statevectorsegments", "--segment-name", "whitehtsegments", "--output-segment-name", "statevectorsegments", "--output-segment-name", "whitehtsegments", "--output-file", "%s" % cumulative_segments] + seg_files)
 			seg_files_to_merge.append(cumulative_segments)
 		elif len(seg_files) == 1:
+			shutil.copyfile(seg_files[0], cumulative_segments)
 			seg_files_to_merge.append(seg_files[0])
 
 		for injection_file in inj_file_bins:
