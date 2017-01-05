@@ -918,7 +918,7 @@ static unsigned fdsfilter(GSTLALFIRBank *element, GstMapInfo *mapinfo, unsigned 
  */
 
 
-static unsigned filter(GSTLALFIRBank *element, GstMapInfo *mapinfo)
+static unsigned filter(GSTLALFIRBank *element, GstBuffer *buf)
 {
 	unsigned output_length;
 
@@ -934,6 +934,10 @@ static unsigned filter(GSTLALFIRBank *element, GstMapInfo *mapinfo)
 	 */
 
 	if(output_length) {
+		GstMapInfo mapinfo;
+
+		gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
+
 		if(element->time_domain) {
 			/*
 			 * use time-domain filter implementation;  start by
@@ -942,11 +946,11 @@ static unsigned filter(GSTLALFIRBank *element, GstMapInfo *mapinfo)
 			 */
 
 			if(GST_AUDIO_INFO_WIDTH(&element->audio_info) == 64)
-				output_length = tddfilter(element, mapinfo, output_length);
+				output_length = tddfilter(element, &mapinfo, output_length);
 			else if(GST_AUDIO_INFO_WIDTH(&element->audio_info) == 32) {
 				if(!element->workspace.tds.working_fir_matrix)
 					create_tds_workspace(element);
-				output_length = tdsfilter(element, mapinfo, output_length);
+				output_length = tdsfilter(element, &mapinfo, output_length);
 			} else
 				g_assert_not_reached();
 		} else {
@@ -959,13 +963,15 @@ static unsigned filter(GSTLALFIRBank *element, GstMapInfo *mapinfo)
 			if(GST_AUDIO_INFO_WIDTH(&element->audio_info) == 64) {
 				if(!element->workspace.fdd.working_fir_matrix)
 					create_fdd_workspace(element);
-				output_length = fddfilter(element, mapinfo, output_length);
+				output_length = fddfilter(element, &mapinfo, output_length);
 			} else if(GST_AUDIO_INFO_WIDTH(&element->audio_info) == 32) {
 				if(!element->workspace.fds.working_fir_matrix)
 					create_fds_workspace(element);
-				output_length = fdsfilter(element, mapinfo, output_length);
+				output_length = fdsfilter(element, &mapinfo, output_length);
 			}
 		}
+
+		gst_buffer_unmap(buf, &mapinfo);
 	}
 
 	/*
@@ -973,6 +979,12 @@ static unsigned filter(GSTLALFIRBank *element, GstMapInfo *mapinfo)
 	 */
 
 	gst_audioadapter_flush_samples(element->adapter, output_length);
+
+	/*
+	 * set output metadata
+	 */
+
+	set_metadata(element, buf, output_length, FALSE);
 
 	/*
 	 * done
@@ -993,9 +1005,7 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_leng
 {
 	GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 	GstBuffer *buf;
-	GstMapInfo mapinfo;
 	unsigned filter_output_length;
-	GstFlowReturn result;
 
 	/* FIXME:  if we released the fir matrix lock the matrix might
 	 * change while we do this.  but we probably shouldn't hold the
@@ -1008,13 +1018,9 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_leng
 	if(!buf)
 		return GST_FLOW_ERROR;
 
-	gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
-	filter_output_length = filter(element, &mapinfo);
-	set_metadata(element, buf, filter_output_length, FALSE);
-	gst_buffer_unmap(buf, &mapinfo);
+	filter_output_length = filter(element, buf);
 	g_assert_cmpuint(filter_output_length, ==, output_length);
-	result = gst_pad_push(srcpad, buf);
-	return result;
+	return gst_pad_push(srcpad, buf);
 }
 
 
@@ -1571,14 +1577,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * known to be all 0s
 		 */
 
-		guint samples;
-
-		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-		samples = filter(element, &mapinfo);
+		guint samples = filter(element, outbuf);
 		g_assert_cmpuint(output_length, ==, samples);
-		set_metadata(element, outbuf, samples, FALSE);
 		GST_LOG_OBJECT(element, "output is %u samples", output_length);
-		gst_buffer_unmap(outbuf, &mapinfo);
 	} else if(history_is_gap) {
 		/*
 		 * all data in hand is known to be 0s, the output is a
@@ -1602,14 +1603,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * from the history?")
 		 */
 
-		guint samples;
-
-		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-		samples = filter(element, &mapinfo);
+		guint samples = filter(element, outbuf);
 		g_assert_cmpuint(output_length, ==, samples);
-		set_metadata(element, outbuf, samples, FALSE);
 		GST_LOG_OBJECT(element, "output is %u samples", output_length);
-		gst_buffer_unmap(outbuf, &mapinfo);
 	} else {
 		/*
 		 * the tailing zeros in the history combined with the input
