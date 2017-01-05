@@ -918,7 +918,7 @@ request_new_pad(GstElement *gstelement, GstPadTemplate *templ, const gchar *unus
 
 	/* new pads can only be sink pads */
 	if(templ->direction != GST_PAD_SINK) {
-		g_warning("gstlal_timeslicechisq: request new pad that is not a SINK pad\n");
+		g_warning("gstlal_timeslicechisq: request new pad that is not a SINK pad");
 		goto not_sink;
 	}
 
@@ -1181,12 +1181,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/* check that the number of channels and timeslices match the dimension of chifacs */
 	if (num_channels(element) != element->channels) {
 		g_mutex_unlock(element->coefficients_lock);
-		GST_ERROR_OBJECT(element, "number of channels from caps negotiation X does not match second dimension of chifacs matrix Y: X = %i, Y = %i\n", element->channels, num_channels(element));
+		GST_ERROR_OBJECT(element, "number of channels from caps negotiation X does not match second dimension of chifacs matrix Y: X = %i, Y = %i", element->channels, num_channels(element));
 		goto bad_numchannels;
 	}
 	if (num_timeslices(element) != element->padcount) {
 		g_mutex_unlock(element->coefficients_lock);
-		GST_ERROR_OBJECT(element, "number of sink pads X does not match first dimension of chifacs matrix Y: X = %i, Y = %i\n", element->padcount, num_timeslices(element));
+		GST_ERROR_OBJECT(element, "number of sink pads X does not match first dimension of chifacs matrix Y: X = %i, Y = %i", element->padcount, num_timeslices(element));
 		goto bad_numtimeslices;
 	}
 
