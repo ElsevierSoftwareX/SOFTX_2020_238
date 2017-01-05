@@ -55,7 +55,7 @@ def parse_form(form):
 	#base_path = "/home/gstlalcbctest/engineering/10/S6/bns"
 	#jobdirs = ["by_job/%04d" % i for i in range(10)]
 	base_path = "/home/gstlalcbc/observing/2/online/trigs"
-	jobdirs = ["by_job/%04d" % i for i in range(191)]
+	jobdirs = ["by_job/%04d" % i for i in range(182)]
 
 	return reqId, query, query_time, duration, datatype, base_path, jobdirs
 
@@ -64,13 +64,14 @@ def gps_by_level(t, level):
 	return "/".join([x for x in str(t)[0:level]])
 
 
-def get_partial_paths_to_aggregated_data(query_time, duration):
+def get_partial_paths_to_aggregated_data(query_time, duration, level = None):
 	if query_time is None:
 		yield ""
 	else:
-		level = 10 - int(numpy.ceil(numpy.log10(duration)))
-		if level > 6:
-			level = 6
+		if level is None:
+			level = 10 - int(numpy.ceil(numpy.log10(duration)))
+			if level > 6:
+				level = 6
 		for n in count():
 			this_time = query_time - n * 10**(10-level)
 			if this_time > 0:
@@ -96,17 +97,19 @@ reqId, query, query_time, duration, datatype, base_path, jobdirs = parse_form(fo
 def stats_on_data(data):
 	return float(numpy.min(data)), float(numpy.percentile(data, 15.9)), float(numpy.percentile(data, 84.1)), float(numpy.max(data))
 
-def read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], rootdir = "aggregator", datatype = "median", age = 0.):
+def read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], rootdir = "aggregator", datatype = "median", age = 0., level = None):
 	max_time = []
 	for jobdir in jobdirs:
 		this_data = numpy.empty((0))
 		this_time = numpy.empty((0))
-		for n, partial_path in enumerate(get_partial_paths_to_aggregated_data(query_time, duration)):
+		for n, partial_path in enumerate(get_partial_paths_to_aggregated_data(query_time, duration, level = level)):
 			try:
 				fname = "%s/%s/%s/%s/%s/%s.hdf5" % (base_path, rootdir, partial_path, jobdir, datatype, route)
 				f = h5py.File(fname, "r")
-				this_data = numpy.hstack((this_data, numpy.array(f["data"])))
-				this_time = numpy.hstack((this_time, numpy.array(f["time"])))
+				#this_data = numpy.hstack((this_data, numpy.array(f["data"])))
+				#this_time = numpy.hstack((this_time, numpy.array(f["time"])))
+				this_data = numpy.hstack((numpy.array(f["data"]), this_data))
+				this_time = numpy.hstack((numpy.array(f["time"]), this_time))
 				f.close()
 				#print fname, len(this_data), len(this_time)
 			except IOError:
@@ -122,7 +125,8 @@ def read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs 
 				this_time = numpy.array([query_time - duration - age, query_time - age])
 				# FIXME allow a different default value
 				this_data = numpy.array([0,0])
-		yield jobdir, this_time, this_data
+		ix = numpy.argsort(this_time)
+		yield jobdir, this_time[ix], this_data[ix]
 
 #
 # latency, SNR, FAR, likelihood
@@ -284,7 +288,8 @@ for route, x, y, units in (("horizon_history", "time", "horizon", "(Mpc)"), ("no
 		if "now" in query:
 			for ifo, this_time, this_data in read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = ["H1", "L1"], rootdir = "dq", datatype = "max"):
 				latest[ifo] = float(this_time[-1]), float(this_data[-1])
-			out_data = [[float(latest["H1"][1]), float(latest["L1"][1])]]
+			# convert to range
+			out_data = [[float(latest["H1"][1])/2.25, float(latest["L1"][1])/2.25]]
 			description = [
 				("H1 %s" % (units,), "number"),
 				("L1 %s" % (units,), "number")
@@ -293,7 +298,8 @@ for route, x, y, units in (("horizon_history", "time", "horizon", "(Mpc)"), ("no
 			out_data = []; H1L1time = {}; H1L1data = {}
 			# FIXME don't harcode
 			for ifo, this_time, this_data in read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = ["H1", "L1"], rootdir = "dq", datatype = "max"):
-				H1L1data[ifo] = interp1d(this_time, this_data, kind = "nearest", bounds_error = False, fill_value=0.)
+				# convert to range
+				H1L1data[ifo] = interp1d(this_time, this_data / 2.25, kind = "nearest", bounds_error = False, fill_value=0.)
 				H1L1time[ifo] = this_time
 			for t in numpy.sort(numpy.hstack((H1L1time["H1"], H1L1time["L1"]))):
 				out_data.append([float(t), float(H1L1data["H1"](t)), float(H1L1data["L1"](t))])
@@ -488,4 +494,46 @@ if "nagios" in query:
 	sys.exit()
 
 
+# FIXME, just a hardcoded POS
+# FIXME counts now, turn into VT
+if "vt" in query:
+
+	nowtime = now()
+	# FIXME check this
+	O2_start = 1164556817
+	duration = nowtime - O2_start
+
+	bnsrootdir = "U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1_aggregator"
+	nsbhrootdir = "U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1_aggregator"
+	bbhrootdir = "U_dVdzo1pz_lnm_online_injections_O2A_v1_aggregator"
+
+	dvt = {}
+	dvt["bns"] = 0.240829 / (652333 + 11566878)
+	dvt["nsbh"] = 5.45325 / (597700 + 62915658)
+	dvt["bbh"] = 32.8574 / (652356 + 5281336)
+
+	datadict = {}
+	out_data = []
+	timevec = numpy.linspace(O2_start, nowtime, 1000) 
+	for key, rootdir in (("bns", bnsrootdir), ("nsbh", nsbhrootdir), ("bbh", bbhrootdir)):
+		for job, this_time, this_data in read_aggregated_data_by_job("far_history", nowtime, duration, base_path, jobdirs = [""], rootdir = rootdir, datatype = "min", age = 1e6, level = 5):
+			count_data = numpy.ones(len(this_data))
+			count_data[this_data > 3.86e-7] = 0
+			count_interp = interp1d(this_time, numpy.cumsum(count_data), kind = "nearest", bounds_error = False, fill_value=0.)
+			datadict[key] = numpy.log10(count_interp(timevec) * dvt[key])
+
+	# FIXME should use a time vector that makes sure to span all three
+	# sets, but this should be okay
+	for t, x, y, z in zip(timevec, datadict["bns"], datadict["nsbh"], datadict["bbh"]):
+		out_data.append([float(t), float(x), float(y), float(z)])
+	description = [
+		("time", "number"),
+		("BNS", "number"),
+		("NSBH", "number"),
+		("BBH", "number")
+		]
+	
+	data_table = gviz_api.DataTable(description)
+	data_table.LoadData(out_data)
+	print data_table.ToJSonResponse(order_by = "time", req_id = reqId)
 
