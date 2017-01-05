@@ -702,21 +702,21 @@ class Data(object):
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
-			# coincs.  NOTE:  we rely on the arguments to
-			# .chain() being evaluated in left-to-right order
-			# so that .add_events() is evaluated before
-			# .last_coincs because the former initializes the
-			# latter.  we skip singles collected during times
-			# when only one instrument was on.  NOTE:  the
-			# definition of "on" is blurry since we can recover
-			# triggers with end times outside of the available
-			# strain data, but the purpose of this test is
-			# simply to prevent signals occuring during
-			# single-detector times from contaminating our
-			# noise model, so it's not necessary for this test
-			# to be super precisely defined.
+			# zero-lag multi-instrument coincs.  NOTE:  we rely
+			# on the arguments to .chain() being evaluated in
+			# left-to-right order so that .add_events() is
+			# evaluated before .last_coincs because the former
+			# initializes the latter.  we skip singles
+			# collected during times when only one instrument
+			# was on.  NOTE:  the definition of "on" is blurry
+			# since we can recover triggers with end times
+			# outside of the available strain data, but the
+			# purpose of this test is simply to prevent signals
+			# occuring during single-detector times from
+			# contaminating our noise model, so it's not
+			# necessary for this test to be super precisely
+			# defined.
 			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
-
 				if len(self.seglistdicts["whitehtsegments"].keys_at(event.end)) > 1:
 					self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
 			self.coincs_document.commit()
