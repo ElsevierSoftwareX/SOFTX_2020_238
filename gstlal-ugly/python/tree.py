@@ -1,6 +1,7 @@
 import itertools
 import metric as metric_module
 import numpy
+import random
 
 def mass_sym(boundaries):
 	# Assumes first two are m_1 m_2
@@ -11,16 +12,6 @@ def mass_sym(boundaries):
 		if corner[1] < corner[0]:
 			return True
 	return False
-
-def find_neighbors_by_m1m2(cube, tiles):
-	# Assumes first two are m_1 m_2
-	m1 = cube.boundaries[0]
-	m2 = cube.boundaries[1]
-	neighbors = []
-	for t in tiles:
-		if numpy.any(corner in t for corner in itertools.product(m1,m2)):
-			neighbors.append(t)
-	return neighbors
 
 
 class HyperCube(object):
@@ -100,26 +91,23 @@ class HyperCube(object):
 		if stochastic:
 			# To Stephen with love
 			# From Chad
-			self.tiles = [self.center]
-			N = self.N()
-			target = numpy.ceil(self.num_templates(mismatch))
-			dl = self.dl(mismatch)
-			cnt = 0
-			rand_coords = numpy.random.rand(1e4, len(self.deltas))
+			target = int(numpy.ceil(self.num_templates(mismatch)))
+			iters = 0
 			neighbor_tiles = []
 			for neighbor in self.neighbors:
 				neighbor_tiles.extend(neighbor.tiles)
-			print len(neighbor_tiles)
-			for randcoord in rand_coords:
-				randcoord = (randcoord - 0.5) * self.deltas + self.center
-				distances = [metric_module.distance(self.metric_tensor, randcoord, t) for t in self.tiles + neighbor_tiles]
-				maxdist = max(distances)
-				mindist = min(distances)
-				assert randcoord in self
-				if mindist > dl * N**.5:
-					self.tiles.append(randcoord)
-				if len(self.tiles) > target:
-					break
+			cells = [self] + self.neighbors
+			if len(neighbor_tiles) == 0:
+				self.tiles.append(self.center)
+			# FIXME don't hardcode this tolerance
+			while len(self.tiles) < target and iters < 1e3:
+				randcoords = numpy.array([random.random()-0.5 for i in range(len(self.deltas))])
+				randcoords *= self.deltas 
+				randcoords += self.center
+				match = max([min(metric_module.metric_match(c.metric_tensor, randcoords, t) for c in cells) for t in self.tiles + neighbor_tiles])
+				if randcoords in self and match < (1. - self.__mismatch):
+					self.tiles.append(randcoords)
+				iters+=1
 
 		else:
 			# The bounding box has 2*N points to define it each point is
@@ -157,9 +145,9 @@ class HyperCube(object):
 				if primed_coords in self:
 					self.tiles.append(primed_coords)
 
-		# Gaurantee at least one
-		if len(self.tiles) == 0:
-			self.tiles.append(self.center)
+			# Gaurantee at least one
+			if len(self.tiles) == 0:
+				self.tiles.append(self.center)
 
 		return list(self.tiles), popcount
 
@@ -195,42 +183,22 @@ class HyperCube(object):
 
 	def num_templates(self, mismatch):
 		# From Owen 1995 (2.16)
+		# with an additional packaging fraction to account for the real random packing to be better
+		# FIXME look this up it will depend on dimension
 		return self.volume() / self.dl(mismatch)**self.N()
 
 	def vertices(self):
-		vertices = []
-		#for n in range (0, len(self.boundaries)):
-		#	paramOne = self.boundaries[0][n]
-		#	for m in range (0, len(self.boundaries[n])):
-		#		paramTwo = self.boundaries[1][m]
-		#		vertices.append([paramOne, paramTwo])
-		#print 'VERTICES:', vertices
-		vlist = itertools.product(*self.boundaries)
-		for vertex in vlist:
-			vertices.append(vertex)
+		vertices = list(itertools.product(*self.boundaries))
 		print 'VERTICES:', vertices
 		return vertices
 
 	def returnneighbors(self):
 		revisedneighbors = []
 		for neighbor in self.neighbors:
-			#print 'NCHECK:', len(self.neighbors)
-			#print 'VCHECK:', neighbor.vertices
-			for vertex in neighbor.vertices:
-				#print 'VCHECK1:', vertex
-				if vertex in self:
-					#print 'HELLO WORLD', neighbor
-					revisedneighbors.append(neighbor)
-					break
-
-			for vertex in self.vertices:
-				#print 'VCHECK2'
-				if vertex in neighbor:
-					#print 'HELLO WORLD', neighbor
-					revisedneighbors.append(neighbor)
-					break
+			if any([vertex in self for vertex in neighbor.vertices]) or any([vertex in neighbor for vertex in self.vertices]):
+				revisedneighbors.append(neighbor)
+		print 'KEPT %d/%d NEIGHBORS' % (len(revisedneighbors), len(self.neighbors))
 		self.neighbors = revisedneighbors
-		print 'FINALNLIST:', len(self.neighbors)
 
 class Node(object):
 	"""
@@ -253,9 +221,9 @@ class Node(object):
 
 		# Figure out how many templates go inside
 		numtmps = numpy.floor(self.cube.num_templates(mismatch))
-		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates) or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
+		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates): #or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
 			bifurcation += 1
-			print 'BIF:', bifurcation
+			print 'LEVEL:', bifurcation
 			left, right = self.cube.split(splitdim)
 
 			self.left = Node(left, self)
@@ -295,18 +263,23 @@ class Node(object):
 
 		# Always split on the largest size
 		splitdim = numpy.argmax(size)
-		derr = 2.0
+		verr = 2.0
 
 		if self.parent is not None:
-			d1 = metric_module.distance(self.cube.metric_tensor, self.cube.center, self.parent.cube.center)
-			d2 = metric_module.distance(self.parent.cube.metric_tensor, self.cube.center, self.parent.cube.center)
-			avgd = (d2+d1)/2.
-			deltad = abs(d2-d1)
-			derr = deltad / avgd
-
-		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and derr > 0.05):
+			#d1 = metric_module.distance(self.cube.metric_tensor, self.cube.center, self.parent.cube.center)
+			#d2 = metric_module.distance(self.parent.cube.metric_tensor, self.cube.center, self.parent.cube.center)
+			#avgd = (d2+d1)/2.
+			#deltad = abs(d2-d1)
+			#derr = deltad / avgd
+			v1 = numpy.abs(numpy.linalg.det(self.cube.metric_tensor))
+			v2 = numpy.abs(numpy.linalg.det(self.parent.cube.metric_tensor))
+			avgv = (v2+v1)/2.
+			deltav = abs(v2-v1)
+			verr = deltav / avgv
+			print v1, v2, verr
+		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and verr > 0.5):
 			bifurcation += 1
-			print 'BIF:', bifurcation
+			print 'LEVEL:', bifurcation
 			left, right = self.cube.split(splitdim)
 			self.left = Node(left, self)
 			self.right = Node(right, self)
@@ -326,12 +299,12 @@ class Node(object):
                         #print 'FINERIGHT:', self.right.cube.neighbors
 
 			if verbose:
-				print "%30s: %0.2f" % ("Splitting", derr)
+				print "%30s: %0.2f" % ("Splitting", verr)
 			self.left.split_fine(mismatch = mismatch, bifurcation = bifurcation)
 			self.right.split_fine(mismatch = mismatch, bifurcation = bifurcation)
 		else:
 			if verbose:
-				print "%30s: %0.2f" % ("Not Splitting", derr)
+				print "%30s: %0.2f" % ("Not Splitting", verr)
 
 	def walk(self, out = []):
 		"""
