@@ -107,30 +107,29 @@ class Metric(object):
 		p = self.coord_func(coords)
 		
 		try:
-			hplus,hcross = lalsim.SimInspiralChooseFDWaveform(
-				0., # phase
-				self.df, # sampling interval
-				lal.MSUN_SI * p[0],
-				lal.MSUN_SI * p[1],
-				p[2],
-				p[3],
-				p[4],
-				p[5],
-				p[6],
-				p[7],
-				self.flow,
-				self.fhigh,
-				0,
-				1.e6 * lal.PC_SI, # distance
-				0., # inclination
-				0., # tidal deformability lambda 1
-				0., # tidal deformability lambda 2
-				None, # waveform flags
-				None, # Non GR params
-				0,
-				7,
-				self.approximant
-				)
+			parameters = {}
+			parameters['m1'] = lal.MSUN_SI * p[0]
+			parameters['m2'] = lal.MSUN_SI * p[1]
+			parameters['S1x'] = p[2]
+			parameters['S1y'] = p[3]
+			parameters['S1z'] = p[4]
+			parameters['S2x'] = p[5]
+			parameters['S2y'] = p[6]
+			parameters['S2z'] = p[7]
+			parameters['distance'] = 1.e6 * lal.PC_SI
+			parameters['inclination'] = 0.
+			parameters['phiRef'] = 0.
+			parameters['longAscNodes'] = 0.
+			parameters['eccentricity'] = 0.
+			parameters['meanPerAno'] = 0.
+			parameters['deltaF'] = self.df
+			parameters['f_min'] = self.flow
+			parameters['f_max'] = self.fhigh
+			parameters['f_ref'] = 0.
+			parameters['LALparams'] = None
+			parameters['approximant'] = self.approximant
+
+			hplus, hcross = lalsim.SimInspiralFD(**parameters)
 
 			fseries = hplus
 			lal.WhitenCOMPLEX16FrequencySeries(fseries, self.psd)
@@ -186,7 +185,7 @@ class Metric(object):
 		# The match must lie in the range 0.9995 - 0.999999 to be valid for a metric computation, which means d is between 0.000001 and 0.0005
 		if (d2 > 1e-5):
 			return self.metric_tensor_component((i,j), center = center, deltas = deltas / 10., g = g, w1 = w1)
-		if (d2 < 1e-8):
+		if (d2 < 1e-7):
 			return self.metric_tensor_component((i,j), center = center, deltas = deltas * 2., g = g, w1 = w1)
 
 		# Compute the diagonal
@@ -218,6 +217,8 @@ class Metric(object):
 		return g
 
 
+
+
 def distance(metric_tensor, x, y):
 	"""
 	Compute the distance between to points inside the cube using
@@ -228,4 +229,12 @@ def distance(metric_tensor, x, y):
 		return numpy.dot(numpy.dot(x.T, metric), y)
 
 	return (dot(x-y, x-y, metric_tensor))**.5
+
+
+def metric_match(metric_tensor, c1, c2):
+	d2 = distance(metric_tensor, c1, c2)**2
+	if d2 < 1:
+		return 1 - d2
+	else:
+		return 0.
 		
