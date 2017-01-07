@@ -52,8 +52,8 @@ def mchirp_bounds(mchirp, which):
 def mchirp_injection_str(keys, name):
 	# FIXME this could be done better by just looking for values that cross
 	# the boundaries defined in mchirp_bounds
-	lower_mchirp_bound = min([mchirp_bounds(mchirp, 'lower') for mchirp in keys])
-	upper_mchirp_bound = max([mchirp_bounds(mchirp, 'upper') for mchirp in keys])
+	lower_mchirp_bound = min([mchirp_bounds(mchirp, 'lower') for [mchirp, simulation_id] in keys])
+	upper_mchirp_bound = max([mchirp_bounds(mchirp, 'upper') for [mchirp, simulation_id] in keys])
 	return '%.2f:%.2f:%s ' % ( lower_mchirp_bound, upper_mchirp_bound, name )
 
 
@@ -114,8 +114,8 @@ xmldoc = ligolw.Document()
 # conserving process ids
 xmldoc = ligolw_add.ligolw_add(xmldoc, filenames, verbose = True, contenthandler = ligolwcontenthandler)
 processmap = dict((proc.process_id, proc) for proc in lsctables.ProcessTable.get_table(xmldoc))
-siminspiralmap = dict((sim.mchirp, (sim.geocent_end_time + 1e-9*sim.geocent_end_time_ns, sim)) for sim in lsctables.SimInspiralTable.get_table(xmldoc))
-siminspiralmchirps = sorted(siminspiralmap.keys())
+siminspiralmap = dict(((sim.mchirp, sim.simulation_id), (sim.geocent_end_time + 1e-9*sim.geocent_end_time_ns, sim)) for sim in lsctables.SimInspiralTable.get_table(xmldoc))
+siminspiralmchirps = sorted(siminspiralmap.keys(), key = lambda k: k[0])
 
 process_params_dict = {}
 for param in lsctables.ProcessParamsTable.get_table(xmldoc):
@@ -129,13 +129,13 @@ num_output = 1
 avg_inj_rate = numpy.inf
 i=0
 
-while avg_inj_rate > target_inj_rate_interval[1]:# or avg_inj_rate < target_inj_rate_interval[0]:
+while avg_inj_rate > target_inj_rate_interval[1]:
 
 	num_output += 1
 	split_keys = numpy.array_split(siminspiralmchirps, num_output)
 	avg_dts = []
-	for keys in split_keys:
-		sorted_times = numpy.sort([siminspiralmap[key][0] for key in keys])
+	for i, keys in enumerate(split_keys):
+		sorted_times = numpy.sort([siminspiralmap[tuple(k for k in key)][0] for key in keys])
 		if len(sorted_times) < 2:
 			raise ValueError("files need to be split too finely to hit target injection rate, try increasing target rate or tolerance (last splitting attempt: %d files)" % num_output)
 		avg_dts.append((sorted_times[1:] - sorted_times[:-1]).mean())
@@ -149,7 +149,7 @@ while avg_inj_rate > target_inj_rate_interval[1]:# or avg_inj_rate < target_inj_
 
 mchirp_str = ''
 for i, keys in enumerate(split_keys):
-	create_split_injection(processmap, process_params_dict, [siminspiralmap[key] for key in keys], keys[0], keys[-1], 'split_injections_%04d.xml' % i, options)
+	create_split_injection(processmap, process_params_dict, [siminspiralmap[tuple(k for k in key)] for key in keys], keys[0][0], keys[-1][0], 'split_injections_%04d.xml' % i, options)
 	mchirp_str += mchirp_injection_str(keys, 'split_injections_%04d.xml' % i)
 
 print 'MCHIRP_INJECTIONS := %s' % mchirp_str[:-1]
