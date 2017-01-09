@@ -39,7 +39,7 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
 #define EPSILON 5
-#define PEAKFINDER_CLUSTER_WINDOW 5
+#define PEAKFINDER_CLUSTER_WINDOW 0
 
 static void additional_initializations(GType type)
 {
