@@ -32,7 +32,6 @@
 #include <glib.h>
 #include <cohfar/background_stats_utils.h>
 
-#define MAX_FNAMES 100
 #define __DEBUG__ 1
 
 static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar **pout, gchar **pifos)
@@ -147,7 +146,7 @@ int main(int argc, char *argv[])
 	
 	BackgroundStats **stats_in = background_stats_create(*pifos);
 	BackgroundStats **stats_out = background_stats_create(*pifos);
-	gchar **in_fnames = g_strsplit(*pin, ",", MAX_FNAMES);
+	gchar **in_fnames = g_strsplit(*pin, ",", -1); // split the string completely
 
 	gsl_vector *data_dim1, *data_dim2;
 	if (g_strcmp0(*pfmt, "data") == 0) {
