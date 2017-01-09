@@ -627,9 +627,8 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
 			if instrument in shift_dict.keys():
 				head = mktimeshift(pipeline, head, float(shift_dict[instrument]))
-
-			if verbose:
-				head = pipeparts.mkprogressreport(pipeline, head, "after_timeshift_%s" % suffix)
+				if verbose:
+					head = pipeparts.mkprogressreport(pipeline, head, "after_timeshift_%s" % suffix)
 
 
 			head = pipeparts.mkreblock(pipeline, head)
