@@ -288,8 +288,6 @@ CFLAGS="$old_CFLAGS"
 #
 # Check for framecpp
 #
-# FIXME:  this isn't really optional any more.  make its absence an error
-#
 
 
 AC_SUBST([MIN_FRAMECPP_VERSION], [2.5.0])
