@@ -610,11 +610,6 @@ class Data(object):
 					events.extend(streamthinca.SnglInspiral.from_buffer(mapinfo.data))
 				memory.unmap(mapinfo)
 
-			# Find max SNR sngles
-			if events:
-				max_snr_event = max(events, key = lambda t: t.snr)
-				self.ifo_snr_history[max_snr_event.ifo].append((float(max_snr_event.end_time) + 1e-9 * float(max_snr_event.end_time_ns), max_snr_event.snr))
-
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_", 1)[0]
 
@@ -633,6 +628,11 @@ class Data(object):
 			# trigger list is complete upto this buffer's time
 			# stamp.
 			assert all(event.end >= buf_timestamp for event in events)
+
+			# Find max SNR sngles
+			if events:
+				max_snr_event = max(events, key = lambda t: t.snr)
+				self.ifo_snr_history[max_snr_event.ifo].append((float(max_snr_event.end), max_snr_event.snr))
 
 			# set metadata on triggers.  because this uses the
 			# ID generator attached to the database-backed
