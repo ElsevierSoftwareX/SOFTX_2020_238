@@ -1634,7 +1634,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
-		gst_buffer_set_size(outbuf, gap_length * fir_channels(element) * GST_AUDIO_INFO_WIDTH(&element->audio_info) / 8);
+		gst_buffer_set_size(outbuf, gap_length * GST_AUDIO_INFO_BPF(&element->audio_info));
 		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
 		memset(mapinfo.data, 0, mapinfo.size);
 		set_metadata(element, outbuf, gap_length, TRUE);
