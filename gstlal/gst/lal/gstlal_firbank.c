@@ -924,7 +924,9 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *buf)
 
 	/*
 	 * how many samples can we compute?  in fft mode this is limited to
-	 * whole fft blocks
+	 * whole fft blocks.  the actual number of samples generated might
+	 * be less than this if the output buffer is not large enough (the
+	 * individual filter functions clip their output to the buffer)
 	 */
 
 	output_length = get_output_length(element, get_available_samples(element));
