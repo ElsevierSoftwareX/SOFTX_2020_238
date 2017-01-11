@@ -625,8 +625,14 @@ class Data(object):
 			self.coincs_document.add_to_search_summary_outseg(buf_seg)
 			self.seglistdicts["triggersegments"][instrument] |= segments.segmentlist((buf_seg,))
 
-			# safety check end times
-			assert all(event.end in buf_seg for event in events)
+			# safety check end times.  OK for end times to be
+			# past end of buffer, but we cannot allow triggr
+			# times to go backwards.  they cannot precede the
+			# buffer's start because, below,
+			# streamthinca.add_events() will be told the
+			# trigger list is complete upto this buffer's time
+			# stamp.
+			assert all(event.end >= buf_timestamp for event in events)
 
 			# set metadata on triggers.  because this uses the
 			# ID generator attached to the database-backed
