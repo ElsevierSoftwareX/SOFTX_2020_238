@@ -33,6 +33,10 @@
  */
 
 
+#include <math.h>
+#include <string.h>
+
+
 /*
  * stuff from glib/gstreamer
  */
@@ -42,27 +46,28 @@
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
 #include <gst/base/gstadapter.h>
-#include <math.h>
-#include <string.h>
+
 
 /*
  * our own stuff
  */
+
 
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_peakfinder.h>
 #include <gstlal/gstaudioadapter.h>
 #include <gstlal_peak.h>
 
+
 static guint64 output_num_samps(GSTLALPeak *element)
 {
-	return (guint64) element->n;
+	return element->n;
 }
 
 
 static guint64 output_num_bytes(GSTLALPeak *element)
 {
-	return (guint64) output_num_samps(element) * element->adapter->unit_size;
+	return output_num_samps(element) * element->adapter->unit_size;
 }
 
 
@@ -74,6 +79,7 @@ static int reset_time_and_offset(GSTLALPeak *element)
 	element->next_output_timestamp = GST_CLOCK_TIME_NONE;
 	return 0;
 }
+
 
 static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 {
@@ -385,7 +391,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
 	if (!element->data)
-		element->data = malloc(maxsize);
+		element->data = g_malloc(maxsize);
 
 	/*
 	 * check validity of timestamp and offsets
@@ -483,7 +489,7 @@ static void finalize(GObject *object)
 	g_object_unref(element->adapter);
 	if (element->maxdata)
 		gstlal_peak_state_free(element->maxdata);
-	if (!element->data)
+	if (element->data)
 		g_free(element->data);  
 	G_OBJECT_CLASS(gstlal_peak_parent_class)->finalize(object);
 }
