@@ -1041,6 +1041,8 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	unsigned final_gap_length;
 	GstFlowReturn result = GST_FLOW_OK;
 
+	GST_INFO_OBJECT(element, "flushing history");
+
 	/*
 	 * in time-domain mode, there's never enough stuff left in the
 	 * adpater, after an invocation of the transform() method, to
@@ -1457,6 +1459,7 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 		 * least make sure the adapter's contents are wiped
 		 */
 
+		GST_INFO_OBJECT(element, "got EOS");
 		g_mutex_lock(&element->fir_matrix_lock);
 		if(element->fir_matrix) {
 			if(flush_history(element) != GST_FLOW_OK)
@@ -1527,6 +1530,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
+		GST_INFO_OBJECT(element, "encountered discont.  reason:  %s", GST_BUFFER_IS_DISCONT(inbuf) ? "discont flag set in input" : GST_BUFFER_OFFSET(inbuf) != element->next_in_offset ? "input offset mismatch" : "internal clock not yet set");
+
 		/*
 		 * flush any previous history and clear the adapter
 		 */
