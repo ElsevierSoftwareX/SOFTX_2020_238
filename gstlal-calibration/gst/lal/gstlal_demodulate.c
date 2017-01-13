@@ -496,7 +496,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	switch (prop_id) {
 	case ARG_LINE_FREQUENCY:
-		element->line_frequency = 100 * g_value_get_double(value);
+		element->line_frequency = (int) (100.000000000001 * g_value_get_double(value)); /* Make sure truncation does not corrupt it */
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
