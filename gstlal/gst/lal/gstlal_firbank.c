@@ -1711,13 +1711,16 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	}
 
 	case ARG_FIR_MATRIX: {
-		unsigned channels;
+		unsigned channels, length;
 		g_mutex_lock(&element->fir_matrix_lock);
 		if(element->fir_matrix) {
 			channels = fir_channels(element);
+			length = fir_length(element);
 			gsl_matrix_free(element->fir_matrix);
-		} else
+		} else {
 			channels = 0;
+			length = 0;
+		}
 		element->fir_matrix = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
 		g_assert(element->fir_matrix != NULL);
 
@@ -1726,15 +1729,15 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * renegotiation
 		 */
 
-		if(fir_channels(element) != channels) {
+		if(fir_channels(element) != channels)
 			gst_base_transform_reconfigure_src(GST_BASE_TRANSFORM(object));
-		}
 
 		/*
 		 * invalidate filter workspace
 		 */
 
-		free_workspace(element);
+		if(fir_length(element) != length || fir_channels(element) != channels)
+			free_workspace(element);
 
 		/*
 		 * signal availability of new time-domain filters
