@@ -28,7 +28,6 @@
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/LALStdlib.h>
-#include <lal/Units.h>
 #include <snglinspiralrowtype.h>
 #include <gsl/gsl_matrix_float.h>
 #include <gsl/gsl_blas.h>
@@ -149,7 +148,6 @@ int gstlal_set_min_offset_in_snglinspiral_array(SnglInspiralTable *bankarray, in
 GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff timediff)
 {
 	GstBuffer *srcbuf = gst_buffer_new();
-	LALUnit snr_units;	
 
 	if (!srcbuf) {
 		GST_ERROR_OBJECT(pad, "Could not allocate sngl-inspiral buffer");
