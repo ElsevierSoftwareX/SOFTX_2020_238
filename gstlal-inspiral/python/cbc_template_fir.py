@@ -62,6 +62,7 @@ import lalsimulation as lalsim
 from pylal import spawaveform
 
 
+from gstlal import reference_psd
 from gstlal import templates
 from gstlal import chirptime
 from gstlal.reference_psd import interpolate_psd, horizon_distance
@@ -71,6 +72,8 @@ __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.or
 __version__ = "FIXME"
 __date__ = "FIXME"
 
+# a macro to switch between a conventional whitener and a fir whitener below
+FIR_WHITENER = False
 
 #
 # =============================================================================
@@ -268,10 +271,6 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	working_length = templates.ceil_pow_2(length_max + round(1./psd.deltaF * sample_rate_max))
 	working_duration = float(working_length) / sample_rate_max
 
-	# Smooth the PSD and interpolate to required resolution
-	if psd is not None:
-		psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max / 2.0))
-
 	revplan = lal.CreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	fwdplan = lal.CreateForwardREAL8FFTPlan(working_length, 1)
 	tseries = lal.CreateCOMPLEX16TimeSeries(
@@ -290,6 +289,58 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		length = working_length // 2 + 1,
 		sampleUnits = lal.Unit("strain s")
 	)
+
+	if FIR_WHITENER:
+		assert psd
+		#
+		# Add another COMPLEX16TimeSeries and COMPLEX16FrequencySeries for kernel's FFT (Leo)
+		#
+
+		# Add another FFT plan for kernel FFT (Leo)
+		fwdplan_kernel = lal.CreateForwardCOMPLEX16FFTPlan(working_length, 1)
+		kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
+			name = "timeseries of whitening kernel",
+			epoch = LIGOTimeGPS(0.),
+			f0 = 0.,
+			deltaT = 1.0 / sample_rate_max,
+			length = working_length,
+			sampleUnits = lal.Unit("strain")
+		)
+		kernel_fseries = lal.CreateCOMPLEX16FrequencySeries(
+			name = "freqseries of whitening kernel",
+			epoch = LIGOTimeGPS(0),
+			f0 = 0.0,
+			deltaF = 1.0 / working_duration,
+			length = working_length, #if this is "working_length // 2 + 1", it gives segmentation fault
+			sampleUnits = lal.Unit("strain s")
+		)
+
+		#
+		# Obtain a kernel of zero-latency whitening filter and adjust its length (Leo)
+		#
+		(kernel, latency, fir_rate) = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd) #FIXME
+		(kernel, theta) = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel) #FIXME
+		kernel = kernel[-1::-1]
+		if len(kernel) < working_length:
+			kernel = numpy.append(kernel, numpy.zeros(working_length - len(kernel)))
+		else:
+			kernel = kernel[:working_length]
+
+
+		assert len(kernel_tseries.data.data) == len(kernel), "the size of whitening kernel does not match with a given format of COMPLEX16TimeSeries."
+		kernel_tseries.data.data = kernel #FIXME
+
+		#
+		# FFT of the kernel
+		#
+
+		lal.COMPLEX16TimeFreqFFT(kernel_fseries, kernel_tseries, fwdplan_kernel) #FIXME
+
+	else:
+		# Smooth the PSD and interpolate to required resolution
+		if psd is not None:
+			psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max / 2.0))
+
 
 	# Check parity of autocorrelation length
 	if autocorrelation_length is not None:
@@ -322,13 +373,23 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
 
-		#
-		# whiten and add quadrature phase ("sine" component)
-		#
+		if FIR_WHITENER:
+			#
+			# Compute a product of freq series of the whitening kernel and the template (convolution in time domain) then add quadrature phase(Leo)
+			#
 
-		if psd is not None:
-			lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
-		fseries = templates.QuadraturePhase.add_quadrature_phase(fseries, working_length)
+			assert len(kernel_fseries.data.data) == len(fseries.data.data), "the size of whitening kernel freq series does not match with a given format of COMPLEX16FrequencySeries."
+			fseries.data.data *= kernel_fseries.data.data[len(kernel_fseries.data.data) // 2 - 1:]
+			fseries = templates.QuadraturePhase.add_quadrature_phase(fseries, working_length)
+		else:
+			#
+			# whiten and add quadrature phase ("sine" component)
+			#
+
+			if psd is not None:
+				lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
+				fseries = templates.QuadraturePhase.add_quadrature_phase(fseries, working_length)
+
 
 		#
 		# compute time-domain autocorrelation function
