@@ -4,6 +4,7 @@
 	<title>gstlal CBC Latency</title>
 	<link rel="stylesheet" type="text/css" href="gstlal.css">
 	<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+	<script type="text/javascript" src="jquery-3.1.1.min.js"></script>
 	<script type="text/javascript" src="gstlal.js"></script>
 	<script type="text/javascript">
 	google.charts.load('current', {'packages':['corechart']});
@@ -37,7 +38,15 @@
 		      <li><a href="#latency" class="tablinks" onclick="openGstlalTab(event, 'Latency')">Latency</a></li>
 		      <li><a href="#snr" class="tablinks" onclick="openGstlalTab(event, 'SNR')">SNR</a></li>
 		    </ul></td>
-		    <td><form><input type="text" name="GPS" value=""><input type="submit" value="GPS"></form></dd>
+                    <td>
+                      <form>
+		        <table>
+				<tr><td><input type="text" name="GPS" value=""><input type="submit" value="GPS"></td><tr>
+				<tr><td><input type="text" name="Duration" value=""><input type="submit" value="Duration"></td><tr>
+			</table>
+		      </form>
+		    </td>
+		<td><div id="clock"></div></td>
 		</tr>
 		</table>
 	</div>

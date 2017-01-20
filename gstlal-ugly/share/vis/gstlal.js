@@ -40,6 +40,7 @@ var psd_wrapper;
 var range_gauge_wrapper;
 
 var noise_wrapper;
+var noise_wrapper_2;
 var noise_table_wrapper;
 var noise_gauge_wrapper;
 
@@ -50,17 +51,14 @@ var ram_status_wrapper;
 var time_since_last_wrapper;
 var time_since_trigger_wrapper;
 
+var vt_wrapper;
+
 var charts = [];
 
 var H1="#e74c3c";
 var L1="#2ecc71";
 var white="#ecf0f1";
 var darkblue="#2c3e50";
-
-/* Despite what mathematicians claim, 2 billion really is the biggest number */
-/* FIXME, this works around an occasional "inf" coming in from unbounded
- * segments: do something smarter */
-var inf = 2000000000;
 
 default_options = {
 	title: 'Figure', 
@@ -81,7 +79,8 @@ default_options = {
 	width: "90%",
 	bar: {
 	    groupWidth: '70%',
-	}
+	},
+	allowHtml: true
 };
 
 
@@ -152,7 +151,12 @@ function openGstlalTab(evt, tabName) {
 	// Redraw and re-enable queries for this chart
 	for (i = 2; i < arguments.length; i++) {
 		arguments[i].clear();
-		arguments[i].setRefreshInterval(refresh);
+		// FIXME allow this function to accept a custom refresh
+		// interval for each chart instead of this hardcoded BS
+		if (arguments[i] == time_since_last_wrapper || arguments[i] == noise_wrapper) 
+			arguments[i].setRefreshInterval(refresh);
+		else
+			arguments[i].setRefreshInterval(longrefresh);
 		arguments[i].draw();
         }
 }
@@ -407,7 +411,7 @@ function drawSNRHistory(gps, duration, refresh, analysis_path, job_ids) {
 function drawLikelihoodStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
-	these_options.title = 'Likelihood';
+	these_options.title = 'Log likelihood ratio';
 
 	likelihood_status_by_nodes_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
@@ -427,7 +431,7 @@ function drawLikelihoodHistory(gps, duration, refresh, analysis_path, job_ids) {
 	//these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	//these_options.title = 'Likelihood';
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
-	these_options.title = 'Likelihood';
+	these_options.title = 'Log likelihood ratio';
 	these_options.pointShape = 'star';
 	these_options.lineWidth = 0;
 	these_options.dataOpacity =  "1.0",
@@ -491,8 +495,8 @@ function drawFARHistory(gps, duration, refresh, analysis_path, job_ids) {
 
 function drawHorizon(gps, duration, refresh, analysis_path, job_ids) {
 	var these_options = clone(default_options);
-	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:32, maxValue:512, textPosition: 'out', ticks: [32,64,128,256,512] };
-	these_options.title = 'Horizon';
+	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'linear', minValue:0, maxValue:150, textPosition: 'out', ticks: [10,20,30,40,50,60,70,80,90,100] };
+	these_options.title = 'Range';
 
 	horizon_wrapper = new ChartWrapper({
 		chartType: 'LineChart',
@@ -550,11 +554,11 @@ function drawRangeGauge(gps, duration, refresh, analysis_path, job_ids) {
         options: {
 		animation: {duration: 4000, easing: 'linear'},
 		width: 1000, height: 1000,
-		redFrom: 0, redTo: 50,
-		yellowFrom: 50, yellowTo: 157,
-		greenFrom: 157, greenTo: 225,
+		redFrom: 0, redTo: 40,
+		yellowFrom: 40, yellowTo: 60,
+		greenFrom: 60, greenTo: 100,
 		minorTicks: 5,
-		max: 225,
+		max: 100,
 		min: 0
 		},
 	containerId: 'range_gauge_wrapper',
@@ -585,6 +589,15 @@ function drawNoise(gps, duration, refresh, analysis_path, job_ids) {
 		containerId: 'noise_wrapper',
 	});
 
+	noise_wrapper_2 = new ChartWrapper({
+		chartType: 'LineChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:800'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		query: 'select noise',
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'noise_wrapper_2',
+	});
+
 /*
 	noise_table_wrapper = new ChartWrapper({
 		chartType: 'Table',
@@ -596,8 +609,10 @@ function drawNoise(gps, duration, refresh, analysis_path, job_ids) {
 	});
 */
 	noise_wrapper.draw();
+	noise_wrapper_2.draw();
 	//noise_table_wrapper.draw();
 	charts.push(noise_wrapper);
+	charts.push(noise_wrapper_2);
 	//charts.push(noise_table_wrapper);
 }
 
@@ -738,3 +753,23 @@ function drawTimeSinceTrigger(gps, duration, refresh, analysis_path, job_ids) {
 	time_since_trigger_wrapper.draw();
 	charts.push(time_since_trigger_wrapper);
 }
+
+function drawVT(gps, duration, refresh, analysis_path, job_ids) {
+	// Setup the custom options
+	var these_options = clone(default_options);
+	these_options.title = "log_10 VT (Gpc^3/yr)";
+	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'linear', minValue:-4, maxValue:1, textPosition: 'out', ticks: [-4,-3,-2,-1,0,1] };
+
+	vt_wrapper = new ChartWrapper({
+		chartType: 'LineChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1400'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		query: 'select vt',
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'vt_wrapper',
+	});
+
+	vt_wrapper.draw();
+	charts.push(vt_wrapper);
+}
+
