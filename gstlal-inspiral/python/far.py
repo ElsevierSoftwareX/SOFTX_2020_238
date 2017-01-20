@@ -775,12 +775,12 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 			raise ValueError("encountered NaN signal or noise model probability densities")
 		signal_rates[ln_lamb,] += exp(lnP_signal)
 		noise_rates[ln_lamb,] += exp(lnP_noise)
-	return signal_rates, noise_rates
 
 
-def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, *args, **kwargs):
+def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, signal_rates, noise_rates, samples, nsamples):
 	try:
-		queue.put(binned_log_likelihood_ratio_rates_from_samples(*args, **kwargs))
+		binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, samples, nsamples)
+		queue.put((signal_rates.array, noise_rates.array))
 	except:
 		queue.put((None, None))
 		raise
@@ -869,7 +869,7 @@ class RankingData(object):
 			threads.append((p, q, key))
 		while threads:
 			p, q, key = threads.pop(0)
-			self.signal_likelihood_rates[key], self.background_likelihood_rates[key] = q.get()
+			self.signal_likelihood_rates[key].array, self.background_likelihood_rates[key].array = q.get()
 			p.join()
 			if p.exitcode:
 				raise Exception("sampling thread failed")
