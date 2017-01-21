@@ -19,6 +19,7 @@ AC_CONFIG_FILES([ \
 	debian/Makefile \
 	python/Makefile \
 	share/Makefile \
+	share/vis/Makefile \
 	gst/Makefile \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
@@ -468,6 +469,29 @@ AS_IF([test "x$with_cuda" != "xno"], [
 ])
 AC_DEFINE([HAVE_CUDA], [test "x${HAVE_CUDA}" == "xyes"], [Defined if you have cuda])
 AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
+
+
+#
+# Check for webdir, this enables installation of web visualation tools
+#
+AC_ARG_WITH(
+	[webdir],
+	[AS_HELP_STRING([--with-webdir], [specify location of directory for web visualization tools. [$HOME/public_html]])],
+	[],
+	[with_webdir=no]
+)
+AS_IF([test "x$with_webdir" != "xno"], [
+	AC_MSG_WARN([copying web visualization tools to $with_webdir])
+	#AC_DEFINE([WEBDEST],"x$with_webdir", [Defined as the destination for web visualization tool.])
+	AC_SUBST([WEBDEST],["$with_webdir"])
+	HAVE_WEBDIR="yes"
+],[
+	AC_MSG_WARN([disabling installation of web visualization tools])
+	HAVE_WEBDIR="no"
+])
+AC_DEFINE([HAVE_WEBDIR], [test "x{HAVE_WEBDIR}" == "xyes"], [Defined if you are enabling web visualiation])
+AM_CONDITIONAL([COND_WEBDIR], [test "x${HAVE_WEBDIR}" == "xyes"])
+
 
 
 #
