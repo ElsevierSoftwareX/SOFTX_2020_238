@@ -189,9 +189,25 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		pipeparts.mkfakesink(pipeline, whiten)
 
-		kernel, latency, sample_rate = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd)
-		kernel, theta = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel)
-		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array(kernel, ndmin = 2), time_domain = True)
+		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array([1.], ndmin = 2), block_stride = 16384, time_domain = False)
+
+		def set_fir_psd(whiten, pspec, firbank):
+			psd_data = whiten.get_property("mean-psd")
+			psd = lal.CreateREAL8FrequencySeries(
+				name = "psd",
+				epoch = lal.LIGOTimeGPS(0),
+				f0 = 0.0,
+				deltaF = whiten.get_property("delta-f"),
+				sampleUnits = lal.Unit(whiten.get_property("psd-units")),
+				length = len(psd_data)
+			)
+			psd.data.data = psd_data
+			kernel, latency, sample_rate = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd)
+			kernel, theta = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel)
+			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
+
+		whiten.connect("notify::mean-psd", set_fir_psd, head)
+
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
