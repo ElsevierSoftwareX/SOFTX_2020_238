@@ -185,19 +185,23 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	#
 
 	if FIR_WHITENER:
-		t = pipeparts.mktee(pipeline, head)
-		whiten = pipeparts.mkwhiten(pipeline, t, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
-
-		(kernel, latency, sample_rate) = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd)
-		(kernel, theta) = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel)
-		fir = pipeparts.mkfirbank(pipeline, t, 0, numpy.array(kernel, ndmin = 2), time_domain = True)
-		fir = pipeparts.mkchecktimestamps(pipeline, fir, "%s_timestamps_fir" % instrument)
-		fir = pipeparts.mknxydumpsinktee(pipeline, fir, filename = "after_mkfirbank.txt")
+		head = pipeparts.mktee(pipeline, head)
+		whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		pipeparts.mkfakesink(pipeline, whiten)
-		head = pipeparts.mkaudioconvert(pipeline, fir)
+
+		kernel, latency, sample_rate = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd)
+		kernel, theta = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel)
+		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array(kernel, ndmin = 2), time_domain = True)
+		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
+		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
 		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
-		head = pipeparts.mkaudioconvert(pipeline, head)
+
+	#
+	# convert to desired precision
+	#
+
+	head = pipeparts.mkaudioconvert(pipeline, head)
 	if width == 64:
 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
 	else:
