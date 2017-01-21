@@ -16,5 +16,6 @@ webvis_SCRIPTS = \
 	jquery-3.1.1.min.js
 
 webviscgi_SCRIPTS = \
-	gstlal 
+	gstlal \
+	mobile
 	
