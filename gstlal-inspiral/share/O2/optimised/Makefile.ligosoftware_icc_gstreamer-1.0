@@ -7,7 +7,7 @@
 # time make logs/gstlal.txt -f Makefile.ligosoftware_icc_deb8_gstreamer-1.0 1> make.out 2> make.err
 
 # albert.einstein for git checkout
-USER=duncan.meacher
+USER=alexander.pace
 
 # Set directories and paths
 SRC_DIR:=${PWD}/src
@@ -19,7 +19,7 @@ LALSUITE_REPO:=${PWD}/git/lalsuite
 INSTALL_DIR:=${LAL_PATH}
 
 # Set to build from git (0 = repo, 1 = git)
-LALSUITE_GIT=0
+LALSUITE_GIT=1
 GSTLAL_GIT=1
 
 # Set package release versions
@@ -55,6 +55,7 @@ GSTREAMER=gstreamer-1.4.5
 GSL=gsl-1.16
 ORC=orc-0.4.25
 FFTW=fftw-3.3.5
+PYFFTW=pyFFTW-0.9.0
 
 # Specify target/dependancy files
 GSTINSPIRAL_TARGET=$(INSTALL_DIR)/lib/libgstlalinspiral.so
@@ -90,6 +91,7 @@ GSL_2_TARGET=$(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
 GSL_1_TARGET=$(INSTALL_DIR)/lib/libgsl.so
 ORC_TARGET=$(INSTALL_DIR)/lib/liborc-0.4.so
 FFTW_TARGET=$(INSTALL_DIR)/lib/libfftw3.so
+PYFFTW_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/pyfftw/pyfftw.so
 # tarballs
 GSTLALINSPIRAL_TAR_TARGET=$(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz
 GSTLALCALIB_TAR_TARGET=$(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz
@@ -122,13 +124,15 @@ GSTBASE_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz
 GSTREAMER_TAR_TARGET=$(TAR_DIR)/$(GSTREAMER).tar.xz
 GSL_TAR_TARGET=$(TAR_DIR)/$(GSL).tar.gz
 ORC_TAR_TARGET=$(TAR_DIR)/$(ORC).tar.xz
+PYFFTW_TAR_TARGET=$(TAR_DIR)/$(PYFFTW).tar.gz
 FFTW_TAR_TARGET=$(TAR_DIR)/$(FFTW).tar.gz
 # git repos
 GSTLAL_GIT_TARGET=$(GSTLAL_REPO)/TODO.md
 LALSUITE_GIT_TARGET=$(LALSUITE_REPO)/lal/README
 
 # Specify how many processors to run on
-CORES:=$(shell echo `nproc --all`"-2" | bc -l)
+#CORES:=$(shell echo `nproc --all`"-2" | bc -l)
+CORES:=8
 
 # Determine cluster
 CLUSTER:=$(shell hostname -d)
@@ -566,14 +570,24 @@ $(GSL_1_TARGET) : $(ORC_TARGET)
 	cd $(SRC_DIR)/$(GSL) && make -j$(CORES) && make install -j$(CORES)
 
 # ORC
-logs/orc.txt : $(LOGS_DIR)/fftw.txt $(ORC_TARGET)
+logs/orc.txt : $(LOGS_DIR)/pyfftw.txt $(ORC_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-$(ORC_TARGET) : $(FFTW_TARGET)
+$(ORC_TARGET) : $(PYFFTW_TARGET)
 	echo $(ORC) 1>&2
 	tar -xf $(TAR_DIR)/$(ORC).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(ORC) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(ORC) && make -j$(CORES) && make install -j$(CORES)
+
+#pyfftw
+logs/pyfftw.txt : $(LOGS_DIR)/fftw.txt $(PYFFTW_TARGET)
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(PYFFTW_TARGET) : $(FFTW_TARGET)
+	echo $(PYFFTW) 1>&2
+	tar -xzf $(TAR_DIR)/$(PYFFTW).tar.gz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(PYFFTW) && python setup.py install --prefix=$(INSTALL_DIR)
+
 
 # fftw
 logs/fftw.txt : $(LOGS_DIR)/patch.txt $(FFTW_TARGET)
@@ -586,7 +600,7 @@ $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 	cd $(SRC_DIR)/$(FFTW) && \
 		./configure CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES) && make clean && \
-		./configure CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse2 --enable-avx2 --enable-avx --enable-threads --prefix=$(INSTALL_DIR) && \
+		./configure CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse2 --enable-avx --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES)
 
 #########################
@@ -598,7 +612,7 @@ logs/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 #tarballs
-logs/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(OPROFILE_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
+logs/tar.txt : $(FFTW_TAR_TARGET) $(PYFFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(OPROFILE_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(GSTLALINSPIRAL_TAR_TARGET) : $(GSTLALCALIB_TAR_TARGET)
@@ -691,8 +705,11 @@ $(GSTREAMER_TAR_TARGET) : $(GSL_TAR_TARGET)
 $(GSL_TAR_TARGET) : $(ORC_TAR_TARGET)
 	wget --no-check-certificate http://ftp.gnu.org/gnu/gsl/$(GSL).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
-$(ORC_TAR_TARGET) : $(FFTW_TAR_TARGET)
+$(ORC_TAR_TARGET) : $(PYFFTW_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/orc/$(ORC).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(PYFFTW_TAR_TARGET) : $(LOGS_DIR)
+	wget --no-check-certificate https://pypi.python.org/packages/2d/2c/5849e5fec48101f15bb85002f9fc548812e78d701352e309ceb359f83235/$(PYFFTW).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(FFTW_TAR_TARGET) : $(LOGS_DIR)
 	wget --no-check-certificate http://www.fftw.org/$(FFTW).tar.gz --directory-prefix=$(TAR_DIR) -nc
