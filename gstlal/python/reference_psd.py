@@ -30,7 +30,10 @@ import math
 import numpy
 import os
 import scipy
-import scipy.fftpack
+try:
+	from pyfftw.interfaces import scipy_fftpack as fftpack
+except ImportError:
+	from scipy import fftpack
 from scipy import interpolate
 import sys
 import signal
@@ -375,19 +378,14 @@ def psd_to_linear_phase_whitening_fir_kernel(psd, invert = True):
 	if invert:
 		data_nonzeros = (data != 0.)
 		data[data_nonzeros] = 1./data[data_nonzeros]
-	try:
-		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) / (2 * len(data) - 1)
-		kernel = numpy.hstack((kernel[::-1], kernel[1:]))
-	except AttributeError:
-		# this computer's scipy.fftpack is missing idct()
-		# repack data:  data[0], data[1], 0, data[2], 0, ....
-		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
-		tmp[0] = data[0]
-		tmp[1::2] = data[1:]
-		data = tmp
-		del tmp
-		kernel = scipy.fftpack.irfft(numpy.sqrt(data))
-		kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
+	# repack data:  data[0], data[1], 0, data[2], 0, ....
+	tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
+	tmp[0] = data[0]
+	tmp[1::2] = data[1:]
+	data = tmp
+	del tmp
+	kernel = fftpack.irfft(numpy.sqrt(data))
+	kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
 
 	#
 	# apply a Tukey window whose flat bit is 50% of the kernel.
@@ -428,14 +426,14 @@ def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(linear_phase_k
 	# compute abs of FFT of kernel
 	#
 
-	absX = abs(scipy.fftpack.fft(linear_phase_kernel))
+	absX = abs(fftpack.fft(linear_phase_kernel))
 
 	#
 	# compute the cepstrum of the kernel
 	# (i.e., the iFFT of the log of the abs of the FFT of the kernel)
 	#
 
-	cepstrum = scipy.fftpack.ifft(scipy.log(absX))
+	cepstrum = fftpack.ifft(scipy.log(absX))
 
 	#
 	# compute sgn
@@ -450,13 +448,13 @@ def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(linear_phase_k
 	# compute theta
 	#
 
-	theta = -1.j * scipy.fftpack.fft(sgn * cepstrum)
+	theta = -1.j * fftpack.fft(sgn * cepstrum)
 
 	#
 	# compute minimum phase kernel
 	#
 
-	minimum_phase_kernel = scipy.real(scipy.fftpack.ifft(absX * scipy.exp(1.j * theta)))
+	minimum_phase_kernel = scipy.real(fftpack.ifft(absX * scipy.exp(1.j * theta)))
 
 	#
 	# this kernel needs to be reversed to follow conventions used with the
