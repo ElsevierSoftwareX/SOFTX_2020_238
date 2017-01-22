@@ -297,7 +297,7 @@ if options.color_psd:
 	rpsd.data.data = rpsd.data.data[:max_sample]
 	
 	# create the coloring FIR kernel from reference_psd.psd_to_fir_kernel()
-	fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
+	fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_linear_phase_whitening_fir_kernel(rpsd, invert = False)
 
 	## 7) Set the pipeline head to a pipeparts.mkfirbank() recoloring filter
 	head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_matrix], block_stride = 32 * options.sample_rate)
