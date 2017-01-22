@@ -186,7 +186,6 @@ def parse_command_line():
 	parser.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
 	parser.add_option("--min-log-L", metavar = "log likelihood ratio", type = "float", help = "Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).")
 	parser.add_option("--channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
-	parser.add_option("--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
 	parser.add_option("--state-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the state channel to process (required).")
 	parser.add_option("--dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the DQ channel to process (required).")
 	parser.add_option("--framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process (required). IFO=ADDR:port can be given multiple times.")

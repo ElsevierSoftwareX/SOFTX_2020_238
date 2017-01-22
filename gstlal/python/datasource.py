@@ -519,7 +519,7 @@ class GWDataSourceInfo(object):
 
 		## DQ and state vector channel dictionary, e.g., { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
 		self.state_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
-		self.state_channel_dict = { "H1": "DMT-DQ_VECTOR", "H2": "DMT-DQ_VECTOR","L1": "DMT-DQ_VECTOR", "V1": "DMT-DQ_VECTOR" }
+		self.dq_channel_dict = { "H1": "DMT-DQ_VECTOR", "H2": "DMT-DQ_VECTOR","L1": "DMT-DQ_VECTOR", "V1": "DMT-DQ_VECTOR" }
 
 		if options.state_channel_name is not None:
 			state_channel_dict_from_options = channel_dict_from_channel_list( options.state_channel_name )
