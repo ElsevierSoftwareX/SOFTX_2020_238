@@ -320,12 +320,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# adjust its length (Leo)
 		#
 
-		# FIXME:  nothing here makes sure the fir_rate matches the
-		# template's sample rate.  the psd's nyquist needs to be
-		# adjusted up or down as needed.  I don't know what the
-		# other FIXME's are for.  maybe somebody else remembers.
-
-		(kernel, latency, fir_rate) = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd) #FIXME
+		(kernel, latency, fir_rate) = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd, nyquist = sample_rate_max / 2.0) #FIXME
 		(kernel, theta) = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel) #FIXME
 		kernel = kernel[-1::-1]
 		if len(kernel) < working_length:
