@@ -162,8 +162,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
         GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
 
         /* set the time stamps */
-	/* NOTE: We have to allow one sample of slop because the end times are actually interpolated between samples */
-        GST_BUFFER_PTS(srcbuf) = time + timediff - gst_util_uint64_scale_int_round(GST_SECOND, 1, rate);
+        GST_BUFFER_PTS(srcbuf) = time + timediff;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	if (input->num_events) {
