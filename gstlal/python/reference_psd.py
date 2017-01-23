@@ -332,7 +332,7 @@ def effective_distance_factor(inclination, fp, fc):
 	return 1.0 / math.sqrt(fp**2 * (1+cos2i)**2 / 4 + fc**2 * cos2i)
 
 
-def psd_to_linear_phase_whitening_fir_kernel(psd, invert = True):
+def psd_to_linear_phase_whitening_fir_kernel(psd, invert = True, nyquist = None):
 	"""
 	Compute an acausal finite impulse-response filter kernel from a power
 	spectral density conforming to the LAL normalization convention,
@@ -368,6 +368,15 @@ def psd_to_linear_phase_whitening_fir_kernel(psd, invert = True):
 	#
 
 	data *= sample_rate
+
+	#
+	# Change Nyquist frequency if requested
+	#
+
+	if nyquist is not None:
+		assert nyquist <= sample_rate / 2.
+		sample_rate = nyquist * 2
+		data = data[:int(sample_rate / psd.deltaF)]
 
 	#
 	# compute the FIR kernel.  it always has an odd number of samples
