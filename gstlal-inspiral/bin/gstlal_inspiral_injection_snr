@@ -179,7 +179,7 @@ for cacheentry in reference_psd_files:
 	PSDs = read_psd_xmldoc(xmldoc)
 	allPSDs[start] = PSDs
 
-pool = multiprocessing.Pool(8)
+pool = multiprocessing.Pool(16)
 h1snr = []
 l1snr = []
 #print pool.map(calc_expected_snr,[inj for idx, inj in enumerate(sim_inspiral_table)])
