@@ -141,7 +141,12 @@ int gstlal_set_min_offset_in_snglinspiral_array(SnglInspiralTable *bankarray, in
 		if (offset < gpsns)
 			gpsns = offset;
 	}
-	*timediff = gpsns;
+	/*
+	 * FIXME FIXME FIXME This should be one sample at the sample rate, but
+	 * unfortunately we don't have that in this function, so it is hardcoded to a
+	 * very conservative value of 32 samples per second
+	 */
+	*timediff = gpsns - gst_util_uint64_scale_int_round(1, GST_SECOND, 32);
 	return 0;
 }
 
