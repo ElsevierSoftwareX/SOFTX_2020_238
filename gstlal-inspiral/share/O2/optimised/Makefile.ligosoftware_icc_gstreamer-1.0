@@ -4,10 +4,10 @@
 # run: make env.sh, then source the resulting environment file and run: make
 #
 # example command:
-# time make logs/gstlal.txt -f Makefile.ligosoftware_icc_deb8_gstreamer-1.0 1> make.out 2> make.err
+# time make logs/gstlal.txt -f Makefile.ligosoftware_icc_gstreamer-1.0 1> make.out 2> make.err
 
 # albert.einstein for git checkout
-USER=alexander.pace
+USER=albert.einstein
 
 # Set directories and paths
 SRC_DIR:=${PWD}/src
@@ -173,10 +173,8 @@ env.sh :
 	@echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages' >> $@
 	@echo 'LAL_DATA_PATH=/home/cbc/ROM_data' >> $@
 	@echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0' >> $@
-	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH' >> $@
-
-#@echo '#export LD_PRELOAD="$${LAL_PATH}/lib/libfftw3.so:$${LAL_PATH}/lib/libfftw3f.so:$${LAL_PATH}/lib/libfftw3_threads.so:$${LAL_PATH}/lib/libfftw3f_threads.so"' >> $@
-#@echo 'LAL_DATA_PATH=$${LAL_PATH}/share/lalsimulation' >> $@
+	@echo 'GST_REGISTRY_1_0=$${LAL_PATH}/registry.bin' >> $@
+	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH GST_REGISTRY_1_0' >> $@
 
 #####################
 # Check time stamps #
