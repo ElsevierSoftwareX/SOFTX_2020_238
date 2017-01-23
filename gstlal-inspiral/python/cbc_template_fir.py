@@ -316,8 +316,15 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		)
 
 		#
-		# Obtain a kernel of zero-latency whitening filter and adjust its length (Leo)
+		# Obtain a kernel of zero-latency whitening filter and
+		# adjust its length (Leo)
 		#
+
+		# FIXME:  nothing here makes sure the fir_rate matches the
+		# template's sample rate.  the psd's nyquist needs to be
+		# adjusted up or down as needed.  I don't know what the
+		# other FIXME's are for.  maybe somebody else remembers.
+
 		(kernel, latency, fir_rate) = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd) #FIXME
 		(kernel, theta) = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel) #FIXME
 		kernel = kernel[-1::-1]
@@ -325,7 +332,6 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			kernel = numpy.append(kernel, numpy.zeros(working_length - len(kernel)))
 		else:
 			kernel = kernel[:working_length]
-
 
 		assert len(kernel_tseries.data.data) == len(kernel), "the size of whitening kernel does not match with a given format of COMPLEX16TimeSeries."
 		kernel_tseries.data.data = kernel #FIXME
