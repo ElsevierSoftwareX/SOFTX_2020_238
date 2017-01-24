@@ -193,7 +193,7 @@ else:
 
 # building the event loop and pipeline
 mainloop = GObject.MainLoop()
-pipeline = Gst.Pipeline("gstlal_play_frames")
+pipeline = Gst.Pipeline("gstlal_play")
 handler = simplehandler.Handler(mainloop, pipeline)
 
 #
