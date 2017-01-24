@@ -376,7 +376,7 @@ def psd_to_linear_phase_whitening_fir_kernel(psd, invert = True, nyquist = None)
 	if nyquist is not None:
 		assert nyquist <= sample_rate / 2.
 		sample_rate = nyquist * 2
-		data = data[:int(sample_rate / psd.deltaF)]
+		data = data[:int(nyquist / psd.deltaF)]
 
 	#
 	# compute the FIR kernel.  it always has an odd number of samples
