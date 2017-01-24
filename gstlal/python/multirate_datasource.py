@@ -206,7 +206,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			kernel, theta = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel)
 			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
 
-		whiten.connect("notify::mean-psd", set_fir_psd, head)
+		whiten.connect_after("notify::mean-psd", set_fir_psd, head)
 
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
