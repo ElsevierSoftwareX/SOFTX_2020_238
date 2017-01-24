@@ -186,7 +186,13 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	if FIR_WHITENER:
 		head = pipeparts.mktee(pipeline, head)
-		whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+		# because we are not asking the whitener to reassemble an
+		# output time series (that we care about) we drop the
+		# zero-padding in this code path.  the psd_fft_length is
+		# reduced to account for the loss of the zero padding to
+		# keep the Hann window the same as implied by the
+		# user-supplied parameters.
+		whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		pipeparts.mkfakesink(pipeline, whiten)
 
 		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array([1.], ndmin = 2), block_stride = 16384, time_domain = False)
