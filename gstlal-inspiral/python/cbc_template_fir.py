@@ -271,6 +271,11 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	working_length = templates.ceil_pow_2(length_max + round(1./psd.deltaF * sample_rate_max))
 	working_duration = float(working_length) / sample_rate_max
 
+	# Smooth the PSD and interpolate to required resolution
+	if not FIR_WHITENER and psd is not None:
+		psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max / 2.0))
+	else:
+		psd = interpolate_psd(psd, 1.0 / working_duration)
 	revplan = lal.CreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	fwdplan = lal.CreateForwardREAL8FFTPlan(working_length, 1)
 	tseries = lal.CreateCOMPLEX16TimeSeries(
@@ -311,7 +316,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			epoch = LIGOTimeGPS(0),
 			f0 = 0.0,
 			deltaF = 1.0 / working_duration,
-			length = working_length, #if this is "working_length // 2 + 1", it gives segmentation fault
+			length = working_length,
 			sampleUnits = lal.Unit("strain s")
 		)
 
@@ -323,25 +328,20 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		(kernel, latency, fir_rate) = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd, nyquist = sample_rate_max / 2.0) #FIXME
 		(kernel, theta) = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel) #FIXME
 		kernel = kernel[-1::-1]
+		# FIXME this is off by one sample, but shouldn't be. Look at the miminum phase function
+		# assert len(kernel) == working_length
 		if len(kernel) < working_length:
 			kernel = numpy.append(kernel, numpy.zeros(working_length - len(kernel)))
 		else:
 			kernel = kernel[:working_length]
 
-		assert len(kernel_tseries.data.data) == len(kernel), "the size of whitening kernel does not match with a given format of COMPLEX16TimeSeries."
-		kernel_tseries.data.data = kernel #FIXME
+		kernel_tseries.data.data = kernel
 
 		#
 		# FFT of the kernel
 		#
 
 		lal.COMPLEX16TimeFreqFFT(kernel_fseries, kernel_tseries, fwdplan_kernel) #FIXME
-
-	else:
-		# Smooth the PSD and interpolate to required resolution
-		if psd is not None:
-			psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max / 2.0))
-
 
 	# Check parity of autocorrelation length
 	if autocorrelation_length is not None:
@@ -379,7 +379,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			# Compute a product of freq series of the whitening kernel and the template (convolution in time domain) then add quadrature phase(Leo)
 			#
 
-			assert len(kernel_fseries.data.data) == len(fseries.data.data), "the size of whitening kernel freq series does not match with a given format of COMPLEX16FrequencySeries."
+			assert (len(kernel_fseries.data.data) // 2 + 1) == len(fseries.data.data), "the size of whitening kernel freq series does not match with a given format of COMPLEX16FrequencySeries."
 			fseries.data.data *= kernel_fseries.data.data[len(kernel_fseries.data.data) // 2 - 1:]
 			fseries = templates.QuadraturePhase.add_quadrature_phase(fseries, working_length)
 		else:
