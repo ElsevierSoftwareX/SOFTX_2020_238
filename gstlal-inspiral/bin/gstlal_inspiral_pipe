@@ -27,7 +27,8 @@
 # See datasource.append_options() for generic options
 #
 #	+ '--psd-fft-length's' [int] (s) : FFT length, default 32s.  Note that 50% will be used for zero-padding.
-#	+ '--reference-psd' : Don't measure PSDs, use this one instead 
+#	+ '--reference-psd' : Do not measure PSDs, use this one instead 
+#	+ '--template-bank' : Set the template bank xml file
 #	+ '--overlap' [int] : set the factor that describes the overlap of the sub banks, must be even!
 #	+ '--autocorrelation-length' [int] : The minimum number of samples to use for auto-chisquared, default 201 should be odd
 #	+ '--samples-min' [int] : The minimum number of samples to use for time slices default 1024
@@ -252,6 +253,20 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, temp
 				output_files = {"write-svd":svd_bank_name}
 				)
 			)
+	#
+	# Plot template/svd bank jobs
+	#
+
+	primary_ifo = bank_group.items()[0][0]
+	inspiral_pipe.generic_node(plotBanksJob, dag,
+				parent_nodes = sum(svd_nodes.values(),[]),
+				opts = { "plot-svd-bank":"",
+					"plot-template-bank":"",
+					"output-dir": output_dir},
+				input_files = {"template-bank-file":options.template_bank},
+				input_cache_files = {"svd-bank-cache":[f.output_files["write-svd"] for f in svd_nodes[primary_ifo]]}
+				)
+
 	return svd_nodes, new_template_mchirp_dict
 
 def create_svd_bank_strings(svd_nodes, instruments = None):
@@ -1018,7 +1033,10 @@ def parse_command_line():
 
 	# reference_psd
 	parser.add_option("--reference-psd", help = "Don't measure PSDs, use this one instead")
-	
+
+	# Template bank
+	parser.add_option("--template-bank", metavar = "filename", help = "Set the template bank xml file.")
+
 	# SVD bank construction options
 	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
 	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
@@ -1216,6 +1234,7 @@ else:
 	# set up jobs only needed for zerolag run
 	refPSDJob = inspiral_pipe.generic_job("gstlal_reference_psd", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
 	medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	plotBanksJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_banks", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"7GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
