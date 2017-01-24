@@ -167,9 +167,6 @@ def parse_command_line():
 		if options.low_pass_filter <= options.high_pass_filter:
 			raise ValueError("--low-pass-filter must be > --high-pass-filter")
 
-	if options.whiten and (options.low_pass_filter or options.high_pass_filter):
-		raise ValueError("specify either whitening or filtering not both")
-
 	if options.reference_psd and not options.whiten:
 		raise ValueError("--reference-psd requires --whiten")
 
