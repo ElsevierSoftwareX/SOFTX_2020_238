@@ -63,6 +63,9 @@ summary_about = webpage.elem("p", ["This page was generated on %s by %s in the w
 
 
 
+summary_lt = webpage.section("Search Summary")
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]), "lt_summary_div"))
+summary_lt += [webpage.elem("div", [], "id=lt_summary_div width=100% height=500")]
 
 #FIXME assumes the zero lag database is the first tag
 summary_seg = webpage.section("Segments")
@@ -83,7 +86,7 @@ summary_commands = webpage.section("Commands run")
 summary_commands += [webpage.elem("pre", [webpage.elem("samp", ["\n".join(["\t %s" % x for x in  subprocess.check_output(["make", "-B", "-n", "-f", makefile]).split("\n") ])])])]
 
 
-summary_div = summary([summary_about, summary_seg, summary_env, summary_make, summary_commands])
+summary_div = summary([summary_about, summary_lt, summary_seg, summary_env, summary_make, summary_commands])
 
 
 #

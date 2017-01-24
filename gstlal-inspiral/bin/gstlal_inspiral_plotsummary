@@ -291,7 +291,9 @@ class CoincDatabase(object):
 			if self.coinc_def_table is not None:
 				for description, n in cursor.execute("SELECT description, COUNT(*) FROM coinc_definer NATURAL JOIN coinc_event GROUP BY coinc_def_id"):
 					data.append([description, str(n)])
-			to_google_json("%s_%s_%s" % (self.base, plotsummary_json, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
+
+			if self.sim_inspiral_table is None:
+				to_google_json("%s_%s" % (self.base, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
 
 #
 # =============================================================================
