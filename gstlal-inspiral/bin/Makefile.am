@@ -1,5 +1,4 @@
 dist_bin_SCRIPTS = \
-	gstlal_add_spins_to_bank \
 	gstlal_bank_splitter \
 	gstlal_compute_far_from_snr_chisq_histograms \
 	gstlal_iir_bank \
@@ -8,7 +7,6 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_calc_rank_pdfs \
 	gstlal_inspiral_coinc_extractor \
-	gstlal_inspiral_condition_data \
 	gstlal_inspiral_create_prior_diststats \
 	gstlal_inspiral_fake_zerolag_counts \
 	gstlal_inspiral_iir_bank_pipe \
