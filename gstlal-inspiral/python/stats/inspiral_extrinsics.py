@@ -51,7 +51,6 @@ import lal
 import lalsimulation
 from pylal import rate
 from pylal import snglcoinc
-from pylal.inject import light_travel_time
 
 
 # FIXME:  caution, this information might get organized differently later.
@@ -717,7 +716,7 @@ def coinc_window(delta_t, instruments):
 		return 0.
 	if sorted(instruments) != ["H1","L1"]:
 		raise ValueError("H1L1 only ifo combo currently supported")
-	return light_travel_time(instruments[0], instruments[1]) + delta_t
+	return snglcoinc.light_travel_time(instruments[0], instruments[1]) + delta_t
 
 
 def __dphi_calc_A(combined_snr, delta_t):
@@ -778,7 +777,7 @@ def lnP_dt_signal(dt, snr_ratio):
 def lnP_dt_dphi_uniform_H1L1(coincidence_window_extension):
 	# FIXME Dont hardcode
 	# NOTE This assumes the standard delta t
-	return math.log(1 / (light_travel_time("H1","L1")+coincidence_window_extension) * 1 / (2*math.pi))
+	return math.log(1 / (snglcoinc.light_travel_time("H1","L1")+coincidence_window_extension) * 1 / (2*math.pi))
 
 
 def lnP_dt_dphi_uniform(params, coincidence_window_extension):
