@@ -198,7 +198,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array([1.], ndmin = 2), block_stride = 16384, time_domain = False)
 
 		def set_fir_psd(whiten, pspec, firbank):
-			psd_data = whiten.get_property("mean-psd")
+			psd_data = numpy.array(whiten.get_property("mean-psd"))
 			psd = lal.CreateREAL8FrequencySeries(
 				name = "psd",
 				epoch = lal.LIGOTimeGPS(0),
