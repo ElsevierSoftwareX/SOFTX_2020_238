@@ -218,20 +218,9 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
 		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
-
-	#
-	# convert to desired precision
-	#
-
-	head = pipeparts.mkaudioconvert(pipeline, head)
-	if width == 64:
-		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
-	else:
-		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
-
-	# make the buffers going downstream smaller, this can really help with
-	# RAM
-	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
+		# make the buffers going downstream smaller, this can
+		# really help with RAM
+		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
 
 	if psd is None:
 		# use running average PSD
@@ -267,6 +256,16 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		whiten.connect_after("notify::f-nyquist", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::delta-f", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::psd-units", psd_units_or_resolution_changed, psd)
+
+	#
+	# convert to desired precision
+	#
+
+	head = pipeparts.mkaudioconvert(pipeline, head)
+	if width == 64:
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
+	else:
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
