@@ -151,7 +151,7 @@ diststats = far.ThincaCoincParamsDistributions(instruments = set(segs), delta_t 
 # 
 
 # FIXME make the prefactors adjustable
-diststats.add_background_prior(n = n_trigs, prefactors_range = (0.5, 20.), df = 40, inv_snr_pow = 2., ba = "background_rates", verbose = options.verbose)
+diststats.add_background_prior(n = n_trigs, prefactors_range = (0.5, 20.), df = 20, inv_snr_pow = 2., ba = "background_rates", verbose = options.verbose)
 
 # fill in the background to the requested amount
 for instrument, number_of_events in n_trigs.items():
