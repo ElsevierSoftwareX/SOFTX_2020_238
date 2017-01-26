@@ -379,9 +379,10 @@ if options.plot_svd_bank:
 	# Exract the list of file_tags for easier handling
 	file_tags = [params[0] for params in edgevalues]
 
+	tag_num = [int(''.join(c for c in tag if c.isdigit())) for tag in file_tags]
+
 	# Create plots
-	color_split_bank_by_svd(filename_template,
-			map(int, [svd_num.strip('_SVD') for svd_num in file_tags]),
+	color_split_bank_by_svd(filename_template, tag_num,
 			[params[1] for params in edgevalues], [params[2] for params in edgevalues],
 			[params[3] for params in edgevalues], [params[4] for params in edgevalues])
 
