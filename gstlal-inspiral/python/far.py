@@ -307,7 +307,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			raise ValueError("require df >= 0: %s" % repr(df))
 		if set(n) != self.instruments:
 			raise ValueError("n must provide a count for exactly each of %s" % ", ".join(sorted(self.instruments)))
-		pfs = numpy.logspace(numpy.log10(prefactors_range[0]), numpy.log10(prefactors_range[1]), 100)
+		#pfs = numpy.logspace(numpy.log10(prefactors_range[0]), numpy.log10(prefactors_range[1]), 100)
+		pfs = numpy.linspace((prefactors_range[0]), (prefactors_range[1]), 100)
 		for instrument, number_of_events in n.items():
 			binarr = rates_dict["%s_snr_chi" % instrument]
 			if verbose:
@@ -368,31 +369,24 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
 
-			snr = new_binarr.bins[0].centres()
-			rcoss = new_binarr.bins[1].centres()
+			snrindices, rcossindices = new_binarr.bins[self.snr_min:1e10, 1e-6:1e2]
+			snr, dsnr = new_binarr.bins[0].centres()[snrindices], new_binarr.bins[0].upper()[snrindices] - new_binarr.bins[0].lower()[snrindices]
+			rcoss, drcoss = new_binarr.bins[1].centres()[rcossindices], new_binarr.bins[1].upper()[rcossindices] - new_binarr.bins[1].lower()[rcossindices]
 
-			# ignore overflows in SNR^6.  correct answer is 0
-			# when that happens.
-			with numpy.errstate(over = "ignore"):
-				psnr = numpy.exp(-(snr**2 - 6.**2)/ 2.) + (1 + 6.**6) / (1. + snr**6)
 			prcoss = numpy.ones(len(rcoss))
+			psnr = 1e-8 * snr**-6 #(1. + 10**6) / (1. + snr**6)
+			psnrdcoss = numpy.outer(numpy.exp(-(snr - 2**.5)**2/ 2.) * dsnr, numpy.exp(-(rcoss - .05)**2 / .0002*2) * drcoss)
 
-			# the bins at the edges end up with infinite volume
-			# elements.  the PDF should be 0 in those bins so
-			# we 0 their volume elements to force that result
-			dsnr_drcoss = new_binarr.bins.volumes()
-			dsnr_drcoss[~numpy.isfinite(dsnr_drcoss)] = 0.
-			new_binarr.array[:,:] = numpy.outer(psnr, prcoss) * dsnr_drcoss
-
+			#new_binarr.array[snrindices, rcossindices] = numpy.outer(psnr * dsnr, prcoss * drcoss)
+			new_binarr.array[snrindices, rcossindices] += psnrdcoss 
 			# Normalize what's left to the requested count.
-			# Give .1% of the requested events to this portion of the model
-			new_binarr.array *= 0.001 * number_of_events / new_binarr.array.sum()
+			# Give 99.999999% of the requested events to this portion of the model
+			new_binarr.array *= 0.99 * number_of_events / new_binarr.array.sum()
 			# add to raw counts
 			getattr(self, ba)["singles"][instrument,] += number_of_events
 			binarr += new_binarr
-
-		# Give 99.9% of the requested events to the "glitch model"
-		self.add_snrchi_prior(getattr(self, ba), dict((ifo, x * 0.999) for ifo, x in n.items()), prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, verbose = verbose)
+		# Give 0.00000001% of the requested events to the "glitch model"
+		self.add_snrchi_prior(getattr(self, ba), dict((ifo, x * 0.01) for ifo, x in n.items()), prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
@@ -459,7 +453,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				denom += self.zero_lag_rates[key].array
 			binnedarray.array += denom * (binnedarray.array.sum() / denom.sum() * self.numerator_accidental_weight)
 
-		numsamples = binnedarray.array.sum() / 10. + 1. # Be extremely conservative and assume only 1 in 10 samples are independent.
+		numsamples = max(binnedarray.array.sum() / 10. + 1., 1e7) # Be extremely conservative and assume only 1 in 10 samples are independent, but assume there are always at least 1e7 samples.
 		# construct the density estimation kernel
 		snr_bins = binnedarray.bins[0]
 		chisq_bins = binnedarray.bins[1]
