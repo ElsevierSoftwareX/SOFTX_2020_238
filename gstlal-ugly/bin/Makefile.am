@@ -30,4 +30,5 @@ dist_bin_SCRIPTS = \
 	gstlal_parse_frame_segment_logs \
 	gstlal_ll_inspiral_aggregator \
 	gstlal_ll_dq \
-	gstlal_ll_inspiral_state
+	gstlal_ll_inspiral_state \ 
+	gstlal_condor_top
