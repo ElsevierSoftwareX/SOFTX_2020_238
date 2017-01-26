@@ -110,6 +110,10 @@ if options.verbose:
 
 
 for key in ranking_data.background_likelihood_rates:
+	if key is None:
+		# ingore the marginalized PDFs, they are not included in
+		# the on-disk version
+		continue
 	ranking_data.zero_lag_likelihood_rates[key].array[:] = ranking_data.background_likelihood_rates[key].array
 	ranking_data.zero_lag_likelihood_pdfs[key].array[:] = ranking_data.background_likelihood_pdfs[key].array
 	ranking_data.background_likelihood_rates[key].array[:] = ranking_data.background_likelihood_pdfs[key].array[:] = 0.
