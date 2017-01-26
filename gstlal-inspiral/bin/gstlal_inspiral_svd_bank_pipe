@@ -161,8 +161,7 @@ for i, f in enumerate(groups):
 	dag.output_cache.append(CacheEntry(ifo, "GSTLAL_SVD_BANK_%d" % i, segments.segment(0, 0), "file://localhost%s" % (svd_bank_name,)))
 	
 	svdNode = inspiral_pipe.generic_node(svdJob, dag, [],
-		opts = {"snr-threshold":far.ThincaCoincParamsDistributions.snr_min,
-			"flow":options.flow,
+		opts = {"flow":options.flow,
 			"svd-tolerance":options.tolerance,
 			"ortho-gate-fap":0.5,
 			"samples-min":options.samples_min,

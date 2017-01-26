@@ -48,7 +48,7 @@ from gstlal.far import ThincaCoincParamsDistributions
 # 
 # - Typical use
 #
-# 		$ gstlal_svd_bank --reference-psd reference_psd.xml --samples-min 1024 --bank-id 0 --snr-threshold 4.0 --ortho-gate-fap 0.5 --flow 40.0 --template-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --svd-tolerance 0.9995 --write-svd-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/svd_0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --samples-max-64 4096 --clipleft 0 --autocorrelation-length 351 --samples-max-256 1024 --clipright 20 --samples-max 4096
+# 		$ gstlal_svd_bank --reference-psd reference_psd.xml --samples-min 1024 --bank-id 0 --ortho-gate-fap 0.5 --flow 40.0 --template-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --svd-tolerance 0.9995 --write-svd-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/svd_0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --samples-max-64 4096 --clipleft 0 --autocorrelation-length 351 --samples-max-256 1024 --clipright 20 --samples-max 4096
 #
 # - Please add more!
 #
@@ -60,7 +60,6 @@ from gstlal.far import ThincaCoincParamsDistributions
 #	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
 #	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
 #	+ `--ortho-gate-fap` [probability]: Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).
-#	+ `--snr-threshold` [SNR]: Set the SNR threshold (default = 4.0).  Currently this cannot be changed. 
 #	+ `--write-svd-bank` [filename]: Set the filename in which to save the template bank (required).
 #	+ `--verbose`: Be verbose (optional).
 #	+ `--clipleft` [int]: Remove poorly reconstructable templates from the left edge of each sub-bank.
@@ -109,7 +108,6 @@ parser.add_option("--reference-psd", metavar = "filename", help = "Load the spec
 parser.add_option("--template-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
 parser.add_option("--template-bank-cache", metavar = "filename", help = "Provide a cache file with the names of the LIGO light-weight XML file from which to load the template bank.")
 parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 0.5, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 0.5).")
-parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold (default = 4.0). Currently this cannot be changed.")
 parser.add_option("--write-svd-bank", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--clipleft", type = "int", metavar = "N", action = "append", help = "Remove N poorly reconstructable templates from the left edge of each sub-bank. Required")
@@ -139,9 +137,6 @@ if not (len(options.template_bank) == len(options.clipleft) == len(options.clipr
 if not options.autocorrelation_length % 2:
 	raise ValueError("--autocorrelation-length must be odd")
 
-if options.snr_threshold != ThincaCoincParamsDistributions.snr_min:
-	raise ValueError("--snr-threshold must be %f" % ThincaCoincParamsDistributions.snr_min)
-
 
 #
 #
@@ -161,7 +156,7 @@ svd_bank.write_bank(
 		psd,
 		options.flow,
 		options.ortho_gate_fap,
-		options.snr_threshold,
+		ThincaCoincParamsDistributions.snr_min,
 		options.svd_tolerance,
 		padding = options.padding,
 		identity_transform = options.identity_transform,

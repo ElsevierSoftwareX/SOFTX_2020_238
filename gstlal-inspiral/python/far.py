@@ -103,7 +103,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
 
 	# range of SNRs covered by this object
-	# FIXME:  must ensure lower boundary matches search threshold
 	snr_min = 4.
 
 	# load/initialize an SNRPDF instance for use by all instances of
