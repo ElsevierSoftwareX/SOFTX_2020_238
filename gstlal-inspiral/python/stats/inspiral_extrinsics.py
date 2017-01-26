@@ -93,6 +93,12 @@ def instruments_rate_given_noise(singles_counts, num_templates, segs, delta_t, m
 	>>> seglists = segmentlistdict({"H1": segmentlist([segment(0, 30)]), "L1": segmentlist([segment(10, 50)]), "V1": segmentlist([segment(20, 70)])})
 	>>> instruments_rate_given_noise(singles_counts, num_templates, seglists, 0.005, min_instruments = 1)
 	{frozenset(['V1']): 52420.355265761136, frozenset(['H1']): 31658.502382616472, frozenset(['V1', 'H1']): 763.5030405229143, frozenset(['L1']): 32623.729803299546, frozenset(['V1', 'L1']): 1798.275619839839, frozenset(['V1', 'H1', 'L1']): 17.866073876116275, frozenset(['H1', 'L1']): 560.128502984505}
+
+	Works for zero counts
+
+	>>> singles_counts = {"H1": 0, "L1": 0, "V1": 0}
+	>>> inspiral_extrinsics.instruments_rate_given_noise(singles_counts, num_templates, seglists, 0.005, min_instruments = 1)
+	{frozenset(['V1']): 0.0, frozenset(['H1']): 0.0, frozenset(['V1', 'H1']): 0.0, frozenset(['L1']): 0.0, frozenset(['V1', 'L1']): 0.0, frozenset(['V1', 'H1', 'L1']): 0.0, frozenset(['H1', 'L1']): 0.0}
 	"""
 	if set(singles_counts) != set(segs):
 		raise ValueError("singles_counts (%s) and segs (%s) must be for the same instruments" % (", ".join(sorted(singles_counts)), ", ".join(sorted(segs))))
@@ -126,6 +132,16 @@ def instruments_rate_given_noise(singles_counts, num_templates, segs, delta_t, m
 
 
 def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instruments = 2, min_distance = 0.):
+	"""
+	Example:
+
+	>>> from gstlal.stats.horizonhistory import *
+	>>> hist = HorizonHistories({"H1": NearestLeafTree([(0., 120.)]), "L1": NearestLeafTree([(0., 120.)])})
+	>>> P_instruments_given_signal(hist)
+	{frozenset(['H1', 'L1']): 1.0}
+	>>> P_instruments_given_signal(hist, min_instruments = 1)
+	{frozenset(['L1']): 0.25423904879460091, frozenset(['H1', 'L1']): 0.49116512120682387, frozenset(['H1']): 0.25459582999857527}
+	"""
 	# FIXME:  this function computes P(instruments | signal)
 	# marginalized over time (i.e., marginalized over the history of
 	# horizon distances).  what we really want is to know P(instruments

@@ -86,7 +86,11 @@ class NearestLeafTree(object):
 	Example:
 
 	>>> x = NearestLeafTree()
+	>>> bool(x)
+	False
 	>>> x[100.0] = 120.
+	>>> bool(x)
+	True
 	>>> x[104.0] = 100.
 	>>> x[102.0] = 110.
 	>>> x[90.]
