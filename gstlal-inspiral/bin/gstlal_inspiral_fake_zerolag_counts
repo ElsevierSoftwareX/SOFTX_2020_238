@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2016  Kipp Cannon, Chad Hanna
+# Copyright (C) 2017  Kipp Cannon, Chad Hanna
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -98,6 +98,8 @@ options, paramdict, urls = parse_command_line()
 
 
 _, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.input, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
+if ranking_data is None:
+	raise ValueError("'%s' does not contain a RankingData object" % options.input)
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
