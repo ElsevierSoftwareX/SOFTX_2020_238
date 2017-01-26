@@ -150,8 +150,8 @@ diststats = far.ThincaCoincParamsDistributions(instruments = set(segs), delta_t 
 # Add background, zero_lag and injection prior distributions in the SNR and chi-squared plane
 # 
 
-# FIXME make the prefactors adjustable
-diststats.add_background_prior(n = n_trigs, prefactors_range = (0.5, 20.), df = 20, inv_snr_pow = 2., ba = "background_rates", verbose = options.verbose)
+# This a guess at a mass dependent snr chisq prior
+diststats.add_background_prior(n = n_trigs, prefactors_range = ((30. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3., ba = "background_rates", verbose = options.verbose)
 
 # fill in the background to the requested amount
 for instrument, number_of_events in n_trigs.items():
