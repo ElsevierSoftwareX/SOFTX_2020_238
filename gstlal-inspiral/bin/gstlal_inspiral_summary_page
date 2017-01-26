@@ -42,14 +42,15 @@ sens = webpage.tab("search_sensitivity","Search Sensitivity", "Search Sensitivit
 back = webpage.tab("background","Background", "Background")
 #chisq = webpage.tab("chisq","Chi-squared", "Chi-squared")
 money = webpage.tab("money","Money Plots", "Money Plots")
-
+about_doc = webpage.tab("about", "About", "About")
+sched_doc = webpage.tab("schedule", "Schedule", "Schedule")
 
 #
 # add the sections to the nav bar and the nav bar to the page
 #
 
 nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
-nav+=[summary, injparams, injrecovery, sens, back, money]
+nav+=[summary, injparams, injrecovery, sens, back, money, about_doc, sched_doc]
 nav+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
 thispage+=nav
 thispage+=webpage.elem("br",[])
@@ -302,13 +303,30 @@ if opts.open_box:
 	money_table += [webpage.elem("p", ["Open Box Summary Table"])]
 	money_table += [webpage.elem("div", [], "id=%ssummary_table" % opts.output_user_tag[0])]
 
+#
+# Add search documentation
+#
+
+about_search = webpage.section("Search Plan Documentation")
+about_search += [webpage.elem("iframe", [], """src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true" width=100%% height=100%% id=search_doc_div""")]
+
+about_div = about_doc([about_search])
+
+#
+# Add search documentation
+#
+
+about_shifts = webpage.section("Search Run Schedule")
+about_shifts += [webpage.elem("iframe", [], """width=100% height=100% src="https://docs.google.com/spreadsheets/d/e/2PACX-1vR1XwazhZYoVbMXFZCq_s2rlzyNwcF0xC4kyhnKrCeXFSWte-2jRodL590RU3PsoX4OVypYyAZ7Nl_8/pubhtml?widget=true&amp;headers=false" id=shift_doc_div""")]
+
+shift_div = sched_doc([about_shifts])
 
 #
 # add all the content from each tab to the pages
 #
 
 
-thispage += [summary_div, inj_params_div, inj_recovery_div, sens_div, back_div, money_div]
+thispage += [summary_div, inj_params_div, inj_recovery_div, sens_div, back_div, money_div, about_div, shift_div]
 
 
 #
