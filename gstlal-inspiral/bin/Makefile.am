@@ -24,6 +24,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_pipe \
 	gstlal_inspiral_plot_background \
 	gstlal_inspiral_plot_banks \
+	gstlal_inspiral_plot_kernels \
 	gstlal_inspiral_plot_sensitivity \
 	gstlal_inspiral_plotsummary \
 	gstlal_inspiral_plot_svd_bank \
