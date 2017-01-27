@@ -5,25 +5,38 @@ import sched, time, os, sys, subprocess, re, pwd
 import numpy as np
 
 
+class color:
+   PURPLE = '\033[95m'
+   CYAN = '\033[96m'
+   DARKCYAN = '\033[36m'
+   BLUE = '\033[94m'
+   GREEN = '\033[92m'
+   YELLOW = '\033[93m'
+   RED = '\033[91m'
+   BOLD = '\033[1m'
+   UNDERLINE = '\033[4m'
+   END = '\033[0m'
+
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("-u", "--username", help = "User name.")
-	parser.add_option("-f", "--trigger-pipe", metavar = "filename", help = "Set path to run trigger_pipe.sh file.")
-	parser.add_option("-d", "--dag-number", metavar = "value", type = "int", default = 1, help = "dag number in output of condor_q -dag username")
+	# dag specification shouldn't be necessary with condor_ssh_to_job
+	#parser.add_option("-d", "--dag-number", metavar = "value", type = "int", default = 1, help = "dag number in output of condor_q -dag username")
+	parser.add_option("-s", "--sampler", default = "top", help = "Choose sampling program to use (top or ps), default = top")
 
 	options, filenames = parser.parse_args()
 
 	if options.username is None:
 		options.username = pwd.getpwuid(os.getuid()).pw_name
 
-	if options.trigger_pipe is None:
-		raise ValueError("Must specify --trigger-pipe")
+	if options.sampler is None:
+		options.sampler = 'top'
+	
+	if options.sampler not in ['top','ps']:
+		print "Invalid sampler. Please specify either top or ps."
+		exit()
 
 	return options, filenames
-
-# input params
-#username = 'gstlalcbc'
-#trigger_pipe ='/work/gstlalcbc/observing/2/offline/C00/chunk_1_1164556817_1166482817_run_3/trigger_pipe.sh' 
 
 options, filenames = parse_command_line()
 
@@ -35,12 +48,16 @@ cq_out = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
 cq_out = cq_out.communicate()[0].splitlines()
 
 # Get the dag condor_id by searching for the usename:
-dag_id = [line for line in cq_out if username_search in line][options.dag_number-1].split()[0]
-path_to_log = '/localscratch/'+options.username+'/dag-logs/trigger_pipe.dag-'+dag_id[:-2]+'.nodes.log'
+#dag_id = [line for line in cq_out if username_search in line][options.dag_number-1].split()[0]
+#path_to_log = '/localscratch/'+options.username+'/dag-logs/trigger_pipe.dag-'+dag_id[:-2]+'.nodes.log'
 
 # Define the prefixes to search for:
 #prefixes=['gstlal_reference_psd_','gstlal_inspiral_','gstlal_inspiral_inj_']
 prefixes=['gstlal_reference_psd_','gstlal_svd_bank_','gstlal_inspiral_injection_snr_','gstlal_inspiral_','gstlal_inspiral_inj_']
+
+# Get column width for pretty printing. Add four for the hex suffix and two 
+# for buffer.
+col_width = max(len(pref) for pref in prefixes) + 4 + 2 
 
 # Initialize the results list to zero:
 results=[]
@@ -55,12 +72,8 @@ if not results:
 	print "No matches found in condor_q"
 	exit()
 else:
-	print "job_name condor_id ip_address pid cpu% mem%"
-
-# Open trigger_pipe.sh, store in buffer:
-with (open(options.trigger_pipe,'r')) as pipe:
-	pipe_buf = pipe.readlines()
-	pipe.close()
+	print color.BOLD + "".join("job_name".ljust(col_width))+ \
+	      "".join("condor_id".ljust(18))+"pid\tcpu%\tmem%" + color.END
 
 # Loop over all jobs
 for r in results:
@@ -73,31 +86,37 @@ for r in results:
 	# Get the condorID:
 	condor_id = split_list[0]
 
-	# Get the IP adddress of the current job
-	for line in open(path_to_log):
-		if "001 ("+condor_id in line:
-			ip_address = line.split()[8].split(':')[0][1:]
+	# Put together the command string for condor_ssh_to job. Note that the 
+	# quotes and slashes are key for the correct command to get evaluated by
+	# the interpreter:
 
-	# Search trigger_pipe.sh	
-	for n, line in enumerate(pipe_buf):
-		if job_name in line:
-			search_command = pipe_buf[n+1]
+	if options.sampler == 'top':
+		sample_command = ' "top b -n 1 -p \\${_CONDOR_JOB_PIDS}"'
 
-	# ssh into the IP address, run ps aux, grep for the output of the command.
-	try:
-		command = 'ssh ' + ip_address + ' ps aux | grep "' + search_command.strip() + '"'
-	except NameError:
-		print "No matches found, check dag number (condor_q -dag)"
-		exit()
-	sshout = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
-	pid = sshout.communicate()[0].split('\n', 1)[0].split()[1]
+	if options.sampler == 'ps':
+		sample_command = ' "ps u -p \\${_CONDOR_JOB_PIDS}"'
 
-	# ssh into the IP address, run top with PID number, get out cpu and memory usage
-	command = 'ssh ' + ip_address + ' top b -n 1 -p ' + pid
-	sshout = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
-	sshout = sshout.communicate()[0].splitlines()[-1]
-	cpu = sshout.split()[8]
-	mem = sshout.split()[9]
+	condor_ssh_command = 'condor_ssh_to_job ' + \
+			     condor_id + \
+			     sample_command
 
-	print job_name, condor_id, ip_address, pid, cpu, mem 
+	cstj_output = subprocess.check_output(condor_ssh_command, shell=True)
+
+	# Collect output. The syntax should be apparent from looking at which 
+	# line is being collected and which column is being pulled after the
+	# split().
+
+	if options.sampler == 'top':
+		cstj_output = cstj_output.splitlines()[-1].split()
+		pid = cstj_output[0]
+		cpu = cstj_output[8]+"%"
+		mem = cstj_output[9]+"%"
+	if options.sampler == 'ps':
+		cstj_output = cstj_output.splitlines()[1].split()
+		pid = cstj_output[1]
+		cpu = cstj_output[2]+"%"
+		mem = cstj_output[3]+"%"
+
+	print "".join(job_name.ljust(col_width)) + \
+	      "".join(condor_id.ljust(18)) +pid,'\t'+ cpu+'\t'+mem
 
