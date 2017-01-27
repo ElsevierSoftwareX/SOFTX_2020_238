@@ -706,6 +706,16 @@ class Data(object):
 					self.ranking_data.finish(verbose = self.verbose)
 					self.fapfar = far.FAPFAR(self.ranking_data, livetime = far.get_live_time(seglists))
 
+			# add triggers to total trigger counts.  this needs
+			# to be done without any cuts on coincidence, etc.,
+			# so that the total trigger count agrees with the
+			# total livetime from the SNR buffers.  we assume
+			# the density of real signals is so small that this
+			# count is not sensitive to their presence
+			singles = self.coinc_params_distributions.background_rates["singles"]
+			for event in events:
+				singles[event.ifo,] += 1
+
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
 			# zero-lag multi-instrument coincs.  NOTE:  we rely
@@ -724,7 +734,7 @@ class Data(object):
 			# defined.
 			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
 				if len(self.seglistdicts["whitehtsegments"].keys_at(event.end)) > 1:
-					self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
+					self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 			self.coincs_document.commit()
 
 			# update zero-lag coinc bin counts in
@@ -816,7 +826,7 @@ class Data(object):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
-			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
+			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None))
 		self.coincs_document.commit()
 
 		# update zero-lag bin counts in coinc_params_distributions
