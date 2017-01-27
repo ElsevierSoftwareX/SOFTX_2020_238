@@ -702,3 +702,16 @@ def polyfit(psd, minsample, maxsample, order, verbose = False):
 	)
 	psd.data.data = olddata
 	return psd
+
+def one_second_highpass_kernel(rate, cutoff = 12):
+	highpass_filter_fd =  numpy.ones(rate, dtype=complex)
+	highpass_filter_fd[:int(cutoff)] = 0.
+	highpass_filter_fd[-int(cutoff):] = 0.
+	highpass_filter_fd[rate/2-1:rate/2+1] = 0.
+	highpass_filter_td = fftpack.ifft(highpass_filter_fd)
+	highpass_filter_td = numpy.roll(numpy.real(highpass_filter_td), rate/2)
+	highpass_filter_kernel = numpy.zeros(len(highpass_filter_td)+1)
+	highpass_filter_kernel[:-1] = highpass_filter_td[:]
+	x = numpy.arange(len(highpass_filter_kernel))
+	highpass_filter_kernel *= 1. - (x-2048)**2 / 2048.**2
+	return highpass_filter_kernel
