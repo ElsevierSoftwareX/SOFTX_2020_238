@@ -137,7 +137,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# in the parent class this is a class attribute, but we use
 		# it as an instance attribute here
-		self.binnings = dict.fromkeys(("%s_snr_chi" % instrument for instrument in instruments), rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 300))))
+		self.binnings = dict.fromkeys(("%s_snr_chi" % instrument for instrument in instruments), rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280))))
 		self.binnings.update({
 			"instruments": rate.NDBins((snglcoinc.InstrumentBins(instruments),)),
 			"singles": rate.NDBins((rate.HashableBins(instruments),))
@@ -437,7 +437,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		with numpy.errstate(invalid = "ignore"):
 			binnedarray.array /= binnedarray.array.sum()
 
-	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = 10., chisq_kernel_width = 0.1,  sigma = 10.):
+	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = 8., chisq_kernel_width = 0.08,  sigma = 10.):
 		# get the binned array we're going to process
 		binnedarray = pdf_dict[key]
 
