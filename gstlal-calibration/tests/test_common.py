@@ -76,7 +76,7 @@ def test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, channels = 
 	if wave == "ligo":
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = "H1", channel_name = "LSC-STRAIN")
 	else:
-		head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, volume = volume, blocksize = 8 * int(buffer_length * rate), num_buffers = int(test_duration / buffer_length), is_live = is_live)
+		head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, volume = volume, samplesperbuffer = int(buffer_length * rate), num_buffers = int(test_duration / buffer_length), is_live = is_live)
 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=F%d%s, rate=%d, channels=%d" % (width, BYTE_ORDER, rate, channels))
 	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "src")
