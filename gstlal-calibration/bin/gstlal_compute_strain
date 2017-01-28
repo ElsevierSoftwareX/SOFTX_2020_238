@@ -976,7 +976,7 @@ if not options.no_dq_vector:
 	odcstatevector = calibration_parts.caps_and_progress(pipeline, head_dict["odcstatevector"], odc_caps, "odc_%s" % instrument)
 	odctagstr = "channel-name=%s:%s, instrument=%s" % (instrument, options.dq_channel_name, instrument)
 	odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
-	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector, name = "odcstatevectortee")
+	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 	#
 	# GAP BIT BRANCH
