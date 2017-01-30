@@ -247,7 +247,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, temp
 					"autocorrelation-length":options.autocorrelation_length,
 					"bank-id":ids,
 					"identity-transform":options.identity_transform,
-					"snr-threshold":4.0, "ortho-gate-fap":0.5},
+					"ortho-gate-fap":0.5},
 				input_files = {"reference-psd":psd},
 				input_cache_files = {"template-bank-cache":files},
 				output_files = {"write-svd":svd_bank_name}
