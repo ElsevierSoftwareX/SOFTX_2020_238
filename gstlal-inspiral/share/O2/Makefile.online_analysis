@@ -1,0 +1,208 @@
+H1_BANK_CACHE = /home/gstlalcbctest/observing/2/online/bank/H1_bank.cache
+L1_BANK_CACHE = /home/gstlalcbctest/observing/2/online/bank/L1_bank.cache
+BANK_DIR = /mnt/qfs6/gstlalcbctest/observing/2/online/bank/gstlal_svd_bank_H1/
+
+REFPSD = /home/gstlalcbc/engineering/10/online/bank/O2_reference_spectrum.xml.gz
+WEBDIR=/home/gstlalcbctest/public_html/observing/2
+
+H1CHANNEL=GDS-CALIB_STRAIN
+L1CHANNEL=GDS-CALIB_STRAIN
+
+BNSCHANNEL=0000:0080:H1=GDS-CALIB_STRAIN_BNS_INJ,L1=GDS-CALIB_STRAIN_BNS_INJ
+NSBHCHANNEL=0080:0143:H1=GDS-CALIB_STRAIN_NSBH_INJ,L1=GDS-CALIB_STRAIN_NSBH_INJ
+BBHCHANNEL=0143:0182:H1=GDS-CALIB_STRAIN_BBH_INJ,L1=GDS-CALIB_STRAIN_BBH_INJ
+
+H1STATECHANNEL=GDS-CALIB_STATE_VECTOR
+L1STATECHANNEL=GDS-CALIB_STATE_VECTOR
+H1INJSTATECHANNEL=GDS-CALIB_STATE_VECTOR
+L1INJSTATECHANNEL=GDS-CALIB_STATE_VECTOR
+
+H1DQCHANNEL=DMT-DQ_VECTOR
+L1DQCHANNEL=DMT-DQ_VECTOR
+H1INJDQCHANNEL=DMT-DQ_VECTOR
+L1INJDQCHANNEL=DMT-DQ_VECTOR
+
+H1FRAMEXMIT=224.3.2.221:7096
+L1FRAMEXMIT=224.3.2.222:7097
+H1INJFRAMEXMIT=224.3.2.103:7402
+L1INJFRAMEXMIT=224.3.2.104:7403
+
+BNSINJFILE=0000:0080:U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz
+NSBHINJFILE=0080:0143:U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz
+BBHINJFILE=0143:0182:U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz
+
+# NOTE needed to make 10000s duration to get sufficient zero lag triggers - the duty cycle is low...
+#H1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-35000")
+#H1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)-15000")
+#L1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-20000")
+#L1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
+H1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-1000")
+H1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
+L1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-1000")
+L1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
+H1PRIORRANGE=60
+L1PRIORRANGE=60
+# FIXME currently bit 0 is not required due to an issue with misreported calib stat
+# set bits 1,5,6,7,8 for non-injections jobs (adds up to dec 482) 
+# # set bits 1,5,7,8 for injection jobs (adds up to dec 418)
+#FIXME should be this
+# set bits 0,1,5,6,7,8 for non-injections jobs (adds up to dec 483) 
+# # set bits 0,1,5,7,8 for injection jobs (adds up to dec 419)
+# # 0: HOFT_OK: h(t) was successfully computed
+# # 1: OBSERVATION_INTENT: "observation intent" button is pushed
+# # 2: OBSERVATION_READY: observation ready data is available
+# # 3: HOFT_PROD: h(t) was produced by the calibration pipeline
+# # 4: FILTERS_OK: calibration filters settled in
+# # 5: NO_STOCH_HW_INJ: No stochastic HW injection
+# # 6: NO_CBC_HW_INJ: No CBC HW injection
+# # 7: NO_BURST_HW_INJ: No burst HW injection
+# # 8: NO_DETCHAR_HW_INJ: No HW injections for detector characterization
+# # 9: NO_GAP: No gap in input data
+
+all : dag
+
+U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz:
+	wget https://trac.ligo.caltech.edu/cbc/export/9696/gstlal/low_latency_injections/ER10/U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz
+
+U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz:
+	https://trac.ligo.caltech.edu/cbc/export/9696/gstlal/low_latency_injections/ER10/U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz
+
+U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz:
+	https://trac.ligo.caltech.edu/cbc/export/9696/gstlal/low_latency_injections/ER10/U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz
+
+tisi.xml :
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
+
+dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz
+	gstlal_ll_inspiral_pipe \
+		--bank-cache H1=$(H1_BANK_CACHE),L1=$(L1_BANK_CACHE) \
+		--reference-psd $(REFPSD) \
+		--max-jobs 1000 \
+		--likelihood-cache prior.cache \
+		--zerolag-likelihood-cache zerolag_prior.cache \
+		--channel-name=H1=$(H1CHANNEL) \
+		--channel-name=L1=$(L1CHANNEL) \
+		--dq-channel-name=L1=$(L1DQCHANNEL) \
+		--dq-channel-name=H1=$(H1DQCHANNEL) \
+		--state-channel-name=L1=$(L1STATECHANNEL) \
+		--state-channel-name=H1=$(H1STATECHANNEL) \
+		--framexmit-addr=H1=$(H1FRAMEXMIT) \
+		--framexmit-addr=L1=$(L1FRAMEXMIT) \
+		--framexmit-iface=10.14.0.1 \
+		--state-vector-on-bits=H1=482 \
+		--state-vector-on-bits=L1=482 \
+		--state-vector-off-bits=H1=0 \
+		--state-vector-off-bits=L1=0 \
+		--dq-vector-on-bits=H1=7 \
+		--dq-vector-on-bits=L1=7 \
+		--dq-vector-off-bits=H1=0 \
+		--dq-vector-off-bits=L1=0 \
+		--gracedb-far-threshold -1 \
+		--control-peak-time 0 \
+		--fir-stride 1 \
+		--psd-fft-length 32 \
+		--marginalized-likelihood-file marginalized_likelihood.xml.gz \
+		--gracedb-group CBC \
+		--gracedb-search HighMass \
+		--thinca-interval 1 \
+		--ht-gate-threshold 50 \
+		--data-source framexmit \
+		--likelihood-snapshot-interval 14400 \
+		--lvalert-listener-program gstlal_inspiral_lvalert_background_plotter \
+		--lvalert-listener-program gstlal_inspiral_lvalert_psd_plotter \
+		--inspiral-condor-command '+Online_CBC_gstlal_Skylake_inspiral_tmp=True' \
+		--inspiral-condor-command 'Requirements=(TARGET.Online_CBC_gstlal_Skylake_inspiral_tmp=?=True)' \
+		--inspiral-condor-command 'accounting_group = ligo.dev.o2.cbc.em.gstlalonline' \
+		--inspiral-condor-command 'request_cpus = 2' \
+		--inspiral-condor-command 'accounting_group_user = cody.messick' \
+		--non-inspiral-condor-command '+Online_CBC_gstlal_Skylake_other_tmp=True' \
+		--non-inspiral-condor-command 'Requirements=(TARGET.Online_CBC_gstlal_Skylake_other_tmp=?=True)' \
+		--non-inspiral-condor-command 'accounting_group = ligo.dev.o2.cbc.em.gstlalonline' \
+		--non-inspiral-condor-command 'accounting_group_user = cody.messick' \
+		--non-inspiral-condor-command 'request_cpus = 8' \
+		--local-condor-command 'accounting_group = ligo.dev.o2.cbc.em.gstlalonline' \
+		--local-condor-command 'accounting_group_user = cody.messick' \
+		--web-dir $(WEBDIR) \
+		--min-instruments 2 \
+		--state-backup-destination gstlalcbc@pcdev3.phys.uwm.edu:/home/gstlalcbc/observing/2/uber_state_backup \
+		--inj-channel-name=$(BNSCHANNEL)\
+		--inj-channel-name=$(NSBHCHANNEL)\
+		--inj-channel-name=$(BBHCHANNEL)\
+		--inj-state-channel-name=L1=$(L1INJSTATECHANNEL) \
+		--inj-state-channel-name=H1=$(H1INJSTATECHANNEL) \
+		--inj-dq-channel-name=L1=$(L1INJDQCHANNEL) \
+		--inj-dq-channel-name=H1=$(H1INJDQCHANNEL) \
+		--inj-framexmit-addr=H1=$(H1INJFRAMEXMIT) \
+		--inj-framexmit-addr=L1=$(L1INJFRAMEXMIT) \
+		--inj-framexmit-iface=10.14.0.1 \
+		--inj-gracedb-group CBC \
+		--inj-gracedb-search HighMassInj \
+		--inj-gracedb-service-url https://simdb.cgca.uwm.edu/api/ \
+		--inj-lvalert-listener-program gstlal_inspiral_lvalert_background_plotter \
+		--inj-dq-vector-on-bits=H1=7 \
+		--inj-dq-vector-on-bits=L1=7 \
+		--inj-dq-vector-off-bits=H1=0 \
+		--inj-dq-vector-off-bits=L1=0 \
+		--inj-state-vector-on-bits=H1=418 \
+		--inj-state-vector-on-bits=L1=418 \
+		--inj-state-vector-off-bits=H1=0 \
+		--inj-state-vector-off-bits=L1=0 \
+		--inj-gracedb-far-threshold -1 \
+		--injection-file $(BNSINJFILE) \
+		--injection-file $(NSBHINJFILE) \
+		--injection-file $(BBHINJFILE) \
+		--time-slide-file tisi.xml
+		#--min-log-L 2 \
+
+ll_simplify_and_cluster.sql:
+	wget http://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify_and_cluster.sql
+
+ll_simplify.sql:
+	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify.sql
+
+plots:
+	mkdir plots
+	mkdir -p $(WEBDIR)
+
+set-far-thresh :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold 1e-5 \
+		0*registry.txt
+
+set-high-far-thresh :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold 1e-10 \
+		0*registry.txt
+
+set-inj-far-thresh :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold 1e-7 \
+		1*registry.txt
+
+disable-uploads :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold -1 \
+		0*registry.txt
+
+prior.cache : 0000_prior.xml.gz 0001_prior.xml.gz 0002_prior.xml.gz 0003_prior.xml.gz 0004_prior.xml.gz 0005_prior.xml.gz 0006_prior.xml.gz 0007_prior.xml.gz 0008_prior.xml.gz 0009_prior.xml.gz 0010_prior.xml.gz 0011_prior.xml.gz 0012_prior.xml.gz 0013_prior.xml.gz 0014_prior.xml.gz 0015_prior.xml.gz 0016_prior.xml.gz 0017_prior.xml.gz 0018_prior.xml.gz 0019_prior.xml.gz 0020_prior.xml.gz 0021_prior.xml.gz 0022_prior.xml.gz 0023_prior.xml.gz 0024_prior.xml.gz 0025_prior.xml.gz 0026_prior.xml.gz 0027_prior.xml.gz 0028_prior.xml.gz 0029_prior.xml.gz 0030_prior.xml.gz 0031_prior.xml.gz 0032_prior.xml.gz 0033_prior.xml.gz 0034_prior.xml.gz 0035_prior.xml.gz 0036_prior.xml.gz 0037_prior.xml.gz 0038_prior.xml.gz 0039_prior.xml.gz 0040_prior.xml.gz 0041_prior.xml.gz 0042_prior.xml.gz 0043_prior.xml.gz 0044_prior.xml.gz 0045_prior.xml.gz 0046_prior.xml.gz 0047_prior.xml.gz 0048_prior.xml.gz 0049_prior.xml.gz 0050_prior.xml.gz 0051_prior.xml.gz 0052_prior.xml.gz 0053_prior.xml.gz 0054_prior.xml.gz 0055_prior.xml.gz 0056_prior.xml.gz 0057_prior.xml.gz 0058_prior.xml.gz 0059_prior.xml.gz 0060_prior.xml.gz 0061_prior.xml.gz 0062_prior.xml.gz 0063_prior.xml.gz 0064_prior.xml.gz 0065_prior.xml.gz 0066_prior.xml.gz 0067_prior.xml.gz 0068_prior.xml.gz 0069_prior.xml.gz 0070_prior.xml.gz 0071_prior.xml.gz 0072_prior.xml.gz 0073_prior.xml.gz 0074_prior.xml.gz 0075_prior.xml.gz 0076_prior.xml.gz 0077_prior.xml.gz 0078_prior.xml.gz 0079_prior.xml.gz 0080_prior.xml.gz 0081_prior.xml.gz 0082_prior.xml.gz 0083_prior.xml.gz 0084_prior.xml.gz 0085_prior.xml.gz 0086_prior.xml.gz 0087_prior.xml.gz 0088_prior.xml.gz 0089_prior.xml.gz 0090_prior.xml.gz 0091_prior.xml.gz 0092_prior.xml.gz 0093_prior.xml.gz 0094_prior.xml.gz 0095_prior.xml.gz 0096_prior.xml.gz 0097_prior.xml.gz 0098_prior.xml.gz 0099_prior.xml.gz 0100_prior.xml.gz 0101_prior.xml.gz 0102_prior.xml.gz 0103_prior.xml.gz 0104_prior.xml.gz 0105_prior.xml.gz 0106_prior.xml.gz 0107_prior.xml.gz 0108_prior.xml.gz 0109_prior.xml.gz 0110_prior.xml.gz 0111_prior.xml.gz 0112_prior.xml.gz 0113_prior.xml.gz 0114_prior.xml.gz 0115_prior.xml.gz 0116_prior.xml.gz 0117_prior.xml.gz 0118_prior.xml.gz 0119_prior.xml.gz 0120_prior.xml.gz 0121_prior.xml.gz 0122_prior.xml.gz 0123_prior.xml.gz 0124_prior.xml.gz 0125_prior.xml.gz 0126_prior.xml.gz 0127_prior.xml.gz 0128_prior.xml.gz 0129_prior.xml.gz 0130_prior.xml.gz 0131_prior.xml.gz 0132_prior.xml.gz 0133_prior.xml.gz 0134_prior.xml.gz 0135_prior.xml.gz 0136_prior.xml.gz 0137_prior.xml.gz 0138_prior.xml.gz 0139_prior.xml.gz 0140_prior.xml.gz 0141_prior.xml.gz 0142_prior.xml.gz 0143_prior.xml.gz 0144_prior.xml.gz 0145_prior.xml.gz 0146_prior.xml.gz 0147_prior.xml.gz 0148_prior.xml.gz 0149_prior.xml.gz 0150_prior.xml.gz 0151_prior.xml.gz 0152_prior.xml.gz 0153_prior.xml.gz 0154_prior.xml.gz 0155_prior.xml.gz 0156_prior.xml.gz 0157_prior.xml.gz 0158_prior.xml.gz 0159_prior.xml.gz 0160_prior.xml.gz 0161_prior.xml.gz 0162_prior.xml.gz 0163_prior.xml.gz 0164_prior.xml.gz 0165_prior.xml.gz 0166_prior.xml.gz 0167_prior.xml.gz 0168_prior.xml.gz 0169_prior.xml.gz 0170_prior.xml.gz 0171_prior.xml.gz 0172_prior.xml.gz 0173_prior.xml.gz 0174_prior.xml.gz 0175_prior.xml.gz 0176_prior.xml.gz 0177_prior.xml.gz 0178_prior.xml.gz 0179_prior.xml.gz 0180_prior.xml.gz 0181_prior.xml.gz 0182_prior.xml.gz 0183_prior.xml.gz
+	ls *[0-9]_prior.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > prior.cache
+	ls *[0-9]_zerolag_prior.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > zerolag_prior.cache
+	ls *[0-9]_RD.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > RD.cache
+	cat zerolag_prior.cache RD.cache > all_marg_files.cache
+
+%_prior.xml.gz:
+	gstlal_inspiral_fake_diststats --svd-bank-file $(BANK_DIR)/H1-GSTLAL_SVD_BANK_$(shell python -c "print int('$*')")-0-0.xml.gz --segment-and-horizon=H1:$(H1PRIORSTART):$(H1PRIORSTOP):$(H1PRIORRANGE) --segment-and-horizon=L1:$(L1PRIORSTART):$(L1PRIORSTOP):$(L1PRIORRANGE) --verbose --min-instruments 2 --output $@
+	gstlal_inspiral_calc_rank_pdfs $@ --ranking-stat-samples 10000 --verbose --output $*_RD.xml.gz
+	gstlal_inspiral_fake_zerolag_counts --input $*_RD.xml.gz --output $*_zerolag_prior.xml.gz
+
+marginalized_likelihood.xml.gz : prior.cache
+	gstlal_inspiral_marginalize_likelihood \
+		--output $@ \
+		--verbose \
+		--likelihood-cache all_marg_files.cache
+
+clean :
+	rm -rf gstlal_ll_inspiral_aggregator gstlal_inspiral gstlal_inspiral_inj gracedb gstlal_inspiral_marginalize_likelihoods_online gstlal_ll_inspiral_get_urls lvalert_listen gstlal_ll_inspiral_calculate_range gstlal_ll_inspiral_save_state
+	rm -rf *.txt lvalert.ini *.gz trigger_pipe.* *.sub logs lvalert*.sh node* *.xml prior.cache
+	rm -rf 0* 1* *.html gstlal_ll_inspiral_daily_page_online *.sqlite toggle.js Images plots zerolag_prior.cache
+	rm -rf dq gstlal_ll_dq gstlal_ll_inspiral_state 
