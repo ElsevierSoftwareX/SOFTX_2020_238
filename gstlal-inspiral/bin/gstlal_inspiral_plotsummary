@@ -833,7 +833,7 @@ FROM
 				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box
 
 		to_google_json(self.base + "_injection_summary.json", [("Found||Missed", "string"), ("On Instruments", "string"), ("Participating Instruments", "string"), ("count", "number")], self.injection_summary_data)
-		to_google_json(self.base + "_missed_summary.json", [("On Instruments", "string"), ("Waveform", "string"), ("H1 <i>t</i>", "number"), ("L1 <i>t</i>", "number"), ("<i>m</i><sub>1</sub>", "number"), ("<i>m</i><sub>2</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>1y</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("<i>s</i><sub>2y</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("D (Mpc)", "number"), ("Decisive D<sub>chirp,eff</sub> (Mpc)" , "number"), ("Inclination", "number"), ("H1 &rho;", "number"), ("L1 &rho;", "number"), ("Decisive &rho;", "number")], self.missed_summary_data)
+		to_google_json(self.base + "_missed_summary.json", [("On Instruments", "string"), ("Waveform", "string"), ("H1 <i>t</i>", "number"), ("L1 <i>t</i>", "number"), ("<i>m</i><sub>1</sub>", "number"), ("<i>m</i><sub>2</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>1y</sub>", "number"), ("<i>s</i><sub>1z</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("<i>s</i><sub>2y</sub>", "number"), ("<i>s</i><sub>2z</sub>", "number"), ("D (Mpc)", "number"), ("Decisive D<sub>chirp,eff</sub> (Mpc)" , "number"), ("Inclination", "number"), ("H1 &rho;", "number"), ("L1 &rho;", "number"), ("Decisive &rho;", "number")], self.missed_summary_data)
 
 
 #
