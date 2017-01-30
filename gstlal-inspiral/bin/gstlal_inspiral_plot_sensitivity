@@ -69,6 +69,7 @@ def source_type_distance_chirp_mass_bins_from_sims(sims, distbins = 200):
     distances = [tup[0] for tup in dist_mchirp_vals]
 
     return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.8, 2.0, 4.5, 45., 450])])
+    #return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.8, 1.74, 8.07, 14.92, 21.77, 100.0, 218.00, 450.0])])
 
 def chirp_mass(m1,m2):
     m1 = numpy.array(m1)
@@ -300,7 +301,7 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--max-snr", default = 15, type = "float", help = "Specify the maximum SNR for volume calculation.")
 
     # Input data options
-    parser.add_option("--include-play", default = False, action = "store_true", help = "Include playground data in computing the livetime and volume.")
+    parser.add_option("--include-play", default = True, action = "store_true", help = "Include playground data in computing the livetime and volume.")
     parser.add_option("--zero-lag-database", default = [], action = "append", help = "Name of database containing the zero lag segments and triggers.")
     parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers.")
     parser.add_option("--live-time-program", default = "gstlal_inspiral", metavar = "name", help = "Set the name of the program whose rings will be extracted from the search_summary table.  Default = \"gstlal_inspiral\".")
@@ -324,10 +325,10 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--dist-bins", default = 50, metavar = "integer", type = "int", help = "Space distance bins evenly and specify the number of distance bins to use.")
 
     # injection filters
-    parser.add_option("--min-mtotal", metavar = "m", type = 'float', default = 2.0, help = "Specify the minimum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
-    parser.add_option("--max-mtotal", metavar = "m", type = 'float', default = 100.0, help = "Specify the maximum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
-    parser.add_option("--min-mass", metavar = "MM", type = 'float', default = 1.0, help = "Specify the minimum component mass to consider among the injections found in the DB. This filters all injectionswith any component lighter than MM.")
-    parser.add_option("--max-mass", metavar = "MM", type = 'float', default = 99.0, help = "Specify the maximum mass to consider among the injections found in the DB. This filters all injections with any component heavier than MM.")
+    parser.add_option("--min-mtotal", metavar = "m", type = 'float', default = 0.0, help = "Specify the minimum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
+    parser.add_option("--max-mtotal", metavar = "m", type = 'float', default = float("Inf"), help = "Specify the maximum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
+    parser.add_option("--min-mass", metavar = "MM", type = 'float', default = 0.0, help = "Specify the minimum component mass to consider among the injections found in the DB. This filters all injectionswith any component lighter than MM.")
+    parser.add_option("--max-mass", metavar = "MM", type = 'float', default = float("Inf"), help = "Specify the maximum mass to consider among the injections found in the DB. This filters all injections with any component heavier than MM.")
     parser.add_option("--max-mass-ratio", metavar = "q", type = 'float', default = None, help = "Specify the maximum allowed mass ratio. Should be >= 1.")
     parser.add_option("--exclude-sim-type", default = [], action = "append", metavar = "SIM", help = "When computing the search volume, exclude injections made using the SIM waveform family. Example: SpinTaylorthreePointFivePN. Use this option multiple times to exclude more than one injection type.")
 
@@ -348,7 +349,7 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--bin-by-mass-ratio", default = False, action = "store_true", help = "Bin injections by mass ratio when estimating the search efficiency.")
 
     # bin by source type
-    parser.add_option("--bin-by-source-type", default = False, action = "store_true", help = "Bin injections by source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 100")
+    parser.add_option("--bin-by-source-type", default = False, action = "store_true", help = "Bin injections by source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0")
 
     opts, filenames = parser.parse_args()
     opts.injection_database.extend(filenames)
@@ -596,6 +597,8 @@ for bin_type in opts.bin_types:
             #      since otherwise, fill_between allocates too many blocks and crashes
             # sensitivity vs far
             center = numpy.array([v[mmid] for v in vols_far])
+            if (center == 0).all():
+                continue
             lo = numpy.array([v[mmid] for v in vols_lo_far])
             hi = numpy.array([v[mmid] for v in vols_hi_far])
             line, = ax_far.plot( fars, center, label=label, linewidth=2 )
@@ -637,7 +640,7 @@ for bin_type in opts.bin_types:
         ax_far.set_yscale("log")
         ax_far.set_xlim([min(fars), max(fars)])
         ax_far.invert_xaxis()
-        ax_far.legend(loc="upper right")
+        ax_far.legend(loc="lower left")
         ax_far.grid()
 
         # range vs far
@@ -646,7 +649,7 @@ for bin_type in opts.bin_types:
         ax_far_range.set_xscale("log")
         ax_far_range.set_xlim([min(fars), max(fars)])
         ax_far_range.invert_xaxis()
-        ax_far_range.legend(loc="upper right")
+        ax_far_range.legend(loc="lower left")
         ax_far_range.grid()
 
         # sensitivity vs snr
@@ -661,7 +664,7 @@ for bin_type in opts.bin_types:
         ax_snr.set_yscale("log")
         ax_snr.set_xlim([min(snrs), max(snrs)])
         ax_snr.set_ylim(ymin=0)
-        ax_snr.legend(loc="upper right")
+        ax_snr.legend(loc="lower left")
         ax_snr.grid()
 
         # efficiency vs distance
