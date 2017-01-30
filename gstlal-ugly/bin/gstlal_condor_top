@@ -36,9 +36,8 @@ class color:
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("-u", "--username", help = "User name.")
-	# dag specification shouldn't be necessary with condor_ssh_to_job
-	#parser.add_option("-d", "--dag-number", metavar = "value", type = "int", default = 1, help = "dag number in output of condor_q -dag username")
 	parser.add_option("-s", "--sampler", default = "top", help = "Choose sampling program to use (top or ps), default = top")
+	parser.add_option("-c", "--cpu-limit", metavar = "value", type = "float", default = 1.0, help = "cpu% to recheck jobs below")
 
 	options, filenames = parser.parse_args()
 
@@ -63,10 +62,6 @@ command = 'condor_q -dag -nobatch ' + options.username
 cq_out = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
 cq_out = cq_out.communicate()[0].splitlines()
 
-# Get the dag condor_id by searching for the usename:
-#dag_id = [line for line in cq_out if username_search in line][options.dag_number-1].split()[0]
-#path_to_log = '/localscratch/'+options.username+'/dag-logs/trigger_pipe.dag-'+dag_id[:-2]+'.nodes.log'
-
 # Define the prefixes to search for:
 #prefixes=['gstlal_reference_psd_','gstlal_inspiral_','gstlal_inspiral_inj_']
 prefixes=['gstlal_reference_psd_','gstlal_svd_bank_','gstlal_inspiral_injection_snr_','gstlal_inspiral_','gstlal_inspiral_inj_']
@@ -77,6 +72,8 @@ col_width = max(len(pref) for pref in prefixes) + 4 + 2
 
 # Initialize the results list to zero:
 results=[]
+output={}
+recheck={}
 
 # If an item in the output from condor_q contains our prefix and the hex
 # regular expression, then add it to the results list. 
@@ -85,7 +82,7 @@ for pre in prefixes:
 
 # Check to see is any matches
 if not results:
-	print "No matches found in condor_q"
+	print color.YELLOW + "No matches found in condor_q" + color.END
 	exit()
 else:
 	print color.BOLD + "".join("job_name".ljust(col_width))+ \
@@ -116,7 +113,14 @@ for r in results:
 			     condor_id + \
 			     sample_command
 
-	cstj_output = subprocess.check_output(condor_ssh_command, shell=True)
+	cstj_err = None
+	try:
+		cstj_call = subprocess.Popen(condor_ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+		cstj_output, cstj_err = cstj_call.communicate()
+		print cstj_err
+	except cstj_err is not None:
+		print color.YELLOW + "Job completed, continuing" + color.END
+		continue
 
 	# Collect output. The syntax should be apparent from looking at which 
 	# line is being collected and which column is being pulled after the
@@ -135,4 +139,60 @@ for r in results:
 
 	print "".join(job_name.ljust(col_width)) + \
 	      "".join(condor_id.ljust(18)) +pid,'\t'+ cpu+'\t'+mem
+
+	output.update({ job_name : [ condor_id, pid, cpu, mem] })
+
+print "Jobs with cpu% less than", options.cpu_limit, "%"
+
+for name in output:
+	if float(output[name][2][:-1]) < options.cpu_limit:
+		recheck.update({ name : float(output[name][2][:-1])})
+		print color.RED + "".join(name.ljust(col_width)) + \
+		      "".join(output[name][0].ljust(18)) +output[name][1],'\t'+ output[name][2]+'\t'+output[name][3] + color.END
+
+print "Rechecking jobs"
+
+for check in recheck:
+	if options.sampler == 'top':
+		sample_command = ' "top b -n 1 -p \\${_CONDOR_JOB_PIDS}"'
+
+	if options.sampler == 'ps':
+		sample_command = ' "ps u -p \\${_CONDOR_JOB_PIDS}"'
+
+	condor_ssh_command = 'condor_ssh_to_job ' + \
+			     output[check][0] + \
+			     sample_command
+
+	cstj_err = None
+	try:
+		cstj_call = subprocess.Popen(condor_ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+		cstj_output, cstj_err = cstj_call.communicate()
+	except cstj_err is not None:
+		print color.YELLOW + "Job completed, continuing" + color.END
+		continue
+
+	if options.sampler == 'top':
+		cstj_output = cstj_output.splitlines()[-1].split()
+		pid = cstj_output[0]
+		cpu = cstj_output[8]+"%"
+		mem = cstj_output[9]+"%"
+		if cpu[:-1] < options.cpu_limit:
+			print color.RED + "".join(check.ljust(col_width)) + \
+			      "".join(output[check][0].ljust(18)) +pid,'\t'+ cpu+'\t'+mem + color.END
+		else:
+			print color.GREEN + "".join(check.ljust(col_width)) + \
+			      "".join(output[check][0].ljust(18)) +pid,'\t'+ cpu+'\t'+mem + color.END
+
+	if options.sampler == 'ps':
+		cstj_output = cstj_output.splitlines()[1].split()
+		pid = cstj_output[1]
+		cpu = cstj_output[2]+"%"
+		mem = cstj_output[3]+"%"
+		if cpu[:-1] < options.cpu_limit:
+			print color.RED + "".join(check.ljust(col_width)) + \
+			      "".join(output[check][0].ljust(18)) +pid,'\t'+ cpu+'\t'+mem + color.END
+		else:
+			print color.GREEN + "".join(check.ljust(col_width)) + \
+			      "".join(output[check][0].ljust(18)) +pid,'\t'+ cpu+'\t'+mem + color.END
+
 
