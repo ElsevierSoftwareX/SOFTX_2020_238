@@ -56,6 +56,8 @@ APPROXIMANT2 = $(MCHIRP_SPLIT):1000.0:SEOBNRv4_ROM
 
 # The detectors to analyze
 IFOS = H1 L1
+# Minimum number of detecors working to use
+MIN_IFOS = 2
 # The GPS start time for analysis (O1)
 START = 1127000000
 # The GPS end time for analysis (O1, start + 1000000s)
@@ -177,7 +179,10 @@ include $(HOME)/local/src/gstlal/gstlal-inspiral/share/Makefile.offline_analysis
 # Workflow #
 ############
 
-all : dag
+all : dag SNR_sed
+
+SNR_sed : gstlal_inspiral_injection_snr.sub
+	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=${MKLROOT}/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
 
 dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) reference_likelihood_file.xml.gz
 	gstlal_inspiral_pipe \
@@ -207,19 +212,18 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		$(CONDOR_COMMANDS) \
 		--singles-threshold 100.0 \
 		--request-cpu 2 \
-		--request-memory 7GB \
+		--request-memory 5GB \
 		--min-log-L 4. \
-		--min-instruments 1 \
+		--min-instruments $(MIN_IFOS) \
 		--reference-likelihood-file reference_likelihood_file.xml.gz
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
 
 reference_likelihood_file.xml.gz:
-	gstlal_ll_inspiral_create_prior_diststats \
+	gstlal_inspiral_fake_diststats \
 		--segment-and-horizon=H1:$(H1PRIORSTART):$(H1PRIORSTOP):$(H1PRIORRANGE) \
 		--segment-and-horizon=L1:$(L1PRIORSTART):$(L1PRIORSTOP):$(L1PRIORRANGE) \
-		--write-likelihood-basename $@ \
-		--num-templates 1000 \
-		--min-instruments 1 \
+		--output $@ \
+		--min-instruments $(MIN_IFOS) \
 		--verbose
 
 %_split_bank.cache : H1-TMPLTBANK-$(START)-2048.xml
