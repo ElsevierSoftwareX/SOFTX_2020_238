@@ -766,6 +766,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		min_log_L = options.min_log_L,
 		sngls_snr_threshold = options.singles_threshold,
 		gracedb_far_threshold = options.gracedb_far_threshold,
+		gracedb_min_instruments = 2,
 		gracedb_group = options.gracedb_group,
 		gracedb_search = options.gracedb_search,
 		gracedb_pipeline = options.gracedb_pipeline,

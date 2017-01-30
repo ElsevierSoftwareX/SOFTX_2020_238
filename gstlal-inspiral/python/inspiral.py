@@ -478,7 +478,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, url, process_params, pipeline, seg, coinc_params_distributions, offsetvectors, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_url_namedtuple = None, injection_filename = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, url, process_params, pipeline, seg, coinc_params_distributions, offsetvectors, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_url_namedtuple = None, injection_filename = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -496,6 +496,7 @@ class Data(object):
 		self.likelihood_snapshot_timestamp = None
 		# gracedb far threshold
 		self.gracedb_far_threshold = gracedb_far_threshold
+		self.gracedb_min_instruments = gracedb_min_instruments
 		self.gracedb_group = gracedb_group
 		self.gracedb_search = gracedb_search
 		self.gracedb_pipeline = gracedb_pipeline
@@ -518,6 +519,8 @@ class Data(object):
 		bottle.route("/zero_lag_ranking_stats.xml")(self.web_get_zero_lag_ranking_stats_file)
 		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
 		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
+		bottle.route("/gracedb_min_instruments.txt", method = "GET")(self.web_get_gracedb_min_instruments)
+		bottle.route("/gracedb_min_instruments.txt", method = "POST")(self.web_set_gracedb_min_instruments)
 		bottle.route("/sngls_snr_threshold.txt", method = "GET")(self.web_get_sngls_snr_threshold)
 		bottle.route("/sngls_snr_threshold.txt", method = "POST")(self.web_set_sngls_snr_threshold)
 
@@ -892,10 +895,11 @@ class Data(object):
 		for coinc_event in self.stream_thinca.last_coincs.coinc_event_index.values():
 			#
 			# continue if the false alarm rate is not low
-			# enough, or is nan.
+			# enough, or is nan, or there aren't enough
+			# instruments participating in this coinc
 			#
 
-			if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far is None or coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far):
+			if coinc_inspiral_index[coinc_event.coinc_event_id].combined_far is None or coinc_inspiral_index[coinc_event.coinc_event_id].combined_far > self.gracedb_far_threshold or numpy.isnan(coinc_inspiral_index[coinc_event.coinc_event_id].combined_far) or len(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event.coinc_event_id)) < self.gracedb_min_instruments:
 				continue
 
 			#
@@ -1127,6 +1131,26 @@ class Data(object):
 				else:
 					self.gracedb_far_threshold = None
 					yield "OK: rate=\n"
+		except:
+			yield "error\n"
+
+	def web_get_gracedb_min_instruments(self):
+		with self.lock:
+			if self.gracedb_min_instruments is not None:
+				yield "gracedb_min_instruments=%d\n" % self.gracedb_min_instruments
+			else:
+				yield "gracedb_min_instruments=\n"
+
+	def web_set_gracedb_min_instruments(self):
+		try:
+			with self.lock:
+				gracedb_min_instruments = bottle.request.forms["gracedb_min_instruments"]
+				if gracedb_min_instruments is not None:
+					self.gracedb_min_instruments = int(gracedb_min_instruments)
+					yield "OK: gracedb_min_instruments=%d\n" % self.gracedb_min_instruments
+				else:
+					self.gracedb_min_instruments = None
+					yield "OK: gracedb_min_instruments=\n"
 		except:
 			yield "error\n"
 
