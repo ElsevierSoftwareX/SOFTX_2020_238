@@ -26,11 +26,9 @@
 #		--min-instruments, metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).
 #		--num-templates, metavar = "N", default = 1000, type = "int", help = "Set the number of templates per bank. default 1000")
 #		--num-banks, metavar = "N", default = 1, type = "int", help = "Set the number of banks. default 1")
-#		--write-likelihood-basename, metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
-#		--write-likelihood-cache, metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file.")
-#		--write-zerolag-likelihood-cache, metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
+#		--svd-bank-file metavar = "File", help = "Set the number of templates per bank. default 1000"
+#		--output, metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
 #		--segment-and-horizon, action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
-#		--override-background-prior, metavar = "N", type = "float", help = "Override the count in the SNR/chisquared bins to be this value")
 #		--injection-prefactors, metavar = "s,e", default = "0.01,0.25", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.01,0.25")
 
 #
@@ -81,7 +79,6 @@ def parse_command_line():
 
 	parser.add_option("--svd-bank-file", metavar = "File", help = "Set the number of templates per bank. default 1000")
 	parser.add_option("--output", metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
-	parser.add_option("--zerolag-output", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
 	parser.add_option("--segment-and-horizon", action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
 	#parser.add_option("--override-background-prior", metavar = "N", type = "float", help = "Override the count in the SNR/chisquared bins to be this value")
 	parser.add_option("--injection-prefactors", metavar = "s,e", default = "0.01,0.25", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.01,0.25")
