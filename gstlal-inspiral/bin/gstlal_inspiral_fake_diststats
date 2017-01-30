@@ -109,9 +109,12 @@ def parse_command_line():
 	if options.min_instruments > len(options.instruments):
 		raise ValueError("--min-instruments is greater than number of available instruments")
 
-	banks = svd_bank.read_banks(options.svd_bank_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
-	num_templates = sum([len(b.sngl_inspiral_table) for b in banks])
-	mchirp = max([max([row.mchirp for row in b.sngl_inspiral_table]) for b in banks])
+	if options.svd_bank_file:
+		banks = svd_bank.read_banks(options.svd_bank_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
+		num_templates = sum([len(b.sngl_inspiral_table) for b in banks])
+		mchirp = max([max([row.mchirp for row in b.sngl_inspiral_table]) for b in banks])
+	else:
+		mchirp = 0.8
 	return options, process_params, seglistdict, horizon_history, num_templates, mchirp
 
 
