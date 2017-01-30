@@ -208,7 +208,7 @@ sens_about = webpage.elem("p", ["""This page shows plots that characterize the o
 
 sens_div_list = [sens_about]
 for tag in opts.output_user_tag:
-	for bin_type in ("SOURCE_TYPE", "CHIRP_MASS", "TOTAL_MASS"):
+	for bin_type in ("SOURCE_TYPE"):
 		images = webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_%s*.png' % (tag, bin_type)), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
 		if len(images.content) > 0:
 			sens_section = webpage.section("Binned by %s" % bin_type.replace("_", " ").lower())
