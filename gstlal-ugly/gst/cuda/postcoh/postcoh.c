@@ -39,7 +39,7 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
 #define EPSILON 5
-#define PEAKFINDER_CLUSTER_WINDOW 0
+#define PEAKFINDER_CLUSTER_WINDOW 5
 
 static void additional_initializations(GType type)
 {
@@ -850,7 +850,7 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist,int iifo
 
 static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh)
 {
-	int iifo, ipeak, npeak, nifo = state->nifo,  tmp_peak_pos[state->max_npeak], bubbled_peak_pos[state->max_npeak], peak_cur;
+	int iifo, ipeak, npeak, nifo = state->nifo,  cluster_peak_pos[state->max_npeak], bubbled_peak_pos[state->max_npeak], peak_cur;
 	int final_peaks = 0, bubbled_peaks = 0;
 	PeakList *pklist; 
 	int *peak_pos;
@@ -874,8 +874,8 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 		 */
 
 		for(ipeak=0; ipeak<state->max_npeak; ipeak++)
-		   tmp_peak_pos[ipeak] = -1;
-		memcpy(tmp_peak_pos, peak_pos, sizeof(int) * npeak);
+		   cluster_peak_pos[ipeak] = -1;
+		memcpy(cluster_peak_pos, peak_pos, sizeof(int) * npeak);
 
 		/*
 		 * select zerolag that satisfy the criteria: cohsnr > triggersnr + coh_thresh
@@ -887,7 +887,7 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 			 * */
 			peak_cur = peak_pos[ipeak];
 			if (sqrt(pklist->cohsnr[peak_cur]) > 1.414 + pklist->snglsnr_L[iifo*(state->max_npeak) + peak_cur]) {
-				tmp_peak_pos[final_peaks++] = peak_cur;
+				cluster_peak_pos[final_peaks++] = peak_cur;
 			} else 
 				bubbled_peak_pos[bubbled_peaks++] = peak_cur;
 
@@ -897,11 +897,11 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 		 * bubble out the rest peaks
 		 */
 		for(ipeak=final_peaks; ipeak<npeak; ipeak++)
-			tmp_peak_pos[ipeak] = bubbled_peak_pos[ipeak - final_peaks];
+			cluster_peak_pos[ipeak] = bubbled_peak_pos[ipeak - final_peaks];
 
 
 		npeak = final_peaks;
-		memcpy(peak_pos, tmp_peak_pos, sizeof(int) * state->max_npeak);
+		memcpy(peak_pos, cluster_peak_pos, sizeof(int) * state->max_npeak);
 		pklist->npeak[0] = npeak;
 
 		GST_DEBUG("ifo %d, back entries %d, npeak %d", iifo, left_entries, npeak);
@@ -1164,6 +1164,7 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 	int *peak_pos = pklist->peak_pos;
 	int *tmplt_idx = pklist->tmplt_idx;
 	int *len_idx = pklist->len_idx;
+	/* find maxsnr for each sampling point, keep the record of the tmplt_idx */
 	for (ilen=0; ilen<exe_len; ilen++) {
 		tmp_maxsnr[ilen] = 0.0;
 		tmp_tmpltidx[ilen] = -1;
@@ -1176,9 +1177,12 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 			isnr++;
 		}
 	}
-
+	/* find the maxsnr acrros each tmplt */
 	for (ilen=0; ilen<exe_len; ilen++) {
 		if (tmp_tmpltidx[ilen] > -1) {
+			/* find if the subsequential snr has larger snr, 
+			 * yes: continue to next sample point, 
+			 * no: save this snr and delete snr on other times of the same tmplt*/
 			for (jlen=ilen+1; jlen<exe_len; jlen++) {
 				if (tmp_tmpltidx[jlen] == tmp_tmpltidx[ilen] && tmp_maxsnr[jlen] > tmp_maxsnr[ilen])
 					break;
@@ -1201,24 +1205,24 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 	    state->snglsnr_max = tmp_maxsnr[ilen];
 	}
 
-	/* do clustering every 5 samples */
-	int tmp_peak_pos[state->max_npeak], len_tmp_peak, len_next_peak, final_peaks=0, ipeak;
-	tmp_peak_pos[0] = peak_pos[0];
+	/* do clustering every PEAKFINDER_CLUSTER_WINDOW samples, FIXME: if set to 0, the size of output will be ten times */
+	int cluster_peak_pos[state->max_npeak], len_cluster_peak, len_next_peak, final_peaks=0, ipeak;
+	cluster_peak_pos[0] = peak_pos[0];
 	for(ipeak=0; ipeak<npeak-1; ipeak++) {
-		if (peak_pos[ipeak+1] - tmp_peak_pos[final_peaks] > PEAKFINDER_CLUSTER_WINDOW) {
+		if (peak_pos[ipeak+1] - cluster_peak_pos[final_peaks] > PEAKFINDER_CLUSTER_WINDOW) {
 			final_peaks++;
-			tmp_peak_pos[final_peaks] = peak_pos[ipeak+1];
+			cluster_peak_pos[final_peaks] = peak_pos[ipeak+1];
 		}
-		else { // update the tmp_peak_pos if next peak pos has larger SNR
-			len_tmp_peak = len_idx[tmp_peak_pos[final_peaks]];
+		else { // update the cluster_peak_pos if next peak pos has larger SNR
+			len_cluster_peak = len_idx[cluster_peak_pos[final_peaks]];
 			len_next_peak = len_idx[peak_pos[ipeak+1]];
-			if (tmp_maxsnr[len_tmp_peak] < tmp_maxsnr[len_next_peak])
-				tmp_peak_pos[final_peaks] = peak_pos[ipeak+1];
+			if (tmp_maxsnr[len_cluster_peak] < tmp_maxsnr[len_next_peak])
+				cluster_peak_pos[final_peaks] = peak_pos[ipeak+1];
 		}
 	}
 
 	npeak = final_peaks;
-	memcpy(peak_pos, tmp_peak_pos, sizeof(int) * npeak);
+	memcpy(peak_pos, cluster_peak_pos, sizeof(int) * npeak);
 	pklist->npeak[0] = npeak;
 
 	//printf("peaks_over_thresh , ifo %d, npeak %d\n", cur_ifo, npeak);
