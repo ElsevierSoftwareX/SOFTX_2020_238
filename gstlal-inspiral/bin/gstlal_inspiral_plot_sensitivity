@@ -628,12 +628,6 @@ for bin_type in opts.bin_types:
             ax_eff.fill_between(ds, lo, hi, alpha=0.5, color=line.get_color())
 
         # sensitivity vs far
-        vol_tix = ax_far.get_yticks()
-        tx = ax_far.twinx() # map volume to distance
-        tx.set_yticks(vol_tix)
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
-        tx.set_ylabel("Range (Mpc)")
-
         ax_far.set_xlabel("Combined FAR (Hz)")
         ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
         ax_far.set_xscale("log")
@@ -642,6 +636,14 @@ for bin_type in opts.bin_types:
         ax_far.invert_xaxis()
         ax_far.legend(loc="lower left")
         ax_far.grid()
+
+        vol_tix = ax_far.get_yticks()
+        tx = ax_far.twinx() # map volume to distance
+        tx.set_yticks(vol_tix)
+        tx.set_yscale("log")
+        tx.set_ylim(ax_far.get_ylim())
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
+        tx.set_ylabel("Range (Mpc)")
 
         # range vs far
         ax_far_range.set_xlabel("Combined FAR (Hz)")
@@ -653,12 +655,6 @@ for bin_type in opts.bin_types:
         ax_far_range.grid()
 
         # sensitivity vs snr
-        vol_tix = ax_snr.get_yticks()
-        tx = ax_snr.twinx() # map volume to distance
-        tx.set_yticks(vol_tix)
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
-        tx.set_ylabel("Range (Mpc)")
-
         ax_snr.set_xlabel("Network SNR")
         ax_snr.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
         ax_snr.set_yscale("log")
@@ -667,9 +663,18 @@ for bin_type in opts.bin_types:
         ax_snr.legend(loc="lower left")
         ax_snr.grid()
 
+        vol_tix = ax_snr.get_yticks()
+        tx = ax_snr.twinx() # map volume to distance
+        tx.set_yticks(vol_tix)
+        tx.set_yscale("log")
+        tx.set_ylim(ax_snr.get_ylim())
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
+        tx.set_ylabel("Range (Mpc)")
+
         # efficiency vs distance
         ax_eff.set_xlabel("Distance (Mpc)")
         ax_eff.set_ylabel("Efficiency")
+        ax_eff.set_xscale("log")
         ax_eff.legend(loc="upper right")
         ax_eff.grid()
 
