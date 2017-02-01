@@ -859,7 +859,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d %d" % (t, on, off, gap)
 
 		@bottle.route("/%s/dq_vector_on_off_gap.txt" % instrument)
-		def dq_vector_state(elem = statevector):
+		def dq_vector_state(elem = dqvector):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			on = elem.get_property("on-samples")
 			off = elem.get_property("off-samples")
