@@ -372,7 +372,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 			prcoss = numpy.ones(len(rcoss))
 			psnr = 1e-8 * snr**-6 #(1. + 10**6) / (1. + snr**6)
-			psnrdcoss = numpy.outer(numpy.exp(-(snr - 2**.5)**2/ 2.) * dsnr, numpy.exp(-(rcoss - .05)**2 / .0002*2) * drcoss)
+			psnrdcoss = numpy.outer(numpy.exp(-(snr - 2**.5)**2/ 2.) * dsnr, numpy.exp(-(rcoss - .05)**2 / .00015*2) * drcoss)
 
 			#new_binarr.array[snrindices, rcossindices] = numpy.outer(psnr * dsnr, prcoss * drcoss)
 			new_binarr.array[snrindices, rcossindices] += psnrdcoss 
@@ -450,7 +450,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				denom += self.zero_lag_rates[key].array
 			binnedarray.array += denom * (binnedarray.array.sum() / denom.sum() * self.numerator_accidental_weight)
 
-		numsamples = max(binnedarray.array.sum() / 10. + 1., 1e7) # Be extremely conservative and assume only 1 in 10 samples are independent, but assume there are always at least 1e7 samples.
+		numsamples = max(binnedarray.array.sum() / 10. + 1., 1e6) # Be extremely conservative and assume only 1 in 10 samples are independent, but assume there are always at least 1e7 samples.
 		# construct the density estimation kernel
 		snr_bins = binnedarray.bins[0]
 		chisq_bins = binnedarray.bins[1]
