@@ -798,7 +798,7 @@ class RankingData(object):
 	}
 
 	filters = {
-		"ln_likelihood_ratio": rate.gaussian_window(8.)
+		"ln_likelihood_ratio": rate.gaussian_window(4.)
 	}
 
 	def __init__(self, coinc_params_distributions, instruments = None, sampler_coinc_params_distributions = None, process_id = None, nsamples = 1000000, verbose = False):
