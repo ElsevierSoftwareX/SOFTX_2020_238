@@ -103,7 +103,7 @@ int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 	int i;
 	for (i = 0; i < length; i++) {
 		if (channel) {
-	        	strncpy(bankarray[i].channel, (const char*) channel, LIGOMETA_CHANNEL_MAX);
+			strncpy(bankarray[i].channel, (const char*) channel, LIGOMETA_CHANNEL_MAX);
 			bankarray[i].channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
 		}
 	}
@@ -115,7 +115,7 @@ int gstlal_set_instrument_in_snglinspiral_array(SnglInspiralTable *bankarray, in
 	int i;
 	for (i = 0; i < length; i++) {
 		if (instrument) {
-	        	strncpy(bankarray[i].ifo, (const char*) instrument, LIGOMETA_IFO_MAX);
+			strncpy(bankarray[i].ifo, (const char*) instrument, LIGOMETA_IFO_MAX);
 			bankarray[i].ifo[LIGOMETA_IFO_MAX - 1] = 0;
 		}
 	}
@@ -157,18 +157,18 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 	if (!srcbuf) {
 		GST_ERROR_OBJECT(pad, "Could not allocate sngl-inspiral buffer");
 		return srcbuf;
-		}
+	}
 
 	if (input->num_events == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 
 	/* set the offset */
-        GST_BUFFER_OFFSET(srcbuf) = offset;
-        GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
+	GST_BUFFER_OFFSET(srcbuf) = offset;
+	GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
 
-        /* set the time stamps */
-        GST_BUFFER_PTS(srcbuf) = time + timediff;
-        GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
+	/* set the time stamps */
+	GST_BUFFER_PTS(srcbuf) = time + timediff;
+	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	if (input->num_events) {
 		guint channel;
@@ -178,7 +178,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 			double complex maxdata_channel = 0;
 
 			switch (input->type)
-				{
+			{
 				case GSTLAL_PEAK_COMPLEX:
 				maxdata_channel = (double complex) input->interpvalues.as_float_complex[channel];
 				break;
@@ -189,9 +189,9 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 
 				default:
 				g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
-				}
+			}
 
-			if ( !maxdata_channel )
+			if (!maxdata_channel)
 				continue;
 
 			/*
@@ -244,7 +244,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 			parent->chisq = 0.0;
 			parent->chisq_dof = 1;
 			switch (input->type)
-				{
+			{
 				case GSTLAL_PEAK_COMPLEX:
 				if (chi2) parent->chisq = (double) *(((float *) chi2 ) + channel);
 				break;
@@ -255,7 +255,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 
 				default:
 				g_assert(input->type == GSTLAL_PEAK_COMPLEX || input->type == GSTLAL_PEAK_DOUBLE_COMPLEX);
-				}
+			}
 
 			/*
 			 * add to buffer
