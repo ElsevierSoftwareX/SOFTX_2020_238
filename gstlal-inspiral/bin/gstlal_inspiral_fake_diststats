@@ -152,7 +152,7 @@ diststats = far.ThincaCoincParamsDistributions(instruments = set(segs), delta_t 
 # 
 
 # This a guess at a mass dependent snr chisq prior
-diststats.add_background_prior(n = n_trigs, prefactors_range = ((30. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3., ba = "background_rates", verbose = options.verbose)
+diststats.add_background_prior(n = n_trigs, prefactors_range = ((10. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3., ba = "background_rates", verbose = options.verbose)
 
 # fill in the background to the requested amount
 for instrument, number_of_events in n_trigs.items():
