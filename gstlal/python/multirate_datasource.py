@@ -195,9 +195,12 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		pipeparts.mkfakesink(pipeline, whiten)
 
-		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array([1.], ndmin = 2), block_stride = 16384, time_domain = False)
+		# high pass filter
+		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(reference_psd.one_second_highpass_kernel(max(rates), cutoff = 12), ndmin=2), block_stride = 4096, time_domain = False, latency = max(rates)/2)
 
-		def set_fir_psd(whiten, pspec, firbank):
+		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array([1.], ndmin = 2), block_stride = 4096, time_domain = False)
+
+		def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
 			psd_data = numpy.array(whiten.get_property("mean-psd"))
 			psd = lal.CreateREAL8FrequencySeries(
 				name = "psd",
@@ -208,12 +211,19 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 				length = len(psd_data)
 			)
 			psd.data.data = psd_data
-			kernel, latency, sample_rate = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd)
-			kernel, theta = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel)
+			kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
+			kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
 			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
 
-		whiten.connect_after("notify::mean-psd", set_fir_psd, head)
+		whiten.connect_after("notify::mean-psd", set_fir_psd, head, reference_psd.PSDFirKernel())
 
+
+		if psd is None:
+			# the time-domain whitener is more sensitive to the psd
+			# than the frequency domain whitener, so we drop data
+			# until the psd converges to a point that produces
+			# sensible output in the time-domain whitener
+			head = pipeparts.mkdrop(pipeline, head, drop_samples = 8*psd_fft_length*max(rates))
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
