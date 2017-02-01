@@ -325,8 +325,9 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# adjust its length (Leo)
 		#
 
-		(kernel, latency, fir_rate) = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd, nyquist = sample_rate_max / 2.0) #FIXME
-		(kernel, theta) = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel) #FIXME
+		psd_fir_kernel = reference_psd.PSDFirKernel()
+		(kernel, latency, fir_rate) = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd, nyquist = sample_rate_max / 2.0)
+		(kernel, theta) = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, fir_rate)
 		kernel = kernel[-1::-1]
 		# FIXME this is off by one sample, but shouldn't be. Look at the miminum phase function
 		# assert len(kernel) == working_length
