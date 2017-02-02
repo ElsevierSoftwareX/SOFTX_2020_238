@@ -141,8 +141,14 @@ class upper_limit(object):
         # symmetrize between m1-m2
         for instr in self.instruments:
             self.total_injections[instr] = imr_utils.symmetrize_sims(self.total_injections[instr], "mass1", "mass2")
+            self.total_injections[instr] = self.filter_injections(self.total_injections[instr])
             self.found_injections_fars[instr] = self.filter_injections(self.found_injections_fars[instr])
             self.found_injections_snrs[instr] = self.filter_injections(self.found_injections_snrs[instr])
+
+            if self.opts.verbose:
+                print >>sys.stdout,"\nInstruments: %s" % instr
+                print >>sys.stdout,"Number of found injections: %d" % len(self.found_injections_fars[instr])
+                print >>sys.stdout,"Number of total injections: %d" % len(self.total_injections[instr])
 
 
     def get_on_instruments(self,connection):
@@ -258,7 +264,13 @@ class upper_limit(object):
         '''
         for inst in self.instruments:
             newinjs = []
-            for far, sim in sims:
+            for sim_params in sims:
+
+                if type(sim_params) == tuple:
+                    far, sim = sim_params
+                else:
+                    sim = sim_params
+
                 # exclude simulations from certain waveform families
                 if sim.waveform in self.opts.exclude_sim_type:
                     continue
@@ -269,6 +281,11 @@ class upper_limit(object):
                 if self.opts.max_mass_ratio and not (1.0/self.opts.max_mass_ratio <= sim.mass1/sim.mass2 <= self.opts.max_mass_ratio):
                     continue
 
+                # Exclude precessing waveforms if requested
+                if self.opts.remove_precession:
+                    if any(s != 0.0 for s in (sim.spin1x, sim.spin1y, sim.spin2x, sim.spin2y)):
+                        continue
+
                 # symmetrize in m1-m2
                 if sim.mass1 > sim.mass2:
                     m1 = sim.mass1
@@ -277,7 +294,10 @@ class upper_limit(object):
                     sim.mass2 = m1
 
                 # passed all constraint tests, we can use it
-                newinjs.append((far,sim))
+                if type(sim_params) == tuple:
+                    newinjs.append((far,sim))
+                else:
+                    newinjs.append(sim)
 
         return newinjs
 
@@ -331,6 +351,7 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--max-mass", metavar = "MM", type = 'float', default = float("Inf"), help = "Specify the maximum mass to consider among the injections found in the DB. This filters all injections with any component heavier than MM.")
     parser.add_option("--max-mass-ratio", metavar = "q", type = 'float', default = None, help = "Specify the maximum allowed mass ratio. Should be >= 1.")
     parser.add_option("--exclude-sim-type", default = [], action = "append", metavar = "SIM", help = "When computing the search volume, exclude injections made using the SIM waveform family. Example: SpinTaylorthreePointFivePN. Use this option multiple times to exclude more than one injection type.")
+    parser.add_option("--remove-precession", action = "store_true", help = "Exclude precessing injections when plotting sensitivity.")
 
     # more options
     # Bin injections in mass by m1-m2
