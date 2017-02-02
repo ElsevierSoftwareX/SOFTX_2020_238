@@ -196,7 +196,9 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		pipeparts.mkfakesink(pipeline, whiten)
 
 		# high pass filter
-		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(reference_psd.one_second_highpass_kernel(max(rates), cutoff = 12), ndmin=2), block_stride = 4096, time_domain = False, latency = max(rates)/2)
+		kernel = reference_psd.one_second_highpass_kernel(max(rates), cutoff = 12)
+		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
+		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = 4096, time_domain = False, latency = (len(kernel) - 1) // 2)
 
 		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array([1.], ndmin = 2), block_stride = 4096, time_domain = False)
 
