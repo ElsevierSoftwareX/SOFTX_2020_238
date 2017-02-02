@@ -57,6 +57,7 @@ import sys
 import lal
 from lal.utils import CacheEntry
 
+from glue import iterutils
 from glue import segments
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
@@ -130,6 +131,8 @@ def parse_command_line():
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
 	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Provide an output directory")
 	parser.add_option("-f", "--format", metavar = "{\"png\",\"pdf\",\"svg\",\"eps\",...}", action = "append", default = [], help = "Set the output image format.  Can be given multiple times (default = \"png\").")
+	parser.add_option("--shrink-data-segments", metavar = "float", type = float, help = "Shrink data segments by this much (on each side). e.g. specifying 2 will shrink each datasegment by 4 seconds")
+	parser.add_option("--extend-veto-segments", metavar = "float", type = float, help = "Pad segments by this number of seconds (on both sides)")
 	parser.add_option("--segments-name", metavar = "name", default = "statevectorsegments", help = "Set the name of the segments that were analyzed (default = \"statevectorsegments\").")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the veto segments (default = \"vetoes\").")
 	parser.add_option("--plot-group", metavar = "number", action = "append", default = None, help = """Generate the given plot group.  Can be given multiple times (default = make all plot groups)
@@ -143,6 +146,9 @@ def parse_command_line():
 """)
 	parser.add_option("--far-threshold", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Path to the marginalized likelihood file.")
+	# FIXME Add check that plot group 1 being generated if these options are given
+	parser.add_option("--remove-precession", action = "store_true", help = "Ignore precessing injections when generating missed/found plots")
+	parser.add_option("--isolate-precession", action = "store_true", help = "Only make missed/found plots for precessing injections")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -173,7 +179,7 @@ def parse_command_line():
 
 
 class CoincDatabase(object):
-	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, plotsummary_json = None, base = None, program_name = "gstlal_inspiral"):
+	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, plotsummary_json = None, base = None, program_name = "gstlal_inspiral", shrink_data_segments = None, extend_veto_segments = None):
 		"""
 		Compute and record some summary information about the
 		database.
@@ -234,9 +240,20 @@ class CoincDatabase(object):
 
 		# get the segment lists
 		self.seglists = ligolw_segments.segmenttable_get_by_name(xmldoc, data_segments_name).coalesce()
+		if shrink_data_segments is not None:
+			# Make sure all segments are at least long enough to be
+			# contracted (e.g. if a segment is 32 seconds long but
+			# the user is going to contract it by 17 seconds, then
+			# the end time of the segment would come before the
+			# start time of the segment. This is bad)
+			for seglist in self.seglists.values():
+				iterutils.inplace_filter(lambda s: abs(s) > 2*shrink_data_segments, seglist)
+			self.seglists.contract(shrink_data_segments)
 		self.instruments = set(self.seglists)
 		if veto_segments_name is not None:
 			self.veto_segments = ligolw_segments.segmenttable_get_by_name(xmldoc, veto_segments_name).coalesce()
+			if extend_veto_segments is not None:
+				self.veto_segments.protract(extend_veto_segments)
 		else:
 			self.veto_segments = segments.segmentlistdict()
 		self.seglists -= self.veto_segments
@@ -291,9 +308,7 @@ class CoincDatabase(object):
 			if self.coinc_def_table is not None:
 				for description, n in cursor.execute("SELECT description, COUNT(*) FROM coinc_definer NATURAL JOIN coinc_event GROUP BY coinc_def_id"):
 					data.append([description, str(n)])
-
-			if self.sim_inspiral_table is None:
-				to_google_json("%s_%s" % (self.base, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
+			to_google_json("%s_%s_%s" % (self.base, plotsummary_json, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
 
 #
 # =============================================================================
@@ -673,11 +688,13 @@ FROM
 
 class MissedFoundPlots(object):
 	class MissedFound(object):
-		def __init__(self, on_instruments, far_thresh, missed_found_plots):
+		def __init__(self, on_instruments, far_thresh, missed_found_plots, remove_precession, isolate_precession):
 			self.on_instruments = on_instruments
 			self.far_thresh = far_thresh
 			self.found_in = {}
 			self.missed_found_plots = missed_found_plots
+			self.remove_precession = remove_precession
+			self.isolate_precession = isolate_precession
 
 		def add_contents(self, contents):
 			self.base = contents.base
@@ -703,13 +720,17 @@ FROM
 				sim = contents.sim_inspiral_table.row_from_cols(values)
 				del sim.process_id, sim.source, sim.simulation_id
 				if sim.get_time_geocent() in zerolag_segments:
+					# any nonzero nonz spin -> precession_bool=True -> precessing injection
+					# all zero nonz spin -> precession_bool=Fales -> non precesssing injection
+					precession_bool = any(s != 0.0 for s in (sim.spin1x, sim.spin1y, sim.spin2x, sim.spin2y))
+					if self.remove_precession and precession_bool:
+						continue
+					if self.isolate_precession and not precession_bool:
+						continue
 					participating_instruments = lsctables.instrument_set_from_ifos(values[-1])
 					if participating_instruments is not None:
 						participating_instruments = frozenset(participating_instruments)
-					try:
-						self.found_in[participating_instruments].append(sim)
-					except KeyError:
-						self.found_in[participating_instruments] = [sim]
+					self.found_in.setdefault(participating_instruments, []).append(sim)
 
 		def finish(self):
 			missed = self.found_in.pop(None, [])
@@ -811,11 +832,13 @@ FROM
 				except ValueError:
 					print >> sys.stderr, "Cannot create expected SNR plots, no positive values, probably the SNRs are not set"
 
-	def __init__(self, far_thresh):
+	def __init__(self, far_thresh, remove_precession, isolate_precession):
 		self.far_thresh = far_thresh
 		self.plots = {}
 		self.injection_summary_data = []
 		self.missed_summary_data = []
+		self.remove_precession = remove_precession
+		self.isolate_precession = isolate_precession
 
 	def add_contents(self, contents):
 		self.base = contents.base
@@ -824,7 +847,7 @@ FROM
 			return
 		for on_instruments in contents.on_instruments_combos:
 			if on_instruments not in self.plots:
-				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh, self)
+				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession)
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
@@ -833,6 +856,9 @@ FROM
 				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box
 
 		to_google_json(self.base + "_injection_summary.json", [("Found||Missed", "string"), ("On Instruments", "string"), ("Participating Instruments", "string"), ("count", "number")], self.injection_summary_data)
+		with open('debugcheck.txt','w') as f:
+			for m in self.missed_summary_data:
+				f.write(str(m) + '\n')
 		to_google_json(self.base + "_missed_summary.json", [("On Instruments", "string"), ("Waveform", "string"), ("H1 <i>t</i>", "number"), ("L1 <i>t</i>", "number"), ("<i>m</i><sub>1</sub>", "number"), ("<i>m</i><sub>2</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>1y</sub>", "number"), ("<i>s</i><sub>1z</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("<i>s</i><sub>2y</sub>", "number"), ("<i>s</i><sub>2z</sub>", "number"), ("D (Mpc)", "number"), ("Decisive D<sub>chirp,eff</sub> (Mpc)" , "number"), ("Inclination", "number"), ("H1 &rho;", "number"), ("L1 &rho;", "number"), ("Decisive &rho;", "number")], self.missed_summary_data)
 
 
@@ -1722,11 +1748,11 @@ else:
 # how many there could be, so we know how many digits for the filenames
 max_plot_groups = None
 
-def new_plots(plots = None, far_thresh = None):
+def new_plots(plots = None, far_thresh = None, remove_precession = False, isolate_precession = False):
 	global max_plot_groups
 	l = (
 		SummaryTable(),
-		MissedFoundPlots(far_thresh = far_thresh),
+		MissedFoundPlots(far_thresh, remove_precession, isolate_precession),
 		ParameterAccuracyPlots(far_thresh = far_thresh),
 		BackgroundVsInjectionPlots(snr_min = snr_min),
 		BackgroundVsInjectionPlotsMulti(snr_min = snr_min),
@@ -1738,7 +1764,7 @@ def new_plots(plots = None, far_thresh = None):
 		plots = range(len(l))
 	return [l[i] for i in plots]
 
-plots = new_plots(options.plot_group, options.far_threshold)
+plots = new_plots(options.plot_group, options.far_threshold, options.remove_precession, options.isolate_precession)
 if options.plot_group is None:
 	options.plot_group = range(len(plots))
 
@@ -1754,7 +1780,7 @@ for n, filename in enumerate(filenames):
 		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(filename)[-1].replace(".sqlite","").replace(".tmp",""), base = os.path.join(options.output_dir, options.user_tag))
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(filename)[-1].replace(".sqlite","").replace(".tmp",""), base = os.path.join(options.output_dir, options.user_tag), extend_veto_segments = options.extend_veto_segments, shrink_data_segments = options.shrink_data_segments)
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	seg_class.add_contents(contents)
