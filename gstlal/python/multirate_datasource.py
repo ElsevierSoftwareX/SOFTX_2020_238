@@ -200,7 +200,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
 		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = max(rates), time_domain = False, latency = (len(kernel) - 1) // 2)
 
-		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array([1.], ndmin = 2), block_stride = 4096, time_domain = False)
+		head = pipeparts.mkfirbank(pipeline, head, 0, numpy.array([1.], ndmin = 2), block_stride = max(rates), time_domain = False, latency = 0)
 
 		def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
 			psd_data = numpy.array(whiten.get_property("mean-psd"))
