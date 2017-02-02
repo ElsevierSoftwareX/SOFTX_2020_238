@@ -223,7 +223,6 @@ class FinalSink(object):
 		self.onperformer = OnlinePerformer(parent_lock = self.lock)
 
 		# trigger control
-
 		self.trigger_control_doc = "trigger_control.txt"
 
 	def appsink_new_buffer(self, elem):
