@@ -229,95 +229,95 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 
 static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
-        GstCaps *othercaps = NULL;
-        guint i;
+	GstCaps *othercaps = NULL;
+	guint i;
 
-        if(gst_caps_get_size(caps) > 1)
-                GST_WARNING_OBJECT(trans, "not yet smart enough to transform complex formats");
+	if(gst_caps_get_size(caps) > 1)
+		GST_WARNING_OBJECT(trans, "not yet smart enough to transform complex formats");
 
-        switch(direction) {
-        case GST_PAD_SRC:
-                /*
+	switch(direction) {
+	case GST_PAD_SRC:
+		/*
 		 * Sink pad's format is the same as the source pad's except
 		 * it can have any sample rate equal to or greater than the
 		 * source pad's. It actually must be an integer multiple
 		 * of the source pad's rate, but that requirement is not
 		 * enforced here.
-                 * FIXME:  this doesn't work out all the allowed
-                 * permutations, it just takes the rate from the
-                 * first structure on the source pad and copies it into all
-                 * the structures on the sink pad
-                 */
+		 * FIXME:  this doesn't work out all the allowed
+		 * permutations, it just takes the rate from the
+		 * first structure on the source pad and copies it into all
+		 * the structures on the sink pad
+		 */
 
-                othercaps = gst_caps_normalize(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)));
-                for(i = 0; i < gst_caps_get_size(othercaps); i++) {
+		othercaps = gst_caps_normalize(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)));
+		for(i = 0; i < gst_caps_get_size(othercaps); i++) {
 
-                        const GValue *v = gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate");
-                        g_assert(v);
+			const GValue *v = gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate");
+			g_assert(v);
 
 			GstStructure *otherstr = gst_caps_get_structure(othercaps, i);
 
-                        if(GST_VALUE_HOLDS_INT_RANGE(v))
-                                gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, gst_value_get_int_range_min(v), G_MAXINT, NULL);
-                        else if(G_VALUE_HOLDS_INT(v))
-                                gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, g_value_get_int(v), G_MAXINT, NULL);
-                        else
-                                GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid type for rate in caps"));
+			if(GST_VALUE_HOLDS_INT_RANGE(v))
+				gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, gst_value_get_int_range_min(v), G_MAXINT, NULL);
+			else if(G_VALUE_HOLDS_INT(v))
+				gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, g_value_get_int(v), G_MAXINT, NULL);
+			else
+				GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid type for rate in caps"));
 		}
-                break;
+		break;
 
-        case GST_PAD_SINK:
-                /*
+	case GST_PAD_SINK:
+		/*
 		 * Sink pad's format is the same as the source pad's except
 		 * it can have any sample rate equal to or greater than the
 		 * source pad's. It actually must be an integer multiple
 		 * of the source pad's rate, but that requirement is not
 		 * enforced here.
-                 */
+		 */
 
-                othercaps = gst_caps_normalize(gst_caps_copy(caps));
-                for(i = 0; i < gst_caps_get_size(othercaps); i++) {
+		othercaps = gst_caps_normalize(gst_caps_copy(caps));
+		for(i = 0; i < gst_caps_get_size(othercaps); i++) {
 
-                        const GValue *v = gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate");
-                        g_assert(v);
+			const GValue *v = gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate");
+			g_assert(v);
 
 			GstStructure *otherstr = gst_caps_get_structure(othercaps, i);
 
-                        gst_structure_set(otherstr, "channels", G_TYPE_INT, 1, NULL);
-                        gst_structure_set(otherstr, "format", G_TYPE_STRING, GST_AUDIO_NE(U32), NULL);
+			gst_structure_set(otherstr, "channels", G_TYPE_INT, 1, NULL);
+			gst_structure_set(otherstr, "format", G_TYPE_STRING, GST_AUDIO_NE(U32), NULL);
 
-                        if(GST_VALUE_HOLDS_INT_RANGE(v)) {
-                                if(gst_value_get_int_range_max(v) == 1)
-                                        gst_structure_set(otherstr, "rate", G_TYPE_INT, 1, NULL);
-                                else
-                                        gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, 1, gst_value_get_int_range_max(v), NULL);
-                        } else if(G_VALUE_HOLDS_INT(v)) {
-                                if(g_value_get_int(v) == 1)
-                                        gst_structure_set(otherstr, "rate", G_TYPE_INT, 1, NULL);
-                                else
-                                        gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, 1, g_value_get_int(v), NULL);
-                        } else {
-                                GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid type for rate in caps"));
-                        }
+			if(GST_VALUE_HOLDS_INT_RANGE(v)) {
+				if(gst_value_get_int_range_max(v) == 1)
+					gst_structure_set(otherstr, "rate", G_TYPE_INT, 1, NULL);
+				else
+					gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, 1, gst_value_get_int_range_max(v), NULL);
+			} else if(G_VALUE_HOLDS_INT(v)) {
+				if(g_value_get_int(v) == 1)
+					gst_structure_set(otherstr, "rate", G_TYPE_INT, 1, NULL);
+				else
+					gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, 1, g_value_get_int(v), NULL);
+			} else {
+				GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid type for rate in caps"));
+			}
 
-                }
-                break;
+		}
+		break;
 
-        case GST_PAD_UNKNOWN:
-                GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
-                gst_caps_unref(caps);
-                return GST_CAPS_NONE;
-        }
+	case GST_PAD_UNKNOWN:
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
+		gst_caps_unref(caps);
+		return GST_CAPS_NONE;
+	}
 
-        othercaps = gst_caps_simplify(othercaps);
+	othercaps = gst_caps_simplify(othercaps);
 
-        if(filter) {
-                GstCaps *intersection = gst_caps_intersect(othercaps, filter);
-                gst_caps_unref(othercaps);
-                othercaps = intersection;
-        }
+	if(filter) {
+		GstCaps *intersection = gst_caps_intersect(othercaps, filter);
+		gst_caps_unref(othercaps);
+		othercaps = intersection;
+	}
 
-        return othercaps;
+	return othercaps;
 }
 
 

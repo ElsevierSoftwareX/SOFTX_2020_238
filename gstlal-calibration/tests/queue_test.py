@@ -109,30 +109,31 @@ def queue_01(pipeline, name):
 
 def queue_02(pipeline, name):
 
-        #
-        # This test is intended to probe data flow with tees, firbanks, and queues
-        #
+	#
+	# This test is intended to probe data flow with tees, firbanks, and queues
+	#
 
-        rate = 1000             # Hz
-        buffer_length = 1.0     # seconds
-        test_duration = 100.0   # seconds
+	rate = 16384		# Hz
+	buffer_length = 1.0	# seconds
+	test_duration = 100.0	# seconds
 
 	#
 	# build pipeline
 	#
 
 	src = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, width = 32)
-	tee = pipeparts.mktee(pipeline, src)
-	head = pipeparts.mkfirbank(pipeline, tee, fir_matrix=[numpy.hanning(600)], latency = 300, time_domain = True)
-	head = calibration_parts.mkinsertgap(pipeline, head, bad_data_intervals = [-1e35, 1e35], block_duration = buffer_length * 1000000000, remove_gap = False)
-	head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "FIR_to_adder")
+#	tee = pipeparts.mktee(pipeline, src)
+	head = pipeparts.mkgeneric(pipeline, src, "splitcounter", name = "before_resample")
+	head = calibration_parts.mkresample(pipeline, head, "audio/x-raw, format=F32LE,rate=16")#fir_matrix=[numpy.hanning(600)], latency = 300, time_domain = True)
+#	head = calibration_parts.mkinsertgap(pipeline, head, bad_data_intervals = [-1e35, 1e35], block_duration = buffer_length * 1000000000, remove_gap = False)
+	head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "after_resample")
 #	head2 = pipeparts.mkfirbank(pipeline, tee, fir_matrix=[numpy.hanning(1000)], latency = 500, time_domain = True)
 #	head2 = calibration_parts.mkinsertgap(pipeline, head2, bad_data_intervals = [-1e35, 1e35], block_duration = buffer_length * 1000000000, remove_gap = False)
-	head2 = pipeparts.mkgeneric(pipeline, tee, "splitcounter", name = "tee_to_adder")
-	head = calibration_parts.mkqueue(pipeline, head, 1)
+#	head2 = pipeparts.mkgeneric(pipeline, tee, "splitcounter", name = "tee_to_adder")
+#	head = calibration_parts.mkqueue(pipeline, head, 1)
 #	head2 = calibration_parts.mkqueue(pipeline, head2, 1)
-	adder = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, head, head2))
-	head = pipeparts.mkgeneric(pipeline, adder, "splitcounter", name = "before_final_dump")
+#	adder = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, head, head2))
+#	head = pipeparts.mkgeneric(pipeline, adder, "splitcounter", name = "before_final_dump")
 	pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
 
 	#
@@ -143,29 +144,29 @@ def queue_02(pipeline, name):
 
 def queue_03(pipeline, name):
 
-        #
-        # Very simple test of data storage in queues
-        #
+	#
+	# Very simple test of data storage in queues
+	#
 
-        rate = 1000             # Hz
-        buffer_length = 1.0     # seconds
-        test_duration = 100.0   # seconds
+	rate = 1000	     # Hz
+	buffer_length = 1.0     # seconds
+	test_duration = 100.0   # seconds
 
-        #
-        # build pipeline
-        #
+	#
+	# build pipeline
+	#
 
-        src = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, width = 32)
-        head = pipeparts.mkgeneric(pipeline, src, "splitcounter", name = "before_queue")
-        head = calibration_parts.mkqueue(pipeline, head, 50)
-        head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "after_queue")
-        pipeparts.mkfakesink(pipeline, head)
+	src = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, width = 32)
+	head = pipeparts.mkgeneric(pipeline, src, "splitcounter", name = "before_queue")
+	head = calibration_parts.mkqueue(pipeline, head, 50)
+	head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "after_queue")
+	pipeparts.mkfakesink(pipeline, head)
 
-        #
-        # done
-        #
+	#
+	# done
+	#
 
-        return pipeline
+	return pipeline
 
 #
 # =============================================================================

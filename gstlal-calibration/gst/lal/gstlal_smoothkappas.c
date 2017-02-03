@@ -352,12 +352,15 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GstStructure *str = gst_caps_get_structure(incaps, 0);
 	const gchar *name = gst_structure_get_string(str, "format");
 	success &= (name != NULL);
-	success &= gst_structure_get_int(gst_caps_get_structure(incaps, 0), "rate", &rate_in);
+	success &= gst_structure_get_int(str, "rate", &rate_in);
 	success &= gst_structure_get_int(gst_caps_get_structure(outcaps, 0), "rate", &rate_out);
-	success &= (rate_in == rate_out);
-
 	if(!success)
-		GST_ERROR_OBJECT(element, "unable to parse caps %" GST_PTR_FORMAT, incaps);
+		GST_ERROR_OBJECT(element, "unable to parse caps.  input caps = %" GST_PTR_FORMAT " output caps = %" GST_PTR_FORMAT, incaps, outcaps);
+
+	/* require the input and output rates to be equal */
+	success &= (rate_in == rate_out);
+	if(rate_in != rate_out)
+		GST_ERROR_OBJECT(element, "output rate is not equal to input rate.  input caps = %" GST_PTR_FORMAT " output caps = %" GST_PTR_FORMAT, incaps, outcaps);
 
 	/*
 	 * record stream parameters
