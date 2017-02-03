@@ -219,13 +219,19 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 		whiten.connect_after("notify::mean-psd", set_fir_psd, head, reference_psd.PSDFirKernel())
 
-
 		if psd is None:
-			# the time-domain whitener is more sensitive to the psd
-			# than the frequency domain whitener, so we drop data
-			# until the psd converges to a point that produces
-			# sensible output in the time-domain whitener
-			head = pipeparts.mkdrop(pipeline, head, drop_samples = 8*psd_fft_length*max(rates))
+			# the FIR whitener currently lacks tapering at the
+			# edges of filter updates and in the absence of a
+			# good reference PSD the rapid jumps in PSD
+			# estimate while the average settles at start-up
+			# cause clicks in the data.  until this is
+			# addressed with a tapering FIR filter element we
+			# mitigate the issue by simply dropping 8 FFT
+			# periods (16 PSD samples) to give it a chance to
+			# converge to a good mean.  this only has to be
+			# done if no reference PSD is available
+			head = pipeparts.mkdrop(pipeline, head, drop_samples = 8 * psd_fft_length * max(rates))
+
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
