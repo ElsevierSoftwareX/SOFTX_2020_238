@@ -97,7 +97,6 @@ def hook_up(pipeline, demux, channel_name, instrument, buffer_length):
 	else:
 		head = mkinsertgap(pipeline, None, block_duration = 1000000000 * buffer_length)
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_static_pad("sink"))
-#	head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = channel_name)
 
 	return head
 
