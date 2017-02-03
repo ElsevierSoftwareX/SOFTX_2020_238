@@ -1019,7 +1019,7 @@ if not options.no_dq_vector:
 	# Set the FILTERS-OK bit based on observation-ready transitions
 	filtersok = pipeparts.mkbitvectorgen(pipeline, obsintenttee, bit_vector=16, threshold=2)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, calibstate_caps)
-	filtersok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, filtersok, queue_length1), control = calibration_parts.mkqueue(pipeline, obsreadytee, queue_length2), threshold = 4, attack_length = -int(filter_settle_time * calibstatesr + 1))
+	filtersok = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, filtersok, queue_length1), control = calibration_parts.mkqueue(pipeline, obsreadytee, queue_length2), threshold = 4, attack_length = -int(filter_settle_time * calibstatesr))
 	filtersok = pipeparts.mkbitvectorgen(pipeline, filtersok, bit_vector = 16, nongap_is_control = True)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, calibstate_caps)
 
@@ -1113,7 +1113,7 @@ if not options.no_dq_vector:
 			darm_coh_ok = pipeparts.mkcapsfilter(pipeline, darm_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % cohsr)
 			darm_coh_ok = pipeparts.mkgeneric(pipeline, darm_coh_ok, "lal_logicalundersample", required_on = 4194304, status_out = 4194304)
 			darm_coh_ok = pipeparts.mkcapsfilter(pipeline, darm_coh_ok, calibstate_caps)
-			coherence_bits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, pcaly_line1_coh_ok, queue_length1), calibration_parts.mkqueue(pipeline, sus_coh_ok, queue_length2), calibration_parts.mkqueue(pipeline, darm_coh_ok, queue_length1)))
+			coherence_bits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, pcaly_line1_coh_ok, queue_length2), calibration_parts.mkqueue(pipeline, sus_coh_ok, queue_length1), calibration_parts.mkqueue(pipeline, darm_coh_ok, queue_length1)))
 		if not options.no_kappac or not options.no_fcc:
 			pcaly_line2_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line2_coh, threshold = options.coherence_uncertainty_threshold, bit_vector = 16777216, invert_control = True)
 			pcaly_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line2_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % cohsr)
