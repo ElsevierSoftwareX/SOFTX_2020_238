@@ -1055,10 +1055,16 @@ WHERE
 			zlagcounts_ba = self.zero_lag_likelihood_rates[key]
 
 			# Only model background above a ln(LR) of 3 or at the 10000 event count whatever is greater
-			likethresh = numpy.searchsorted(bgcounts_ba.bins.upper()[0], max(3, bgcounts_ba.bins.upper()[0][::-1][numpy.searchsorted(zlagcounts_ba.array[::-1].cumsum(), 10000)]))
-			bgcounts_ba.array[:likethresh] = 0.
-			bgpdf_ba.array[:likethresh] = 0.
-			zlagcounts_ba.array[:likethresh] = 0.
+			if zlagcounts_ba.array.sum() < 10000:
+				likethreshvalue = 3.
+				# Issue a warning if we have less than 10000 events
+				warnings.warn("There are less than 10000 zerolag events, extinction effects on background may not be accurately calculated.")
+			else:
+				likethreshvalue = max(3, bgcounts_ba.bins.upper()[0][::-1][numpy.searchsorted(zlagcounts_ba.array[::-1].cumsum(), 10000)])
+			likethreshindex = numpy.searchsorted(bgcounts_ba.bins.upper()[0], likethreshvalue)
+			bgcounts_ba.array[:likethreshindex] = 0.
+			bgpdf_ba.array[:likethreshindex] = 0.
+			zlagcounts_ba.array[:likethreshindex] = 0.
 
 			# safety checks
 			assert not numpy.isnan(bgcounts_ba.array).any(), "log likelihood ratio rates contains NaNs"
@@ -1072,16 +1078,12 @@ WHERE
 			drank = bgcounts_ba.bins.volumes().compress(finite_bins)
 
 			# figure out the minimum rank
-			fit_min_rank = ranks[likethresh]
+			fit_min_rank = ranks[likethreshindex]
 
 			# whittle down the arrays of counts and pdfs
 			bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
 			bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
 			zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
-
-			# Issue a warning if we have less than 100,000 events
-			if zlagcounts_ba_array.sum() < 100000:
-				warnings.warn("There are less than 100000 coincidences, extinction effects on background may not be accurately calculated.")
 
 			def extinct(bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, drank, fit_min_rank):
 				# Generate arrays of complementary cumulative counts
