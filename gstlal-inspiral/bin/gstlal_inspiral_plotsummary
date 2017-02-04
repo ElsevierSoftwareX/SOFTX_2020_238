@@ -688,17 +688,19 @@ FROM
 
 class MissedFoundPlots(object):
 	class MissedFound(object):
-		def __init__(self, on_instruments, far_thresh, missed_found_plots, remove_precession, isolate_precession):
+		def __init__(self, on_instruments, far_thresh, missed_found_plots, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
 			self.on_instruments = on_instruments
 			self.far_thresh = far_thresh
 			self.found_in = {}
 			self.missed_found_plots = missed_found_plots
 			self.remove_precession = remove_precession
 			self.isolate_precession = isolate_precession
+			self.nonzero_horizon_seglistdict = nonzero_horizon_seglistdict
 
 		def add_contents(self, contents):
 			self.base = contents.base
 			zerolag_segments = contents.seglists.intersection(self.on_instruments) - contents.seglists.union(contents.instruments - self.on_instruments)
+			zerolag_segments &= self.nonzero_horizon_seglistdict.intersection(self.on_instruments)
 			for values in contents.connection.cursor().execute("""
 SELECT
 	sim_inspiral.*,
@@ -832,13 +834,14 @@ FROM
 				except ValueError:
 					print >> sys.stderr, "Cannot create expected SNR plots, no positive values, probably the SNRs are not set"
 
-	def __init__(self, far_thresh, remove_precession, isolate_precession):
+	def __init__(self, far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
 		self.far_thresh = far_thresh
 		self.plots = {}
 		self.injection_summary_data = []
 		self.missed_summary_data = []
 		self.remove_precession = remove_precession
 		self.isolate_precession = isolate_precession
+		self.nonzero_horizon_seglistdict = nonzero_horizon_seglistdict
 
 	def add_contents(self, contents):
 		self.base = contents.base
@@ -847,7 +850,7 @@ FROM
 			return
 		for on_instruments in contents.on_instruments_combos:
 			if on_instruments not in self.plots:
-				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession)
+				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession, self.nonzero_horizon_seglistdict)
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
@@ -1359,7 +1362,38 @@ def load_distributions(filenames, verbose = False):
 		seglists.extent_all()
 	except ValueError:
 		seglists[None] = lsctables.segments.segmentlist([lsctables.segments.segment(0, 0)])
-	return coinc_params_distributions.snr_min, ranking_data, seglists
+
+	# Construct segments of nonzero horizon distance times
+	nonzero_horizon_seglistdict = segments.segmentlistdict()
+	segstart = None
+	prev_time = None
+	for ifo, nearestleaftree in coinc_params_distributions.horizon_history.items():
+		seglist = segments.segmentlist()
+		for time, hdistance in nearestleaftree.items():
+			if hdistance == 0.0:
+				if segstart is not None:
+					# this is the end of a segment of nonzero horizon distances, append this segment to the seglist
+					seglist.append(segments.segment(segstart, lal.LIGOTimeGPS((time+prev_time)/2)))
+					segstart = None
+			else:
+				if segstart is None:
+					if prev_time is not None:
+						# this is the first nonzero horizon distance in a new segment of nonzero horizon distances
+						segstart = lal.LIGOTimeGPS((time+prev_time)/2)
+					else:
+						# this is the first (time, hdistance) tuple in the horizon history
+						segstart = lal.LIGOTimeGPS(time)
+			prev_time = time
+		# contract nonzero horizon distance segments by 1 second
+		# (reducing each segment length by 2 seconds) to avoid case
+		# where injections geocent end time occurs in nonzero horizon
+		# distance time but at least one observed single ifo time
+		# occurs during a zero horizon distance time; first must get
+		# rid of any segments less than 2 seconds long
+		iterutils.inplace_filter(lambda s: abs(s) > 2, seglist)
+		seglist.contract(1)
+		nonzero_horizon_seglistdict[ifo] = seglist
+	return coinc_params_distributions.snr_min, ranking_data, seglists, nonzero_horizon_seglistdict
 
 
 def sigma_region(mean, nsigma):
@@ -1730,7 +1764,7 @@ options, filenames = parse_command_line()
 #
 
 
-snr_min, ranking_data, seglists = load_distributions([options.likelihood_file], verbose = options.verbose)
+snr_min, ranking_data, seglists, nonzero_horizon_seglistdict = load_distributions([options.likelihood_file], verbose = options.verbose)
 if ranking_data is not None:
 	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 else:
@@ -1749,7 +1783,7 @@ def new_plots(plots = None, far_thresh = None, remove_precession = False, isolat
 	global max_plot_groups
 	l = (
 		SummaryTable(),
-		MissedFoundPlots(far_thresh, remove_precession, isolate_precession),
+		MissedFoundPlots(far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict),
 		ParameterAccuracyPlots(far_thresh = far_thresh),
 		BackgroundVsInjectionPlots(snr_min = snr_min),
 		BackgroundVsInjectionPlotsMulti(snr_min = snr_min),
