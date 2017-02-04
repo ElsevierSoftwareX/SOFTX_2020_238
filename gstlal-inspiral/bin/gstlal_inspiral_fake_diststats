@@ -29,7 +29,7 @@
 #		--svd-bank-file metavar = "File", help = "Set the number of templates per bank. default 1000"
 #		--output, metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
 #		--segment-and-horizon, action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
-#		--injection-prefactors, metavar = "s,e", default = "0.01,0.25", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.01,0.25")
+#		--injection-prefactors, metavar = "s,e", default = "0.001,0.01", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.001,0.01")
 
 #
 # =============================================================================
@@ -81,7 +81,7 @@ def parse_command_line():
 	parser.add_option("--output", metavar = "string", default = "prior.xml.gz", help = "Write likelihood files to disk with this basename: default prior.xml.gz.")
 	parser.add_option("--segment-and-horizon", action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
 	#parser.add_option("--override-background-prior", metavar = "N", type = "float", help = "Override the count in the SNR/chisquared bins to be this value")
-	parser.add_option("--injection-prefactors", metavar = "s,e", default = "0.01,0.25", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.01,0.25")
+	parser.add_option("--injection-prefactors", metavar = "s,e", default = "0.0001,0.1", help = "Set the range of prefactors on the chi-squared distribution for the signal model: default 0.001,0.1")
 	options, filenames = parser.parse_args()
 
 	process_params = dict(options.__dict__)
@@ -152,7 +152,7 @@ diststats = far.ThincaCoincParamsDistributions(instruments = set(segs), delta_t 
 # 
 
 # This a guess at a mass dependent snr chisq prior
-diststats.add_background_prior(n = n_trigs, prefactors_range = ((10. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3., ba = "background_rates", verbose = options.verbose)
+diststats.add_background_prior(n = n_trigs, prefactors_range = ((1. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3., ba = "background_rates", verbose = options.verbose)
 
 # fill in the background to the requested amount
 for instrument, number_of_events in n_trigs.items():
@@ -160,7 +160,7 @@ for instrument, number_of_events in n_trigs.items():
 	if options.verbose:
 		print "setting number of singles events in %s to %d" % (instrument, number_of_events)
 
-diststats.add_foreground_snrchi_prior(n = dict(((ifo, 1e8) for ifo, seg in segs.items())), prefactors_range = tuple(float(x) for x in options.injection_prefactors.split(",")), verbose = options.verbose)
+diststats.add_foreground_snrchi_prior(n = dict(((ifo, 1e12) for ifo, seg in segs.items())), prefactors_range = tuple(float(x) for x in options.injection_prefactors.split(",")), df = 40, verbose = options.verbose)
 
 #
 # Update the horizon distance history with our fake, user provided horizon history
