@@ -49,7 +49,7 @@ sched_doc = webpage.tab("schedule", "Schedule", "Schedule")
 # add the sections to the nav bar and the nav bar to the page
 #
 
-nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://versions.ligo.org/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
 nav+=[summary, injparams, injrecovery, sens, back, money, about_doc, sched_doc]
 nav+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
 thispage+=nav
