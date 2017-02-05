@@ -48,7 +48,6 @@ import lal
 import lalsimulation as lalsim
 
 
-from pylal import spawaveform
 from gstlal import chirptime
 
 
