@@ -419,7 +419,7 @@ class FinalSink(object):
 		row.event_duration = 0
 		row.amplitude = 0
 		row.eff_distance = 0 
-		row.coa_phase = trigger.coa_phase_L
+		row.coa_phase = trigger.coaphase_L
 		row.mass1 = trigger.mass1 
 		row.mass2 = trigger.mass2
 		row.mchirp = trigger.mchirp 
@@ -488,7 +488,7 @@ class FinalSink(object):
 		row.event_duration = 0
 		row.amplitude = 0
 		row.eff_distance = 0 
-		row.coa_phase = trigger.coa_phase_H
+		row.coa_phase = trigger.coaphase_H
 		row.mass1 = trigger.mass1 
 		row.mass2 = trigger.mass2 
 		row.mchirp = trigger.mchirp 
