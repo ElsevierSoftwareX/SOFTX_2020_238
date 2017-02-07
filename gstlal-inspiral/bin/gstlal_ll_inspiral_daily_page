@@ -228,7 +228,7 @@ if __name__ == '__main__':
 	#
 
 	try:
-		subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb] + injdb.values())
+		subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "triggersegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb] + injdb.values())
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
