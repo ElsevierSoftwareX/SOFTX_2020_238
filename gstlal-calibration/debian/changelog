@@ -1,3 +1,15 @@
+gstlal-calibration (1.1.4-1) unstable; urgency=low
+
+  * Bug fix in NOGATE channels
+  * Removed gating of kappas with the observation-ready bit
+  * Removed all audiorate and reblock elements
+  * Pipeline no longer exits on non-zero dataValid flags
+  * Added options --buffer-length and --low-latency, rearranged queues
+  * Removed option --different-control-whitening
+  * Changed calculation of filter-settle-time
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Tue, 07 Feb 2017 10:43:45 -0600
+
 gstlal-calibration (1.1.3-1) unstable; urgency=low
 
   * Added queues before gates to prevent pipeline from hanging.
