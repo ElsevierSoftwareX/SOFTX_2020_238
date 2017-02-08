@@ -607,7 +607,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# FIXME This only works for H1L1 cas
 		coinc_window = inspiral_extrinsics.coinc_window(self.delta_t, list(instruments))
 		random_uniform = random.uniform
-		twopi = 2*numpy.pi
+		twopi = 2. * math.pi
 		ifo_keys = tuple("%s" % instrument for instrument in instruments)
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
