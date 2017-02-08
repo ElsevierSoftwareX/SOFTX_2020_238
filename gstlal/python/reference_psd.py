@@ -436,6 +436,8 @@ class PSDFirKernel(object):
 		norm_before = numpy.dot(kernel, kernel)
 		kernel *= lal.CreateTukeyREAL8Window(len(data), .5).data.data
 		kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
+		# FIXME this should probably be part of PSD defn.
+		kernel *= 1. / 2**.5
 
 		#
 		# the kernel's latency
