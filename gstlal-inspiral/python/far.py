@@ -217,23 +217,23 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			if len(events) < self.min_instruments:
 				raise ValueError("candidates require >= %d events in ranking mode" % self.min_instruments)
 			params["instruments"] = (frozenset(event.ifo for event in events),)
-			# FIXME This doesnt work for more tan two detectors
-			zero_offset = min((event.ifo, event.end) for event in events)[-1]
-			params.t_offset = dict((event.ifo, float(event.end - zero_offset) + offsetvector[event.ifo]) for event in events)
 		elif mode == "counting":
 			if len(events) != 1:
 				raise ValueError("only singles are allowed in counting mode")
 		else:
 			raise ValueError("invalid mode '%s'" % mode)
 
-		# record coa_phase and offset from end_time, where offset is
-		# the difference between a sngl inspiral's end time and the
-		# coinc inspiral's end time. Since the coinc inspiral's end
-		# time is just the end time of the first sngl inspiral
-		# alphabetically, non-coinc sngl inspirals will have offsets of
-		# 0, and the first sngl inspiral in a coinc will have an offset
-		# of 0
+		#
+		# record coa_phase and offset from epoch.  the epoch is
+		# chosen to be the time-slid end-time of the 0th trigger.
+		# the objective here is to allow the time-shifted end times
+		# to be converted to floats without loss of precision in
+		# such a way that singles always have an offset of 0.
+		#
+
 		params.coa_phase = dict((event.ifo, event.coa_phase) for event in events)
+		ref, ref_offset = events[0].end, offsetvector[events[0].ifo]
+		params.t_offset = dict((event.ifo, float(event.end - ref) + offsetvector[event.ifo] - ref_offset) for event in events)
 
 		#
 		# record the horizon distances.  pick one trigger at random
