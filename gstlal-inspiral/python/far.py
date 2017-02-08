@@ -608,7 +608,6 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		coinc_window = inspiral_extrinsics.coinc_window(self.delta_t, list(instruments))
 		random_uniform = random.uniform
 		twopi = 2. * math.pi
-		ifo_keys = tuple("%s" % instrument for instrument in instruments)
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = CoincParams(zip(keys, seq[0::2]))
@@ -619,7 +618,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# time between them, the coincidence end time is set by
 			# the first detector alphabetically
 			params.t_offset = dict(zip(ifo_keys, tuple((-1)**i * dt/2 for dt in [random_uniform(-coinc_window,coinc_window)] for i, instrument in enumerate(instruments))))
-			params.coa_phase = dict(zip(ifo_keys, tuple(random_uniform(0, twopi) for instrument in instruments)))
+			params.coa_phase = dict((instrument, random_uniform(0., twopi)) for instrument in instruments)
 			params.horizons = horizongen()
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
