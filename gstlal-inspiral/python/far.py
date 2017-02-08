@@ -602,22 +602,17 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		base_params = {"instruments": (frozenset(instruments),)}
 		horizongen = iter(self.horizon_history.randhorizons()).next
 		# P(horizons) = 1/livetime
+		# FIXME:  the dt portion is only correct for the H1L1 pair
 		log_P_horizons_dt_dphi = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey()) + inspiral_extrinsics.lnP_dt_dphi_uniform_H1L1(self.delta_t)
 		coordgens = tuple(iter(self.binnings[key].randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next for key in keys)
-		# FIXME This only works for H1L1 cas
-		coinc_window = inspiral_extrinsics.coinc_window(self.delta_t, list(instruments))
+		t_offsets_gen = snglcoinc.CoincSynthesizer(segmentlists = dict.fromkeys(self.instruments, None), delta_t = self.delta_t).plausible_toas(instruments)
 		random_uniform = random.uniform
 		twopi = 2. * math.pi
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = CoincParams(zip(keys, seq[0::2]))
 			params.update(base_params)
-			# FIXME This will only work for 2 (and maybe 1) detector cases
-			# NOTE Actual (2-detector) coincidences will have one
-			# offset equal to 0 and the other offset equal to the
-			# time between them, the coincidence end time is set by
-			# the first detector alphabetically
-			params.t_offset = dict(zip(ifo_keys, tuple((-1)**i * dt/2 for dt in [random_uniform(-coinc_window,coinc_window)] for i, instrument in enumerate(instruments))))
+			params.t_offset = t_offsets_gen.next()
 			params.coa_phase = dict((instrument, random_uniform(0., twopi)) for instrument in instruments)
 			params.horizons = horizongen()
 			# NOTE:  I think the result of this sum is, in
@@ -625,6 +620,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# it to be (only that it be correct up to an
 			# unknown constant) and I've not checked that it is
 			# so the documentation doesn't promise that it is.
+			# FIXME:  no, it's not normalized until the dt_dphi
+			# bit is corrected for other than H1L1
 			yield params, sum(seq[1::2], log_P_horizons_dt_dphi)
 
 	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0, coinc_only = True):

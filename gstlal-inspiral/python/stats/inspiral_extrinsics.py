@@ -727,14 +727,6 @@ norm_polynomial = numpy.poly1d([-348550.84040194791, 2288151.9147818103, -662388
 dt_chebyshev_coeffs = [0]*13
 
 
-def coinc_window(delta_t, instruments):
-	if len(instruments) == 1:
-		return 0.
-	if sorted(instruments) != ["H1","L1"]:
-		raise ValueError("H1L1 only ifo combo currently supported")
-	return snglcoinc.light_travel_time(instruments[0], instruments[1]) + delta_t
-
-
 def __dphi_calc_A(combined_snr, delta_t):
         B = -10.840765 * numpy.abs(delta_t) + 1.072866
         M = 46.403738 * numpy.abs(delta_t) - 0.160205
@@ -793,7 +785,7 @@ def lnP_dt_signal(dt, snr_ratio):
 def lnP_dt_dphi_uniform_H1L1(coincidence_window_extension):
 	# FIXME Dont hardcode
 	# NOTE This assumes the standard delta t
-	return math.log(1 / (snglcoinc.light_travel_time("H1","L1")+coincidence_window_extension) * 1 / (2*math.pi))
+	return -math.log((snglcoinc.light_travel_time("H1", "L1") + coincidence_window_extension) * (2. * math.pi))
 
 
 def lnP_dt_dphi_uniform(params, coincidence_window_extension):
