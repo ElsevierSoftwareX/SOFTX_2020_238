@@ -29,6 +29,7 @@
 #ifndef __GSTLAL_RESAMPLE_H__
 #define __GSTLAL_RESAMPLE_H__
 
+#include <complex.h>
 
 #include <glib.h>
 #include <gst/gst.h>
@@ -72,6 +73,7 @@ struct _GSTLALResample {
 		GSTLAL_RESAMPLE_Z128
 	} data_type;
 	gboolean need_buffer_resize;
+	guint leading_samples;
 
 	/* timestamp book-keeping */
 
@@ -86,10 +88,9 @@ struct _GSTLALResample {
 	guint polynomial_order;
 
 	/* filter */
-	double dxdt0;
-	double *remaining_samples;
-	guint clipped_samples;
-	guint latency;
+	double complex dxdt0;
+	double complex end_sample;
+	double complex before_end_sample;
 };
 
 
