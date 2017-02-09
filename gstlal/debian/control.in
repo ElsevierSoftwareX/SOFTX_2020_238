@@ -31,9 +31,8 @@ Build-Depends:
 
 Package: gstlal
 Architecture: any
-Replaces: gstlal-ugly (<< 0.99.0)
-Breaks: gstlal-ugly (<< 0.99.0)
-Recommends: gstlal-ugly
+Replaces: gstlal-ugly (<< 0.99.0), gstlal-dep
+Breaks: gstlal-ugly (<< 0.99.0), gstlal-dep
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  avahi-daemon,
  gir1.2-glib-2.0,
