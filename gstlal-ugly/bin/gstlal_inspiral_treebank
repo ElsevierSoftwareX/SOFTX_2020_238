@@ -122,7 +122,6 @@ for i, v in enumerate(("mass1", "mass2", "spin1x", "spin1y", "spin1z", "spin2x",
 	if dx !=0:
 		coord_limits.append([xi,xf])
 		positions.append(i)
-
 # Function to map from the coordinates used for template placement and the
 # metric calculation and the coordinates needed to call into LALSimulation, the
 # latter of which includes parameters that may have fixed values.
@@ -141,14 +140,31 @@ def coord_func(coords, positions = positions):
 # Initialize the metric and set the coordinate function
 g_ij = metric_module.Metric(
 	args.psd_file,
-	coord_func = coord_func,
+	coord_func = metric_module.M_q_func,
 	duration = 4, # FIXME!!!!!
 	flow = args.flow,
 	fhigh = args.fhigh,
 	approximant = args.approximant)
 
+#Have to properly implement coord swap, write in rework for coord_limits, and change metric appropriately
+
 # Initialize the tree root and then split with a given splitsize
-#bank = Node(HyperCube(numpy.array(x), symmetries = numpy.array([[0, 1, 0, 0, 0, 0, 0, 0]]), metric = g_ij))
+def trans_M_q(coord_limits):
+	M = []
+	q = []
+	for i in coord_limits[0]:
+		for j in coord_limits[1]:
+			M.append(i + j)
+			q.append(i / j)
+	#M_q_vertices = zip(M,q)
+	M_limits = [min(M), max(M)]
+	q_limits = [min(q), min(q)]
+	return [M_limits, q_limits]
+
+print 'ORIGINAL: ', coord_limits
+coord_limits_2 = trans_M_q(coord_limits)
+print 'AFTER: ', coord_limits, coord_limits_2
+
 bank = Node(HyperCube(numpy.array(coord_limits), args.min_match, symmetry_func = tree.mass_sym, metric = g_ij))
 
 if args.verbose:
