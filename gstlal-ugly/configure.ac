@@ -475,6 +475,8 @@ AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
 #
 # Check for webdir, this enables installation of web visualation tools
 #
+
+
 AC_ARG_WITH(
 	[webdir],
 	[AS_HELP_STRING([--with-webdir], [specify location of directory for web visualization tools. [$HOME/public_html]])],
@@ -494,8 +496,11 @@ AM_CONDITIONAL([COND_WEBDIR], [test "x${HAVE_WEBDIR}" == "xyes"])
 
 
 #
-# Check for dataserver, this enables installation of data server for web visualization
+# Check for dataserver, this enables installation of data server for web
+# visualization
 #
+
+
 AC_ARG_WITH(
 	[dataserver],
 	[AS_HELP_STRING([--with-dataserver], [specify location of directory for data server tools [$HOME/public_html/cgi-bin]])],
@@ -512,6 +517,8 @@ AS_IF([test "x$with_dataserver" != "xno"], [
 ])
 AC_DEFINE([HAVE_DATASERVER], [test "x{HAVE_DATASERVER}" == "xyes"], [Defined if you are enabling web data server])
 AM_CONDITIONAL([COND_DATASERVER], [test "x${HAVE_DATASERVER}" == "xyes"])
+
+
 #
 # Output configure information
 #
