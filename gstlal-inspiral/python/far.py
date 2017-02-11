@@ -220,6 +220,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		elif mode == "counting":
 			if len(events) != 1:
 				raise ValueError("only singles are allowed in counting mode")
+			# we don't require an offsetvector in counting mode
+			# because that would be nonsensical, but we need
+			# something for the code below to be happy
+			if offsetvector is None:
+				offsetvector = {events[0].ifo: 0.0}
 		else:
 			raise ValueError("invalid mode '%s'" % mode)
 
