@@ -423,12 +423,11 @@ DEFINE_AVG_DOWNSAMPLE(double, complex)
 
 
 /* Based on given parameters, this function calls the proper resampling function */
-static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_size, enum gstlal_resample_data_type data_type, gint unit_size, guint cadence, guint inv_cadence, guint polynomial_order, double complex *dxdt0, double complex *end_sample, double complex *before_end_sample, guint leading_samples)
+static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, enum gstlal_resample_data_type data_type, guint cadence, guint inv_cadence, guint polynomial_order, void *dxdt0, void *end_sample, void *before_end_sample, guint leading_samples)
 {
 	/* Sanity checks */
 	g_assert_cmpuint(src_size % unit_size, ==, 0);
 	g_assert_cmpuint(dst_size % unit_size, ==, 0);
-	g_assert(src_size * cadence == dst_size || dst_size * inv_cadence == src_size);
 	g_assert(cadence > 1 || inv_cadence > 1);
 
 	/* convert buffer sizes to number of samples */
@@ -462,13 +461,13 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 	} else if(cadence > 1 && polynomial_order == 1) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			linear_upsample_float(src, dst, src_size, cadence, (float *) end_sample);
+			linear_upsample_float(src, dst, src_size, cadence, end_sample);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			linear_upsample_double(src, dst, src_size, cadence, (double *) end_sample);
+			linear_upsample_double(src, dst, src_size, cadence, end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			linear_upsample_floatcomplex(src, dst, src_size, cadence, (float complex *) end_sample);
+			linear_upsample_floatcomplex(src, dst, src_size, cadence, end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
 			linear_upsample_doublecomplex(src, dst, src_size, cadence, end_sample);
@@ -481,13 +480,13 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 	} else if(cadence > 1 && polynomial_order == 2) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			quadratic_upsample_float(src, dst, src_size, cadence, (float *) end_sample, (float *) before_end_sample);
+			quadratic_upsample_float(src, dst, src_size, cadence, end_sample, before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			quadratic_upsample_double(src, dst, src_size, cadence, (double *) end_sample, (double *) before_end_sample);
+			quadratic_upsample_double(src, dst, src_size, cadence, end_sample, before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			quadratic_upsample_floatcomplex(src, dst, src_size, cadence, (float complex *) end_sample, (float complex *) before_end_sample);
+			quadratic_upsample_floatcomplex(src, dst, src_size, cadence, end_sample, before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
 			quadratic_upsample_doublecomplex(src, dst, src_size, cadence, end_sample, before_end_sample);
@@ -500,13 +499,13 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 	} else if(cadence > 1 && polynomial_order == 3) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			cubic_upsample_float(src, dst, src_size, cadence, (float *) dxdt0, (float *) end_sample, (float *) before_end_sample);
+			cubic_upsample_float(src, dst, src_size, cadence, dxdt0, end_sample, before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			cubic_upsample_double(src, dst, src_size, cadence, (double *) dxdt0, (double *) end_sample, (double *) before_end_sample);
+			cubic_upsample_double(src, dst, src_size, cadence, dxdt0, end_sample, before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			cubic_upsample_floatcomplex(src, dst, src_size, cadence, (float complex *) dxdt0, (float complex *) end_sample, (float complex *) before_end_sample);
+			cubic_upsample_floatcomplex(src, dst, src_size, cadence, dxdt0, end_sample, before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
 			cubic_upsample_doublecomplex(src, dst, src_size, cadence, dxdt0, end_sample, before_end_sample);
@@ -544,16 +543,16 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 	} else if(inv_cadence > 1 && polynomial_order > 0) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			avg_downsample_float(src, dst, src_size, dst_size, inv_cadence, leading_samples, (guint *) dxdt0, (float *) end_sample);
+			avg_downsample_float(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, end_sample);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			avg_downsample_double(src, dst, src_size, dst_size, inv_cadence, leading_samples, (guint *) dxdt0, (double *) end_sample);
+			avg_downsample_double(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			avg_downsample_floatcomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, (guint *) dxdt0, (float complex *) end_sample);
+			avg_downsample_floatcomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			avg_downsample_doublecomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, (guint *) dxdt0, end_sample);
+			avg_downsample_doublecomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, end_sample);
 			break;
 		default:
 			g_assert_not_reached();
@@ -838,7 +837,8 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 			*othersize = size * cadence;
 		else {
 			*othersize = size / inv_cadence;
-			if(size % inv_cadence || (guint) element->dxdt0 < (inv_cadence + 1) / 2)
+			guint *weight = (void *) &element->dxdt0;
+			if(size % inv_cadence || (element->polynomial_order > 0 && *weight < (inv_cadence + 1) / 2))
 				element->need_buffer_resize = TRUE;
 		}
 		break;
@@ -915,6 +915,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		if(element->polynomial_order > 0)
 			element->need_buffer_resize = TRUE;
 	}
+
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
 	if(element->rate_out > element->rate_in && ((element->polynomial_order > 0 && element->end_sample == 0.0) || (element->polynomial_order > 2 && element->before_end_sample == 0.0)))
@@ -963,10 +964,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				guint trailing_samples = (inbuf_samples - element->leading_samples - 1) % inv_cadence;
 				outbuf_size -= element->unit_size * (1 - trailing_samples / (inv_cadence / 2));
 				/* Check if there will be an outgoing sample on this buffer before the presentation timestamp of the input buffer */
-				if(element->leading_samples + (guint) (element->dxdt0 + 0.5) >= inv_cadence && (guint) (element->dxdt0 + 0.5) + inbuf_samples >= inv_cadence)
+				guint *weight = (void *) &element->dxdt0;
+				if(element->leading_samples + *weight >= inv_cadence && *weight + inbuf_samples >= inv_cadence)
 					outbuf_size += element->unit_size;
-			} else
-				g_assert_not_reached();
+			}
 		}
 		if(outbuf_size < 0)
 			outbuf_size = 0;
@@ -987,7 +988,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
-		resample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->data_type, element->rate_out / element->rate_in, element->rate_in / element->rate_out, element->polynomial_order, &element->dxdt0, &element->end_sample, &element->before_end_sample, element->leading_samples);
+		resample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->data_type, element->rate_out / element->rate_in, element->rate_in / element->rate_out, element->polynomial_order, (void *) &element->dxdt0, (void *) &element->end_sample, (void *) &element->before_end_sample, element->leading_samples);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, FALSE);
 		gst_buffer_unmap(outbuf, &outmap);
 	} else {
