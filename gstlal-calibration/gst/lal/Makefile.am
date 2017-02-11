@@ -8,6 +8,7 @@ libgstlalcalibration_la_SOURCES = \
 	gstlal_smoothcalibfactors.c gstlal_smoothcalibfactors.h \
 	gstlal_smoothkappas.c gstlal_smoothkappas.h \
 	gstlal_constantupsample.c gstlal_constantupsample.h \
+	gstlal_resample.c gstlal_resample.h \
 	gstlal_logicalundersample.c gstlal_logicalundersample.h \
 	gstlal_demodulate.c gstlal_demodulate.h \
 	gstlal_insertgap.c gstlal_insertgap.h

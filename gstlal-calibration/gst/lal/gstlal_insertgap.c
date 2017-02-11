@@ -503,16 +503,16 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 				result = process_inbuf_guint32(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE);
 				break;
 			case GSTLAL_INSERTGAP_F32:
-                                result = process_inbuf_float(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE);
+				result = process_inbuf_float(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE);
 				break;
 			case GSTLAL_INSERTGAP_F64:
-                                result = process_inbuf_double(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE);
+				result = process_inbuf_double(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE);
 				break;
 			case GSTLAL_INSERTGAP_Z64:
-                                result = process_inbuf_floatcomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), TRUE);
+				result = process_inbuf_floatcomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), TRUE);
 				break;
 			case GSTLAL_INSERTGAP_Z128:
-                                result = process_inbuf_doublecomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), TRUE);
+				result = process_inbuf_doublecomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), TRUE);
 				break;
 			default:
 				g_assert_not_reached();
@@ -881,8 +881,8 @@ static void gstlal_insertgap_init(GSTLALInsertGap *element)
 	element->rate = 0;
 	element->unit_size = 0;
 	element->last_sinkbuf_ets = 0;
-        element->last_sinkbuf_offset_end = 0;
-        element->discont_offset = 0;
+	element->last_sinkbuf_offset_end = 0;
+	element->discont_offset = 0;
 	element->discont_time = 0;
 	element->empty_bufs = 0;
 }

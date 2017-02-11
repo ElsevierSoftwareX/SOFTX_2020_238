@@ -56,6 +56,7 @@
 #include <gstlal_smoothcalibfactors.h>
 #include <gstlal_smoothkappas.h>
 #include <gstlal_constantupsample.h>
+#include <gstlal_resample.h>
 #include <gstlal_logicalundersample.h>
 #include <gstlal_demodulate.h>
 #include <gstlal_insertgap.h>
@@ -82,6 +83,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_smoothcalibfactors", GSTLAL_SMOOTHCALIBFACTORS_TYPE},
 		{"lal_smoothkappas", GSTLAL_SMOOTHKAPPAS_TYPE},
 		{"lal_constantupsample", GSTLAL_CONSTANTUPSAMPLE_TYPE},
+		{"lal_resample", GSTLAL_RESAMPLE_TYPE},
 		{"lal_logicalundersample", GSTLAL_LOGICALUNDERSAMPLE_TYPE},
 		{"lal_demodulate", GSTLAL_DEMODULATE_TYPE},
 		{"lal_insertgap", GSTLAL_INSERTGAP_TYPE},
