@@ -65,7 +65,11 @@ class page(object):
 			"https://www.gstatic.com/charts/loader.js",
 			"//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/gstlal.js"
 			], 
-		content = [], header_content = ["""<script type="text/javascript">google.charts.load('current', {'packages':['table', 'timeline']});</script>"""], verbose=False):
+		content = None, header_content = None, verbose=False):
+		if content is None:
+			content = []
+		if header_content is None:
+			header_content = ["""<script type="text/javascript">google.charts.load('current', {'packages':['table', 'timeline']});</script>"""]
 		self.title = title; self.path = path; self.css = css; self.script = script; self.content = content; self.verbose = verbose; self.header_content = header_content
 
 	def __iadd__(self, content):
