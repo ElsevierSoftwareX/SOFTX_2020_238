@@ -5,6 +5,7 @@ libgstlalcalibration_la_SOURCES = \
 	gstlal_add_constant.c gstlal_add_constant.h \
 	gstlal_pyfuncsrc.c gstlal_pyfuncsrc.h \
 	gstlal_wings.c gstlal_wings.h \
+	gstlal_complexfirbank.c gstlal_complexfirbank.h \
 	gstlal_smoothcalibfactors.c gstlal_smoothcalibfactors.h \
 	gstlal_smoothkappas.c gstlal_smoothkappas.h \
 	gstlal_constantupsample.c gstlal_constantupsample.h \

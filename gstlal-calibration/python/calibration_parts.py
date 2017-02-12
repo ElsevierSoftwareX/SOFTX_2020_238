@@ -45,15 +45,24 @@ def mkcomplexqueue(pipeline, head, length, min_length = 0):
 def mkinsertgap(pipeline, head, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND):
 	return pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = insert_gap, remove_gap = remove_gap, replace_value = replace_value, fill_discont = fill_discont, block_duration = int(block_duration))
 
-def mkupsample(pipeline, head, new_caps):
-	head = pipeparts.mkgeneric(pipeline, head, "lal_constantupsample")
-	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
-	return head
+#def mkupsample(pipeline, head, new_caps):
+#	head = pipeparts.mkgeneric(pipeline, head, "lal_constantupsample")
+#	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
+#	return head
 
-def mkresample(pipeline, head, caps):
-	head = pipeparts.mkresample(pipeline, head, quality = 9)
+#def mkresample(pipeline, head, caps):
+#	head = pipeparts.mkresample(pipeline, head, quality = 9)
+#	head = pipeparts.mkcapsfilter(pipeline, head, caps)
+#	return head
+
+def mkresample(pipeline, head, polynomial_order, caps):
+	head = pipeparts.mkgeneric(pipeline, head, "lal_resample", polynomial_order = polynomial_order)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	return head
+
+def mkcomplexfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
+	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
+	return pipeparts.mkgeneric(pipeline, src, "lal_complexfirbank", **properties)
 
 def mkmultiplier(pipeline, srcs, sync = True):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, mix_mode="product")
@@ -250,28 +259,8 @@ def demodulate(pipeline, head, freq, td, caps, integration_samples, queue_length
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq)
-	headR, headI = split_into_real(pipeline, head)
-	headR = pipeparts.mkresample(pipeline, headR)
-	headR = pipeparts.mkcapsfilter(pipeline, headR, caps)
-	headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples + 1)], time_domain = td)
-	headI = pipeparts.mkresample(pipeline, headI)
-	headI = pipeparts.mkcapsfilter(pipeline, headI, caps)
-	headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples + 1)], time_domain = td)
-	head = merge_into_complex(pipeline, headR, headI, queue_length1, queue_length2)
-
-	# headR, headI = split_into_real(pipeline, headtee)
-	# headR = pipeparts.mkresample(pipeline, headR)
-	# headR = pipeparts.mkcapsfilter(pipeline, headR, "audio/x-raw, rate=512")
-	# headR = pipeparts.mkaudioamplify(pipeline, headR, amplification = 1.0/16384.0);
-	# headR = pipeparts.mkfirbank(pipeline, headR, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
-	# headI = pipeparts.mkresample(pipeline, headI)
-	# headI = pipeparts.mkcapsfilter(pipeline, headI, "audio/x-raw, rate=512")
-	# headI = pipeparts.mkaudioamplify(pipeline, headI, amplification = -1.0/16384.0);
-	# headI = pipeparts.mkfirbank(pipeline, headI, fir_matrix=[numpy.hanning(integration_samples+1)], time_domain = td)
-	# #pipeparts.mknxydumpsink(pipeline, headR, "real_new.txt")
-	# #pipeparts.mknxydumpsink(pipeline, headI, "imag_new.txt")
-	# head2 = merge_into_complex(pipeline, headR, headI)
-	# pipeparts.mknxydumpsink(pipeline, head2, "old_method_demod.dump")
+	head = mkresample(pipeline, head, 1, caps)
+	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1)], time_domain = td)
 
 	return head
 
