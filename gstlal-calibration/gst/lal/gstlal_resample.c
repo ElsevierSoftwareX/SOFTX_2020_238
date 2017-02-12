@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015, 2016  Madeline Wade <madeline.wade@ligo.org>, Aaron Viets <aaron.viets@ligo.org>
+ * Copyright (C) 2017  Aaron Viets <aaron.viets@ligo.org>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -749,8 +749,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		GST_ERROR_OBJECT(element, "unable to parse caps.  input caps = %" GST_PTR_FORMAT " output caps = %" GST_PTR_FORMAT, incaps, outcaps);
 
 	/* require the output rate to be an integer multiple or divisor of the input rate */
-	success &= (rate_out % rate_in) || (rate_in % rate_out);
-	if(!((rate_out % rate_in) || (rate_in % rate_out)))
+	success &= !(rate_out % rate_in) || !(rate_in % rate_out);
+	if((rate_out % rate_in) && (rate_in % rate_out))
 		GST_ERROR_OBJECT(element, "output rate is not an integer multiple or divisor of input rate.  input caps = %" GST_PTR_FORMAT " output caps = %" GST_PTR_FORMAT, incaps, outcaps);
 
 	/*
@@ -838,8 +838,10 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		else {
 			*othersize = size / inv_cadence;
 			guint *weight = (void *) &element->dxdt0;
-			if(size % inv_cadence || (element->polynomial_order > 0 && *weight < (inv_cadence + 1) / 2))
+			if(size % inv_cadence || (element->polynomial_order > 0 && *weight < (inv_cadence + 1) / 2)) {
 				element->need_buffer_resize = TRUE;
+				*othersize += 1;
+			}
 		}
 		break;
 
@@ -934,10 +936,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */ 
 
 	if(element->need_buffer_resize) {
-		gssize outbuf_size = 0;
+		gint64 outbuf_size = 0;
 		if(element->rate_out > element->rate_in) {
 			/* We are upsampling */
-			outbuf_size = gst_buffer_get_size(outbuf);
+			outbuf_size = (gint64) gst_buffer_get_size(outbuf);
 
 			/*
 			 * If using any interpolation, each input buffer leaves one or two samples at the end to add 
@@ -971,7 +973,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		}
 		if(outbuf_size < 0)
 			outbuf_size = 0;
-		gst_buffer_set_size(outbuf, outbuf_size);
+		gst_buffer_set_size(outbuf, (gssize) outbuf_size);
 		element->need_buffer_resize = FALSE;
 	}
 
@@ -1097,7 +1099,7 @@ static void gstlal_resample_class_init(GSTLALResampleClass *klass)
 		"Resamples a data stream",
 		"Filter/Audio",
 		"Resamples a stream with adjustable (or no) interpolation.",
-		"Madeline Wade <madeline.wade@ligo.org>, Aaron Viets <aaron.viets@ligo.org>"
+		"Aaron Viets <aaron.viets@ligo.org>"
 	);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
@@ -1115,7 +1117,7 @@ static void gstlal_resample_class_init(GSTLALResampleClass *klass)
 			"When upsampling, this is the order of the polynomial used to interpolate between\n\t\t\t"
 			"input samples. 0 yields a constant upsampling, 1 is linear interpolation, 3 is a\n\t\t\t"
 			"cubic spline. When downsampling, this determines whether we just pick every nth\n\t\t\t"
-			"sample, or take an average of n input samples surrounding output sample timestamps.",
+			"sample, or apply a Tukey window to n input samples surrounding output sample timestamps.",
 			0, 3, 0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
