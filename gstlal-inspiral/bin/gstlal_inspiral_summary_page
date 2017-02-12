@@ -203,17 +203,15 @@ inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_
 # Add sensitivity content
 #
 
-
-sens_about = webpage.elem("p", ["""This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of total mass and component mass."""])
+sens_about = webpage.elem("p", ["""This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0"""])
 
 sens_div_list = [sens_about]
 for tag in opts.output_user_tag:
-	for bin_type in ("SOURCE_TYPE"):
-		images = webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_%s*.png' % (tag, bin_type)), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
-		if len(images.content) > 0:
-			sens_section = webpage.section("Binned by %s" % bin_type.replace("_", " ").lower())
-			sens_section += images
-			sens_div_list.append(sens_section)
+	images = webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_SOURCE_TYPE*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
+	if len(images.content) > 0:
+		sens_section = webpage.section("Binned by SOURCE_TYPE")
+		sens_section += images
+		sens_div_list.append(sens_section)
 
 sens_div = sens(sens_div_list)
 
