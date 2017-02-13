@@ -115,13 +115,8 @@ def get_files(gracedb_client, graceid, ranking_data_filename = "ranking_data.xml
 
 
 def plot_snrchisq(instrument, coinc_param_distributions, plot_type, max_snr, snrchisq = None):
-	if snrchisq is None:
-		snr, chisq = None, None
-	else:
-		snr, chisq = snrchisq
-
-	fig = plotfar.plot_snr_chi_pdf(coinc_param_distributions, instrument, plot_type, max_snr, event_snr = snr, event_chisq = chisq)
-	return fig
+	snr, chisq = snrchisq if snrchisq is not None else (None, None)
+	return plotfar.plot_snr_chi_pdf(coinc_param_distributions, instrument, plot_type, max_snr, event_snr = snr, event_chisq = chisq)
 
 
 #
