@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009--2015 Kipp Cannon <kipp.cannon@ligo.org>
+ *		 2017 Aaron Viets <aaron.viets@ligo.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -996,6 +997,200 @@ static unsigned fddfilter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo, un
 }
 
 
+static unsigned fddcfilter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo, unsigned output_length)
+{
+	unsigned i;
+	unsigned stride = fft_block_stride(element);
+	unsigned filter_length_fd = fft_block_length(element) / 2 + 1;
+	unsigned input_length;
+	double complex *input, *malloced_input;
+	double *input_real, *input_imag, *malloced_input_real, *malloced_input_imag;
+	double *output_real, *output_imag, *output_real_end, *output_imag_end;
+	gsl_vector_view workspace;
+	gsl_matrix_view output_view_real, output_view_imag;
+
+	/*
+	 * how many samples do we need from the adapter?  FIXME:  we might
+	 * not need this much because after output_length is clipped to the
+	 * buffer size we might find we can reduce the number of fft blocks
+	 * to be processed
+	 */
+
+	input_length = output_length + fir_length(element) - 1;
+
+	/*
+	 * clip number of output samples to buffer size.  we still need to
+	 * compute all of them because we're limited to processing full FFT
+	 * blocks, but only this many will be copied into the output buffer
+	 */
+
+	output_length = MIN(output_length, mapinfo->size / (fir_channels(element) * sizeof(*input)));
+
+	/*
+	 * retrieve input samples and split into real an imaginary parts
+	 */
+
+	input = malloced_input = g_malloc(input_length * sizeof(*input));
+	input_real = malloced_input_real = g_malloc(input_length * sizeof(*input_real));
+	input_imag = malloced_input_imag = g_malloc(input_length * sizeof(*input_imag));
+	output_real = g_malloc(output_length * sizeof(*output_real));
+	output_imag = g_malloc(output_length * sizeof(*output_imag));
+	gst_audioadapter_copy_samples(element->adapter, input, input_length, NULL, NULL);
+	for(i = 0; i < input_length; i++) {
+		input_real[i] = creal(input[i]);
+		input_imag[i] = cimag(input[i]);
+	}
+
+	/*
+	 * wrap workspace (as real numbers) in a GSL vector view.  note
+	 * that vector has length fft_block_stride to affect the requisite
+	 * overlap
+	 */
+
+	workspace = gsl_vector_view_array((double *) element->workspace.fdd.filtered, stride);
+
+	/*
+	 * wrap first block of output buffers in a GSL matrix view
+	 */
+
+	output_view_real = gsl_matrix_view_array(output_real, stride, fir_channels(element));
+	output_view_imag = gsl_matrix_view_array(output_imag, stride, fir_channels(element));
+	output_real_end = output_view_real.matrix.data + output_length * fir_channels(element);
+	output_imag_end = output_view_imag.matrix.data + output_length * fir_channels(element);
+
+	/*
+	 * loop over FFT blocks to produce real part of output
+	 */
+
+	while(output_view_real.matrix.data < output_real_end) {
+		complex double *filter;
+		unsigned j;
+
+		/*
+		 * clip the output to the output buffer's length
+		 */
+
+		if(output_real_end - output_view_real.matrix.data < stride * fir_channels(element))
+			workspace.vector.size = output_view_real.matrix.size1 = (output_real_end - output_view_real.matrix.data) / fir_channels(element);
+
+		/*
+		 * copy a block-length of data to input workspace and
+		 * transform to frequency-domain inplace
+		 */
+
+		memcpy(element->workspace.fdd.input, input_real, fft_block_length(element) * sizeof(*input_real));
+		fftw_execute(element->workspace.fdd.in_plan);
+
+		/*
+		 * loop over filters
+		 */
+
+		filter = element->workspace.fdd.working_fir_matrix;
+		for(j = 0; j < fir_channels(element); j++) {
+			/*
+			 * multiply input by filter, transform to
+			 * time-domain inplace, copy to output.  note that
+			 * the workspace view and the output matrix view
+			 * are only stride samples long, thus the end of
+			 * the real workspace is not copied.  the
+			 * frequency-domain filters are constructed so that
+			 * the wrap-around transient lives in that part of
+			 * the work space in the time domain.
+			 */
+
+			complex double *last_input_real, *input_real = element->workspace.fdd.input;
+			complex double *workspace_fd = element->workspace.fdd.filtered;
+			for(last_input_real = input_real + filter_length_fd; input_real < last_input_real; )
+				*(workspace_fd++) = *(input_real++) * *(filter++);
+			fftw_execute(element->workspace.fdd.out_plan);
+			gsl_matrix_set_col(&output_view_real.matrix, j, &workspace.vector);
+		}
+
+		/*
+		 * advance to next block
+		 */
+
+		input_real += stride;
+		output_view_real.matrix.data += stride * fir_channels(element);
+	}
+
+	/*
+	 * now take care of imaginary part of output
+	 */
+
+	while(output_view_imag.matrix.data < output_imag_end) {
+		complex double *filter;
+		unsigned j;
+
+		/*
+		 * clip the output to the output buffer's length
+		 */
+
+		if(output_imag_end - output_view_imag.matrix.data < stride * fir_channels(element))
+			workspace.vector.size = output_view_imag.matrix.size1 = (output_imag_end - output_view_imag.matrix.data) / fir_channels(element);
+
+		/*
+		 * copy a block-length of data to input workspace and
+		 * transform to frequency-domain inplace
+		 */
+
+		memcpy(element->workspace.fdd.input, input_imag, fft_block_length(element) * sizeof(*input_imag));
+		fftw_execute(element->workspace.fdd.in_plan);
+
+		/*
+		 * loop over filters
+		 */
+
+		filter = element->workspace.fdd.working_fir_matrix;
+		for(j = 0; j < fir_channels(element); j++) {
+			/*
+			 * multiply input by filter, transform to
+			 * time-domain inplace, copy to output.  note that
+			 * the workspace view and the output matrix view
+			 * are only stride samples long, thus the end of
+			 * the real workspace is not copied.  the
+			 * frequency-domain filters are constructed so that
+			 * the wrap-around transient lives in that part of
+			 * the work space in the time domain.
+			 */
+
+			complex double *last_input_imag, *input_imag = element->workspace.fdd.input;
+			complex double *workspace_fd = element->workspace.fdd.filtered;
+			for(last_input_imag = input_imag + filter_length_fd; input_imag < last_input_imag; )
+				*(workspace_fd++) = *(input_imag++) * *(filter++);
+			fftw_execute(element->workspace.fdd.out_plan);
+			gsl_matrix_set_col(&output_view_imag.matrix, j, &workspace.vector);
+		}
+
+		/*
+		 * advance to next block
+		 */
+
+		input_imag += stride;
+		output_view_imag.matrix.data += stride * fir_channels(element);
+	}
+
+	/*
+	 * recombine real and imaginary parts to produce output
+	 */
+
+	for(i = 0; i < output_length; i++)
+		mapinfo->data[i] = output_real[i] + I * output_imag[i];
+
+	/*
+	 * done
+	 */
+
+	g_free(malloced_input);
+	g_free(malloced_input_real);
+	g_free(malloced_input_imag);
+	g_free(output_real);
+	g_free(output_imag);
+
+	return output_length;
+}
+
+
 static unsigned fdsfilter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo, unsigned output_length)
 {
 	unsigned stride = fft_block_stride(element);
@@ -1110,18 +1305,214 @@ static unsigned fdsfilter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo, un
 }
 
 
+static unsigned fdscfilter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo, unsigned output_length)
+{
+	unsigned i;
+	unsigned stride = fft_block_stride(element);
+	unsigned filter_length_fd = fft_block_length(element) / 2 + 1;
+	unsigned input_length;
+	float complex *input, *malloced_input;
+	float *input_real, *input_imag, *malloced_input_real, *malloced_input_imag;
+	float *output_real, *output_imag, *output_real_end, *output_imag_end;
+	gsl_vector_float_view workspace;
+	gsl_matrix_float_view output_float_view_real, output_float_view_imag;
+
+	/*
+	 * how many samples do we need from the adapter?  FIXME:  we might
+	 * not need this much because after output_length is clipped to the
+	 * buffer size we might find we can reduce the number of fft blocks
+	 * to be processed
+	 */
+
+	input_length = output_length + fir_length(element) - 1;
+
+	/*
+	 * clip number of output samples to buffer size.  we still need to
+	 * compute all of them because we're limited to processing full FFT
+	 * blocks, but only this many will be copied into the output buffer
+	 */
+
+	output_length = MIN(output_length, mapinfo->size / (fir_channels(element) * sizeof(*input)));
+
+	/*
+	 * retrieve input samples and split into real an imaginary parts
+	 */
+
+	input = malloced_input = g_malloc(input_length * sizeof(*input));
+	input_real = malloced_input_real = g_malloc(input_length * sizeof(*input_real));
+	input_imag = malloced_input_imag = g_malloc(input_length * sizeof(*input_imag));
+	output_real = g_malloc(output_length * sizeof(*output_real));
+	output_imag = g_malloc(output_length * sizeof(*output_imag));
+	gst_audioadapter_copy_samples(element->adapter, input, input_length, NULL, NULL);
+	for(i = 0; i < input_length; i++) {
+		input_real[i] = creal(input[i]);
+		input_imag[i] = cimag(input[i]);
+	}
+
+	/*
+	 * wrap workspace (as real numbers) in a GSL vector view.  note
+	 * that vector has length fft_block_stride to affect the requisite
+	 * overlap
+	 */
+
+	workspace = gsl_vector_float_view_array((float *) element->workspace.fds.filtered, stride);
+
+	/*
+	 * wrap first block of output buffers in a GSL matrix view
+	 */
+
+	output_float_view_real = gsl_matrix_float_view_array(output_real, stride, fir_channels(element));
+	output_float_view_imag = gsl_matrix_float_view_array(output_imag, stride, fir_channels(element));
+	output_real_end = output_float_view_real.matrix.data + output_length * fir_channels(element);
+	output_imag_end = output_float_view_imag.matrix.data + output_length * fir_channels(element);
+
+	/*
+	 * loop over FFT blocks to produce real part of output
+	 */
+
+	while(output_float_view_real.matrix.data < output_real_end) {
+		complex float *filter;
+		unsigned j;
+
+		/*
+		 * clip the output to the output buffer's length
+		 */
+
+		if(output_real_end - output_float_view_real.matrix.data < stride * fir_channels(element))
+			workspace.vector.size = output_float_view_real.matrix.size1 = (output_real_end - output_float_view_real.matrix.data) / fir_channels(element);
+
+		/*
+		 * copy a block-length of data to input workspace and
+		 * transform to frequency-domain inplace
+		 */
+
+		memcpy(element->workspace.fds.input, input_real, fft_block_length(element) * sizeof(*input_real));
+		fftwf_execute(element->workspace.fds.in_plan);
+
+		/*
+		 * loop over filters
+		 */
+
+		filter = element->workspace.fds.working_fir_matrix;
+		for(j = 0; j < fir_channels(element); j++) {
+			/*
+			 * multiply input by filter, transform to
+			 * time-domain inplace, copy to output.  note that
+			 * the workspace view and the output matrix view
+			 * are only stride samples long, thus the end of
+			 * the real workspace is not copied.  the
+			 * frequency-domain filters are constructed so that
+			 * the wrap-around transient lives in that part of
+			 * the work space in the time domain.
+			 */
+
+			complex float *last_input_real, *input_real = element->workspace.fds.input;
+			complex float *workspace_fd = element->workspace.fds.filtered;
+			for(last_input_real = input_real + filter_length_fd; input_real < last_input_real; )
+				*(workspace_fd++) = *(input_real++) * *(filter++);
+			fftwf_execute(element->workspace.fds.out_plan);
+			gsl_matrix_float_set_col(&output_float_view_real.matrix, j, &workspace.vector);
+		}
+
+		/*
+		 * advance to next block
+		 */
+
+		input_real += stride;
+		output_float_view_real.matrix.data += stride * fir_channels(element);
+	}
+
+	/*
+	 * now take care of imaginary part of output
+	 */
+
+	while(output_float_view_imag.matrix.data < output_imag_end) {
+		complex float *filter;
+		unsigned j;
+
+		/*
+		 * clip the output to the output buffer's length
+		 */
+
+		if(output_imag_end - output_float_view_imag.matrix.data < stride * fir_channels(element))
+			workspace.vector.size = output_float_view_imag.matrix.size1 = (output_imag_end - output_float_view_imag.matrix.data) / fir_channels(element);
+
+		/*
+		 * copy a block-length of data to input workspace and
+		 * transform to frequency-domain inplace
+		 */
+
+		memcpy(element->workspace.fds.input, input_imag, fft_block_length(element) * sizeof(*input_imag));
+		fftwf_execute(element->workspace.fds.in_plan);
+
+		/*
+		 * loop over filters
+		 */
+
+		filter = element->workspace.fds.working_fir_matrix;
+		for(j = 0; j < fir_channels(element); j++) {
+			/*
+			 * multiply input by filter, transform to
+			 * time-domain inplace, copy to output.  note that
+			 * the workspace view and the output matrix view
+			 * are only stride samples long, thus the end of
+			 * the real workspace is not copied.  the
+			 * frequency-domain filters are constructed so that
+			 * the wrap-around transient lives in that part of
+			 * the work space in the time domain.
+			 */
+
+			complex float *last_input_imag, *input_imag = element->workspace.fds.input;
+			complex float *workspace_fd = element->workspace.fds.filtered;
+			for(last_input_imag = input_imag + filter_length_fd; input_imag < last_input_imag; )
+				*(workspace_fd++) = *(input_imag++) * *(filter++);
+			fftwf_execute(element->workspace.fds.out_plan);
+			gsl_matrix_float_set_col(&output_float_view_imag.matrix, j, &workspace.vector);
+		}
+
+		/*
+		 * advance to next block
+		 */
+
+		input_imag += stride;
+		output_float_view_imag.matrix.data += stride * fir_channels(element);
+	}
+
+	/*
+	 * recombine real and imaginary parts to produce output
+	 */
+
+	for(i = 0; i < output_length; i++)
+		mapinfo->data[i] = output_real[i] + I * output_imag[i];
+
+	/*
+	 * done
+	 */
+
+	g_free(malloced_input);
+	g_free(malloced_input_real);
+	g_free(malloced_input_imag);
+	g_free(output_real);
+	g_free(output_imag);
+
+	return output_length;
+}
+
+
 /*
  * filtering algorithm front-end
  */
 
 
-static unsigned filter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo)
+static unsigned filter(GSTLALComplexFIRBank *element, GstBuffer *buf)
 {
 	unsigned output_length;
 
 	/*
 	 * how many samples can we compute?  in fft mode this is limited to
-	 * whole fft blocks
+	 * whole fft blocks.  the actual number of samples generated might
+	 * be less than this if the output buffer is not large enough (the
+	 * individual filter functions clip their output to the buffer)
 	 */
 
 	output_length = get_output_length(element, get_available_samples(element));
@@ -1131,6 +1522,10 @@ static unsigned filter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo)
 	 */
 
 	if(output_length) {
+		GstMapInfo mapinfo;
+
+		gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
+
 		if(element->time_domain) {
 			/*
 			 * use time-domain filter implementation;  start by
@@ -1140,20 +1535,20 @@ static unsigned filter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo)
 
 			if(element->data_type == GSTLAL_COMPLEXFIRBANK_F64) {
 				g_assert_cmpuint(GST_AUDIO_INFO_WIDTH(&element->audio_info), ==, 64);
-				output_length = tddfilter(element, mapinfo, output_length);
+				output_length = tddfilter(element, &mapinfo, output_length);
 			} else if(element->data_type == GSTLAL_COMPLEXFIRBANK_F32) {
 				g_assert_cmpuint(GST_AUDIO_INFO_WIDTH(&element->audio_info), ==, 32);
 				if(!element->workspace.tds.working_fir_matrix)
 					create_tds_workspace(element);
-				output_length = tdsfilter(element, mapinfo, output_length);
+				output_length = tdsfilter(element, &mapinfo, output_length);
 			} else if(element->data_type == GSTLAL_COMPLEXFIRBANK_Z128) {
 				g_assert_cmpuint(GST_AUDIO_INFO_WIDTH(&element->audio_info), ==, 128);
-				output_length = tddcfilter(element, mapinfo, output_length);
+				output_length = tddcfilter(element, &mapinfo, output_length);
 			} else if(element->data_type == GSTLAL_COMPLEXFIRBANK_Z64) {
 				g_assert_cmpuint(GST_AUDIO_INFO_WIDTH(&element->audio_info), ==, 64);
 				if(!element->workspace.tds.working_fir_matrix)
 					create_tds_workspace(element);
-				output_length = tdscfilter(element, mapinfo, output_length);
+				output_length = tdscfilter(element, &mapinfo, output_length);
 			} else
 				g_assert_not_reached();
 		} else {
@@ -1167,26 +1562,34 @@ static unsigned filter(GSTLALComplexFIRBank *element, GstMapInfo *mapinfo)
 				g_assert_cmpuint(GST_AUDIO_INFO_WIDTH(&element->audio_info), ==, 64);
 				if(!element->workspace.fdd.working_fir_matrix)
 					create_fdd_workspace(element);
-				output_length = fddfilter(element, mapinfo, output_length);
+				output_length = fddfilter(element, &mapinfo, output_length);
 			} else if(element->data_type == GSTLAL_COMPLEXFIRBANK_F32) {
 				g_assert_cmpuint(GST_AUDIO_INFO_WIDTH(&element->audio_info), ==, 32);
 				if(!element->workspace.fds.working_fir_matrix)
 					create_fds_workspace(element);
-				output_length = fdsfilter(element, mapinfo, output_length);
-/*			} else if(element->data_type == GSTLAL_COMPLEXFIRBANK_Z128) {
+				output_length = fdsfilter(element, &mapinfo, output_length);
+			} else if(element->data_type == GSTLAL_COMPLEXFIRBANK_Z128) {
 				g_assert_cmpuint(GST_AUDIO_INFO_WIDTH(&element->audio_info), ==, 128);
 				if(!element->workspace.fdd.working_fir_matrix)
 					create_fdd_workspace(element);
-				output_length = fddcfilter(element, mapinfo, output_length);
+				output_length = fddcfilter(element, &mapinfo, output_length);
 			} else if(element->data_type == GSTLAL_COMPLEXFIRBANK_Z64) {
 				g_assert_cmpuint(GST_AUDIO_INFO_WIDTH(&element->audio_info), ==, 64);
 				if(!element->workspace.fds.working_fir_matrix)
 					create_fds_workspace(element);
-				output_length = fdscfilter(element, mapinfo, output_length);*/
+				output_length = fdscfilter(element, &mapinfo, output_length);
 			} else
 				g_assert_not_reached();
 		}
+
+		gst_buffer_unmap(buf, &mapinfo);
 	}
+
+	/*
+	 * set output metadata
+	 */
+
+	set_metadata(element, buf, output_length, FALSE);
 
 	/*
 	 * flush the data from the adapter
@@ -1213,9 +1616,7 @@ static GstFlowReturn filter_and_push(GSTLALComplexFIRBank *element, guint64 outp
 {
 	GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 	GstBuffer *buf;
-	GstMapInfo mapinfo;
 	unsigned filter_output_length;
-	GstFlowReturn result;
 
 	/* FIXME:  if we released the fir matrix lock the matrix might
 	 * change while we do this.  but we probably shouldn't hold the
@@ -1228,13 +1629,9 @@ static GstFlowReturn filter_and_push(GSTLALComplexFIRBank *element, guint64 outp
 	if(!buf)
 		return GST_FLOW_ERROR;
 
-	gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
-	filter_output_length = filter(element, &mapinfo);
-	set_metadata(element, buf, filter_output_length, FALSE);
-	gst_buffer_unmap(buf, &mapinfo);
+	filter_output_length = filter(element, buf);
 	g_assert_cmpuint(filter_output_length, ==, output_length);
-	result = gst_pad_push(srcpad, buf);
-	return result;
+	return gst_pad_push(srcpad, buf);
 }
 
 
@@ -1252,6 +1649,8 @@ static GstFlowReturn flush_history(GSTLALComplexFIRBank *element)
 	unsigned output_length;
 	unsigned final_gap_length;
 	GstFlowReturn result = GST_FLOW_OK;
+
+	GST_INFO_OBJECT(element, "flushing history");
 
 	/*
 	 * in time-domain mode, there's never enough stuff left in the
@@ -1357,7 +1756,7 @@ static GstFlowReturn do_new_segment(GSTLALComplexFIRBank *element)
 
 	switch(segment->format) {
 	case GST_FORMAT_TIME:
-		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")\n", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position), GST_AUDIO_INFO_RATE(&element->audio_info), element->latency);
+		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position), GST_AUDIO_INFO_RATE(&element->audio_info), element->latency);
 		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_AUDIO_INFO_RATE(&element->audio_info), GST_SECOND);
 		segment->start += samples_lost - element->latency;
 		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
@@ -1367,7 +1766,7 @@ static GstFlowReturn do_new_segment(GSTLALComplexFIRBank *element)
 			segment->stop = gst_util_uint64_scale_int_round(segment->stop, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
 		}
 		segment->position = segment->start;
-		GST_INFO_OBJECT(element, "to [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT "\n", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position));
+		GST_INFO_OBJECT(element, "to [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position));
 		break;
 
 	default:
@@ -1682,6 +2081,7 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 		 * least make sure the adapter's contents are wiped
 		 */
 
+		GST_INFO_OBJECT(element, "got EOS");
 		g_mutex_lock(&element->fir_matrix_lock);
 		if(element->fir_matrix) {
 			if(flush_history(element) != GST_FLOW_OK)
@@ -1752,6 +2152,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
+		GST_INFO_OBJECT(element, "encountered discont.  reason:  %s", GST_BUFFER_IS_DISCONT(inbuf) ? "discont flag set in input" : GST_BUFFER_OFFSET(inbuf) != element->next_in_offset ? "input offset mismatch" : "internal clock not yet set");
+
 		/*
 		 * flush any previous history and clear the adapter
 		 */
@@ -1804,14 +2206,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * known to be all 0s
 		 */
 
-		guint samples;
-
-		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-		samples = filter(element, &mapinfo);
+		guint samples = filter(element, outbuf);
 		g_assert_cmpuint(output_length, ==, samples);
-		set_metadata(element, outbuf, samples, FALSE);
 		GST_LOG_OBJECT(element, "output is %u samples", output_length);
-		gst_buffer_unmap(outbuf, &mapinfo);
 	} else if(history_is_gap) {
 		/*
 		 * all data in hand is known to be 0s, the output is a
@@ -1835,14 +2232,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * from the history?")
 		 */
 
-		guint samples;
-
-		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-		samples = filter(element, &mapinfo);
+		guint samples = filter(element, outbuf);
 		g_assert_cmpuint(output_length, ==, samples);
-		set_metadata(element, outbuf, samples, FALSE);
 		GST_LOG_OBJECT(element, "output is %u samples", output_length);
-		gst_buffer_unmap(outbuf, &mapinfo);
 	} else {
 		/*
 		 * the tailing zeros in the history combined with the input
@@ -1871,11 +2263,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
-		gst_buffer_set_size(outbuf, gap_length * fir_channels(element) * GST_AUDIO_INFO_WIDTH(&element->audio_info) / 8);
 		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
 		memset(mapinfo.data, 0, mapinfo.size);
-		set_metadata(element, outbuf, gap_length, TRUE);
 		gst_buffer_unmap(outbuf, &mapinfo);
+		set_metadata(element, outbuf, gap_length, TRUE);
+		gst_buffer_set_size(outbuf, gap_length * GST_AUDIO_INFO_BPF(&element->audio_info));
 	}
 
 	/*
@@ -2141,7 +2533,13 @@ static void gstlal_complexfirbank_class_init(GSTLALComplexFIRBankClass *klass)
 
 	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
 
-	gst_element_class_set_details_simple(element_class, "FIR Filter Bank", "Filter/Audio", "Projects a single audio channel onto a bank of FIR filters to produce a multi-channel output", "Kipp Cannon <kipp.cannon@ligo.org>");
+	gst_element_class_set_details_simple(
+		element_class,
+		"FIR Filter Bank",
+		"Filter/Audio",
+		"Projects a single audio channel onto a bank of FIR filters to produce a multi-channel output",
+		"Kipp Cannon <kipp.cannon@ligo.org>, Aaron Viets <aaron.viets@ligo.org>"
+	);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
@@ -2152,7 +2550,10 @@ static void gstlal_complexfirbank_class_init(GSTLALComplexFIRBankClass *klass)
 		g_param_spec_boolean(
 			"time-domain",
 			"Use time-domain convolution",
-			"Set to true to use time-domain (a.k.a. direct) convolution, set to false to use FFT-based convolution.  For long filters FFT-based convolution is usually significantly faster than time-domain convolution but incurs a higher processing latency and requires more RAM.",
+			"Set to true to use time-domain (a.k.a. direct) convolution, set to false to use\n\t\t\t"
+			"FFT-based convolution.  For long filters FFT-based convolution is usually\n\t\t\t"
+			"significantly faster than time-domain convolution but incurs a higher processing\n\t\t\t"
+			"latency and requires more RAM.",
 			DEFAULT_TIME_DOMAIN,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -2163,7 +2564,9 @@ static void gstlal_complexfirbank_class_init(GSTLALComplexFIRBankClass *klass)
 		g_param_spec_int(
 			"block-stride",
 			"Convolution block stride",
-			"When using FFT convolutions, this many samples will be produced from each block.  Smaller values decrease latency but increase computational cost.  If very small values are desired, consider using time-domain convolution mode instead.",
+			"When using FFT convolutions, this many samples will be produced from each block.\n\t\t\t"
+			"Smaller values decrease latency but increase computational cost.  If very small\n\t\t\t"
+			"values are desired, consider using time-domain convolution mode instead.",
 			1, G_MAXINT, DEFAULT_BLOCK_STRIDE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -2174,7 +2577,8 @@ static void gstlal_complexfirbank_class_init(GSTLALComplexFIRBankClass *klass)
 		g_param_spec_value_array(
 			"fir-matrix",
 			"FIR Matrix",
-			"Array of impulse response vectors.  Number of vectors (rows) in matrix sets number of output channels.  All filters must have the same length.",
+			"Array of impulse response vectors.  Number of vectors (rows) in matrix sets\n\t\t\t"
+			"number of output channels.  All filters must have the same length.",
 			g_param_spec_value_array(
 				"response",
 				"Impulse Response",
