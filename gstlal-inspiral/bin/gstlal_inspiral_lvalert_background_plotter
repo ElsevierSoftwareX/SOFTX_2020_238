@@ -106,8 +106,7 @@ def get_files(gracedb_client, graceid, ranking_data_filename = "ranking_data.xml
 	coinc_param_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ranking_data_xmldoc)
 	ranking_data.finish()
 
-	# FIXME Is this livetime correct?
-	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
+	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists, min_instruments = coinc_param_distributions.min_instruments))
 
 	return coinc_xmldoc, coinc_param_distributions, ranking_data, fapfar
 
