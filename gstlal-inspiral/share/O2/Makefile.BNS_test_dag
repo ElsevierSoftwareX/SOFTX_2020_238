@@ -127,7 +127,7 @@ INJ_MAX_DIST = 180000
 # GSTLAL_SEGMENTS Options
 SEG_SERVER=https://segments.ligo.org
 LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C02:1"
-SEGMENT_TRIM = 16
+SEGMENT_TRIM = 0
 SEGMENT_MIN_LENGTH = 512
 
 #GSTLAL VETO Options
@@ -336,9 +336,7 @@ vetoes.xml.gz: $(VETOES_FILES)
 segments.xml.gz: $(SEGMENTS_FILES) frame.cache CAT1_vetoes.xml.gz
 	ligolw_add --output segdb.xml $(SEGMENTS_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
-	gstlal_cache_to_segments frame.cache nogaps.xml
-	gstlal_segments_operations --intersection --output-file segments_noCAT1.xml.gz segdb.xml nogaps.xml
-	gstlal_segments_operations --diff --output-file $@ segments_noCAT1.xml.gz CAT1_vetoes.xml.gz
+	gstlal_segments_operations --diff --output-file $@ segdb.xml CAT1_vetoes.xml.gz
 	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
 
 CAT1_vetoes.xml.gz: $(CAT1_VETOES_FILES)
