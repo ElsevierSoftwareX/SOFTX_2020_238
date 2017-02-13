@@ -383,7 +383,7 @@ class PSDFirKernel(object):
 		if nyquist is not None:
 			assert nyquist <= sample_rate / 2.
 			sample_rate = nyquist * 2
-			data = data[:int(nyquist / psd.deltaF)]
+			data = data[:int(nyquist / psd.deltaF) + 1]
 
 		#
 		# compute the FIR kernel.  it always has an odd number of samples
@@ -436,8 +436,6 @@ class PSDFirKernel(object):
 		norm_before = numpy.dot(kernel, kernel)
 		kernel *= lal.CreateTukeyREAL8Window(len(data), .5).data.data
 		kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
-		# FIXME this should probably be part of PSD defn.
-		kernel *= 1. / 2**.5
 
 		#
 		# the kernel's latency
@@ -715,5 +713,6 @@ def one_second_highpass_kernel(rate, cutoff = 12):
 	highpass_filter_kernel = numpy.zeros(len(highpass_filter_td)+1)
 	highpass_filter_kernel[:-1] = highpass_filter_td[:]
 	x = numpy.arange(len(highpass_filter_kernel))
-	highpass_filter_kernel *= 1. - (x-2048)**2 / 2048.**2
+	mid = len(x) / 2.
+	highpass_filter_kernel *= 1. - (x-mid)**2 / mid**2
 	return highpass_filter_kernel
