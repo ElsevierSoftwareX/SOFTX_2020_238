@@ -83,6 +83,9 @@ def parse_command_line():
 	else:
 		logging.basicConfig(format = "%(asctime)s:%(message)s")
 
+	if options.no_upload and options.output_path is None:
+		raise ValueError("--no-upload without setting --ouput-path disables all output")
+
 	return options, gid_list
 
 
