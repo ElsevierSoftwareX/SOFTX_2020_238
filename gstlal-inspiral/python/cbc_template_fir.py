@@ -52,6 +52,7 @@ import math
 import numpy
 import scipy
 import sys
+import os
 
 
 import lal
@@ -73,7 +74,14 @@ __version__ = "FIXME"
 __date__ = "FIXME"
 
 # a macro to switch between a conventional whitener and a fir whitener below
-FIR_WHITENER = False
+try:
+	if int(os.environ["GSTLAL_FIR_WHITEN"]):
+		FIR_WHITENER = True
+	else:
+		FIR_WHITENER = False
+except KeyError:
+	print sys.stderr, "You must set the environment variable GSTLAL_FIR_WHITEN to either 0 or 1.  1 enables causal whitening. 0 is the traditional acausal whitening filter"
+	raise
 
 #
 # =============================================================================
