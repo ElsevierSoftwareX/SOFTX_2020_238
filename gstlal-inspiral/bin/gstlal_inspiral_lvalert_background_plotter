@@ -176,8 +176,6 @@ for gid in gid_list:
 		raise ValueError("candidate is not an inspiral<-->inspiral coincidence")
 	offsetvector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id]
 	sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
-	# the instruments that were being analyzed
-	instruments, = [row.instruments for row in lsctables.ProcessTable.get_table(coinc_xmldoc) if row.process_id == coinc_event.process_id]
 
 
 	#
@@ -186,7 +184,7 @@ for gid in gid_list:
 
 
 	for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
-		for instrument in instruments:
+		for instrument in coinc_param_distributions.instruments:
 			if instrument in sngl_inspirals:
 				# place marker on plot
 				fig = plot_snrchisq(instrument, coinc_param_distributions, plot_type, options.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
