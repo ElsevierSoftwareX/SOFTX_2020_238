@@ -295,7 +295,7 @@ if options.reference_psd is not None or options.write_psd is not None:
 # H1 branch
 #
 
-H1head = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H1", verbose = options.verbose)
+H1head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H1", verbose = options.verbose)
 
 H1head = pipeparts.mkreblock(pipeline, H1head)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=[%d,MAX]" % handler.srate)
@@ -315,7 +315,7 @@ if options.track_psd is not None:
 # H2 branch
 #
 
-H2head = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H2", verbose = options.verbose)
+H2head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H2", verbose = options.verbose)
 
 H2head = pipeparts.mkreblock(pipeline, H2head)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=[%d,MAX]" % handler.srate)

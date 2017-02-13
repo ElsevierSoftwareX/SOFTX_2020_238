@@ -253,7 +253,7 @@ mainloop = GObject.MainLoop()
 handler = simplehandler.Handler(mainloop, pipeline)
 
 ## 1) Set the pipeline head to basic input from datasource.mkbasicsrc()
-head = datasource.mkbasicsrc(pipeline, gw_data_source, instrument, verbose = options.verbose)
+head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source, instrument, verbose = options.verbose)
 
 ## 2) Set the pipeline head to be verbose with pipeparts.mkprogressreport()
 head = pipeparts.mkprogressreport(pipeline, head, "frames")

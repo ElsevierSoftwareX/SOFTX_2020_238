@@ -197,11 +197,11 @@ handler = simplehandler.Handler(mainloop, pipeline)
 # the pipeline
 #
 # A basic src
-head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
+head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
 
 # if whitening, leverage mkwhitened_multirate_src() otherwise just resample
 if options.whiten:
-	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.rate], instrument, psd)[options.rate]
+	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.rate], instrument, psd, track_psd = True)[options.rate]
 else:
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.rate)

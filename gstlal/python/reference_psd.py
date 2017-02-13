@@ -156,7 +156,7 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	pipeline = Gst.Pipeline(name="psd")
 	handler = PSDHandler(mainloop, pipeline)
 
-	head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = verbose)
+	head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = verbose)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=[%d,MAX]" % rate)	# disallow upsampling
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % rate)

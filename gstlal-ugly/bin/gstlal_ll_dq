@@ -156,7 +156,7 @@ mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(name="DQ")
 handler = PSDHandler(mainloop, pipeline, out_path = options.out_path, instrument = instrument)
 
-head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
+head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
 head = pipeparts.mkresample(pipeline, head, quality = 9)
 head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.sample_rate)
 head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)

@@ -789,6 +789,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	instrument source.  A code wishing to have multiple basicsrcs will need to call
 	this function for each instrument.
 	"""
+	dqvector = statevector = None
 
 	if gw_data_source_info.data_source == "white":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, volume = 1.0)
@@ -866,11 +867,13 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			gap = elem.get_property("gap-samples")
 			return "%.9f %d %d %d" % (t, on, off, gap)
 
+		statevector = pipeparts.mktee(pipeline, statevector)
+		dqvector = pipeparts.mktee(pipeline, dqvector)
 		# use state vector to gate strain
-		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector, default_state = False, name = "%s_state_vector_gate" % instrument)
+		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector), default_state = False, name = "%s_state_vector_gate" % instrument)
 
 		# use dq vector to gate strain
-		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = dqvector, default_state = False, name = "%s_dq_vector_gate" % instrument)
+		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector), default_state = False, name = "%s_dq_vector_gate" % instrument)
 
 		# fill in holes, skip duplicate data
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
@@ -917,7 +920,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	# done
 	#
 
-	return src
+	return src, statevector, dqvector
 
 
 ## 
