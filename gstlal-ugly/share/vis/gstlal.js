@@ -59,6 +59,8 @@ var H1="#e74c3c";
 var L1="#2ecc71";
 var white="#ecf0f1";
 var darkblue="#2c3e50";
+/* FIXME hack for infs in segments */
+var inf = 2000000000;
 
 default_options = {
 	title: 'Figure', 
