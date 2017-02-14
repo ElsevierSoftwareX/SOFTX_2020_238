@@ -1008,7 +1008,7 @@ class Data(object):
 			del fobj
 			self.__upload_gracedb_aux_data(message, filename, tag, contents, gracedb_ids, retries, gracedb_client)
 
-	def __upload_gracedb_aux_data(self, message, filename, tag, contents, gracedb_ids, retries, gracedb_client):
+	def __upload_gracedb_aux_data(self, message, filename, tag, contents, gracedb_ids, retries, gracedb_client, retry_delay = 5):
 		for gracedb_id in gracedb_ids:
 			for attempt in range(1, retries + 1):
 				try:
