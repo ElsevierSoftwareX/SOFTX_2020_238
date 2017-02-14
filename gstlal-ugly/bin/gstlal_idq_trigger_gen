@@ -1,0 +1,124 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2017 Sydney J. Chamberlin, Patrick Godwin, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+from optparse import OptionParser
+import sys
+
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
+import lal
+
+import numpy
+from gstlal import datasource
+from gstlal import multirate_datasource
+import multichannel_datasource
+from gstlal import pipeparts
+from gstlal import simplehandler
+from glue.ligolw import utils as ligolw_utils
+
+def parse_command_line():
+
+	parser = OptionParser(description = __doc__)
+
+	#
+	# First append the datasource common options
+	#
+
+	multichannel_datasource.append_options(parser)
+
+	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the output.  If not given, output is sent to the default audio device.  The filename's extension determines the format, the following are recognized:  .wav, .flac, .ogg, .txt, /dev/stdout, /dev/stderr")
+	parser.add_option("--min-rate", metavar = "Hz", type = "int", default = 32, help = "Downsample input to this minimum sample rate. Default = 32 Hz.  Must be <= input sample rate or else you will get a caps negotiation error.")
+	parser.add_option("--max-rate", metavar = "Hz", type = "int", default = 4096, help = "Downsample input to this maximum sample rate. Default = 4096 Hz.  Must be <= input sample rate or else you will get a caps negotiation error.")
+	parser.add_option("--reference-psd", metavar = "filename", help = "When whitening, normalize the time series to the spectrum described in this XML file.  If this option is not given, the spectrum is measured from the data.") 
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	#
+	# parse the arguments and sanity check
+	#
+
+	options, filenames = parser.parse_args()
+
+	if options.min_rate % 2:
+		raise ValueError("Minimum rate is not a power of 2")
+
+	if options.max_rate % 2:
+		raise ValueError("Maximum rate is not a power of 2")
+	
+	return options, filenames
+   
+  
+# parsing and setting up some core structures
+options, filenames = parse_command_line()
+
+data_source_info = multichannel_datasource.DataSourceInfo(options)
+instrument, = data_source_info.channel_dict
+channels = data_source_info.channel_dict[instrument].keys()
+
+if options.reference_psd is not None:
+	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))[instrument]
+else:
+	psd = None
+
+# building the event loop and pipeline
+mainloop = GObject.MainLoop()
+pipeline = Gst.Pipeline(sys.argv[0])
+handler = simplehandler.Handler(mainloop, pipeline)
+
+#
+# the pipeline
+#
+# A basic src
+head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
+
+#for channel in channels:   
+#	downsampledsrc = multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [2**x for x in range(int(numpy.log2(options.min_rate)), int(numpy.log2(options.max_rate)))], instrument, psd)
+#
+#	for rate in downsampledsrc:
+#		pipeparts.mkfakesink(pipeline, downsampledsrc[rate])
+for channel in channels:
+	pipeparts.mkfakesink(pipeline, head[channel])
+  
+# Allow Ctrl+C or sig term to gracefully shut down the program for online
+# sources, otherwise it will just kill it
+if data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
+	simplehandler.OneTimeSignalHandler(pipeline)
+
+# Seek
+if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter READY state")
+if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
+	datasource.pipeline_seek_for_gps(pipeline, data_source_info.seg[0], data_source_info.seg[1])
+
+# run
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
+mainloop.run()
+  
+   
+   
+   
+   
+   
+   
+   
+   
+  
+ 
