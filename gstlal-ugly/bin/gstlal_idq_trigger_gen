@@ -29,7 +29,7 @@ import lal
 import numpy
 from gstlal import datasource
 from gstlal import multirate_datasource
-import multichannel_datasource
+from gstlal import multichannel_datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw import utils as ligolw_utils

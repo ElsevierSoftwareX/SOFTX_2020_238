@@ -10,4 +10,5 @@ pkgpython_PYTHON = \
 	aggregator.py \
 	gviz_api.py \
 	metric.py \
+	multichannel_datasource.py \
 	tree.py
