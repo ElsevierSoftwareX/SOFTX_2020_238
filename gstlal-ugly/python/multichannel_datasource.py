@@ -81,6 +81,15 @@ def channel_dict_from_channel_file(channel_file):
 	channel_list.close()
 	return dict_out
 
+def channel_list_from_channel_dict(instrument, channel_dict):
+	"""!
+	Given a channel dictionary, and instrument tag, will produce a list of channels, in the form
+	["H1:channel1", "H1:channel2", ...], given instrument = "H1".
+	"""
+	out = []
+	for channel in channel_dict[instrument]:
+		out.append("%s:%s" % (instrument, channel))
+	return out	
 
 class DataSourceInfo(object):
 	"""!
@@ -277,11 +286,12 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 			# impossible code path
 			raise ValueError(data_source_info.data_source)
 
-		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
+		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = channel_list_from_channel_dict(instrument, data_source_info.channel_dict))
 
 		# channels
-		head = dict.fromkeys(data_source_info.channel_dict[instrument].keys(), pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND* 60 * 1)) # 1 minute of buffering
+		head = dict.fromkeys(data_source_info.channel_dict[instrument].keys(), None)
 		for channel in head:		
+			head[channel] = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND* 60 * 1) # 1 minute of buffering
 			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, channel), head[channel].get_static_pad("sink"))
 		
 			# fill in holes, skip duplicate data
