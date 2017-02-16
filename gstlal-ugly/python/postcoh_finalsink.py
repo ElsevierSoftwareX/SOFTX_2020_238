@@ -347,13 +347,16 @@ class FinalSink(object):
 		last_time = float(last_time)
 		last_far = float(last_far)
 
-		if abs(float(trigger.end) - last_time) < 5 or (abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.1):
-			print >> sys.stderr, "trigger controled, time %f, FAR %e" % (float(trigger.end), trigger.far)
-			return True
-
 		line = "%f,%e\n" % (float(trigger.end), trigger.far)
 		with open(self.trigger_control_doc, "a") as f:
 			f.write(line)
+
+
+		# suppress the trigger 
+		# if it is not one order of magnitude more significant than the last trigger
+		if (abs(float(trigger.end) - last_time) < 120 and abs(trigger.far/last_far) > 0.1):
+			print >> sys.stderr, "trigger controled, time %f, FAR %e" % (float(trigger.end), trigger.far)
+			return True
 
 		return False
 
