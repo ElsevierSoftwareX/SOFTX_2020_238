@@ -13,7 +13,6 @@ def mass_sym(boundaries):
 			return True
 	return False
 
-
 class HyperCube(object):
 
 	def __init__(self, boundaries, mismatch, symmetry_func = mass_sym, metric = None):
@@ -105,7 +104,7 @@ class HyperCube(object):
 				randcoords *= self.deltas 
 				randcoords += self.center
 				match = max([min(metric_module.metric_match(c.metric_tensor, randcoords, t) for c in cells) for t in self.tiles + neighbor_tiles])
-				if randcoords in self and match < (1. - self.__mismatch):
+				if randcoords in self and match < (1. - self.__mismatch) and randcoords[1] < 1.0:
 					self.tiles.append(randcoords)
 				iters+=1
 
@@ -189,7 +188,7 @@ class HyperCube(object):
 
 	def vertices(self):
 		vertices = list(itertools.product(*self.boundaries))
-		print 'VERTICES:', vertices
+		#print 'VERTICES:', vertices
 		return vertices
 
 	def returnneighbors(self):
@@ -197,7 +196,7 @@ class HyperCube(object):
 		for neighbor in self.neighbors:
 			if any([vertex in self for vertex in neighbor.vertices]) or any([vertex in neighbor for vertex in self.vertices]):
 				revisedneighbors.append(neighbor)
-		print 'KEPT %d/%d NEIGHBORS' % (len(revisedneighbors), len(self.neighbors))
+		#print 'KEPT %d/%d NEIGHBORS' % (len(revisedneighbors), len(self.neighbors))
 		self.neighbors = revisedneighbors
 
 class Node(object):
@@ -223,7 +222,7 @@ class Node(object):
 		numtmps = numpy.floor(self.cube.num_templates(mismatch))
 		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates): #or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
 			bifurcation += 1
-			print 'LEVEL:', bifurcation
+			#print 'LEVEL:', bifurcation
 			left, right = self.cube.split(splitdim)
 
 			self.left = Node(left, self)
@@ -276,10 +275,10 @@ class Node(object):
 			avgv = (v2+v1)/2.
 			deltav = abs(v2-v1)
 			verr = deltav / avgv
-			print v1, v2, verr
+			#print v1, v2, verr
 		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and verr > 0.5):
 			bifurcation += 1
-			print 'LEVEL:', bifurcation
+			#print 'LEVEL:', bifurcation
 			left, right = self.cube.split(splitdim)
 			self.left = Node(left, self)
 			self.right = Node(right, self)
