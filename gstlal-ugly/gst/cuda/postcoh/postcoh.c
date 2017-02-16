@@ -1273,7 +1273,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 //			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo, postcoh->stream);
 
-			GST_LOG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d\n", ligo_time.gpsSeconds, cur_ifo, c_npeak);
+			GST_LOG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d, max_snglsnr %f\n", ligo_time.gpsSeconds, cur_ifo, c_npeak, state->snglsnr_max);
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
 			/* copy the snglsnr to the right cuda memory */
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
