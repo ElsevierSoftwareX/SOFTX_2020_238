@@ -236,11 +236,11 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 		# Gate after gaps
 		if statevector:
-			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, statevector, max_size_time = 4 * psd_fft_length * Gst.SECOND), threshold = 0, hold_length = 0, attack_length = -psd_fft_length * max(rates))
+			head = pipeparts.mkgate(pipeline, head, control = statevector, default_state = False, threshold = 1, hold_length = 0, attack_length = -max(rates) * psd_fft_length)
 		if dqvector:
-			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, dqvector, max_size_time =  4 * psd_fft_length * Gst.SECOND), threshold = 0, hold_length = 0, attack_length = -psd_fft_length * max(rates))
-		# FIXME This drop causes assertions in a later adder
-		#head = pipeparts.mkdrop(pipeline, head, drop_samples = 8 * psd_fft_length * max(rates))
+			head = pipeparts.mkgate(pipeline, head, control = dqvector, default_state = False, threshold = 1, hold_length = 0, attack_length = -max(rates) * psd_fft_length)
+		# Drop initial data to let the PSD settle
+		head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max(rates))
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
