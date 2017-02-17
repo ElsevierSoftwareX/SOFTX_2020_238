@@ -886,6 +886,10 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
 
 		# 10 minutes of buffering
+		dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
+		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, silent = False)
+		statevector = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 12)
+		dqvector = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 12)
 		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
