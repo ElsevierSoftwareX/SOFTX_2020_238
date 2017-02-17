@@ -30,6 +30,7 @@
 
 
 import json
+import urlparse
 import logging
 from optparse import OptionParser
 import os
