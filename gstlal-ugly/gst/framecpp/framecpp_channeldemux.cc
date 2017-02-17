@@ -864,18 +864,11 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *inbuf)
 			verifier.ValidateMetadata(false);
 			verifier.CheckFileChecksumOnly(true);
 
-#if 0	/* comment out for ER9:  broken still */
-#if VERIFY_THROWS_EXCEPTION
 			try {
 				verifier(ifs);
 			} catch(const FrameCPP::Common::VerifyException& E) {
 				throw std::runtime_error(E.what());
 			}
-#else
-			if(verifier(ifs) != 0)
-				throw std::runtime_error(verifier.ErrorInfo());
-#endif /* VERIFY_THROWS_EXCEPTION */
-#endif
 		}
 
 		/*
