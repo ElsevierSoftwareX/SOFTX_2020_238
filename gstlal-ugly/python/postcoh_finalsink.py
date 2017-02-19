@@ -351,7 +351,7 @@ class FinalSink(object):
 		# suppress the trigger 
 		# if it is not one order of magnitude more significant than the last trigger 
 		# or if it not more significant the last submitted trigger
-		if ((abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.1)) or (abs(float(trigger.end) - float(last_submitted_time) < 3600 and trigger.far > last_submitted_far*0.5) :
+		if ((abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.1)) or (abs(float(trigger.end) - float(last_submitted_time)) < 3600 and trigger.far > last_submitted_far*0.5) :
 			print >> sys.stderr, "trigger controled, time %f, FAR %e" % (float(trigger.end), trigger.far)
 			self.last_trigger.append((trigger.end, trigger.far))
 			line = "%f,%e,%d\n" % (float(trigger.end), trigger.far, trigger_is_submitted)
