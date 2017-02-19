@@ -340,30 +340,45 @@ class FinalSink(object):
 	def __need_trigger_control(self, trigger):
 		# do trigger control
 		# FIXME: implement a sql solution for node communication ?
+
+		with open(self.trigger_control_doc, "r") as f:
+		  content = f.read().splitlines()
 		
-		last_time = self.last_trigger[-1][0]
-		last_far = self.last_trigger[-1][1]
-		last_submitted_time = self.last_submitted_trigger[-1][0]
-		last_submitted_far = self.last_submitted_trigger[-1][1]
+		is_submitted_idx = -1
+		if len(content) > 0:
+		  (last_time, last_far, is_submitted) = content[-1].split(",")
+		  last_time = float(last_time)
+		  last_far = float(last_far)
+		  while is_submitted == "0" and len(content) + is_submitted_idx > 0:
+		    is_submitted_idx = is_submitted_idx - 1;
+		    (last_time, last_far, is_submitted) = content[is_submitted_idx].split(",")
+		  last_time = float(last_time)
+		  last_far = float(last_far)
+		else:
+		  last_time = self.last_trigger[-1][0]
+		  last_far = self.last_trigger[-1][1]
+
+		last_submitted_time = last_time
+		last_submitted_far = last_far
 
 		trigger_is_submitted = 0
 
 		# suppress the trigger 
 		# if it is not one order of magnitude more significant than the last trigger 
 		# or if it not more significant the last submitted trigger
-		if ((abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.1)) or (abs(float(trigger.end) - float(last_submitted_time)) < 3600 and trigger.far > last_submitted_far*0.5) :
-			print >> sys.stderr, "trigger controled, time %f, FAR %e" % (float(trigger.end), trigger.far)
+		if ((abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.5)) or (abs(float(trigger.end) - float(last_submitted_time)) < 3600 and trigger.far > last_submitted_far*0.5) :
+			print >> sys.stderr, "trigger controled, time %f, FAR %f, last_far %f, last_submitted time %f, last_submitted far %f" % (float(trigger.end), trigger.far, last_far, last_submitted_time, last_submitted_far)
 			self.last_trigger.append((trigger.end, trigger.far))
 			line = "%f,%e,%d\n" % (float(trigger.end), trigger.far, trigger_is_submitted)
 			with open(self.trigger_control_doc, "a") as f:
 			  f.write(line)
 			return True
 		
-		print >> sys.stderr, "trigger passed, time %f, FAR %e, last_far %f, last_submitted time %f, last_submitted_far %f" % (float(trigger.end), trigger.far, last_far, last_submitted_time, last_submitted_far)
+		print >> sys.stderr, "trigger passed, time %f, FAR %f, last_far %f, last_submitted time %f, last_submitted_far %f" % (float(trigger.end), trigger.far, last_far, last_submitted_time, last_submitted_far)
 
 		trigger_is_submitted = 1
-		self.last_trigger.append((trigger.end, trigger.far))
-		self.last_submitted_trigger.append((trigger.end, trigger.far))
+		#self.last_trigger.append((trigger.end, trigger.far))
+		#self.last_submitted_trigger.append((trigger.end, trigger.far))
 		line = "%f,%e,%d\n" % (float(trigger.end), trigger.far, trigger_is_submitted)
 		with open(self.trigger_control_doc, "a") as f:
 		  f.write(line)
