@@ -247,6 +247,7 @@ if __name__ == '__main__':
 
 	try:
 		webserverplotdir = os.path.join(options.web_dir, "plots")
+		shutil.rmtree(options.web_dir + "_lite", ignore_errors = True)
 		if os.path.exists(webserverplotdir):
 			newdir = os.path.join(options.web_dir, str(int(now())))
 			aggregator.makedir(newdir)
