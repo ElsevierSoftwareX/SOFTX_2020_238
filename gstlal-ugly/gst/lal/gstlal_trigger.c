@@ -1,5 +1,5 @@
 /*
- * An inspiral trigger and autocorrelation chisq (itac) element
+ * An trigger trigger and autocorrelation chisq (itac) element
  *
  * Copyright (C) 2011  Chad Hanna, Kipp Cannon
  *
@@ -20,7 +20,7 @@
 
 /**
  * SECTION:gstlal_itac
- * @short_description:  Compute inspiral triggers
+ * @short_description:  Compute trigger triggers
  *
  * Reviewed: a2347a2191cdea431a256abc1651736a2c28bfda 2015-05-13 
  * K. Cannon, J. Creighton, C. Hanna, F. Robinett 
@@ -95,7 +95,7 @@
 #include <gstlal/gstaudioadapter.h>
 #include <gstlal/gstlal_tags.h>
 #include <gstlal/gstlal_autocorrelation_chi2.h>
-//#include <gstlal-inspiral/gstlal_snglinspiral.h>
+#include <gstlal_sngltrigger.h>
 
 
 /*
@@ -110,7 +110,7 @@
 #define GST_CAT_DEFAULT gstlal_trigger_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
-
+// Macro defining the type
 G_DEFINE_TYPE_WITH_CODE(
 	GSTLALTrigger,
 	gstlal_trigger,
@@ -183,7 +183,7 @@ static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 	return size;
 }
 
-
+//can remove
 static void free_bank(GSTLALTrigger *element)
 {
 	g_free(element->bank_filename);
@@ -192,7 +192,7 @@ static void free_bank(GSTLALTrigger *element)
 	element->bankarray = NULL;
 }
 
-
+// keep if we keep the uto correlation stuff above
 static void update_peak_info_from_autocorrelation_properties(GSTLALTrigger *element)
 {
 	if (element->maxdata && element->autocorrelation_matrix) {
@@ -273,7 +273,7 @@ static gboolean setcaps(GSTLALTrigger *element, GstPad *pad, GstCaps *caps)
 	return success;
 }
 
-
+// Make new version of single trigger table: gps, snr, phase, chi sqrd,
 static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALTrigger *trigger = GSTLAL_TRIGGER(parent);
@@ -304,8 +304,8 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 				g_free(trigger->channel_name);
 				trigger->channel_name = channel_name;
 				g_mutex_lock(&trigger->bank_lock);
-				//gstlal_set_channel_in_snglinspiral_array(trigger->bankarray, trigger->channels, trigger->channel_name);
-				//gstlal_set_instrument_in_snglinspiral_array(trigger->bankarray, trigger->channels, trigger->instrument);
+				gstlal_set_channel_in_sngltrigger_array(trigger->bankarray, trigger->channels, trigger->channel_name);
+				gstlal_set_instrument_in_sngltrigger_array(trigger->bankarray, trigger->channels, trigger->instrument);
 				g_mutex_unlock(&trigger->bank_lock);
 				}
 			break;
@@ -337,17 +337,17 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
  * ============================================================================
  */
 
-
+//remove bank file name. sigmasq
 enum property {
 	ARG_N = 1,
 	ARG_SNR_THRESH,
-	ARG_BANK_FILENAME,
-	ARG_SIGMASQ,
+	//ARG_BANK_FILENAME,
+	//ARG_SIGMASQ,
 	ARG_AUTOCORRELATION_MATRIX,
 	ARG_AUTOCORRELATION_MASK
 };
 
-
+// funcation that called when user trys to set an element. Called when launch gst_launch command or set g-streamer propertises in function call.
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALTrigger *element = GSTLAL_TRIGGER(object);
@@ -363,19 +363,19 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_SNR_THRESH:
 		element->snr_thresh = g_value_get_double(value);
 		break;
-
+	//can remove all
 	case ARG_BANK_FILENAME:
 		g_mutex_lock(&element->bank_lock);
 		element->bank_filename = g_value_dup_string(value);
-		//element->channels = gstlal_snglinspiral_array_from_file(element->bank_filename, &(element->bankarray));
-		//gstlal_set_min_offset_in_snglinspiral_array(element->bankarray, element->channels, &(element->difftime));
+		//element->channels = gstlal_sngltrigger_array_from_file(element->bank_filename, &(element->bankarray));
+		//gstlal_set_min_offset_in_sngltrigger_array(element->bankarray, element->channels, &(element->difftime));
 		if (element->instrument && element->channel_name) {
-			//gstlal_set_instrument_in_snglinspiral_array(element->bankarray, element->channels, element->instrument);
-			//gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
+			//gstlal_set_instrument_in_sngltrigger_array(element->bankarray, element->channels, element->instrument);
+			//gstlal_set_channel_in_sngltrigger_array(element->bankarray, element->channels, element->channel_name);
 		}
 		g_mutex_unlock(&element->bank_lock);
 		break;
-
+	// Can remove all
 	case ARG_SIGMASQ: {
 		g_mutex_lock(&element->bank_lock);
 		if(element->bankarray) {
@@ -384,7 +384,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			if((gint) element->channels != length)
 				GST_ERROR_OBJECT(element, "vector length (%d) does not match number of templates (%d)", length, element->channels);
 			//else
-			//	gstlal_set_sigmasq_in_snglinspiral_array(element->bankarray, length, sigmasq);
+			//	gstlal_set_sigmasq_in_sngltrigger_array(element->bankarray, length, sigmasq);
 			g_free(sigmasq);
 		} else
 			GST_WARNING_OBJECT(element, "must set template bank before setting sigmasq");
@@ -437,7 +437,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_UNLOCK(element);
 }
 
-
+//used to query values
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALTrigger *element = GSTLAL_TRIGGER(object);
@@ -452,13 +452,13 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_SNR_THRESH:
 		g_value_set_double(value, element->snr_thresh);
 		break;
-
+	// Can remove
 	case ARG_BANK_FILENAME:
 		g_mutex_lock(&element->bank_lock);
 		g_value_set_string(value, element->bank_filename);
 		g_mutex_unlock(&element->bank_lock);
 		break;
-
+	// Can remove
 	case ARG_SIGMASQ: {
 		g_mutex_lock(&element->bank_lock);
 		if(element->bankarray) {
@@ -518,14 +518,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 /*
  * chain()
  */
-
+// update buffer info
 static void update_state(GSTLALTrigger *element, GstBuffer *srcbuf)
 {
 	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
 	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) - element->difftime;
 	element->next_output_timestamp += GST_BUFFER_DURATION(srcbuf);
 }
-
+//pushes buffer downstream
 static GstFlowReturn push_buffer(GSTLALTrigger *element, GstBuffer *srcbuf)
 {
 	GstFlowReturn result = GST_FLOW_OK;
@@ -534,7 +534,7 @@ static GstFlowReturn push_buffer(GSTLALTrigger *element, GstBuffer *srcbuf)
 	result =  gst_pad_push(element->srcpad, srcbuf);
 	return result;
 }
-
+// used when there is a gap in the data/ Rewrite: gstlal_sngltrigger_new_buffer_from_peak
 static GstFlowReturn push_gap(GSTLALTrigger *element, guint samps)
 {
 	GstBuffer *srcbuf = NULL;
@@ -542,14 +542,14 @@ static GstFlowReturn push_gap(GSTLALTrigger *element, guint samps)
 	/* Clearing the max data structure causes the resulting buffer to be a GAP */
 	gstlal_peak_state_clear(element->maxdata);
 	/* create the output buffer */
-	//srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
+	srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
 	/* push the result */
 	result = push_buffer(element, srcbuf);
 	return result;
 }
-
+// Rewrite: gstlal_sngltrigger_new_buffer_from_peak
 static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint outsamps)
 {
 	GstBuffer *srcbuf = NULL;
@@ -592,7 +592,7 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 			gstlal_double_complex_series_around_peak(element->maxdata, dataptr.as_double_complex, (double complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			/* create the output buffer */
-			//srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL, element->difftime);
+			srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL, element->difftime);
 			}
 		else if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
@@ -600,13 +600,13 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			/* create the output buffer */
 			/* FIXME snr snippets not supported for double precision yet */
-			//srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view), element->difftime);
+			srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view), element->difftime);
 			}
 		else
 			g_assert_not_reached();
 		}
 	else
-		//srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
+		srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
 		
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
@@ -614,12 +614,12 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 	result = push_buffer(element, srcbuf);
 	return result;
 }
-
+//decides if data is a gap or not, then calls either of functons above.
 static GstFlowReturn process(GSTLALTrigger *element)
 {
 	guint outsamps, gapsamps, nongapsamps, copysamps;
 	GstFlowReturn result = GST_FLOW_OK;
-
+	//while you still have data here just keep pushing out buffers till its empty. Can turn big buffers into smaller buffers
 	while( (element->EOS && gst_audioadapter_available_samples(element->adapter)) || gst_audioadapter_available_samples(element->adapter) > (element->n + 2 * element->maxdata->pad)) {
 
 		/* See if the output is a gap or not */
@@ -670,7 +670,7 @@ static GstFlowReturn process(GSTLALTrigger *element)
 
 	return result;
 }
-
+// Gstreamer thing that called to stick the data together.
 static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 {
 	GSTLALTrigger *element = GSTLAL_TRIGGER(parent);
@@ -721,10 +721,10 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
 		element->next_output_timestamp = GST_BUFFER_PTS(sinkbuf);// + output_duration(element);
 	}
-
+	// one big bucket tht takes all the data
 	/* put the incoming buffer into an adapter, handles gaps */
 	gst_audioadapter_push(element->adapter, sinkbuf);
-
+	// takes out data it needs
 	/* process the data we have */
 	process(element);
 
@@ -746,7 +746,7 @@ done:
  * Instance finalize function.  See ???
  */
 
-
+// Cleans up everything in the end. Must free up memory when pipeline are destroyed
 static void finalize(GObject *object)
 {
 
@@ -762,7 +762,7 @@ static void finalize(GObject *object)
 		free(element->instrument);
 		element->instrument = NULL;
 		}
-	if (element->channel_name) {
+	if (element->channel_name) { //can remove
 		free(element->channel_name);
 		element->channel_name = NULL;
 		}
@@ -804,7 +804,7 @@ static void finalize(GObject *object)
  * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
  */
 
-
+// Capabilities, provides info to gstreamer
 #define CAPS \
 	"audio/x-raw, " \
 	"format = (string) { " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
@@ -839,14 +839,14 @@ static void gstlal_trigger_class_init(GSTLALTriggerClass *klass)
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(CAPS)
 		)
-	);
+	); //define new source type function : gstlal_trigger
 	gst_element_class_add_pad_template(
 		element_class,
 		gst_pad_template_new(
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_from_string("application/x-lal-snglinspiral")
+			gst_caps_from_string("application/x-lal-sngltrigger")
 		)
 	);
 
@@ -1001,8 +1001,8 @@ static void gstlal_trigger_init(GSTLALTrigger *element)
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 	element->instrument = NULL;
 	element->channel_name = NULL;
-	element->bankarray = NULL;
-	element->bank_filename = NULL;
+	element->bankarray = NULL; // remove
+	element->bank_filename = NULL; //remove
 	element->data = NULL;
 	element->maxdata = NULL;
 	g_mutex_init(&element->bank_lock);

@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I gnuscripts
 EXTRA_DIST = gstlal-ugly.spec
-SUBDIRS = debian gst python bin share tests examples
+SUBDIRS = debian gst python bin share tests examples lib
 
 # check that the most recent changelog entry's version matches the package
 # version

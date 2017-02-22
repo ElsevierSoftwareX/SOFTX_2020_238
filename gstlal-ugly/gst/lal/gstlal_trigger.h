@@ -77,7 +77,7 @@ typedef struct {
 	void *chi2;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
-	SnglInspiralTable *bankarray;
+	SnglTriggerTable *bankarray;
 	char * bank_filename;
 	char * instrument;
 	char * channel_name;
