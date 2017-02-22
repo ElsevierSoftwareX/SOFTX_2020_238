@@ -34,28 +34,7 @@ for name, in set(connection.cursor().execute("SELECT name from segment_definer")
 	print "%s: livetime %s" % (name, abs(segs))
 	print "%s: two or more detectors on: %s\n" % (name, abs(segmentsUtils.vote(segs.values(), 2)))
 
-triggersegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("triggersegments")).coalesce()
-whitesegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("whitehtsegments")).coalesce()
 datasegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("datasegments")).coalesce()
 vetosegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("vetoes")).coalesce()
 
-padded_segs = whitesegs - datasegs
-gated_segs = (datasegs - vetosegs - whitesegs)
-for k,s in gated_segs.items():
-	gated_segs[k] = s & segmentsUtils.vote(datasegs.values(), 2)
-
-print "zero padded segs livetime: %s" % abs(padded_segs) 
-print "gated segs livetime: %s" % abs(gated_segs) 
 print "analyzable time %s" % abs(segmentsUtils.vote((datasegs-vetosegs).values(),2))
-print "trigger segments intersected with analyzable time %s\n" % abs(segmentsUtils.vote((datasegs-vetosegs).values(),2) & segmentsUtils.vote((triggersegs).values(),2))
-
-for ifo, segs in padded_segs.items():
-	print "\n+++++++++++++++++++++++++++++++++++++++++++++++++++\n%s: whitener padded segments\n" % ifo
-	for seg in segs:
-		print seg
-
-for ifo, segs in gated_segs.items():
-	print "\n+++++++++++++++++++++++++++++++++++++++++++++++++++\n%s: ht gated segments\n" % ifo
-	for seg in segs:
-		print seg
-
