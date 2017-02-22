@@ -193,7 +193,7 @@ def parse_command_line():
   parser.add_option("--finalsink-gracedb-pipeline", default = "gstlal-spiir", help = "gracedb pipeline, default is gstlal-spiir")
   parser.add_option("--finalsink-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
   parser.add_option("--finalsink-output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the triggers (required)")
-  parser.add_option("--finalsink-cluster-window", type = "float", metavar = "seconds", default = 0.5, help = "Cluster window to cluster zerolags.")
+  parser.add_option("--finalsink-cluster-window", type = "float", metavar = "seconds", default = 0, help = "Cluster window to cluster zerolags.")
   parser.add_option("--finalsink-need-online-perform", type = "int", default = 0, help = "need online performer ? 1: yes, 0: no")
 
   # set the postcoh parameters
