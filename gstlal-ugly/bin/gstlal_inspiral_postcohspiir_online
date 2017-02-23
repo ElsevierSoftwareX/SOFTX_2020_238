@@ -200,7 +200,7 @@ def parse_command_line():
   parser.add_option("--cuda-postcoh-snglsnr-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
   parser.add_option("--cuda-postcoh-cohsnr-thresh", metavar = "SNR", type = "float", default = 1.05, help = "Set the coherent SNR threshold that cohsnr > thresh * triggersnr.")
   parser.add_option("--cuda-postcoh-detrsp-fname", metavar = "filename", help = "detector response filename.")
-  parser.add_option("--cuda-postcoh-hist-trials", metavar = "hist-trials", type = "int", default = 1, help = "histogram trials for background distribution.")
+  parser.add_option("--cuda-postcoh-hist-trials", metavar = "hist-trials", type = "int", default = 100, help = "histogram trials for background distribution.")
   parser.add_option("--cuda-postcoh-output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "if output skymap, 1: yes, 0: no")
 
   # gpu acceleartion support
