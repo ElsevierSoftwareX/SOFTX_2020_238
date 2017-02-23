@@ -90,7 +90,8 @@ class Metric(object):
 		self.fhigh = fhigh
 		self.working_length = int(round(self.duration * 2 * self.fhigh))
 		self.psd = reference_psd.interpolate_psd(series.read_psd_xmldoc(ligolw_utils.load_filename(psd_xml, verbose = True, contenthandler = series.PSDContentHandler)).values()[0], self.df)
-
+		self.metric_tensor = None
+		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "workspace",
@@ -185,7 +186,7 @@ class Metric(object):
 		# The match must lie in the range 0.9995 - 0.999999 to be valid for a metric computation, which means d is between 0.000001 and 0.0005
 		if (d2 > 1e-5):
 			return self.metric_tensor_component((i,j), center = center, deltas = deltas / 10., g = g, w1 = w1)
-		if (d2 < 1e-7):
+		if (d2 < 1e-10):
 			return self.metric_tensor_component((i,j), center = center, deltas = deltas * 2., g = g, w1 = w1)
 
 		# Compute the diagonal
@@ -198,7 +199,7 @@ class Metric(object):
 			return g[i,j]
 
 
-	def metric_tensor(self, center, deltas):
+	def set_metric_tensor(self, center, deltas):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
@@ -211,30 +212,35 @@ class Metric(object):
 		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
 		mxw = numpy.max(w)
+		self.metric_is_valid = True
 		if numpy.any(w < 0):
 			w[w<0.] = 1e-4 * mxw
 			g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
+			self.metric_is_valid = False
 		return g
 
 
 
 
-def distance(metric_tensor, x, y):
-	"""
-	Compute the distance between to points inside the cube using
-	the metric tensor, but assuming it is constant
-	"""
+	def distance(self, metric_tensor, x, y):
+		"""
+		Compute the distance between to points inside the cube using
+		the metric tensor, but assuming it is constant
+		"""
 
-	def dot(x, y, metric):
-		return numpy.dot(numpy.dot(x.T, metric), y)
+		def dot(x, y, metric):
+			return numpy.dot(numpy.dot(x.T, metric), y)
 
-	return (dot(x-y, x-y, metric_tensor))**.5
+		return (dot(x-y, x-y, metric_tensor))**.5
 
 
-def metric_match(metric_tensor, c1, c2):
-	d2 = distance(metric_tensor, c1, c2)**2
-	if d2 < 1:
-		return 1 - d2
-	else:
-		return 0.
-		
+	def metric_match(self, metric_tensor, c1, c2):
+		d2 = self.distance(metric_tensor, c1, c2)**2
+		if d2 < 1:
+			return 1 - d2
+		else:
+			return 0.
+
+
+	def explicit_match(self, c1, c2):
+		return self.match(self.waveform(c1), self.waveform(c2))
