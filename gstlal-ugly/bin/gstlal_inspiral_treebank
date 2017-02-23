@@ -7,7 +7,6 @@ from glue.ligolw import table
 from glue.ligolw import utils
 from glue.ligolw import ilwd
 from glue.ligolw.utils import process as ligolw_process
-from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
 from gstlal import metric as metric_module
 from gstlal import tree
 # FIXME dont do this
@@ -154,7 +153,7 @@ g_ij = metric_module.Metric(
 	fhigh = args.fhigh,
 	approximant = args.approximant)
 
-#Have to properly implement coord swap, write in rework for coord_limits, and change metric appropriately
+mismatch = 1.0 - args.min_match
 
 # Initialize the tree root and then split with a given splitsize
 def trans_M_q(coord_limits):
@@ -173,12 +172,11 @@ def trans_M_q(coord_limits):
 
 if args.Mq:
 	coord_limits_2 = trans_M_q(coord_limits)
-	bank = Node(HyperCube(numpy.array(coord_limits_2), args.min_match, symmetry_func = lambda x: True, metric = g_ij))
+	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, symmetry_func = lambda x: True, metric = g_ij))
 else:
 	coord_limits_2 = coord_limits
-	bank = Node(HyperCube(numpy.array(coord_limits_2), args.min_match, symmetry_func = tree.mass_sym, metric = g_ij))
+	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, symmetry_func = tree.mass_sym, metric = g_ij))
 
-#bank = Node(HyperCube(numpy.array(coord_limits_2), args.min_match, symmetry_func = lambda x: True, metric = g_ij))
 
 if args.verbose:
 	print "The bank size according to the center metric: ", bank.cube.size
@@ -186,14 +184,14 @@ if args.verbose:
 	for row in bank.cube.boundaries:
 		print "\t", row
 
-# Split according to how many templates you want to place in the hypercube
 mismatch = 1.0 - args.min_match
 bank.split(2**len(coord_limits_2), mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-tbl = lsctables.New(lsctables.SnglInspiralTable)
+sngl_inspiral_columns = ("process_id", "mass1", "mass2", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z")
+tbl = lsctables.New(lsctables.SnglInspiralTable, columns = sngl_inspiral_columns)
 xmldoc.childNodes[-1].appendChild(tbl)
 # FIXME make a real process table
 process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], {})
@@ -204,15 +202,18 @@ previous_tiles = []
 nodes = bank.walk()
 patches = []
 expected = 0
+bad_metrics = 0
 for n, c in enumerate(nodes):
 
 	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic)
 	expected += c.num_templates(mismatch)
+	if not c.metric.metric_is_valid:
+		bad_metrics+=1
 	totalpopcount = totalpopcount + temppopcount
 	previous_tiles.extend(tiles)
 
 	for t in tiles:
-		row = SnglInspiralTable()
+		row = lsctables.SnglInspiralTable.RowType()
 		row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z = coord_func(t)
 		row.event_id = ilwd.ilwdchar('sngl_inspiral:event_id:%d' % len(tbl))
 		row.ifo = "H1" # FIXME
@@ -220,6 +221,7 @@ for n, c in enumerate(nodes):
 			mass1 = row.mass1
 			row.mass1 = row.mass2
 			row.mass2 = mass1
+		row.process_id = process.process_id
 		#row.mass2 = row.mass1 / (row.mass2 + 1)
 		#row.mass1 = row.mass1 - row.mass2
 		#print row.mass1, row.mass2
@@ -232,6 +234,8 @@ for n, c in enumerate(nodes):
 			print "\t", row
                 print "\tcurrent bank size: %d" % len(tbl)
 	patches.append(c.boundaries)
+
+print "bad metrics ", bad_metrics
 
 numpy.save("patches.npy", numpy.array(patches))
 
