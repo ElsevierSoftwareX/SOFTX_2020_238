@@ -17,8 +17,8 @@ AC_CONFIG_FILES([ \
 	gstlal-ugly.spec \
 	debian/control \
 	debian/Makefile \
-	lib/gstlal-ugly.pc \                                                     
-	lib/Makefile \ 
+	lib/gstlal-ugly.pc \
+	lib/Makefile \
 	python/Makefile \
 	share/Makefile \
 	share/vis/Makefile \
@@ -74,6 +74,18 @@ AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 
 
 AC_SUBST([pkgdatadir],["\${datadir}/gstlal"])
+
+
+#
+# Set the library API info
+#
+#  0.0.0   Original version
+
+
+AC_SUBST([LIBAPI], [0])
+AC_SUBST([LIBREL], [0])
+AC_SUBST([LIBAGE], [0])
+AC_SUBST([LIBVERSION], [${LIBAPI}:${LIBREL}:${LIBAGE}])
 
 
 #

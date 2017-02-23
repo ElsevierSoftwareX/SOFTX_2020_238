@@ -183,16 +183,7 @@ static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 	return size;
 }
 
-//can remove
-static void free_bank(GSTLALTrigger *element)
-{
-	g_free(element->bank_filename);
-	element->bank_filename = NULL;
-	free(element->bankarray);
-	element->bankarray = NULL;
-}
-
-// keep if we keep the uto correlation stuff above
+// keep if we keep the auto correlation stuff above
 static void update_peak_info_from_autocorrelation_properties(GSTLALTrigger *element)
 {
 	if (element->maxdata && element->autocorrelation_matrix) {
@@ -341,8 +332,6 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 enum property {
 	ARG_N = 1,
 	ARG_SNR_THRESH,
-	//ARG_BANK_FILENAME,
-	//ARG_SIGMASQ,
 	ARG_AUTOCORRELATION_MATRIX,
 	ARG_AUTOCORRELATION_MASK
 };
@@ -363,34 +352,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_SNR_THRESH:
 		element->snr_thresh = g_value_get_double(value);
 		break;
-	//can remove all
-	case ARG_BANK_FILENAME:
-		g_mutex_lock(&element->bank_lock);
-		element->bank_filename = g_value_dup_string(value);
-		//element->channels = gstlal_sngltrigger_array_from_file(element->bank_filename, &(element->bankarray));
-		//gstlal_set_min_offset_in_sngltrigger_array(element->bankarray, element->channels, &(element->difftime));
-		if (element->instrument && element->channel_name) {
-			//gstlal_set_instrument_in_sngltrigger_array(element->bankarray, element->channels, element->instrument);
-			//gstlal_set_channel_in_sngltrigger_array(element->bankarray, element->channels, element->channel_name);
-		}
-		g_mutex_unlock(&element->bank_lock);
-		break;
-	// Can remove all
-	case ARG_SIGMASQ: {
-		g_mutex_lock(&element->bank_lock);
-		if(element->bankarray) {
-			gint length;
-			double *sigmasq = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &length);
-			if((gint) element->channels != length)
-				GST_ERROR_OBJECT(element, "vector length (%d) does not match number of templates (%d)", length, element->channels);
-			//else
-			//	gstlal_set_sigmasq_in_sngltrigger_array(element->bankarray, length, sigmasq);
-			g_free(sigmasq);
-		} else
-			GST_WARNING_OBJECT(element, "must set template bank before setting sigmasq");
-		g_mutex_unlock(&element->bank_lock);
-		break;
-	}
 
 	case ARG_AUTOCORRELATION_MATRIX: {
 		g_mutex_lock(&element->bank_lock);
@@ -452,28 +413,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_SNR_THRESH:
 		g_value_set_double(value, element->snr_thresh);
 		break;
-	// Can remove
-	case ARG_BANK_FILENAME:
-		g_mutex_lock(&element->bank_lock);
-		g_value_set_string(value, element->bank_filename);
-		g_mutex_unlock(&element->bank_lock);
-		break;
-	// Can remove
-	case ARG_SIGMASQ: {
-		g_mutex_lock(&element->bank_lock);
-		if(element->bankarray) {
-			double sigmasq[element->channels];
-			gint i;
-			for(i = 0; i < (gint) element->channels; i++)
-				sigmasq[i] = element->bankarray[i].sigmasq;
-			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(sigmasq, element->channels));
-		} else {
-			GST_WARNING_OBJECT(element, "no template bank");
-			g_value_take_boxed(value, g_value_array_new(0));
-		}
-		g_mutex_unlock(&element->bank_lock);
-		break;
-	}
 
 	case ARG_AUTOCORRELATION_MATRIX:
 		g_mutex_lock(&element->bank_lock);
@@ -670,7 +609,7 @@ static GstFlowReturn process(GSTLALTrigger *element)
 
 	return result;
 }
-// Gstreamer thing that called to stick the data together.
+// Gstreamer thing that is called to stick the data together.
 static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 {
 	GSTLALTrigger *element = GSTLAL_TRIGGER(parent);
@@ -766,8 +705,6 @@ static void finalize(GObject *object)
 		free(element->channel_name);
 		element->channel_name = NULL;
 		}
-	if (element->bankarray)
-		free_bank(element);
 	if (element->maxdata) {
 		gstlal_peak_state_free(element->maxdata);
 		element->maxdata = NULL;
@@ -864,18 +801,6 @@ static void gstlal_trigger_class_init(GSTLALTriggerClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_BANK_FILENAME,
-		g_param_spec_string(
-			"bank-filename",
-			"Bank file name",
-			"Path to XML file used to generate the template bank.  Setting this property resets sigmasq to a vector of 0s.",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
-	);
-
-	g_object_class_install_property(
-		gobject_class,
 		ARG_SNR_THRESH,
 		g_param_spec_double(
 			"snr-thresh",
@@ -883,24 +808,6 @@ static void gstlal_trigger_class_init(GSTLALTriggerClass *klass)
 			"SNR Threshold that determines a trigger.",
 			0, G_MAXDOUBLE, DEFAULT_SNR_THRESH,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
-	);
-
-	g_object_class_install_property(
-		gobject_class,
-		ARG_SIGMASQ,
-		g_param_spec_value_array(
-			"sigmasq",
-			"\\sigma^{2} factors",
-			"Vector of \\sigma^{2} factors.  The effective distance of a trigger is \\sqrt{sigma^{2}} / SNR.",
-			g_param_spec_double(
-				"sigmasq",
-				"\\sigma^{2}",
-				"\\sigma^{2} factor",
-				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
-				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-			),
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
 		)
 	);
 	
@@ -1001,8 +908,6 @@ static void gstlal_trigger_init(GSTLALTrigger *element)
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 	element->instrument = NULL;
 	element->channel_name = NULL;
-	element->bankarray = NULL; // remove
-	element->bank_filename = NULL; //remove
 	element->data = NULL;
 	element->maxdata = NULL;
 	g_mutex_init(&element->bank_lock);

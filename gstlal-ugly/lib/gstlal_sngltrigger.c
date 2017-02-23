@@ -28,13 +28,14 @@
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/LALStdlib.h>
-#include <snglinspiralrowtype.h>
+#include <sngltriggerrowtype.h>
 #include <gsl/gsl_matrix_float.h>
 #include <gsl/gsl_blas.h>
+#include <gstlal_sngltrigger.h>
 
 /**
  * SECTION:gstlal_sngltrigger.c
- * @short_description:  Utilities for sngl trigger 
+ * @short_description:  Utilities for sngl trigger
  * 
  * Reviewed: 38c65535fc96d6cc3dee76c2de9d3b76b47d5283 2015-05-14 
  * K. Cannon, J. Creighton, C. Hanna, F. Robinett 
@@ -48,31 +49,31 @@
  *  56: free() should be LALFree()
  */
 
-//double gstlal_eta(double m1, double m2)
-//{
-//	return m1 * m2 / pow(m1 + m2, 2);
-//}
-//
-//
-//double gstlal_mchirp(double m1, double m2)
-//{
-//	return pow(m1 * m2, 0.6) / pow(m1 + m2, 0.2);
-//}
-//
-//
-//double gstlal_effective_distance(double snr, double sigmasq)
-//{
-//	return sqrt(sigmasq) / snr;
-//}
-
-int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglTriggerTable **bankarray)
+double gstlal_eta(double m1, double m2)
 {
-	SnglTriggerTable *this = NULL;
-	SnglTriggerTable *bank = NULL;
-	int num;
-	num = LALSnglTriggerTableFromLIGOLw(&this, bank_filename, -1, -1);
+	return m1 * m2 / pow(m1 + m2, 2);
+}
 
-	*bankarray = bank = (SnglTriggerTable *) calloc(num, sizeof(SnglTriggerTable));
+
+double gstlal_mchirp(double m1, double m2)
+{
+	return pow(m1 * m2, 0.6) / pow(m1 + m2, 0.2);
+}
+
+
+double gstlal_effective_distance(double snr, double sigmasq)
+{
+	return sqrt(sigmasq) / snr;
+}
+
+int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglInspiralTable **bankarray)
+{
+	SnglInspiralTable *this = NULL;
+	SnglInspiralTable *bank = NULL;
+	int num;
+	num = LALSnglInspiralTableFromLIGOLw(&this, bank_filename, -1, -1);
+
+	*bankarray = bank = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable));
 
 	/* FIXME do some basic sanity checking */
 
@@ -82,7 +83,7 @@ int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglTriggerTab
 	 */
 
 	while (this) {
-		SnglTriggerTable *next = this->next;
+		SnglInspiralTable *next = this->next;
 		this->snr = 0;
 		this->sigmasq = 0;
 		this->mtotal = this->mass1 + this->mass2;
@@ -98,7 +99,7 @@ int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglTriggerTab
 	return num;
 }
 
-int gstlal_set_channel_in_sngltrigger_array(SnglTriggerTable *bankarray, int length, char *channel)
+int gstlal_set_channel_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, char *channel)
 {
 	int i;
 	for (i = 0; i < length; i++) {
@@ -110,7 +111,7 @@ int gstlal_set_channel_in_sngltrigger_array(SnglTriggerTable *bankarray, int len
 	return 0;
 }
 
-int gstlal_set_instrument_in_sngltrigger_array(SnglTriggerTable *bankarray, int length, char *instrument)
+int gstlal_set_instrument_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, char *instrument)
 {
 	int i;
 	for (i = 0; i < length; i++) {
@@ -122,7 +123,7 @@ int gstlal_set_instrument_in_sngltrigger_array(SnglTriggerTable *bankarray, int 
 	return 0;
 }
 
-int gstlal_set_sigmasq_in_sngltrigger_array(SnglTriggerTable *bankarray, int length, double *sigmasq)
+int gstlal_set_sigmasq_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, double *sigmasq)
 {
 	int i;
 	for (i = 0; i < length; i++) {
@@ -131,7 +132,7 @@ int gstlal_set_sigmasq_in_sngltrigger_array(SnglTriggerTable *bankarray, int len
 	return 0;
 }
 
-int gstlal_set_min_offset_in_sngltrigger_array(SnglTriggerTable *bankarray, int length, GstClockTimeDiff *timediff)
+int gstlal_set_min_offset_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, GstClockTimeDiff *timediff)
 {
 	int i;
 	gint64 gpsns = 0;
@@ -150,7 +151,7 @@ int gstlal_set_min_offset_in_sngltrigger_array(SnglTriggerTable *bankarray, int 
 	return 0;
 }
 
-GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, SnglTriggerTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff timediff)
+GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff timediff)
 {
 	GstBuffer *srcbuf = gst_buffer_new();
 
@@ -174,7 +175,7 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 		guint channel;
 		for(channel = 0; channel < input->channels; channel++) {
 			struct GSTLALSnglTrigger *event;
-			SnglTriggerTable *parent;
+			SnglInspiralTable *parent;
 			double complex maxdata_channel = 0;
 
 			switch (input->type)
@@ -216,7 +217,7 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 			} else
 				event = gstlal_sngltrigger_new(0);
 
-			parent = (SnglTriggerTable *) event;
+			parent = (SnglInspiralTable *) event;
 			if (!event) {
 				/* FIXME handle error */
 			}

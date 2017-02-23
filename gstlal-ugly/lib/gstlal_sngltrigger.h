@@ -37,20 +37,20 @@
 
 G_BEGIN_DECLS
 
-//double gstlal_eta(double m1, double m2);
-//double gstlal_mchirp(double m1, double m2);
-//double gstlal_effective_distance(double snr, double sigmasq);
+double gstlal_eta(double m1, double m2);
+double gstlal_mchirp(double m1, double m2);
+double gstlal_effective_distance(double snr, double sigmasq);
 
-int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglTriggerTable **bankarray);
-int gstlal_set_channel_in_sngltrigger_array(SnglTriggerTable *bankarray, int length, char *channel);
-int gstlal_set_instrument_in_sngltrigger_array(SnglTriggerTable *bankarray, int length, char *instrument);
-int gstlal_set_sigmasq_in_sngltrigger_array(SnglTriggerTable *bankarray, int length, double *sigmasq);
-int gstlal_set_min_offset_in_sngltrigger_array(SnglTriggerTable *bankarray, int length, GstClockTimeDiff *difftime);
+int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglInspiralTable **bankarray);
+int gstlal_set_channel_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, char *channel);
+int gstlal_set_instrument_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, char *instrument);
+int gstlal_set_sigmasq_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, double *sigmasq);
+int gstlal_set_min_offset_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, GstClockTimeDiff *difftime);
 
 /*
  * FIXME: only support single precision SNR snippets at the moment
  */
-GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, SnglTriggerTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff);
+GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff);
 
 
 G_END_DECLS
