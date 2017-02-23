@@ -1,3 +1,9 @@
+gstlal (1.2.1-1) unstable; urgency=low
+
+  * 1.2.1 release, O2a
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Fri, 24 Feb 2017 02:07:43 +0900
+
 gstlal (1.2.0-1) unstable; urgency=low
 
   * 1.2.0 release, O2a

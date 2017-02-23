@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-ugly],[1.3.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_INIT([gstlal-ugly],[1.3.1],[gstlal-discuss@ligo.org],[gstlal-ugly])
 AC_COPYRIGHT([Copyright (C) 2008--2016 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -405,7 +405,7 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [1.2.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.2.1])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
