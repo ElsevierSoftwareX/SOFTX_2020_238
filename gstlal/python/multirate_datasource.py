@@ -235,10 +235,14 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		whiten.connect_after("notify::mean-psd", set_fir_psd, head, psd_fir_kernel)
 
 		# Gate after gaps
+		# FIXME the -max(rates) extra padding is for the high pass
+		# filter: NOTE it also needs to be big enough for the
+		# downsampling filter, but that is typically smaller than the
+		# HP filter (192 samples at Qual 9)
 		if statevector:
-			head = pipeparts.mkgate(pipeline, head, control = statevector, default_state = False, threshold = 1, hold_length = 0, attack_length = -max(rates) * psd_fft_length)
+			head = pipeparts.mkgate(pipeline, head, control = statevector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
 		if dqvector:
-			head = pipeparts.mkgate(pipeline, head, control = dqvector, default_state = False, threshold = 1, hold_length = 0, attack_length = -max(rates) * psd_fft_length)
+			head = pipeparts.mkgate(pipeline, head, control = dqvector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
 		# Drop initial data to let the PSD settle
 		head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max(rates))
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
