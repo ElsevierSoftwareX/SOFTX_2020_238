@@ -27,11 +27,11 @@ dist_bin_SCRIPTS = \
 	gstlal_parse_frame_segment_logs \
 	gstlal_postcoh_skymap2fits \
 	gstlal_ll_iir_inspiral_pipe \
-	gstlal_ll_postcohspiir_inspiral_pipe \
-	gstlal_cohfar_plot_stats \
-	gstlal_postcohspiir_inspiral_online \
-	gstlal_postcohspiir_inspiral_lvalert_background_plotter \
-	gstlal_postcohspiir_inspiral_offline \
-	gstlal_postcohspiir_inspiral_extract_zerolag \
+	gstlal_inspiral_postcohspiir_workflow \
+	gstlal_inspiral_postcohspiir_online \
+	gstlal_inspiral_postcohspiir_lvalert_background_plotter \
+	gstlal_inspiral_postcohspiir_offline \
+	gstlal_inspiral_postcohspiir_extract_zerolag \
 	gstlal_iir_inspiral \
+	gstlal_cohfar_plot_stats \
 	gstlal_cohfar_plot_ifar
