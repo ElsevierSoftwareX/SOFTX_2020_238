@@ -84,7 +84,17 @@ else:
 # generate the iir coefficients and write to xml
 bank = Bank()
 
-bank.build_from_tmpltbank(options.template_bank, sampleRate = options.sampleRate, all_psd = ALLpsd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, epsilon = options.epsilon, autocorrelation_length = options.autocorrelation_length, req_min_match = options.req_min_match)
+bank.build_from_tmpltbank(
+		options.template_bank, 
+		sampleRate = options.sampleRate, 
+		all_psd = ALLpsd, 
+		verbose=options.verbose, 
+		padding=options.padding, 
+		flower=options.flow, 
+		downsample = options.downsample, 
+		epsilon = options.epsilon, 
+		autocorrelation_length = options.autocorrelation_length, 
+		req_min_match = options.req_min_match)
 
 bank.write_to_xml(options.output)
 
