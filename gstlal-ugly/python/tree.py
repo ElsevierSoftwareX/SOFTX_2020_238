@@ -36,7 +36,7 @@ class HyperCube(object):
 		self.center = numpy.array([c[0] + (c[1] - c[0]) / 2. for c in boundaries])
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
-		self.metric_tensor = self.metric.metric_tensor(self.center, self.deltas)
+		self.metric_tensor = self.metric.set_metric_tensor(self.center, self.deltas)
 		self.size = self._size()
 		self.tiles = []
 		self.symmetry_func = symmetry_func
@@ -59,7 +59,7 @@ class HyperCube(object):
 			y = self.center.copy()
 			x[i] = self.boundaries[i,0]
 			y[i] = self.boundaries[i,1]
-			size[i] = metric_module.distance(self.metric_tensor, x, y)
+			size[i] = self.metric.distance(self.metric_tensor, x, y)
 		return size
 
 	def num_tmps_per_side(self, mismatch):
@@ -90,23 +90,34 @@ class HyperCube(object):
 		if stochastic:
 			# To Stephen with love
 			# From Chad
-			target = int(numpy.ceil(self.num_templates(mismatch)))
+			target = int(numpy.ceil(self.num_templates(mismatch))) + 10
 			iters = 0
 			neighbor_tiles = []
 			for neighbor in self.neighbors:
-				neighbor_tiles.extend(neighbor.tiles)
-			cells = [self] + self.neighbors
+				neighbor_tiles.extend(list(neighbor.tiles))
+				for other in neighbor.neighbors:
+					neighbor_tiles.extend(list(other.tiles))
+			neighbor_tiles = list(neighbor_tiles)
 			if len(neighbor_tiles) == 0:
 				self.tiles.append(self.center)
+
 			# FIXME don't hardcode this tolerance
+			matches = []
 			while len(self.tiles) < target and iters < 1e3:
 				randcoords = numpy.array([random.random()-0.5 for i in range(len(self.deltas))])
 				randcoords *= self.deltas 
 				randcoords += self.center
-				match = max([min(metric_module.metric_match(c.metric_tensor, randcoords, t) for c in cells) for t in self.tiles + neighbor_tiles])
-				if randcoords in self and match < (1. - self.__mismatch) and randcoords[1] < 1.0:
+				assert randcoords in self
+				if self.metric.metric_is_valid:
+					match = max([self.metric.metric_match(self.metric_tensor, randcoords, t) for t in self.tiles + neighbor_tiles])
+				else:
+					print "Metric invalid falling back on explicit match"
+					match = max([self.metric.explicit_match(randcoords, t) for t in self.tiles + neighbor_tiles])
+				if match < (1. - self.__mismatch):
 					self.tiles.append(randcoords)
+					matches.append(match)
 				iters+=1
+			print "placed %d/%d tiles with %d iterations and matches %s" % (len(self.tiles), target, iters, matches)
 
 		else:
 			# The bounding box has 2*N points to define it each point is
@@ -199,6 +210,7 @@ class HyperCube(object):
 		#print 'KEPT %d/%d NEIGHBORS' % (len(revisedneighbors), len(self.neighbors))
 		self.neighbors = revisedneighbors
 
+
 class Node(object):
 	"""
 	A Node implements a node in a binary tree decomposition of the
@@ -265,11 +277,6 @@ class Node(object):
 		verr = 2.0
 
 		if self.parent is not None:
-			#d1 = metric_module.distance(self.cube.metric_tensor, self.cube.center, self.parent.cube.center)
-			#d2 = metric_module.distance(self.parent.cube.metric_tensor, self.cube.center, self.parent.cube.center)
-			#avgd = (d2+d1)/2.
-			#deltad = abs(d2-d1)
-			#derr = deltad / avgd
 			v1 = numpy.abs(numpy.linalg.det(self.cube.metric_tensor))
 			v2 = numpy.abs(numpy.linalg.det(self.parent.cube.metric_tensor))
 			avgv = (v2+v1)/2.
