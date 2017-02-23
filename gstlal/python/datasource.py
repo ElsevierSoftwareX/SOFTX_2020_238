@@ -807,7 +807,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = "V")
 		else:
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
 		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
 		# allow frame reading and decoding to occur in a diffrent
 		# thread
@@ -834,7 +834,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# impossible code path
 			raise ValueError(gw_data_source_info.data_source)
 
-		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
+		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True)
 		pipeparts.framecpp_channeldemux_set_units(src, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
 
 		# strain
