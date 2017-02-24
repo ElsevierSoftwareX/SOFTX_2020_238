@@ -37,10 +37,6 @@
 
 G_BEGIN_DECLS
 
-double gstlal_eta(double m1, double m2);
-double gstlal_mchirp(double m1, double m2);
-double gstlal_effective_distance(double snr, double sigmasq);
-
 int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglInspiralTable **bankarray);
 int gstlal_set_channel_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, char *channel);
 int gstlal_set_instrument_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, char *instrument);

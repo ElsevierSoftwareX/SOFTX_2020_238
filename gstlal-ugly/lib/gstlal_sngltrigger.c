@@ -33,38 +33,6 @@
 #include <gsl/gsl_blas.h>
 #include <gstlal_sngltrigger.h>
 
-/**
- * SECTION:gstlal_sngltrigger.c
- * @short_description:  Utilities for sngl trigger
- * 
- * Reviewed: 38c65535fc96d6cc3dee76c2de9d3b76b47d5283 2015-05-14 
- * K. Cannon, J. Creighton, C. Hanna, F. Robinett 
- * 
- * Actions:
- * 67,79: outside of loop
- * 144: add bankarray end time here to take into account the IMR waveform shifts
- * 152: figure out how to use a more accurate sigmasq calculation
- *
- * Complete Actions:
- *  56: free() should be LALFree()
- */
-
-double gstlal_eta(double m1, double m2)
-{
-	return m1 * m2 / pow(m1 + m2, 2);
-}
-
-
-double gstlal_mchirp(double m1, double m2)
-{
-	return pow(m1 * m2, 0.6) / pow(m1 + m2, 0.2);
-}
-
-
-double gstlal_effective_distance(double snr, double sigmasq)
-{
-	return sqrt(sigmasq) / snr;
-}
 
 int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglInspiralTable **bankarray)
 {
@@ -87,8 +55,6 @@ int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglInspiralTa
 		this->snr = 0;
 		this->sigmasq = 0;
 		this->mtotal = this->mass1 + this->mass2;
-		this->mchirp = gstlal_mchirp(this->mass1, this->mass2);
-		this->eta = gstlal_eta(this->mass1, this->mass2);
 		*bank = *this;
 		bank->next = NULL;
 		bank++;
@@ -240,7 +206,6 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 			event->deltaT = 1. / rate;
 
 			parent->end_time_gmst = XLALGreenwichMeanSiderealTime(&parent->end);
-			parent->eff_distance = gstlal_effective_distance(parent->snr, parent->sigmasq);
 			/* populate chi squared if we have it */
 			parent->chisq = 0.0;
 			parent->chisq_dof = 1;
