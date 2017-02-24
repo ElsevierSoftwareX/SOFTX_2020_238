@@ -1,7 +1,8 @@
 # condor commands
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
-ACCOUNTING_TAG=
-CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG)
+ACCOUNTING_TAG=ligo.dev.o1.cbc.em.gstlal_spiir
+GROUP_USER=qi.chu
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-mand=accounting_group_user=$(GROUP_USER)
 
 #
 # Template bank parameters
@@ -16,7 +17,7 @@ NUM_SPLIT_TEMPLATES = 1000
 # The program used to make the template bank. This will be searched for in the
 # process param table in order to extract some metadata
 BANK_PROGRAM = pycbc_geom_nonspinbank
-# The approximant that you wish to filter with
+# FIXME: spiir only accepts SpinTaylorT4 and IMBPB. The approximant that you wish to filter with
 APPROXIMANT = TaylorF2
 
 # overlap for nearby banks
@@ -27,7 +28,7 @@ OVERLAP = 0
 #
 
 # The detectors to analyze
-IFOS = H1 L1
+IFOS = H1 L1 V1
 # The GPS start time
 START = 966384015
 # The GPS end time
@@ -44,7 +45,7 @@ AC_LENGTH = 351
 
 
 # coherent search options
-DETRSP_FNAME = L1H1_skymap.xml
+DETRSP_FNAME = L1H1V1_skymap.xml
 
 #
 # additional options, e.g.,
@@ -75,7 +76,7 @@ VIRGO_FRAME_TYPE='T1300121_V1_EARLY_RECOLORED_V2'
 H1_CHANNEL=LDAS-STRAIN
 L1_CHANNEL=LDAS-STRAIN
 V1_CHANNEL=h_16384Hz
-CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
+CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL) --channel-name=V1=$(V1_CHANNEL)
 
 #
 # Get some basic definitions.  NOTE this comes from the share directory probably.
@@ -105,7 +106,7 @@ plots :
 $(WEBDIR) : 
 	mkdir -p $(WEBDIR)
 
-dag : segments.xml.gz vetoes.xml.gz frame.cache plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
+dag : segments.xml.gz vetoes.xml.gz frame.cache plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) $(DETRSP_FNAME)
 	gstlal_inspiral_postcohspiir_workflow \
 		--data-source frames \
 		--gps-start-time $(START) \
@@ -124,7 +125,7 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache plots $(WEBDIR) $(INJECTIONS) $(
 		--autocorrelation-length $(AC_LENGTH) \
 		--sampleRate 4096.0 \
 		--cuda-postcoh-detrsp-fname $(DETRSP_FNAME) \
-	       	$(ADDITIONAL_DAG_OPTIONS)
+	       	$(ADDITIONAL_DAG_OPTIONS) $(CONDOR_COMMAND)
 
 V1_frame.cache:
 	# FIXME force the observatory column to actually be instrument
@@ -145,7 +146,7 @@ segments.xml.gz: frame.cache
 	# These segments come from the MDC set
 	gsiscp pcdev3.cgca.uwm.edu:/home/channa/public_html/SELECTED_SEGS.xml.gz $@
 	gstlal_cache_to_segments frame.cache nogaps.xml
-	gstlal_segments_operations $@ nogaps.xml --intersection --output-file $@
+	gstlal_segments_operations --segment-file1 $@ --segment-file2 nogaps.xml --intersection --output-file $@
 	-rm -vf nogaps.xml
 	gstlal_segments_trim --trim 8 --gps-start-time $(START) --gps-end-time $(STOP) --min-length 2048 --output $@ $@
 
