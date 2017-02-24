@@ -579,7 +579,7 @@ class FinalSink(object):
 
 		row = coinc_table.RowType()
 		row.coinc_event_id = "coinc_event:coinc_event_id:1"
-		row.instruments = trigger.ifos
+		row.instruments = ','.join(re.findall('..',trigger.ifos)) #FIXME: for more complex detector names
 		row.nevents = 2
 		row.process_id = "process:process_id:1"
 		row.coinc_def_id = "coinc_definer:coinc_def_id:3"
@@ -597,7 +597,7 @@ class FinalSink(object):
 		row.snr = trigger.cohsnr
 		row.end_time_ns = trigger.end_time_ns
 		row.combined_far = trigger.far
-		row.ifos = trigger.ifos
+		row.ifos = ','.join(re.findall('..',trigger.ifos)) #FIXME: for more complex detector names
 		coinc_inspiral_table.append(row)
 
 		row = coinc_map_table.RowType()
@@ -683,6 +683,7 @@ class FinalSink(object):
 		if self.verbose:
 			print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 		psddict = {}
+		#FIXME: for more complex detector names
 		instruments = re.findall('..', trigger.ifos)
 		for instrument in instruments:
 			elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
