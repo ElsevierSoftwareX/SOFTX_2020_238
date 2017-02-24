@@ -40,6 +40,7 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
 #define EPSILON 5
 #define PEAKFINDER_CLUSTER_WINDOW 5
+#define RAD2DEG 57.2957795
 
 static void additional_initializations(GType type)
 {
@@ -990,11 +991,11 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->eta = sngl_table[tmplt_idx].eta;
 			/* convert pixel index to ra and dec */
 			double theta, phi;
-			/* ra = phi, dec = 2pi - theta */	
+			/* ra = phi, dec = pi/2 - theta */	
 			pix2ang_nest(postcoh->state->nside, output->pix_idx, &theta, &phi);
 	
-			output->ra = phi;
-			output->dec = 2*M_PI - theta;
+			output->ra = phi*RAD2DEG;
+			output->dec = (M_PI_2 - theta)*RAD2DEG;
 			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
