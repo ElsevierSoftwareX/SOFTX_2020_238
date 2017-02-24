@@ -18,50 +18,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-/**
- * SECTION:gstlal_itac
- * @short_description:  Compute trigger triggers
- *
- * Reviewed: a2347a2191cdea431a256abc1651736a2c28bfda 2015-05-13 
- * K. Cannon, J. Creighton, C. Hanna, F. Robinett 
- *
- * Actions:
- *
- *	- sigma^2 range should be limited to non-negative numbers
- *	- delete the commented out "+ ..." thing in the
- *	  next_buffer_timestamp initialization
- *	- line 521 ">" should be ">="
- *	- edit comment on line 535
- *	- check that there's a test that autocorrelation length is odd:
- *	  yes, done
- *	- modify allowed range for n to exclude 0
- *	- fix mask
- *	- don't initialize properties in instance_init() that get
- *	  PARAM_CONSTRUCT'ed
- *	- event handler:
- *		- make sure succes is &='ed everywhere
- *		- move the default() chain out of switch (all cases do
- *		  it)
- *	- move update of channel and instrument names in tags event
- *	  handler to inside the mutex-protected code
- *	- ABSFUNC() macros:  use .im, .re to get real and imaginary
- *	  parts
- *	- ABSFUNC() macros:  parentheses around real versions
- *	- peak_state_free():  whole thing should be in an
- *	  if(val) { ... }
- *	- peak_state_clear():  sizeof()s should be tied to types by
- *	  compiler
- *	- peak_state_clear():  memset()s shouldn't be passed 0.0
- *	- peak_state_clear():  maybe add a .as_void element to the
- *	  unions to use instead of .as_float to aid readability in cases
- *	  where the type isn't really being assumed
- *	- maybe clean up case in peak_state init function
- *	- peak_state init default case leaks memory.  Kipp suggests
- *	  g_assert_not_reached().
- *	- peak_state:  maybe check all g_assert()s in defaults 
- *
- */
-
 
 /*
  * ========================================================================
@@ -183,7 +139,7 @@ static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 	return size;
 }
 
-// keep if we keep the auto correlation stuff above
+
 static void update_peak_info_from_autocorrelation_properties(GSTLALTrigger *element)
 {
 	if (element->maxdata && element->autocorrelation_matrix) {
@@ -328,7 +284,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
  * ============================================================================
  */
 
-//remove bank file name. sigmasq
+
 enum property {
 	ARG_N = 1,
 	ARG_SNR_THRESH,
@@ -336,7 +292,7 @@ enum property {
 	ARG_AUTOCORRELATION_MASK
 };
 
-// funcation that called when user trys to set an element. Called when launch gst_launch command or set g-streamer propertises in function call.
+// function that is called when user trys to set an element. Called when launch gst_launch command or set g-streamer propertises in function call.
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALTrigger *element = GSTLAL_TRIGGER(object);
@@ -701,7 +657,7 @@ static void finalize(GObject *object)
 		free(element->instrument);
 		element->instrument = NULL;
 		}
-	if (element->channel_name) { //can remove
+	if (element->channel_name) {
 		free(element->channel_name);
 		element->channel_name = NULL;
 		}
@@ -758,7 +714,7 @@ static void gstlal_trigger_class_init(GSTLALTriggerClass *klass)
 
 	gst_element_class_set_details_simple(
 		element_class,
-		"Trigger generator",
+		"Generic trigger generator",
 		"Filter",
 		"Find triggers in snr streams",
 		"Duncan Meacher <duncan.meacher@ligo.org>"
