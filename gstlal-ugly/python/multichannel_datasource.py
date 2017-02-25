@@ -286,7 +286,7 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 			# impossible code path
 			raise ValueError(data_source_info.data_source)
 
-		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = channel_list_from_channel_dict(instrument, data_source_info.channel_dict))
+		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channel_list_from_channel_dict(instrument, data_source_info.channel_dict))
 
 		# channels
 		head = dict.fromkeys(data_source_info.channel_dict[instrument].keys(), None)
