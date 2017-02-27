@@ -18,6 +18,7 @@
 
 from optparse import OptionParser
 import sys
+import resource
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -28,11 +29,12 @@ import lal
 
 import numpy
 from gstlal import datasource
-from gstlal import multirate_datasource
+from gstlal import idq_multirate_datasource
 from gstlal import multichannel_datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw import utils as ligolw_utils
+
 
 def parse_command_line():
 
@@ -45,9 +47,7 @@ def parse_command_line():
 	multichannel_datasource.append_options(parser)
 
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the output.  If not given, output is sent to the default audio device.  The filename's extension determines the format, the following are recognized:  .wav, .flac, .ogg, .txt, /dev/stdout, /dev/stderr")
-	parser.add_option("--min-rate", metavar = "Hz", type = "int", default = 32, help = "Downsample input to this minimum sample rate. Default = 32 Hz.  Must be <= input sample rate or else you will get a caps negotiation error.")
-	parser.add_option("--max-rate", metavar = "Hz", type = "int", default = 4096, help = "Downsample input to this maximum sample rate. Default = 4096 Hz.  Must be <= input sample rate or else you will get a caps negotiation error.")
-	parser.add_option("--reference-psd", metavar = "filename", help = "When whitening, normalize the time series to the spectrum described in this XML file.  If this option is not given, the spectrum is measured from the data.") 
+	parser.add_option("--downsample-rate", metavar = "Hz", type = "int", default = 16, help = "Downsample input to this minimum sample rate. Default = 16 Hz.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	#
@@ -56,12 +56,9 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	if options.min_rate % 2:
+	if options.downsample_rate % 2:
 		raise ValueError("Minimum rate is not a power of 2")
 
-	if options.max_rate % 2:
-		raise ValueError("Maximum rate is not a power of 2")
-	
 	return options, filenames
    
   
@@ -71,11 +68,6 @@ options, filenames = parse_command_line()
 data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument, = data_source_info.channel_dict
 channels = data_source_info.channel_dict[instrument].keys()
-
-if options.reference_psd is not None:
-	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))[instrument]
-else:
-	psd = None
 
 # building the event loop and pipeline
 mainloop = GObject.MainLoop()
@@ -88,12 +80,11 @@ handler = simplehandler.Handler(mainloop, pipeline)
 # A basic src
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
 
-#for channel in channels:   
-#	downsampledsrc = multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [2**x for x in range(int(numpy.log2(options.min_rate)), int(numpy.log2(options.max_rate)))], instrument, psd)
-#
-#	for rate in downsampledsrc:
-#		pipeparts.mkfakesink(pipeline, downsampledsrc[rate])
 for channel in channels:
+	samp_rate = data_source_info.channel_dict[instrument][channel]   
+	head[channel] = idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [samp_rate], instrument, channel_name = channel)[samp_rate]
+	head[channel] = pipeparts.mkaudioundersample(pipeline, head[channel])
+	head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, rate=%d" % options.downsample_rate) 
 	pipeparts.mkfakesink(pipeline, head[channel])
   
 # Allow Ctrl+C or sig term to gracefully shut down the program for online

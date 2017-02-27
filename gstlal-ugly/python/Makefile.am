@@ -11,4 +11,5 @@ pkgpython_PYTHON = \
 	gviz_api.py \
 	metric.py \
 	multichannel_datasource.py \
+	idq_multirate_datasource.py \
 	tree.py
