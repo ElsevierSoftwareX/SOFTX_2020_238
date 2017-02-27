@@ -210,26 +210,26 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 	static char *formats[] = {"F32LE", "F32BE", "F64LE", "F64BE", "Z64LE", "Z64BE", "Z128LE", "Z128BE"};
 	gint sizes[] = {4, 4, 8, 8, 8, 8, 16, 16};
 
-        GstStructure *str = gst_caps_get_structure(caps, 0);
-        g_assert(str);
+	GstStructure *str = gst_caps_get_structure(caps, 0);
+	g_assert(str);
 
-        if(gst_structure_has_field(str, "format")) {
-                format = gst_structure_get_string(str, "format");
-        } else {
-                GST_ERROR_OBJECT(trans, "No format! Cannot infer unit size.\n");
-                return FALSE;
-        }
-        int test = 0;
-        for(unsigned int i = 0; i < sizeof(formats) / sizeof(*formats); i++) {
-                if(!strcmp(format, formats[i])) {
-                        *size = sizes[i];
-                        test++;
-                }
-        }
-        if(test != 1)
-                GST_WARNING_OBJECT(trans, "unit size not properly set");
+	if(gst_structure_has_field(str, "format")) {
+		format = gst_structure_get_string(str, "format");
+	} else {
+		GST_ERROR_OBJECT(trans, "No format! Cannot infer unit size.\n");
+		return FALSE;
+	}
+	int test = 0;
+	for(unsigned int i = 0; i < sizeof(formats) / sizeof(*formats); i++) {
+		if(!strcmp(format, formats[i])) {
+			*size = sizes[i];
+			test++;
+		}
+	}
+	if(test != 1)
+		GST_WARNING_OBJECT(trans, "unit size not properly set");
 
-        return TRUE;
+	return TRUE;
 }
 
 

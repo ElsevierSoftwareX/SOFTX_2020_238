@@ -63,14 +63,20 @@ struct _GSTLALDemodulate {
 	/* stream info */
 	gint unit_size;
 	gint rate;
+	enum gstlal_demodulate_data_type {
+		GSTLAL_DEMODULATE_F32 = 0,
+		GSTLAL_DEMODULATE_F64,
+		GSTLAL_DEMODULATE_Z64,
+		GSTLAL_DEMODULATE_Z128
+	} data_type;
 
-        /* timestamp book-keeping */
+	/* timestamp book-keeping */
 
-        GstClockTime t0;
-        guint64 offset0;
-        guint64 next_in_offset;
-        guint64 next_out_offset;
-        gboolean need_discont;
+	GstClockTime t0;
+	guint64 offset0;
+	guint64 next_in_offset;
+	guint64 next_out_offset;
+	gboolean need_discont;
 
 	/* properties */
 	int line_frequency; /* in centihertz */

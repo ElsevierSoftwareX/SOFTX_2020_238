@@ -94,21 +94,47 @@ static void demodulate_double(const double *src, gsize src_size, double complex 
 }
 
 
-static void demodulate(const void *src, gsize src_size, void *dst, gsize dst_size, guint64 t, gint rate, gint unit_size, const int frequency)
+static void demodulate_complex_float(const complex float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const int frequency)
 {
-	g_assert_cmpuint(src_size % unit_size, ==, 0);
-	g_assert_cmpuint(dst_size % unit_size, ==, 0);
-	g_assert_cmpuint(2 * src_size, ==, dst_size);
+	const complex float *src_end;
+	guint64 i = 0;
+	__uint128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
+		t_scaled = 32 * t + i * scale / rate;
+		integer_arg = (t_scaled * frequency) % (100 * scale);
+		*dst = *src * cexpf(-2. * M_PI * I * integer_arg / (100.0 * scale));
+	}
+}
 
-	dst_size /= unit_size;
-	src_size /= unit_size;
 
-	switch(unit_size) {
-	case 4:
+static void demodulate_complex_double(const complex double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const int frequency)
+{
+	const complex double *src_end;
+	guint64 i = 0;
+	__uint128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
+		t_scaled = 32 * t + i * scale / rate;
+		integer_arg = (t_scaled * frequency) % (100 * scale);
+		*dst = *src * cexp(-2. * M_PI * I * integer_arg / (100.0 * scale));
+	}
+}
+
+
+static void demodulate(const void *src, gsize src_size, void *dst, guint64 t, gint rate, enum gstlal_demodulate_data_type data_type, const int frequency)
+{
+
+	switch(data_type) {
+	case GSTLAL_DEMODULATE_F32:
 		demodulate_float(src, src_size, dst, t, rate, frequency);
 		break;
-	case 8:
+	case GSTLAL_DEMODULATE_F64:
 		demodulate_double(src, src_size, dst, t, rate, frequency);
+		break;
+	case GSTLAL_DEMODULATE_Z64:
+		demodulate_complex_float(src, src_size, dst, t, rate, frequency);
+		break;
+	case GSTLAL_DEMODULATE_Z128:
+		demodulate_complex_double(src, src_size, dst, t, rate, frequency);
 		break;
 	default:
 		g_assert_not_reached();
@@ -123,6 +149,8 @@ static void demodulate(const void *src, gsize src_size, void *dst, gsize dst_siz
 
 static void set_metadata(GSTLALDemodulate *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
 {
+	if(element->data_type == GSTLAL_DEMODULATE_F32 || element->data_type == GSTLAL_DEMODULATE_F64)
+		outsamples /= 2;
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
@@ -150,7 +178,7 @@ static void set_metadata(GSTLALDemodulate *element, GstBuffer *buf, guint64 outs
 
 #define INCAPS \
 	"audio/x-raw, " \
-	"format = (string) {"GST_AUDIO_NE(F32)", "GST_AUDIO_NE(F64)"}, " \
+	"format = (string) {"GST_AUDIO_NE(F32)", "GST_AUDIO_NE(F64)", "GST_AUDIO_NE(Z64)", "GST_AUDIO_NE(Z128)"}, " \
 	"rate = " GST_AUDIO_RATE_RANGE ", " \
 	"channels = (int) [1, MAX], " \
 	"layout = (string) interleaved, " \
@@ -224,22 +252,27 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	guint n;
 
 	caps = gst_caps_normalize(gst_caps_copy(caps));
+	GstCaps *othercaps = gst_caps_new_empty();
 
 	switch(direction) {
 	case GST_PAD_SRC:
+		/* There are two possible sink pad formats for each src pad format, so the sink pad caps has twice as many structures */
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
-			GstStructure *str = gst_caps_get_structure(caps, n);
+			gst_caps_append(othercaps, gst_caps_copy_nth(caps, n));
+			gst_caps_append(othercaps, gst_caps_copy_nth(caps, n));
+
+			GstStructure *str = gst_caps_get_structure(othercaps, 2 * n);
 			const gchar *format = gst_structure_get_string(str, "format");
 
 			if(!format) {
-				GST_DEBUG_OBJECT(trans, "unrecognized caps %" GST_PTR_FORMAT, caps);
+				GST_DEBUG_OBJECT(trans, "unrecognized caps %" GST_PTR_FORMAT, othercaps);
 				goto error;
 			} else if(!strcmp(format, GST_AUDIO_NE(Z64)))
 				gst_structure_set(str, "format", G_TYPE_STRING, GST_AUDIO_NE(F32), NULL);
 			else if(!strcmp(format, GST_AUDIO_NE(Z128)))
 				gst_structure_set(str, "format", G_TYPE_STRING, GST_AUDIO_NE(F64), NULL);
 			else {
-				GST_DEBUG_OBJECT(trans, "unrecognized format %s in %" GST_PTR_FORMAT, format, caps);
+				GST_DEBUG_OBJECT(trans, "unrecognized format %s in %" GST_PTR_FORMAT, format, othercaps);
 				goto error;
 			}
 		}
@@ -247,18 +280,19 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 
 	case GST_PAD_SINK:
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
-			GstStructure *str = gst_caps_get_structure(caps, n);
+			gst_caps_append(othercaps, gst_caps_copy_nth(caps, n));
+			GstStructure *str = gst_caps_get_structure(othercaps, n);
 			const gchar *format = gst_structure_get_string(str, "format");
 
 			if(!format) {
-				GST_DEBUG_OBJECT(trans, "unrecognized caps %" GST_PTR_FORMAT, caps);
+				GST_DEBUG_OBJECT(trans, "unrecognized caps %" GST_PTR_FORMAT, othercaps);
 				goto error;
-			} else if(!strcmp(format, GST_AUDIO_NE(F32)))
+			} else if(!strcmp(format, GST_AUDIO_NE(F32)) || !strcmp(format, GST_AUDIO_NE(Z64)))
 				gst_structure_set(str, "format", G_TYPE_STRING, GST_AUDIO_NE(Z64), NULL);
-			else if(!strcmp(format, GST_AUDIO_NE(F64)))
+			else if(!strcmp(format, GST_AUDIO_NE(F64)) || !strcmp(format, GST_AUDIO_NE(Z128)))
 				gst_structure_set(str, "format", G_TYPE_STRING, GST_AUDIO_NE(Z128), NULL);
 			else {
-				GST_DEBUG_OBJECT(trans, "unrecognized format %s in %" GST_PTR_FORMAT, format, caps);
+				GST_DEBUG_OBJECT(trans, "unrecognized format %s in %" GST_PTR_FORMAT, format, othercaps);
 				goto error;
 			}
 		}
@@ -270,14 +304,16 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	}
 
 	if(filter) {
-		GstCaps *intersection = gst_caps_intersect(caps, filter);
-		gst_caps_unref(caps);
-		caps = intersection;
+		GstCaps *intersection = gst_caps_intersect(othercaps, filter);
+		gst_caps_unref(othercaps);
+		othercaps = intersection;
 	}
-	return gst_caps_simplify(caps);
+	gst_caps_unref(caps);
+	return gst_caps_simplify(othercaps);
 
 error:
 	gst_caps_unref(caps);
+	gst_caps_unref(othercaps);
 	return GST_CAPS_NONE;
 }
 
@@ -292,11 +328,16 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GSTLALDemodulate *element = GSTLAL_DEMODULATE(trans);
 	gint rate_in, rate_out;
 	gsize unit_size;
+	const gchar *format = gst_structure_get_string(gst_caps_get_structure(incaps, 0), "format");
 
 	/*
 	 * parse the caps
 	 */
 
+	if(!format) {
+		GST_DEBUG_OBJECT(element, "unable to parse format from %" GST_PTR_FORMAT, incaps);
+		return FALSE;
+	}
 	if(!get_unit_size(trans, incaps, &unit_size)) {
 		GST_DEBUG_OBJECT(element, "function 'get_unit_size' failed");
 		return FALSE;
@@ -323,6 +364,21 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * record stream parameters
 	 */
 
+	if(!strcmp(format, GST_AUDIO_NE(F32))) {
+		element->data_type = GSTLAL_DEMODULATE_F32;
+		g_assert_cmpuint(unit_size, ==, 4);
+	} else if(!strcmp(format, GST_AUDIO_NE(F64))) {
+		element->data_type = GSTLAL_DEMODULATE_F64;
+		g_assert_cmpuint(unit_size, ==, 8);
+	} else if(!strcmp(format, GST_AUDIO_NE(Z64))) {
+		element->data_type = GSTLAL_DEMODULATE_Z64;
+		g_assert_cmpuint(unit_size, ==, 8);
+	} else if(!strcmp(format, GST_AUDIO_NE(Z128))) {
+		element->data_type = GSTLAL_DEMODULATE_Z128;
+		g_assert_cmpuint(unit_size, ==, 16);
+	} else
+		g_assert_not_reached();
+
 	element->rate = rate_in;
 	element->unit_size = unit_size;
 
@@ -348,6 +404,11 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 * which is half as large in bytes.
 		 */
 
+		if(!element->data_type) {
+			GST_DEBUG_OBJECT(element, "Data type is not set. Cannot specify incoming buffer size given outgoing buffer size.");
+			return FALSE;
+		}
+
 		if(!get_unit_size(trans, caps, &unit_size)) {
 			GST_DEBUG_OBJECT(element, "function 'get_unit_size' failed");
 			return FALSE;
@@ -359,7 +420,13 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 			return FALSE;
 		}
 
-		*othersize = size / 2;
+		if(element->data_type == GSTLAL_DEMODULATE_F32 || element->data_type == GSTLAL_DEMODULATE_F64)
+			*othersize = size / 2;
+		else if(element->data_type == GSTLAL_DEMODULATE_Z64 || element->data_type == GSTLAL_DEMODULATE_Z128)
+			*othersize = size;
+		else
+			g_assert_not_reached();
+
 		break;
 
 	case GST_PAD_SINK:
@@ -379,7 +446,25 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 			return FALSE;
 		}
 
-		*othersize = 2 * size;
+		GstStructure *str = gst_caps_get_structure(caps, 0);
+		const gchar *format = gst_structure_get_string(str, "format");
+
+		if(!format) {
+			GST_DEBUG_OBJECT(trans, "unrecognized caps %" GST_PTR_FORMAT, caps);
+			return FALSE;
+		} else if(!strcmp(format, GST_AUDIO_NE(F32)) || !strcmp(format, GST_AUDIO_NE(F64)))
+			*othersize = 2 * size;
+		else if(!strcmp(format, GST_AUDIO_NE(Z64)) || !strcmp(format, GST_AUDIO_NE(Z128)))
+			*othersize = size;
+		else {
+			GST_DEBUG_OBJECT(trans, "unrecognized format %s in %" GST_PTR_FORMAT, format, caps);
+			return FALSE;
+		}
+
+		if(!get_unit_size(trans, caps, &unit_size)) {
+			GST_DEBUG_OBJECT(element, "function 'get_unit_size' failed");
+			return FALSE;
+		}
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -444,8 +529,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
-		demodulate(inmap.data, inmap.size, outmap.data, outmap.size, GST_BUFFER_PTS(inbuf), element->rate, element->unit_size, element->line_frequency);
-		set_metadata(element, outbuf, outmap.size / (2 * element->unit_size), FALSE);
+		demodulate(inmap.data, inmap.size / element->unit_size, outmap.data, GST_BUFFER_PTS(inbuf), element->rate, element->data_type, element->line_frequency);
+		set_metadata(element, outbuf, outmap.size / element->unit_size, FALSE);
 		gst_buffer_unmap(outbuf, &outmap);
 		gst_buffer_unmap(inbuf, &inmap);
 	} else {
@@ -457,7 +542,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
 		memset(outmap.data, 0, outmap.size);
-		set_metadata(element, outbuf, outmap.size / (2 * element->unit_size), TRUE);
+		set_metadata(element, outbuf, outmap.size / element->unit_size, TRUE);
 		gst_buffer_unmap(outbuf, &outmap);
 	}
 
@@ -564,7 +649,7 @@ static void gstlal_demodulate_class_init(GSTLALDemodulateClass *klass)
 			"Calibration line frequency",
 			"The frequency of the calibration line corresponding to the calibration\n\t\t\t"
 			"factor 'kappa' we wish to extract from incoming stream",
-			0, G_MAXDOUBLE, 300.,
+			-G_MAXDOUBLE, G_MAXDOUBLE, 300.,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
