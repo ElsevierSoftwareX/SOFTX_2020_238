@@ -1,0 +1,158 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2013--2015  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+## @file gstlal_inspiral_lvalert_psd_plotter
+# A program to listen to lvalerts, download the psd from gstlal gracedb events, plot it, and upload the results
+#
+# ### Command line interface
+#
+#	+ `--no-upload`: Write plots to disk.
+#	+ `--skip-404`: Skip events that give 404 (file not found) errors (default is to abort)
+#	+ `--gracedb-service-url`: GraceDb service url to upload (default is gracedb.DEFAULT_SERVICE_URL)
+#	+ `--verbose`: Be verbose.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import logging
+from optparse import OptionParser
+import os.path
+import sys
+import urlparse
+import json
+import glob
+import shutil
+
+import lal
+
+
+from glue.ligolw import utils as ligolw_utils
+from gstlal import lvalert_helper
+from gstlal import plotpsd
+from ligo.gracedb import rest as gracedb
+
+
+plotpsd.matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 300,
+	"savefig.dpi": 300,
+	"text.usetex": True,
+	"path.simplify": True
+})
+
+
+#
+# =============================================================================
+#
+#                                   Library
+#
+# =============================================================================
+#
+
+
+def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = False):
+	response = lvalert_helper.get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
+	if response is None:
+		return None
+	return lal.series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, contenthandler = lal.series.PSDContentHandler)[0])
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+PLOT_DEFAULTS = ['plots/H1L1-GSTLAL_INSPIRAL_PLOT_SENSITIVITY_ALL_LLOID_COMBINED_RANGE_VS_FAR_BINNED_BY_SOURCE_TYPE-*.png', 'plots/H1L1-GSTLAL_INSPIRAL_PLOT_SENSITIVITY_ALL_LLOID_COMBINED_VOLUME_VS_FAR_BINNED_BY_SOURCE_TYPE-*.png', 'plots/H1L1V1-GSTLAL_INSPIRAL_PLOTSUMMARY_ALL_LLOID_COMBINED_03_chi2_vs_rho_*1_openbox-*.png', 'plots/H1L1V1-GSTLAL_INSPIRAL_PLOTSUMMARY_ALL_LLOID_COMBINED_02_mchirp_acc_frac_scatter_*_*1_closedbox-*.png']
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
+	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--plot-glob-pattern", default = PLOT_DEFAULTS, action = "append", help = "find plots matching these patterns on disk and upload them to an event")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, graceids = parser.parse_args()
+
+	if not graceids:
+		# FIXME:  lvalert_listen doesn't allow command-line
+		# options, enable logging for online analysis
+		options.verbose = True
+
+	# can only call basicConfig once (otherwise need to switch to more
+	# complex logging configuration)
+	if options.verbose:
+		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+	else:
+		logging.basicConfig(format = "%(asctime)s:%(message)s")
+
+	return options, graceids
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+options, graceids = parse_command_line()
+
+
+if not graceids:
+	lvalert_data = json.loads(sys.stdin.read())
+	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+	logging.info("lvalert data: %s" % repr(lvalert_data))
+	filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+	if filename not in (u"psd.xml.gz",):
+		logging.info("filename is not 'psd.xml.gz'.  skipping")
+		sys.exit()
+	graceids = [str(lvalert_data["uid"])]
+
+
+gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
+
+
+for graceid in graceids:
+	number = 0
+	for pat in options.plot_glob_pattern:
+		for filename in glob.glob(pat):
+			tmpfilename = "plot%d.png" % number
+			shutil.copyfile(filename, tmpfilename)
+			print tmpfilename
+			lvalert_helper.upload_file(gracedb_client, graceid, filename = tmpfilename, log_message = "Additional analysis plot", tagname = "background")
+			if tmpfilename != filename:
+				os.remove(tmpfilename)
+			number += 1
+	logging.info("finished processing %s" % graceid)
