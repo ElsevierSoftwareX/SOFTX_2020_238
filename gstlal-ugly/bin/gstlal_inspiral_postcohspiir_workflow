@@ -62,7 +62,7 @@ __author__ = 'Chad Hanna <chad.hanna@ligo.org> Qi Chu <qi.chu@ligo.org>'
 
 ##############################################################################
 # import standard modules and append the lalapps prefix to the python path
-import sys, os, copy, math, stat
+import sys, os, copy, math, stat, re
 import subprocess, socket, tempfile
 import itertools
 
@@ -196,7 +196,8 @@ def gen_bank_node(bankJob, dag, parent_nodes, psd, bank_groups, options, seg):
 	for i, bank_group in enumerate(bank_groups):
 		for ifo, template_files in bank_group.items():
 			for template_bank in template_files:
-				spiir_bank_name = inspiral_pipe.T050017_filename(ifo, '%d_SPIIR' % (i,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = bankJob.output_path)
+				bank_id = re.search(r'\d+', template_bank.split("/")[-1].split("_")[-1]).group()
+				spiir_bank_name = inspiral_pipe.T050017_filename(ifo, '%s_SPIIR' % (bank_id,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = bankJob.output_path)
 
 				bank_nodes.setdefault(ifo, []).append(
 					inspiral_pipe.generic_node(
