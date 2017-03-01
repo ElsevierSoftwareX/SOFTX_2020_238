@@ -119,7 +119,7 @@ class gstlal_iir_bank_job(pipeline.CondorDAGJob):
 class gstlal_iir_bank_node(pipeline.CondorDAGNode):
 	"""
 	"""
-	def __init__(self, job, dag, template_bank, ifo, flow, reference_psd, sampleRate, padding, downsample, epsilon=0.02, p_node=[]):
+	def __init__(self, job, dag, template_bank, ifo, flow, reference_psd, sampleRate, padding, downsample, epsilon=0.02, req_min_match = 0.99, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("template-bank", template_bank)
@@ -128,6 +128,7 @@ class gstlal_iir_bank_node(pipeline.CondorDAGNode):
 		self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("sampleRate",sampleRate)
 		self.add_var_opt("padding",padding)
+		self.add_var_opt("req-min-match",req_min_match)
 		if downsample: self.add_var_opt("downsample","")
 		self.add_var_opt("epsilon", epsilon)
 		iir_bank_name_path = os.path.split(template_bank)
@@ -143,6 +144,7 @@ def parse_command_line():
 	parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
 	parser.add_option("--sampleRate", metavar = "Hz", type = "float", help = "Set the sample rate of the IIR template bank (optional).")
 	parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
+	parser.add_option("--req-min-match", metavar = "match", type = "float", default = 0.99, help = "Set the SPIIR approximation minimal match (default = 0.99).")
 	parser.add_option("--epsilon", metavar = "pad", type = "float", default = 0.02, help = "Second order correction factor.")
 	parser.add_option("--reference-psd", metavar = "file", help = "Set the name of the reference psd file, required")
 	parser.add_option("--bank-cache", metavar = "file", help = "Set the name of the bank cache, required")
@@ -172,7 +174,7 @@ iirNode = {}
 
 for f in [lal.CacheEntry(line).path for line in open(input_cache)]:
 	print f
-	iirNode[f] = gstlal_iir_bank_node(iirJob, dag, f, ifo, options.flow, ref_psd, options.sampleRate, options.padding, options.downsample, options.epsilon)
+	iirNode[f] = gstlal_iir_bank_node(iirJob, dag, f, ifo, options.flow, ref_psd, options.sampleRate, options.padding, options.downsample, options.epsilon, options.req_min_match)
 
 dag.write_sub_files()
 dag.write_dag()
