@@ -290,19 +290,19 @@ class Node(object):
 			self.left = Node(left, self)
 			self.right = Node(right, self)
 
-                        self.left.cube.neighbors += self.cube.neighbors
-                        self.right.cube.neighbors += self.cube.neighbors
+			self.left.cube.neighbors += self.cube.neighbors
+			self.right.cube.neighbors += self.cube.neighbors
 
-                        self.left.cube.neighbors.append(self.right.cube)
-                        self.right.cube.neighbors.append(self.left.cube)
+			self.left.cube.neighbors.append(self.right.cube)
+			self.right.cube.neighbors.append(self.left.cube)
 
-                        #print 'NLCHECK:', self.left.cube.neighbors
-                        #print 'NRCHECKL:', self.right.cube.neighbors
+			#print 'NLCHECK:', self.left.cube.neighbors
+			#print 'NRCHECKL:', self.right.cube.neighbors
 
-                        self.left.cube.returnneighbors()
-                        self.right.cube.returnneighbors()
-                        #print 'FINELEFT:', self.left.cube.neighbors
-                        #print 'FINERIGHT:', self.right.cube.neighbors
+			self.left.cube.returnneighbors()
+			self.right.cube.returnneighbors()
+			#print 'FINELEFT:', self.left.cube.neighbors
+			#print 'FINERIGHT:', self.right.cube.neighbors
 
 			if verbose:
 				print "%30s: %0.2f" % ("Splitting", verr)
