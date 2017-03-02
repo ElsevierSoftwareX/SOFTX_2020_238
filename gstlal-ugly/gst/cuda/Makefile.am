@@ -65,8 +65,21 @@ gstlal_cohfar_calc_cdf_SOURCES = \
 	cohfar/background_stats_utils.c \
 	cohfar/cohfar_calc_cdf.c
 
-gstlal_cohfar_calc_cdf_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS) 
+gstlal_cohfar_calc_cdf_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS)
 gstlal_cohfar_calc_cdf_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
 
+gstlal_postcoh_gen_detrsp_map_SOURCES = \
+	LIGOLw_xmllib/LIGOLwReader.c \
+	LIGOLw_xmllib/LIGOLwWriter.c \
+	LIGOLw_xmllib/LIGOLwUtils.c \
+	postcoh/postcoh_detrsp_map.c
+
+gstlal_postcoh_gen_detrsp_map_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS) $(NVCC_CFLAGS) $(CHEALPIX_CFLAGS)
+
+gstlal_postcoh_gen_detrsp_map_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS) $(NVCC_LIBS) $(CHEALPIX_LIBS) -lstdc++ -llapacke -llapack -lrefblas -lgfortran
+
+
 bin_PROGRAMS = \
-	gstlal_cohfar_calc_cdf
+	gstlal_cohfar_calc_cdf \
+	gstlal_postcoh_gen_detrsp_map
+
