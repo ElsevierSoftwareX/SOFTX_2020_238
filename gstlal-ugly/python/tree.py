@@ -1,7 +1,7 @@
 import itertools
 import metric as metric_module
 import numpy
-import random
+from numpy import random
 
 def mass_sym(boundaries):
 	# Assumes first two are m_1 m_2
