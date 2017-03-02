@@ -185,6 +185,7 @@ parser.add_option("--tst-exc-channel-name", metavar = "name", default = "SUS-ETM
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used for calculating the calibration factors. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
 parser.add_option("--dewhitening", action = "store_true", help = "Dewhitening should be used on the relevant channels, since the incoming channels are whitened and single precision.")
 parser.add_option("--low-latency", action = "store_true", help = "Run the pipeline in low-latency mode. This uses minimal queueing. Otherwise, maximal queueing is used to prevent the pipeline from locking up.")
+parser.add_option("--cancel-callines", action = "store_true", help = "Remove calibration lines at known freqnencies from h(t) using software.")
 
 # These are all options related to the reference channels used in the calibration factors computation
 parser.add_option("--ref-channels-sr", metavar = "Hz", default = 16, help = "Set the sample rate for the reference model channels used in the calibration factors calculation. (Default = 16 Hz)")
@@ -581,10 +582,14 @@ for key in headkeys:
 if not options.no_coherence:
 	if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
 		pcaly_line1_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line1_coh"], coh_caps, "pcaly_line1_coh")
+		pcaly_line1_coh = calibration_parts.mkresample(pipeline, pcaly_line1_coh, 0, compute_calib_factors_caps)
 		sus_coh = calibration_parts.caps_and_progress(pipeline, head_dict["sus_coh"], coh_caps, "sus_coh")
+		sus_coh = calibration_parts.mkresample(pipeline, sus_coh, 0, compute_calib_factors_caps)
 		darm_coh = calibration_parts.caps_and_progress(pipeline, head_dict["darm_coh"], coh_caps, "darm_coh")
+		darm_coh = calibration_parts.mkresample(pipeline, darm_coh, 0, compute_calib_factors_caps)
 	if not options.no_kappac or not options.no_fcc:
 		pcaly_line2_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line2_coh"], coh_caps, "pcaly_line2_coh")
+		pcaly_line2_coh = calibration_parts.mkresample(pipeline, pcaly_line2_coh, 0, compute_calib_factors_caps)
 
 if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
 	tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % options.tst_exc_sample_rate
@@ -594,7 +599,6 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 	exc = calibration_parts.caps_and_progress(pipeline, head_dict["exc"], hoft_caps, "exc")
 
 # If we use the coherence channels multiple times in the pipeline, we need to tee the channels
-# 
 lowfreq_coh_use = int(not options.no_kappatst) + int(not options.no_kappapu) + int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_dq_vector and (not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc))
 highfreq_coh_use = int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_dq_vector and (not options.no_kappac or not options.no_fcc)) 
 if lowfreq_coh_use >= 2:
@@ -618,15 +622,13 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 		darm_err = calibration_parts.caps_and_progress(pipeline, head_dict["darm_err"], hoft_caps, "darm_err")
 	derrtee = pipeparts.mktee(pipeline, darm_err)
 
-	# demodulate the PCAL channel at the DARM actuation line frequency
-	pcal_at_darm_act_freq_nocorr = calibration_parts.demodulate(pipeline, pcaltee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, queue_length1, queue_length2)
-	# apply the PCAL correction factor at the DARM actuation line frequency
-	pcal_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, pcal_at_darm_act_freq_nocorr, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
-	if not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+	# demodulate the PCAL channel and apply the PCAL correction factor at the DARM actuation line frequency
+	pcal_at_darm_act_freq = calibration_parts.demodulate(pipeline, pcaltee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
+	if not options.no_kappapu or not options.no_kappac or not options.no_fcc or options.cancel_callines:
 		pcal_at_darm_act_freq = pipeparts.mktee(pipeline, pcal_at_darm_act_freq)
 
 	# demodulate DARM_ERR at the DARM actuation line frequency
-	derr_at_darm_act_freq = calibration_parts.demodulate(pipeline, derrtee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, queue_length1, queue_length2)
+	derr_at_darm_act_freq = calibration_parts.demodulate(pipeline, derrtee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 	if options.dewhitening:
 		# dewhiten DARM_ERR at the DARM actuation line frequency
 		derr_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_darm_act_freq, derr_dewhiten_at_darm_act_freq_real, derr_dewhiten_at_darm_act_freq_imag)
@@ -635,10 +637,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 
 	# resample and demodulate the TST excitation channel at the ESD actuation line frequency
 	tstexc = calibration_parts.mkresample(pipeline, tstexc, 3, hoft_caps)
-	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, queue_length1, queue_length2)
+	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 
 	# demodulate DARM_ERR at the ESD actuation line frequency
-	derr_at_esd_act_freq = calibration_parts.demodulate(pipeline, derrtee, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, queue_length1, queue_length2)
+	derr_at_esd_act_freq = calibration_parts.demodulate(pipeline, derrtee, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 	if options.dewhitening:
 		# dewhiten DARM_ERR at the ESD actuation line frequency
 		derr_at_esd_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_esd_act_freq, derr_dewhiten_at_esd_act_freq_real, derr_dewhiten_at_esd_act_freq_imag)
@@ -684,10 +686,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 # If we're also computing \kappa_c, f_cc, or \kappa_pu, keep going
 if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 	# demodulate excitation channel at PU actuation line frequency
-	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples, queue_length1, queue_length2)
+	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 
 	# demodulate DARM_ERR at PU actuation line frequency
-	derr_at_pu_act_freq = calibration_parts.demodulate(pipeline, derrtee, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples, queue_length1, queue_length2)
+	derr_at_pu_act_freq = calibration_parts.demodulate(pipeline, derrtee, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 	if options.dewhitening:
 		# dewhiten DARM_ERR at the PU actuation line frequency
 		derr_at_pu_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_pu_act_freq, derr_dewhiten_at_pu_act_freq_real, derr_dewhiten_at_pu_act_freq_imag)
@@ -739,13 +741,13 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 
 	# Finally, compute \kappa_c and f_cc
 	if not options.no_kappac or not options.no_fcc:
-		# demodulate PCAL channel at optical gain and f_cc line frequency
-		pcal_at_opt_gain_freq_nocorr = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, queue_length1, queue_length2)
-		# apply the PCAL correction factor at optical gain and f_cc line frequency
-		pcal_at_opt_gain_freq = calibration_parts.complex_audioamplify(pipeline, pcal_at_opt_gain_freq_nocorr, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
+		# demodulate PCAL channel and apply the PCAL correction factor at optical gain and f_cc line frequency
+		pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
+		if options.cancel_callines:
+			pcal_at_opt_gain_freq = pipeparts.mktee(pipeline, pcal_at_opt_gain_freq)
 
 		# demodulate DARM_ERR at optical gain and f_cc line frequency
-		derr_at_opt_gain_freq = calibration_parts.demodulate(pipeline, derrtee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, queue_length1, queue_length2)
+		derr_at_opt_gain_freq = calibration_parts.demodulate(pipeline, derrtee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 		if options.dewhitening:
 			# dewhiten DARM_ERR at optical gain and f_cc line frequency
 			derr_at_opt_gain_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_opt_gain_freq, derr_dewhiten_at_opt_gain_fcc_freq_real, derr_dewhiten_at_opt_gain_fcc_freq_imag)
@@ -823,6 +825,23 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 			smooth_fcctee = pipeparts.mktee(pipeline, smooth_fcc)
 
 #
+# Calibration Line Cancellation
+#
+
+if options.cancel_callines:
+	pcaly_line1 = calibration_parts.mkresample(pipeline, pcal_at_darm_act_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "lal_demodulate", line_frequency = -1.0 * darm_act_line_freq, prefactor_real = -2.0/3994.5)
+	cancel_pcaly_line1, trash = calibration_parts.split_into_real(pipeline, pcaly_line1)
+	pipeparts.mkfakesink(pipeline, trash)
+
+	pcaly_line2 = calibration_parts.mkresample(pipeline, pcal_at_opt_gain_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "lal_demodulate", line_frequency = -1.0 * opt_gain_fcc_line_freq, prefactor_real = -2.0/3994.5)
+	cancel_pcaly_line2, trash = calibration_parts.split_into_real(pipeline, pcaly_line2)
+	pipeparts.mkfakesink(pipeline, trash)
+
+	cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length2)))
+
+#
 # CONTROL BRANCH
 #
 
@@ -845,10 +864,10 @@ if options.partial_calibration:
 
 	# if you need to, dewhiten the TST and PUM/UIM chains
 	if options.dewhitening:
-		pumuim = calibration_parts.mkresample(pipeline, pumuim, 3, "audio/x-raw, format=F64LE, rate=%d" % pumuimdewhitensr) 
+		pumuim = calibration_parts.mkstockresample(pipeline, pumuim, 3, "audio/x-raw, format=F64LE, rate=%d" % pumuimdewhitensr) 
 		pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = td)
 		pumuim_filter_settle_time += float(len(pumuimdewhiten)-pumuimdewhitendelay)/pumuimdewhitensr
-		tst = calibration_parts.mkresample(pipeline, tsttee, 3, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
+		tst = calibration_parts.mkstockresample(pipeline, tsttee, 3, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
 		tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdewhitendelay), fir_matrix = [tstdewhiten[::-1]], time_domain = td)
 		tst_filter_settle_time += float(len(tstdewhiten)-tstdewhitendelay)/tstdewhitensr
 	else:
@@ -861,7 +880,7 @@ if options.full_calibration:
 	
 	if options.dewhitening:
 		# dewhiten the DARM_CTRL channel
-		ctrl = calibration_parts.mkresample(pipeline, darmctrltee, 3, "audio/x-raw, format=F64LE, rate=%d" % ctrldewhitensr)
+		ctrl = calibration_parts.mkstockresample(pipeline, darmctrltee, 3, "audio/x-raw, format=F64LE, rate=%d" % ctrldewhitensr)
 		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrldewhitendelay), fir_matrix = [ctrldewhiten[::-1]], time_domain = td)
 		tst_filter_settle_time += float(len(ctrldewhiten)-ctrldewhitendelay)/ctrldewhitensr
 		pumuim_filter_settle_time += float(len(ctrldewhiten)-ctrldewhitendelay)/ctrldewhitensr
@@ -873,7 +892,7 @@ if options.full_calibration:
 	pumuim = ctrltee
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
-tst = calibration_parts.mkresample(pipeline, tst, 3, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
+tst = calibration_parts.mkstockresample(pipeline, tst, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
 # filter TST chain with the TST acutaiton filter
 tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdelay), fir_matrix = [tstfilt[::-1]], time_domain = td)
 tst = calibration_parts.mkinsertgap(pipeline, tst, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
@@ -883,7 +902,7 @@ if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappap
 	tst = calibration_parts.mkresample(pipeline, tst, 3, hoft_caps)
 
 # resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
-pumuim = calibration_parts.mkresample(pipeline, pumuim, 3, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
+pumuim = calibration_parts.mkstockresample(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
 # filter the PUM/UIM chain with the PUM/UIM actuation filter
 pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdelay), fir_matrix = [pumuimfilt[::-1]], time_domain = td)
 pumuim = calibration_parts.mkinsertgap(pipeline, pumuim, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
@@ -895,12 +914,12 @@ if tstchainsr != pumuimchainsr or options.apply_kappapu or options.apply_kappats
 # apply kappa_tst
 if options.apply_kappatst:
 	# Only apply the real part of \kappa_tst as a correction to A_tst
-	ktst_for_tst = calibration_parts.mkresample(pipeline, smooth_ktstRtee, 1, hoft_caps)
+	ktst_for_tst = calibration_parts.mkresample(pipeline, smooth_ktstRtee, 3, hoft_caps)
 	tst = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, ktst_for_tst, ktst_queue_length), calibration_parts.mkqueue(pipeline, tst, tst_queue_length)))
 # apply kappa_pu
 if options.apply_kappapu:
 	# Only apply the real part of \kappa_pu as a correction to A_pu
-	kpu_for_pu = calibration_parts.mkresample(pipeline, smooth_kpuRtee, 1, hoft_caps)
+	kpu_for_pu = calibration_parts.mkresample(pipeline, smooth_kpuRtee, 3, hoft_caps)
 	pumuim = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, kpu_for_pu, kpu_queue_length), calibration_parts.mkqueue(pipeline, pumuim, pumuim_queue_length)))
 
 # Add the TST and PUM/UIM chains together to form the full actuation chain
@@ -938,7 +957,7 @@ if options.dewhitening:
 
 # Apply factors to actuation and sensing chains, if applicable
 if options.apply_kappac:
-	kc_modify_res = calibration_parts.mkresample(pipeline, smooth_kctee, 1, hoft_caps)
+	kc_modify_res = calibration_parts.mkresample(pipeline, smooth_kctee, 3, hoft_caps)
 	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, res, reskc_queue_length), calibration_parts.mkqueue(pipeline, pipeparts.mkpow(pipeline, kc_modify_res, exponent = -1.0), kc_queue_length)))
 
 filter_settle_time = max(res_filter_settle_time, tst_filter_settle_time, pumuim_filter_settle_time)
@@ -954,6 +973,10 @@ try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
 except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
+
+if options.cancel_callines:
+	strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, strain, queue_length2), calibration_parts.mkqueue(pipeline, cancel_callines, max_queue_length)))
+
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
 	
 # Put the units back to strain before writing to frames
@@ -963,7 +986,6 @@ if not options.no_dq_vector:
 	strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 else:
 	strain = pipeparts.mktaginject(pipeline, strain, straintagstr)
-	
 
 #
 # CALIB_STATE_VECTOR BRANCH
@@ -1028,7 +1050,7 @@ if not options.no_dq_vector:
 	#
 
 	# Check if any of the input data channels had to be replaced by zeroes because they were < 1e-35
-	resok = pipeparts.mkcapsfilter(pipeline, restee, hoft_caps) 
+	resok = pipeparts.mkcapsfilter(pipeline, restee, hoft_caps)
 	resok = pipeparts.mkbitvectorgen(pipeline, resok, threshold=1e-35, bit_vector=1)
 	resok = pipeparts.mkcapsfilter(pipeline, resok, "audio/x-raw, format=U32LE, rate=%d" % hoftsr)
 	resok = pipeparts.mkgeneric(pipeline, resok, "lal_logicalundersample", required_on = 1, status_out = 1)
@@ -1199,46 +1221,58 @@ if not options.no_kappapu:
 
 	kpuRout = pipeparts.mkaudioconvert(pipeline, smooth_kpuRtee)
 	kpuRout = calibration_parts.mkresample(pipeline, kpuRout, 1, record_kappa_caps)
+	kpuRout = pipeparts.mkprogressreport(pipeline, kpuRout, "progress_kappa_pu_real_%s" % instrument)
 
 	kpuIout = pipeparts.mkaudioconvert(pipeline, smooth_kpuItee)
 	kpuIout = calibration_parts.mkresample(pipeline, kpuIout, 1, record_kappa_caps)
+	kpuIout = pipeparts.mkprogressreport(pipeline, kpuIout, "progress_kappa_pu_imag_%s" % instrument)
 
 	smooth_kpuR_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kpuR_nogate)
 	smooth_kpuR_nogate = calibration_parts.mkresample(pipeline, smooth_kpuR_nogate, 1, record_kappa_caps)
+	smooth_kpuR_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpuR_nogate, "progress_kappa_pu_real_nogate_%s" % instrument)
 
 	smooth_kpuI_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kpuI_nogate)
 	smooth_kpuI_nogate = calibration_parts.mkresample(pipeline, smooth_kpuI_nogate, 1, record_kappa_caps)
+	smooth_kpuI_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpuI_nogate, "progress_kappa_pu_imag_nogate_%s" % instrument)
 
 # Resample the \kappa_tst channels at the specified recording sample rate and change them to single precision channels
 if not options.no_kappatst:
 
 	ktstRout = pipeparts.mkaudioconvert(pipeline, smooth_ktstRtee)
 	ktstRout = calibration_parts.mkresample(pipeline, ktstRout, 1, record_kappa_caps)
+	ktstRout = pipeparts.mkprogressreport(pipeline, ktstRout, "progress_kappa_tst_real_%s" % instrument)
 
 	ktstIout = pipeparts.mkaudioconvert(pipeline, smooth_ktstItee)
 	ktstIout = calibration_parts.mkresample(pipeline, ktstIout, 1, record_kappa_caps)
+	ktstIout = pipeparts.mkprogressreport(pipeline, ktstIout, "progress_kappa_tst_imag_%s" % instrument)
 
 	smooth_ktstR_nogate = pipeparts.mkaudioconvert(pipeline, smooth_ktstR_nogate)
 	smooth_ktstR_nogate = calibration_parts.mkresample(pipeline, smooth_ktstR_nogate, 1, record_kappa_caps)
+	smooth_ktstR_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstR_nogate, "progress_kappa_tst_real_nogate_%s" % instrument)
 
 	smooth_ktstI_nogate = pipeparts.mkaudioconvert(pipeline, smooth_ktstI_nogate)
 	smooth_ktstI_nogate = calibration_parts.mkresample(pipeline, smooth_ktstI_nogate, 1, record_kappa_caps)
+	smooth_ktstI_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstI_nogate, "progress_kappa_tst_imag_nogate_%s" % instrument)
 
 # Resample the \kappa_c channel at the specified recording sample rate and change it to a single precision channel
 if not options.no_kappac:
 	kcout = pipeparts.mkaudioconvert(pipeline, smooth_kctee)
 	kcout = calibration_parts.mkresample(pipeline, kcout, 1, record_kappa_caps)
+	kcout = pipeparts.mkprogressreport(pipeline, kcout, "progress_kappa_c_%s" % instrument)
 
 	smooth_kc_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kc_nogate)
 	smooth_kc_nogate = calibration_parts.mkresample(pipeline, smooth_kc_nogate, 1, record_kappa_caps)
+	smooth_kc_nogate = pipeparts.mkprogressreport(pipeline, smooth_kc_nogate, "progress_kappa_c_nogate_%s" % instrument)
 
 # Resample the f_cc channel at the specified recording sample rate and change it to a single precision channel
 if not options.no_fcc:
 	fccout = pipeparts.mkaudioconvert(pipeline, smooth_fcctee)
 	fccout = calibration_parts.mkresample(pipeline, fccout, 1, record_kappa_caps)
+	fccout = pipeparts.mkprogressreport(pipeline, fccout, "progress_f_cc_%s" % instrument)
 
 	smooth_fcc_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fcc_nogate)
 	smooth_fcc_nogate = calibration_parts.mkresample(pipeline, smooth_fcc_nogate, 1, record_kappa_caps)
+	smooth_fcc_nogate = pipeparts.mkprogressreport(pipeline, smooth_fcc_nogate, "progress_f_cc_nogate_%s" % instrument)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT

@@ -80,6 +80,8 @@ struct _GSTLALDemodulate {
 
 	/* properties */
 	int line_frequency; /* in centihertz */
+	double prefactor_real;
+	double prefactor_imag;
 };
 
 

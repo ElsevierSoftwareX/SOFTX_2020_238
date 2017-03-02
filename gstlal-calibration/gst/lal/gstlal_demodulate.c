@@ -68,73 +68,73 @@
  */
 
 
-static void demodulate_float(const float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const int frequency)
+static void demodulate_float(const float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const int frequency, complex float prefactor)
 {
 	const float *src_end;
 	guint64 i = 0;
-	__uint128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	__int128_t t_scaled, integer_arg, scale = 32000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
 		t_scaled = 32 * t + i * scale / rate;
 		integer_arg = (t_scaled * frequency) % (100 * scale);
-		*dst = *src * cexpf(-2. * M_PI * I * integer_arg / (100.0 * scale));
+		*dst = prefactor * *src * cexpf(-2. * M_PI * I * integer_arg / (100.0 * scale));
 	}
 }
 
 
-static void demodulate_double(const double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const int frequency)
+static void demodulate_double(const double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const int frequency, complex double prefactor)
 {
 	const double *src_end;
 	guint64 i = 0;
-	__uint128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	__int128_t t_scaled, integer_arg, scale = 32000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
 		t_scaled = 32 * t + i * scale / rate;
 		integer_arg = (t_scaled * frequency) % (100 * scale);
-		*dst = *src * cexp(-2. * M_PI * I * integer_arg / (100.0 * scale));
+		*dst = prefactor * *src * cexp(-2. * M_PI * I * integer_arg / (100.0 * scale));
 	}
 }
 
 
-static void demodulate_complex_float(const complex float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const int frequency)
+static void demodulate_complex_float(const complex float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const int frequency, complex float prefactor)
 {
 	const complex float *src_end;
 	guint64 i = 0;
-	__uint128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	__int128_t t_scaled, integer_arg, scale = 32000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
 		t_scaled = 32 * t + i * scale / rate;
 		integer_arg = (t_scaled * frequency) % (100 * scale);
-		*dst = *src * cexpf(-2. * M_PI * I * integer_arg / (100.0 * scale));
+		*dst = prefactor * *src * cexpf(-2. * M_PI * I * integer_arg / (100.0 * scale));
 	}
 }
 
 
-static void demodulate_complex_double(const complex double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const int frequency)
+static void demodulate_complex_double(const complex double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const int frequency, complex double prefactor)
 {
 	const complex double *src_end;
 	guint64 i = 0;
-	__uint128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	__int128_t t_scaled, integer_arg, scale = 32000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
 		t_scaled = 32 * t + i * scale / rate;
 		integer_arg = (t_scaled * frequency) % (100 * scale);
-		*dst = *src * cexp(-2. * M_PI * I * integer_arg / (100.0 * scale));
+		*dst = prefactor * *src * cexp(-2. * M_PI * I * integer_arg / (100.0 * scale));
 	}
 }
 
 
-static void demodulate(const void *src, gsize src_size, void *dst, guint64 t, gint rate, enum gstlal_demodulate_data_type data_type, const int frequency)
+static void demodulate(const void *src, gsize src_size, void *dst, guint64 t, gint rate, enum gstlal_demodulate_data_type data_type, const int frequency, complex double prefactor)
 {
 
 	switch(data_type) {
 	case GSTLAL_DEMODULATE_F32:
-		demodulate_float(src, src_size, dst, t, rate, frequency);
+		demodulate_float(src, src_size, dst, t, rate, frequency, (complex float) prefactor);
 		break;
 	case GSTLAL_DEMODULATE_F64:
-		demodulate_double(src, src_size, dst, t, rate, frequency);
+		demodulate_double(src, src_size, dst, t, rate, frequency, prefactor);
 		break;
 	case GSTLAL_DEMODULATE_Z64:
-		demodulate_complex_float(src, src_size, dst, t, rate, frequency);
+		demodulate_complex_float(src, src_size, dst, t, rate, frequency, (complex float) prefactor);
 		break;
 	case GSTLAL_DEMODULATE_Z128:
-		demodulate_complex_double(src, src_size, dst, t, rate, frequency);
+		demodulate_complex_double(src, src_size, dst, t, rate, frequency, prefactor);
 		break;
 	default:
 		g_assert_not_reached();
@@ -529,7 +529,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
-		demodulate(inmap.data, inmap.size / element->unit_size, outmap.data, GST_BUFFER_PTS(inbuf), element->rate, element->data_type, element->line_frequency);
+		demodulate(inmap.data, inmap.size / element->unit_size, outmap.data, GST_BUFFER_PTS(inbuf), element->rate, element->data_type, element->line_frequency, element->prefactor_real + I * element->prefactor_imag);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, FALSE);
 		gst_buffer_unmap(outbuf, &outmap);
 		gst_buffer_unmap(inbuf, &inmap);
@@ -570,6 +570,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 enum property {
 	ARG_LINE_FREQUENCY = 1,
+	ARG_PREFACTOR_REAL,
+	ARG_PREFACTOR_IMAG
 };
 
 
@@ -582,6 +584,12 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	switch (prop_id) {
 	case ARG_LINE_FREQUENCY:
 		element->line_frequency = (int) (100.000000000001 * g_value_get_double(value)); /* Make sure truncation does not corrupt it */
+		break;
+	case ARG_PREFACTOR_REAL:
+		element->prefactor_real = g_value_get_double(value);
+		break;
+	case ARG_PREFACTOR_IMAG:
+		element->prefactor_imag = g_value_get_double(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -601,6 +609,12 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	switch (prop_id) {
 	case ARG_LINE_FREQUENCY:
 		g_value_set_double(value, element->line_frequency / 100.0);
+		break;
+	case ARG_PREFACTOR_REAL:
+		g_value_set_double(value, element->prefactor_real);
+		break;
+	case ARG_PREFACTOR_IMAG:
+		g_value_set_double(value, element->prefactor_imag);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -650,6 +664,28 @@ static void gstlal_demodulate_class_init(GSTLALDemodulateClass *klass)
 			"The frequency of the calibration line corresponding to the calibration\n\t\t\t"
 			"factor 'kappa' we wish to extract from incoming stream",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 300.,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_PREFACTOR_REAL,
+		g_param_spec_double(
+			"prefactor-real",
+			"Real part of prefactor",
+			"The real part of a prefactor by which to multiply the outputs",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_PREFACTOR_IMAG,
+		g_param_spec_double(
+			"prefactor-imag",
+			"Imaginary part of prefactor",
+			"The imaginary part of a prefactor by which to multiply the outputs",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);

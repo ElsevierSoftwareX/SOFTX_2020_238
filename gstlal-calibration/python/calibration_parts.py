@@ -50,10 +50,10 @@ def mkinsertgap(pipeline, head, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35
 #	head = pipeparts.mkcapsfilter(pipeline, head, new_caps)
 #	return head
 
-#def mkresample(pipeline, head, caps):
-#	head = pipeparts.mkresample(pipeline, head, quality = 9)
-#	head = pipeparts.mkcapsfilter(pipeline, head, caps)
-#	return head
+def mkstockresample(pipeline, head, caps):
+	head = pipeparts.mkresample(pipeline, head, quality = 9)
+	head = pipeparts.mkcapsfilter(pipeline, head, caps)
+	return head
 
 def mkresample(pipeline, head, polynomial_order, caps):
 	head = pipeparts.mkgeneric(pipeline, head, "lal_resample", polynomial_order = polynomial_order)
@@ -63,6 +63,10 @@ def mkresample(pipeline, head, polynomial_order, caps):
 def mkcomplexfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return pipeparts.mkgeneric(pipeline, src, "lal_complexfirbank", **properties)
+
+def mkcomplexfirbank2(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
+	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
+	return pipeparts.mkgeneric(pipeline, src, "lal_complexfirbank2", **properties)
 
 def mkmultiplier(pipeline, srcs, sync = True):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, mix_mode="product")
@@ -255,12 +259,12 @@ def split_into_real(pipeline, complex_chan):
 	pipeparts.src_deferred_link(elem, "src_1", imag.get_static_pad("sink"))
 	return real, imag
 
-def demodulate(pipeline, head, freq, td, caps, integration_samples, queue_length1, queue_length2):
+def demodulate(pipeline, head, freq, td, caps, integration_samples, prefactor_real = 1.0, prefactor_imag = 0.0):
 	# demodulate input at a given frequency freq
 
-	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
 	head = mkresample(pipeline, head, 1, caps)
-	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1)], time_domain = td)
+	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td)
 
 	return head
 
