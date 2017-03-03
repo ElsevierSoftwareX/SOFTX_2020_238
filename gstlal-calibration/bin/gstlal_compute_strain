@@ -350,6 +350,12 @@ if options.factors_from_filters_file:
 	EP8_imag = float(filters["EP8_imag"])
 	EP9_real = float(filters["EP9_real"])
 	EP9_imag = float(filters["EP9_imag"])
+try:
+	ref_A_tst_real = float(filters["ref_A_tst_real"])
+	ref_A_tst_imag = float(filters["ref_A_tst_imag"])
+	cancel_esd_act_line = True
+except:
+	cancel_esd_act_line = False
 
 # Load all of the kappa dewhitening and correction factors
 darm_act_line_freq = float(filters["ka_pcal_line_freq"])
@@ -360,6 +366,20 @@ opt_gain_fcc_line_freq = float(filters["kc_pcal_line_freq"])
 pcal_corr_at_opt_gain_fcc_freq_real = float(filters["kc_pcal_corr_re"])
 pcal_corr_at_opt_gain_fcc_freq_imag = float(filters["kc_pcal_corr_im"])
 esd_act_line_freq = float(filters["ktst_esd_line_freq"])
+try:
+	src_pcal_line_freq = float(filters["src_pcal_line_freq"])
+	pcal_corr_at_src_line_freq_real = float(filters["src_pcal_corr_re"])
+	pcal_corr_at_src_line_freq_imag = float(filters["src_pcal_corr_im"])
+	cancel_src_pcal_line = True
+except:
+	cancel_src_pcal_line = False
+try:
+	roaming_pcal_line_freq = float(filters["roaming_pcal_line_freq"])
+	pcal_corr_at_roaming_line_freq_real = float(filters["roaming_pcal_corr_re"])
+	pcal_corr_at_roaming_line_freq_imag = float(filters["roaming_pcal_corr_im"])
+	cancel_roaming_pcal_line = True
+except:
+	cancel_roaming_pcal_line = False
 try:
 	fcc_default = float(filters["fcc"])
 except:
@@ -638,6 +658,8 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 	# resample and demodulate the TST excitation channel at the ESD actuation line frequency
 	tstexc = calibration_parts.mkresample(pipeline, tstexc, 3, hoft_caps)
 	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+	if options.cancel_callines and cancel_esd_act_line:
+		tstexc_at_esd_act_freq = pipeparts.mktee(pipeline, tstexc_at_esd_act_freq)
 
 	# demodulate DARM_ERR at the ESD actuation line frequency
 	derr_at_esd_act_freq = calibration_parts.demodulate(pipeline, derrtee, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
@@ -839,7 +861,28 @@ if options.cancel_callines:
 	cancel_pcaly_line2, trash = calibration_parts.split_into_real(pipeline, pcaly_line2)
 	pipeparts.mkfakesink(pipeline, trash)
 
-	cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length2)))
+	if cancel_esd_act_line:
+		esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, ref_A_tst_real, ref_A_tst_imag)
+		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		esd_act_line_cancel = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = -2.0/3994.5)
+		esd_act_line_cancel, trash = calibration_parts.split_into_real(pipeline, esd_act_line_cancel)
+		pipeparts.mkfakesink(pipeline, trash)
+
+	if cancel_roaming_pcal_line:
+		pcaly_line3 = calibration_parts.demodulate(pipeline, pcaltee, roaming_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_roaming_line_freq_real, pcal_corr_at_roaming_line_freq_imag)
+		pcaly_line3 = calibration_parts.mkresample(pipeline, pcaly_line3, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = -2.0/3994.5)
+		cancel_pcaly_line3, trash = calibration_parts.split_into_real(pipeline, pcaly_line3)
+		pipeparts.mkfakesink(pipeline, trash)
+
+	if cancel_esd_act_line and cancel_roaming_pcal_line:
+		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length1), calibration_parts.mkqueue(pipeline, esd_act_line_cancel, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line3, queue_length2)))
+	elif cancel_esd_act_line:
+		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length2), calibration_parts.mkqueue(pipeline, esd_act_line_cancel, queue_length1)))
+	elif cancel_roaming_pcal_line:
+		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line3, queue_length2)))
+	else:
+		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length2)))
 
 #
 # CONTROL BRANCH
