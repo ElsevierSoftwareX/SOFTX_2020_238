@@ -727,6 +727,8 @@ class Bank(object):
 				if(spiir_match < req_min_match):
 					epsilon -= epsilon_increment
 
+				n_filters = len(delay)
+
 			if(spiir_match < req_min_match):
 				opIIR = OptimizerIIR(length, a1, b0, delay)
 				opIIR.setTemplate(opIIR.cnormalize(h_pad1))
@@ -745,7 +747,6 @@ class Bank(object):
 			self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
 			
 			self.matches.append(spiir_match)
-			n_filters = len(a1)
 
 			if verbose:
 				logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), m1,m2, epsilon, n_filters, spiir_match, original_epsilon, original_filters, original_match))	
