@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Qi Chu <qi.chu@uwa.edu.au>
+ * Copyright (C) 2015 Qi Chu <qi.chu@ligo.org>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -35,6 +35,7 @@
 
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
 #include <cohfar/ssvkernel.h>
+#include <cohfar/knn_kde.h>
 
 char *IFO_COMBO_MAP[] = {"L1", "H1", "V1", "H1L1", "H1V1", "L1V1", "H1L1V1"};
 
@@ -209,6 +210,35 @@ background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2)
 
 gboolean
 background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
+{
+
+	gsl_vector_long *snr = rates->lgsnr_bins->data;
+	gsl_vector_long *chisq = rates->lgchisq_bins->data;
+
+	long nevent = gsl_vector_long_sum(snr);
+	if (nevent == 0)
+		return TRUE;
+	gsl_vector *snr_double = gsl_vector_alloc(snr->size);
+	gsl_vector *chisq_double = gsl_vector_alloc(chisq->size);
+	gsl_vector_long_to_double(snr, snr_double);
+	gsl_vector_long_to_double(chisq, chisq_double);
+
+	gsl_vector *tin_snr = gsl_vector_alloc(pdf->x_nbin);
+	gsl_vector *tin_chisq = gsl_vector_alloc(pdf->y_nbin);
+	gsl_vector_linspace(pdf->x_cmin, pdf->x_cmax, pdf->x_nbin, tin_snr);
+	gsl_vector_linspace(pdf->y_cmin, pdf->y_cmax, pdf->y_nbin, tin_chisq);
+
+	knn_kde(tin_snr, tin_chisq, (gsl_matrix_long *)rates->hist->data, (gsl_matrix *)pdf->data);
+
+}
+
+
+/* deprecated: ssvkernel-2d estimation is not 
+ * consistent with histogram
+ */
+
+gboolean
+background_stats_rates_to_pdf_ssvkernel(BackgroundRates *rates, Bins2D *pdf)
 {
 
 	gsl_vector_long *snr = rates->lgsnr_bins->data;
