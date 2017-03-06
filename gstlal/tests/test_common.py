@@ -58,6 +58,7 @@ else:
 
 
 def complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, test_duration = 10.0, wave = 5, freq = 0, is_live = False, verbose = True):
+	assert not width % 8
 	head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length), is_live = is_live)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=Z%d%s, rate=%d, channels=2" % (width, BYTE_ORDER, rate))
 	head = pipeparts.mktogglecomplex(pipeline, head)
@@ -67,6 +68,7 @@ def complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, tes
 
 
 def test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, channels = 1, test_duration = 10.0, wave = 5, freq = 0, is_live = False, verbose = True):
+	assert not width % 8
 	if wave == "ligo":
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = "H1", channel_name = "LSC-STRAIN")
 	else:
