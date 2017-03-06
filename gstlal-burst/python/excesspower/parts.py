@@ -45,7 +45,7 @@ import lal
 from lal.utils import CacheEntry
 
 from lalburst import snglcluster
-from lalburst import ligolw_bucluster
+from lalburst import bucluster
 
 from glue import datafind
 
@@ -490,7 +490,7 @@ class EPHandler(Handler):
 	def clustering(self, value):
 		self._clustering = value
 		if len(self.triggers) > 1:
-			ligolw_bucluster.add_ms_columns_to_table(self.triggers)
+			bucluster.add_ms_columns_to_table(self.triggers)
 
 	@classmethod
 	def make_output_table(cls, add_ms_columns=False):
@@ -500,7 +500,7 @@ class EPHandler(Handler):
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
 		#if add_ms_columns:
-			#ligolw_bucluster.add_ms_columns_to_table(tbl)
+			#bucluster.add_ms_columns_to_table(tbl)
 		return tbl
 
 	def get_triggers(self, appsink):
@@ -602,15 +602,15 @@ class EPHandler(Handler):
 		# Pipe down unless its important
 		verbose = self.verbose and full
 		changed = True
-		ligolw_bucluster.add_ms_columns_to_table(self.triggers)
-		off = ligolw_bucluster.ExcessPowerPreFunc(self.triggers)
+		bucluster.add_ms_columns_to_table(self.triggers)
+		off = bucluster.ExcessPowerPreFunc(self.triggers)
 		while changed and self._clustering:
 			changed = snglcluster.cluster_events( 
 				events = self.triggers,
-				testfunc = ligolw_bucluster.ExcessPowerTestFunc,
-				clusterfunc = ligolw_bucluster.ExcessPowerClusterFunc,
-				sortfunc = ligolw_bucluster.ExcessPowerSortFunc,
-				bailoutfunc = ligolw_bucluster.ExcessPowerBailoutFunc,
+				testfunc = bucluster.ExcessPowerTestFunc,
+				clusterfunc = bucluster.ExcessPowerClusterFunc,
+				sortfunc = bucluster.ExcessPowerSortFunc,
+				bailoutfunc = bucluster.ExcessPowerBailoutFunc,
 				verbose = verbose
 			)
 			# If full clustering is on, ignore the number of cluster_passes
@@ -619,7 +619,7 @@ class EPHandler(Handler):
 			# If we've reached the number of requested passes, break out
 			if cluster_passes <= 0: 
 				break
-		ligolw_bucluster.ExcessPowerPostFunc(self.triggers, off)
+		bucluster.ExcessPowerPostFunc(self.triggers, off)
 
 	# FIXME: Remove flush argument, it serves no purpose
 	def write_triggers(self, filename, flush=False, seg=None):
