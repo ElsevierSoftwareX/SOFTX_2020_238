@@ -73,7 +73,7 @@ class HyperCube(object):
 		rightbound[dim,0] = self.center[dim]
 		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
-	def tile(self, mismatch, stochastic = False):
+	def tile(self, mismatch, stochastic = False, neighbor_tiles = []):
 
 		popcount = 0
 
@@ -92,14 +92,15 @@ class HyperCube(object):
 			# From Chad
 			target = int(numpy.ceil(self.num_templates(mismatch))) + 10
 			iters = 0
-			neighbor_tiles = []
-			for neighbor in self.neighbors:
-				neighbor_tiles.extend(list(neighbor.tiles))
-				for other in neighbor.neighbors:
-					neighbor_tiles.extend(list(other.tiles))
-			neighbor_tiles = list(neighbor_tiles)
-			if len(neighbor_tiles) == 0:
-				self.tiles.append(self.center)
+			if not neighbor_tiles:
+				neighbor_tiles = []
+				for neighbor in self.neighbors:
+					neighbor_tiles.extend(list(neighbor.tiles))
+					for other in neighbor.neighbors:
+						neighbor_tiles.extend(list(other.tiles))
+				neighbor_tiles = list(neighbor_tiles)
+				if len(neighbor_tiles) == 0:
+					self.tiles.append(self.center)
 
 			# FIXME don't hardcode this tolerance
 			matches = []

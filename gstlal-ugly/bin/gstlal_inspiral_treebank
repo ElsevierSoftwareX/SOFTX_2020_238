@@ -75,6 +75,8 @@ def parse_command_line():
 					default=0.95, help="Minimum match to generate bank.")
 	parser.add_argument("--stochastic", action="store_true", \
 					default=False, help="Use stochastic placement for tiling instead of a regular lattice.")
+	parser.add_argument("--disable-neighbors", action="store_true", \
+					default=False, help="Compute matches between all tempaltes for new stochastic proposals.")
 	parser.add_argument("--rng-seed", action="store", type=float,\
 					default=314, help="Set seed used for random number generator. Relevant only when using stocahstic placement.")
 	parser.add_argument("--flow", action="store", type=float,\
@@ -205,12 +207,11 @@ expected = 0
 bad_metrics = 0
 for n, c in enumerate(nodes):
 
-	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic)
+	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic, neighbor_tiles = previous_tiles if args.disable_neighbors else [])
 	expected += c.num_templates(mismatch)
 	if not c.metric.metric_is_valid:
 		bad_metrics+=1
 	totalpopcount = totalpopcount + temppopcount
-	previous_tiles.extend(tiles)
 
 	for t in tiles:
 		row = lsctables.SnglInspiralTable.RowType()
@@ -227,6 +228,7 @@ for n, c in enumerate(nodes):
 		#print row.mass1, row.mass2
 		if coord_limits[0][0] <= row.mass1 <= coord_limits[0][1] and coord_limits[1][0] <= row.mass2 <= coord_limits[1][1]: 
 			tbl.append(row)
+			previous_tiles.extend(tiles)
 
         if args.verbose:
 		print "Placed %04d tiles in hyperrectangle %d/%d with boundary:" % (len(tiles), n+1, len(nodes))
