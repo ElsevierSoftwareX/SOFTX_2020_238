@@ -82,7 +82,7 @@ def firbank_test_01(pipeline, name, width, time_domain):
 
 
 #
-# does the firbank work with input and outpu streams that have differnt
+# does the firbank work with input and output streams that have differnt
 # numbers of channels
 #
 
