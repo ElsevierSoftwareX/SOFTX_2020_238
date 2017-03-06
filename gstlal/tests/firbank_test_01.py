@@ -89,7 +89,7 @@ def firbank_test_01(pipeline, name, width, time_domain):
 
 def firbank_test_02(pipeline, name, width, time_domain):
 	# 1 channel goes into firbank
-	head = test_common.test_src(pipeline, buffer_length = 10.0, rate = 16384, width = width, channels = 1, test_duration = 10000.0, wave = 5, verbose = True)
+	head = test_common.test_src(pipeline, buffer_length = 10.0, rate = 16384, width = width, channels = 1, test_duration = 200.0, wave = 5, verbose = True)
 	# 200 channels come out
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.ones((200, 1)), time_domain = time_domain)
 	pipeparts.mkfakesink(pipeline, head)
