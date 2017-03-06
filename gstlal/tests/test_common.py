@@ -59,7 +59,8 @@ else:
 
 def complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, test_duration = 10.0, wave = 5, freq = 0, is_live = False, verbose = True):
 	assert not width % 8
-	head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, blocksize = (width / 8 * 2) * int(round(buffer_length * rate)), volume = 1, num_buffers = int(round(test_duration / buffer_length)), is_live = is_live)
+	samplesperbuffer = int(round(buffer_length * rate))
+	head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, volume = 1, blocksize = (width / 8 * 2) * samplesperbuffer, samplesperbuffer = samplesperbuffer, num_buffers = int(round(test_duration / buffer_length)), is_live = is_live)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=Z%d%s, rate=%d, channels=2" % (width, BYTE_ORDER, rate))
 	head = pipeparts.mktogglecomplex(pipeline, head)
 	if verbose:
@@ -72,7 +73,8 @@ def test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, channels = 
 	if wave == "ligo":
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = "H1", channel_name = "LSC-STRAIN")
 	else:
-		head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, blocksize = (width / 8 * channels) * int(round(buffer_length * rate)), volume = 1, num_buffers = int(round(test_duration / buffer_length)), is_live = is_live)
+		samplesperbuffer = int(round(buffer_length * rate))
+		head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, volume = 1, blocksize = (width / 8 * channels) * samplesperbuffer, samplesperbuffer = samplesperbuffer, num_buffers = int(round(test_duration / buffer_length)), is_live = is_live)
 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=F%d%s, rate=%d, channels=%d" % (width, BYTE_ORDER, rate, channels))
 	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "src")
@@ -82,7 +84,8 @@ def test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 64, channels = 
 def add_gaps(pipeline, head, buffer_length, rate, test_duration, gap_frequency = None, gap_threshold = None, control_dump_filename = None):
 	if gap_frequency is None:
 		return head
-	control = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 0, freq = gap_frequency, blocksize = 4 * int(round(buffer_length * rate)), volume = 1, num_buffers = int(round(test_duration / buffer_length))), "audio/x-raw, format=F32%s, rate=%d, channels=1" % (BYTE_ORDER, rate))
+	samplesperbuffer = int(round(buffer_length * rate))
+	control = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 0, freq = gap_frequency, volume = 1, blocksize = 4 * samplesperbuffer, samplesperbuffer = samplesperbuffer, num_buffers = int(round(test_duration / buffer_length))), "audio/x-raw, format=F32%s, rate=%d, channels=1" % (BYTE_ORDER, rate))
 	if control_dump_filename is not None:
 		control = pipeparts.mknxydumpsinktee(pipeline, pipeparts.mkqueue(pipeline, control), control_dump_filename)
 		control = pipeparts.mkqueue(pipeline, control)
