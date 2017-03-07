@@ -935,6 +935,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 		# compute SRC Q
 		if not options.no_srcQ:
 			XiI_inv = pipeparts.mkpow(pipeline, XiI, exponent = -1.0)
+			XiI_inv = pipeparts.mkaudioamplify(pipeline, XiI_inv, -1.0)
 			srcQ = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, sqrtXiR, queue_length1), calibration_parts.mkqueue(pipeline, XiI_inv, queue_length2)))
 			srcQ = pipeparts.mktee(pipeline, srcQ)
 			smooth_srcQ_nogate = pipeparts.mkgeneric(pipeline, srcQ, "lal_smoothkappas", default_kappa_re = options.expected_srcQ, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
