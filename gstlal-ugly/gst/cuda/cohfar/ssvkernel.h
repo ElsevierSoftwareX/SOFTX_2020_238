@@ -30,6 +30,8 @@
 //pc: pdf and cdf
 ///////////////////////////////
 
+#ifndef __SSVKERNEL__
+#define __SSVKERNEL__
 
 #include <stdio.h>
 #include <math.h>
@@ -91,3 +93,5 @@ void gsl_vector_linspace(double min_val, double max_val, size_t num,
 double gsl_vector_mindiff(gsl_vector * x); //x must be in ascending order
 void ssvkernel_from_hist(gsl_vector * y_hist_input, gsl_vector * tin, gsl_matrix * result);
 void ssvkernel(gsl_vector * x, gsl_vector * tin, gsl_vector * y_hist_result,gsl_matrix * result);
+
+#endif /* SSVKERNEL */

@@ -154,13 +154,13 @@ int main(int argc, char *argv[])
 		// FIXME: hardcoded to only update the last stats
 		background_stats_rates_update_all(data_dim1, data_dim2, stats_out[ncombo-1]->rates);
 		background_stats_rates_to_pdf(stats_out[ncombo-1]->rates, stats_out[ncombo-1]->pdf);
-		background_stats_pdf_to_cdf(stats_out[ncombo-1]->pdf, stats_out[ncombo-1]->cdf);
+		background_stats_pdf_to_fap(stats_out[ncombo-1]->pdf, stats_out[ncombo-1]->cdf);
 		// background_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
 	} else if(g_strcmp0(*pfmt, "stats") == 0) {
 		cohfar_get_stats_from_file(in_fnames, stats_in, stats_out, ncombo);
 		for (icombo=0; icombo<ncombo; icombo++) {
 			background_stats_rates_to_pdf(stats_out[icombo]->rates, stats_out[icombo]->pdf);
-			background_stats_pdf_to_cdf(stats_out[icombo]->pdf, stats_out[icombo]->cdf);
+			background_stats_pdf_to_fap(stats_out[icombo]->pdf, stats_out[icombo]->cdf);
 		}
 	}
 	background_stats_to_xml(stats_out, ncombo, *pout);

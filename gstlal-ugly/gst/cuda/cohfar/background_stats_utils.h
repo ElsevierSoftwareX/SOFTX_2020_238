@@ -39,10 +39,10 @@ Bins1D *
 bins1D_create_long(double cmin, double cmax, int nbin);
 
 Bins2D *
-bins2D_create(double x_cmin, double x_cmax, int x_nbin, double y_cmin, double y_cmax, int y_nbin);
+bins2D_create(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cmax_y, int nbin_y);
 
 Bins2D *
-bins2D_create_long(double x_cmin, double x_cmax, int x_nbin, double y_cmin, double y_cmax, int y_nbin);
+bins2D_create_long(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cmax_y, int nbin_y);
 
 BackgroundStats **
 background_stats_create(char *ifos);

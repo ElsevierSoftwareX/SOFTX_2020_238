@@ -28,6 +28,7 @@
 
 #include <math.h>
 #include <cohfar/knn_kde.h>
+#include <cohfar/ssvkernel.h>
 
 static int get_num_nonzero(gsl_matrix_long *histogram)
 {
@@ -104,21 +105,21 @@ static double get_kth_value(double * all_dist, int len, int knn_k)// Puts the di
 }
 
 
-static void set_kth_dist(gsl_matrix_long * nonzero_idx, int knn_k, gsl_vector *kth_dist)// Calculates the distance from each grid point to each data point, calling ascend() to order them 
+static void set_kth_dist(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long * nonzero_idx, int knn_k, gsl_vector *kth_dist)// Calculates the distance from each grid point to each data point, calling ascend() to order them 
 {
 
 	int i = 0,j = 0;
 	int num_nonzero = nonzero_idx->size1;
 	double *all_dist = (double*)malloc(sizeof(double)*num_nonzero);
-	double kth_value = 0;
+	double kth_value = 0, dx = gsl_vector_mindiff(tin_x), dy = gsl_vector_mindiff(tin_y);
 	for (i=0;i<num_nonzero;i++)
 	{
 		for (j=0;j<num_nonzero;j++)
 		{
-			all_dist[j] = sqrt(pow(gsl_matrix_long_get(nonzero_idx, i, 0) - gsl_matrix_long_get(nonzero_idx, j, 0) , 2) + pow(gsl_matrix_long_get(nonzero_idx, i, 1) - gsl_matrix_long_get(nonzero_idx, j, 1), 2));
+			all_dist[j] = sqrt(pow((gsl_matrix_long_get(nonzero_idx, i, 0) - gsl_matrix_long_get(nonzero_idx, j, 0))*dx , 2) + pow((gsl_matrix_long_get(nonzero_idx, i, 1) - gsl_matrix_long_get(nonzero_idx, j, 1))*dy, 2));
 		}
 		kth_value = get_kth_value_gsl(all_dist, num_nonzero, knn_k);
-		printf("%d nonzero, kth neighbour dist %f\n", i, kth_value);
+		//printf("%d nonzero, kth neighbour dist %f\n", i, kth_value);
 		gsl_vector_set(kth_dist, i, kth_value);
 	}
 	free(all_dist);
@@ -134,7 +135,15 @@ static void set_pdf(double band_const, gsl_vector *tin_x, gsl_vector *tin_y, gsl
 	double dist, gau, sum_gau = 0.0;
 	double cur_x_coor, cur_y_coor, knn_x_coor, knn_y_coor;
 	double norm_factor = 0, hband;
+	double norm_machine = (double) gsl_matrix_long_max(histogram);
+	//two-dimensional histogram
+	gsl_matrix *histogram_double = gsl_matrix_alloc(histogram->size1, histogram->size2);
+	gsl_matrix_long_to_double(histogram, histogram_double);
+	double scale_factor = gsl_matrix_sum(histogram_double);
+	gsl_matrix_scale(histogram_double, 1/scale_factor);
 
+
+	
 	for(i=0;i<x_nbin;i++)
 	{
 		for(j=0;j<y_nbin;j++)
@@ -150,16 +159,29 @@ static void set_pdf(double band_const, gsl_vector *tin_x, gsl_vector *tin_y, gsl
 				knn_y_coor = gsl_vector_get(tin_y, knn_y_idx); 
 				hband = band_const* gsl_vector_get(kth_dist, k);
 				dist = -(pow(cur_x_coor - knn_x_coor, 2) + pow(cur_y_coor - knn_y_coor, 2))/(2 * pow(hband, 2));
-				gau = exp(dist)*((double)gsl_matrix_long_get(histogram, knn_x_idx, knn_y_idx))/(2 * M_PI * pow(hband, 2));
+				gau = exp(dist)*(gsl_matrix_get(histogram_double, knn_x_idx, knn_y_idx))/(2 * M_PI * pow(hband, 2));
 				sum_gau = sum_gau + gau;
 			}
-			printf("i %d, j %d, sum_gau %lf\n", i, j, sum_gau);
 			gsl_matrix_set(pdf, i, j, sum_gau);
+			//printf("i %d, j %d, pdf %lf\n", i, j, gsl_matrix_get(pdf, i, j));
 		}
 	}
-	/* normalization that sum(pdf) == 1 */
-	norm_factor = 1/ gsl_matrix_sum(pdf);
-	gsl_matrix_scale(pdf, norm_factor);
+	// normalize pdf
+	double dx = gsl_vector_mindiff(tin_x), dy = gsl_vector_mindiff(tin_y);
+
+	gsl_matrix_scale(histogram_double, 1/(dx*dy));
+	gsl_matrix_sub(histogram_double, pdf);
+	gsl_matrix_mul_elements(histogram_double, histogram_double);
+	double mise = sqrt(gsl_matrix_sum(histogram_double));
+	printf("mise %lf\n", mise);
+       	double pdf_sum = dx * dy * gsl_matrix_sum(pdf);
+	//printf("sum of pdf %lf\n", pdf_sum);
+	gsl_matrix_scale(pdf, 1/pdf_sum);
+	
+	/* deprecated; norm_factor is problematic, causing zeros of pdf. normalization that sum(pdf) == 1 */
+	// norm_factor = 1/ gsl_matrix_sum(pdf);
+	//printf("norm_factor %lf\n", norm_factor);
+	//gsl_matrix_scale(pdf, norm_factor);
 }
 
 void
@@ -176,7 +198,7 @@ knn_kde(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long *histogram, gsl_ma
 
 	gsl_vector * kth_dist = gsl_vector_alloc(num_nonzero);
 	printf("finding kth neighbour\n");
-	set_kth_dist(nonzero_idx, knn_k, kth_dist);
+	set_kth_dist(tin_x, tin_y, nonzero_idx, knn_k, kth_dist);
 	printf("calculating pdf\n");
 	set_pdf(band_const, tin_x, tin_y, histogram, nonzero_idx, kth_dist, pdf);
 

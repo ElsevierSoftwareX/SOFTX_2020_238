@@ -60,16 +60,16 @@ typedef struct {
 } Bins1D;
 
 typedef struct {
-	double	x_cmin;
-	double	x_cmax;
-	int	x_nbin;
-	double	x_step;
-	double	x_step_2;
-	double	y_cmin;
-	double	y_cmax;
-	int	y_nbin;
-	double	y_step;
-	double	y_step_2;
+	double	cmin_x;
+	double	cmax_x;
+	int	nbin_x;
+	double	step_x;
+	double	step_x_2;
+	double	cmin_y;
+	double	cmax_y;
+	int	nbin_y;
+	double	step_y;
+	double	step_y_2;
 	void	*data; //gsl_matrix or gsl_matrix_long
 } Bins2D;
 

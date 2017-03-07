@@ -80,37 +80,37 @@ bins1D_create_long(double cmin, double cmax, int nbin)
 }
 
 Bins2D *
-bins2D_create(double x_cmin, double x_cmax, int x_nbin, double y_cmin, double y_cmax, int y_nbin) 
+bins2D_create(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cmax_y, int nbin_y) 
 {
   Bins2D * bins = (Bins2D *) malloc(sizeof(Bins2D));
-  bins->x_cmin = x_cmin;
-  bins->x_cmax = x_cmax;
-  bins->x_nbin = x_nbin;
-  bins->x_step = (x_cmax - x_cmin) / (x_nbin - 1);
-  bins->x_step_2 = bins->x_step / 2;
-  bins->y_cmin = y_cmin;
-  bins->y_cmax = y_cmax;
-  bins->y_nbin = y_nbin;
-  bins->y_step = (y_cmax - y_cmin) / (y_nbin - 1);
-  bins->y_step_2 = bins->y_step / 2;
-  bins->data = gsl_matrix_alloc(x_nbin, y_nbin);
+  bins->cmin_x = cmin_x;
+  bins->cmax_x = cmax_x;
+  bins->nbin_x = nbin_x;
+  bins->step_x = (cmax_x - cmin_x) / (nbin_x - 1);
+  bins->step_x_2 = bins->step_x / 2;
+  bins->cmin_y = cmin_y;
+  bins->cmax_y = cmax_y;
+  bins->nbin_y = nbin_y;
+  bins->step_y = (cmax_y - cmin_y) / (nbin_y - 1);
+  bins->step_y_2 = bins->step_y / 2;
+  bins->data = gsl_matrix_alloc(nbin_x, nbin_y);
   gsl_matrix_set_zero(bins->data);
   return bins;
 }
 
 Bins2D *
-bins2D_create_long(double x_cmin, double x_cmax, int x_nbin, double y_cmin, double y_cmax, int y_nbin) 
+bins2D_create_long(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cmax_y, int nbin_y) 
 {
   Bins2D * bins = (Bins2D *) malloc(sizeof(Bins2D));
-  bins->x_cmin = x_cmin;
-  bins->x_cmax = x_cmax;
-  bins->x_nbin = x_nbin;
-  bins->x_step = (x_cmax - x_cmin) / (x_nbin - 1);
-  bins->y_cmin = y_cmin;
-  bins->y_cmax = y_cmax;
-  bins->y_nbin = y_nbin;
-  bins->y_step = (y_cmax - y_cmin) / (y_nbin - 1);
-  bins->data = gsl_matrix_long_alloc(x_nbin, y_nbin);
+  bins->cmin_x = cmin_x;
+  bins->cmax_x = cmax_x;
+  bins->nbin_x = nbin_x;
+  bins->step_x = (cmax_x - cmin_x) / (nbin_x - 1);
+  bins->cmin_y = cmin_y;
+  bins->cmax_y = cmax_y;
+  bins->nbin_y = nbin_y;
+  bins->step_y = (cmax_y - cmin_y) / (nbin_y - 1);
+  bins->data = gsl_matrix_long_alloc(nbin_x, nbin_y);
   gsl_matrix_long_set_zero(bins->data);
   return bins;
 }
@@ -205,7 +205,7 @@ background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2)
 }
 
 /*
- * background cdf utils
+ * background cdf utils, consistent with the matlab pdf code
  */
 
 gboolean
@@ -223,10 +223,10 @@ background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf)
 	gsl_vector_long_to_double(snr, snr_double);
 	gsl_vector_long_to_double(chisq, chisq_double);
 
-	gsl_vector *tin_snr = gsl_vector_alloc(pdf->x_nbin);
-	gsl_vector *tin_chisq = gsl_vector_alloc(pdf->y_nbin);
-	gsl_vector_linspace(pdf->x_cmin, pdf->x_cmax, pdf->x_nbin, tin_snr);
-	gsl_vector_linspace(pdf->y_cmin, pdf->y_cmax, pdf->y_nbin, tin_chisq);
+	gsl_vector *tin_snr = gsl_vector_alloc(pdf->nbin_x);
+	gsl_vector *tin_chisq = gsl_vector_alloc(pdf->nbin_y);
+	gsl_vector_linspace(pdf->cmin_x, pdf->cmax_x, pdf->nbin_x, tin_snr);
+	gsl_vector_linspace(pdf->cmin_y, pdf->cmax_y, pdf->nbin_y, tin_chisq);
 
 	knn_kde(tin_snr, tin_chisq, (gsl_matrix_long *)rates->hist->data, (gsl_matrix *)pdf->data);
 
@@ -252,13 +252,13 @@ background_stats_rates_to_pdf_ssvkernel(BackgroundRates *rates, Bins2D *pdf)
 	gsl_vector_long_to_double(snr, snr_double);
 	gsl_vector_long_to_double(chisq, chisq_double);
 
-	gsl_vector *tin_snr = gsl_vector_alloc(pdf->x_nbin);
-	gsl_vector *tin_chisq = gsl_vector_alloc(pdf->y_nbin);
-	gsl_vector_linspace(pdf->x_cmin, pdf->x_cmax, pdf->x_nbin, tin_snr);
-	gsl_vector_linspace(pdf->y_cmin, pdf->y_cmax, pdf->y_nbin, tin_chisq);
+	gsl_vector *tin_snr = gsl_vector_alloc(pdf->nbin_x);
+	gsl_vector *tin_chisq = gsl_vector_alloc(pdf->nbin_y);
+	gsl_vector_linspace(pdf->cmin_x, pdf->cmax_x, pdf->nbin_x, tin_snr);
+	gsl_vector_linspace(pdf->cmin_y, pdf->cmax_y, pdf->nbin_y, tin_chisq);
 
-	gsl_matrix *result_snr = gsl_matrix_alloc(pdf->x_nbin, pdf->x_nbin);
-	gsl_matrix *result_chisq = gsl_matrix_alloc(pdf->y_nbin, pdf->y_nbin);
+	gsl_matrix *result_snr = gsl_matrix_alloc(pdf->nbin_x, pdf->nbin_x);
+	gsl_matrix *result_chisq = gsl_matrix_alloc(pdf->nbin_y, pdf->nbin_y);
 
 	ssvkernel_from_hist(snr_double, tin_snr, result_snr);
 	ssvkernel_from_hist(chisq_double, tin_chisq, result_chisq);
@@ -296,11 +296,11 @@ background_stats_rates_to_pdf_ssvkernel(BackgroundRates *rates, Bins2D *pdf)
 	}
 
 	// normalize pdf
-	double x_step = pdf->x_step, y_step = pdf->y_step;
+	double step_x = pdf->step_x, step_y = pdf->step_y;
 	double pdf_sum;
-       	pdf_sum = x_step * y_step * gsl_matrix_sum(result);
+       	pdf_sum = step_x * step_y * gsl_matrix_sum(result);
 	gsl_matrix_scale(result, 1/pdf_sum);
-	//printf("pdf sum %f\n", gsl_matrix_sum(result) * x_step * y_step);
+	//printf("pdf sum %f\n", gsl_matrix_sum(result) * step_x * step_y);
 	
 	gsl_vector_free(snr_double);
 	gsl_vector_free(chisq_double);
@@ -313,28 +313,52 @@ background_stats_rates_to_pdf_ssvkernel(BackgroundRates *rates, Bins2D *pdf)
 	return TRUE;
 }
 
-void
-background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf)
+static double gsl_matrix_accum_pdf(gsl_matrix *pdfdata, gsl_matrix *cdfdata, double cur_cdf)
 {
-	int x_nbin = pdf->x_nbin, y_nbin = pdf->y_nbin;
-	int ix, iy;
-       	double	tmp;
-	gsl_matrix *pdfdata = pdf->data, *cdfdata = cdf->data;
+	int nbin_x = pdfdata->size1, nbin_y = pdfdata->size2;
+	int ibin_x, ibin_y;
+	double fap = 0.0;
+	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) 
+		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) 
+			if (gsl_matrix_get(cdfdata, ibin_x, ibin_y) <= cur_cdf)
+				fap += gsl_matrix_get(pdfdata, ibin_x, ibin_y);
 
-	for (ix=x_nbin-1; ix>=0; ix--) {
-		for (iy=0; iy<=y_nbin-1; iy++) {
+	return fap;
+
+}
+/* this is acutally fap */
+void
+background_stats_pdf_to_fap(Bins2D *pdf, Bins2D *cdf)
+{
+	int nbin_x = pdf->nbin_x, nbin_y = pdf->nbin_y;
+	int ibin_x, ibin_y;
+       	double	tmp;
+	gsl_matrix *pdfdata = pdf->data, *fapdata = cdf->data;
+	gsl_matrix *cdfdata = gsl_matrix_calloc(pdfdata->size1, pdfdata->size2);
+
+	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
+		for (ibin_y=0; ibin_y<=nbin_y-1; ibin_y++) {
 			tmp = 0;
-			if (iy > 0)
-				tmp += gsl_matrix_get(cdfdata, ix, iy-1);
-			if (ix < x_nbin-1)
-				tmp += gsl_matrix_get(cdfdata, ix+1, iy);
-			if (ix < x_nbin-1 && iy > 0)
-				tmp -= gsl_matrix_get(cdfdata, ix+1, iy-1);
-			tmp += gsl_matrix_get(pdfdata, ix, iy) * pdf->x_step * pdf->y_step;
-			gsl_matrix_set(cdfdata, ix, iy, tmp);
+			if (ibin_y > 0)
+				tmp += gsl_matrix_get(cdfdata, ibin_x, ibin_y-1);
+			if (ibin_x < nbin_x-1)
+				tmp += gsl_matrix_get(cdfdata, ibin_x+1, ibin_y);
+			if (ibin_x < nbin_x-1 && ibin_y > 0)
+				tmp -= gsl_matrix_get(cdfdata, ibin_x+1, ibin_y-1);
+			tmp += gsl_matrix_get(pdfdata, ibin_x, ibin_y) * pdf->step_x * pdf->step_y;
+			gsl_matrix_set(cdfdata, ibin_x, ibin_y, tmp);
 		}
 	}
-	//printf("cdf cmax %f\n", gsl_matrix_cmax(cdfdata));
+	double cur_cdf, fap;
+	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
+		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) {
+			cur_cdf = gsl_matrix_get(cdfdata, ibin_x, ibin_y);
+			fap = gsl_matrix_accum_pdf(pdfdata, cdfdata, cur_cdf);
+			gsl_matrix_set(fapdata, ibin_x, ibin_y, fap*pdf->step_x*pdf->step_y);
+		}
+	}
+
+	//printf("cdf cmax %f\n", gsl_matricmax_x(cdfdata));
 }
 
 double
@@ -342,8 +366,8 @@ background_stats_bins2D_get_val(double snr, double chisq, Bins2D *bins)
 {
   double lgsnr = log10(snr), lgchisq = log10(chisq);
   int x_idx = 0, y_idx = 0;
-  x_idx = MIN(MAX((lgsnr - bins->x_cmin - bins->x_step_2) / bins->x_step, 0), bins->x_nbin-1);
-  y_idx = MIN(MAX((lgchisq - bins->y_cmin - bins->y_step_2) / bins->y_step, 0), bins->y_nbin-1);
+  x_idx = MIN(MAX((lgsnr - bins->cmin_x - bins->step_x_2) / bins->step_x, 0), bins->nbin_x-1);
+  y_idx = MIN(MAX((lgchisq - bins->cmin_y - bins->step_y_2) / bins->step_y, 0), bins->nbin_y-1);
   return gsl_matrix_get(bins->data, x_idx, y_idx);
 }
 
@@ -393,15 +417,15 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
   /* load to stats */
 
   printf( "after parse stats file\n" );
-  int x_nbin = stats[0]->pdf->x_nbin, y_nbin = stats[0]->pdf->y_nbin;
-  int x_size = sizeof(double) * x_nbin, y_size = sizeof(double) * y_nbin;
-  int xy_size = sizeof(double) * x_nbin * y_nbin;
+  int nbin_x = stats[0]->pdf->nbin_x, nbin_y = stats[0]->pdf->nbin_y;
+  int x_size = sizeof(double) * nbin_x, y_size = sizeof(double) * nbin_y;
+  int xy_size = sizeof(double) * nbin_x * nbin_y;
 
   /* make sure the dimensions of the acquired array is consistent 
    * with the dimensions we can read set in the .h file
    */
-  g_assert(array_lgsnr_bins[0].dim[0] == x_nbin);
-  g_assert(array_lgchisq_bins[0].dim[0] == y_nbin);
+  g_assert(array_lgsnr_bins[0].dim[0] == nbin_x);
+  g_assert(array_lgchisq_bins[0].dim[0] == nbin_y);
 
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
@@ -441,34 +465,34 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   XmlArray *array_pdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_cdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
 
-  int x_nbin = stats[0]->pdf->x_nbin, y_nbin = stats[0]->pdf->y_nbin;
-  int x_size = sizeof(double) * x_nbin, y_size = sizeof(double) * y_nbin;
-  int xy_size = sizeof(double) * x_nbin * y_nbin;
+  int nbin_x = stats[0]->pdf->nbin_x, nbin_y = stats[0]->pdf->nbin_y;
+  int x_size = sizeof(double) * nbin_x, y_size = sizeof(double) * nbin_y;
+  int xy_size = sizeof(double) * nbin_x * nbin_y;
 
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
     BackgroundRates *rates = cur_stats->rates;
     array_lgsnr_bins[icombo].ndim = 1;
-    array_lgsnr_bins[icombo].dim[0] = x_nbin;
+    array_lgsnr_bins[icombo].dim[0] = nbin_x;
     array_lgsnr_bins[icombo].data = (long *) malloc(x_size);
     memcpy(array_lgsnr_bins[icombo].data, ((gsl_vector_long *)rates->lgsnr_bins->data)->data, x_size);
     array_lgchisq_bins[icombo].ndim = 1;
-    array_lgchisq_bins[icombo].dim[0] = y_nbin;
+    array_lgchisq_bins[icombo].dim[0] = nbin_y;
     array_lgchisq_bins[icombo].data = (long *) malloc(y_size);
     memcpy(array_lgchisq_bins[icombo].data, ((gsl_vector_long *)rates->lgchisq_bins->data)->data, y_size);
     array_hist[icombo].ndim = 2;
-    array_hist[icombo].dim[0] = x_nbin;
-    array_hist[icombo].dim[1] = y_nbin;
+    array_hist[icombo].dim[0] = nbin_x;
+    array_hist[icombo].dim[1] = nbin_y;
     array_hist[icombo].data = (long *) malloc(xy_size);
     memcpy(array_hist[icombo].data, ((gsl_matrix_long *)rates->hist->data)->data, xy_size);
     array_pdf[icombo].ndim = 2;
-    array_pdf[icombo].dim[0] = x_nbin;
-    array_pdf[icombo].dim[1] = y_nbin;
+    array_pdf[icombo].dim[0] = nbin_x;
+    array_pdf[icombo].dim[1] = nbin_y;
     array_pdf[icombo].data = (double *) malloc(xy_size);
     memcpy(array_pdf[icombo].data, ((gsl_matrix *)cur_stats->pdf->data)->data, xy_size);
     array_cdf[icombo].ndim = 2;
-    array_cdf[icombo].dim[0] = x_nbin;
-    array_cdf[icombo].dim[1] = y_nbin;
+    array_cdf[icombo].dim[0] = nbin_x;
+    array_cdf[icombo].dim[1] = nbin_y;
     array_cdf[icombo].data = (double *) malloc(x_size * y_size);
     memcpy(array_cdf[icombo].data, ((gsl_matrix *)cur_stats->cdf->data)->data, xy_size);
   
