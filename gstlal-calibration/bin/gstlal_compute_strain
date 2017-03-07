@@ -159,6 +159,8 @@ parser.add_option("--no-kappatst", action = "store_true", help = "Set this to tu
 parser.add_option("--no-kappapu", action = "store_true", help = "Set this to turn off the calculation of \kappa_pu.")
 parser.add_option("--no-kappac", action = "store_true", help = "Set this to turn off the calculation of \kappa_c.")
 parser.add_option("--no-fcc", action = "store_true", help = "Set this to turn off the calculation of f_cc.")
+parser.add_option("--no-srcQ", action = "store_true", help = "Set this to turn off the calculation of the SRC Q.")
+parser.add_option("--no-fs", action = "store_true", help = "Set this to turn off the calculation of the SRC spring frequency.")
 parser.add_option("--factors-averaging-time", metavar = "Sec", type = int, default = 10, help = "Time over which to average the smoothed time-varying calibration factors (\kappas), given in seconds. (Default = 10 seconds)")
 parser.add_option("--apply-kappapu", action = "store_true", help = "Set this to have the \kappa_pu factors multiply the actuation chain.")
 parser.add_option("--apply-kappatst", action = "store_true", help = "Set this to have the \kappa_tst factors multiply the actuation chain.")
@@ -174,12 +176,16 @@ parser.add_option("--expected-kappapu-imag", metavar = "float", type = float, de
 parser.add_option("--expected-kappatst-imag", metavar = "float", type = float, default = 0.0, help = "Expected value for the imaginary part of \kappa_tst. (Default = 0.0)")
 parser.add_option("--expected-kappac", metavar = "float", type = float, default = 1.0, help = "Expected value for \kappa_c. (Default = 1.0)")
 parser.add_option("--expected-fcc", metavar = "Hz", type = float, default = 330.0, help = "Expected value for the coupled cavity pole. (Default = 330.0 Hz)")
+parser.add_option("--expected-fs", metavar = "Hz", type = float, default = 8.0, help = "Expected value for the SRC optical spring frequency. (Default = 8.0 Hz)")
+parser.add_option("--expected-srcQ", metavar = "float", type = float, default = 28.0, help = "Expected value for the SRC Q. (Default = 28.0)")
 parser.add_option("--kappapu-real-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the real part of \kappa_pu +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--kappatst-real-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the real part of \kappa_tst +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--kappapu-imag-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the imaginary part of \kappa_pu +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--kappatst-imag-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the imaginary part of \kappa_tst +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--kappac-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of \kappa_c +/- this number will be considered OK. (Default = 0.2)")
 parser.add_option("--fcc-ok-var", metavar = "Hz", type = float, default = 50, help = "Values of f_cc +/- this number (in Hz) will be considered OK. (Default = 50 Hz)")
+parser.add_option("--fs-ok-var", metavar = "Hz", type = float, default = 10, help = "Values of SRC spring frequency +/- this number (in Hz) will be considered OK. (Default = 10 Hz)")
+parser.add_option("--srcQ-ok-var", metavar = "float", type = float, default = 20.0, help = "Values of SRC Q +/- this number will be considered OK. (Default = 20)")
 parser.add_option("--exc-channel-name", metavar = "name", default = "CAL-CS_LINE_SUM_DQ", help = "Set the name of the excitation channel.  This is only necessary when the calibration factors computation is turned on, which is the default behavior. (Default = CAL-CS_LINE_SUM_DQ)")
 parser.add_option("--tst-exc-channel-name", metavar = "name", default = "SUS-ETMY_L3_CAL_LINE_OUT_DQ", help = "Set the name of the TST excitation channel.  This is only necessary when the \kappa_tst factors computation is turned on, which is the default behavior. (Default = SUS-ETMY_L3_CAL_LINE_OUT_DQ)")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used for calculating the calibration factors. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
@@ -200,13 +206,23 @@ parser.add_option("--EP2-imag", metavar = "name", default = "CAL-CS_TDEP_REF_CLG
 parser.add_option("--EP6-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_C_NOCAVPOLE_REAL", help = "Set the name of the channel containing the real part of C_res at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_C_NOCAVPOLE_REAL")
 parser.add_option("--EP6-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_C_NOCAVPOLE_IMAG", help = "Set the name of the channel containing the imaginary part of C_res at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_C_NOCAVPOLE_IMAG")
 parser.add_option("--EP7-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_D_REAL", help = "Set the name of the channel containing the real part of D at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_D_REAL")
-parser.add_option("--EP7-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_D_IMAG", help = "Set the name of the channel containing the real part of D at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_D_IMAG")
+parser.add_option("--EP7-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_D_IMAG", help = "Set the name of the channel containing the imaginary part of D at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_D_IMAG")
 parser.add_option("--EP8-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_TST_REAL", help = "Set the name of the channel containing the real part of A_tst at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_TST_REAL")
-parser.add_option("--EP8-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_TST_IMAG", help = "Set the name of the channel containing the real part of A_tst at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_TST_IMAG")
+parser.add_option("--EP8-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_TST_IMAG", help = "Set the name of the channel containing the imaginary part of A_tst at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_TST_IMAG")
 parser.add_option("--EP9-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_REAL", help = "Set the name of the channel containing the real part of A_pu at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_REAL")
-parser.add_option("--EP9-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG", help = "Set the name of the channel containing the real part of A_pu at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG")
+parser.add_option("--EP9-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG", help = "Set the name of the channel containing the imaginary part of A_pu at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG")
 parser.add_option("--EP1-real", metavar = "name", default = "CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_REAL", help = "Set the name of the channel containing the real part of the \kappa_tst reference factors. (Default = CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_REAL)")
 parser.add_option("--EP1-imag", metavar = "name", default = "CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_IMAG", help = "Set the name of the channel containing the imaginary part of the \kappa_tst reference factors. (Default = CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_IMAG)")
+parser.add_option("--EP10-real", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_TST_REAL", help = "Set the name of the channel containing the real part of A_tst at the ESD line used for cancellation of the ESD line. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_TST_REAL")
+parser.add_option("--EP10-imag", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_TST_IMAG", help = "Set the name of the channel containing the imaginary part of A_tst at the ESD line used for cancellation of the ESD line. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_TST_IMAG")
+parser.add_option("--EP11-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_C_NOCAVPOLE_REAL", help = "Set the name of the channel containing the real part of C_res at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_C_NOCAVPOLE_REAL")
+parser.add_option("--EP11-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_C_NOCAVPOLE_IMAG", help = "Set the name of the channel containing the imaginary part of C_res at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_C_NOCAVPOLE_IMAG")
+parser.add_option("--EP12-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_D_REAL", help = "Set the name of the channel containing the real part of D at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_D_REAL")
+parser.add_option("--EP12-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_D_IMAG", help = "Set the name of the channel containing the imaginary part of D at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_D_IMAG")
+parser.add_option("--EP13-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_A_TST_REAL", help = "Set the name of the channel containing the real part of A_tst at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_A_TST_REAL")
+parser.add_option("--EP13-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_A_TST_IMAG", help = "Set the name of the channel containing the imaginary part of A_tst at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_A_TST_IMAG")
+parser.add_option("--EP14-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_A_USUM_REAL", help = "Set the name of the channel containing the real part of A_pu at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_A_USUM_REAL")
+parser.add_option("--EP14-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_A_USUM_IMAG", help = "Set the name of the channel containing the imaginary part of A_pu at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_A_USUM_IMAG")
 
 # These options are specific to the full calibration mode
 parser.add_option("--full-calibration", action = "store_true", help = "Set this to run the pipeline in full calibration mode.")
@@ -350,12 +366,24 @@ if options.factors_from_filters_file:
 	EP8_imag = float(filters["EP8_imag"])
 	EP9_real = float(filters["EP9_real"])
 	EP9_imag = float(filters["EP9_imag"])
-try:
-	ref_A_tst_real = float(filters["ref_A_tst_real"])
-	ref_A_tst_imag = float(filters["ref_A_tst_imag"])
-	cancel_esd_act_line = True
-except:
-	cancel_esd_act_line = False
+	try:
+		EP10_real = float(filters["EP10_real"])
+		EP10_imag = float(filters["EP10_imag"])
+		cancel_esd_act_line = True
+	except:
+		cancel_esd_act_line = False
+	try:
+		EP11_real = float(filters["EP11_real"])
+		EP11_imag = float(filters["EP11_imag"])
+		EP12_real = float(filters["EP12_real"])
+		EP12_imag = float(filters["EP12_imag"])
+		EP13_real = float(filters["EP13_real"])
+		EP13_imag = float(filters["EP13_imag"])
+		EP14_real = float(filters["EP14_real"])
+		EP14_imag = float(filters["EP14_imag"])
+	except:
+		if not options.no_srcQ or not options.no_fs:
+			raise ValueError("Cannot compute SRC spring frequency or Q, as the needed EPICS are not contained in the specified filters file.")
 
 # Load all of the kappa dewhitening and correction factors
 darm_act_line_freq = float(filters["ka_pcal_line_freq"])
@@ -368,11 +396,13 @@ pcal_corr_at_opt_gain_fcc_freq_imag = float(filters["kc_pcal_corr_im"])
 esd_act_line_freq = float(filters["ktst_esd_line_freq"])
 try:
 	src_pcal_line_freq = float(filters["src_pcal_line_freq"])
-	pcal_corr_at_src_line_freq_real = float(filters["src_pcal_corr_re"])
-	pcal_corr_at_src_line_freq_imag = float(filters["src_pcal_corr_im"])
+	pcal_corr_at_src_freq_real = float(filters["src_pcal_corr_re"])
+	pcal_corr_at_src_freq_imag = float(filters["src_pcal_corr_im"])
 	cancel_src_pcal_line = True
 except:
 	cancel_src_pcal_line = False
+	if not options.no_srcQ or not options.no_fs:
+		raise ValueError("Cannot compute SRC spring frequency or Q, as the calibration line frequency is not contained in the specified filters file.")
 try:
 	roaming_pcal_line_freq = float(filters["roaming_pcal_line_freq"])
 	pcal_corr_at_roaming_line_freq_real = float(filters["roaming_pcal_corr_re"])
@@ -619,8 +649,8 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 	exc = calibration_parts.caps_and_progress(pipeline, head_dict["exc"], hoft_caps, "exc")
 
 # If we use the coherence channels multiple times in the pipeline, we need to tee the channels
-lowfreq_coh_use = int(not options.no_kappatst) + int(not options.no_kappapu) + int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_dq_vector and (not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc))
-highfreq_coh_use = int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_dq_vector and (not options.no_kappac or not options.no_fcc)) 
+lowfreq_coh_use = int(not options.no_kappatst) + int(not options.no_kappapu) + int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_srcQ) + int(not options.no_fs) + int(not options.no_dq_vector and (not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs))
+highfreq_coh_use = int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_srcQ) + int(not options.no_fs) + int(not options.no_dq_vector and (not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs)) 
 if lowfreq_coh_use >= 2:
 	pcaly_line1_coh = pipeparts.mktee(pipeline, pcaly_line1_coh)
 	sus_coh = pipeparts.mktee(pipeline, sus_coh)
@@ -629,7 +659,7 @@ if highfreq_coh_use >= 2:
 	pcaly_line2_coh = pipeparts.mktee(pipeline, pcaly_line2_coh)
 
 # Set up computations for \kappa_a, \kappa_tst,\kappa_c, \kappa_pu, f_cc, if applicable
-if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not options.no_kappapu:
+if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not options.no_kappapu or not options.no_srcQ or not options.no_fs:
 
 	# pcal excitation channel, which will be demodulated
 	pcal = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
@@ -644,7 +674,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 
 	# demodulate the PCAL channel and apply the PCAL correction factor at the DARM actuation line frequency
 	pcal_at_darm_act_freq = calibration_parts.demodulate(pipeline, pcaltee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
-	if not options.no_kappapu or not options.no_kappac or not options.no_fcc or options.cancel_callines:
+	if not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs or options.cancel_callines:
 		pcal_at_darm_act_freq = pipeparts.mktee(pipeline, pcal_at_darm_act_freq)
 
 	# demodulate DARM_ERR at the DARM actuation line frequency
@@ -652,7 +682,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 	if options.dewhitening:
 		# dewhiten DARM_ERR at the DARM actuation line frequency
 		derr_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_darm_act_freq, derr_dewhiten_at_darm_act_freq_real, derr_dewhiten_at_darm_act_freq_imag)
-	if not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+	if not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
 		derr_at_darm_act_freq = pipeparts.mktee(pipeline, derr_at_darm_act_freq)
 
 	# resample and demodulate the TST excitation channel at the ESD actuation line frequency
@@ -674,7 +704,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 	elif options.factors_from_filters_file:
 		ktst = calibration_parts.compute_kappatst_from_filters_file(pipeline, derr_at_esd_act_freq, tstexc_at_esd_act_freq, pcal_at_darm_act_freq, derr_at_darm_act_freq, EP1_real, EP1_imag, queue_length1, queue_length2)
 
-	if not options.no_kappatst or not options.no_kappac or not options.no_fcc:
+	if not options.no_kappatst or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
 		ktst = pipeparts.mktee(pipeline, ktst)
 	if not options.no_kappatst:
 		smooth_ktst_nogate = pipeparts.mkgeneric(pipeline, ktst, "lal_smoothkappas", default_kappa_re = options.expected_kappatst_real, default_kappa_im = options.expected_kappatst_imag, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
@@ -706,7 +736,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 		smooth_ktstItee = pipeparts.mktee(pipeline, smooth_ktstI)
 	
 # If we're also computing \kappa_c, f_cc, or \kappa_pu, keep going
-if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
+if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not options.no_srcQ or not options.no_fs:
 	# demodulate excitation channel at PU actuation line frequency
 	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 
@@ -731,8 +761,9 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 	elif options.factors_from_filters_file:
 		kpu = calibration_parts.compute_kappapu_from_filters_file(pipeline, EP3_real, EP3_imag, afctrl, ktst, EP4_real, EP4_imag, queue_length1, queue_length2)
 
-	if not options.no_kappapu:
+	if not options.no_kappapu or not options.no_srcQ or not options.no_fs:
 		kpu = pipeparts.mktee(pipeline, kpu)
+	if not options.no_kappapu:
 		smooth_kpu_nogate = pipeparts.mkgeneric(pipeline, kpu, "lal_smoothkappas", default_kappa_re = options.expected_kappapu_real, default_kappa_im = options.expected_kappapu_imag, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
 		smooth_kpuR_nogate, smooth_kpuI_nogate = calibration_parts.split_into_real(pipeline, smooth_kpu_nogate)
 
@@ -762,7 +793,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 		smooth_kpuItee = pipeparts.mktee(pipeline, smooth_kpuI)	
 
 	# Finally, compute \kappa_c and f_cc
-	if not options.no_kappac or not options.no_fcc:
+	if not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
 		# demodulate PCAL channel and apply the PCAL correction factor at optical gain and f_cc line frequency
 		pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
 		if options.cancel_callines:
@@ -793,64 +824,151 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 			SI = pipeparts.mktee(pipeline, SI)
 
 		# compute kappa_c
-		if not options.no_kappac:
+		if not options.no_kappac or not options.no_srcQ or not options.no_fs:
 			kc = calibration_parts.compute_kappac(pipeline, SR, SI, queue_length1, queue_length2)
+		if not options.no_kappac:
 			kc = pipeparts.mktee(pipeline, kc)
 			smooth_kc_nogate = pipeparts.mkgeneric(pipeline, kc, "lal_smoothkappas", default_kappa_re = options.expected_kappac, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
 
 			if not options.no_coherence:
 				# Gate kappa_c with all four of the calibration lines
-				kc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				kc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc, queue_length2), control = calibration_parts.mkqueue(pipeline, darm_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				kc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				kc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc, queue_length2), control = calibration_parts.mkqueue(pipeline, sus_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				if not options.no_dq_vector:
-					kc = pipeparts.mktee(pipeline, kc)
+				kc_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				kc_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, darm_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				kc_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				kc_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, kc_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, sus_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
 
-			if options.no_coherence:
+				if not options.no_dq_vector:
+					kc_gated = pipeparts.mktee(pipeline, kc_gated)
+					smooth_kcdq = calibration_parts.track_bad_kappas(pipeline, kc_gated, options.expected_kappac, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+				smooth_kc = calibration_parts.smooth_kappas(pipeline, kc_gated, options.expected_kappac, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+			else:
 				smooth_kc = calibration_parts.smooth_kappas_no_coherence(pipeline, kc, options.kappac_ok_var, options.expected_kappac, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
 
 				if not options.no_dq_vector:
 					smooth_kcdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, kc, options.kappac_ok_var, options.expected_kappac, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
-			else:
-				smooth_kc = calibration_parts.smooth_kappas(pipeline, kc, options.expected_kappac, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
-				if not options.no_dq_vector:
-					smooth_kcdq = calibration_parts.track_bad_kappas(pipeline, kc, options.expected_kappac, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
 
 		smooth_kctee = pipeparts.mktee(pipeline, smooth_kc)
 
 		# compute f_cc
-		if not options.no_fcc:
+		if not options.no_fcc or not options.nosrcQ or not options.no_fs:
 			fcc = calibration_parts.compute_fcc(pipeline, SR, SI, opt_gain_fcc_line_freq, queue_length1, queue_length2)
-
+		if not options.no_fcc:
 			fcc = pipeparts.mktee(pipeline, fcc)
 			smooth_fcc_nogate = pipeparts.mkgeneric(pipeline, fcc, "lal_smoothkappas", default_kappa_re = fcc_default, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
 
 			if not options.no_coherence:
 				# Gate f_cc with all four of the calibration lines
-				fcc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				fcc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc, queue_length2), control = calibration_parts.mkqueue(pipeline, darm_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				fcc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				fcc = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc, queue_length2), control = calibration_parts.mkqueue(pipeline, sus_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				if not options.no_dq_vector:
-					fcc = pipeparts.mktee(pipeline, fcc)
+				fcc_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				fcc_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, darm_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				fcc_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				fcc_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fcc_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, sus_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
 
-			if options.no_coherence:
+				if not options.no_dq_vector:
+					fcc_gated = pipeparts.mktee(pipeline, fcc_gated)
+					smooth_fccdq = calibration_parts.track_bad_kappas(pipeline, fcc_gated, fcc_default, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+				smooth_fcc = calibration_parts.smooth_kappas(pipeline, fcc_gated, fcc_default, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+			else:
 				smooth_fcc = calibration_parts.smooth_kappas_no_coherence(pipeline, fcc, options.fcc_ok_var, fcc_default, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
 				if not options.no_dq_vector:
 					smooth_fccdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, fcc, options.fcc_ok_var, fcc_default, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
-			else:
-				smooth_fcc = calibration_parts.smooth_kappas(pipeline, fcc, fcc_default, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
-				if not options.no_dq_vector:
-					smooth_fccdq = calibration_parts.track_bad_kappas(pipeline, fcc, fcc_default, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
 				
 			smooth_fcctee = pipeparts.mktee(pipeline, smooth_fcc)
+
+	if not options.no_fs or not options.no_srcQ:
+		# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
+		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
+
+		# demodulate DARM_ERR at SRC detuning line frequency
+		derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+
+		# Compute the factor Xi which will be used for the f_s and src_Q calculations
+		if not options.factors_from_filters_file:
+			EP11 = calibration_parts.merge_into_complex(pipeline, head_dict["EP11_real"], head_dict["EP11_imag"], queue_length1, queue_length2)
+			EP12 = calibration_parts.merge_into_complex(pipeline, head_dict["EP12_real"], head_dict["EP12_imag"], queue_length1, queue_length2)
+			EP13 = calibration_parts.merge_into_complex(pipeline, head_dict["EP13_real"], head_dict["EP13_imag"], queue_length1, queue_length2)
+			EP14 = calibration_parts.merge_into_complex(pipeline, head_dict["EP14_real"], head_dict["EP14_imag"], queue_length1, queue_length2)
+			Xi = calibration_parts.compute_Xi(pipeline, pcal_at_src_freq, derr_at_src_freq, src_pcal_line_freq, EP11, EP12, EP13, EP14, ktst, kpu, kc, fcc, queue_length1, queue_length2)
+		elif options.factors_from_filters_file:
+			Xi = calibration_parts.compute_Xi_from_filters_file(pipeline, pcal_at_src_freq, derr_at_src_freq, src_pcal_line_freq, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc, queue_length1, queue_length2)
+
+		XiR, XiI = calibration_parts.split_into_real(pipeline, Xi)
+
+		if options.no_srcQ:
+			# the imaginary part is only used to compute Q
+			pipeparts.mkfakesink(pipeline, XiI)
+
+		sqrtXiR = pipeparts.mkpow(pipeline, XiR, exponent = 0.5)
+		if not options.no_fs and not options.no_srcQ:
+			sqrtXiR = pipeparts.mktee(pipeline, sqrtXiR)
+
+		# compute f_s
+		if not options.no_fs:
+			fs = pipeparts.mkaudioamplify(pipeline, sqrtXiR, src_pcal_line_freq)
+			fs = pipeparts.mktee(pipeline, fs)
+			smooth_fs_nogate = pipeparts.mkgeneric(pipeline, fs, "lal_smoothkappas", default_kappa_re = options.expected_fs, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
+
+			if not options.no_coherence:
+				# Gate f_s with all four of the calibration lines
+				fs_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fs, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				fs_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fs_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, darm_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				fs_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fs_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				fs_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, fs_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, sus_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+
+				if not options.no_dq_vector:
+					fs_gated = pipeparts.mktee(pipeline, fs_gated)
+					smooth_fsdq = calibration_parts.track_bad_kappas(pipeline, fs_gated, options.expected_fs, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+				smooth_fs = calibration_parts.smooth_kappas(pipeline, fs_gated, options.expected_fs, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+			else:
+				smooth_fs = calibration_parts.smooth_kappas_no_coherence(pipeline, fs, options.fs_ok_var, options.expected_fs, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+				if not options.no_dq_vector:
+					smooth_fsdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, fs, options.fs_ok_var, options.expected_fs, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+			if not options.no_dq_vector:
+				smooth_fs = pipeparts.mktee(pipeline, smooth_fs)
+
+		# compute SRC Q
+		if not options.no_srcQ:
+			XiI_inv = pipeparts.mkpow(pipeline, XiI, exponent = -1.0)
+			srcQ = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, sqrtXiR, queue_length1), calibration_parts.mkqueue(pipeline, XiI_inv, queue_length2)))
+			srcQ = pipeparts.mktee(pipeline, srcQ)
+			smooth_srcQ_nogate = pipeparts.mkgeneric(pipeline, srcQ, "lal_smoothkappas", default_kappa_re = options.expected_srcQ, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
+
+			if not options.no_coherence:
+				# Gate SRC_Q with all four of the calibration lines
+				srcQ_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				srcQ_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, darm_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				srcQ_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				srcQ_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, sus_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+
+				if not options.no_dq_vector:
+					srcQ_gated = pipeparts.mktee(pipeline, srcQ_gated)
+					smooth_srcQdq = calibration_parts.track_bad_kappas(pipeline, srcQ_gated, options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+				smooth_srcQ = calibration_parts.smooth_kappas(pipeline, srcQ_gated, options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+			else:
+				smooth_srcQ = calibration_parts.smooth_kappas_no_coherence(pipeline, srcQ, options.srcQ_ok_var, options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+				if not options.no_dq_vector:
+					smooth_srcQdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, srcQ, options.srcQ_ok_var, options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+
+			if not options.no_dq_vector:
+				smooth_srcQ = pipeparts.mktee(pipeline, smooth_srcQ)
 
 #
 # Calibration Line Cancellation
 #
 
 if options.cancel_callines:
+	# if we didn't compute the kappas, we still need to get the pcal channel
+	if options.no_kappac and options.no_fcc and options.no_kappatst and options.no_kappapu and options.no_srcQ and options.no_fs:
+		pcaltee = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
 	pcaly_line1 = calibration_parts.mkresample(pipeline, pcal_at_darm_act_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 	pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "lal_demodulate", line_frequency = -1.0 * darm_act_line_freq, prefactor_real = -2.0/3994.5)
 	cancel_pcaly_line1, trash = calibration_parts.split_into_real(pipeline, pcaly_line1)
@@ -862,7 +980,7 @@ if options.cancel_callines:
 	pipeparts.mkfakesink(pipeline, trash)
 
 	if cancel_esd_act_line:
-		esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, ref_A_tst_real, ref_A_tst_imag)
+		esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
 		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		esd_act_line_cancel = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = -2.0/3994.5)
 		esd_act_line_cancel, trash = calibration_parts.split_into_real(pipeline, esd_act_line_cancel)
@@ -938,7 +1056,8 @@ if options.full_calibration:
 tst = calibration_parts.mkstockresample(pipeline, tst, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
 # filter TST chain with the TST acutaiton filter
 tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdelay), fir_matrix = [tstfilt[::-1]], time_domain = td)
-tst = calibration_parts.mkinsertgap(pipeline, tst, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
+if options.low_latency:
+	tst = calibration_parts.mkinsertgap(pipeline, tst, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
 tst_filter_settle_time += float(len(tstfilt)-tstdelay)/tstchainsr
 # resample the TST actuation chain to the full sample rate
 if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappapu:
@@ -948,7 +1067,8 @@ if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappap
 pumuim = calibration_parts.mkstockresample(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
 # filter the PUM/UIM chain with the PUM/UIM actuation filter
 pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdelay), fir_matrix = [pumuimfilt[::-1]], time_domain = td)
-pumuim = calibration_parts.mkinsertgap(pipeline, pumuim, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
+if options.low_latency:
+	pumuim = calibration_parts.mkinsertgap(pipeline, pumuim, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
 pumuim_filter_settle_time += float(len(pumuimfilt)-pumuimdelay)/pumuimchainsr
 # resample the PUM/UIM actuation chain to the full sample rate
 if tstchainsr != pumuimchainsr or options.apply_kappapu or options.apply_kappatst:
@@ -992,7 +1112,8 @@ if options.partial_calibration:
 
 # apply the residual chain filter
 res = pipeparts.mkfirbank(pipeline, restee, latency = int(reschaindelay), fir_matrix = [reschainfilt[::-1]], time_domain = td)
-res = calibration_parts.mkinsertgap(pipeline, res, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
+if options.low_latency:
+	res = calibration_parts.mkinsertgap(pipeline, res, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
 res_filter_settle_time += float(len(reschainfilt)-reschaindelay)/hoftsr
 if options.dewhitening:
 	res = pipeparts.mkfirbank(pipeline, res, latency = int(resdewhitendelay), fir_matrix = [resdewhiten[::-1]], time_domain = td)
@@ -1160,10 +1281,22 @@ if not options.no_dq_vector:
 		fccSmoothInRange, fccMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, smooth_fccdq, fcc_default, options.fcc_ok_var, status_out_smooth = 524288, status_out_median = 1048576, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
+	# FS BITS BRANCH
+	#
+	if not options.no_fs:
+		fsSmoothInRange, fsMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, smooth_fsdq, options.expected_fs, options.fs_ok_var, status_out_smooth = 67108864, status_out_median = 134217728, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+
+	#
+	# SRCQ BITS BRANCH
+	#
+	if not options.no_srcQ:
+		srcQSmoothInRange, srcQMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ, smooth_srcQdq, options.expected_srcQ, options.srcQ_ok_var, status_out_smooth = 268435456, status_out_median = 536870912, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+
+	#
 	# COHERENCE BITS BRANCH
 	#
 	if not options.no_coherence:
-		if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+		if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
 			pcaly_line1_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line1_coh, threshold = options.coherence_uncertainty_threshold, bit_vector = 8388608, invert_control = True)
 			pcaly_line1_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line1_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % cohsr)
 			pcaly_line1_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line1_coh_ok, "lal_logicalundersample", required_on = 8388608, status_out = 8388608)
@@ -1179,7 +1312,7 @@ if not options.no_dq_vector:
 			darm_coh_ok = pipeparts.mkgeneric(pipeline, darm_coh_ok, "lal_logicalundersample", required_on = 4194304, status_out = 4194304)
 			darm_coh_ok = pipeparts.mkcapsfilter(pipeline, darm_coh_ok, calibstate_caps)
 			coherence_bits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, pcaly_line1_coh_ok, queue_length2), calibration_parts.mkqueue(pipeline, sus_coh_ok, queue_length1), calibration_parts.mkqueue(pipeline, darm_coh_ok, queue_length1)))
-		if not options.no_kappac or not options.no_fcc:
+		if not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
 			pcaly_line2_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line2_coh, threshold = options.coherence_uncertainty_threshold, bit_vector = 16777216, invert_control = True)
 			pcaly_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line2_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % cohsr)
 			pcaly_line2_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line2_coh_ok, "lal_logicalundersample", required_on = 16777216, status_out = 16777216)
@@ -1251,6 +1384,10 @@ if not options.no_dq_vector:
 			calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, calibstatevector, queue_length2), calibration_parts.mkqueue(pipeline, kcMedianUncorrupt, max_queue_length)))
 	if not options.no_fcc:
 		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, calibstatevector, queue_length2), calibration_parts.mkqueue(pipeline, fccSmoothInRange, max_queue_length), calibration_parts.mkqueue(pipeline, fccMedianUncorrupt, max_queue_length)))
+	if not options.no_fs:
+		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, calibstatevector, queue_length2), calibration_parts.mkqueue(pipeline, fsSmoothInRange, max_queue_length), calibration_parts.mkqueue(pipeline, fsMedianUncorrupt, max_queue_length)))
+	if not options.no_srcQ:
+		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, calibstatevector, queue_length2), calibration_parts.mkqueue(pipeline, srcQSmoothInRange, max_queue_length), calibration_parts.mkqueue(pipeline, srcQMedianUncorrupt, max_queue_length)))
 
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
@@ -1297,7 +1434,7 @@ if not options.no_kappatst:
 	smooth_ktstI_nogate = calibration_parts.mkresample(pipeline, smooth_ktstI_nogate, 1, record_kappa_caps)
 	smooth_ktstI_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstI_nogate, "progress_kappa_tst_imag_nogate_%s" % instrument)
 
-# Resample the \kappa_c channel at the specified recording sample rate and change it to a single precision channel
+# Resample the \kappa_c channels at the specified recording sample rate and change it to a single precision channel
 if not options.no_kappac:
 	kcout = pipeparts.mkaudioconvert(pipeline, smooth_kctee)
 	kcout = calibration_parts.mkresample(pipeline, kcout, 1, record_kappa_caps)
@@ -1307,7 +1444,7 @@ if not options.no_kappac:
 	smooth_kc_nogate = calibration_parts.mkresample(pipeline, smooth_kc_nogate, 1, record_kappa_caps)
 	smooth_kc_nogate = pipeparts.mkprogressreport(pipeline, smooth_kc_nogate, "progress_kappa_c_nogate_%s" % instrument)
 
-# Resample the f_cc channel at the specified recording sample rate and change it to a single precision channel
+# Resample the f_cc channels at the specified recording sample rate and change it to a single precision channel
 if not options.no_fcc:
 	fccout = pipeparts.mkaudioconvert(pipeline, smooth_fcctee)
 	fccout = calibration_parts.mkresample(pipeline, fccout, 1, record_kappa_caps)
@@ -1316,6 +1453,26 @@ if not options.no_fcc:
 	smooth_fcc_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fcc_nogate)
 	smooth_fcc_nogate = calibration_parts.mkresample(pipeline, smooth_fcc_nogate, 1, record_kappa_caps)
 	smooth_fcc_nogate = pipeparts.mkprogressreport(pipeline, smooth_fcc_nogate, "progress_f_cc_nogate_%s" % instrument)
+
+# Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
+if not options.no_fs:
+	fsout = pipeparts.mkaudioconvert(pipeline, smooth_fs)
+	fsout = calibration_parts.mkresample(pipeline, fsout, 1, record_kappa_caps)
+	fsout = pipeparts.mkprogressreport(pipeline, fsout, "progress_f_s_%s" % instrument)
+
+	smooth_fs_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fs_nogate)
+	smooth_fs_nogate = calibration_parts.mkresample(pipeline, smooth_fs_nogate, 1, record_kappa_caps)
+	smooth_fs_nogate = pipeparts.mkprogressreport(pipeline, smooth_fs_nogate, "progress_f_s_nogate_%s" % instrument)
+
+# Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
+if not options.no_srcQ:
+	srcQout = pipeparts.mkaudioconvert(pipeline, smooth_srcQ)
+	srcQout = calibration_parts.mkresample(pipeline, srcQout, 1, record_kappa_caps)
+	srcQout = pipeparts.mkprogressreport(pipeline, srcQout, "progress_SRC_Q_%s" % instrument)
+
+	smooth_srcQ_nogate = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_nogate)
+	smooth_srcQ_nogate = calibration_parts.mkresample(pipeline, smooth_srcQ_nogate, 1, record_kappa_caps)
+	smooth_srcQ_nogate = pipeparts.mkprogressreport(pipeline, smooth_srcQ_nogate, "progress_SRC_Q_nogate_%s" % instrument)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -1364,6 +1521,16 @@ if not options.no_kappac:
 if not options.no_fcc:
 	calibration_parts.mkqueue(pipeline, fccout, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_F_CC%s" % (instrument, chan_prefix, chan_suffix)))
 	calibration_parts.mkqueue(pipeline, smooth_fcc_nogate, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_F_CC_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
+
+# Link the f_s to the muxer
+if not options.no_fs:
+	calibration_parts.mkqueue(pipeline, fsout, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_F_S%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, smooth_fs_nogate, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_F_S_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
+
+# Link the src_Q to the muxer
+if not options.no_srcQ:
+	calibration_parts.mkqueue(pipeline, srcQout, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, smooth_srcQ_nogate, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Check that all frames are long enough, that they have all of the channels by requring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
 def check_complete_frames(pad, info, (output_start, frame_duration, wings_start, wings_end)):
