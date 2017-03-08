@@ -957,10 +957,10 @@ static void gstlal_tdwhiten_class_init(GSTLALTDwhitenClass *klass)
 
 	gst_element_class_set_details_simple(
 		element_class,
-		"Average of last N samples",
+		"Audio FIR Filter",
 		"Filter/Audio",
-		"Each output sample is the average of the N most recent samples",
-		"Kipp Cannon <kipp.cannon@ligo.org>"
+		"Generic audio FIR filter with custom filter kernel and smooth kernel updates",
+		"Leo Tsukada <tsukada@resceu.s.u-tokyo.ac.jp>"
 	);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
