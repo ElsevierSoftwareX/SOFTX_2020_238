@@ -101,7 +101,6 @@ class HyperCube(object):
 				neighbor_tiles = list(neighbor_tiles)
 				if len(neighbor_tiles) == 0:
 					self.tiles.append(self.center)
-
 			# FIXME don't hardcode this tolerance
 			matches = []
 			while len(self.tiles) < target and iters < 1e3:
@@ -112,7 +111,7 @@ class HyperCube(object):
 				if self.metric.metric_is_valid:
 					match = max([self.metric.metric_match(self.metric_tensor, randcoords, t) for t in self.tiles + neighbor_tiles])
 				else:
-					print "Metric invalid falling back on explicit match"
+					print "Metric invalid, falling back to explicit match"
 					match = max([self.metric.explicit_match(randcoords, t) for t in self.tiles + neighbor_tiles])
 				if match < (1. - self.__mismatch):
 					self.tiles.append(randcoords)
@@ -278,13 +277,13 @@ class Node(object):
 		verr = 2.0
 
 		if self.parent is not None:
-			v1 = numpy.abs(numpy.linalg.det(self.cube.metric_tensor))
-			v2 = numpy.abs(numpy.linalg.det(self.parent.cube.metric_tensor))
+			v1 = numpy.sqrt(numpy.linalg.det(self.cube.metric_tensor))
+			v2 = numpy.sqrt(numpy.linalg.det(self.parent.cube.metric_tensor))
 			avgv = (v2+v1)/2.
 			deltav = abs(v2-v1)
 			verr = deltav / avgv
 			#print v1, v2, verr
-		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and verr > 0.5):
+		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and verr > 0.25):
 			bifurcation += 1
 			#print 'LEVEL:', bifurcation
 			left, right = self.cube.split(splitdim)
