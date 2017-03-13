@@ -919,6 +919,18 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, mask_matrix = 
 		properties["sigmasq"] = sigmasq
 	return mkgeneric(pipeline, src, "lal_itac", **properties)
 
+def mktrigger(pipeline, src, n, autocorrelation_matrix = None, mask_matrix = None, snr_thresh = 0, sigmasq = None):
+	properties = {
+		"n": n,
+		"snr_thresh": snr_thresh
+	}
+	if autocorrelation_matrix is not None:
+		properties["autocorrelation_matrix"] = pipeio.repack_complex_array_to_real(autocorrelation_matrix)
+	if mask_matrix is not None:
+		properties["autocorrelation_mask"] = mask_matrix
+	if sigmasq is not None:
+		properties["sigmasq"] = sigmasq
+	return mkgeneric(pipeline, src, "lal_trigger", **properties)
 
 def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse, H2_latency, srate):
 	elem = mkgeneric(pipeline, None, "lal_lho_coherent_null", block_stride = srate, H1_impulse = H1_impulse, H2_impulse = H2_impulse, H1_latency = H1_latency, H2_latency = H2_latency)
