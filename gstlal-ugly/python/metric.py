@@ -181,22 +181,24 @@ class Metric(object):
 		x[i] = deltas[i]
 		x[j] = deltas[j]
 
-		# Check the match
-		d2 = 1 - self.match(w1, self.waveform(center+x))
-		# The match must lie in the range 0.9995 - 0.999999 to be valid for a metric computation, which means d is between 0.000001 and 0.0005
-		if (d2 > 1e-5):
-			return self.metric_tensor_component((i,j), center = center, deltas = deltas / 10., g = g, w1 = w1)
-		if (d2 < 1e-10):
-			return self.metric_tensor_component((i,j), center = center, deltas = deltas * 2., g = g, w1 = w1)
-
 		# Compute the diagonal
 		if j == i:
+			# Check the match
+			d2 = 1 - self.match(w1, self.waveform(center+x))
+			# The match must lie in the range 0.9995 - 0.999999 to be valid for a metric computation, which means d is between 0.000001 and 0.0005
+			if (d2 > 1e-5):
+				return self.metric_tensor_component((i,j), center = center, deltas = deltas / 10., g = g, w1 = w1)
+			if (d2 < 1e-10):
+				return self.metric_tensor_component((i,j), center = center, deltas = deltas * 2., g = g, w1 = w1)
+
 			g[i,i] = d2 / deltas[i] / deltas[i]
-			return g[i,i]
+			return g[i,i], deltas[i]
 		# NOTE Assumes diagonal parts are already computed!!!
 		else:
+			# Check the match
+			d2 = 1 - self.match(w1, self.waveform(center+x))
 			g[i,j] = g[j,i] = (d2 - g[i,i] * deltas[i]**2 - g[j,j] * deltas[j]**2) / (2 *  deltas[i] * deltas[j])
-			return g[i,j]
+			return g[i,j], None
 
 
 	def set_metric_tensor(self, center, deltas):
@@ -204,10 +206,10 @@ class Metric(object):
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
 		# First get the diagonal components
-		[self.metric_tensor_component((i,i), center, deltas / 2., g, w1) for i in range(len(center))]
+		deltas = numpy.array([self.metric_tensor_component((i,i), center, deltas / 2., g, w1)[1] for i in range(len(center))])
 
 		# Then the rest
-		[self.metric_tensor_component(ij, center, deltas / 2., g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
+		[self.metric_tensor_component(ij, center, deltas, g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
 
 		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
