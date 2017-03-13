@@ -228,7 +228,7 @@ for n, c in enumerate(nodes):
 		#print row.mass1, row.mass2
 		if coord_limits[0][0] <= row.mass1 <= coord_limits[0][1] and coord_limits[1][0] <= row.mass2 <= coord_limits[1][1]: 
 			tbl.append(row)
-			previous_tiles.extend(tiles)
+			previous_tiles.append(t)
 
         if args.verbose:
 		print "Placed %04d tiles in hyperrectangle %d/%d with boundary:" % (len(tiles), n+1, len(nodes))
