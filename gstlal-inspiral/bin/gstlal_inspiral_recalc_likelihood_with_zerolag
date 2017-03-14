@@ -35,7 +35,6 @@ from gstlal import far
 import lal
 from lal.utils import CacheEntry
 from lalburst import ligolw_burca2
-from pylal import snglcoinc
 
 # FIXME Need to add entries to process and process_params tables
 
@@ -329,7 +328,7 @@ def get_likelihood_funcs(likelihood_files, verbose = False):
 
 	coinc_params_distributions.finish(segs = seglists, verbose = verbose)
 
-	return coinc_params_distributions.coinc_params, snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+	return coinc_params_distributions.coinc_params, coinc_params_distributions
 
 #
 # =============================================================================

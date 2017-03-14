@@ -48,7 +48,6 @@ from glue import segments
 from glue.ligolw import lsctables
 import lal
 from pylal import ligolw_thinca
-from pylal import snglcoinc
 from gstlal import snglinspiraltable
 
 
@@ -117,7 +116,7 @@ class StreamThinca(object):
 			self.ln_likelihood_func = None
 			self.ln_likelihood_params_func = None
 		else:
-			self.ln_likelihood_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+			self.ln_likelihood_func = coinc_params_distributions
 			self.ln_likelihood_params_func = coinc_params_distributions.coinc_params
 	def del_coinc_params_distributions(self):
 		self.ln_likelihood_func = None

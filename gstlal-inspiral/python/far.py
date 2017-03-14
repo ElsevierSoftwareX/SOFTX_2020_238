@@ -107,7 +107,7 @@ class CoincParams(dict):
 	__slots__ = ("horizons","t_offset","coa_phase")
 
 
-class ThincaCoincParamsDistributions(object):
+class ThincaCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
 
 	#
@@ -321,8 +321,8 @@ class ThincaCoincParamsDistributions(object):
 		# horizon history is keyed by floating-point values (don't
 		# need nanosecond precision for this).  NOTE:  this is
 		# attached as a property instead of going into the
-		# dictionary to not confuse the stock lnP_noise(),
-		# lnP_signal(), and friends methods.
+		# dictionary to not confuse denominator(), numerator(),
+		# and friends methods.
 		#
 		# FIXME:  this should use .weighted_mean() to get an
 		# average over a interval
@@ -391,7 +391,7 @@ class ThincaCoincParamsDistributions(object):
 				# param value out of range
 				pass
 
-	def lnP_noise(self, params):
+	def denominator(self, params):
 		"""
 		From a parameter value dictionary as returned by
 		self.coinc_params(), compute and return the natural
@@ -420,7 +420,7 @@ class ThincaCoincParamsDistributions(object):
 		__getitem__ = self.background_lnpdf_interp.__getitem__
 		return lnP_dt_dphi_noise + sum(__getitem__(name)(*value) for name, value in params.items())
 
-	def lnP_signal(self, params):
+	def numerator(self, params):
 		"""
 		From a parameter value dictionary as returned by
 		self.coinc_params(), compute and return the natural
@@ -442,12 +442,12 @@ class ThincaCoincParamsDistributions(object):
 		that require more sophisticated calculations can override
 		this method.
 		"""
-		# NOTE:  lnP_signal() and lnP_noise() (not shown here) both
-		# omit the factor P(horizon distance) = 1/T because it is
-		# identical in the numerator and denominator and so factors
-		# out of the ranking statistic, and because it is constant
-		# and so equivalent to an irrelevant normalization factor
-		# in the ranking statistic PDF sampler code.
+		# NOTE:  numerator() and denominator() both omit the factor
+		# P(horizon distance) = 1/T because it is identical in the
+		# numerator and denominator and so factors out of the
+		# ranking statistic, and because it is constant and so
+		# equivalent to an irrelevant normalization factor in the
+		# ranking statistic PDF sampler code.
 
 		# instrument-->snr mapping
 		snrs = dict((name.split("_", 1)[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
@@ -881,9 +881,8 @@ class ThincaCoincParamsDistributions(object):
 
 		random_sim_params()
 
-		The sequence is suitable for input to the
-		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
-		ratio generator.
+		The sequence is suitable for input to the .ln_lr_samples()
+		log likelihood ratio generator.
 		"""
 		if len(instruments) < self.min_instruments:
 			raise ValueError("cannot simulate candidates for < %d instruments" % self.min_instruments)
@@ -931,9 +930,8 @@ class ThincaCoincParamsDistributions(object):
 
 		random_params()
 
-		The sequence is suitable for input to the
-		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
-		ratio generator.
+		The sequence is suitable for input to the .ln_lr_samples()
+		log likelihood ratio generator.
 
 		Bugs:
 
@@ -941,13 +939,12 @@ class ThincaCoincParamsDistributions(object):
 		a placeholder, not the natural logarithm of the PDF from
 		which the sample has been drawn, as in the case of
 		random_params().  Therefore, when used in combination with
-		pylal.snglcoinc.LnLikelihoodRatio.samples(), the two
-		probability densities computed and returned by that
-		generator along with each log likelihood ratio value will
-		simply be the probability densities of the signal and noise
-		populations at that point in parameter space.  They cannot
-		be used to form an importance weighted sampler of the log
-		likelihood ratios.
+		.ln_lr_samples(), the two probability densities computed
+		and returned by that generator along with each log
+		likelihood ratio value will simply be the probability
+		densities of the signal and noise populations at that point
+		in parameter space.  They cannot be used to form an
+		importance weighted sampler of the log likelihood ratios.
 		"""
 		# FIXME need to add dt and dphi 
 		#
@@ -1138,7 +1135,7 @@ class RankingData(object):
 				q,
 				self.signal_likelihood_rates[key],
 				self.background_likelihood_rates[key],
-				snglcoinc.LnLikelihoodRatio(coinc_params_distributions).samples(sampler_coinc_params_distributions.random_params(key), sampler_coinc_params_distributions),
+				coinc_params_distributions.ln_lr_samples(sampler_coinc_params_distributions.random_params(key), sampler_coinc_params_distributions),
 				nsamples = nsamples
 			))
 			p.start()

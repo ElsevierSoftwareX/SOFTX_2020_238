@@ -155,7 +155,6 @@ if options.verbose:
 if options.add_zerolag_to_background:
 	coincparamsdistributions.zero_lag_in_background = True
 coincparamsdistributions.finish(segs = seglists, verbose = options.verbose)
-ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coincparamsdistributions)
 
 
 #
@@ -248,7 +247,7 @@ for n, url in enumerate(urls, 1):
 		vetoseglists = vetoseglists,
 		events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id],
 		veto_func = sngl_inspiral_veto_func,
-		ln_likelihood_ratio_func = ln_likelihood_ratio_func,
+		ln_likelihood_ratio_func = coincparamsdistributions,
 		likelihood_params_func = coincparamsdistributions.coinc_params,
 		verbose = options.verbose
 	)
