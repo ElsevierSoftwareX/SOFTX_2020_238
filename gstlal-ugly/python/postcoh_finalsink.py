@@ -331,11 +331,7 @@ class FinalSink(object):
 			self.need_candidate_check = True
 
 	def __set_far(self, candidate):
-		hack_factor = max(0.5, self.nevent_clustered / float(1 + self.snapshot_duration.gpsSeconds))
-		candidate.far = candidate.fap * hack_factor * self.far_factor
-		candidate.far_h = candidate.fap_h * hack_factor * self.far_factor
-		candidate.far_l = candidate.fap_l * hack_factor * self.far_factor
-		candidate.far_v = candidate.fap_v * hack_factor * self.far_factor
+		candidate.far = max(candidate.far_2h, candidate.far_1d, candidate.far_1w)
 
 	def __need_trigger_control(self, trigger):
 		# do trigger control
