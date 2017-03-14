@@ -586,6 +586,11 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   ((double *)param_range.data)[1] = LOGCHISQ_CMAX;
   ligoxml_write_Param(writer, &param_range, BAD_CAST "real_8", BAD_CAST param_name->str);
 
+  XmlParam param_nevent;
+  param_nevent.data = (long *) malloc (sizeof(long));
+
+  XmlParam param_duration;
+  param_duration.data = (long *) malloc (sizeof(long));
 
   GString *array_name = g_string_new(NULL);
   for (icombo=0; icombo<ncombo; icombo++) {
@@ -600,9 +605,11 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_CDF_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
     ligoxml_write_Array(writer, &(array_cdf[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
     g_string_printf(param_name, "%s_nevent:param", IFO_COMBO_MAP[icombo]);
-    ligoxml_write_Param(writer, &(stats[icombo]->nevent), BAD_CAST "int_8s", BAD_CAST param_name->str);
+    ((long *)param_nevent.data)[0] = stats[icombo]->nevent;
+    ligoxml_write_Param(writer, &param_nevent, BAD_CAST "int_8s", BAD_CAST param_name->str);
     g_string_printf(param_name, "%s_duration:param", IFO_COMBO_MAP[icombo]);
-    ligoxml_write_Param(writer, &(stats[icombo]->duration), BAD_CAST "int_8s", BAD_CAST param_name->str);
+    ((long *)param_duration.data)[0] = stats[icombo]->duration;
+    ligoxml_write_Param(writer, &param_duration, BAD_CAST "int_8s", BAD_CAST param_name->str);
   }
   g_string_free(param_name, TRUE);
   g_string_free(array_name, TRUE);
@@ -619,6 +626,8 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
 
   xmlFreeTextWriter(writer);
   free(param_range.data);
+  free(param_nevent.data);
+  free(param_duration.data);
   for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_lgsnr_bins + icombo);
     freeArray(array_lgchisq_bins + icombo);

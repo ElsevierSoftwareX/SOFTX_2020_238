@@ -167,13 +167,14 @@ class BackgroundStatsUpdater(object):
 			cmd += ["--input-format", "stats"]
 			cmd += ["--output-filename", output_for_cmd]
 			cmd += ["--ifos", self.ifos]
+			cmd += ["--duration", 86400]
 			print cmd
 			self.proc = subprocess.Popen(cmd)
 
 
 
 class FinalSink(object):
-	def __init__(self, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfap_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+	def __init__(self, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
@@ -216,7 +217,7 @@ class FinalSink(object):
 		self.total_duration = None
 		self.t_start = None
 		self.background_collection_time = background_collection_time
-		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfap_input_fname, collection_time = background_collection_time, ifos = ifos)
+		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfar_input_fname, collection_time = background_collection_time, ifos = ifos)
 
 		# online information performer
 		self.need_online_perform = need_online_perform

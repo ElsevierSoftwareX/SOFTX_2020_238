@@ -119,7 +119,7 @@ static void cohfar_assignfar_dispose (GObject *object);
 
 static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 {
-	CohfarAssignfar *element = COHFAR_ASSIGNFAP(trans);
+	CohfarAssignfar *element = COHFAR_ASSIGNFAR(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 
 
@@ -161,7 +161,7 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 				table->far_1w = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1w[icombo]->cdf)*stats_1w[icombo]->nevent/ stats_1w[icombo]->duration;
 				table->far_1d = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1d[icombo]->cdf)*stats_1d[icombo]->nevent/ stats_1d[icombo]->duration;
 				table->far_2h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_2h[icombo]->cdf)*stats_2h[icombo]->nevent/ stats_2h[icombo]->duration;
-				/* FIXME: currently hardcoded for single detectors FAP */
+				/* FIXME: currently hardcoded for single detectors FAR */
 				table->far_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, stats_1w[1]->cdf)*stats_1w[1]->nevent/ stats_1w[1]->duration;
 				table->far_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, stats_1w[0]->cdf)*stats_1w[0]->nevent/ stats_1w[0]->duration;
 				table->far_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, stats_1w[2]->cdf)*stats_1w[2]->nevent/ stats_1w[2]->duration;
@@ -185,7 +185,7 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 static gboolean
 cohfar_assignfar_event (GstBaseTransform * base, GstEvent * event)
 {
-  CohfarAssignfar *element = COHFAR_ASSIGNFAP(base);
+  CohfarAssignfar *element = COHFAR_ASSIGNFAR(base);
 
   switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_EOS:
@@ -210,7 +210,7 @@ cohfar_assignfar_event (GstBaseTransform * base, GstEvent * event)
 
 static void cohfar_assignfar_set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
 {
-	CohfarAssignfar *element = COHFAR_ASSIGNFAP(object);
+	CohfarAssignfar *element = COHFAR_ASSIGNFAR(object);
 
 	GST_OBJECT_LOCK(element);
 	switch(prop_id) {
@@ -254,7 +254,7 @@ static void cohfar_assignfar_set_property(GObject *object, enum property prop_id
 
 static void cohfar_assignfar_get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
 {
-	CohfarAssignfar *element = COHFAR_ASSIGNFAP(object);
+	CohfarAssignfar *element = COHFAR_ASSIGNFAR(object);
 
 	GST_OBJECT_LOCK(element);
 
@@ -289,7 +289,7 @@ static void cohfar_assignfar_get_property(GObject *object, enum property prop_id
 
 static void cohfar_assignfar_dispose(GObject *object)
 {
-	CohfarAssignfar *element = COHFAR_ASSIGNFAP(object);
+	CohfarAssignfar *element = COHFAR_ASSIGNFAR(object);
 
 	if(element->stats_1w) {
 		// FIXME: free stats

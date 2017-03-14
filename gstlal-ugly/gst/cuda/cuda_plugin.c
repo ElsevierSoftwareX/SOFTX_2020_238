@@ -49,7 +49,7 @@
 #include <postcoh/postcoh.h>
 #include <postcoh/postcoh_filesink.h>
 #include <cohfar/cohfar_accumbackground.h>
-#include <cohfar/cohfar_assignfap.h>
+#include <cohfar/cohfar_assignfar.h>
 
 
 /*
@@ -74,7 +74,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"cuda_postcoh", CUDA_TYPE_POSTCOH},
 		{"postcoh_filesink", POSTCOH_TYPE_FILESINK},
 		{"cohfar_accumbackground", COHFAR_ACCUMBACKGROUND_TYPE},
-		{"cohfar_assignfap", COHFAR_ASSIGNFAP_TYPE},
+		{"cohfar_assignfar", COHFAR_ASSIGNFAR_TYPE},
 		{NULL, 0},
 	};
 
