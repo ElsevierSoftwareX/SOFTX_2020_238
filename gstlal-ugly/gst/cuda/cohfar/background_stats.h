@@ -93,6 +93,7 @@ typedef struct {
 	BackgroundRates *rates;
 	Bins2D	*pdf;
 	Bins2D	*cdf;
+	long nevent;
 } BackgroundStats;
 
 #endif /* __BACKGROUND_STATS_H__ */

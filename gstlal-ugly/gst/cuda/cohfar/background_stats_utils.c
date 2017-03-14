@@ -151,6 +151,7 @@ background_stats_create(char *ifos)
     cur_stats->pdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
     cur_stats->cdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
   }
+  stats->nevent = 0;
   return stats;
 }
 
@@ -182,7 +183,7 @@ background_stats_rates_update_all(gsl_vector *snr_vec, gsl_vector *chisq_vec, Ba
 }
 
 void
-background_stats_rates_update(double snr, double chisq, BackgroundRates *rates)
+background_stats_rates_update(double snr, double chisq, BackgroundRates *rates, BackgroundStats *stats)
 {
 	int snr_idx = get_idx_bins1D(snr, rates->lgsnr_bins);
 	int chisq_idx = get_idx_bins1D(chisq, rates->lgchisq_bins);
@@ -194,6 +195,7 @@ background_stats_rates_update(double snr, double chisq, BackgroundRates *rates)
 	gsl_vector_long_set(snr_vec, snr_idx, gsl_vector_long_get(snr_vec, snr_idx) + 1);
 	gsl_vector_long_set(chisq_vec, chisq_idx, gsl_vector_long_get(chisq_vec, chisq_idx) + 1);
 	gsl_matrix_long_set(hist_mat, snr_idx, chisq_idx, gsl_matrix_long_get(hist_mat, snr_idx, chisq_idx) + 1);
+	stats->nevent++;
 }
 
 void
@@ -202,6 +204,7 @@ background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2)
 	gsl_vector_long_add((gsl_vector_long *)rates1->lgsnr_bins->data, (gsl_vector_long *)rates2->lgsnr_bins->data);
 	gsl_vector_long_add((gsl_vector_long *)rates1->lgchisq_bins->data, (gsl_vector_long *)rates2->lgchisq_bins->data);
 	gsl_matrix_long_add((gsl_matrix_long *)rates1->hist->data, (gsl_matrix_long *)rates2->hist->data);
+	stats->nevent = gsl_vector_long_sum((gsl_vector_long *)rates1->lgsnr_bins->data);
 }
 
 /*
@@ -457,8 +460,6 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
 {
   gchar *tmp_filename = g_strdup_printf("%s_next", filename);
   int icombo = 0;
-  XmlParam param_range;
-  param_range.data = (double *) malloc(sizeof(double) * 2);
   XmlArray *array_lgsnr_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_lgchisq_bins = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_hist = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
@@ -554,18 +555,23 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
           ("testXmlwriterFilename: Error at xmlTextWriterWriteAttribute\n");
       return FALSE;
   }
+  XmlParam param_range;
+  param_range.data = (double *) malloc(sizeof(double) * 2);
 
   GString *param_name = g_string_new(NULL);
 
   g_string_printf(param_name, "%s:%s_range:param",  BACKGROUND_XML_RATES_NAME, BACKGROUND_XML_SNR_SUFFIX);
   ((double *)param_range.data)[0] = LOGSNR_CMIN;
   ((double *)param_range.data)[1] = LOGSNR_CMAX;
-  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_8", BAD_CAST "DOUBLE");
+  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_8", BAD_CAST param_name->str);
 
   g_string_printf(param_name, "%s:%s_range:param",  BACKGROUND_XML_RATES_NAME, BACKGROUND_XML_CHISQ_SUFFIX);
   ((double *)param_range.data)[0] = LOGCHISQ_CMIN;
   ((double *)param_range.data)[1] = LOGCHISQ_CMAX;
-  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_8", BAD_CAST "DOUBLE");
+  ligoxml_write_Param(writer, &param_range, BAD_CAST "real_8", BAD_CAST param_name->str);
+
+  g_string_printf(param_name, "nevent:param");
+  ligoxml_write_Param(writer, &(stats->nevent), BAD_CAST "int_8s", BAD_CAST param_name->str);
 
   g_string_free(param_name, TRUE);
 
