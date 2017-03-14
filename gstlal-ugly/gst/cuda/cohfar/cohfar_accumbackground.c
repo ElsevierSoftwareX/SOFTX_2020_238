@@ -175,11 +175,11 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 			//FIXME: add single detector stats
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1)
-				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats[icombo]->rates);
+				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats[icombo]->rates, stats[icombo]);
 
 			nifo = strlen(intable->ifos)/IFO_LEN;
 			for (isingle=0; isingle< nifo; isingle++)
-				background_stats_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats[isingle]->rates);
+				background_stats_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats[isingle]->rates, stats[isingle]);
 
 
 		} else { /* coherent trigger entry */

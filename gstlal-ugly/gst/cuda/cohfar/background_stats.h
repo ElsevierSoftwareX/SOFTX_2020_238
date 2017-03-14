@@ -94,6 +94,7 @@ typedef struct {
 	Bins2D	*pdf;
 	Bins2D	*cdf;
 	long nevent;
+	long duration;
 } BackgroundStats;
 
 #endif /* __BACKGROUND_STATS_H__ */

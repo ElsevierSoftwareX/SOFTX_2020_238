@@ -34,7 +34,7 @@
 
 #define __DEBUG__ 1
 
-static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar **pout, gchar **pifos)
+static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar **pout, gchar **pifos, gchar **pduration)
 {
 	int option_index = 0;
 	struct option long_opts[] =
@@ -42,6 +42,7 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar 
 		{"input-filename",	required_argument,	0,	'i'},
 		{"input-format",	required_argument,	0,	'f'},
 		{"output-filename",	required_argument,	0,	'o'},
+		{"duration",		required_argument,	0,	'u'},
 		{"ifos",		required_argument,	0,	'd'},
 		{0, 0, 0, 0}
 	};
@@ -60,6 +61,9 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar 
 			case 'd':
 				*pifos = g_strdup((gchar *)optarg);
 				break;
+			case 'u':
+				*pduration = g_strdup((gchar *)optarg);
+	
 			default:
 				exit(0);
 		}
@@ -128,7 +132,7 @@ void cohfar_get_stats_from_file(gchar **in_fnames, BackgroundStats **stats_in, B
 		background_stats_from_xml(stats_in, ncombo, *ifname);
 		printf("%s done read\n", *ifname);
 		for (icombo=0; icombo<ncombo; icombo++)
-			background_stats_rates_add(stats_out[icombo]->rates, stats_in[icombo]->rates);
+			background_stats_rates_add(stats_out[icombo]->rates, stats_in[icombo]->rates, stats_out[icombo]);
 	}
 }
 
@@ -139,8 +143,9 @@ int main(int argc, char *argv[])
 	gchar **pfmt = (gchar **)malloc(sizeof(gchar *));
 	gchar **pout = (gchar **)malloc(sizeof(gchar *));
 	gchar **pifos = (gchar **)malloc(sizeof(gchar *));
+	gchar **pduration = (gchar **)malloc(sizeof(gchar *));
 
-	parse_opts(argc, argv, pin, pfmt, pout, pifos);
+	parse_opts(argc, argv, pin, pfmt, pout, pifos, pduration);
 	int nifo = strlen(*pifos) / IFO_LEN;
 	int icombo, ncombo = get_ncombo(nifo);
 	
@@ -152,7 +157,7 @@ int main(int argc, char *argv[])
 	if (g_strcmp0(*pfmt, "data") == 0) {
 		cohfar_get_data_from_file(in_fnames, &data_dim1, &data_dim2);
 		// FIXME: hardcoded to only update the last stats
-		background_stats_rates_update_all(data_dim1, data_dim2, stats_out[ncombo-1]->rates);
+		background_stats_rates_update_all(data_dim1, data_dim2, stats_out[ncombo-1]->rates, stats_out[ncombo-1]);
 		background_stats_rates_to_pdf(stats_out[ncombo-1]->rates, stats_out[ncombo-1]->pdf);
 		background_stats_pdf_to_fap(stats_out[ncombo-1]->pdf, stats_out[ncombo-1]->cdf);
 		// background_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
@@ -161,6 +166,7 @@ int main(int argc, char *argv[])
 		for (icombo=0; icombo<ncombo; icombo++) {
 			background_stats_rates_to_pdf(stats_out[icombo]->rates, stats_out[icombo]->pdf);
 			background_stats_pdf_to_fap(stats_out[icombo]->pdf, stats_out[icombo]->cdf);
+			stats_out[icombo]->duration = atol(*pduration);
 		}
 	}
 	background_stats_to_xml(stats_out, ncombo, *pout);

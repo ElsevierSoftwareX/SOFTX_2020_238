@@ -51,10 +51,10 @@ int
 get_idx_bins1D(double val, Bins1D *bins);
 
 void
-background_stats_rates_update(double snr, double chisq, BackgroundRates *rates);
+background_stats_rates_update(double snr, double chisq, BackgroundRates *rates, BackgroundStats *cur_stats);
 
 void
-background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2);
+background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2, BackgroundStats *cur_stats);
 
 gboolean
 background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf);
