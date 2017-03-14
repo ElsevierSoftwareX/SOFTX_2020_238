@@ -108,11 +108,18 @@ class HyperCube(object):
 				randcoords *= self.deltas 
 				randcoords += self.center
 				assert randcoords in self
+				match = 0
 				if self.metric.metric_is_valid:
-					match = max([self.metric.metric_match(self.metric_tensor, randcoords, t) for t in self.tiles + neighbor_tiles])
+					for t in self.tiles + neighbor_tiles:
+						match = max(self.metric.metric_match(self.metric_tensor, randcoords, t), match)
+						if match >= 1. - self.__mismatch:
+							break
 				else:
-					print "Metric invalid, falling back to explicit match"
-					match = max([self.metric.explicit_match(randcoords, t) for t in self.tiles + neighbor_tiles])
+					for t in self.tiles + neighbor_tiles:
+						match = max(match, self.metric.explicit_match(randcoords, t))
+						if match >= 1. - self.__mismatch:
+							break
+
 				if match < (1. - self.__mismatch):
 					self.tiles.append(randcoords)
 					matches.append(match)
