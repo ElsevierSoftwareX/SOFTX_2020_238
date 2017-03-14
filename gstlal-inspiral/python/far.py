@@ -46,6 +46,14 @@
 #
 
 
+try:
+	from fpconst import NaN, NegInf, PosInf
+except ImportError:
+	# fpconst is not part of the standard library and might not be
+	# available
+	NaN = float("nan")
+	NegInf = float("-inf")
+	PosInf = float("+inf")
 import itertools
 import math
 import multiprocessing
@@ -61,6 +69,7 @@ import sys
 
 from glue import segments
 from glue.ligolw import ligolw
+from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
@@ -98,8 +107,19 @@ class CoincParams(dict):
 	__slots__ = ("horizons","t_offset","coa_phase")
 
 
-class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
+class ThincaCoincParamsDistributions(object):
 	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
+
+	#
+	# Default content handler for loading CoincParamsDistributions
+	# objects from XML documents
+	#
+
+	@ligolw_array.use_in
+	@ligolw_param.use_in
+	@lsctables.use_in
+	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+		pass
 
 	# range of SNRs covered by this object
 	snr_min = 4.
@@ -118,10 +138,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	numerator_accidental_weight = 0.
 
 	# binnings (initialized in .__init__()
-	binnings = {
-	}
+	binnings = {}
+	pdf_from_rates_func = {}
 
-	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, signal_rate = 1.0, delta_t = 0.005, **kwargs):
+	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, signal_rate = 1.0, delta_t = 0.005, process_id = None, **kwargs):
 		#
 		# check input
 		#
@@ -149,7 +169,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		# this can't be done until the binnings attribute has been
 		# populated
-		super(ThincaCoincParamsDistributions, self).__init__(**kwargs)
+		self.zero_lag_rates = dict((param, rate.BinnedArray(binning)) for param, binning in self.binnings.items())
+		self.background_rates = dict((param, rate.BinnedArray(binning)) for param, binning in self.binnings.items())
+		self.injection_rates = dict((param, rate.BinnedArray(binning)) for param, binning in self.binnings.items())
+		self.zero_lag_pdf = {}
+		self.background_pdf = {}
+		self.injection_pdf = {}
+		self.zero_lag_lnpdf_interp = {}
+		self.background_lnpdf_interp = {}
+		self.injection_lnpdf_interp = {}
+		self.process_id = process_id
 
 		# record of horizon distances for all instruments in the
 		# network
@@ -176,7 +205,34 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	def instruments(self):
 		return frozenset(self.horizon_history)
 
+	@staticmethod
+	def addbinnedarrays(rate_target_dict, rate_source_dict, pdf_target_dict, pdf_source_dict):
+		"""
+		For internal use.
+		"""
+		weight_target = {}
+		weight_source = {}
+		for name, binnedarray in rate_source_dict.items():
+			if name in rate_target_dict:
+				weight_target[name] = rate_target_dict[name].array.sum()
+				weight_source[name] = rate_source_dict[name].array.sum()
+				rate_target_dict[name] += binnedarray
+			else:
+				rate_target_dict[name] = binnedarray.copy()
+		for name, binnedarray in pdf_source_dict.items():
+			if name in pdf_target_dict:
+				binnedarray = binnedarray.copy()
+				binnedarray.array *= weight_source[name]
+				pdf_target_dict[name].array *= weight_target[name]
+				pdf_target_dict[name] += binnedarray
+				pdf_target_dict[name].array /= weight_source[name] + weight_target[name]
+			else:
+				pdf_target_dict[name] = binnedarray.copy()
+
 	def __iadd__(self, other):
+		if type(other) != type(self):
+			raise TypeError(other)
+
 		# NOTE:  because we use custom PDF constructions, the stock
 		# .__iadd__() method for this class will not result in
 		# valid PDFs.  the rates arrays *are* handled correctly by
@@ -197,9 +253,28 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			raise ValueError("incompatible minimum number of instruments")
 		if self.delta_t != other.delta_t:
 			raise ValueError("incompatible delta_t coincidence thresholds")
-		super(ThincaCoincParamsDistributions, self).__iadd__(other)
+
+		self.addbinnedarrays(self.zero_lag_rates, other.zero_lag_rates, self.zero_lag_pdf, other.zero_lag_pdf)
+		self.addbinnedarrays(self.background_rates, other.background_rates, self.background_pdf, other.background_pdf)
+		self.addbinnedarrays(self.injection_rates, other.injection_rates, self.injection_pdf, other.injection_pdf)
 		self.horizon_history += other.horizon_history
+
+		#
+		# rebuild interpolators
+		#
+
+		self._rebuild_interpolators()
+
+		#
+		# done
+		#
+
 		return self
+
+	def copy(self):
+		new = type(self)(process_id = self.process_id)
+		new += self
+		return new
 
 	def coinc_params(self, events, offsetvector, mode = "ranking"):
 		#
@@ -271,13 +346,102 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		return params
 
+	def add_zero_lag(self, param_dict, weight = 1.0):
+		"""
+		Increment a bin in one or more of the observed data (or
+		"zero lag") histograms by weight (default 1).  The names of
+		the histograms to increment, and the parameters identifying
+		the bin in each histogram, are given by the param_dict
+		dictionary.
+		"""
+		for param, value in param_dict.items():
+			try:
+				self.zero_lag_rates[param][value] += weight
+			except IndexError:
+				# param value out of range
+				pass
+
+	def add_background(self, param_dict, weight = 1.0):
+		"""
+		Increment a bin in one or more of the noise (or
+		"background") histograms by weight (default 1).  The names
+		of the histograms to increment, and the parameters
+		identifying the bin in each histogram, are given by the
+		param_dict dictionary.
+		"""
+		for param, value in param_dict.items():
+			try:
+				self.background_rates[param][value] += weight
+			except IndexError:
+				# param value out of range
+				pass
+
+	def add_injection(self, param_dict, weight = 1.0):
+		"""
+		Increment a bin in one or more of the signal (or
+		"injection") histograms by weight (default 1).  The names
+		of the histograms to increment, and the parameters
+		identifying the bin in each histogram, are given by the
+		param_dict dictionary.
+		"""
+		for param, value in param_dict.items():
+			try:
+				self.injection_rates[param][value] += weight
+			except IndexError:
+				# param value out of range
+				pass
+
 	def lnP_noise(self, params):
+		"""
+		From a parameter value dictionary as returned by
+		self.coinc_params(), compute and return the natural
+		logarithm of the noise probability density at that point in
+		parameter space.
+
+		The .finish() method must have been invoked before this
+		method does meaningful things.  No attempt is made to
+		ensure the .finish() method has been invoked nor, if it has
+		been invoked, that no manipulations have occured that might
+		require it to be re-invoked (e.g., the contents of the
+		parameter distributions have been modified and require
+		re-normalization).
+
+		This default implementation assumes the individual PDFs
+		containined in the noise dictionary are for
+		statistically-independent random variables, and computes
+		and returns the logarithm of their product.  Sub-classes
+		that require more sophisticated calculations can override
+		this method.
+		"""
 		# evaluate dt and dphi parameters
 		lnP_dt_dphi_noise = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "noise")
 
-		return lnP_dt_dphi_noise + super(ThincaCoincParamsDistributions, self).lnP_noise(params)
+		# evaluate the rest
+		__getitem__ = self.background_lnpdf_interp.__getitem__
+		return lnP_dt_dphi_noise + sum(__getitem__(name)(*value) for name, value in params.items())
 
 	def lnP_signal(self, params):
+		"""
+		From a parameter value dictionary as returned by
+		self.coinc_params(), compute and return the natural
+		logarithm of the signal probability density at that point
+		in parameter space.
+
+		The .finish() method must have been invoked before this
+		method does meaningful things.  No attempt is made to
+		ensure the .finish() method has been invoked nor, if it has
+		been invoked, that no manipulations have occured that might
+		require it to be re-invoked (e.g., the contents of the
+		parameter distributions have been modified and require
+		re-normalization).
+
+		This default implementation assumes the individual PDFs
+		containined in the signal dictionary are for
+		statistically-independent random variables, and computes
+		and returns the logarithm of their product.  Sub-classes
+		that require more sophisticated calculations can override
+		this method.
+		"""
 		# NOTE:  lnP_signal() and lnP_noise() (not shown here) both
 		# omit the factor P(horizon distance) = 1/T because it is
 		# identical in the numerator and denominator and so factors
@@ -299,7 +463,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# probabilities to is OK.  we probably need to cache these
 		# and save them in the XML file, too, like P(snrs | signal,
 		# instruments)
-		return lnP_snr_signal + lnP_dt_dphi_signal + super(ThincaCoincParamsDistributions, self).lnP_signal(params)
+		__getitem__ = self.injection_lnpdf_interp.__getitem__
+		return lnP_snr_signal + lnP_dt_dphi_signal + sum(__getitem__(name)(*value) for name, value in params.items())
 
 	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
 		if verbose:
@@ -393,10 +558,33 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
 	def _rebuild_interpolators(self):
+		"""
+		Initialize the interp dictionaries from the discretely
+		sampled PDF data.  For internal use only.
+		"""
+		self.zero_lag_lnpdf_interp.clear()
+		self.background_lnpdf_interp.clear()
+		self.injection_lnpdf_interp.clear()
+		# build interpolators
 		keys = set(self.zero_lag_rates)
 		keys.remove("instruments")
 		keys.remove("singles")
-		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators(keys)
+		def mkinterp(binnedarray):
+			with numpy.errstate(invalid = "ignore"):
+				assert not (binnedarray.array < 0.).any()
+			binnedarray = binnedarray.copy()
+			with numpy.errstate(divide = "ignore"):
+				binnedarray.array = numpy.log(binnedarray.array)
+			return rate.InterpBinnedArray(binnedarray, fill_value = NegInf)
+		for key, binnedarray in self.zero_lag_pdf.items():
+			if key in keys:
+				self.zero_lag_lnpdf_interp[key] = mkinterp(binnedarray)
+		for key, binnedarray in self.background_pdf.items():
+			if key in keys:
+				self.background_lnpdf_interp[key] = mkinterp(binnedarray)
+		for key, binnedarray in self.injection_pdf.items():
+			if key in keys:
+				self.injection_lnpdf_interp[key] = mkinterp(binnedarray)
 
 		#
 		# the instrument combination "interpolators" are
@@ -503,6 +691,15 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				binnedarray.array[i] /= norm
 
 	def finish(self, segs, verbose = False):
+		"""
+		Populate the discrete PDF dictionaries from the contents of
+		the rates dictionaries, and then the PDF interpolator
+		dictionaries from the discrete PDFs.  The raw bin counts
+		from the rates dictionaries are copied verbatim, smoothed,
+		and converted to normalized PDFs using the bin volumes.
+		Finally the dictionary of PDF interpolators is populated
+		from the discretely sampled PDF data.
+		"""
 		#
 		# populate background instrument combination rates
 		#
@@ -545,25 +742,116 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			self.injection_rates["instruments"][instruments,] = self.signal_rate * p
 
 		#
-		# chain to parent class
+		# convert raw bin counts into normalized PDFs
 		#
 
-		super(ThincaCoincParamsDistributions, self).finish(verbose = verbose)
+		self.zero_lag_pdf.clear()
+		self.background_pdf.clear()
+		self.injection_pdf.clear()
+		progressbar = ProgressBar(text = "Computing Parameter PDFs", max = len(self.zero_lag_rates) + len(self.background_rates) + len(self.injection_rates)) if verbose else None
+		for key, (msg, rates_dict, pdf_dict) in itertools.chain(
+				zip(self.zero_lag_rates, itertools.repeat(("zero lag", self.zero_lag_rates, self.zero_lag_pdf))),
+				zip(self.background_rates, itertools.repeat(("background", self.background_rates, self.background_pdf))),
+				zip(self.injection_rates, itertools.repeat(("injections", self.injection_rates, self.injection_pdf)))
+		):
+			assert numpy.isfinite(rates_dict[key].array).all() and (rates_dict[key].array >= 0).all(), "%s %s counts are not valid" % (key, msg)
+			pdf_dict[key] = rates_dict[key].copy()
+			pdf_from_rates_func = self.pdf_from_rates_func[key]
+			if pdf_from_rates_func is not None:
+				pdf_from_rates_func(key, pdf_dict)
+			if progressbar is not None:
+				progressbar.increment()
+
+		#
+		# rebuild interpolators
+		#
+
+		self._rebuild_interpolators()
+
+	@classmethod
+	def get_xml_root(cls, xml, name):
+		"""
+		Sub-classes can use this in their overrides of the
+		.from_xml() method to find the root element of the XML
+		serialization.
+		"""
+		name = u"%s:%s" % (name, cls.ligo_lw_name_suffix)
+		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == name]
+		if len(xml) != 1:
+			raise ValueError("XML tree must contain exactly one %s element named %s" % (ligolw.LIGO_LW.tagName, name))
+		return xml[0]
 
 	@classmethod
 	def from_xml(cls, xml, name):
+		"""
+		In the XML document tree rooted at xml, search for the
+		serialized CoincParamsDistributions object named name, and
+		deserialize it.  The return value is a two-element tuple.
+		The first element is the deserialized
+		CoincParamsDistributions object, the second is the process
+		ID recorded when it was written to XML.
+		"""
+		# find the root element of the XML serialization
 		xml = cls.get_xml_root(xml, name)
-		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name,
+
+		# retrieve the process ID
+		process_id = ligolw_param.get_pyvalue(xml, u"process_id")
+
+		# create an instance
+		self = cls(
+			process_id = process_id,
 			instruments = lsctables.instrument_set_from_ifos(ligolw_param.get_pyvalue(xml, u"instruments")),
 			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
 			signal_rate = ligolw_param.get_pyvalue(xml, u"signal_rate"),
 			delta_t = ligolw_param.get_pyvalue(xml, u"delta_t")
 		)
+
+		# reconstruct the BinnedArray objects
+		def reconstruct(xml, prefix, target_dict):
+			for name in [elem.Name.split(u":")[1] for elem in xml.childNodes if elem.Name.startswith(u"%s:" % prefix)]:
+				target_dict[str(name)] = rate.BinnedArray.from_xml(xml, u"%s:%s" % (prefix, name))
+		reconstruct(xml, u"zero_lag", self.zero_lag_rates)
+		reconstruct(xml, u"zero_lag_pdf", self.zero_lag_pdf)
+		reconstruct(xml, u"background", self.background_rates)
+		reconstruct(xml, u"background_pdf", self.background_pdf)
+		reconstruct(xml, u"injection", self.injection_rates)
+		reconstruct(xml, u"injection_pdf", self.injection_pdf)
+
+		# reconstruct horizon history
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, name)
+
+		#
+		# rebuild interpolators
+		#
+
+		self._rebuild_interpolators()
+
+		#
+		# done
+		#
+
 		return self
 
 	def to_xml(self, name):
-		xml = super(ThincaCoincParamsDistributions, self).to_xml(name)
+		"""
+		Serialize this CoincParamsDistributions object to an XML
+		fragment and return the root element of the resulting XML
+		tree.  The .process_id attribute of process will be
+		recorded in the serialized XML, and the object will be
+		given the name name.
+		"""
+		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"process_id", self.process_id))
+		def store(xml, prefix, source_dict):
+			for name, binnedarray in sorted(source_dict.items()):
+				xml.appendChild(binnedarray.to_xml(u"%s:%s" % (prefix, name)))
+		store(xml, u"zero_lag", self.zero_lag_rates)
+		store(xml, u"zero_lag_pdf", self.zero_lag_pdf)
+		store(xml, u"background", self.background_rates)
+		store(xml, u"background_pdf", self.background_pdf)
+		store(xml, u"injection", self.injection_rates)
+		store(xml, u"injection_pdf", self.injection_pdf)
+
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.ifos_from_instrument_set(self.instruments)))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"signal_rate", self.signal_rate))
@@ -780,9 +1068,6 @@ def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, signal_rates, 
 #
 # Class to compute ranking statistic PDFs for background-like and
 # signal-like populations
-#
-# FIXME:  this is really close to just being another subclass of
-# CoincParamsDistributions.  consider the wisdom of rewriting it to be such
 #
 
 
@@ -1008,9 +1293,9 @@ WHERE
 				progressbar.increment()
 
 	def __iadd__(self, other):
-		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
-		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.signal_likelihood_rates, other.signal_likelihood_rates, self.signal_likelihood_pdfs, other.signal_likelihood_pdfs)
-		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.zero_lag_likelihood_rates, other.zero_lag_likelihood_rates, self.zero_lag_likelihood_pdfs, other.zero_lag_likelihood_pdfs)
+		ThincaCoincParamsDistributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
+		ThincaCoincParamsDistributions.addbinnedarrays(self.signal_likelihood_rates, other.signal_likelihood_rates, self.signal_likelihood_pdfs, other.signal_likelihood_pdfs)
+		ThincaCoincParamsDistributions.addbinnedarrays(self.zero_lag_likelihood_rates, other.zero_lag_likelihood_rates, self.zero_lag_likelihood_pdfs, other.zero_lag_likelihood_pdfs)
 		return self
 
 	@classmethod
