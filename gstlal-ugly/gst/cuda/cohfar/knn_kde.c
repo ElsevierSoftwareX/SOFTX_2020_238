@@ -46,7 +46,7 @@ static int get_num_nonzero(gsl_matrix_long *histogram)
 	return num_nonzero;
 }
 
-static void set_nonzero_idx(gsl_matrix_long *histogram, gsl_matrix_long * nonzero_idx)
+static void find_nonzero_idx(gsl_matrix_long *histogram, gsl_matrix_long * nonzero_idx)
 {
 //	This loop should generate an array that looks something like this
 //	0 1
@@ -105,7 +105,7 @@ static double get_kth_value(double * all_dist, int len, int knn_k)// Puts the di
 }
 
 
-static void set_kth_dist(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long * nonzero_idx, int knn_k, gsl_vector *kth_dist)// Calculates the distance from each grid point to each data point, calling ascend() to order them 
+static void find_kth_dist(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long * nonzero_idx, int knn_k, gsl_vector *kth_dist)// Calculates the distance from each grid point to each data point, calling ascend() to order them 
 {
 
 	int i = 0,j = 0;
@@ -125,7 +125,7 @@ static void set_kth_dist(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long *
 	free(all_dist);
 }
 
-static void set_pdf(double band_const, gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long * histogram, gsl_matrix_long * nonzero_idx, gsl_vector * kth_dist, gsl_matrix *pdf)
+static void calc_pdf(double band_const, gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long * histogram, gsl_matrix_long * nonzero_idx, gsl_vector * kth_dist, gsl_matrix *pdf)
 {
 		
 	int i = 0,j = 0, k = 0;
@@ -194,12 +194,12 @@ knn_kde(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long *histogram, gsl_ma
 	gsl_matrix_long * nonzero_idx = gsl_matrix_long_calloc(num_nonzero, 2);
 
 	printf("finding nonzero idx\n");
-	set_nonzero_idx(histogram, nonzero_idx);
+	find_nonzero_idx(histogram, nonzero_idx);
 
 	gsl_vector * kth_dist = gsl_vector_alloc(num_nonzero);
 	printf("finding kth neighbour\n");
-	set_kth_dist(tin_x, tin_y, nonzero_idx, knn_k, kth_dist);
+	find_kth_dist(tin_x, tin_y, nonzero_idx, knn_k, kth_dist);
 	printf("calculating pdf\n");
-	set_pdf(band_const, tin_x, tin_y, histogram, nonzero_idx, kth_dist, pdf);
+	calc_pdf(band_const, tin_x, tin_y, histogram, nonzero_idx, kth_dist, pdf);
 
 }
