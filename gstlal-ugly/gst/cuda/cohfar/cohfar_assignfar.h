@@ -26,8 +26,8 @@
  */
 
 
-#ifndef __COHFAR_ASSIGNFAP_H__
-#define __COHFAR_ASSIGNFAP_H__
+#ifndef __COHFAR_ASSIGNFAR_H__
+#define __COHFAR_ASSIGNFAR_H__
 
 #include <glib.h>
 #include <gst/gst.h>
@@ -36,21 +36,21 @@
 #include <cohfar/background_stats.h>
 
 G_BEGIN_DECLS
-#define COHFAR_ASSIGNFAP_TYPE \
-	(cohfar_assignfap_get_type())
-#define COHFAR_ASSIGNFAP(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), COHFAR_ASSIGNFAP_TYPE, CohfarAssignfap))
-#define COHFAR_ASSIGNFAP_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), COHFAR_ASSIGNFAP_TYPE, CohfarAssignfapClass))
-#define GST_IS_COHFAR_ASSIGNFAP(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), COHFAR_ASSIGNFAP_TYPE))
-#define GST_IS_COHFAR_ASSIGNFAP_CLASS(klass) \
-	(G_type_CHECK_CLASS_TYPE((klass), COHFAR_ASSIGNFAP_TYPE))
+#define COHFAR_ASSIGNFAR_TYPE \
+	(cohfar_assignfar_get_type())
+#define COHFAR_ASSIGNFAR(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), COHFAR_ASSIGNFAR_TYPE, CohfarAssignfar))
+#define COHFAR_ASSIGNFAR_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), COHFAR_ASSIGNFAR_TYPE, CohfarAssignfarClass))
+#define GST_IS_COHFAR_ASSIGNFAR(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), COHFAR_ASSIGNFAR_TYPE))
+#define GST_IS_COHFAR_ASSIGNFAR_CLASS(klass) \
+	(G_type_CHECK_CLASS_TYPE((klass), COHFAR_ASSIGNFAR_TYPE))
 
 
 typedef struct {
 	GstBaseTransformClass parent_class;
-} CohfarAssignfapClass;
+} CohfarAssignfarClass;
 
 
 typedef struct {
@@ -58,12 +58,14 @@ typedef struct {
 
 	char *ifos;
 	int ncombo; // ifo combination
-	BackgroundStats **stats;
+	BackgroundStats **stats_2h;
+	BackgroundStats **stats_1d;
+	BackgroundStats **stats_1w;
 
 	int collection_time;
 	gboolean pass_collection_time;
 	int refresh_interval;
-	gchar *input_fname;
+	gchar **input_fnames;
 
 	/*
 	 * timestamp book-keeping
@@ -71,13 +73,13 @@ typedef struct {
 
 	GstClockTime t_start;
 	GstClockTime t_roll_start;
-} CohfarAssignfap;
+} CohfarAssignfar;
 
 
-GType cohfar_assignfap_get_type(void);
+GType cohfar_assignfar_get_type(void);
 
 
 G_END_DECLS
 
 
-#endif	/* __COHFAR_ASSIGNFAP_H__ */
+#endif	/* __COHFAR_ASSIGNFAR_H__ */

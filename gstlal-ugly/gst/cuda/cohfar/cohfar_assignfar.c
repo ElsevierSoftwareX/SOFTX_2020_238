@@ -43,7 +43,7 @@
 
 #include <postcoh/postcohinspiral_table.h>
 #include <cohfar/background_stats_utils.h>
-#include <cohfar/cohfar_assignfap.h>
+#include <cohfar/cohfar_assignfar.h>
 
 #include <time.h>
 #define DEFAULT_STATS_NAME "stats.xml.gz"
@@ -62,20 +62,22 @@
  *
  * ============================================================================
  */
+#define STATS_FNAME_1W_IDX 0
+#define STATS_FNAME_1D_IDX 1
+#define STATS_FNAME_2H_IDX 2
 
-
-#define GST_CAT_DEFAULT cohfar_assignfap_debug
+#define GST_CAT_DEFAULT cohfar_assignfar_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 static void additional_initializations(GType type)
 {
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cohfar_assignfap", 0, "cohfar_assignfap element");
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cohfar_assignfar", 0, "cohfar_assignfar element");
 }
 
 GST_BOILERPLATE_FULL(
-	CohfarAssignfap,
-	cohfar_assignfap,
+	CohfarAssignfar,
+	cohfar_assignfar,
 	GstBaseTransform,
 	GST_TYPE_BASE_TRANSFORM,
 	additional_initializations
@@ -89,15 +91,15 @@ enum property {
 	PROP_INPUT_FNAME
 };
 
-static void cohfar_assignfap_set_property (GObject * object,
+static void cohfar_assignfar_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
-static void cohfar_assignfap_get_property (GObject * object,
+static void cohfar_assignfar_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
 
 /* vmethods */
-static GstFlowReturn cohfar_assignfap_transform_ip (GstBaseTransform * base,
+static GstFlowReturn cohfar_assignfar_transform_ip (GstBaseTransform * base,
     GstBuffer * buf);
-static void cohfar_assignfap_dispose (GObject *object);
+static void cohfar_assignfar_dispose (GObject *object);
 
 /*
  * ============================================================================
@@ -115,9 +117,9 @@ static void cohfar_assignfap_dispose (GObject *object);
  */
 
 
-static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstBuffer *buf)
+static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 {
-	CohfarAssignfap *element = COHFAR_ASSIGNFAP(trans);
+	CohfarAssignfar *element = COHFAR_ASSIGNFAP(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 
 
@@ -128,33 +130,41 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 	/* Check that we have collected enough backgrounds */
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start)&& (t_cur - element->t_start)/GST_SECOND >= (unsigned) element->collection_time) {
 		element->t_roll_start = t_cur;
-		if (element->input_fname)
-			background_stats_from_xml(element->stats, element->ncombo, element->input_fname);
+		/* FIXME: the order of input fnames must match the stats order */
+		background_stats_from_xml(element->stats_1w, element->ncombo, element->input_fnames[STATS_FNAME_1W_IDX]);
+		background_stats_from_xml(element->stats_1d, element->ncombo, element->input_fnames[STATS_FNAME_1D_IDX]);
+		background_stats_from_xml(element->stats_2h, element->ncombo, element->input_fnames[STATS_FNAME_2H_IDX]);
 		element->pass_collection_time = TRUE;
 	}
 
 	/* Check if it is time to refresh the background stats */
 	if (element->pass_collection_time && element->refresh_interval > 0 && (t_cur - element->t_roll_start)/GST_SECOND > (unsigned) element->refresh_interval) {
 		element->t_roll_start = t_cur;
-		if (element->input_fname)
-			background_stats_from_xml(element->stats, element->ncombo, element->input_fname);
+		/* FIXME: the order of input fnames must match the stats order */
+		background_stats_from_xml(element->stats_1w, element->ncombo, element->input_fnames[STATS_FNAME_1W_IDX]);
+		background_stats_from_xml(element->stats_1d, element->ncombo, element->input_fnames[STATS_FNAME_1D_IDX]);
+		background_stats_from_xml(element->stats_2h, element->ncombo, element->input_fnames[STATS_FNAME_2H_IDX]);
 	}
 
 
 	if (element->pass_collection_time) {
 		int icombo;
-		BackgroundStats **stats = element->stats;
+		BackgroundStats **stats_1w = element->stats_1w;
+		BackgroundStats **stats_1d = element->stats_1d;
+		BackgroundStats **stats_2h = element->stats_2h;
 		PostcohInspiralTable *table = (PostcohInspiralTable *) GST_BUFFER_DATA(buf);
 		PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
 			if (icombo > -1)
 			{
+				table->far_1w = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1w[icombo]->cdf)*stats_1w[icombo]->nevent/ stats_1w[icombo]->duration;
+				table->far_1d = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1d[icombo]->cdf)*stats_1d[icombo]->nevent/ stats_1d[icombo]->duration;
+				table->far_2h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_2h[icombo]->cdf)*stats_2h[icombo]->nevent/ stats_2h[icombo]->duration;
 				/* FIXME: currently hardcoded for single detectors FAP */
-				table->fap = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats[icombo]->cdf);
-				table->fap_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, stats[1]->cdf);
-				table->fap_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, stats[0]->cdf);
-				table->fap_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, stats[2]->cdf);
+				table->far_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, stats_1w[1]->cdf)*stats_1w[1]->nevent/ stats_1w[1]->duration;
+				table->far_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, stats_1w[0]->cdf)*stats_1w[0]->nevent/ stats_1w[0]->duration;
+				table->far_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, stats_1w[2]->cdf)*stats_1w[2]->nevent/ stats_1w[2]->duration;
 			}
 		}
 	}
@@ -173,16 +183,16 @@ static GstFlowReturn cohfar_assignfap_transform_ip(GstBaseTransform *trans, GstB
 
 /* handle events (search) */
 static gboolean
-cohfar_assignfap_event (GstBaseTransform * base, GstEvent * event)
+cohfar_assignfar_event (GstBaseTransform * base, GstEvent * event)
 {
-  CohfarAssignfap *element = COHFAR_ASSIGNFAP(base);
+  CohfarAssignfar *element = COHFAR_ASSIGNFAP(base);
 
   switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_EOS:
 //      if (fflush (sink->file))
 //        goto flush_failed;
 
-    GST_LOG_OBJECT(element, "EVENT EOS. Finish assign fap");
+    GST_LOG_OBJECT(element, "EVENT EOS. Finish assign far");
       break;
     default:
       break;
@@ -198,9 +208,9 @@ cohfar_assignfap_event (GstBaseTransform * base, GstEvent * event)
  */
 
 
-static void cohfar_assignfap_set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
+static void cohfar_assignfar_set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
 {
-	CohfarAssignfap *element = COHFAR_ASSIGNFAP(object);
+	CohfarAssignfar *element = COHFAR_ASSIGNFAP(object);
 
 	GST_OBJECT_LOCK(element);
 	switch(prop_id) {
@@ -208,13 +218,15 @@ static void cohfar_assignfap_set_property(GObject *object, enum property prop_id
 			element->ifos = g_value_dup_string(value);
 			int nifo = strlen(element->ifos) / IFO_LEN;
 			element->ncombo = get_ncombo(nifo);
-			element->stats = background_stats_create(element->ifos);
+			element->stats_1w = background_stats_create(element->ifos);
+			element->stats_1d = background_stats_create(element->ifos);
+			element->stats_2h = background_stats_create(element->ifos);
 			break;
 
 		case PROP_INPUT_FNAME:
 			/* must make sure ifos have been loaded */
 			g_assert(element->ifos != NULL);
-			element->input_fname = g_value_dup_string(value);
+			element->input_fnames = g_strsplit(g_value_dup_string(value), ",", -1);
 			break;
 
 		case PROP_COLLECTION_TIME:
@@ -240,9 +252,9 @@ static void cohfar_assignfap_set_property(GObject *object, enum property prop_id
  */
 
 
-static void cohfar_assignfap_get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
+static void cohfar_assignfar_get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
 {
-	CohfarAssignfap *element = COHFAR_ASSIGNFAP(object);
+	CohfarAssignfar *element = COHFAR_ASSIGNFAP(object);
 
 	GST_OBJECT_LOCK(element);
 
@@ -252,7 +264,7 @@ static void cohfar_assignfap_get_property(GObject *object, enum property prop_id
 			break;
 
 		case PROP_INPUT_FNAME:
-			g_value_set_string(value, element->input_fname);
+			g_value_set_string(value, element->input_fnames);
 			break;
 
 		case PROP_COLLECTION_TIME:
@@ -275,11 +287,11 @@ static void cohfar_assignfap_get_property(GObject *object, enum property prop_id
  */
 
 
-static void cohfar_assignfap_dispose(GObject *object)
+static void cohfar_assignfar_dispose(GObject *object)
 {
-	CohfarAssignfap *element = COHFAR_ASSIGNFAP(object);
+	CohfarAssignfar *element = COHFAR_ASSIGNFAP(object);
 
-	if(element->stats) {
+	if(element->stats_1w) {
 		// FIXME: free stats
 	}
 	G_OBJECT_CLASS(parent_class)->dispose(object);
@@ -291,16 +303,16 @@ static void cohfar_assignfap_dispose(GObject *object)
  */
 
 
-static void cohfar_assignfap_base_init(gpointer gclass)
+static void cohfar_assignfar_base_init(gpointer gclass)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
 	gst_element_class_set_details_simple(
 		element_class,
-		"assign fap to postcoh triggers",
-		"assign fap",
-		"assign fap to postcoh triggers according to a given stats file.\n",
+		"assign far to postcoh triggers",
+		"assign far",
+		"assign far to postcoh triggers according to a given stats file.\n",
 		"Qi Chu <qi.chu at ligo dot org>"
 	);
 	gst_element_class_add_pad_template(
@@ -330,8 +342,8 @@ static void cohfar_assignfap_base_init(gpointer gclass)
 		)
 	);
 
-	transform_class->transform_ip = GST_DEBUG_FUNCPTR(cohfar_assignfap_transform_ip);
-	transform_class->event = GST_DEBUG_FUNCPTR(cohfar_assignfap_event);
+	transform_class->transform_ip = GST_DEBUG_FUNCPTR(cohfar_assignfar_transform_ip);
+	transform_class->event = GST_DEBUG_FUNCPTR(cohfar_assignfar_event);
 
 }
 
@@ -341,13 +353,13 @@ static void cohfar_assignfap_base_init(gpointer gclass)
  */
 
 
-static void cohfar_assignfap_class_init(CohfarAssignfapClass *klass)
+static void cohfar_assignfar_class_init(CohfarAssignfarClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 ;
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(cohfar_assignfap_set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(cohfar_assignfap_get_property);
-	gobject_class->dispose = GST_DEBUG_FUNCPTR(cohfar_assignfap_dispose);
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(cohfar_assignfar_set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(cohfar_assignfar_get_property);
+	gobject_class->dispose = GST_DEBUG_FUNCPTR(cohfar_assignfar_dispose);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -403,10 +415,13 @@ static void cohfar_assignfap_class_init(CohfarAssignfapClass *klass)
  */
 
 
-static void cohfar_assignfap_init(CohfarAssignfap *element, CohfarAssignfapClass *kclass)
+static void cohfar_assignfar_init(CohfarAssignfar *element, CohfarAssignfarClass *kclass)
 {
 	element->ifos = NULL;
-	element->stats = NULL;
+	element->stats_2h = NULL;
+	element->stats_1d = NULL;
+	element->stats_1w = NULL;
+	element->input_fnames = NULL;
 	element->t_start = GST_CLOCK_TIME_NONE;
 	element->t_roll_start = GST_CLOCK_TIME_NONE;
 	element->pass_collection_time = FALSE;

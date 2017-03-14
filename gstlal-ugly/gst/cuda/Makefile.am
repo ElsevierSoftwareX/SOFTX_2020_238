@@ -21,7 +21,7 @@ libcuda_plugin_la_SOURCES = \
 	cohfar/ssvkernel.c \
 	cohfar/background_stats_utils.c \
 	cohfar/cohfar_accumbackground.c \
-	cohfar/cohfar_assignfap.c
+	cohfar/cohfar_assignfar.c
 #	deprecated
 #	postcoh/detresponse_skymap.c
 #	audioresample folder not working, seg fault
@@ -56,7 +56,7 @@ noinst_HEADERS = \
 	cohfar/background_stats.h \
 	cohfar/background_stats_utils.h \
 	cohfar/cohfar_accumbackground.h \
-	cohfar/cohfar_assignfap.h
+	cohfar/cohfar_assignfar.h
 
 gstlal_cohfar_calc_cdf_SOURCES = \
 	LIGOLw_xmllib/LIGOLwReader.c \
