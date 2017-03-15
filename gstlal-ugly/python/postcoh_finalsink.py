@@ -1,5 +1,5 @@
-
-# Copyright (C) 2015 Qi Chu, Shinkee Chung
+#
+# Copyright (C) 2015 Qi Chu
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -135,46 +135,64 @@ class OnlinePerformer(object):
 
 
 class BackgroundStatsUpdater(object):
-	def __init__(self, path, input_prefix_list, output, collection_time, ifos):
+	def __init__(self, path, input_prefix_list, output_list_string, collection_time_string, ifos):
 		self.path = path
 		self.input_prefix_list = input_prefix_list
-		self.output = output
-		self.collection_time = collection_time
+		self.output = output_list_string.split(",")
+		self.collection_time = []
+		times = collection_time_string.split(",")
+		for itime in times:
+			self.collection_time.append(int(itime))
 		self.ifos = ifos
-		self.proc = None
+		self.procs = []
 
-	def update(self, cur_buftime):
-		boundary = cur_buftime - self.collection_time
+	def update_fap_stats(self, cur_buftime):
 		# list all the files in the path
-		nprefix = len(self.input_prefix_list[0].split("_"))
+		#nprefix = len(self.input_prefix_list[0].split("_"))
 		ls_proc = subprocess.Popen(["ls", self.path], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-		ls_out, ls_err = ls_proc.communicate()
+		ls_out = subprocess.check_output(["grep", "stats"], stdin = ls_proc.stdout)
+		ls_proc.wait()
 		ls_fnames = ls_out.split("\n")
-		# find the files within the collection time
-		valid_fnames = []
-		for ifname in ls_fnames:
-			ifname_split = ifname.split("_")
-			# FIXME: hard coded the prefix test for the first 4 chars 
-			if len(ifname_split) > nprefix and ifname[0:3] == self.input_prefix_list[0][0:3] and ifname[-4:] != "next" and ifname_split[nprefix].isdigit() and int(ifname_split[nprefix]) > boundary:
-				valid_fnames.append("%s/%s" % (self.path, ifname))
-		if len(valid_fnames) > 0:
-			input_for_cmd = ",".join(valid_fnames)
-			output_for_cmd = "%s/%s" % (self.path, self.output)
-			# execute the cmd in a different process
-			cmd = []
-			cmd += ["gstlal_cohfar_calc_cdf"]
-			cmd += ["--input-filename", input_for_cmd]
-			cmd += ["--input-format", "stats"]
-			cmd += ["--output-filename", output_for_cmd]
-			cmd += ["--ifos", self.ifos]
-			cmd += ["--duration", 86400]
-			print cmd
-			self.proc = subprocess.Popen(cmd)
+		#pdb.set_trace()	
+		for (i, collection_time) in enumerate(self.collection_time):
+			print "collection time %d" % collection_time
+			boundary = cur_buftime - collection_time
+			# find the files within the collection time
+			valid_fnames = []
+			for ifname in ls_fnames:
+				ifname_split = ifname.split("_")
+				# FIXME: hard coded the prefix test for the first 4 chars: must be bank
+				if len(ifname_split)> 1 and ifname[-4:] != "next" and ifname_split[-2].isdigit() and int(ifname_split[-2]) > boundary:
+					valid_fnames.append("%s/%s" % (self.path, ifname))
 
+			if len(valid_fnames) > 0:
+				input_for_cmd = ",".join(valid_fnames)
+				# execute the cmd in a different process
+				cmd = []
+				cmd += ["gstlal_cohfar_calc_cdf"]
+				cmd += ["--input", input_for_cmd]
+				cmd += ["--input-format", "stats"]
+				cmd += ["--output", self.output[i]]
+				cmd += ["--ifos", self.ifos]
+				cmd += ["--duration", str(collection_time)]
+				print cmd
+				self.procs.append(subprocess.Popen(cmd))
+
+	def combine_stats(self, cur_buftime):
+		# list all the bank stats files in the path
+		if not os.path.isfile("./combine_stats.sh"):
+			print "./combine_stats.sh not found, exiting"
+			sys.exit()
+
+		cmd_string = "./combine_stats.sh %s" % (self.path)
+		cmd = []
+		cmd += [cmb_string]
+		print cmd
+		self.procs.append(subprocess.Popen(cmd))
 
 
 class FinalSink(object):
-	def __init__(self, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time = 86400, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+	def __init__(self, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, bsupdate_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
@@ -216,8 +234,9 @@ class FinalSink(object):
 		# background updater
 		self.total_duration = None
 		self.t_start = None
-		self.background_collection_time = background_collection_time
-		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output = cohfar_assignfar_input_fname, collection_time = background_collection_time, ifos = ifos)
+		self.t_bsupdate_start = None
+		self.bsupdate_interval = bsupdate_interval
+		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output_list_string = cohfar_assignfar_input_fname, collection_time_string = background_collection_time_string, ifos = ifos)
 
 		# online information performer
 		self.need_online_perform = need_online_perform
@@ -242,6 +261,7 @@ class FinalSink(object):
 			# initialization
 			if self.is_first_buf:
 				self.t_snapshot_start = buf_timestamp
+				self.t_bsupdate_start = buf_timestamp
 				self.t_start = buf_timestamp
 				self.is_first_buf = False
 
@@ -274,15 +294,20 @@ class FinalSink(object):
 					self.candidate = None
 					self.need_candidate_check = False
 
-			# do snapshot when ready
+			# dump zerolag candidates when interval is reached
 			self.snapshot_duration = buf_timestamp - self.t_snapshot_start
-			self.total_duration = buf_timestamp - self.t_start
 			if self.snapshot_interval is not None and self.snapshot_duration >= self.snapshot_interval:
 				snapshot_filename = self.get_output_filename(self.output_prefix, self.t_snapshot_start, self.snapshot_duration)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_snapshot_start = buf_timestamp
-				self.bsupdater.update(buf_timestamp)
+				self.bsupdater.combine_stats(buf_timestamp)
 				self.nevent_clustered = 0
+
+			# do bsupdate when interval is reached
+			bsupdate_duration = buf_timestamp - self.t_bsupdate_start
+			if bsupdate_duration is not None and bsupdate_duration >= self.bsupdate_interval:
+				self.bsupdater.update_fap_stats(buf_timestamp)
+				self.t_bsupdate_start = buf_timestamp
 
 	def __select_head_event(self):
 		# last event should have the smallest timestamp
@@ -746,8 +771,9 @@ class FinalSink(object):
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
 			self.thread_snapshot.join()
 	
-		if self.bsupdater.proc is not None and self.bsupdater.proc.poll() is None:
-			tmp_out, tmp_err = self.bsupdater.proc.communicate()
+		if self.bsupdater.procs is not None:
+			for p in self.bsupdater.procs:
+				p.wait()
 
 	def write_output_file(self, filename = None, verbose = False):
 		self.__check_internal_process_finish()

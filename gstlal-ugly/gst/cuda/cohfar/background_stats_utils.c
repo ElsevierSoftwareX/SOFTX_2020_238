@@ -424,14 +424,12 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
  
   }
 
-  printf("before parse stats file\n");
   parseFile(filename, xns, nnode);
 
   // FIXME: need sanity check that number of rows and columns are the same
   // with the struct of BackgroundStats
   /* load to stats */
 
-  printf( "after parse stats file\n");
   int nbin_x = stats[0]->pdf->nbin_x, nbin_y = stats[0]->pdf->nbin_y;
   int x_size = sizeof(double) * nbin_x, y_size = sizeof(double) * nbin_y;
   int xy_size = sizeof(double) * nbin_x * nbin_y;
@@ -454,16 +452,15 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     cur_stats->duration = param_duration[icombo].data;
   }
 
-  for (icombo=0; icombo<ncombo; icombo++) {
-    freeArray(array_lgsnr_bins + icombo);
-    freeArray(array_lgchisq_bins + icombo);
-    freeArray(array_hist + icombo);
-    freeArray(array_pdf + icombo);
-    freeArray(array_cdf + icombo);
-    freeParam(param_nevent + icombo);
-    freeParam(param_duration + icombo);
-  }
+  free(array_lgsnr_bins);
+  free(array_lgchisq_bins);
+  free(array_hist);
+  free(array_pdf);
+  free(array_cdf);
+  free(param_nevent);
+  free(param_duration);
 
+  printf( "after load stats file\n");
   free(xns);
   xmlCleanupParser();
   xmlMemoryDump();

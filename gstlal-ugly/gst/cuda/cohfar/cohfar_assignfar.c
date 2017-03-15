@@ -131,6 +131,7 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start)&& (t_cur - element->t_start)/GST_SECOND >= (unsigned) element->collection_time) {
 		element->t_roll_start = t_cur;
 		/* FIXME: the order of input fnames must match the stats order */
+		GST_DEBUG_OBJECT(element, "read input stats to assign far %s, %s, %s", element->input_fnames[STATS_FNAME_1W_IDX], element->input_fnames[STATS_FNAME_1W_IDX], element->input_fnames[STATS_FNAME_1W_IDX]);
 		background_stats_from_xml(element->stats_1w, element->ncombo, element->input_fnames[STATS_FNAME_1W_IDX]);
 		background_stats_from_xml(element->stats_1d, element->ncombo, element->input_fnames[STATS_FNAME_1D_IDX]);
 		background_stats_from_xml(element->stats_2h, element->ncombo, element->input_fnames[STATS_FNAME_2H_IDX]);
@@ -141,6 +142,7 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 	if (element->pass_collection_time && element->refresh_interval > 0 && (t_cur - element->t_roll_start)/GST_SECOND > (unsigned) element->refresh_interval) {
 		element->t_roll_start = t_cur;
 		/* FIXME: the order of input fnames must match the stats order */
+		GST_DEBUG_OBJECT(element, "read refreshed stats to assign far.");
 		background_stats_from_xml(element->stats_1w, element->ncombo, element->input_fnames[STATS_FNAME_1W_IDX]);
 		background_stats_from_xml(element->stats_1d, element->ncombo, element->input_fnames[STATS_FNAME_1D_IDX]);
 		background_stats_from_xml(element->stats_2h, element->ncombo, element->input_fnames[STATS_FNAME_2H_IDX]);

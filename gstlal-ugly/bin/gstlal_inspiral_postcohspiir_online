@@ -164,10 +164,10 @@ def parse_command_line():
   parser.add_option("--cohfar-accumbackground-snapshot-interval", type = "int", metavar = "seconds", default = 0, help = "How often to snapshot the stats files. (optional)")
   parser.add_option("--cohfar-accumbackground-history-fname", metavar = "filename", help = "Set the history filename to read stats from (optional)")
   parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (required)")
-  parser.add_option("--cohfar-assignfap-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
-  parser.add_option("--cohfar-assignfap-collection-time", type = "int", metavar = "seconds", default = 0, help = "Do not assign FAP during this collection time. (optional)")
-  parser.add_option("--finalsink-background-collection-time", type = "int", metavar = "seconds", default = 86400, help = "Update the marginalized stats files using the information of the collection time. (optional)")
-  parser.add_option("--cohfar-assignfap-input-fname", metavar = "filename", default = None, help = "Set the filename to read the CDF (optional)")
+  parser.add_option("--cohfar-assignfar-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
+  parser.add_option("--cohfar-assignfar-collection-time", type = "int", metavar = "seconds", default = 0, help = "Do not assign FAP during this collection time. (optional)")
+  parser.add_option("--finalsink-background-collection-time", metavar = "seconds,seconds,seconds", default = "604800,86400,7200", help = "Update the marginalized stats files using the information of the collection time. (optional)")
+  parser.add_option("--cohfar-assignfar-input-fname", metavar = "filename", default = None, help = "Set the filename to read the FAP (optional)")
   parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (optional).")
   parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
   parser.add_option("--iir-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
@@ -192,6 +192,7 @@ def parse_command_line():
   parser.add_option("--finalsink-gracedb-search", default = "LowMass", help = "gracedb type, default is LowMass")
   parser.add_option("--finalsink-gracedb-pipeline", default = "gstlal-spiir", help = "gracedb pipeline, default is gstlal-spiir")
   parser.add_option("--finalsink-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
+  parser.add_option("--finalsink-bsupdate-interval", type = "float", metavar = "seconds", default = None, help = "How often to update the fap stats files.")
   parser.add_option("--finalsink-output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the triggers (required)")
   parser.add_option("--finalsink-cluster-window", type = "float", metavar = "seconds", default = 0, help = "Cluster window to cluster zerolags.")
   parser.add_option("--finalsink-need-online-perform", type = "int", default = 0, help = "need online performer ? 1: yes, 0: no")
@@ -439,9 +440,9 @@ if 1==1:
       cohfar_file_path = options.job_tag,
       cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
       cohfar_accumbackground_snapshot_interval = options.cohfar_accumbackground_snapshot_interval,
-      cohfar_assignfap_refresh_interval = options.cohfar_assignfap_refresh_interval,
-      cohfar_assignfap_collection_time = options.cohfar_assignfap_collection_time,
-      cohfar_assignfap_input_fname = options.cohfar_assignfap_input_fname
+      cohfar_assignfar_refresh_interval = options.cohfar_assignfar_refresh_interval,
+      cohfar_assignfar_collection_time = options.cohfar_assignfar_collection_time,
+      cohfar_assignfar_input_fname = options.cohfar_assignfar_input_fname
  # or "%s-%s_Postcoh-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
     )
 
@@ -454,9 +455,10 @@ if 1==1:
 		  far_factor = options.finalsink_far_factor,
 		  cluster_window = options.finalsink_cluster_window,
 		  snapshot_interval = options.finalsink_snapshot_interval,
+		  bsupdate_interval = options.finalsink_bsupdate_interval,
 		  cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
-		  cohfar_assignfap_input_fname = options.cohfar_assignfap_input_fname,
-		  background_collection_time = options.finalsink_background_collection_time,
+		  cohfar_assignfar_input_fname = options.cohfar_assignfar_input_fname,
+		  background_collection_time_string = options.finalsink_background_collection_time,
 		  gracedb_far_threshold = options.finalsink_gracedb_far_threshold,
 		  gracedb_group = options.finalsink_gracedb_group,
 		  gracedb_search = options.finalsink_gracedb_search,

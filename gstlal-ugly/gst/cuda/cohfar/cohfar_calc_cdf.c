@@ -39,15 +39,15 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar 
 	int option_index = 0;
 	struct option long_opts[] =
 	{
-		{"input-filename",	required_argument,	0,	'i'},
+		{"input",		required_argument,	0,	'i'},
 		{"input-format",	required_argument,	0,	'f'},
-		{"output-filename",	required_argument,	0,	'o'},
+		{"output",		required_argument,	0,	'o'},
 		{"duration",		required_argument,	0,	'u'},
 		{"ifos",		required_argument,	0,	'd'},
 		{0, 0, 0, 0}
 	};
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:f:o:d:", long_opts, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "i:f:o:u:d:", long_opts, &option_index)) != -1) {
 		switch (opt) {
 			case 'i':
 				*pin = g_strdup((gchar *)optarg);
@@ -63,7 +63,7 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar 
 				break;
 			case 'u':
 				*pduration = g_strdup((gchar *)optarg);
-	
+				break;
 			default:
 				exit(0);
 		}
@@ -167,6 +167,7 @@ int main(int argc, char *argv[])
 			background_stats_rates_to_pdf(stats_out[icombo]->rates, stats_out[icombo]->pdf);
 			background_stats_pdf_to_fap(stats_out[icombo]->pdf, stats_out[icombo]->cdf);
 			stats_out[icombo]->duration = atol(*pduration);
+			printf("stats_out duration %d\n", stats_out[icombo]->duration );
 		}
 	}
 	background_stats_to_xml(stats_out, ncombo, *pout);
