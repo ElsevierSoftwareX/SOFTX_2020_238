@@ -62,8 +62,8 @@ typedef struct {
 	BackgroundStats **stats_1d;
 	BackgroundStats **stats_1w;
 
-	int collection_time;
-	gboolean pass_collection_time;
+	int silent_time;
+	gboolean pass_silent_time;
 	int refresh_interval;
 	gchar **input_fnames;
 

@@ -87,7 +87,7 @@ enum property {
 	PROP_0,
 	PROP_IFOS,
 	PROP_REFRESH_INTERVAL,
-	PROP_COLLECTION_TIME,
+	PROP_SILENT_TIME,
 	PROP_INPUT_FNAME
 };
 
@@ -128,18 +128,18 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 		element->t_start = t_cur;
 
 	/* Check that we have collected enough backgrounds */
-	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start)&& (t_cur - element->t_start)/GST_SECOND >= (unsigned) element->collection_time) {
+	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start)&& (t_cur - element->t_start)/GST_SECOND >= (unsigned) element->silent_time) {
 		element->t_roll_start = t_cur;
 		/* FIXME: the order of input fnames must match the stats order */
 		GST_DEBUG_OBJECT(element, "read input stats to assign far %s, %s, %s", element->input_fnames[STATS_FNAME_1W_IDX], element->input_fnames[STATS_FNAME_1W_IDX], element->input_fnames[STATS_FNAME_1W_IDX]);
 		background_stats_from_xml(element->stats_1w, element->ncombo, element->input_fnames[STATS_FNAME_1W_IDX]);
 		background_stats_from_xml(element->stats_1d, element->ncombo, element->input_fnames[STATS_FNAME_1D_IDX]);
 		background_stats_from_xml(element->stats_2h, element->ncombo, element->input_fnames[STATS_FNAME_2H_IDX]);
-		element->pass_collection_time = TRUE;
+		element->pass_silent_time = TRUE;
 	}
 
 	/* Check if it is time to refresh the background stats */
-	if (element->pass_collection_time && element->refresh_interval > 0 && (t_cur - element->t_roll_start)/GST_SECOND > (unsigned) element->refresh_interval) {
+	if (element->pass_silent_time && element->refresh_interval > 0 && (t_cur - element->t_roll_start)/GST_SECOND > (unsigned) element->refresh_interval) {
 		element->t_roll_start = t_cur;
 		/* FIXME: the order of input fnames must match the stats order */
 		GST_DEBUG_OBJECT(element, "read refreshed stats to assign far.");
@@ -149,7 +149,7 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 	}
 
 
-	if (element->pass_collection_time) {
+	if (element->pass_silent_time) {
 		int icombo;
 		BackgroundStats **stats_1w = element->stats_1w;
 		BackgroundStats **stats_1d = element->stats_1d;
@@ -231,8 +231,8 @@ static void cohfar_assignfar_set_property(GObject *object, enum property prop_id
 			element->input_fnames = g_strsplit(g_value_dup_string(value), ",", -1);
 			break;
 
-		case PROP_COLLECTION_TIME:
-			element->collection_time = g_value_get_int(value);
+		case PROP_SILENT_TIME:
+			element->silent_time = g_value_get_int(value);
 			break;
 
 
@@ -269,8 +269,8 @@ static void cohfar_assignfar_get_property(GObject *object, enum property prop_id
 			g_value_set_string(value, element->input_fnames);
 			break;
 
-		case PROP_COLLECTION_TIME:
-			g_value_set_int(value, element->collection_time);
+		case PROP_SILENT_TIME:
+			g_value_set_int(value, element->silent_time);
 			break;
 
 		case PROP_REFRESH_INTERVAL:
@@ -401,11 +401,11 @@ static void cohfar_assignfar_class_init(CohfarAssignfarClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_COLLECTION_TIME,
+		PROP_SILENT_TIME,
 		g_param_spec_int(
-			"collection-time",
-			"background collection time",
-			"(0) do not need background collection time; (N) allow N seconds to accumulate background.",
+			"silent-time",
+			"background silent time",
+			"(0) do not need background silent time; (N) allow N seconds to accumulate background.",
 			0, G_MAXINT, 36000,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -426,5 +426,5 @@ static void cohfar_assignfar_init(CohfarAssignfar *element, CohfarAssignfarClass
 	element->input_fnames = NULL;
 	element->t_start = GST_CLOCK_TIME_NONE;
 	element->t_roll_start = GST_CLOCK_TIME_NONE;
-	element->pass_collection_time = FALSE;
+	element->pass_silent_time = FALSE;
 }

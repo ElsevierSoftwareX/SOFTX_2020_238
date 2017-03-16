@@ -137,11 +137,11 @@ def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", snapshot_interval = 0,
 		src.link(elem)
 	return elem
 
-def mkcohfar_assignfar(pipeline, src, ifos= "H1L1", refresh_interval = 14400, collection_time = 0, input_fname = None):
+def mkcohfar_assignfar(pipeline, src, ifos= "H1L1", refresh_interval = 14400, silent_time = 0, input_fname = None):
 	properties = {
 		"ifos": ifos,
 		"refresh_interval": refresh_interval,
-		"collection_time": collection_time,
+		"silent_time": silent_time,
 	}
 	if input_fname is not None:
 		properties["input_fname"] = input_fname
@@ -532,7 +532,7 @@ def parse_shift_string(shift_string):
 	return out
 
 
-def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_string = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh = 5.0, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 0, cohfar_assignfar_refresh_interval = 86400, cohfar_assignfar_collection_time = 0, cohfar_assignfar_input_fname = None):
+def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_string = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh = 5.0, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 0, cohfar_assignfar_refresh_interval = 86400, cohfar_assignfar_silent_time = 0, cohfar_assignfar_input_fname = None):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -650,7 +650,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
 		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname_prefix = cohfar_accumbackground_output_prefix[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
-		postcoh = mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfar_refresh_interval, collection_time = cohfar_assignfar_collection_time, input_fname = cohfar_assignfar_input_fname)
+		postcoh = mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)
 		#head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(postcoh)
 	return triggersrcs
