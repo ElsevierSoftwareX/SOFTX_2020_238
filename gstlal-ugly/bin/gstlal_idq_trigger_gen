@@ -91,7 +91,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 		self.timedeq = deque(maxlen = 10000)
 
-        def do_on_message(self, bus, message):
+	def do_on_message(self, bus, message):
 		return False
 
 	
@@ -112,7 +112,6 @@ class MultiChannelHandler(simplehandler.Handler):
 			buf.unmap(mapinfo)
 			del buf
 			return Gst.FlowReturn.OK
-
 
 
 		# Save a "latest"
