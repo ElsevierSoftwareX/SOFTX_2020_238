@@ -16,9 +16,20 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+
+####################
+# 
+#     preamble
+#
+####################   
+
+
 from optparse import OptionParser
+from collections import deque
+import os
 import sys
-import resource
+import StringIO
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -34,6 +45,12 @@ from gstlal import multichannel_datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw import utils as ligolw_utils
+
+####################
+# 
+#    functions
+#
+####################   
 
 
 def parse_command_line():
@@ -55,12 +72,126 @@ def parse_command_line():
 	#
 
 	options, filenames = parser.parse_args()
-
 	if options.downsample_rate % 2:
 		raise ValueError("Minimum rate is not a power of 2")
 
 	return options, filenames
-   
+
+####################
+# 
+#      classes
+#
+####################   
+
+
+class MultiChannelHandler(simplehandler.Handler):
+	def __init__(self, *args, **kwargs):
+		self.output = kwargs.pop("output")
+		self.instrument = kwargs.pop("instrument")
+		#super(MultiChannelHandler, self).__init__(self, *args, **kwargs)
+		simplehandler.Handler.__init__(self, *args, **kwargs)
+		self.timedeq = deque(maxlen = 10000)
+
+        def do_on_message(self, bus, message):
+		return False
+
+	
+	def bufhandler(self, elem, sink_dict):
+		buf = elem.emit("pull-sample").get_buffer()
+		buftime = int(buf.pts / 1e9)
+		(result, mapinfo) = buf.map(Gst.MapFlags.READ)
+		assert result
+		if mapinfo.data:
+			data = StringIO.StringIO(mapinfo.data).getvalue()
+			channel = sink_dict[elem]
+			fdata = ""
+			for line in data.split('\n'):
+				if len(line) > 0:
+					fdata += "%s\t" % channel + line + "\n"
+			self.timedeq.append(buftime)
+		else:
+			buf.unmap(mapinfo)
+			del buf
+			return Gst.FlowReturn.OK
+
+
+
+		# Save a "latest"
+		self.to_trigger_file(os.path.join(self.output, "output_triggers.txt"), fdata)
+		
+		buf.unmap(mapinfo)
+		del buf
+		return Gst.FlowReturn.OK
+
+	def to_trigger_file(self, path, data):
+		with open(path, 'a') as f:
+ 			f.write(data)
+
+
+class LinkedAppSync(pipeparts.AppSync):
+	def __init__(self, appsink_new_buffer, sink_dict = {}):
+		#super(LinkedAppSync, self).__init__(self, appsink_new_buffer, sink_dict.keys())
+		pipeparts.AppSync.__init__(self, appsink_new_buffer, sink_dict.keys())
+		self.sink_dict = sink_dict	
+	
+	def attach(self, appsink):
+		"""
+		connect this AppSync's signal handlers to the given appsink
+		element.  the element's max-buffers property will be set to
+		1 (required for AppSync to work).
+		"""
+		if appsink in self.appsinks:
+			raise ValueError("duplicate appsinks %s" % repr(appsink))
+		appsink.set_property("max-buffers", 1)
+		handler_id = appsink.connect("new-preroll", self.new_preroll_handler)
+		assert handler_id > 0
+		handler_id = appsink.connect("new-sample", self.new_sample_handler)
+		assert handler_id > 0
+		handler_id = appsink.connect("eos", self.eos_handler)
+		assert handler_id > 0
+		self.appsinks[appsink] = None
+		_, instrument, channel = appsink.name.split("_", 2)
+		self.sink_dict.setdefault(appsink, "%s:%s" % (instrument, channel))
+		return appsink
+	
+	def pull_buffers(self, elem):
+		"""
+		for internal use.  must be called with lock held.
+		"""
+		# keep looping while we can process buffers
+		while 1:
+			# retrieve the timestamps of all elements that
+			# aren't at eos and all elements at eos that still
+			# have buffers in them
+			timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
+			# if all elements are at eos and none have buffers,
+			# then we're at eos
+			if not timestamps:
+				return Gst.FlowReturn.EOS
+			# find the element with the oldest timestamp.  None
+			# compares as less than everything, so we'll find
+			# any element (that isn't at eos) that doesn't yet
+			# have a buffer (elements at eos and that are
+			# without buffers aren't in the list)
+			timestamp, elem_with_oldest = min(timestamps)
+			# if there's an element without a buffer, quit for
+			# now --- we require all non-eos elements to have
+			# buffers before proceding
+			if timestamp is None:
+				return Gst.FlowReturn.OK
+			# clear timestamp and pass element to handler func.
+			# function call is done last so that all of our
+			# book-keeping has been taken care of in case an
+			# exception gets raised
+			self.appsinks[elem_with_oldest] = None
+			self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
+
+####################
+# 
+#       main
+#
+####################   
+
   
 # parsing and setting up some core structures
 options, filenames = parse_command_line()
@@ -72,20 +203,26 @@ channels = data_source_info.channel_dict[instrument].keys()
 # building the event loop and pipeline
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
-handler = simplehandler.Handler(mainloop, pipeline)
+#handler = simplehandler.Handler(mainloop, pipeline)
+handler = MultiChannelHandler(mainloop, pipeline, output = options.output, instrument = instrument)
 
-#
-# the pipeline
-#
-# A basic src
+# multiple channel src
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
 
 for channel in channels:
-	samp_rate = data_source_info.channel_dict[instrument][channel]   
-	head[channel] = idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [samp_rate], instrument, channel_name = channel)[samp_rate]
+	#samp_rate = data_source_info.channel_dict[instrument][channel]   
+	#head[channel] = idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [samp_rate], instrument, channel_name = channel)[samp_rate]
 	head[channel] = pipeparts.mkaudioundersample(pipeline, head[channel])
 	head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, rate=%d" % options.downsample_rate) 
-	pipeparts.mkfakesink(pipeline, head[channel])
+	#pipeparts.mkfakesink(pipeline, head[channel])
+	#pipeparts.mknxydumpsink(pipeline, head[channel], options.output)	
+	head[channel] = pipeparts.mkgeneric(pipeline, head[channel], "lal_nxydump")
+
+if options.verbose:
+	print >>sys.stderr, "attaching appsinks to pipeline..."
+appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
+appsinks = set(appsync.add_sink(pipeline, head[channel], name = "sink_%s_%s" % (instrument, channel)) for channel in channels) 
+
   
 # Allow Ctrl+C or sig term to gracefully shut down the program for online
 # sources, otherwise it will just kill it
@@ -96,7 +233,7 @@ if data_source_info.data_source in ("lvshm", "framexmit"):# what about nds onlin
 if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter READY state")
 if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
-	datasource.pipeline_seek_for_gps(pipeline, data_source_info.seg[0], data_source_info.seg[1])
+	datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time)
 
 # run
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:

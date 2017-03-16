@@ -253,7 +253,7 @@ class DataSourceInfo(object):
 			self.frame_segments = segments.segmentlistdict((instrument, None) for instrument in self.channel_dict)
 		
 		## frame cache file
-		#self.frame_cache = options.frame_cache
+		self.frame_cache = options.frame_cache
 		## block size in bytes to read data from disk
 		self.block_size = options.block_size
 		## Data source, one of python.datasource.DataSourceInfo.data_sources
@@ -334,6 +334,7 @@ def append_options(parser):
 	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is only used if --data-source is one of white, silence.")
 	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
+	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
 	group.add_option("--channel-list", type="string", metavar = "name", help = "Set the list of the channels to process. Command given as --channel-list=location/to/file")
 	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
 	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
@@ -407,17 +408,12 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 	"""
 
 	if data_source_info.data_source == "white":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument, channel, blocksize = data_source_info.block_size, volume = 1.0) for channel in data_source_info.channel_dict[instrument].keys()}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[instrument][channel]) for channel in data_source_info.channel_dict[instrument].keys()}
 	elif data_source_info.data_source == "silence":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument, channel, blocksize = data_source_info.block_size, wave = 4) for channel in data_source_info.channel_dict[instrument].keys()}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = instrument, channel_name = channel, wave = 4) for channel in data_source_info.channel_dict[instrument].keys()}
 	elif data_source_info.data_source == "frames":
-		if instrument == "V1":
-			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
-			src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = "V")
-		else:
-			src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
-
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True, channel_list = channel_list_from_channel_dict(instrument, data_source_info.channel_dict))
+		src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channel_list_from_channel_dict(instrument, data_source_info.channel_dict))
 
 		# allow frame reading and decoding to occur in a different
 		# thread
@@ -437,7 +433,7 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 	elif data_source_info.data_source in ("framexmit", "lvshm"):
 		if data_source_info.data_source == "lvshm":
 			# FIXME make wait_time adjustable through web interface or command line or both
-			src = pipeparts.mklvshmsrc(pipeline, shm_name = data_source_info.shm_part_dict[instrument], wait_time = 120)
+			src = pipeparts.mklvshmsrc(pipeline, shm_name = data_source_info.shm_part_dict[instrument], num_buffers = 64, blocksize = 10000000, wait_time = 120)
 		elif data_source_info.data_source == "framexmit":
 			src = pipeparts.mkframexmitsrc(pipeline, multicast_iface = data_source_info.framexmit_iface, multicast_group = data_source_info.framexmit_addr[instrument][0], port = data_source_info.framexmit_addr[instrument][1], wait_time = 120)
 		else:
@@ -463,23 +459,9 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 
 	
 	for channel in head:
-		#
-		# provide an audioconvert element to allow Virgo data (which is
-		# single-precision) to be adapted into the pipeline
-		#
-
-		head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
-
-		#
 		# progress report
-		#
-
 		if verbose:
 			head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "progress_src_%s_%s" % (instrument, channel))
-
-		#
-		# done
-		#
 
 	return head
 
