@@ -176,7 +176,8 @@ class BackgroundStatsUpdater(object):
 				cmd += ["--ifos", self.ifos]
 				cmd += ["--duration", str(collection_time)]
 				print cmd
-				self.procs.append(subprocess.Popen(cmd))
+				proc = subprocess.Popen(cmd)
+				self.procs.append(proc)
 
 	def combine_stats(self, cur_buftime):
 		# list all the bank stats files in the path
@@ -188,11 +189,12 @@ class BackgroundStatsUpdater(object):
 		cmd = []
 		cmd += [cmb_string]
 		print cmd
-		self.procs.append(subprocess.Popen(cmd))
+		proc = subprocess.Popen(cmd)
+		self.procs.append(proc)
 
 
 class FinalSink(object):
-	def __init__(self, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, bsupdate_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
+	def __init__(self, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, background_update_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", verbose = False):
 	#
 	# initialize
 	#
@@ -235,7 +237,7 @@ class FinalSink(object):
 		self.total_duration = None
 		self.t_start = None
 		self.t_bsupdate_start = None
-		self.bsupdate_interval = bsupdate_interval
+		self.bsupdate_interval = background_update_interval
 		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output_list_string = cohfar_assignfar_input_fname, collection_time_string = background_collection_time_string, ifos = ifos)
 
 		# online information performer
@@ -772,8 +774,9 @@ class FinalSink(object):
 			self.thread_snapshot.join()
 	
 		if self.bsupdater.procs is not None:
-			for p in self.bsupdater.procs:
-				p.wait()
+			for proc in self.bsupdater.procs:
+				if proc.poll() is None:
+					proc.wait()
 
 	def write_output_file(self, filename = None, verbose = False):
 		self.__check_internal_process_finish()
