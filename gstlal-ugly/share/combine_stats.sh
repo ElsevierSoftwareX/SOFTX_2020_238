@@ -15,7 +15,7 @@ do
   this_bankid=`ls ${dir}/$fn|cut -d _ -f 1|cut -d / -f 2`
   if [ $this_banktime -lt $last_banktime ]
   then
-    if [ $total_duration -ge $combine_time ]
+    if [ $total_duration -gt $combine_time ]
     then
       fout=${dir}/${bankid}_stats_${start_banktime}_${total_duration}.xml.gz
       echo "gstlal_cohfar_calc_fap --input $fin --ifos L1H1 --output $fout --input-format stats --duration $total_duration"
@@ -34,7 +34,7 @@ do
     continue
   fi
 
-  if [ $total_duration -ge $combine_time ]
+  if [ $total_duration -gt $combine_time ]
   then
     fout=${dir}/${bankid}_stats_${start_banktime}_${total_duration}.xml.gz
     echo "gstlal_cohfar_calc_fap --input $fin --ifos L1H1 --output $fout --input-format stats --duration $total_duration"
