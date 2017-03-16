@@ -173,7 +173,7 @@ static void calc_pdf(double band_const, gsl_vector *tin_x, gsl_vector *tin_y, gs
 	gsl_matrix_sub(histogram_double, pdf);
 	gsl_matrix_mul_elements(histogram_double, histogram_double);
 	double mise = sqrt(gsl_matrix_sum(histogram_double));
-	printf("mise %lf\n", mise);
+	printf("knn kde mise for pdf: %lf\n", mise);
        	double pdf_sum = dx * dy * gsl_matrix_sum(pdf);
 	//printf("sum of pdf %lf\n", pdf_sum);
 	gsl_matrix_scale(pdf, 1/pdf_sum);
@@ -193,13 +193,10 @@ knn_kde(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long *histogram, gsl_ma
 
 	gsl_matrix_long * nonzero_idx = gsl_matrix_long_calloc(num_nonzero, 2);
 
-	printf("finding nonzero idx\n");
 	find_nonzero_idx(histogram, nonzero_idx);
 
 	gsl_vector * kth_dist = gsl_vector_alloc(num_nonzero);
-	printf("finding kth neighbour\n");
 	find_kth_dist(tin_x, tin_y, nonzero_idx, knn_k, kth_dist);
-	printf("calculating pdf\n");
 	calc_pdf(band_const, tin_x, tin_y, histogram, nonzero_idx, kth_dist, pdf);
 
 }

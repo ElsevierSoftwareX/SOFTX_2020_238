@@ -43,7 +43,6 @@ class PostcohInspiralTable(table.Table):
 			"far_2h":	"real_4",
 			"far_1d":	"real_4",
 			"far_1w":	"real_4",
-	
 			"skymap_fname":	"lstring",
 			"template_duration": "real_8",
 			"mass1":	"real_4",

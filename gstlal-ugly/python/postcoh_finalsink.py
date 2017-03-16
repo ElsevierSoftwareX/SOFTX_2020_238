@@ -185,9 +185,9 @@ class BackgroundStatsUpdater(object):
 			print "./combine_stats.sh not found, exiting"
 			sys.exit()
 
-		cmd_string = "./combine_stats.sh %s" % (self.path)
 		cmd = []
-		cmd += [cmb_string]
+		cmd += ["./combine_stats.sh"]
+		cmd += [self.path]
 		print cmd
 		proc = subprocess.Popen(cmd)
 		self.procs.append(proc)
@@ -210,6 +210,8 @@ class FinalSink(object):
 		self.boundary = None
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
+		# FIXME: hard-coded snr_ratio_thresh to veto 
+		self.snr_ratio_thresh = 5
 		self.nevent_clustered = 0
 
 		# gracedb parameters
@@ -289,7 +291,7 @@ class FinalSink(object):
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
 					# FIXME: Currently hard-coded for single detector far H and L
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2:
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and __snglsnr_veto(self.candidate) is False:
 						self.__do_gracedb_alerts(self.candidate)
 					if self.need_online_perform:
 						self.onperformer.update_eye_candy(self.candidate)
@@ -360,6 +362,13 @@ class FinalSink(object):
 
 	def __set_far(self, candidate):
 		candidate.far = max(candidate.far_2h, candidate.far_1d, candidate.far_1w)
+
+	def __snglsnr_veto(self, candidate):
+		snglsnr_ratio = candidate.snglsnr_L/candidate.snglsnr_H
+		if snglsnr_ratio > self.snr_ratio_thresh or snglsnr_ratio < 1/self.snr_ratio_thresh:
+			return True
+		else:
+			return False
 
 	def __need_trigger_control(self, trigger):
 		# do trigger control
@@ -751,7 +760,7 @@ class FinalSink(object):
 
 	
 	def get_output_filename(self, output_prefix, t_snapshot_start, snapshot_duration):
-		fname = "%s/%s_%d_%d.xml.gz" % (self.path, output_prefix, t_snapshot_start, snapshot_duration)
+		fname = "%s_%d_%d.xml.gz" % (output_prefix, t_snapshot_start, snapshot_duration)
 		return fname
 
 	def snapshot_output_file(self, filename, verbose = False):
