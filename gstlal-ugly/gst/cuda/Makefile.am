@@ -58,17 +58,17 @@ noinst_HEADERS = \
 	cohfar/cohfar_accumbackground.h \
 	cohfar/cohfar_assignfar.h
 
-gstlal_cohfar_calc_cdf_SOURCES = \
+gstlal_cohfar_calc_fap_SOURCES = \
 	LIGOLw_xmllib/LIGOLwReader.c \
 	LIGOLw_xmllib/LIGOLwWriter.c \
 	LIGOLw_xmllib/LIGOLwUtils.c \
 	cohfar/ssvkernel.c \
 	cohfar/knn_kde.c \
 	cohfar/background_stats_utils.c \
-	cohfar/cohfar_calc_cdf.c
+	cohfar/cohfar_calc_fap.c
 
-gstlal_cohfar_calc_cdf_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS)
-gstlal_cohfar_calc_cdf_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+gstlal_cohfar_calc_fap_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(AM_CPPFLAGS)
+gstlal_cohfar_calc_fap_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
 
 gstlal_postcoh_gen_detrsp_map_SOURCES = \
 	LIGOLw_xmllib/LIGOLwReader.c \
@@ -82,6 +82,6 @@ gstlal_postcoh_gen_detrsp_map_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(
 
 
 bin_PROGRAMS = \
-	gstlal_cohfar_calc_cdf \
+	gstlal_cohfar_calc_fap \
 	gstlal_postcoh_gen_detrsp_map
 

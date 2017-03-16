@@ -46,7 +46,7 @@
 #define	BACKGROUND_XML_CHISQ_SUFFIX "_lgchisq"
 #define	BACKGROUND_XML_HIST_SUFFIX "_histogram"	
 #define	BACKGROUND_XML_PDF_NAME	"background_pdf"	
-#define	BACKGROUND_XML_CDF_NAME	"background_cdf"	
+#define	BACKGROUND_XML_FAP_NAME	"background_fap"	
 #define BACKGROUND_XML_SNR_CHISQ_SUFFIX "_lgsnr_lgchisq"
 
 
@@ -92,7 +92,7 @@ typedef struct {
 	char	*ifos;
 	BackgroundRates *rates;
 	Bins2D	*pdf;
-	Bins2D	*cdf;
+	Bins2D	*fap;
 	long nevent;
 	long duration;
 } BackgroundStats;

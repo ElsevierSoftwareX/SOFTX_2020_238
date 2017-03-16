@@ -169,7 +169,7 @@ class BackgroundStatsUpdater(object):
 				input_for_cmd = ",".join(valid_fnames)
 				# execute the cmd in a different process
 				cmd = []
-				cmd += ["gstlal_cohfar_calc_cdf"]
+				cmd += ["gstlal_cohfar_calc_fap"]
 				cmd += ["--input", input_for_cmd]
 				cmd += ["--input-format", "stats"]
 				cmd += ["--output", self.output[i]]

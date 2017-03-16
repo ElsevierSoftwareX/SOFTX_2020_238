@@ -56,7 +56,7 @@ background_stats_rates_update(double snr, double chisq, BackgroundRates *rates, 
 void
 background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2, BackgroundStats *cur_stats);
 
-gboolean
+void
 background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf);
 
 void

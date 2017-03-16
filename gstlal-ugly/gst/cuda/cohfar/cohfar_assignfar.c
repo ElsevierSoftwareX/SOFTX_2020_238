@@ -160,13 +160,13 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 			icombo = get_icombo(table->ifos);
 			if (icombo > -1)
 			{
-				table->far_1w = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1w[icombo]->cdf)*stats_1w[icombo]->nevent/ stats_1w[icombo]->duration;
-				table->far_1d = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1d[icombo]->cdf)*stats_1d[icombo]->nevent/ stats_1d[icombo]->duration;
-				table->far_2h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_2h[icombo]->cdf)*stats_2h[icombo]->nevent/ stats_2h[icombo]->duration;
+				table->far_1w = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1w[icombo]->fap)*stats_1w[icombo]->nevent/ stats_1w[icombo]->duration;
+				table->far_1d = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1d[icombo]->fap)*stats_1d[icombo]->nevent/ stats_1d[icombo]->duration;
+				table->far_2h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_2h[icombo]->fap)*stats_2h[icombo]->nevent/ stats_2h[icombo]->duration;
 				/* FIXME: currently hardcoded for single detectors FAR */
-				table->far_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, stats_1w[1]->cdf)*stats_1w[1]->nevent/ stats_1w[1]->duration;
-				table->far_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, stats_1w[0]->cdf)*stats_1w[0]->nevent/ stats_1w[0]->duration;
-				table->far_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, stats_1w[2]->cdf)*stats_1w[2]->nevent/ stats_1w[2]->duration;
+				table->far_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, stats_1w[1]->fap)*stats_1w[1]->nevent/ stats_1w[1]->duration;
+				table->far_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, stats_1w[0]->fap)*stats_1w[0]->nevent/ stats_1w[0]->duration;
+				table->far_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, stats_1w[2]->fap)*stats_1w[2]->nevent/ stats_1w[2]->duration;
 			}
 		}
 	}
