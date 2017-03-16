@@ -88,8 +88,7 @@ class MultiChannelHandler(simplehandler.Handler):
 	def __init__(self, *args, **kwargs):
 		self.output = kwargs.pop("output")
 		self.instrument = kwargs.pop("instrument")
-		#super(MultiChannelHandler, self).__init__(self, *args, **kwargs)
-		simplehandler.Handler.__init__(self, *args, **kwargs)
+		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 		self.timedeq = deque(maxlen = 10000)
 
         def do_on_message(self, bus, message):
@@ -107,7 +106,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			fdata = ""
 			for line in data.split('\n'):
 				if len(line) > 0:
-					fdata += "%s\t" % channel + line + "\n"
+					fdata += "%s\t" % channel + line.rstrip('\r') + "\n"
 			self.timedeq.append(buftime)
 		else:
 			buf.unmap(mapinfo)
@@ -130,8 +129,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 class LinkedAppSync(pipeparts.AppSync):
 	def __init__(self, appsink_new_buffer, sink_dict = {}):
-		#super(LinkedAppSync, self).__init__(self, appsink_new_buffer, sink_dict.keys())
-		pipeparts.AppSync.__init__(self, appsink_new_buffer, sink_dict.keys())
+		super(LinkedAppSync, self).__init__(appsink_new_buffer, sink_dict.keys())
 		self.sink_dict = sink_dict	
 	
 	def attach(self, appsink):
