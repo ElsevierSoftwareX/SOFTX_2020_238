@@ -290,6 +290,7 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirInjJob, dag, 
 		for ifo in ifos:
 			ifos_string += "%s" % ifo
 
+		seg_counter = 0
 		for seg in segsdict[ifos]:
 			
 			# only use a channel dict with the relevant channels
@@ -299,11 +300,10 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirInjJob, dag, 
 			spiir_bank_strings_full = gen_spiir_bank_strings_from_banknode(bank_nodes, instruments = this_channel_dict.keys())
 
 			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numchunks)):
-				job_counter = 0 
-				job_tag = "%04d" % job_counter
+				job_tag = "%s" % inspiralPostcohspiirJob.tag_base
 				# setup output names
-				output_prefix = '%s/%s_%d_SPIIR_zerolag' % (job_tag, ifos_string, chunk_counter,)
-				stats_prefixs = ['%s/%s_%d_SPIIR_stats' % (job_tag, ifos_string, i + numchunks * chunk_counter,) for i,s in enumerate(spiir_bank_strings)]
+				output_prefix = '%s/%s_SPIIR_zerolag_seg%d_job%d' % (job_tag, ifos_string, seg_counter, chunk_counter, )
+				stats_prefixs = ['%s/%s_SPIIR_stats_seg%d_bank%d' % (job_tag, ifos_string, seg_counter, i + numchunks * chunk_counter, ) for i,s in enumerate(spiir_bank_strings)]
 				# non injection node
 				noninjnode = inspiral_pipe.generic_node(
 						inspiralPostcohspiirJob, 
@@ -328,16 +328,14 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirInjJob, dag, 
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
 			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numchunks)):
-				job_counter_inj = 0 
 				# process injections
+				inj_counter = 0
 				for injections in options.injections:
-					job_counter_inj += 1	
-					job_tag = "%04d_inj" % job_counter_inj
+					job_tag = "%s_inj%d" % (inspiralPostcohspiirJob.tag_base, inj_counter)
 					# setup output names	
 					sim_name = sim_tag_from_inj_file(injections)
-					output_prefix = '%s/%s_%d_SPIIR_zerolag_%s' % (job_tag, ifos_string, chunk_counter, sim_name, )
-					stats_prefixs = ['%s/%s_%d_SPIIR_stats_%s' % (job_tag, ifos_string, i + numchunks * chunk_counter,sim_name,) for i,s in enumerate(spiir_bank_strings)]
-
+					output_prefix = '%s/%s_SPIIR_zerolag_seg%d_job%d' % (job_tag, ifos_string, seg_counter, chunk_counter, )
+					stats_prefixs = ['%s/%s_SPIIR_stats_seg%d_bank%d' % (job_tag, ifos_string, seg_counter, i + numchunks * chunk_counter, ) for i,s in enumerate(spiir_bank_strings)]
 	
 					# setup injection node
 					injnode = inspiral_pipe.generic_node(
@@ -361,6 +359,8 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirInjJob, dag, 
 					# impose a priority to help with depth first submission
 					injnode.set_priority(chunk_counter)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
+					inj_counter += 1
+			seg_counter += 1
 
 	return inspiral_nodes
 
