@@ -705,6 +705,5 @@ inspiral_nodes = gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiir
 
 dag.write_sub_files()
 dag.write_dag()
-pdb.set_trace()
 dag.write_script()
 dag.write_cache()
