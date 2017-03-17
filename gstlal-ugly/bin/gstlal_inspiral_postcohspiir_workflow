@@ -196,6 +196,7 @@ def gen_bank_node(bankJob, dag, parent_nodes, psd, bank_groups, options, seg):
 	for i, bank_group in enumerate(bank_groups):
 		for ifo, template_files in bank_group.items():
 			for template_bank in template_files:
+				# FIXME:bank_id is searched from the template_bank name
 				bank_id = re.search(r'\d+', template_bank.split("/")[-1].split("_")[-1]).group()
 				spiir_bank_name = inspiral_pipe.T050017_filename(ifo, '%s_SPIIR' % (bank_id,), seg[0].seconds, seg[1].seconds, '.xml.gz', path = bankJob.output_path)
 
@@ -299,10 +300,10 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirInjJob, dag, 
 
 			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numchunks)):
 				job_counter = 0 
-				# setup output names
-				output_prefix = '%s_%d_SPIIR_zerolag' % (ifos_string, chunk_counter,)
-				stats_prefixs = ['%s_%d_SPIIR_stats' % (ifos_string, i + numchunks * chunk_counter,) for i,s in enumerate(spiir_bank_strings)]
 				job_tag = "%04d" % job_counter
+				# setup output names
+				output_prefix = '%s/%s_%d_SPIIR_zerolag' % (job_tag, ifos_string, chunk_counter,)
+				stats_prefixs = ['%s/%s_%d_SPIIR_stats' % (job_tag, ifos_string, i + numchunks * chunk_counter,) for i,s in enumerate(spiir_bank_strings)]
 				# non injection node
 				noninjnode = inspiral_pipe.generic_node(
 						inspiralPostcohspiirJob, 
@@ -319,22 +320,23 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirInjJob, dag, 
 						)
 				# Set a post script to check for file integrity
 				noninjnode.set_post_script("gzip_test.sh")
+				check_files = ["%s*" % output_prefix] + ["%s*" % one_stats_prefix for one_stats_prefix in stats_prefixs]
+				noninjnode.add_post_script_arg(" ".join(check_files))
 				#noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
 				# impose a priority to help with depth first submission
 				noninjnode.set_priority(chunk_counter)
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
 			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numchunks)):
-
-				job_counter = 0 
+				job_counter_inj = 0 
 				# process injections
 				for injections in options.injections:
-					job_counter += 1	
-					job_tag = "%04d" % job_counter
+					job_counter_inj += 1	
+					job_tag = "%04d_inj" % job_counter_inj
 					# setup output names	
 					sim_name = sim_tag_from_inj_file(injections)
-					output_prefix = '%s_%d_SPIIR_zerolag_%s' % (ifos_string, chunk_counter, sim_name, )
-					stats_prefixs = ['%s_%d_SPIIR_stats_%s' % (ifos_string, i + numchunks * chunk_counter,sim_name,) for i,s in enumerate(spiir_bank_strings)]
+					output_prefix = '%s/%s_%d_SPIIR_zerolag_%s' % (job_tag, ifos_string, chunk_counter, sim_name, )
+					stats_prefixs = ['%s/%s_%d_SPIIR_stats_%s' % (job_tag, ifos_string, i + numchunks * chunk_counter,sim_name,) for i,s in enumerate(spiir_bank_strings)]
 
 	
 					# setup injection node
@@ -354,6 +356,8 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirInjJob, dag, 
 					)
 					# Set a post script to check for file integrity
 					injnode.set_post_script("gzip_test.sh")
+					check_files = ["%s*" % output_prefix] + ["%s*" % one_stats_prefix for one_stats_prefix in stats_prefixs]
+					injnode.add_post_script_arg(" ".join(check_files))
 					# impose a priority to help with depth first submission
 					injnode.set_priority(chunk_counter)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
@@ -619,7 +623,7 @@ refPSDJob = inspiral_pipe.generic_job("gstlal_reference_psd", condor_commands = 
 medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
 # for spiir bank generation
-bankJob = inspiral_pipe.generic_job("gstlal_iir_bank", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+bankJob = inspiral_pipe.generic_job("gstlal_iir_bank", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"16GB"}))
 
 # horizon information
 horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
