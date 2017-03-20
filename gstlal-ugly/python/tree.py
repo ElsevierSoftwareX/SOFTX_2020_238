@@ -302,7 +302,12 @@ class Node(object):
 			#print 'FINELEFT:', self.left.cube.neighbors
 			#print 'FINERIGHT:', self.right.cube.neighbors
 
-	def assign_neighbors(self):
+	def assign_neighbors(self, disable_neighbors = False):
+		# FIXME don't hardcode tolerance
+		if disable_neighbors:
+			tolerance = 0.3
+		else:
+			tolerance = float("inf")
 
 		# FIXME don't hardcode 30 hz, but what is the right time to use here??
 		def chirptime(m1, m2, flow = 30):
@@ -316,12 +321,12 @@ class Node(object):
 		for i, (t, node) in enumerate(leaf_nodes):
 			j = i
 			# FIXME don't hardcode 1 second
-			while j >= 0 and abs(leaf_nodes[j][0] - t) < .3:
+			while j >= 0 and abs(leaf_nodes[j][0] - t) < tolerance:
 				node.neighbors.add(leaf_nodes[j][1])
 				j -=1
 			j = i
 			# FIXME don't hardcode 1 second
-			while j < len(leaf_nodes) and abs(leaf_nodes[j][0] - t) < .3:
+			while j < len(leaf_nodes) and abs(leaf_nodes[j][0] - t) < tolerance:
 				node.neighbors.add(leaf_nodes[j][1])
 				j +=1
 
