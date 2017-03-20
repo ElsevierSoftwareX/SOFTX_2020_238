@@ -167,6 +167,12 @@ void postcohinspiral_table_set_line(GString *line, PostcohInspiralTable *table, 
 	g_string_append_printf(line, "%g%s", table->spearman_pval, xtable->delimiter->str);
 	g_string_append_printf(line, "%g%s", table->fap, xtable->delimiter->str);
 	g_string_append_printf(line, "%g%s", table->far, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_l, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_h, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_v, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_2h, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_1d, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_1w, xtable->delimiter->str);
 	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
 	g_string_append_printf(line, "%lg%s", table->template_duration, xtable->delimiter->str);
 	g_string_append_printf(line, "%g%s", table->mchirp, xtable->delimiter->str);

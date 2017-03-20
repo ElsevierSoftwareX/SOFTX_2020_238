@@ -632,7 +632,7 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 
   GST_LOG_OBJECT(sink, "start to write postcoh table");
   for(; table<table_end; table++) {
-	is_invalid = postcoh_filesink_is_invalid_background(table);
+	//is_invalid = postcoh_filesink_is_invalid_background(table);
 	if (!is_invalid) {
         GString *line = g_string_new("\t\t\t\t");
 	postcohinspiral_table_set_line(line, table, xtable);

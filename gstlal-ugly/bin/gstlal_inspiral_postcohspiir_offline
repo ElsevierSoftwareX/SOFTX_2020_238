@@ -164,42 +164,24 @@ def parse_command_line():
   parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
   parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
   parser.add_option("--nxydump-segment", metavar = "start:stop", default = None, help = "Set the time interval to dump from nxydump elments (optional).  The default is None, i.e. no dump.")
-  parser.add_option("--cuda-postcohfilesink-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the triggers (required)")
   parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
   parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
   parser.add_option("--iir-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
-  parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
   parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
   parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
-  parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
   parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
   parser.add_option("--comment",  metavar="str")
   parser.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
   parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
   parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
   parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case")
-  #FIXME: in order to be compatible with SVD method, the following paramters are kept though not used for iir filtering
-  parser.add_option("--svd-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
-  parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
-  parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
-  parser.add_option("--local-frame-caching", action = "store_true", help = "Unused")
 
 
   #FIXME: do not consider online paramters yet
   parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
-  parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
-  parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
   parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-  parser.add_option("--cuda-postcohfilesink-snapshot-interval", type = "float", metavar = "seconds", default = 0, help = "How often to snapshot the trigger files.")
   parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
   parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
-  parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
-	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
-	# in the process_params table to determine the threshold below
-	# which it can delete uninteresting singles after the coincs are
-	# ranked.  if the name of this option is changed, be sure to update
-	# gstlal_inspiral_calc_likelihood
-  parser.add_option("--singles-threshold-record", metavar = "SNRrecord", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
 
   # set the postcoh parameters
   parser.add_option("--cuda-postcoh-snglsnr-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
@@ -208,6 +190,8 @@ def parse_command_line():
   parser.add_option("--cuda-postcoh-hist-trials", metavar = "hist-trials", type = "int", default = 1, help = "histogram trials for background distribution.")
   parser.add_option("--cuda-postcoh-output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "if output skymap, 1: yes, 0: no")
 
+  parser.add_option("--cuda-postcohfilesink-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the triggers (required)")
+  parser.add_option("--cuda-postcohfilesink-snapshot-interval", type = "float", metavar = "seconds", default = 0, help = "How often to snapshot the trigger files.")
 
   # gpu acceleartion support
   parser.add_option("--gpu-acc", action = "store_true", help = "gpu acceleration for IIR filtering (optional).")
@@ -227,9 +211,6 @@ def parse_command_line():
   required_options = []
 	
   missing_options = []
-  # FIXME: wield way to be compatible with SVD method
-  if options.svd_bank is not None:
-    options.iir_bank = options.svd_bank
 
   if options.iir_bank is None:
     missing_options += ["--iir-bank"]
@@ -286,14 +267,6 @@ def parse_command_line():
     missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
     if missing_options:
       raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
-
-  else:
-    bad_options = []
-    for option in ["job_tag", "marginalized_likelihood_file"]:
-      if getattr(options, option) is not None:
-	bad_options.append("--%s" % option.replace("_", "-"))
-    if bad_options:
-      raise ValueError("%s options should only be given for --data-source is lvshm or framexmit " % ", ".join(bad_options))
 
   #FIXME: job tag and output can not be both none
   #	if options.job_tag is None and options.output is None:

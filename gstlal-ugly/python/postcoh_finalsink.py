@@ -150,12 +150,16 @@ class BackgroundStatsUpdater(object):
 		# list all the files in the path
 		#nprefix = len(self.input_prefix_list[0].split("_"))
 		ls_proc = subprocess.Popen(["ls", self.path], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-		ls_out = subprocess.check_output(["grep", "stats"], stdin = ls_proc.stdout)
+		ls_out = ""
+		try:
+			ls_out = subprocess.check_output(["grep", "stats"], stdin = ls_proc.stdout)
+		except:
+			print "no stats file yet"
+			return
 		ls_proc.wait()
 		ls_fnames = ls_out.split("\n")
 		#pdb.set_trace()	
 		for (i, collection_time) in enumerate(self.collection_time):
-			print "collection time %d" % collection_time
 			boundary = cur_buftime - collection_time
 			# find the files within the collection time
 			valid_fnames = []
