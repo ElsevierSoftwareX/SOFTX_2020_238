@@ -817,7 +817,7 @@ def parse_command_line():
 
 	# Override the datasource injection option
 	parser.remove_option("--injections")
-	parser.add_option("--injections", action = "append", help = "append injection files to analyze")
+	parser.add_option("--injections", action = "append", default = [], help = "append injection files to analyze")
 
 	# Condor commands
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
