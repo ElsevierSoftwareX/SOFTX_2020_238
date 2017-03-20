@@ -41,7 +41,7 @@ class HyperCube(object):
 		self.tiles = []
 		self.symmetry_func = symmetry_func
 		self.__mismatch = mismatch
-		self.neighbors = []
+		self.neighbors = set()
 		self.vertices = self.vertices()
 
 	def N(self):
@@ -96,14 +96,13 @@ class HyperCube(object):
 				neighbor_tiles = []
 				for neighbor in self.neighbors:
 					neighbor_tiles.extend(list(neighbor.tiles))
-					for other in neighbor.neighbors:
-						neighbor_tiles.extend(list(other.tiles))
-				neighbor_tiles = list(neighbor_tiles)
 				if len(neighbor_tiles) == 0:
 					self.tiles.append(self.center)
+			print "neighbor tiles %d neighbors %d" % (len(neighbor_tiles), len(self.neighbors))
 			# FIXME don't hardcode this tolerance
 			matches = []
-			while len(self.tiles) < target and iters < 1e3:
+			# FIXME consider tightening convergence
+			while len(self.tiles) < target and iters < 1e2:
 				randcoords = numpy.array([random.random()-0.5 for i in range(len(self.deltas))])
 				randcoords *= self.deltas 
 				randcoords += self.center
@@ -209,13 +208,13 @@ class HyperCube(object):
 		#print 'VERTICES:', vertices
 		return vertices
 
-	def returnneighbors(self):
-		revisedneighbors = []
-		for neighbor in self.neighbors:
-			if any([vertex in self for vertex in neighbor.vertices]) or any([vertex in neighbor for vertex in self.vertices]):
-				revisedneighbors.append(neighbor)
-		#print 'KEPT %d/%d NEIGHBORS' % (len(revisedneighbors), len(self.neighbors))
-		self.neighbors = revisedneighbors
+#	def returnneighbors(self):
+#		revisedneighbors = []
+#		for neighbor in self.neighbors:
+#			if any([vertex in self for vertex in neighbor.vertices]) or any([vertex in neighbor for vertex in self.vertices]):
+#				revisedneighbors.append(neighbor)
+#		#print 'KEPT %d/%d NEIGHBORS' % (len(revisedneighbors), len(self.neighbors))
+#		self.neighbors = set(revisedneighbors)
 
 
 class Node(object):
@@ -230,6 +229,11 @@ class Node(object):
 		self.right = None
 		self.left = None
 		self.parent = parent
+		self.sibling = None
+
+	def __hash__(self):
+		# FIXME actually make the cube hashable and call that
+		return (self.cube.center, self.cube.deltas)
 
 	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True):
 		size = self.cube.size
@@ -246,20 +250,8 @@ class Node(object):
 
 			self.left = Node(left, self)
 			self.right = Node(right, self)
-
-			self.left.cube.neighbors += self.cube.neighbors
-			self.right.cube.neighbors += self.cube.neighbors
-
-			self.left.cube.neighbors.append(self.right.cube)
-			self.right.cube.neighbors.append(self.left.cube)
-
-			#print 'NLCHECK:', self.left.cube.neighbors
-			#print 'NRCHECKL:', self.right.cube.neighbors
-
-			self.left.cube.returnneighbors()
-			self.right.cube.returnneighbors()
-			#print 'NORMLEFT:', self.left.cube.neighbors
-			#print 'NORMRIGHT:', self.right.cube.neighbors
+			self.left.sibling = self.right
+			self.right.sibling = self.left
 
 			if verbose:
 				print "Splitting parent with boundaries:"
@@ -290,26 +282,14 @@ class Node(object):
 			deltav = abs(v2-v1)
 			verr = deltav / avgv
 			#print v1, v2, verr
-		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and verr > 0.25):
+		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and verr > 0.5):
 			bifurcation += 1
 			#print 'LEVEL:', bifurcation
 			left, right = self.cube.split(splitdim)
 			self.left = Node(left, self)
 			self.right = Node(right, self)
-
-			self.left.cube.neighbors += self.cube.neighbors
-			self.right.cube.neighbors += self.cube.neighbors
-
-			self.left.cube.neighbors.append(self.right.cube)
-			self.right.cube.neighbors.append(self.left.cube)
-
-			#print 'NLCHECK:', self.left.cube.neighbors
-			#print 'NRCHECKL:', self.right.cube.neighbors
-
-			self.left.cube.returnneighbors()
-			self.right.cube.returnneighbors()
-			#print 'FINELEFT:', self.left.cube.neighbors
-			#print 'FINERIGHT:', self.right.cube.neighbors
+			self.left.sibling = self.right
+			self.right.sibling = self.left
 
 			if verbose:
 				print "%30s: %0.2f" % ("Splitting", verr)
@@ -318,6 +298,32 @@ class Node(object):
 		else:
 			if verbose:
 				print "%30s: %0.2f" % ("Not Splitting", verr)
+
+			#print 'FINELEFT:', self.left.cube.neighbors
+			#print 'FINERIGHT:', self.right.cube.neighbors
+
+	def assign_neighbors(self):
+
+		# FIXME don't hardcode 30 hz, but what is the right time to use here??
+		def chirptime(m1, m2, flow = 30):
+			mc = (m1 * m2)**.6 / (m1 + m2)**.2 * 5e-6 # Msun in seconds 
+			return 5./256. * mc**(-5./3.) * (numpy.pi * flow)**(-8./3.)
+
+		# FIXME assumes m1 m2 are the first two coordinates
+		leaf_nodes = sorted([(chirptime(node.center[0], node.center[1]), node) for node in self.walk()])
+		left_nodes = leaf_nodes
+		right_nodes = leaf_nodes
+		for i, (t, node) in enumerate(leaf_nodes):
+			j = i
+			# FIXME don't hardcode 1 second
+			while j >= 0 and abs(leaf_nodes[j][0] - t) < .3:
+				node.neighbors.add(leaf_nodes[j][1])
+				j -=1
+			j = i
+			# FIXME don't hardcode 1 second
+			while j < len(leaf_nodes) and abs(leaf_nodes[j][0] - t) < .3:
+				node.neighbors.add(leaf_nodes[j][1])
+				j +=1
 
 	def walk(self, out = []):
 		"""
@@ -332,4 +338,4 @@ class Node(object):
 		if not self.right and not self.left and self.cube.symmetry_func(self.cube.boundaries):
 			out.append(self.cube)
 
-		return out
+		return list(set(out))
