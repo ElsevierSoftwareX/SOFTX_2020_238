@@ -932,35 +932,35 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 			if not options.no_dq_vector:
 				smooth_fs = pipeparts.mktee(pipeline, smooth_fs)
 
-		# compute SRC Q
+		# compute SRC Q_inv
 		if not options.no_srcQ:
-			XiI_inv = pipeparts.mkpow(pipeline, XiI, exponent = -1.0)
-			XiI_inv = pipeparts.mkaudioamplify(pipeline, XiI_inv, -1.0)
-			srcQ = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, sqrtXiR, queue_length1), calibration_parts.mkqueue(pipeline, XiI_inv, queue_length2)))
-			srcQ = pipeparts.mktee(pipeline, srcQ)
-			smooth_srcQ_nogate = pipeparts.mkgeneric(pipeline, srcQ, "lal_smoothkappas", default_kappa_re = options.expected_srcQ, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
+			sqrtXiR_inv = pipeparts.mkpow(pipeline, sqrtXiR, exponent = -1.0)
+			sqrtXiR_inv = pipeparts.mkaudioamplify(pipeline, sqrtXiR_inv, -1.0)
+			srcQ_inv = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, sqrtXiR_inv, queue_length1), calibration_parts.mkqueue(pipeline, XiI, queue_length2)))
+			srcQ_inv = pipeparts.mktee(pipeline, srcQ_inv)
+			smooth_srcQ_inv_nogate = pipeparts.mkgeneric(pipeline, srcQ_inv, "lal_smoothkappas", default_kappa_re = 1.0 / options.expected_srcQ, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median)
 
 			if not options.no_coherence:
 				# Gate SRC_Q with all four of the calibration lines
-				srcQ_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				srcQ_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, darm_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				srcQ_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
-				srcQ_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, sus_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				srcQ_inv_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_inv, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line2_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				srcQ_inv_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_inv_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, darm_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				srcQ_inv_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_inv_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, pcaly_line1_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
+				srcQ_inv_gated = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, srcQ_inv_gated, queue_length2), control = calibration_parts.mkqueue(pipeline, sus_coh, queue_length1), threshold = options.coherence_uncertainty_threshold, attack_length = -integration_samples, invert_control = True)
 
 				if not options.no_dq_vector:
-					srcQ_gated = pipeparts.mktee(pipeline, srcQ_gated)
-					smooth_srcQdq = calibration_parts.track_bad_kappas(pipeline, srcQ_gated, options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+					srcQ_inv_gated = pipeparts.mktee(pipeline, srcQ_inv_gated)
+					smooth_srcQdq = calibration_parts.track_bad_kappas(pipeline, srcQ_inv_gated, 1.0 / options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
 
-				smooth_srcQ = calibration_parts.smooth_kappas(pipeline, srcQ_gated, options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+				smooth_srcQ_inv = calibration_parts.smooth_kappas(pipeline, srcQ_inv_gated, 1.0 / options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
 
 			else:
-				smooth_srcQ = calibration_parts.smooth_kappas_no_coherence(pipeline, srcQ, options.srcQ_ok_var, options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+				smooth_srcQ_inv = calibration_parts.smooth_kappas_no_coherence(pipeline, srcQ_inv, options.srcQ_ok_var, 1.0 / options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
 
 				if not options.no_dq_vector:
-					smooth_srcQdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, srcQ, options.srcQ_ok_var, options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
+					smooth_srcQdq = calibration_parts.track_bad_kappas_no_coherence(pipeline, srcQ_inv, options.srcQ_ok_var, 1.0 / options.expected_srcQ, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median)
 
 			if not options.no_dq_vector:
-				smooth_srcQ = pipeparts.mktee(pipeline, smooth_srcQ)
+				smooth_srcQ_inv = pipeparts.mktee(pipeline, smooth_srcQ_inv)
 
 #
 # Calibration Line Cancellation
@@ -1291,7 +1291,7 @@ if not options.no_dq_vector:
 	# SRCQ BITS BRANCH
 	#
 	if not options.no_srcQ:
-		srcQSmoothInRange, srcQMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ, smooth_srcQdq, options.expected_srcQ, options.srcQ_ok_var, status_out_smooth = 268435456, status_out_median = 536870912, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		srcQSmoothInRange, srcQMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, smooth_srcQdq, options.expected_srcQ, options.srcQ_ok_var, status_out_smooth = 268435456, status_out_median = 536870912, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# COHERENCE BITS BRANCH
@@ -1467,11 +1467,13 @@ if not options.no_fs:
 
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if not options.no_srcQ:
-	srcQout = pipeparts.mkaudioconvert(pipeline, smooth_srcQ)
-	srcQout = calibration_parts.mkresample(pipeline, srcQout, 1, record_kappa_caps)
-	srcQout = pipeparts.mkprogressreport(pipeline, srcQout, "progress_SRC_Q_%s" % instrument)
+	srcQ_inv_out = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv)
+	srcQ_out = pipeparts.mkpow(pipeline, srcQ_inv_out, exponent = -1.0)
+	srcQ_out = calibration_parts.mkresample(pipeline, srcQ_out, 1, record_kappa_caps)
+	srcQ_out = pipeparts.mkprogressreport(pipeline, srcQ_out, "progress_SRC_Q_%s" % instrument)
 
-	smooth_srcQ_nogate = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_nogate)
+	smooth_srcQ_inv_nogate = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv_nogate)
+	smooth_srcQ_nogate = pipeparts.mkpow(pipeline, smooth_srcQ_inv_nogate, exponent = -1.0)
 	smooth_srcQ_nogate = calibration_parts.mkresample(pipeline, smooth_srcQ_nogate, 1, record_kappa_caps)
 	smooth_srcQ_nogate = pipeparts.mkprogressreport(pipeline, smooth_srcQ_nogate, "progress_SRC_Q_nogate_%s" % instrument)
 
@@ -1530,7 +1532,7 @@ if not options.no_fs:
 
 # Link the src_Q to the muxer
 if not options.no_srcQ:
-	calibration_parts.mkqueue(pipeline, srcQout, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, srcQ_out, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q%s" % (instrument, chan_prefix, chan_suffix)))
 	calibration_parts.mkqueue(pipeline, smooth_srcQ_nogate, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Check that all frames are long enough, that they have all of the channels by requring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
@@ -1541,7 +1543,7 @@ def check_complete_frames(pad, info, (output_start, frame_duration, wings_start,
 	if not (startts % frame_duration == 0):
 		return Gst.PadProbeReturn.DROP
 	if startts < output_start:
-		return Gst.PadProbeReturn.DROP	
+		return Gst.PadProbeReturn.DROP
 	if duration != frame_duration:
 		return Gst.PadProbeReturn.DROP
 	if wings_start is not None and wings_end is not None:
