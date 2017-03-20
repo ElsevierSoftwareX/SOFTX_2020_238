@@ -201,13 +201,15 @@ ligolw_process.set_process_end_time(process)
 
 totalpopcount = 0
 previous_tiles = []
+bank.assign_neighbors(disable_neighbors = args.disable_neighbors)
 nodes = bank.walk()
 patches = []
 expected = 0
 bad_metrics = 0
+
 for n, c in enumerate(nodes):
 
-	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic, neighbor_tiles = previous_tiles if args.disable_neighbors else [])
+	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic)
 	expected += c.num_templates(mismatch)
 	if not c.metric.metric_is_valid:
 		bad_metrics+=1
