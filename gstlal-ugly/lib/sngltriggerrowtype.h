@@ -34,6 +34,7 @@
 #include <lal/LALDatatypes.h>
 #include <lal/LIGOMetadataTables.h>
 
+#include <gstlal_sngltrigger.h>
 
 G_BEGIN_DECLS
 
@@ -53,7 +54,7 @@ G_BEGIN_DECLS
 
 
 struct GSTLALSnglTrigger {
-	SnglInspiralTable parent;
+	SnglTriggerTable parent;
 	LIGOTimeGPS epoch;
 	double deltaT;
 	size_t length;

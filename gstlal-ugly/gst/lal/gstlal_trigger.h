@@ -38,6 +38,7 @@
 #include <lal/LIGOMetadataTables.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_matrix_float.h>
+#include <gstlal_sngltrigger.h>
 
 G_BEGIN_DECLS
 
@@ -77,8 +78,7 @@ typedef struct {
 	void *chi2;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
-	SnglInspiralTable *bankarray;
-	char * bank_filename;
+	SnglTriggerTable *bankarray;
 	char * instrument;
 	char * channel_name;
 	gboolean last_gap;

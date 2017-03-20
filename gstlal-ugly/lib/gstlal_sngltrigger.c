@@ -34,90 +34,7 @@
 #include <gstlal_sngltrigger.h>
 
 
-int gstlal_sngltrigger_array_from_file(const char *bank_filename, SnglInspiralTable **bankarray)
-{
-	SnglInspiralTable *this = NULL;
-	SnglInspiralTable *bank = NULL;
-	int num;
-	num = LALSnglInspiralTableFromLIGOLw(&this, bank_filename, -1, -1);
-
-	*bankarray = bank = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable));
-
-	/* FIXME do some basic sanity checking */
-
-	/*
-	 * copy the linked list of templates constructed by
-	 * LALSnglInspiralTableFromLIGOLw() into the template array.
-	 */
-
-	while (this) {
-		SnglInspiralTable *next = this->next;
-		this->snr = 0;
-		this->sigmasq = 0;
-		this->mtotal = this->mass1 + this->mass2;
-		*bank = *this;
-		bank->next = NULL;
-		bank++;
-		LALFree(this);
-		this = next;
-	}
-
-	return num;
-}
-
-int gstlal_set_channel_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, char *channel)
-{
-	int i;
-	for (i = 0; i < length; i++) {
-		if (channel) {
-			strncpy(bankarray[i].channel, (const char*) channel, LIGOMETA_CHANNEL_MAX);
-			bankarray[i].channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
-		}
-	}
-	return 0;
-}
-
-int gstlal_set_instrument_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, char *instrument)
-{
-	int i;
-	for (i = 0; i < length; i++) {
-		if (instrument) {
-			strncpy(bankarray[i].ifo, (const char*) instrument, LIGOMETA_IFO_MAX);
-			bankarray[i].ifo[LIGOMETA_IFO_MAX - 1] = 0;
-		}
-	}
-	return 0;
-}
-
-int gstlal_set_sigmasq_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, double *sigmasq)
-{
-	int i;
-	for (i = 0; i < length; i++) {
-		bankarray[i].sigmasq = sigmasq[i];
-	}
-	return 0;
-}
-
-int gstlal_set_min_offset_in_sngltrigger_array(SnglInspiralTable *bankarray, int length, GstClockTimeDiff *timediff)
-{
-	int i;
-	gint64 gpsns = 0;
-	gint64 offset = 0;
-	for (i = 0; i < length; i++) {
-		offset = XLALGPSToINT8NS(&(bankarray[i].end));
-		if (offset < gpsns)
-			gpsns = offset;
-	}
-	/*
-	 * FIXME FIXME FIXME This should be one sample at the sample rate, but
-	 * unfortunately we don't have that in this function, so it is hardcoded to a
-	 * very conservative value of 32 samples per second
-	 */
-	*timediff = gpsns - gst_util_uint64_scale_int_round(1, GST_SECOND, 32);
-	return 0;
-}
-
-GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff timediff)
+GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, char *channel_name, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff timediff)
 {
 	GstBuffer *srcbuf = gst_buffer_new();
 
@@ -141,7 +58,7 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 		guint channel;
 		for(channel = 0; channel < input->channels; channel++) {
 			struct GSTLALSnglTrigger *event;
-			SnglInspiralTable *parent;
+			SnglTriggerTable *parent;
 			double complex maxdata_channel = 0;
 
 			switch (input->type)
@@ -183,7 +100,7 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 			} else
 				event = gstlal_sngltrigger_new(0);
 
-			parent = (SnglInspiralTable *) event;
+			parent = (SnglTriggerTable *) event;
 			if (!event) {
 				/* FIXME handle error */
 			}
@@ -192,9 +109,10 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 			 * populate
 			 */
 
-			*parent = bankarray[channel];
+			//*parent = bankarray[channel];
+			strcpy(parent->channel, channel_name);
 			parent->snr = cabs(maxdata_channel);
-			parent->coa_phase = carg(maxdata_channel);
+			parent->phase = carg(maxdata_channel);
 
 			XLALINT8NSToGPS(&event->epoch, time);
 			{
@@ -205,10 +123,8 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 			XLALGPSAdd(&event->epoch, (double) (input->samples[channel] - input->pad) / rate);
 			event->deltaT = 1. / rate;
 
-			parent->end_time_gmst = XLALGreenwichMeanSiderealTime(&parent->end);
 			/* populate chi squared if we have it */
 			parent->chisq = 0.0;
-			parent->chisq_dof = 1;
 			switch (input->type)
 			{
 				case GSTLAL_PEAK_COMPLEX:
