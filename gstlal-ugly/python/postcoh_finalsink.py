@@ -146,7 +146,15 @@ class BackgroundStatsUpdater(object):
 		self.ifos = ifos
 		self.procs = []
 
+	def __wait_last_process_finish(self):
+		if self.procs is not None:
+			for proc in self.procs:
+				if proc.poll() is None:
+					proc.wait()
+
+
 	def update_fap_stats(self, cur_buftime):
+		self.__wait_last_process_finish()
 		# list all the files in the path
 		#nprefix = len(self.input_prefix_list[0].split("_"))
 		ls_proc = subprocess.Popen(["ls", self.path], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
@@ -768,7 +776,7 @@ class FinalSink(object):
 		return fname
 
 	def snapshot_output_file(self, filename, verbose = False):
-		self.__check_internal_process_finish()
+		self.__wait_internal_process_finish()
 		# free the memory
 		del self.postcoh_document_cpy
 		self.postcoh_document_cpy = self.postcoh_document
@@ -782,7 +790,7 @@ class FinalSink(object):
 		del self.postcoh_table
 		self.postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
-	def __check_internal_process_finish(self):
+	def __wait_internal_process_finish(self):
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
 			self.thread_snapshot.join()
 	
@@ -792,7 +800,7 @@ class FinalSink(object):
 					proc.wait()
 
 	def write_output_file(self, filename = None, verbose = False):
-		self.__check_internal_process_finish()
+		self.__wait_internal_process_finish()
 		self.__write_output_file(filename, verbose = verbose)
 
 	def __write_output_file(self, filename = None, verbose = False):

@@ -170,14 +170,9 @@ int main(int argc, char *argv[])
 			//printf("stats_out duration %d\n", stats_out[icombo]->duration );
 		}
 	}
-	GString *tmp_out = g_string_new(NULL);
-	g_string_append_printf(tmp_out, "%s_next", *pout);
-	background_stats_to_xml(stats_out, ncombo, tmp_out->str);
-	g_rename(tmp_out->str, *pout);
+	background_stats_to_xml(stats_out, ncombo, *pout);
 	//FIXME: free stats
 	g_strfreev(in_fnames);
-
-	g_string_free(tmp_out, TRUE);
 
 	g_free(*pin);
 	g_free(*pfmt);
