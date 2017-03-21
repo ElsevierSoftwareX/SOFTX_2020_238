@@ -1,21 +1,28 @@
-M1bi=2.5
+M1bi=6.17
 M1bf=12.5
-M2bi=2.6
-M2bf=12.6
-M1i=3
-M1f=10
-M2i=3
-M2f=10
-FLOW = 30
+M2bi=6.16
+M2bf=12.2
+M1i=5.5
+M1f=12
+M2i=5.5
+M2f=12
+FLOW=30
+PSD=psd_for_treebank.xml.gz
 
 all : banksim_match_vs_injm1.png
 
 treebank.xml.gz:
-	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 $(M1bf) --max-mass2 $(M2bf)  --min-mass2 $(M2bi) --min-mass1 $(M1bi) --min-match 0.97 --flow $(FLOW) --psd-file psd.xml.gz
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 $(M1bf) --max-mass2 $(M2bf)  --min-mass2 $(M2bi) --min-mass1 $(M1bi) --min-match 0.97 --flow $(FLOW) --psd-file $(PSD) --stochastic --disable-neighbors
 
-H1-SBANK_SMALL-0-999999999.xml.gz:
-	# This produces 1269 templates
-	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow 30 --reference-psd test.xml.gz --user-tag SMALL --instrument H1 --spin1-min 0 --spin1-max 0 --checkpoint 50 --iterative-match-df-max 2.0 --coarse-match-df 2.0
+sbank.xml.gz:
+	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow 30 --reference-psd $(PSD) --output-filename $@ --instrument H1 --spin1-min 0 --spin1-max 0 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned --convergence-threshold 5000 --match-min 0.97 --fhigh-max 1024.0
+
+sbank_treebank_trials.xml.gz: treebank.xml.gz
+	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow 30 --reference-psd $(PSD) --output-filename $@ --instrument H1 --spin1-min 0 --spin1-max 0 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned --trial-waveforms $^ --match-min 0.97 --fhigh-max 1024.0
+
+sbank_treebank_trials_seeded.xml.gz: sbank_treebank_trials.xml.gz
+	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow 30 --reference-psd $(PSD) --output-filename $@ --instrument H1 --spin1-min 0 --spin1-max 0 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned --bank-seed $^ --fhigh-max 1024.0
+
 
 H1-TMPLTBANK_H1_BNS_NSBH_BBH-941365351-2048.xml.gz:
 	# I've written here PhenomB, but I don't think lalapps_tmpltbank actually uses the approximant for anything.
@@ -51,13 +58,13 @@ HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml:
 
 
 treebank.h5: treebank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
-	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag treebank
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd $(PSD) --instrument=H1 --user-tag treebank
 
-sbank.h5:  H1-SBANK_SMALL-0-999999999.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
-	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag sbank
+sbank.h5:  sbank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd $(PSD) --instrument=H1 --user-tag sbank
 
 tmpltbank.h5: H1-TMPLTBANK_H1_SMALL-941365351-2048.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
-	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag tmpltbank
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd $(PSD) --instrument=H1 --user-tag tmpltbank
 
 banksim_match_vs_injm1.png: %.h5
 	lalapps_cbc_sbank_plot_sim $<
