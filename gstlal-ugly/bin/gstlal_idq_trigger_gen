@@ -62,8 +62,8 @@ def parse_command_line():
 	#
 
 	multichannel_datasource.append_options(parser)
-
-	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the output.  If not given, output is sent to the default audio device.  The filename's extension determines the format, the following are recognized:  .wav, .flac, .ogg, .txt, /dev/stdout, /dev/stderr")
+	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
+	parser.add_option("--out-file", metavar = "filename", default = "output_triggers.trg", help = "Set the filename in which to save the output.")
 	parser.add_option("--downsample-rate", metavar = "Hz", type = "int", default = 16, help = "Downsample input to this minimum sample rate. Default = 16 Hz.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
@@ -86,8 +86,8 @@ def parse_command_line():
 
 class MultiChannelHandler(simplehandler.Handler):
 	def __init__(self, *args, **kwargs):
-		self.output = kwargs.pop("output")
-		self.instrument = kwargs.pop("instrument")
+		self.out_file = kwargs.pop("out_file")
+		self.out_path = kwargs.pop("out_path")
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 		self.timedeq = deque(maxlen = 10000)
 
@@ -98,26 +98,33 @@ class MultiChannelHandler(simplehandler.Handler):
 	def bufhandler(self, elem, sink_dict):
 		buf = elem.emit("pull-sample").get_buffer()
 		buftime = int(buf.pts / 1e9)
-		(result, mapinfo) = buf.map(Gst.MapFlags.READ)
-		assert result
-		if mapinfo.data:
-			data = StringIO.StringIO(mapinfo.data).getvalue()
-			channel = sink_dict[elem]
-			fdata = ""
-			for line in data.split('\n'):
-				if len(line) > 0:
-					fdata += "%s\t" % channel + line.rstrip('\r') + "\n"
-			self.timedeq.append(buftime)
-		else:
-			buf.unmap(mapinfo)
-			del buf
-			return Gst.FlowReturn.OK
-
+		channel = sink_dict[elem]
+		fdata = ""	
+		for i in range(buf.n_memory()):
+			memory = buf.peek_memory(i)
+			result, mapinfo = memory.map(Gst.MapFlags.READ)
+			assert result
+			# NOTE NOTE NOTE NOTE
+			# It is critical that the correct class'
+			# .from_buffer() method be used here.  This
+			# code is interpreting the buffer's
+			# contents as an array of C structures and
+			# building instances of python wrappers of
+			# those structures but if the python
+			# wrappers are for the wrong structure
+			# declaration then terrible terrible things
+			# will happen
+			if mapinfo.data:
+				data = StringIO.StringIO(mapinfo.data).getvalue()
+				for line in data.split('\n'):
+					if len(line) > 0:
+						fdata += "%s\t" % channel + line.rstrip('\r') + "\n"
+				self.timedeq.append(buftime)
+			memory.unmap(mapinfo)
 
 		# Save a "latest"
-		self.to_trigger_file(os.path.join(self.output, "output_triggers.txt"), fdata)
+		self.to_trigger_file(os.path.join(self.out_path, self.out_file), fdata)
 		
-		buf.unmap(mapinfo)
 		del buf
 		return Gst.FlowReturn.OK
 
@@ -200,19 +207,16 @@ channels = data_source_info.channel_dict[instrument].keys()
 # building the event loop and pipeline
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
-#handler = simplehandler.Handler(mainloop, pipeline)
-handler = MultiChannelHandler(mainloop, pipeline, output = options.output, instrument = instrument)
+handler = MultiChannelHandler(mainloop, pipeline, out_file = options.out_file, out_path = options.out_path)
 
 # multiple channel src
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
 
 for channel in channels:
-	#samp_rate = data_source_info.channel_dict[instrument][channel]   
-	#head[channel] = idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [samp_rate], instrument, channel_name = channel)[samp_rate]
+	samp_rate = data_source_info.channel_dict[instrument][channel]   
+	head[channel] = idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [samp_rate], instrument, channel_name = channel)[samp_rate]
 	head[channel] = pipeparts.mkaudioundersample(pipeline, head[channel])
 	head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, rate=%d" % options.downsample_rate) 
-	#pipeparts.mkfakesink(pipeline, head[channel])
-	#pipeparts.mknxydumpsink(pipeline, head[channel], options.output)	
 	head[channel] = pipeparts.mkgeneric(pipeline, head[channel], "lal_nxydump")
 
 if options.verbose:
