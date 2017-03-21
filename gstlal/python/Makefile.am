@@ -33,4 +33,4 @@ pkgpyexec_LTLIBRARIES = _misc.la
 _misc_la_SOURCES = misc.c
 _misc_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
 _misc_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlal.la
-_misc_la_LDFLAGS = $(AM_LDFLAGS) $(PYTHON_LDFLAGS) -module -avoid-version
+_misc_la_LDFLAGS = $(AM_LDFLAGS) $(PYTHON_LIBS) -module -avoid-version

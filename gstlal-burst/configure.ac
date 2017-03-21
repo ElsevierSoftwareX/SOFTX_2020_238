@@ -106,12 +106,12 @@ PKG_PROG_PKG_CONFIG()
 
 AM_PATH_PYTHON([2.6],,)
 AX_PYTHON_DEVEL()
-# hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
-# Debian and SL6.  FIXME:  find a way to do this properly
-PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
-# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
+# hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
+# and SL6.  FIXME:  find a way to do this properly
+PYTHON_LIBS=[`echo "$PYTHON_LIBS" | sed -e "s?-L/usr/lib[^[:space:]]*??g"`]
+# hack to add missing options to PYTHON_LIBS.  sigh, what's the point of
 # AX_PYTHON_DEVEL!?
-PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
+PYTHON_LIBS="-module -avoid-version $PYTHON_LIBS"
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
 AC_SUBST([pkgpyexecdir], ["\${pyexecdir}/gstlal"])
