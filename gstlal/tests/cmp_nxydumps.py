@@ -86,9 +86,11 @@ def identify_gaps(lines, timestamp_fuzz = default_timestamp_fuzz, sample_fuzz = 
 	gaps = segments.segmentlist()
 	for i, line in enumerate(lines):
 		if i and (line[0] - lines[i - 1][0]) - dt > timestamp_fuzz * 2:
+			# clock skip.  interpret missing timestamps as a
+			# gap
 			gaps.append(segments.segment((lines[i - 1][0] + dt, line[0])))
 		if flags & COMPARE_FLAGS_ZERO_IS_GAP and all(abs(x) <= sample_fuzz for x in line[1:]):
-			# all samples are 0
+			# all samples are "0".  the current sample is a gap
 			gaps.append(segments.segment((line[0], lines[i + 1][0] if i + 1 < len(lines) else line[0] + (line[0] - lines[i - 1][0]))))
 	return gaps.coalesce()
 
