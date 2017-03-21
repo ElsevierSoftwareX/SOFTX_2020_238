@@ -3,6 +3,11 @@ import metric as metric_module
 import numpy
 from numpy import random
 
+# FIXME don't hardcode 30 hz, but what is the right time to use here??
+def chirptime(m1, m2, flow = 30):
+	mc = (m1 * m2)**.6 / (m1 + m2)**.2 * 5e-6 # Msun in seconds 
+	return 5./256. * mc**(-5./3.) * (numpy.pi * flow)**(-8./3.)
+
 def mass_sym(boundaries):
 	# Assumes first two are m_1 m_2
 	# Makes sure the entire hypercube is outside the symmetric region
@@ -41,8 +46,14 @@ class HyperCube(object):
 		self.tiles = []
 		self.symmetry_func = symmetry_func
 		self.__mismatch = mismatch
-		self.neighbors = set()
+		self.neighbors = []
 		self.vertices = self.vertices()
+		self.ACCEPT = 0
+		self.REJECT = 0
+
+	def __eq__(self, other):
+		# FIXME actually make the cube hashable and call that
+		return (tuple(self.center), tuple(self.deltas)) == (tuple(other.center), tuple(other.deltas))
 
 	def N(self):
 		return len(self.boundaries)
@@ -73,8 +84,7 @@ class HyperCube(object):
 		rightbound[dim,0] = self.center[dim]
 		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
-	def tile(self, mismatch, stochastic = False, neighbor_tiles = []):
-
+	def tile(self, mismatch, stochastic = False):
 		popcount = 0
 
 		# Find the coordinate transformation matrix
@@ -90,40 +100,69 @@ class HyperCube(object):
 		if stochastic:
 			# To Stephen with love
 			# From Chad
-			target = int(numpy.ceil(self.num_templates(mismatch))) + 10
-			iters = 0
-			if not neighbor_tiles:
-				neighbor_tiles = []
-				for neighbor in self.neighbors:
-					neighbor_tiles.extend(list(neighbor.tiles))
-				if len(neighbor_tiles) == 0:
-					self.tiles.append(self.center)
+
+			iters = 1
+			neighbor_tiles = sum([n.tiles for n in self.neighbors], [])
 			print "neighbor tiles %d neighbors %d" % (len(neighbor_tiles), len(self.neighbors))
+
 			# FIXME don't hardcode this tolerance
 			matches = []
+			randcoord_list = []
+			#high_match_tolerance = 1. - len(self.deltas)**.5 * self.__mismatch
+			high_match_tolerance = 1. - self.__mismatch
+			low_match_tolerance = 0 #1. - 2 * self.__mismatch
+
 			# FIXME consider tightening convergence
-			while len(self.tiles) < target and iters < 1e2:
+			def random_coordinate(self = self):
 				randcoords = numpy.array([random.random()-0.5 for i in range(len(self.deltas))])
 				randcoords *= self.deltas 
 				randcoords += self.center
 				assert randcoords in self
-				match = 0
-				if self.metric.metric_is_valid:
-					for t in self.tiles + neighbor_tiles:
-						match = max(self.metric.metric_match(self.metric_tensor, randcoords, t), match)
-						if match >= 1. - self.__mismatch:
-							break
-				else:
-					for t in self.tiles + neighbor_tiles:
-						match = max(match, self.metric.explicit_match(randcoords, t))
-						if match >= 1. - self.__mismatch:
-							break
+				yield randcoords
+				
+			def match_func(r, t, cubes = [self]):
+				return max(c.metric.metric_match(c.metric_tensor, r, t) for c in cubes)
 
-				if match < (1. - self.__mismatch):
-					self.tiles.append(randcoords)
+			def match_coords(this, other_list, neighbors = self.neighbors, tolerance = high_match_tolerance, matchfunc = match_func):
+				match = None
+				for other in other_list:
+					if match is None:
+						match = (matchfunc(this, other), other)
+					else:
+						match = max((matchfunc(this, other), other), match, key = lambda x: x[0])
+					if match[0] >= tolerance:
+						return match
+				for neighbor in neighbors:
+					for other in neighbor.tiles:
+						if match is None:
+							match = (matchfunc(this, other, cubes = [self, neighbor]), other)
+						else:
+							match = max((matchfunc(this, other, cubes = [self, neighbor]), other), match, key = lambda x: x[0])
+						if match[0] >= tolerance:
+							return match
+				return match
+
+			#while (float(1 + len(self.tiles)) / iters) > 0.01:
+			while iters < 100:
+				randcoord = random_coordinate().next()
+				if len(self.tiles) == 0 and len(neighbor_tiles) == 0:
+					self.tiles.append(randcoord)
+					matches.append(0.)
+					continue
+				#self.tiles.append(randcoord)
+				#continue
+				match = match_coords(randcoord, self.tiles)
+				if match[0] <= high_match_tolerance and match[0] > low_match_tolerance:
+					#match2 = self.metric.explicit_match(randcoord, match[1])
+					#if match2 <= match_tolerance: self.ACCEPT+=1
+					#else: self.REJECT+=1
+					#print self.ACCEPT, self.REJECT, match[0], match2
+					self.tiles.append(randcoord)
 					matches.append(match)
-				iters+=1
-			print "placed %d/%d tiles with %d iterations and matches %s" % (len(self.tiles), target, iters, matches)
+					iters = 0
+				iters += 1
+
+			print "placed %d tiles with %d iterations and matches %s" % (len(self.tiles), iters, matches)
 
 		else:
 			# The bounding box has 2*N points to define it each point is
@@ -208,6 +247,10 @@ class HyperCube(object):
 		#print 'VERTICES:', vertices
 		return vertices
 
+	def match(self, other):
+		return self.metric.metric_match(self.metric_tensor, self.center, other.center)
+
+
 #	def returnneighbors(self):
 #		revisedneighbors = []
 #		for neighbor in self.neighbors:
@@ -230,10 +273,6 @@ class Node(object):
 		self.left = None
 		self.parent = parent
 		self.sibling = None
-
-	def __hash__(self):
-		# FIXME actually make the cube hashable and call that
-		return (self.cube.center, self.cube.deltas)
 
 	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True):
 		size = self.cube.size
@@ -304,15 +343,10 @@ class Node(object):
 
 	def assign_neighbors(self, disable_neighbors = False):
 		# FIXME don't hardcode tolerance
-		if disable_neighbors:
-			tolerance = 0.3
+		if not disable_neighbors:
+			tolerance = 0.35
 		else:
 			tolerance = float("inf")
-
-		# FIXME don't hardcode 30 hz, but what is the right time to use here??
-		def chirptime(m1, m2, flow = 30):
-			mc = (m1 * m2)**.6 / (m1 + m2)**.2 * 5e-6 # Msun in seconds 
-			return 5./256. * mc**(-5./3.) * (numpy.pi * flow)**(-8./3.)
 
 		# FIXME assumes m1 m2 are the first two coordinates
 		leaf_nodes = sorted([(chirptime(node.center[0], node.center[1]), node) for node in self.walk()])
@@ -322,25 +356,32 @@ class Node(object):
 			j = i
 			# FIXME don't hardcode 1 second
 			while j >= 0 and abs(leaf_nodes[j][0] - t) < tolerance:
-				node.neighbors.add(leaf_nodes[j][1])
+				# Don't hard code
+				#if disable_neighbors or node.match(leaf_nodes[j][1]) >= 0.0:
+				node.neighbors.append(leaf_nodes[j][1])
 				j -=1
 			j = i
 			# FIXME don't hardcode 1 second
 			while j < len(leaf_nodes) and abs(leaf_nodes[j][0] - t) < tolerance:
-				node.neighbors.add(leaf_nodes[j][1])
+				# Don't hard code
+				#if disable_neighbors or node.match(leaf_nodes[j][1]) > 0.0:
+				node.neighbors.append(leaf_nodes[j][1])
 				j +=1
 
-	def walk(self, out = []):
+	def leafnodes(self):
+		#return [x[1] for x in sorted([(random.random(), node) for node in self.walk()])]
+		return [x[1] for x in sorted([(chirptime(node.center[0], node.center[1]), node) for node in self.walk()])]
+
+	def walk(self, out = set()):
 		"""
 		Return a list of all leaf nodes that are ancestors of the given node
 		and whose bounding box is not fully contained in the symmetryic region.
 		"""
 		if self.right:
-			self.right.walk()
+			self.right.walk(out)
 		if self.left:
-			self.left.walk()
+			self.left.walk(out)
 
 		if not self.right and not self.left and self.cube.symmetry_func(self.cube.boundaries):
-			out.append(self.cube)
-
-		return list(set(out))
+			out.add(self.cube)
+		return out
