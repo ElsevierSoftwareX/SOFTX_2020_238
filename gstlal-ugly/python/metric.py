@@ -233,7 +233,8 @@ class Metric(object):
 		def dot(x, y, metric):
 			return numpy.dot(numpy.dot(x.T, metric), y)
 
-		return (dot(x-y, x-y, metric_tensor))**.5
+		delta = x-y
+		return (dot(delta, delta, metric_tensor))**.5
 
 
 	def metric_match(self, metric_tensor, c1, c2):

@@ -187,7 +187,8 @@ if args.verbose:
 		print "\t", row
 
 mismatch = 1.0 - args.min_match
-bank.split(4**len(coord_limits_2), mismatch = mismatch, verbose = args.verbose)
+#bank.split_by_match(mismatch)
+bank.split(2, mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
@@ -201,20 +202,20 @@ ligolw_process.set_process_end_time(process)
 
 totalpopcount = 0
 previous_tiles = []
-bank.assign_neighbors(disable_neighbors = args.disable_neighbors)
+#bank.assign_neighbors(disable_neighbors = args.disable_neighbors)
 nodes = bank.leafnodes()
 patches = []
 expected = 0
 bad_metrics = 0
-#accepted = 0
-#rejected = 0
+accepted = 0
+rejected = 0
 for n, c in enumerate(nodes):
 
 	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic)
 	expected += c.num_templates(mismatch)
-	#accepted += c.ACCEPT
-	#rejected += c.REJECT
-	#print "accepted %d rejected %d" % (accepted, rejected)
+	accepted += c.ACCEPT
+	rejected += c.REJECT
+	print "accepted %d rejected %d" % (accepted, rejected)
 	if not c.metric.metric_is_valid:
 		bad_metrics+=1
 	totalpopcount = totalpopcount + temppopcount

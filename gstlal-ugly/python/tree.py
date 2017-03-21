@@ -20,7 +20,7 @@ def mass_sym(boundaries):
 
 class HyperCube(object):
 
-	def __init__(self, boundaries, mismatch, symmetry_func = mass_sym, metric = None):
+	def __init__(self, boundaries, mismatch, symmetry_func = mass_sym, metric = None, metric_tensor = None):
 		"""
 		Define a hypercube with boundaries given by boundaries, e.g.,
 
@@ -41,7 +41,10 @@ class HyperCube(object):
 		self.center = numpy.array([c[0] + (c[1] - c[0]) / 2. for c in boundaries])
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
-		self.metric_tensor = self.metric.set_metric_tensor(self.center, self.deltas)
+		if self.metric is not None and metric_tensor is None:
+			self.metric_tensor = self.metric.set_metric_tensor(self.center, self.deltas)
+		else:
+			self.metric_tensor = metric_tensor
 		self.size = self._size()
 		self.tiles = []
 		self.symmetry_func = symmetry_func
@@ -73,16 +76,34 @@ class HyperCube(object):
 			size[i] = self.metric.distance(self.metric_tensor, x, y)
 		return size
 
+	def match_size(self):
+		"""
+		Compute the size of the cube in match according to the metric through
+		the center point for each dimension under the assumption of a constant metric
+		evaluated at the center.
+		"""
+		size = numpy.empty(len(self.center))
+		for i, sides in enumerate(self.boundaries):
+			x = self.center.copy()
+			y = self.center.copy()
+			x[i] = self.boundaries[i,0]
+			y[i] = self.boundaries[i,1]
+			size[i] = self.metric.metric_match(self.metric_tensor, x, y)
+		return size
+
 	def num_tmps_per_side(self, mismatch):
-		return numpy.ceil(self.size / self.dl(mismatch = mismatch))
+		return self.size / self.dl(mismatch = mismatch)
 
 
-	def split(self, dim):
+	def split(self, dim, reuse_metric = False):
 		leftbound = self.boundaries.copy()
 		rightbound = self.boundaries.copy()
 		leftbound[dim,1] = self.center[dim]
 		rightbound[dim,0] = self.center[dim]
-		return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
+		if reuse_metric:
+			return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric, metric_tensor = self.metric_tensor), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric, metric_tensor = self.metric_tensor)
+		else:
+			return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
 	def tile(self, mismatch, stochastic = False):
 		popcount = 0
@@ -100,7 +121,8 @@ class HyperCube(object):
 		if stochastic:
 			# To Stephen with love
 			# From Chad
-
+			self.tiles.append(self.center)
+			return list(self.tiles), popcount
 			iters = 1
 			neighbor_tiles = sum([n.tiles for n in self.neighbors], [])
 			print "neighbor tiles %d neighbors %d" % (len(neighbor_tiles), len(self.neighbors))
@@ -108,9 +130,9 @@ class HyperCube(object):
 			# FIXME don't hardcode this tolerance
 			matches = []
 			randcoord_list = []
-			#high_match_tolerance = 1. - len(self.deltas)**.5 * self.__mismatch
-			high_match_tolerance = 1. - self.__mismatch
-			low_match_tolerance = 0 #1. - 2 * self.__mismatch
+			high_match_tolerance = 1. - len(self.deltas)**.5 * self.__mismatch
+			#high_match_tolerance = 1. - self.__mismatch
+			low_match_tolerance = 1. - 2 * self.__mismatch
 
 			# FIXME consider tightening convergence
 			def random_coordinate(self = self):
@@ -153,13 +175,16 @@ class HyperCube(object):
 				#continue
 				match = match_coords(randcoord, self.tiles)
 				if match[0] <= high_match_tolerance and match[0] > low_match_tolerance:
-					#match2 = self.metric.explicit_match(randcoord, match[1])
-					#if match2 <= match_tolerance: self.ACCEPT+=1
+					match2 = self.metric.explicit_match(randcoord, match[1])
+					if match2 <= high_match_tolerance:
+						self.ACCEPT += 1
 					#else: self.REJECT+=1
 					#print self.ACCEPT, self.REJECT, match[0], match2
-					self.tiles.append(randcoord)
-					matches.append(match)
-					iters = 0
+						self.tiles.append(randcoord)
+						matches.append(match)
+						iters = 0
+					else:
+						self.REJECT += 1
 				iters += 1
 
 			print "placed %d tiles with %d iterations and matches %s" % (len(self.tiles), iters, matches)
@@ -248,7 +273,8 @@ class HyperCube(object):
 		return vertices
 
 	def match(self, other):
-		return self.metric.metric_match(self.metric_tensor, self.center, other.center)
+		return self.metric.explicit_match(self.center, other.center)
+		#return self.metric.metric_match(self.metric_tensor, self.center, other.center)
 
 
 #	def returnneighbors(self):
@@ -276,16 +302,17 @@ class Node(object):
 
 	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True):
 		size = self.cube.size
-
 		# Always split on the largest size
 		splitdim = numpy.argmax(size)
-
 		# Figure out how many templates go inside
-		numtmps = numpy.floor(self.cube.num_templates(mismatch))
+		numtmps = self.cube.num_templates(mismatch)
 		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates): #or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
 			bifurcation += 1
 			#print 'LEVEL:', bifurcation
-			left, right = self.cube.split(splitdim)
+			if numtmps < 4**len(self.cube.deltas):
+				left, right = self.cube.split(splitdim, reuse_metric = True)
+			else:
+				left, right = self.cube.split(splitdim)
 
 			self.left = Node(left, self)
 			self.right = Node(right, self)
@@ -304,8 +331,9 @@ class Node(object):
 			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 		else:
 			if verbose:
-				print "%30s: %04d : %04d" % ("Next Level of Splitting",numtmps, split_num_templates)
-			self.split_fine(mismatch, bifurcation, verbose)
+				print "Not Splitting"
+				#print "%30s: %04d : %04d" % ("Next Level of Splitting",numtmps, split_num_templates)
+			#self.split_fine(mismatch, bifurcation, verbose)
 
 	def split_fine(self, mismatch, bifurcation = 0, verbose = True):
 		size = self.cube.size
@@ -344,7 +372,7 @@ class Node(object):
 	def assign_neighbors(self, disable_neighbors = False):
 		# FIXME don't hardcode tolerance
 		if not disable_neighbors:
-			tolerance = 0.35
+			tolerance = 1.0
 		else:
 			tolerance = float("inf")
 
