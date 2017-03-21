@@ -71,7 +71,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		return Gst.FlowReturn.OK
 
 	def to_trigger_file(self, path, data):
-		#os.remove(path)
+		#print path
 		with open(path, 'a') as f:
  			f.write(data)
 
@@ -90,7 +90,7 @@ def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
 	print >>sys.stderr, "=== Running Test %s ===" % name
 	mainloop = GObject.MainLoop()
 	pipeline = Gst.Pipeline(name = name)
-	handler = MultiChannelHandler(mainloop, pipeline, output = "/home/dmeacher/local/src/gstlal/gstlal-ugly/tests", instrument = None)
+	handler = MultiChannelHandler(mainloop, pipeline, output = "./", instrument = None)
 	pipeline = pipelinefunc(pipeline, name, handler, **pipelinefunc_kwargs)
 	if segment is not None:
 		if pipeline.set_state(Gst.State.PAUSED) == Gst.StateChangeReturn.FAILURE:
