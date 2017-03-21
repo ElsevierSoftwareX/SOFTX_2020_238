@@ -3,11 +3,6 @@ import metric as metric_module
 import numpy
 from numpy import random
 
-# FIXME don't hardcode 30 hz, but what is the right time to use here??
-def chirptime(m1, m2, flow = 30):
-	mc = (m1 * m2)**.6 / (m1 + m2)**.2 * 5e-6 # Msun in seconds 
-	return 5./256. * mc**(-5./3.) * (numpy.pi * flow)**(-8./3.)
-
 def mass_sym(boundaries):
 	# Assumes first two are m_1 m_2
 	# Makes sure the entire hypercube is outside the symmetric region
@@ -76,21 +71,6 @@ class HyperCube(object):
 			size[i] = self.metric.distance(self.metric_tensor, x, y)
 		return size
 
-	def match_size(self):
-		"""
-		Compute the size of the cube in match according to the metric through
-		the center point for each dimension under the assumption of a constant metric
-		evaluated at the center.
-		"""
-		size = numpy.empty(len(self.center))
-		for i, sides in enumerate(self.boundaries):
-			x = self.center.copy()
-			y = self.center.copy()
-			x[i] = self.boundaries[i,0]
-			y[i] = self.boundaries[i,1]
-			size[i] = self.metric.metric_match(self.metric_tensor, x, y)
-		return size
-
 	def num_tmps_per_side(self, mismatch):
 		return self.size / self.dl(mismatch = mismatch)
 
@@ -106,130 +86,8 @@ class HyperCube(object):
 			return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
 
 	def tile(self, mismatch, stochastic = False):
-		popcount = 0
-
-		# Find the coordinate transformation matrix
-		try:
-			M = numpy.linalg.cholesky(self.metric_tensor)
-			Minv = numpy.linalg.inv(M)
-		except numpy.linalg.LinAlgError:
-			self.tiles.append(self.center)
-			print >>sys.stderr, "tiling failed: %f" % numpy.linalg.det(self.metric_tensor)
-			raise
-			return self.tiles, popcount
-
-		if stochastic:
-			# To Stephen with love
-			# From Chad
-			self.tiles.append(self.center)
-			return list(self.tiles), popcount
-			iters = 1
-			neighbor_tiles = sum([n.tiles for n in self.neighbors], [])
-			print "neighbor tiles %d neighbors %d" % (len(neighbor_tiles), len(self.neighbors))
-
-			# FIXME don't hardcode this tolerance
-			matches = []
-			randcoord_list = []
-			high_match_tolerance = 1. - len(self.deltas)**.5 * self.__mismatch
-			#high_match_tolerance = 1. - self.__mismatch
-			low_match_tolerance = 1. - 2 * self.__mismatch
-
-			# FIXME consider tightening convergence
-			def random_coordinate(self = self):
-				randcoords = numpy.array([random.random()-0.5 for i in range(len(self.deltas))])
-				randcoords *= self.deltas 
-				randcoords += self.center
-				assert randcoords in self
-				yield randcoords
-				
-			def match_func(r, t, cubes = [self]):
-				return max(c.metric.metric_match(c.metric_tensor, r, t) for c in cubes)
-
-			def match_coords(this, other_list, neighbors = self.neighbors, tolerance = high_match_tolerance, matchfunc = match_func):
-				match = None
-				for other in other_list:
-					if match is None:
-						match = (matchfunc(this, other), other)
-					else:
-						match = max((matchfunc(this, other), other), match, key = lambda x: x[0])
-					if match[0] >= tolerance:
-						return match
-				for neighbor in neighbors:
-					for other in neighbor.tiles:
-						if match is None:
-							match = (matchfunc(this, other, cubes = [self, neighbor]), other)
-						else:
-							match = max((matchfunc(this, other, cubes = [self, neighbor]), other), match, key = lambda x: x[0])
-						if match[0] >= tolerance:
-							return match
-				return match
-
-			#while (float(1 + len(self.tiles)) / iters) > 0.01:
-			while iters < 100:
-				randcoord = random_coordinate().next()
-				if len(self.tiles) == 0 and len(neighbor_tiles) == 0:
-					self.tiles.append(randcoord)
-					matches.append(0.)
-					continue
-				#self.tiles.append(randcoord)
-				#continue
-				match = match_coords(randcoord, self.tiles)
-				if match[0] <= high_match_tolerance and match[0] > low_match_tolerance:
-					match2 = self.metric.explicit_match(randcoord, match[1])
-					if match2 <= high_match_tolerance:
-						self.ACCEPT += 1
-					#else: self.REJECT+=1
-					#print self.ACCEPT, self.REJECT, match[0], match2
-						self.tiles.append(randcoord)
-						matches.append(match)
-						iters = 0
-					else:
-						self.REJECT += 1
-				iters += 1
-
-			print "placed %d tiles with %d iterations and matches %s" % (len(self.tiles), iters, matches)
-
-		else:
-			# The bounding box has 2*N points to define it each point is
-			# an N length vector.  Figure out the x' coordinates of the
-			# bounding box in and divide by dl to get number of templates
-			bounding_box = numpy.zeros((2*self.N(), self.N()))
-			for i, (s,e) in enumerate(self.boundaries):
-				Vs = numpy.zeros(self.N())
-				Ve = numpy.zeros(self.N())
-				Vs[i] = s - self.center[i]
-				Ve[i] = e - self.center[i]
-				Vsp = numpy.dot(M, Vs) / self.dl(mismatch)
-				Vep = numpy.dot(M, Ve) / self.dl(mismatch)
-				Vsp[Vsp<0] = numpy.floor(Vsp[Vsp<0])
-				Vsp[Vsp>0] = numpy.ceil(Vsp[Vsp>0])
-				Vep[Vep<0] = numpy.floor(Vep[Vep<0]) 
-				Vep[Vep>0] = numpy.ceil(Vep[Vep>0])
-				bounding_box[2*i,:] = Vsp
-				bounding_box[2*i+1,:] = Vep
-
-			grid = []
-			for cnt, (s,e) in enumerate(zip(numpy.min(bounding_box,0), numpy.max(bounding_box,0))):
-				assert s < e
-				numtmps = 2**numpy.ceil(numpy.log2((numpy.ceil((e-s)) + 1) // 2))
-				# FIXME hexagonal lattice in 2D
-				grid.append((numpy.arange(-numtmps, numtmps))* self.dl(mismatch))
-				#grid.append((numpy.arange(-numtmps, numtmps) + 0.5 * cnt % 2)* self.dl(mismatch))
-				#grid.append(numpy.array((-numtmps, numtmps)))
-			for coords in itertools.product(*grid):
-				# check this math
-				norm_coords = numpy.dot(Minv, coords)
-				primed_coords = norm_coords + self.center
-
-				# FIXME take care of ratty edges
-				if primed_coords in self:
-					self.tiles.append(primed_coords)
-
-			# Gaurantee at least one
-			if len(self.tiles) == 0:
-				self.tiles.append(self.center)
-
-		return list(self.tiles), popcount
+		self.tiles.append(self.center)
+		return list(self.tiles)
 
 	def __contains__(self, coords):
 		size = self.size
@@ -273,17 +131,7 @@ class HyperCube(object):
 		return vertices
 
 	def match(self, other):
-		return self.metric.explicit_match(self.center, other.center)
-		#return self.metric.metric_match(self.metric_tensor, self.center, other.center)
-
-
-#	def returnneighbors(self):
-#		revisedneighbors = []
-#		for neighbor in self.neighbors:
-#			if any([vertex in self for vertex in neighbor.vertices]) or any([vertex in neighbor for vertex in self.vertices]):
-#				revisedneighbors.append(neighbor)
-#		#print 'KEPT %d/%d NEIGHBORS' % (len(revisedneighbors), len(self.neighbors))
-#		self.neighbors = set(revisedneighbors)
+		return self.metric.metric_match(self.metric_tensor, self.center, other.center)
 
 
 class Node(object):
@@ -332,73 +180,11 @@ class Node(object):
 		else:
 			if verbose:
 				print "Not Splitting"
-				#print "%30s: %04d : %04d" % ("Next Level of Splitting",numtmps, split_num_templates)
-			#self.split_fine(mismatch, bifurcation, verbose)
-
-	def split_fine(self, mismatch, bifurcation = 0, verbose = True):
-		size = self.cube.size
-
-		# Always split on the largest size
-		splitdim = numpy.argmax(size)
-		verr = 2.0
-
-		if self.parent is not None:
-			v1 = numpy.sqrt(numpy.linalg.det(self.cube.metric_tensor))
-			v2 = numpy.sqrt(numpy.linalg.det(self.parent.cube.metric_tensor))
-			avgv = (v2+v1)/2.
-			deltav = abs(v2-v1)
-			verr = deltav / avgv
-			#print v1, v2, verr
-		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and verr > 0.5):
-			bifurcation += 1
-			#print 'LEVEL:', bifurcation
-			left, right = self.cube.split(splitdim)
-			self.left = Node(left, self)
-			self.right = Node(right, self)
-			self.left.sibling = self.right
-			self.right.sibling = self.left
-
-			if verbose:
-				print "%30s: %0.2f" % ("Splitting", verr)
-			self.left.split_fine(mismatch = mismatch, bifurcation = bifurcation)
-			self.right.split_fine(mismatch = mismatch, bifurcation = bifurcation)
-		else:
-			if verbose:
-				print "%30s: %0.2f" % ("Not Splitting", verr)
-
-			#print 'FINELEFT:', self.left.cube.neighbors
-			#print 'FINERIGHT:', self.right.cube.neighbors
-
-	def assign_neighbors(self, disable_neighbors = False):
-		# FIXME don't hardcode tolerance
-		if not disable_neighbors:
-			tolerance = 1.0
-		else:
-			tolerance = float("inf")
-
-		# FIXME assumes m1 m2 are the first two coordinates
-		leaf_nodes = sorted([(chirptime(node.center[0], node.center[1]), node) for node in self.walk()])
-		left_nodes = leaf_nodes
-		right_nodes = leaf_nodes
-		for i, (t, node) in enumerate(leaf_nodes):
-			j = i
-			# FIXME don't hardcode 1 second
-			while j >= 0 and abs(leaf_nodes[j][0] - t) < tolerance:
-				# Don't hard code
-				#if disable_neighbors or node.match(leaf_nodes[j][1]) >= 0.0:
-				node.neighbors.append(leaf_nodes[j][1])
-				j -=1
-			j = i
-			# FIXME don't hardcode 1 second
-			while j < len(leaf_nodes) and abs(leaf_nodes[j][0] - t) < tolerance:
-				# Don't hard code
-				#if disable_neighbors or node.match(leaf_nodes[j][1]) > 0.0:
-				node.neighbors.append(leaf_nodes[j][1])
-				j +=1
 
 	def leafnodes(self):
+		return list(self.walk())
 		#return [x[1] for x in sorted([(random.random(), node) for node in self.walk()])]
-		return [x[1] for x in sorted([(chirptime(node.center[0], node.center[1]), node) for node in self.walk()])]
+		#return [x[1] for x in sorted([(chirptime(node.center[0], node.center[1]), node) for node in self.walk()])]
 
 	def walk(self, out = set()):
 		"""

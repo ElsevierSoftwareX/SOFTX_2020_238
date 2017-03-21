@@ -187,7 +187,6 @@ if args.verbose:
 		print "\t", row
 
 mismatch = 1.0 - args.min_match
-#bank.split_by_match(mismatch)
 bank.split(2, mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
@@ -200,25 +199,17 @@ xmldoc.childNodes[-1].appendChild(tbl)
 process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], {})
 ligolw_process.set_process_end_time(process)
 
-totalpopcount = 0
 previous_tiles = []
-#bank.assign_neighbors(disable_neighbors = args.disable_neighbors)
 nodes = bank.leafnodes()
 patches = []
 expected = 0
 bad_metrics = 0
-accepted = 0
-rejected = 0
 for n, c in enumerate(nodes):
 
-	tiles, temppopcount = c.tile(mismatch = mismatch, stochastic = args.stochastic)
+	tiles = c.tile(mismatch = mismatch, stochastic = args.stochastic)
 	expected += c.num_templates(mismatch)
-	accepted += c.ACCEPT
-	rejected += c.REJECT
-	print "accepted %d rejected %d" % (accepted, rejected)
 	if not c.metric.metric_is_valid:
 		bad_metrics+=1
-	totalpopcount = totalpopcount + temppopcount
 
 	for t in tiles:
 		row = lsctables.SnglInspiralTable.RowType()
@@ -245,13 +236,9 @@ print "bad metrics ", bad_metrics
 
 numpy.save("patches.npy", numpy.array(patches))
 
-
 utils.write_filename(xmldoc, args.output_name,  gz=args.output_name.endswith("gz"))
 
 if args.verbose:
 	print >>sys.stderr, "Number of leaf nodes: ", n+1
 	print >>sys.stderr, "Number of templates (tiles): ", len(tbl)
 	print >>sys.stderr, "Expected number ", expected
-
-if args.debug:
-	print "Popped templates: ", totalpopcount
