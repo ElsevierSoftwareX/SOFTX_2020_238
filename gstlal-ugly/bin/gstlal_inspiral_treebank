@@ -187,7 +187,8 @@ if args.verbose:
 		print "\t", row
 
 mismatch = 1.0 - args.min_match
-bank.split(2, mismatch = mismatch, verbose = args.verbose)
+# FIXME I made this up. What is the correct volumetric function?
+bank.split(len(coord_limits)**.5, mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
