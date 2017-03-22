@@ -154,7 +154,6 @@ class HyperCube(object):
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
 			metric_tensor = self.metric_tensor
-		# FIXME check math
 		return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
 
 	def mass_volume(self):
@@ -162,10 +161,9 @@ class HyperCube(object):
 		return numpy.product(self.deltas[0:2])
 
 	def num_templates(self, mismatch):
-		# From Owen 1995 (2.16)
-		# with an additional packaging fraction to account for the real random packing to be better
-		# FIXME look this up it will depend on dimension
-		#return self.volume() / self.dl(mismatch)**self.N()
+		# Adapted from Owen 1995 (2.16). The ideal number of
+		# templates required to cover the space with
+		# non-overlapping spheres.
 		return self.volume() / self.template_volume()
 
 	def match(self, other):
