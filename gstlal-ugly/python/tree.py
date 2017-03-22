@@ -19,6 +19,7 @@ import itertools
 import metric as metric_module
 import numpy
 from numpy import random
+from scipy.special import gamma
 
 def mass_sym(boundaries):
 	# Assumes first two are m_1 m_2
@@ -30,6 +31,25 @@ def mass_sym(boundaries):
 			return True
 	return False
 
+def packing_density(n):
+	# From: http://mathworld.wolfram.com/HyperspherePacking.html
+	if n==1:
+		return 1.
+	if n==2:
+		return numpy.pi / 6 * 3 **.5
+	if n==3:
+		return numpy.pi / 6 * 2 **.5
+	if n==4:
+		return numpy.pi**2 / 16
+	if n==5:
+		return numpy.pi**2 / 30 * 2**.5
+	if n==6:
+		return numpy.pi**3 / 144 * 3**.5
+	if n==7:
+		return numpy.pi**3 / 105
+	if n==8:
+		return numpy.pi**4 / 384
+	
 class HyperCube(object):
 
 	def __init__(self, boundaries, mismatch, symmetry_func = mass_sym, metric = None, metric_tensor = None):
@@ -63,12 +83,14 @@ class HyperCube(object):
 		self.__mismatch = mismatch
 		self.neighbors = []
 		self.vertices = self.vertices()
-		self.ACCEPT = 0
-		self.REJECT = 0
 
 	def __eq__(self, other):
 		# FIXME actually make the cube hashable and call that
 		return (tuple(self.center), tuple(self.deltas)) == (tuple(other.center), tuple(other.deltas))
+
+	def template_volume(self):
+		n = self.N()
+		return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
 
 	def N(self):
 		return len(self.boundaries)
@@ -117,7 +139,7 @@ class HyperCube(object):
 		return True
 
 	def __repr__(self):
-		return "boundary: %s\ncoordinate center is: %s" % (self.boundaries, self.center)
+		return "coordinate center: %s\nedge lengths: %s" % (self.center, self.deltas)
 
 	def dl(self, mismatch):
 		# From Owen 1995 (2.15)
@@ -137,7 +159,8 @@ class HyperCube(object):
 		# From Owen 1995 (2.16)
 		# with an additional packaging fraction to account for the real random packing to be better
 		# FIXME look this up it will depend on dimension
-		return self.volume() / self.dl(mismatch)**self.N()
+		#return self.volume() / self.dl(mismatch)**self.N()
+		return self.volume() / self.template_volume()
 
 	def vertices(self):
 		vertices = list(itertools.product(*self.boundaries))
@@ -178,20 +201,11 @@ class Node(object):
 			self.right = Node(right, self)
 			self.left.sibling = self.right
 			self.right.sibling = self.left
-
-			if verbose:
-				print "Splitting parent at level %d with boundaries:" % bifurcation
-				for row in self.cube.boundaries:
-					print "\t", row
-				print "\t\t(est. templates / split threshold: %04d / %04d)" % (numtmps, split_num_templates)
-				print "\tLeft center: ", self.left.cube.center
-				print "\tRight center:", self.right.cube.center
-
 			self.left.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 		else:
 			if verbose:
-				print "Not Splitting"
+				print "Reached final depth in level %03d at %s with edge lengths %s" % (bifurcation, self.cube.center, self.cube.deltas)
 
 	# FIXME can this be made a generator?
 	def leafnodes(self, out = set()):
