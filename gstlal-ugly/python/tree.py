@@ -1,3 +1,20 @@
+# Copyright (C) 2014 Miguel Fernandez, Chad Hanna
+# Copyright (C) 2016,2017 Kipp Cannon, Miguel Fernandez, Chad Hanna, Stephen Privitera, Jonathan Wang
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
 import itertools
 import metric as metric_module
 import numpy
@@ -96,7 +113,6 @@ class HyperCube(object):
 		for i, c in enumerate(coords):
 			# FIXME do something more sane to handle boundaries
 			if not ((c >= self.center[i] - self.deltas[i] * fraction[i] / 2.) and (c <= self.center[i] + self.deltas[i] * fraction[i] / 2.)):
-			#if not (c >= 1. * self.boundaries[i,0] and c < (fraction[i] * self.deltas[i] + self.boundaries[i,0])):
 				return False
 		return True
 
@@ -106,8 +122,6 @@ class HyperCube(object):
 	def dl(self, mismatch):
 		# From Owen 1995 (2.15)
 		return 2 * mismatch**.5 / self.N()**.5
-		# FIXME the factor of 1.27 is just for a 2D hex lattice
-		# return 2 * mismatch**.5 / self.N()**.5 * 1.27
 
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
@@ -127,7 +141,6 @@ class HyperCube(object):
 
 	def vertices(self):
 		vertices = list(itertools.product(*self.boundaries))
-		#print 'VERTICES:', vertices
 		return vertices
 
 	def match(self, other):
@@ -156,7 +169,6 @@ class Node(object):
 		numtmps = self.cube.num_templates(mismatch)
 		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates): #or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
 			bifurcation += 1
-			#print 'LEVEL:', bifurcation
 			if numtmps < 4**len(self.cube.deltas):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
@@ -168,7 +180,7 @@ class Node(object):
 			self.right.sibling = self.left
 
 			if verbose:
-				print "Splitting parent with boundaries:"
+				print "Splitting parent at level %d with boundaries:" % bifurcation
 				for row in self.cube.boundaries:
 					print "\t", row
 				print "\t\t(est. templates / split threshold: %04d / %04d)" % (numtmps, split_num_templates)
@@ -181,20 +193,16 @@ class Node(object):
 			if verbose:
 				print "Not Splitting"
 
-	def leafnodes(self):
-		return list(self.walk())
-		#return [x[1] for x in sorted([(random.random(), node) for node in self.walk()])]
-		#return [x[1] for x in sorted([(chirptime(node.center[0], node.center[1]), node) for node in self.walk()])]
-
-	def walk(self, out = set()):
+	# FIXME can this be made a generator?
+	def leafnodes(self, out = set()):
 		"""
 		Return a list of all leaf nodes that are ancestors of the given node
 		and whose bounding box is not fully contained in the symmetryic region.
 		"""
 		if self.right:
-			self.right.walk(out)
+			self.right.leafnodes(out)
 		if self.left:
-			self.left.walk(out)
+			self.left.leafnodes(out)
 
 		if not self.right and not self.left and self.cube.symmetry_func(self.cube.boundaries):
 			out.add(self.cube)
