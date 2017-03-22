@@ -201,7 +201,7 @@ if args.verbose:
 
 mismatch = 1.0 - args.min_match
 # FIXME I made this up. What is the correct volumetric function?
-bank.split(2, mismatch = mismatch, verbose = args.verbose)
+bank.split(tree.packing_density(len(coord_limits)), mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
@@ -223,6 +223,7 @@ for n, c in enumerate(nodes):
 	tiles = c.tile(mismatch = mismatch)
 	expected += c.num_templates(mismatch)
 	if not c.metric.metric_is_valid:
+		bad_metrics += 1
 	for t in tiles:
 		row = lsctables.SnglInspiralTable.RowType()
 		row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z = coord_func(t)
