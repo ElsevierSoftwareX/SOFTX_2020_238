@@ -203,7 +203,7 @@ class Metric(object):
 			# Check the match
 			d2 = 1 - self.match(w1, self.waveform(center+x))
 			# The match must lie in the range 0.9995 - 0.999999 to be valid for a metric computation, which means d is between 0.000001 and 0.0005
-			if (d2 > 1e-5):
+			if (d2 > 1e-7):
 				return self.metric_tensor_component((i,j), center = center, deltas = deltas / 10., g = g, w1 = w1)
 			if (d2 < 1e-10):
 				return self.metric_tensor_component((i,j), center = center, deltas = deltas * 2., g = g, w1 = w1)
