@@ -200,8 +200,8 @@ if args.verbose:
 		print "\t", row
 
 mismatch = 1.0 - args.min_match
-# FIXME I made this up. What is the correct volumetric function?
-bank.split(tree.packing_density(len(coord_limits)), mismatch = mismatch, verbose = args.verbose)
+# NOTE: As an optimist, I assume we get optimal packing
+bank.split(1.00 * tree.packing_density(len(coord_limits)), mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
