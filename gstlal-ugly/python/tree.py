@@ -199,7 +199,7 @@ class Node(object):
 			vratio = self.cube.volume() / (self.parent.cube.volume() / 2.0)
 		if self.parent is None or (self.cube.constraint_func(self.cube.vertices) and numtmps > split_num_templates) or self.cube.mass_volume() > 1:
 			bifurcation += 1
-			if self.parent and (0.25 < vratio < 4.0):
+			if self.parent and (0.5 < vratio < 2.0):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
