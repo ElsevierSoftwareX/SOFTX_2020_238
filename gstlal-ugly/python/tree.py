@@ -21,13 +21,19 @@ import numpy
 from numpy import random
 from scipy.special import gamma
 
-def mass_sym(boundaries):
-	# Assumes first two are m_1 m_2
-	# Makes sure the entire hypercube is outside the symmetric region
-	m1 = boundaries[0]
-	m2 = boundaries[1]
-	for corner in itertools.product(m1,m2):
-		if corner[1] < corner[0]:
+def uber_constraint(vertices, mtotal = 100, ns_spin = 0.05):
+	# Assumes coords are m_1, m2, s1, s2
+	for vertex in vertices:
+		m1,m2,s1,s2 = vertex
+		if m2 < m1 and ((m1 + m2) < mtotal) and ((m1 < 2. and abs(s1) < ns_spin) or m1 > 2.):
+			return True
+	return False
+
+def mass_sym_constraint(vertices):
+	# Assumes m_1 and m_2 are first
+	for vertex in vertices:
+		m1,m2 = vertex[0:2]
+		if m2 < m1:
 			return True
 	return False
 
@@ -52,7 +58,7 @@ def packing_density(n):
 	
 class HyperCube(object):
 
-	def __init__(self, boundaries, mismatch, symmetry_func = mass_sym, metric = None, metric_tensor = None):
+	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None):
 		"""
 		Define a hypercube with boundaries given by boundaries, e.g.,
 
@@ -79,10 +85,10 @@ class HyperCube(object):
 			self.metric_tensor = metric_tensor
 		self.size = self._size()
 		self.tiles = []
-		self.symmetry_func = symmetry_func
+		self.constraint_func = constraint_func
 		self.__mismatch = mismatch
 		self.neighbors = []
-		self.vertices = self.vertices()
+		self.vertices = list(itertools.product(*self.boundaries))
 
 	def __eq__(self, other):
 		# FIXME actually make the cube hashable and call that
@@ -120,9 +126,9 @@ class HyperCube(object):
 		leftbound[dim,1] = self.center[dim]
 		rightbound[dim,0] = self.center[dim]
 		if reuse_metric:
-			return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric, metric_tensor = self.metric_tensor), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric, metric_tensor = self.metric_tensor)
+			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor)
 		else:
-			return HyperCube(leftbound, self.__mismatch, self.symmetry_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.symmetry_func, metric = self.metric)
+			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric)
 
 	def tile(self, mismatch, stochastic = False):
 		self.tiles.append(self.center)
@@ -162,10 +168,6 @@ class HyperCube(object):
 		#return self.volume() / self.dl(mismatch)**self.N()
 		return self.volume() / self.template_volume()
 
-	def vertices(self):
-		vertices = list(itertools.product(*self.boundaries))
-		return vertices
-
 	def match(self, other):
 		return self.metric.metric_match(self.metric_tensor, self.center, other.center)
 
@@ -190,7 +192,7 @@ class Node(object):
 		splitdim = numpy.argmax(size)
 		# Figure out how many templates go inside
 		numtmps = self.cube.num_templates(mismatch)
-		if self.parent is None or (self.cube.symmetry_func(self.cube.boundaries) and numtmps > split_num_templates): #or (self.cube.symmetry_func(self.cube.boundaries) and self.cube.mass_volume() > 1):
+		if self.parent is None or (self.cube.constraint_func(self.cube.vertices) and numtmps > split_num_templates):
 			bifurcation += 1
 			if numtmps < 4**len(self.cube.deltas):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
@@ -218,6 +220,6 @@ class Node(object):
 		if self.left:
 			self.left.leafnodes(out)
 
-		if not self.right and not self.left and self.cube.symmetry_func(self.cube.boundaries):
+		if not self.right and not self.left and self.cube.constraint_func(self.cube.vertices):
 			out.add(self.cube)
 		return out
