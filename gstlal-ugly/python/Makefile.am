@@ -14,6 +14,7 @@ pkgpython_PYTHON = \
 	metric.py \
 	multichannel_datasource.py \
 	idq_multirate_datasource.py \
+	sngltriggertable.py \
 	tree.py
 
 pkgpyexec_LTLIBRARIES = _sngltriggertable.la
