@@ -1,4 +1,22 @@
 #!/usr/bin/python
+#
+# Copyright (C) 2014 Miguel Fernandez, Chad Hanna
+# Copyright (C) 2016,2017 Kipp Cannon, Miguel Fernandez, Chad Hanna, Stephen Privitera, Jonathan Wang
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
 import itertools
 import numpy
 from glue.ligolw import ligolw
@@ -73,10 +91,6 @@ def parse_command_line():
 	# meta-params
 	parser.add_argument("--min-match", action="store", type=float,\
 					default=0.95, help="Minimum match to generate bank.")
-	parser.add_argument("--stochastic", action="store_true", \
-					default=False, help="Use stochastic placement for tiling instead of a regular lattice.")
-	parser.add_argument("--disable-neighbors", action="store_true", \
-					default=False, help="Compute matches between all tempaltes for new stochastic proposals.")
 	parser.add_argument("--rng-seed", action="store", type=float,\
 					default=314, help="Set seed used for random number generator. Relevant only when using stocahstic placement.")
 	parser.add_argument("--flow", action="store", type=float,\
@@ -149,7 +163,6 @@ else:
 g_ij = metric_module.Metric(
 	args.psd_file,
 	coord_func = coord_func,
-	#coord_func = coord__func,
 	duration = 4, # FIXME!!!!!
 	flow = args.flow,
 	fhigh = args.fhigh,
@@ -188,7 +201,7 @@ if args.verbose:
 
 mismatch = 1.0 - args.min_match
 # FIXME I made this up. What is the correct volumetric function?
-bank.split(len(coord_limits)**.5, mismatch = mismatch, verbose = args.verbose)
+bank.split(2, mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
@@ -207,11 +220,9 @@ expected = 0
 bad_metrics = 0
 for n, c in enumerate(nodes):
 
-	tiles = c.tile(mismatch = mismatch, stochastic = args.stochastic)
+	tiles = c.tile(mismatch = mismatch)
 	expected += c.num_templates(mismatch)
 	if not c.metric.metric_is_valid:
-		bad_metrics+=1
-
 	for t in tiles:
 		row = lsctables.SnglInspiralTable.RowType()
 		row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z = coord_func(t)
