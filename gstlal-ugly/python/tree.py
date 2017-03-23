@@ -154,7 +154,14 @@ class HyperCube(object):
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
 			metric_tensor = self.metric_tensor
-		return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
+		# Figure out the pseudo determinant
+		# FIXME not sure if this is adequate
+		w, v = numpy.linalg.eigh(self.metric_tensor)
+		mxw = numpy.max(w)
+		# use 4 times machine espilon to be safe
+		volume_element = numpy.product(w[w > numpy.finfo(numpy.float32).eps * 4 * mxw])**.5
+		#return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
+		return numpy.product(self.deltas) * volume_element
 
 	def mass_volume(self):
 		# FIXME this assumes m_1 m_2 are the first coordinates, not necessarily true
@@ -184,7 +191,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, min_mass_volume = float("inf")):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, min_mass_volume = float("inf"), vtol = 1.5):
 		size = self.cube.size
 		# FIXME this assumes m1/m2 are the first coordinates
 		# Always split on the largest size unless the mass volume is less than 4 then prefer mass splitting
@@ -200,9 +207,9 @@ class Node(object):
 		# NOTE we in an ad hoc way demand one template per unit mass squared
 		if self.parent is not None:
 			vratio = self.cube.volume() / self.sibling.cube.volume()
-		if self.parent is None or (self.cube.constraint_func(self.cube.vertices) and numtmps > split_num_templates or self.cube.mass_volume() > min_mass_volume or not (0.6 < vratio < 1.8)):
+		if self.parent is None or (self.cube.constraint_func(self.cube.vertices) and (numtmps > split_num_templates or self.cube.mass_volume() > min_mass_volume or not (1./vtol < vratio < vtol))):
 			bifurcation += 1
-			if self.parent and (self.cube.mass_volume() < min_mass_volume) and (0.6 < vratio < 1.8):
+			if self.parent and (self.cube.mass_volume() < min_mass_volume) and (1./vtol < vratio < vtol):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
