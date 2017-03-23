@@ -16,6 +16,7 @@
 #include <string.h>
 #include "LIGOLwHeader.h"
 
+// FIXME: do not have the handle for the mismatch of the search name with the xml name
 //#define __DEBUG__ 1
 //#define __DEBUG_TABLE__ 1
 // In Array Node, No Dim sub node should appear after Stream sub node
@@ -365,7 +366,7 @@ void freeTable(XmlTable *table)
  * Dump information about the current node
  */
 void
-processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len) {
+processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len, int *node_status) {
     const xmlChar *name, *value;
 
     name = xmlTextReaderConstName(reader);
@@ -392,6 +393,7 @@ processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len) {
         if (ret == 0)
         {
             xns[i].processPtr(reader, xns[i].data);
+	    node_status[i] = 1;
             return;
         }
     }
@@ -407,12 +409,13 @@ void
 parseFile(const char *filename, XmlNodeStruct *xns, int len) {
     xmlTextReaderPtr reader;
     int ret;
+    int *node_status = (int *)calloc(len, sizeof(int));
 
     reader = xmlReaderForFile(filename, NULL, XML_PARSE_HUGE);
     if (reader != NULL) {
         ret = xmlTextReaderRead(reader);
         while (ret == 1) {
-            processNode(reader, xns, len);
+            processNode(reader, xns, len, node_status);
             ret = xmlTextReaderRead(reader);
         }
         xmlFreeTextReader(reader);
@@ -422,6 +425,13 @@ parseFile(const char *filename, XmlNodeStruct *xns, int len) {
     } else {
         fprintf(stderr, "Unable to open %s\n", filename);
     }
+
+    int istatus;
+    for (istatus=0; istatus < len; istatus++) {
+	    if (node_status[istatus] == 0)
+		    fprintf(stderr, "Unable to find %s\n", xns[istatus].tag);
+    }
+    free(node_status);
 }
 
 

@@ -159,7 +159,8 @@ void readTable(xmlTextReaderPtr reader, void *data);
 void freeTable(XmlTable *table);
 
 void
-processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len);
+processNode(xmlTextReaderPtr reader, XmlNodeStruct *xns, int len, int *node_status
+		);
 
 void
 parseFile(const char *filename, XmlNodeStruct *xns, int len);
