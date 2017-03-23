@@ -456,13 +456,12 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 	else:
 		raise ValueError("invalid data_source: %s" % data_source_info.data_source)
 
-	head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
-	
-	# progress report	
-	if verbose:
-		for channel in head:
+	for channel in head:
+		head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
+		# progress report
+		if verbose:
 			head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_%s_progress_src" % (instrument, channel))
-
+		 
 	return head
 
 # Unit tests
