@@ -184,22 +184,25 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, min_mass_volume = float("inf")):
 		size = self.cube.size
 		# FIXME this assumes m1/m2 are the first coordinates
-		# Always split on the largest size unless the mass volume is less than 1 then prefer mass splitting
-		if self.cube.mass_volume() <= 1:
+		# Always split on the largest size unless the mass volume is less than 4 then prefer mass splitting
+		if self.cube.mass_volume() <= min_mass_volume:
 			splitdim = numpy.argmax(size)
 		else:
 			splitdim = numpy.argmax(size[0:2])
 		# Figure out how many templates go inside
 		numtmps = self.cube.num_templates(mismatch)
-		# NOTE we in an ad hoc way demand one template per solar mass squared
+		# Artificially overcover the equal mass line
+		if 0.9 < self.cube.center[0] / self.cube.center[1] < 1.1:
+			numtmps *=2
+		# NOTE we in an ad hoc way demand one template per unit mass squared
 		if self.parent is not None:
-			vratio = self.cube.volume() / (self.parent.cube.volume() / 2.0)
-		if self.parent is None or (self.cube.constraint_func(self.cube.vertices) and numtmps > split_num_templates) or self.cube.mass_volume() > 1:
+			vratio = self.cube.volume() / self.sibling.cube.volume()
+		if self.parent is None or (self.cube.constraint_func(self.cube.vertices) and numtmps > split_num_templates or self.cube.mass_volume() > min_mass_volume or not (0.6 < vratio < 1.8)):
 			bifurcation += 1
-			if self.parent and (0.5 < vratio < 2.0):
+			if self.parent and (self.cube.mass_volume() < min_mass_volume) and (0.6 < vratio < 1.8):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
@@ -213,6 +216,7 @@ class Node(object):
 		else:
 			if verbose:
 				print "Reached final depth in level %03d at %s with edge lengths %s" % (bifurcation, self.cube.center, self.cube.deltas)
+
 	# FIXME can this be made a generator?
 	def leafnodes(self, out = set()):
 		"""
