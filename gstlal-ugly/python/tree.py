@@ -39,6 +39,7 @@ def mass_sym_constraint(vertices, mass_ratio  = 20):
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
+	return 1.
 	if n==1:
 		return 1.
 	if n==2:
@@ -158,7 +159,7 @@ class HyperCube(object):
 		# FIXME not sure if this is adequate
 		w, v = numpy.linalg.eigh(self.metric_tensor)
 		mxw = numpy.max(w)
-		# use 4 times machine espilon to be safe
+		# use 4 * machine espilon to be safe
 		volume_element = numpy.product(w[w > numpy.finfo(numpy.float32).eps * 4 * mxw])**.5
 		#return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
 		return numpy.product(self.deltas) * volume_element
@@ -191,25 +192,24 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, min_mass_volume = float("inf"), vtol = 1.5):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.5):
 		size = self.cube.size
 		# FIXME this assumes m1/m2 are the first coordinates
 		# Always split on the largest size unless the mass volume is less than 4 then prefer mass splitting
-		if self.cube.mass_volume() <= min_mass_volume:
-			splitdim = numpy.argmax(size)
-		else:
-			splitdim = numpy.argmax(size[0:2])
+		splitdim = numpy.argmax(size)
 		# Figure out how many templates go inside
-		numtmps = self.cube.num_templates(mismatch)
+		if not self.parent:
+			numtmps = self.cube.num_templates(mismatch)
+		else:
+			numtmps = (self.cube.num_templates(mismatch) + self.sibling.cube.num_templates(mismatch) + self.parent.cube.num_templates(mismatch) / 2.) / 3
+			vratio = numtmps / self.cube.num_templates(mismatch)
 		# Artificially overcover the equal mass line
 		if 0.9 < self.cube.center[0] / self.cube.center[1] < 1.1:
 			numtmps *=2
 		# NOTE we in an ad hoc way demand one template per unit mass squared
-		if self.parent is not None:
-			vratio = self.cube.volume() / self.sibling.cube.volume()
-		if self.parent is None or (self.cube.constraint_func(self.cube.vertices) and (numtmps > split_num_templates or self.cube.mass_volume() > min_mass_volume or not (1./vtol < vratio < vtol))):
+		if self.parent is None or (self.cube.constraint_func(self.cube.vertices) and numtmps > split_num_templates):
 			bifurcation += 1
-			if self.parent and (self.cube.mass_volume() < min_mass_volume) and (1./vtol < vratio < vtol):
+			if self.parent and (1./vtol < vratio < vtol) and numtmps < 5**len(size):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
