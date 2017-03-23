@@ -93,6 +93,7 @@ typedef struct {
 	BackgroundRates *rates;
 	Bins2D	*pdf;
 	Bins2D	*fap;
+	int hist_trials;
 	long nevent;
 	long duration;
 } BackgroundStats;

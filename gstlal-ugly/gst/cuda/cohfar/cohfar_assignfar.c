@@ -131,10 +131,10 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start)&& (t_cur - element->t_start)/GST_SECOND >= (unsigned) element->silent_time) {
 		element->t_roll_start = t_cur;
 		/* FIXME: the order of input fnames must match the stats order */
-		GST_DEBUG_OBJECT(element, "read input stats to assign far %s, %s, %s", element->input_fnames[STATS_FNAME_1W_IDX], element->input_fnames[STATS_FNAME_1W_IDX], element->input_fnames[STATS_FNAME_1W_IDX]);
-		background_stats_from_xml(element->stats_1w, element->ncombo, element->input_fnames[STATS_FNAME_1W_IDX]);
-		background_stats_from_xml(element->stats_1d, element->ncombo, element->input_fnames[STATS_FNAME_1D_IDX]);
-		background_stats_from_xml(element->stats_2h, element->ncombo, element->input_fnames[STATS_FNAME_2H_IDX]);
+		//printf("read input stats to assign far %s, %s, %s\n", element->input_fnames[STATS_FNAME_1W_IDX], element->input_fnames[STATS_FNAME_1D_IDX], element->input_fnames[STATS_FNAME_2H_IDX]);
+		background_stats_from_xml(element->stats_1w, element->ncombo, &(element->hist_trials), element->input_fnames[STATS_FNAME_1W_IDX]);
+		background_stats_from_xml(element->stats_1d, element->ncombo, &(element->hist_trials), element->input_fnames[STATS_FNAME_1D_IDX]);
+		background_stats_from_xml(element->stats_2h, element->ncombo, &(element->hist_trials), element->input_fnames[STATS_FNAME_2H_IDX]);
 		element->pass_silent_time = TRUE;
 	}
 
@@ -142,31 +142,37 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 	if (element->pass_silent_time && element->refresh_interval > 0 && (t_cur - element->t_roll_start)/GST_SECOND > (unsigned) element->refresh_interval) {
 		element->t_roll_start = t_cur;
 		/* FIXME: the order of input fnames must match the stats order */
-		GST_DEBUG_OBJECT(element, "read refreshed stats to assign far.");
-		background_stats_from_xml(element->stats_1w, element->ncombo, element->input_fnames[STATS_FNAME_1W_IDX]);
-		background_stats_from_xml(element->stats_1d, element->ncombo, element->input_fnames[STATS_FNAME_1D_IDX]);
-		background_stats_from_xml(element->stats_2h, element->ncombo, element->input_fnames[STATS_FNAME_2H_IDX]);
+		//printf("read refreshed stats to assign far.");
+		background_stats_from_xml(element->stats_1w, element->ncombo, &(element->hist_trials), element->input_fnames[STATS_FNAME_1W_IDX]);
+		background_stats_from_xml(element->stats_1d, element->ncombo, &(element->hist_trials), element->input_fnames[STATS_FNAME_1D_IDX]);
+		background_stats_from_xml(element->stats_2h, element->ncombo, &(element->hist_trials), element->input_fnames[STATS_FNAME_2H_IDX]);
 	}
 
-
+	BackgroundStats *cur_stats;
+	int hist_trials = element->hist_trials;
 	if (element->pass_silent_time) {
 		int icombo;
-		BackgroundStats **stats_1w = element->stats_1w;
-		BackgroundStats **stats_1d = element->stats_1d;
-		BackgroundStats **stats_2h = element->stats_2h;
 		PostcohInspiralTable *table = (PostcohInspiralTable *) GST_BUFFER_DATA(buf);
 		PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
 			if (icombo > -1)
 			{
-				table->far_1w = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1w[icombo]->fap)*stats_1w[icombo]->nevent/ stats_1w[icombo]->duration;
-				table->far_1d = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_1d[icombo]->fap)*stats_1d[icombo]->nevent/ stats_1d[icombo]->duration;
-				table->far_2h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, stats_2h[icombo]->fap)*stats_2h[icombo]->nevent/ stats_2h[icombo]->duration;
+				cur_stats = element->stats_1w[icombo];
+				table->far_1w = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_1d[icombo];
+				table->far_1d = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_2h[icombo];
+				table->far_2h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+
 				/* FIXME: currently hardcoded for single detectors FAR */
-				table->far_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, stats_1w[1]->fap)*stats_1w[1]->nevent/ stats_1w[1]->duration;
-				table->far_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, stats_1w[0]->fap)*stats_1w[0]->nevent/ stats_1w[0]->duration;
-				table->far_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, stats_1w[2]->fap)*stats_1w[2]->nevent/ stats_1w[2]->duration;
+				cur_stats = element->stats_1w[1];
+				table->far_h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_1w[0];
+				table->far_h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_1w[2];
+				table->far_h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+	
 			}
 		}
 	}
@@ -218,8 +224,8 @@ static void cohfar_assignfar_set_property(GObject *object, enum property prop_id
 	switch(prop_id) {
 		case PROP_IFOS:
 			element->ifos = g_value_dup_string(value);
-			int nifo = strlen(element->ifos) / IFO_LEN;
-			element->ncombo = get_ncombo(nifo);
+			element->nifo = strlen(element->ifos) / IFO_LEN;
+			element->ncombo = get_ncombo(element->nifo);
 			element->stats_1w = background_stats_create(element->ifos);
 			element->stats_1d = background_stats_create(element->ifos);
 			element->stats_2h = background_stats_create(element->ifos);

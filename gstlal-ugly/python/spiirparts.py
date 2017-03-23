@@ -108,10 +108,11 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 	return elem
 
 
-def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", snapshot_interval = 0, history_fname = None, output_fname_prefix = None):
+def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snapshot_interval = 0, history_fname = None, output_fname_prefix = None):
 	properties = {
 		"ifos": ifos,
-		"snapshot_interval": snapshot_interval
+		"snapshot_interval": snapshot_interval,
+		"hist_trials": hist_trials
 	}
 	if history_fname is not None:
 		properties["history_fname"] = history_fname
@@ -649,7 +650,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
-		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, output_fname_prefix = cohfar_accumbackground_output_prefix[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
+		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_fname_prefix = cohfar_accumbackground_output_prefix[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
 		postcoh = mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)
 		#head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(postcoh)

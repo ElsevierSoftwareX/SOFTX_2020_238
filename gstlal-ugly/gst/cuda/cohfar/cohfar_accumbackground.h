@@ -59,10 +59,12 @@ typedef struct {
 	GstPad *sinkpad, *srcpad;
 
 	char *ifos;
+	int nifo;
 	int ncombo; // ifo combination
 	BackgroundStats **stats;
 
 	int snapshot_interval;
+	int hist_trials;
 	gchar *history_fname;
 	gchar *output_fname_prefix;
 

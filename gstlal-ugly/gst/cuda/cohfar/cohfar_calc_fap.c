@@ -123,13 +123,13 @@ void cohfar_get_data_from_file(gchar **in_fnames, gsl_vector **pdata_dim1, gsl_v
 	}
 }	
 
-void cohfar_get_stats_from_file(gchar **in_fnames, BackgroundStats **stats_in, BackgroundStats **stats_out, int ncombo)
+void cohfar_get_stats_from_file(gchar **in_fnames, BackgroundStats **stats_in, BackgroundStats **stats_out, int *hist_trials, int ncombo)
 {
 	gchar **ifname;
 	int icombo;
 	for (ifname = in_fnames; *ifname; ifname++) {
 		printf("%s\n", *ifname);
-		background_stats_from_xml(stats_in, ncombo, *ifname);
+		background_stats_from_xml(stats_in, ncombo, hist_trials, *ifname);
 		printf("%s done read\n", *ifname);
 		for (icombo=0; icombo<ncombo; icombo++)
 			background_stats_rates_add(stats_out[icombo]->rates, stats_in[icombo]->rates, stats_out[icombo]);
@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
 
 	parse_opts(argc, argv, pin, pfmt, pout, pifos, pduration);
 	int nifo = strlen(*pifos) / IFO_LEN;
-	int icombo, ncombo = get_ncombo(nifo);
+	int icombo, ncombo = get_ncombo(nifo), hist_trials;
 	
 	BackgroundStats **stats_in = background_stats_create(*pifos);
 	BackgroundStats **stats_out = background_stats_create(*pifos);
@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
 		background_stats_pdf_to_fap(stats_out[ncombo-1]->pdf, stats_out[ncombo-1]->fap);
 		// background_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
 	} else if(g_strcmp0(*pfmt, "stats") == 0) {
-		cohfar_get_stats_from_file(in_fnames, stats_in, stats_out, ncombo);
+		cohfar_get_stats_from_file(in_fnames, stats_in, stats_out, &hist_trials, ncombo);
 		for (icombo=0; icombo<ncombo; icombo++) {
 			background_stats_rates_to_pdf(stats_out[icombo]->rates, stats_out[icombo]->pdf);
 			background_stats_pdf_to_fap(stats_out[icombo]->pdf, stats_out[icombo]->fap);
@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
 			//printf("stats_out duration %d\n", stats_out[icombo]->duration );
 		}
 	}
-	background_stats_to_xml(stats_out, ncombo, *pout);
+	background_stats_to_xml(stats_out, ncombo, hist_trials, *pout);
 	//FIXME: free stats
 	g_strfreev(in_fnames);
 

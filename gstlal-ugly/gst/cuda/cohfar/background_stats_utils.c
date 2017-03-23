@@ -128,6 +128,7 @@ background_stats_reset(BackgroundStats **stats, int ncombo)
 
 }
 
+
 BackgroundStats **
 background_stats_create(char *ifos)
 {
@@ -366,6 +367,24 @@ background_stats_pdf_to_fap(Bins2D *pdf, Bins2D *fap)
 			gsl_matrix_set(fapdata, ibin_x, ibin_y, cur_fap*pdf->step_x*pdf->step_y);
 		}
 	}
+	/* fap could be zero, set fap=0 to fap=next smallest value */
+	double second_smallest_fap = 1.0;
+	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
+		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) {
+			cur_fap = gsl_matrix_get(fapdata, ibin_x, ibin_y);
+			if (cur_fap > 0.0 && second_smallest_fap > cur_fap) 
+				second_smallest_fap = cur_fap;
+		}
+	}
+
+	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
+		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) {
+			cur_fap = gsl_matrix_get(fapdata, ibin_x, ibin_y);
+			if (cur_fap == 0.0) 
+				gsl_matrix_set(fapdata, ibin_x, ibin_y, second_smallest_fap);
+		}
+	}
+	
 	gsl_matrix_free(cdfdata);
 
 	//printf("fap cmax %f\n", gsl_matricmax_x(fapdata));
@@ -385,9 +404,9 @@ background_stats_bins2D_get_val(double snr, double chisq, Bins2D *bins)
  * background xml utils
  */
 gboolean
-background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char *filename)
+background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_trials, const char *filename)
 {
-  int nnode = ncombo * 7, icombo; // 3 for rates, 1 for pdf, 1 for fap, 1 for nevent
+  int nnode = ncombo * 7 + 1, icombo; // 3 for rates, 1 for pdf, 1 for fap, 1 for nevent
   /* read rates */
 
   XmlNodeStruct * xns = (XmlNodeStruct *) malloc(sizeof(XmlNodeStruct) * nnode);
@@ -420,16 +439,23 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     xns[icombo+4*ncombo].processPtr = readArray;
     xns[icombo+4*ncombo].data = &(array_fap[icombo]);
 
-    sprintf((char *)xns[icombo+5*ncombo].tag, "%s_nevent:array", IFO_COMBO_MAP[icombo]);
+    sprintf((char *)xns[icombo+5*ncombo].tag, "%s_nevent:param", IFO_COMBO_MAP[icombo]);
     xns[icombo+5*ncombo].processPtr = readParam;
     xns[icombo+5*ncombo].data = &(param_nevent[icombo]);
 
-    sprintf((char *)xns[icombo+6*ncombo].tag, "%s_duration:array", IFO_COMBO_MAP[icombo]);
+    sprintf((char *)xns[icombo+6*ncombo].tag, "%s_duration:param", IFO_COMBO_MAP[icombo]);
     xns[icombo+6*ncombo].processPtr = readParam;
     xns[icombo+6*ncombo].data = &(param_duration[icombo]);
- 
   }
 
+  XmlParam *param_hist_trials = (XmlParam *) malloc(sizeof(XmlParam) * 1);
+
+  sprintf((char *)xns[7*ncombo].tag, "hist_trials:param");
+  xns[7*ncombo].processPtr = readParam;
+  xns[7*ncombo].data = param_hist_trials;
+ 
+
+ 
   parseFile(filename, xns, nnode);
 
   // FIXME: need sanity check that number of rows and columns are the same
@@ -454,10 +480,15 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
     memcpy(((gsl_matrix_long *)rates->hist->data)->data, (long *)array_hist[icombo].data, xy_size);
     memcpy(((gsl_matrix *)cur_stats->pdf->data)->data, array_pdf[icombo].data, xy_size);
     memcpy(((gsl_matrix *)cur_stats->fap->data)->data, array_fap[icombo].data, xy_size);
-    cur_stats->nevent = param_nevent[icombo].data;
-    cur_stats->duration = param_duration[icombo].data;
+    cur_stats->nevent = *((long *)param_nevent[icombo].data);
+    cur_stats->duration = *((long *)param_duration[icombo].data);
+    //printf("filename %s, icombo %d, fap addr %p\n", filename, icombo, ((gsl_matrix *)cur_stats->fap->data)->data);
+    //printf("icombo %d, nevent addr %p, %p\n", icombo, (param_nevent[icombo].data), (&(param_nevent[icombo]))->data);
   }
-
+  *hist_trials = *((int *)param_hist_trials->data);
+  free(param_hist_trials);
+ 
+  //printf( "load stats file\n");
   free(array_lgsnr_bins);
   free(array_lgchisq_bins);
   free(array_hist);
@@ -466,7 +497,6 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
   free(param_nevent);
   free(param_duration);
 
-  printf( "after load stats file\n");
   free(xns);
   xmlCleanupParser();
   xmlMemoryDump();
@@ -475,7 +505,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char 
 
 
 gboolean
-background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *filename)
+background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_trials, const char *filename)
 {
   gchar *tmp_filename = g_strdup_printf("%s_next", filename);
   int icombo = 0;
@@ -595,6 +625,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   XmlParam param_duration;
   param_duration.data = (long *) malloc (sizeof(long));
 
+
   GString *array_name = g_string_new(NULL);
   for (icombo=0; icombo<ncombo; icombo++) {
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_SUFFIX);
@@ -614,6 +645,13 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
     ((long *)param_duration.data)[0] = stats[icombo]->duration;
     ligoxml_write_Param(writer, &param_duration, BAD_CAST "int_8s", BAD_CAST param_name->str);
   }
+
+  XmlParam param_hist_trials;
+  param_hist_trials.data = (int *) malloc (sizeof(int));
+  g_string_printf(param_name, "hist_trials:param");
+  *((int *)param_hist_trials.data) = hist_trials;
+  ligoxml_write_Param(writer, &param_hist_trials, BAD_CAST "int_4s", BAD_CAST param_name->str);
+
   g_string_free(param_name, TRUE);
   g_string_free(array_name, TRUE);
 
@@ -631,6 +669,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *f
   free(param_range.data);
   free(param_nevent.data);
   free(param_duration.data);
+  free(param_hist_trials.data);
   for (icombo=0; icombo<ncombo; icombo++) {
     freeArray(array_lgsnr_bins + icombo);
     freeArray(array_lgchisq_bins + icombo);

@@ -86,6 +86,7 @@ GST_BOILERPLATE_FULL(
 enum property {
 	PROP_0,
 	PROP_IFOS,
+	PROP_HIST_TRIALS,
 	PROP_SNAPSHOT_INTERVAL,
 	PROP_HISTORY_FNAME,
 	PROP_OUTPUT_FNAME_PREFIX
@@ -196,7 +197,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		gint gps_time = (int) (element->t_roll_start / GST_SECOND);
 		GString *tmp_fname = g_string_new(element->output_fname_prefix);
 		g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
-		background_stats_to_xml(stats, element->ncombo, tmp_fname->str);
+		background_stats_to_xml(stats, element->ncombo, element->hist_trials, tmp_fname->str);
 		g_string_free(tmp_fname, TRUE);
 		background_stats_reset(stats, element->ncombo);
 		element->t_roll_start = t_cur;
@@ -251,7 +252,7 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	GString *tmp_fname = g_string_new(element->output_fname_prefix);
 	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
-	background_stats_to_xml(element->stats, element->ncombo, tmp_fname->str);
+	background_stats_to_xml(element->stats, element->ncombo, element->hist_trials, tmp_fname->str);
 	g_string_free(tmp_fname, TRUE);
     }
       break;
@@ -277,8 +278,8 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 	switch(prop_id) {
 		case PROP_IFOS:
 			element->ifos = g_value_dup_string(value);
-			int nifo = strlen(element->ifos) / IFO_LEN;
-			element->ncombo = get_ncombo(nifo);
+			element->nifo = strlen(element->ifos) / IFO_LEN;
+			element->ncombo = get_ncombo(element->nifo);
 			element->stats = background_stats_create(element->ifos);
 			break;
 
@@ -287,11 +288,15 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			/* must make sure ifos have been loaded */
 			g_assert(element->ifos != NULL);
 			element->history_fname = g_value_dup_string(value);
-			background_stats_from_xml(element->stats, element->ncombo, element->history_fname);
+			background_stats_from_xml(element->stats, element->ncombo, &(element->hist_trials), element->history_fname);
 			break;
 
 		case PROP_OUTPUT_FNAME_PREFIX:
 			element->output_fname_prefix = g_value_dup_string(value);
+			break;
+
+		case PROP_HIST_TRIALS:
+			element->hist_trials = g_value_get_int(value);
 			break;
 
 
@@ -332,6 +337,10 @@ static void cohfar_accumbackground_get_property(GObject *object, enum property p
 			g_value_set_string(value, element->output_fname_prefix);
 			break;
 
+		case PROP_HIST_TRIALS:
+			g_value_set_int(value, element->hist_trials);
+			break;
+	
 		case PROP_SNAPSHOT_INTERVAL:
 			g_value_set_int(value, element->snapshot_interval);
 			break;
@@ -452,6 +461,19 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 			"Output filename prefix",
 			"Output background statistics filename",
 			DEFAULT_STATS_FNAME,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+
+	g_object_class_install_property(
+		gobject_class,
+		PROP_HIST_TRIALS,
+		g_param_spec_int(
+			"hist-trials",
+			"number of shifted slides",
+			"Number of shifted slides.",
+			0, G_MAXINT, 1,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);

@@ -67,10 +67,10 @@ double
 background_stats_bins2D_get_val(double snr, double chisq, Bins2D *bins);
 
 gboolean
-background_stats_from_xml(BackgroundStats **stats, const int ncombo, const char *filename);
+background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_trials, const char *filename);
 
 gboolean
-background_stats_to_xml(BackgroundStats **stats, const int ncombo, const char *filename);
+background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_trials, const char *filename);
 
 #endif /* __BACKGROUND_STATS_UTILS_H__ */
 

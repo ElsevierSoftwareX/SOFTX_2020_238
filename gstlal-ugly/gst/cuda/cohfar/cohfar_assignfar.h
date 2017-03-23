@@ -57,7 +57,9 @@ typedef struct {
 	GstBaseTransform element;
 
 	char *ifos;
+	int nifo;
 	int ncombo; // ifo combination
+	int hist_trials;
 	BackgroundStats **stats_2h;
 	BackgroundStats **stats_1d;
 	BackgroundStats **stats_1w;
