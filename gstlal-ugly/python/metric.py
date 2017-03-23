@@ -201,11 +201,12 @@ class Metric(object):
 		# Compute the diagonal
 		if j == i:
 			# Check the match
-			d2 = 1 - self.match(w1, self.waveform(center+x))
-			# The match must lie in the range 0.9995 - 0.999999 to be valid for a metric computation, which means d is between 0.000001 and 0.0005
-			if (d2 > 1e-7):
+			d2 = 1. - self.match(w1, self.waveform(center+x))
+			# The match must like close but not beyond machine
+			# epsilon to be a good approximation
+			if (d2 > numpy.finfo(numpy.float32).eps * 4):
 				return self.metric_tensor_component((i,j), center = center, deltas = deltas / 10., g = g, w1 = w1)
-			if (d2 < 1e-10):
+			if (d2 < numpy.finfo(numpy.float32).eps):
 				return self.metric_tensor_component((i,j), center = center, deltas = deltas * 2., g = g, w1 = w1)
 
 			g[i,i] = d2 / deltas[i] / deltas[i]
@@ -214,7 +215,7 @@ class Metric(object):
 		else:
 			# Check the match
 			d2 = 1 - self.match(w1, self.waveform(center+x))
-			g[i,j] = g[j,i] = (d2 - g[i,i] * deltas[i]**2 - g[j,j] * deltas[j]**2) / (2 *  deltas[i] * deltas[j])
+			g[i,j] = g[j,i] = d2 / (2 * deltas[i] * deltas[j]) - g[i,i] * deltas[i] / 2. / deltas[j] - g[j,j] * deltas[j] / 2. / deltas[i]
 			return g[i,j], None
 
 
