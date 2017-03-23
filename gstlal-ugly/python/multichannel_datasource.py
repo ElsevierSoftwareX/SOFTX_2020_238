@@ -414,21 +414,20 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 	elif data_source_info.data_source == "frames":
 		src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
 		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channel_list_from_channel_dict(instrument, data_source_info.channel_dict))
-
 		# allow frame reading and decoding to occur in a different
 		# thread
 		head = dict.fromkeys(data_source_info.channel_dict[instrument].keys(), None)
-		for channel in head:		
+		for channel in head:	
 			head[channel] = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * Gst.SECOND)
 			pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel), head[channel].get_static_pad("sink"))
 			if data_source_info.frame_segments[instrument] is not None:
 				# FIXME:  make segmentsrc generate segment samples at the channel sample rate?
 				# FIXME:  make gate leaky when I'm certain that will work.
 				head[channel] = pipeparts.mkgate(pipeline, head[channel], threshold = 1, control = pipeparts.mksegmentsrc(pipeline, data_source_info.frame_segments[instrument]), name = "%s_%s_frame_segments_gate" % (instrument, channel))
-				pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_static_pad("src"), data_source_info.frame_segments[instrument])
+				pipeparts.framecpp_channeldemux_check_segments.set_probe(head[channel].get_static_pad("src"), data_source_info.frame_segments[instrument])
 		
-				# fill in holes, skip duplicate data
-				head[channel] = pipeparts.mkaudiorate(pipeline, head[channel], skip_to_first = True, silent = False)
+			# fill in holes, skip duplicate data
+			head[channel] = pipeparts.mkaudiorate(pipeline, head[channel], skip_to_first = True, silent = False)
 
 	elif data_source_info.data_source in ("framexmit", "lvshm"):
 		if data_source_info.data_source == "lvshm":
@@ -457,11 +456,12 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 	else:
 		raise ValueError("invalid data_source: %s" % data_source_info.data_source)
 
+	head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
 	
-	for channel in head:
-		# progress report
-		if verbose:
-			head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "progress_src_%s_%s" % (instrument, channel))
+	# progress report	
+	if verbose:
+		for channel in head:
+			head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_%s_progress_src" % (instrument, channel))
 
 	return head
 
