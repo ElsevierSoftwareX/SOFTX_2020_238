@@ -204,9 +204,9 @@ class Metric(object):
 			d2 = 1. - self.match(w1, self.waveform(center+x))
 			# The match must like close but not beyond machine
 			# epsilon to be a good approximation
-			if (d2 > numpy.finfo(numpy.float32).eps * 4):
+			if (d2 > numpy.finfo(numpy.float32).eps * 32):
 				return self.metric_tensor_component((i,j), center = center, deltas = deltas / 10., g = g, w1 = w1)
-			if (d2 < numpy.finfo(numpy.float32).eps):
+			if (d2 < numpy.finfo(numpy.float32).eps * 8):
 				return self.metric_tensor_component((i,j), center = center, deltas = deltas * 2., g = g, w1 = w1)
 
 			g[i,i] = d2 / deltas[i] / deltas[i]
