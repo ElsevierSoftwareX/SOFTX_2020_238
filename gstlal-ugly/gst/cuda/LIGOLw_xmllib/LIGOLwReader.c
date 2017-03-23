@@ -16,7 +16,6 @@
 #include <string.h>
 #include "LIGOLwHeader.h"
 
-// FIXME: do not have the handle for the mismatch of the search name with the xml name
 //#define __DEBUG__ 1
 //#define __DEBUG_TABLE__ 1
 // In Array Node, No Dim sub node should appear after Stream sub node
