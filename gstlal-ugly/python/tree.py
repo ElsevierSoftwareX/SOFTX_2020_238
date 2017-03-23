@@ -29,11 +29,11 @@ def uber_constraint(vertices, mtotal = 100, ns_spin = 0.05):
 			return True
 	return False
 
-def mass_sym_constraint(vertices):
+def mass_sym_constraint(vertices, mass_ratio  = 20):
 	# Assumes m_1 and m_2 are first
 	for vertex in vertices:
 		m1,m2 = vertex[0:2]
-		if m2 < m1:
+		if m2 < m1 and m1/m2 < mass_ratio:
 			return True
 	return False
 
