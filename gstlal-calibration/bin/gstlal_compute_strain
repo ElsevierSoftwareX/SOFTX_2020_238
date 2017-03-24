@@ -971,26 +971,26 @@ if options.cancel_callines:
 	if options.no_kappac and options.no_fcc and options.no_kappatst and options.no_kappapu and options.no_srcQ and options.no_fs:
 		pcaltee = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
 	pcaly_line1 = calibration_parts.mkresample(pipeline, pcal_at_darm_act_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
-	pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "lal_demodulate", line_frequency = -1.0 * darm_act_line_freq, prefactor_real = -2.0/3994.5)
+	pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "lal_demodulate", line_frequency = -1.0 * darm_act_line_freq, prefactor_real = -2.0)
 	cancel_pcaly_line1, trash = calibration_parts.split_into_real(pipeline, pcaly_line1)
 	pipeparts.mkfakesink(pipeline, trash)
 
 	pcaly_line2 = calibration_parts.mkresample(pipeline, pcal_at_opt_gain_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
-	pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "lal_demodulate", line_frequency = -1.0 * opt_gain_fcc_line_freq, prefactor_real = -2.0/3994.5)
+	pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "lal_demodulate", line_frequency = -1.0 * opt_gain_fcc_line_freq, prefactor_real = -2.0)
 	cancel_pcaly_line2, trash = calibration_parts.split_into_real(pipeline, pcaly_line2)
 	pipeparts.mkfakesink(pipeline, trash)
 
 	if cancel_esd_act_line:
 		esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
 		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
-		esd_act_line_cancel = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = -2.0/3994.5)
+		esd_act_line_cancel = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = -2.0)
 		esd_act_line_cancel, trash = calibration_parts.split_into_real(pipeline, esd_act_line_cancel)
 		pipeparts.mkfakesink(pipeline, trash)
 
 	if cancel_roaming_pcal_line:
 		pcaly_line3 = calibration_parts.demodulate(pipeline, pcaltee, roaming_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_roaming_line_freq_real, pcal_corr_at_roaming_line_freq_imag)
 		pcaly_line3 = calibration_parts.mkresample(pipeline, pcaly_line3, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
-		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = -2.0/3994.5)
+		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = -2.0)
 		cancel_pcaly_line3, trash = calibration_parts.split_into_real(pipeline, pcaly_line3)
 		pipeparts.mkfakesink(pipeline, trash)
 
@@ -1133,14 +1133,14 @@ filter_settle_time = max(res_filter_settle_time, tst_filter_settle_time, pumuim_
 
 # Add control and residual chains and divide by L to make h(t)
 strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, res, res_queue_length), calibration_parts.mkqueue(pipeline, ctrl, ctrl_queue_length)))
+# Remove the calibration lines, if we want
+if options.cancel_callines:
+	strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, strain, queue_length2), calibration_parts.mkqueue(pipeline, cancel_callines, max_queue_length)))
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
 except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
-
-if options.cancel_callines:
-	strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, strain, queue_length2), calibration_parts.mkqueue(pipeline, cancel_callines, max_queue_length)))
 
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
 	
@@ -1246,6 +1246,9 @@ if not options.no_dq_vector:
 		noinvalidinput = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, resok, queue_length1), calibration_parts.mkqueue(pipeline, ctrlok, queue_length1)))
 		noinvalidinput = pipeparts.mkbitvectorgen(pipeline, noinvalidinput, threshold=2, bit_vector=33554432)
 	noinvalidinput = pipeparts.mkcapsfilter(pipeline, noinvalidinput, calibstate_caps)
+	noinvalidinput = pipeparts.mktee(pipeline, noinvalidinput)
+	# inputs that are replaced with zeros affect h(t) for a short time before and after the zeros, so we also must account for this corrupted time.
+	noinvalidinput = pipeparts.mkgate(pipeline, calibration_parts.mkqueue(pipeline, noinvalidinput, queue_length1), control = calibration_parts.mkqueue(pipeline, noinvalidinput, queue_length2), threshold = 33554432, attack_length = -max(int(((len(reschainfilt) - reschaindelay) * calibstatesr + hoftsr - 1) / hoftsr), int(((len(tstfilt) - tstdelay) * calibstatesr + tstchainsr - 1) / tstchainsr), int(((len(pumuimfilt) - pumuimdelay) * calibstatesr + pumuimchainsr - 1) / pumuimchainsr)), hold_length = -max(int((reschaindelay * calibstatesr + hoftsr - 1) / hoftsr), int((tstdelay * calibstatesr + tstchainsr - 1) / tstchainsr), int((pumuimdelay * calibstatesr + pumuimchainsr - 1) / pumuimchainsr)))
 
 	#
 	# KAPPA-SMOOTHING-SETTLED BIT BRANCH
