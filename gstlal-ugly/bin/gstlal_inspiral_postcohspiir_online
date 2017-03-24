@@ -165,7 +165,7 @@ def parse_command_line():
   parser.add_option("--cohfar-accumbackground-history-fname", metavar = "filename", help = "Set the history filename to read stats from (optional)")
   parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (required)")
   parser.add_option("--cohfar-assignfar-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
-  parser.add_option("--cohfar-assignfar-silent-time", type = "int", metavar = "seconds", default = 0, help = "Do not assign FAP during this silent time. (optional)")
+  parser.add_option("--cohfar-assignfar-silent-time", type = "int", metavar = "seconds", default = 2147483647, help = "Do not assign FAP during this silent time. (optional)")
   parser.add_option("--finalsink-background-collection-time", metavar = "seconds,seconds,seconds", default = "604800,86400,7200", help = "Update the marginalized stats files using the information of the collection time. (optional)")
   parser.add_option("--cohfar-assignfar-input-fname", metavar = "filename", default = None, help = "Set the filename to read the FAP (optional)")
   parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (optional).")

@@ -135,16 +135,20 @@ class OnlinePerformer(object):
 
 
 class BackgroundStatsUpdater(object):
-	def __init__(self, path, input_prefix_list, output_list_string, collection_time_string, ifos):
+	def __init__(self, path, input_prefix_list, ifos, output_list_string = None, collection_time_string = None):
 		self.path = path
 		self.input_prefix_list = input_prefix_list
-		self.output = output_list_string.split(",")
-		self.collection_time = []
-		times = collection_time_string.split(",")
-		for itime in times:
-			self.collection_time.append(int(itime))
 		self.ifos = ifos
 		self.procs = []
+		if output_list_string is not None:
+			self.output = output_list_string.split(",")
+
+		self.collection_time = []
+		if collection_time_string is not None:
+			times = collection_time_string.split(",")
+			for itime in times:
+				self.collection_time.append(int(itime))
+
 
 	def __wait_last_process_finish(self):
 		if self.procs is not None:

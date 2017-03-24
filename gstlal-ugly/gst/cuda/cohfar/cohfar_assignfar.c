@@ -412,7 +412,7 @@ static void cohfar_assignfar_class_init(CohfarAssignfarClass *klass)
 			"silent-time",
 			"background silent time",
 			"(0) do not need background silent time; (N) allow N seconds to accumulate background.",
-			0, G_MAXINT, 36000,
+			0, G_MAXINT, G_MAXINT,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
