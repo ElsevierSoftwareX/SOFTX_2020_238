@@ -222,8 +222,8 @@ class FinalSink(object):
 		self.boundary = None
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
-		# FIXME: hard-coded snr_ratio_thresh to veto 
-		self.snr_ratio_thresh = 10
+		# FIXME: hard-coded chisq_ratio_thresh to veto 
+		self.chisq_ratio_thresh = 80
 		self.nevent_clustered = 0
 
 		# gracedb parameters
@@ -303,7 +303,7 @@ class FinalSink(object):
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
 					# FIXME: Currently hard-coded for single detector far H and L
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__snglsnr_veto(self.candidate) is False:
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__chisq_ratio_veto(self.candidate) is False:
 						self.__do_gracedb_alert(self.candidate)
 					if self.need_online_perform:
 						self.onperformer.update_eye_candy(self.candidate)
@@ -375,9 +375,9 @@ class FinalSink(object):
 	def __set_far(self, candidate):
 		candidate.far = max(candidate.far_2h, candidate.far_1d, candidate.far_1w)
 
-	def __snglsnr_veto(self, candidate):
-		snglsnr_ratio = candidate.snglsnr_L/candidate.snglsnr_H
-		if snglsnr_ratio > self.snr_ratio_thresh or snglsnr_ratio < 1/self.snr_ratio_thresh:
+	def __chisq_ratio_veto(self, candidate):
+		chisq_ratio = candidate.chisq_H/candidate.chisq_L
+		if chisq_ratio > self.chisq_ratio_thresh or chisq_ratio < 1.0/self.chisq_ratio_thresh:
 			return True
 		else:
 			return False
