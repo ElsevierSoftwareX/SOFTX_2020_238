@@ -377,7 +377,7 @@ class FinalSink(object):
 			self.need_candidate_check = True
 
 	def __set_far(self, candidate):
-		candidate.far = max(candidate.far_2h, candidate.far_1d, candidate.far_1w)
+		candidate.far = (max(candidate.far_2h, candidate.far_1d, candidate.far_1w)) * self.far_factor
 
 	def __chisq_ratio_veto(self, candidate):
 		chisq_ratio = candidate.chisq_H/candidate.chisq_L
