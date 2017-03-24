@@ -321,7 +321,7 @@ class FinalSink(object):
 
 			# do bsupdate when interval is reached
 			bsupdate_duration = buf_timestamp - self.t_bsupdate_start
-			if bsupdate_duration is not None and bsupdate_duration >= self.bsupdate_interval:
+			if self.bsupdate_interval is not None and bsupdate_duration >= self.bsupdate_interval:
 				self.bsupdater.update_fap_stats(buf_timestamp)
 				self.t_bsupdate_start = buf_timestamp
 
