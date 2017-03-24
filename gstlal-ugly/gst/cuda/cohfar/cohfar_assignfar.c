@@ -167,11 +167,11 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 
 				/* FIXME: currently hardcoded for single detectors FAR */
 				cur_stats = element->stats_1w[1];
-				table->far_h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				table->far_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 				cur_stats = element->stats_1w[0];
-				table->far_h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				table->far_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 				cur_stats = element->stats_1w[2];
-				table->far_h = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				table->far_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 	
 			}
 		}
