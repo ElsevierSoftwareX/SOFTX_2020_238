@@ -223,7 +223,7 @@ class FinalSink(object):
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
 		# FIXME: hard-coded snr_ratio_thresh to veto 
-		self.snr_ratio_thresh = 5
+		self.snr_ratio_thresh = 10
 		self.nevent_clustered = 0
 
 		# gracedb parameters
@@ -303,8 +303,8 @@ class FinalSink(object):
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
 					# FIXME: Currently hard-coded for single detector far H and L
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and __snglsnr_veto(self.candidate) is False:
-						self.__do_gracedb_alerts(self.candidate)
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__snglsnr_veto(self.candidate) is False:
+						self.__do_gracedb_alert(self.candidate)
 					if self.need_online_perform:
 						self.onperformer.update_eye_candy(self.candidate)
 					self.candidate = None
@@ -431,7 +431,7 @@ class FinalSink(object):
 		return False
 
 
-	def __do_gracedb_alerts(self, trigger):
+	def __do_gracedb_alert(self, trigger):
 
 		if self.__need_trigger_control(trigger):
 			return
@@ -714,7 +714,7 @@ class FinalSink(object):
 		# write a log to explain far
 		#for gracedb_id in gracedb_ids:
 		gracedb_id = gracedb_ids[0]
-		log_message = "Optimal ra and dec from this coherent pipeline: (%f, %f)" % (trigger.ra, trigger.dec)
+		log_message = "Optimal ra and dec from this coherent pipeline: (%f, %f) in degrees" % (trigger.ra, trigger.dec)
 		while gracedb_upload_itrial < 10:
 			try:
 				resp = gracedb_client.writeLog(gracedb_id, log_message , filename = None, tagname = "analyst_comments")
