@@ -462,6 +462,7 @@ class FinalSink(object):
 		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
 		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
 		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
+		xmldoc.childNodes[-1].appendChild(lsctables.New(postcoh_table_def.PostcohInspiralTable))
 		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentDefTable, columns = ligolw_segments.LigolwSegmentList.segment_def_columns))
 		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentSumTable, columns = ligolw_segments.LigolwSegmentList.segment_sum_columns))
 		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentTable, columns = ligolw_segments.LigolwSegmentList.segment_columns))
@@ -472,6 +473,8 @@ class FinalSink(object):
 		coinc_map_table = lsctables.CoincMapTable.get_table(xmldoc)
 		coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(xmldoc)
 		time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
+		postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(xmldoc)
+
 
 		#sngl_inspiral_table = self.postcoh_table 
 		row = sngl_inspiral_table.RowType()
@@ -675,6 +678,8 @@ class FinalSink(object):
 		row.offset = 0
 		time_slide_table.append(row)
 
+		postcoh_table.append(trigger)
+
 		filename = "%s_%s_%d_%d.xml" % (trigger.ifos, trigger.end_time, trigger.tmplt_idx, trigger.pix_idx)
 		#
 		# construct message and send to gracedb.
@@ -687,9 +692,10 @@ class FinalSink(object):
 		# part way through.
 		#
 		message = StringIO.StringIO()
-		#message = file(filename, "w")
+		#message2 = file(filename, "w")
 		#pdb.set_trace()
 		ligolw_utils.write_fileobj(xmldoc, message, gz = False, trap_signals = None)
+		ligolw_utils.write_filename(xmldoc, filename, gz = False, trap_signals = None)
 		xmldoc.unlink()
 		
 		print >>sys.stderr, "sending %s to gracedb ..." % filename
