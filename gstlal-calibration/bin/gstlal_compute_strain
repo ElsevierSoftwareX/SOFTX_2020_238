@@ -1026,10 +1026,10 @@ if options.partial_calibration:
 
 	# if you need to, dewhiten the TST and PUM/UIM chains
 	if options.dewhitening:
-		pumuim = calibration_parts.mkstockresample(pipeline, pumuim, 3, "audio/x-raw, format=F64LE, rate=%d" % pumuimdewhitensr) 
+		pumuim = calibration_parts.mkstockresample(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" % pumuimdewhitensr) 
 		pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = td)
 		pumuim_filter_settle_time += float(len(pumuimdewhiten)-pumuimdewhitendelay)/pumuimdewhitensr
-		tst = calibration_parts.mkstockresample(pipeline, tsttee, 3, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
+		tst = calibration_parts.mkstockresample(pipeline, tsttee, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
 		tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdewhitendelay), fir_matrix = [tstdewhiten[::-1]], time_domain = td)
 		tst_filter_settle_time += float(len(tstdewhiten)-tstdewhitendelay)/tstdewhitensr
 	else:
