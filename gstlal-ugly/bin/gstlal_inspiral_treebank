@@ -87,6 +87,10 @@ def parse_command_line():
 					default=0, help="Minimum inclination to generate bank. Relevant only for precessing / sub-dominant mode banks.")
 	parser.add_argument("--max-inc", action="store", type=float,\
 					default=numpy.pi/2, help="Maximum inclination to generate bank. Relevant only for precessing / sub-dominant mode banks.")
+	parser.add_argument("--max-mtotal", action="store", type=float,\
+					default=float('inf'), help="Maximum total mass, default infinity")
+	parser.add_argument("--max-q", action="store", type=float,\
+					default=float('inf'), help="Maximum q, default infinity")
 
 	# meta-params
 	parser.add_argument("--min-match", action="store", type=float,\
@@ -234,7 +238,7 @@ for n, c in enumerate(nodes):
 			row.mass1 = row.mass2
 			row.mass2 = mass1
 		row.process_id = process.process_id
-		if coord_limits[0][0] <= row.mass1 <= coord_limits[0][1] and coord_limits[1][0] <= row.mass2 <= coord_limits[1][1]: 
+		if coord_limits[0][0] <= row.mass1 <= coord_limits[0][1] and coord_limits[1][0] <= row.mass2 <= coord_limits[1][1] and (row.mass1+row.mass2 < args.max_mtotal) and (row.mass1 / row.mass2 < args.max_q):
 			tbl.append(row)
 			previous_tiles.append(t)
 
