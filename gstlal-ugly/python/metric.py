@@ -178,64 +178,78 @@ class Metric(object):
 		return m
 
 
-	def metric_tensor_component(self, (i,j), center, deltas, g = None, w1 = None):
-		if w1 is None:
-			w1 = self.waveform(center)
+	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
+		# make the vector to solve for the metric by choosing
+		# either a principle axis or a bisector depending on if
+		# this is a diagonal component or not
+		x = numpy.zeros(len(deltas))
+		x[i] = deltas[i]
+		# Check the match
+		d2 = 1. - self.match(w1, self.waveform(center+x))
+		# The match must like close but not beyond machine
+		# epsilon to be a good approximation
+		#print center, deltas, d2
+		if (d2 > 5e-2):
+			return self.__set_diagonal_metric_tensor_component(i, center, deltas / 10., g, w1)
+		if (d2 < 5e-3):
+			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
+		else:
+			component = [((d2 / x[i] / x[i]), x[i])]
+			#return component[0], x[i]
+			#print center, x, d2, component
+			for factor in (1. / 2**(i+1) for i in range(9)):
+				x[i] = deltas[i] * factor
+				d2 = 1. - self.match(w1, self.waveform(center+x))
+				component.append((d2 / x[i] / x[i], x[i]))
+				#print center, x, d2, component
+			#print numpy.mean(numpy.array(component))
+			# take the biggest metric component
+			gii, delta = sorted(component, key = lambda x: x[0])[-1]
+			g[i,i] = gii
+			#g[i,i] = numpy.mean(component)
+			return delta
+			#return numpy.mean(component), x[i]
 
-		# evaluate symmetrically
-		if j < i:
-			return
-
-		if g is None:
-			if i !=j:
-				raise ValueError("Must provide metric tensor to compute off-diagonal terms")
-			g = numpy.zeros((center.shape[0], center.shape[0]))
-
+	def __set_offdiagonal_metric_tensor_component(self, (i,j), center, deltas, g, w1):
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
 		# this is a diagonal component or not
 		x = numpy.zeros(len(deltas))
 		x[i] = deltas[i]
 		x[j] = deltas[j]
+		# evaluate symmetrically
+		if j <= i:
+			return
 
-		# Compute the diagonal
-		if j == i:
-			# Check the match
-			d2 = 1. - self.match(w1, self.waveform(center+x))
-			# The match must like close but not beyond machine
-			# epsilon to be a good approximation
-			#print d2, deltas[i], d2 * deltas[i] * deltas[i]
-			if ((d2 * deltas[i] * deltas[i]) > numpy.finfo(numpy.float64).eps * 10):
-				return self.metric_tensor_component((i,j), center = center, deltas = deltas / 10., g = g, w1 = w1)
-			if ((d2 * deltas[i] * deltas[i]) < numpy.finfo(numpy.float64).eps * 2):
-				return self.metric_tensor_component((i,j), center = center, deltas = deltas * 2, g = g, w1 = w1)
-
-			g[i,i] = d2 / deltas[i] / deltas[i]
-			return g[i,i], deltas[i]
-		# NOTE Assumes diagonal parts are already computed!!!
-		else:
-			# Check the match
-			d2 = 1 - self.match(w1, self.waveform(center+x))
-			g[i,j] = g[j,i] = d2 / (2 * deltas[i] * deltas[j]) - g[i,i] * deltas[i] / 2. / deltas[j] - g[j,j] * deltas[j] / 2. / deltas[i]
-			return g[i,j], None
+		# Check the match
+		d2 = 1 - self.match(w1, self.waveform(center+x))
+		g[i,j] = g[j,i] = (d2 - g[i,i] * deltas[i]**2 - g[j,j] * deltas[j]**2) / 2 / deltas[i] / deltas[j]
+		return None
 
 
-	def set_metric_tensor(self, center, deltas):
+	#def set_metric_tensor(self, center, deltas):
+	def __call__(self, center, deltas = None):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
+		# if not provided, guess
+		if deltas is None:
+			deltas = center * 0.01
+			deltas[deltas==0.] += 0.01
 		# First get the diagonal components
-		deltas = numpy.array([self.metric_tensor_component((i,i), center, deltas / 2., g, w1)[1] for i in range(len(center))])
-
+		deltas = numpy.array([self.__set_diagonal_metric_tensor_component(i, center, deltas, g, w1) for i in range(len(center))])
 		# Then the rest
-		[self.metric_tensor_component(ij, center, deltas, g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
+		[self.__set_offdiagonal_metric_tensor_component(ij, center, deltas, g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
 
 		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
 		mxw = numpy.max(w)
 		self.metric_is_valid = True
+		#if numpy.any(w < 0):
+		#	print w
+		#	raise ValueError("Negative eigen values of metric")
 		if numpy.any(w < 0):
-			w[w<0.] = 1e-4 * mxw
+			w[w<0.] = numpy.finfo(numpy.float32).eps * mxw
 			g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
 			self.metric_is_valid = False
 		return g
