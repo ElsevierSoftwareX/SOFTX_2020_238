@@ -1,7 +1,7 @@
 /*
  * An trigger trigger and autocorrelation chisq (itac) element
  *
- * Copyright (C) 2011  Chad Hanna, Kipp Cannon
+ * Copyright (C) 2011  Duncan Meacher
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -183,7 +183,7 @@ static gboolean setcaps(GSTLALTrigger *element, GstPad *pad, GstCaps *caps)
 	const gchar *format = gst_structure_get_string(str, "format");
 	gboolean success = TRUE;
 	gst_structure_get_int(str, "rate", &(element->rate));
-	gst_structure_get_uint(str, "channels", &(element->channels));
+	gst_structure_get_int(str, "channels", &(element->channels));
 
 	/*
 	 * update the element metadata
@@ -238,13 +238,14 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			break;
 		}
 		case GST_EVENT_TAG:
-			{
+		{
 			GstTagList *taglist;
 			gchar *instrument, *channel_name;
 			gst_event_parse_tag(event, &taglist);
 			res = taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
 			res &= taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
-			if(res) {
+			if(res)
+			{
 				GST_DEBUG_OBJECT(pad, "found tags \"%s\"=\"%s\", \"%s\"=\"%s\"", GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME, channel_name);
 				g_free(trigger->instrument);
 				trigger->instrument = instrument;
@@ -252,18 +253,19 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 				trigger->channel_name = channel_name;
 				g_mutex_lock(&trigger->bank_lock);
 				g_mutex_unlock(&trigger->bank_lock);
-				}
-			break;
 			}
-		case GST_EVENT_EOS: {
+			break;
+		}
+		case GST_EVENT_EOS:
+		{
 			trigger->EOS = TRUE;
 			/* ignore failures */
 			process(trigger);
 			break;
-			}
+		}
 		default:
 			break;
-		}
+	}
 
 	if(!res)
 		gst_event_unref(event);
