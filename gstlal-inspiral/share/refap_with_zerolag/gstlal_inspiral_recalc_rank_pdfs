@@ -53,7 +53,7 @@ from glue import dagfile
 from glue.lal import CacheEntry
 from glue import segments
 from glue.text_progress_bar import ProgressBar
-from glue.ligolw.lsctables import ifos_from_instrument_set
+from glue.ligolw.lsctables import instrumentsproperty
 
 
 #
@@ -88,7 +88,7 @@ for n, filename in enumerate(sorted(sys.argv[1:])):
 			entry.path = os.path.abspath(os.path.join(directory, entry.path))
 
 	cachefiles.append(CacheEntry(
-		ifos_from_instrument_set(seglists),
+		instrumentsproperty.set(seglists),
 		",".join(sorted(set(entry.description for entry in cache))),
 		seglists.extent_all(),
 		os.path.join("gstlal_inspiral_calc_rank_pdfs", "ranking_stat_cache_%04X.cache" % n)

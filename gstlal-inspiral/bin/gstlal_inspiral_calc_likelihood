@@ -261,7 +261,7 @@ for n, url in enumerate(urls, 1):
 		for row in lsctables.CoincTable.get_table(xmldoc):
 			if row.coinc_def_id != coinc_def_id:
 				continue
-			instruments = lsctables.instrument_set_from_ifos(coinc_inspiral_index[row.coinc_event_id].ifos)
+			instruments = lsctables.instrumentsproperty.get(coinc_inspiral_index[row.coinc_event_id].ifos)
 			ln_likelihood_ratio = row.likelihood
 			if any(offset_vectors[row.time_slide_id].values()):
 				ranking_data.background_likelihood_rates[frozenset(instruments)][ln_likelihood_ratio,] += 1.

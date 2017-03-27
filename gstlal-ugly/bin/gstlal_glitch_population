@@ -72,7 +72,7 @@ def parse_command_line():
 
 	options.start_time = LIGOTimeGPS(options.gps_start_time)
 	options.end_time = LIGOTimeGPS(options.gps_end_time)
-	options.instruments = lsctables.instrument_set_from_ifos(options.time_slide_instruments)
+	options.instruments = lsctables.instrumentsproperty.get(options.time_slide_instruments)
 
 	return options, filenames
 

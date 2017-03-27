@@ -200,7 +200,7 @@ def inj_psd_node_gen(segsdict, options):
 	psd_cache_files = {}
 	for line in open(options.psd_cache):
 		ce = CacheEntry(line)
-		psd_cache_files.setdefault(frozenset(lsctables.instrument_set_from_ifos(ce.observatory)), []).append((ce.segment, ce.path))
+		psd_cache_files.setdefault(frozenset(lsctables.instrumentsproperty.get(ce.observatory)), []).append((ce.segment, ce.path))
 	for ifos in segsdict:
 		reference_psd_files = sorted(psd_cache_files[ifos], key = lambda (s, p): s)
 		ref_psd_file_num = 0

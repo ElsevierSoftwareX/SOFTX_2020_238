@@ -670,7 +670,7 @@ class SNRPDF(object):
 			binnedarray = rate.BinnedArray.from_xml(elem, elem.Name.rsplit(u":", 1)[0])
 
 			key = (
-				frozenset(lsctables.instrument_set_from_ifos(ligolw_param.get_pyvalue(elem, u"instruments:key"))),
+				frozenset(lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(elem, u"instruments:key"))),
 				frozenset((inst.strip(), float(quant) if math.isinf(float(quant)) else int(quant)) for inst, quant in (inst_quant.split(u"=") for inst_quant in ligolw_param.get_pyvalue(elem, u"quantizedhorizons:key").split(u",")))
 			)
 
@@ -694,7 +694,7 @@ class SNRPDF(object):
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"log_distance_tolerance", self.log_distance_tolerance))
 		for i, (key, (ignored, binnedarray, ignored)) in enumerate(self.snr_joint_pdf_cache.items()):
 			elem = xml.appendChild(binnedarray.to_xml(u"%d:pdf" % i))
-			elem.appendChild(ligolw_param.Param.from_pyvalue(u"instruments:key", lsctables.ifos_from_instrument_set(key[0])))
+			elem.appendChild(ligolw_param.Param.from_pyvalue(u"instruments:key", lsctables.instrumentsproperty.set(key[0])))
 			elem.appendChild(ligolw_param.Param.from_pyvalue(u"quantizedhorizons:key", u",".join(u"%s=%.17g" % inst_quant for inst_quant in sorted(key[1]))))
 		return xml
 
@@ -704,6 +704,7 @@ class SNRPDF(object):
 		if fileobj is None:
 			fileobj = open(cls.DEFAULT_FILENAME)
 		return cls.from_xml(ligolw_utils.load_fileobj(fileobj, gz = True, contenthandler = cls.LIGOLWContentHandler)[0])
+
 
 #
 # =============================================================================

@@ -156,7 +156,7 @@ class upper_limit(object):
         Retrieve the sets of instruments which were on during the search.
         '''
 	for inst in connection.cursor().execute("""SELECT DISTINCT(ifos) FROM search_summary"""):
-        	inst =  frozenset(lsctables.instrument_set_from_ifos(inst[0]))
+        	inst =  frozenset(lsctables.instrumentsproperty.get(inst[0]))
         	if not inst in self.instruments:
          		self.instruments.append(inst)
 

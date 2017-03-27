@@ -800,7 +800,7 @@ class ThincaCoincParamsDistributions(object):
 		# create an instance
 		self = cls(
 			process_id = process_id,
-			instruments = lsctables.instrument_set_from_ifos(ligolw_param.get_pyvalue(xml, u"instruments")),
+			instruments = lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(xml, u"instruments")),
 			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
 			signal_rate = ligolw_param.get_pyvalue(xml, u"signal_rate"),
 			delta_t = ligolw_param.get_pyvalue(xml, u"delta_t")
@@ -852,7 +852,7 @@ class ThincaCoincParamsDistributions(object):
 		store(xml, u"injection", self.injection_rates)
 		store(xml, u"injection_pdf", self.injection_pdf)
 
-		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.ifos_from_instrument_set(self.instruments)))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(self.instruments)))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"signal_rate", self.signal_rate))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"delta_t", self.delta_t))
@@ -1221,7 +1221,7 @@ WHERE
 	)
 """, (coinc_def_id,)):
 			assert ln_likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
-			self.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(instruments))][ln_likelihood_ratio,] += 1.
+			self.zero_lag_likelihood_rates[frozenset(lsctables.instrumentsproperty.get(instruments))][ln_likelihood_ratio,] += 1.
 
 		#
 		# update combined rates.  NOTE:  this recomputes all the
@@ -1436,7 +1436,7 @@ WHERE
 		# pull out the likelihood count and PDF arrays
 		def reconstruct(xml, prefix, target_dict):
 			for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and ("_%s" % prefix) in elem.Name]:
-				ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.Name.split("_")[0]))
+				ifo_set = frozenset(lsctables.instrumentsproperty.get(ba_elem.Name.split("_")[0]))
 				target_dict[ifo_set] = rate.BinnedArray.from_xml(ba_elem, ba_elem.Name.split(":")[0])
 		reconstruct(xml, u"background_likelihood_rate", self.background_likelihood_rates)
 		reconstruct(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
@@ -1464,7 +1464,7 @@ WHERE
 		def store(xml, prefix, source_dict):
 			for key, binnedarray in source_dict.items():
 				if key is not None:
-					ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
+					ifostr = lsctables.instrumentsproperty.set(key).replace(",","")
 					xml.appendChild(binnedarray.to_xml(u"%s_%s" % (ifostr, prefix)))
 		store(xml, u"background_likelihood_rate", self.background_likelihood_rates)
 		store(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)

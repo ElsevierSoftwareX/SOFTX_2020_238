@@ -237,8 +237,8 @@ class CoincDatabase(object):
 			self.sc_definer_id = None
 
 		# retrieve the distinct on and participating instruments
-		self.on_instruments_combos = [frozenset(lsctables.instrument_set_from_ifos(x)) for x, in cursor.execute("SELECT DISTINCT(instruments) FROM coinc_event WHERE coinc_def_id == ?", (self.ii_definer_id,))]
-		self.participating_instruments_combos = [frozenset(lsctables.instrument_set_from_ifos(x)) for x, in cursor.execute("SELECT DISTINCT(ifos) FROM coinc_inspiral")]
+		self.on_instruments_combos = [frozenset(lsctables.instrumentsproperty.get(x)) for x, in cursor.execute("SELECT DISTINCT(instruments) FROM coinc_event WHERE coinc_def_id == ?", (self.ii_definer_id,))]
+		self.participating_instruments_combos = [frozenset(lsctables.instrumentsproperty.get(x)) for x, in cursor.execute("SELECT DISTINCT(ifos) FROM coinc_inspiral")]
 
 		# get the segment lists
 		self.seglists = ligolw_segments.segmenttable_get_by_name(xmldoc, data_segments_name).coalesce()
@@ -571,7 +571,7 @@ LIMIT 100
 		for instruments, num in contents.connection.cursor().execute("""
 SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (distinct_ifos.ifos==coinc_inspiral.ifos) JOIN coinc_event ON (coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.ifos==distinct_ifos.ifos AND NOT EXISTS(SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0) GROUP BY distinct_ifos.ifos;
 """):
-			key = frozenset(lsctables.instrument_set_from_ifos(instruments))
+			key = frozenset(lsctables.instrumentsproperty.get(instruments))
 			self.num_trigs.setdefault(key,0)
 			self.num_trigs[key] += num
 
@@ -737,7 +737,7 @@ FROM
 						continue
 					if self.isolate_precession and not precession_bool:
 						continue
-					participating_instruments = lsctables.instrument_set_from_ifos(values[-1])
+					participating_instruments = lsctables.instrumentsproperty.get(values[-1])
 					if participating_instruments is not None:
 						participating_instruments = frozenset(participating_instruments)
 					self.found_in.setdefault(participating_instruments, []).append(sim)
@@ -800,7 +800,7 @@ FROM
 
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
-				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
+				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
 					if cnt == 0:
 						self.missed_found_plots.injection_summary_data.append(["Found", "".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)])
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
@@ -829,7 +829,7 @@ FROM
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
 				try:
-					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
+					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
 						legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
 						axes.semilogy([x_func(sim) for sim in sims], [found_decisive_charsnr(sim, self.on_instruments, participating_instruments) for sim in sims], ".")
 					if missed:
