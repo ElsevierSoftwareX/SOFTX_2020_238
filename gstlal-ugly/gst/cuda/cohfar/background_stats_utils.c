@@ -439,11 +439,11 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
     xns[icombo+4*ncombo].processPtr = readArray;
     xns[icombo+4*ncombo].data = &(array_fap[icombo]);
 
-    sprintf((char *)xns[icombo+5*ncombo].tag, "%s_nevent:param", IFO_COMBO_MAP[icombo]);
+    sprintf((char *)xns[icombo+5*ncombo].tag, "%s:%s_nevent:param",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo]);
     xns[icombo+5*ncombo].processPtr = readParam;
     xns[icombo+5*ncombo].data = &(param_nevent[icombo]);
 
-    sprintf((char *)xns[icombo+6*ncombo].tag, "%s_duration:param", IFO_COMBO_MAP[icombo]);
+    sprintf((char *)xns[icombo+6*ncombo].tag, "%s:%s_duration:param",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo]);
     xns[icombo+6*ncombo].processPtr = readParam;
     xns[icombo+6*ncombo].data = &(param_duration[icombo]);
   }
@@ -638,10 +638,10 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_tria
     ligoxml_write_Array(writer, &(array_pdf[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
     g_string_printf(array_name, "%s:%s%s:array",  BACKGROUND_XML_FAP_NAME, IFO_COMBO_MAP[icombo], BACKGROUND_XML_SNR_CHISQ_SUFFIX);
     ligoxml_write_Array(writer, &(array_fap[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
-    g_string_printf(param_name, "%s_nevent:param", IFO_COMBO_MAP[icombo]);
+    g_string_printf(param_name, "%s:%s_nevent:param",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo]);
     ((long *)param_nevent.data)[0] = stats[icombo]->nevent;
     ligoxml_write_Param(writer, &param_nevent, BAD_CAST "int_8s", BAD_CAST param_name->str);
-    g_string_printf(param_name, "%s_duration:param", IFO_COMBO_MAP[icombo]);
+    g_string_printf(param_name, "%s:%s_duration:param",  BACKGROUND_XML_RATES_NAME, IFO_COMBO_MAP[icombo]);
     ((long *)param_duration.data)[0] = stats[icombo]->duration;
     ligoxml_write_Param(writer, &param_duration, BAD_CAST "int_8s", BAD_CAST param_name->str);
   }
