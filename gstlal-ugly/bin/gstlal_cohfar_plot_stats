@@ -26,6 +26,9 @@ from optparse import OptionParser
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot
+from matplotlib import rc
+
+rc('text', usetex = True)
 
 from gstlal.postcoh_table_def import PostcohInspiralTable
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
@@ -43,10 +46,20 @@ param.use_in(DefaultContentHandler)
 lsctables.use_in(DefaultContentHandler)
 
 
+def param_from_xml(filename, param_name, contenthandler = DefaultContentHandler, verbose = False):
+
+	# Load document
+	xmldoc = utils.load(filename, contenthandler = contenthandler, verbose = verbose)
+
+	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
+		result = param.get_param(root, param_name).param
+	return result
+
+
 def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
 
 	# Load document
-	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+	xmldoc = utils.load(filename, contenthandler = contenthandler, verbose = verbose)
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
 		result = array.get_array(root, array_name).array 
@@ -55,7 +68,7 @@ def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler,
 def postcoh_table_from_xml(filename, contenthandler = DefaultContentHandler, verbose = False):
 
 	# Load document
-	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+	xmldoc = utils.load(filename, contenthandler = contenthandler, verbose = verbose)
 
 	postcoh = PostcohInspiralTable.get_table(xmldoc)
 	return postcoh
@@ -67,18 +80,18 @@ def append_missing_options(missing_options, options, option):
 
 def parse_command_line():
 	parser = OptionParser(version = git_version.verbose_msg, usage = "%prog [options] [file ...]", description = "%prog to plot pdf and cdf")
-	parser.add_option("--output-filename", default = "", metavar = "name", help = "Set the output file name")
-	parser.add_option("--input-stats-filename", default = "", metavar = "name", help = "Set the input stats file name")
+	parser.add_option("--output", default = "", metavar = "name", help = "Set the output file name")
+	parser.add_option("--input-stats", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--zerolag-format", default = "", metavar = "name", help = "format support, single | multi")
 	parser.add_option("--cohsnr", type = "float", help = "if format is single, read the cohsnr")
 	parser.add_option("--cmbchisq", type = "float", help = "if format is single, read the combined chisq")
-	parser.add_option("--input-zerolag-filename", default = "", metavar = "name", help = "Set the input stats file name")
+	parser.add_option("--input-zerolag", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--ifos", metavar = "name", help = "set the ifos to plot pdf and cdf")
 	options, tmp = parser.parse_args()
 
 	missing_options = []
-	append_missing_options(missing_options, options, "output_filename")
-	append_missing_options(missing_options, options, "input_stats_filename")
+	append_missing_options(missing_options, options, "output")
+	append_missing_options(missing_options, options, "input_stats")
 	if options.zerolag_format == "single":
 		append_missing_options(missing_options, options, "cohsnr")
 		append_missing_options(missing_options, options, "cmbchisq")
@@ -92,42 +105,47 @@ options = parse_command_line()
 
 if options.ifos == "L1H1":
 	ifos = "H1L1"
-pdf_name = "background_pdf:%s_lgsnr_lgchisq:array" % ifos
-cdf_name = "background_cdf:%s_lgsnr_lgchisq:array" % ifos
-
-# pdf not needed now
-#pdf = array_from_xml(options.input_stats_filename, pdf_name)
-#figpdf = pyplot.figure()
-#ax = fig.add_axes((.6,2.5,-0.5,2.5))
-#pyplot.imshow(pdf, extent = [0.6, 2.5, -0.5, 2.5], origin = 'lower')
-#pyplot.xlabel('log10(CohSNR)')	
-#pyplot.ylabel('log10(CombinedChisq)')	
-#pyplot.title('PDF')
-#pyplot.savefig("pdf_%s" % options.output_filename_suffix)
-
-cdf = array_from_xml(options.input_stats_filename, cdf_name)
-log10cdf = np.log10(cdf)
-pyplot.figure()
-#ax = fig.add_axes((.6,2.5,-0.5,2.5))
-x = np.arange(0.6, 2.5, 0.01)
-y = np.arange(-0.5, 2.5, 0.01)
-X, Y = np.meshgrid(x, y)
-im = pyplot.imshow(log10cdf, extent = [0.6, 2.5, -0.5, 2.5], origin = 'lower')
-levels = np.arange(-10, -1, 2)
-CS = pyplot.contour(log10cdf, levels, origin = 'lower', extent = (0.6, 2.5, -0.5, 2.5))
-#pyplot.clabel(CS, levels, inline=1, fontsize = 9)
-CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
-if options.zerolag_format == "multi":
-	zerolags = postcoh_table_from_xml(options.input_zerolag_filename)
-	log10cohsnr = np.log10(zerolags.getColumnByName("cohsnr"))
-	log10chisq = np.log10(zerolags.getColumnByName("chisq"))
 else:
-	log10cohsnr = np.log10(options.cohsnr)
-	log10chisq = np.log10(options.cmbchisq)
+	ifos = options.ifos
 
-CM = pyplot.scatter(log10cohsnr, log10chisq, color = 'k', marker = 'o', s = 10, facecolors = 'none')
-pyplot.xlabel('log10(CohSNR)')	
-pyplot.ylabel('log10(CombinedChisq)')	
-pyplot.title('FAP')
-pyplot.savefig(options.output_filename)
+fap_name = "background_fap:%s_lgsnr_lgchisq:array" % ifos
+nevent_name = "%s_nevent:param" % ifos
+duration_name = "%s_duration:param" % ifos
+hist_trials_name = "hist_trials:param"
+
+fap = array_from_xml(options.input_stats, fap_name)
+nevent = param_from_xml(options.input_stats, nevent_name)
+duration = param_from_xml(options.input_stats, duration_name)
+hist_trials = param_from_xml(options.input_stats, hist_trials_name)
+lgfar = np.log10(fap * nevent / (float(duration)*hist_trials))
+
+zerolags = postcoh_table_from_xml(options.input_zerolag)
+all_cohsnr = np.log10(zerolags.getColumnByName("cohsnr"))
+all_chisq = np.log10(zerolags.getColumnByName("chisq"))
+event_cohsnr = np.log10(options.cohsnr)
+event_chisq = np.log10(options.cmbchisq)
+
+# cohsnr
+xmin = 0.54
+xmax = 3.0
+# chisq
+ymin = -1.2
+ymax = 4.0
+x = np.arange(xmin, xmax, 0.0082)
+y = np.arange(ymin, ymax, 0.0173)
+
+pyplot.figure()
+X, Y = np.meshgrid(x, y)
+levels = np.arange(-13, -2, 2)
+CS = pyplot.contour(lgfar, levels, origin = 'lower', extent = (xmin, xmax, ymin, ymax))
+CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
+
+CM = pyplot.scatter(all_cohsnr, all_chisq, color = 'k', marker = 'o', s = 6, facecolors = 'none')
+CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
+pyplot.legend((CM, CM2), ('spiir zerolags', 'spiir event'), loc='lower right')
+pyplot.ylim(-2,1)
+pyplot.xlim(0.7,2)
+pyplot.xlabel(r'$\log_{10}(\rho_c)$')	
+pyplot.ylabel(r'$\log_{10}(\xi_c^2/\rho_c^2)$')	
+pyplot.savefig(options.output)
 
