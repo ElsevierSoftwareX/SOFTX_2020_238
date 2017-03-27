@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (C) 2017 Sydney J. Chamberlin, Patrick Godwin, Chad Hanna
+# Copyright (C) 2017 Sydney J. Chamberlin, Patrick Godwin, Chad Hanna, Duncan Meacher
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -42,6 +42,7 @@ import numpy
 from gstlal import datasource
 from gstlal import idq_multirate_datasource
 from gstlal import multichannel_datasource
+from gstlal import sngltriggertable
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw import utils as ligolw_utils
@@ -94,7 +95,6 @@ class MultiChannelHandler(simplehandler.Handler):
 	def do_on_message(self, bus, message):
 		return False
 
-	
 	def bufhandler(self, elem, sink_dict):
 		buf = elem.emit("pull-sample").get_buffer()
 		buftime = int(buf.pts / 1e9)
@@ -115,10 +115,8 @@ class MultiChannelHandler(simplehandler.Handler):
 			# declaration then terrible terrible things
 			# will happen
 			if mapinfo.data:
-				data = StringIO.StringIO(mapinfo.data).getvalue()
-				for line in data.split('\n'):
-					if len(line) > 0:
-						fdata += "%s\t" % channel + line.rstrip('\r') + "\n"
+				for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
+					fdata += "%s\t%s\t%s\t%s\t%s\t%s\n" % (channel, row.end_time + row.end_time_ns*1e-9, row.phase, row.snr, row.chisq, row.sigmasq)
 				self.timedeq.append(buftime)
 			memory.unmap(mapinfo)
 
@@ -214,10 +212,14 @@ head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instr
 
 for channel in channels:
 	samp_rate = data_source_info.channel_dict[instrument][channel]   
-	head[channel] = idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [samp_rate], instrument, channel_name = channel)[samp_rate]
-	head[channel] = pipeparts.mkaudioundersample(pipeline, head[channel])
-	head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, rate=%d" % options.downsample_rate) 
-	head[channel] = pipeparts.mkgeneric(pipeline, head[channel], "lal_nxydump")
+	print >>sys.stderr, "test " + instrument + " " + channel
+	head[channel] = idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [samp_rate], instrument, channel_name = channel, width=32)[samp_rate]
+	head[channel] = pipeparts.mkfirbank(pipeline, head[channel], fir_matrix = numpy.ones((2,1)), time_domain = True)
+	head[channel] = pipeparts.mktogglecomplex(pipeline, head[channel])
+	head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, format=Z64LE, rate=%i" % int(samp_rate))
+	head[channel] = pipeparts.mktaginject(pipeline, head[channel], "instrument=%s,channel-name=%s" %( instrument, channel) )
+	head[channel] = pipeparts.mktrigger(pipeline, head[channel], int(samp_rate), autocorrelation_matrix = numpy.ones((1,21), dtype=numpy.complex))
+	head[channel] = pipeparts.mkqueue(pipeline, head[channel])
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline..."
