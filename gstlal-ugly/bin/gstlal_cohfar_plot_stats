@@ -49,17 +49,17 @@ lsctables.use_in(DefaultContentHandler)
 def param_from_xml(filename, param_name, contenthandler = DefaultContentHandler, verbose = False):
 
 	# Load document
-	xmldoc = utils.load(filename, contenthandler = contenthandler, verbose = verbose)
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
-		result = param.get_param(root, param_name).param
+		result = param.get_param(root, param_name)
 	return result
 
 
 def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
 
 	# Load document
-	xmldoc = utils.load(filename, contenthandler = contenthandler, verbose = verbose)
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
 		result = array.get_array(root, array_name).array 
@@ -67,11 +67,14 @@ def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler,
 
 def postcoh_table_from_xml(filename, contenthandler = DefaultContentHandler, verbose = False):
 
-	# Load document
-	xmldoc = utils.load(filename, contenthandler = contenthandler, verbose = verbose)
-
-	postcoh = PostcohInspiralTable.get_table(xmldoc)
-	return postcoh
+	files = filename.split(",")
+	all_table = lsctables.New(PostcohInspiralTable)
+	for file in files:
+	  # Load document
+	  xmldoc = utils.load_filename(file, contenthandler = contenthandler, verbose = verbose)
+	  postcoh = PostcohInspiralTable.get_table(xmldoc)
+	  all_table.extend(postcoh)
+	return all_table
 
 def append_missing_options(missing_options, options, option):
 	if getattr(options, option) is None:
@@ -107,7 +110,7 @@ if options.ifos == "L1H1":
 	ifos = "H1L1"
 else:
 	ifos = options.ifos
-
+pdb.set_trace()
 fap_name = "background_fap:%s_lgsnr_lgchisq:array" % ifos
 nevent_name = "%s_nevent:param" % ifos
 duration_name = "%s_duration:param" % ifos
