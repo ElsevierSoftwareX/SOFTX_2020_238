@@ -227,7 +227,7 @@ class FinalSink(object):
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
 		# FIXME: hard-coded chisq_ratio_thresh to veto 
-		self.chisq_ratio_thresh = 80
+		self.chisq_ratio_thresh = 100
 		self.nevent_clustered = 0
 
 		# gracedb parameters

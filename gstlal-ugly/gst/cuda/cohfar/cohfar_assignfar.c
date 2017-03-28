@@ -47,6 +47,8 @@
 
 #include <time.h>
 #define DEFAULT_STATS_NAME "stats.xml.gz"
+/* required minimal background events */
+#define MIN_BACKGROUND_NEVENT 1000000
 /*
  * ============================================================================
  *
@@ -156,9 +158,9 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 		PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
-			if (icombo > -1)
+			cur_stats = element->stats_1w[icombo];
+			if (icombo > -1 && cur_stats->nevent > MIN_BACKGROUND_NEVENT)
 			{
-				cur_stats = element->stats_1w[icombo];
 				table->far_1w = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 				cur_stats = element->stats_1d[icombo];
 				table->far_1d = background_stats_bins2D_get_val((double)table->cohsnr, (double)table->cmbchisq, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
