@@ -53,6 +53,44 @@ from glue.ligolw import utils as ligolw_utils
 #
 ####################   
 
+#
+# construct sine gaussian waveforms that taper to 1e-7 at edges of window
+#
+def duration(phi, q, tolerance = 1e-7):
+        # return the duration of the waveform such that its edges will die out to tolerance of the peak.
+	# phi is the central frequency of the frequency band
+	return 2.*q/(2.*numpy.pi*phi)*numpy.log(1./tolerance)
+
+def sine_gaussian(phi, q, time_arr):
+        # edges should be 1e-7 times peak
+	dt = time_arr[1]-time_arr[0]
+	rate = 1./dt
+	assert phi < rate/2. 
+
+	# phi is the central frequency of the sine gaussian
+	dur = duration(phi,q)
+	tau = q/(2.*numpy.pi*phi)
+	sg_vals = numpy.sin(2.*numpy.pi*phi*time_arr)*numpy.exp(-1.*time_arr**2./tau**2.)
+	return sg_vals 
+
+#
+# number of tiles in frequency and Q
+#
+def N_Q(q_min, q_max, mismatch = 0.05):
+        return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
+
+def N_phi(phi_min, phi_max, q,  mismatch = 0.05):
+       return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
+
+def Qq(q_min, q_max, mismatch = 0.05):
+	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch))
+	return [q_min*(q_max/q_min)**((0.5+q)/N_q) for q in range(int(N_q))]
+
+def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.05):
+	for q in Qq(q_min, q_max):
+		nphi = N_phi(phi_min, phi_max, q)
+		for l in range(int(nphi)):
+			yield (phi_min*(phi_max/phi_min)**((0.5+l)/nphi), q)
 
 def parse_command_line():
 
@@ -65,7 +103,6 @@ def parse_command_line():
 	multichannel_datasource.append_options(parser)
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	parser.add_option("--out-file", metavar = "filename", default = "output_triggers.trg", help = "Set the filename in which to save the output.")
-	parser.add_option("--downsample-rate", metavar = "Hz", type = "int", default = 16, help = "Downsample input to this minimum sample rate. Default = 16 Hz.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	#
@@ -73,8 +110,6 @@ def parse_command_line():
 	#
 
 	options, filenames = parser.parse_args()
-	if options.downsample_rate % 2:
-		raise ValueError("Minimum rate is not a power of 2")
 
 	return options, filenames
 
@@ -89,8 +124,19 @@ class MultiChannelHandler(simplehandler.Handler):
 	def __init__(self, *args, **kwargs):
 		self.out_file = kwargs.pop("out_file")
 		self.out_path = kwargs.pop("out_path")
+                # if file already exists, delete it first
+                # FIXME this may not be the most elegant solution,
+                #       but it'll do for now
+                try:
+                        os.remove(os.path.join(self.out_path, self.out_file))
+                except OSError:
+                        pass
+                # create header for trigger file
+                #header = "# start_time stop_time time frequency unnormalized_energy normalized_energy chisqdof significance channel\n"
+                header = "# %8s\t%8s\t%8s\t%8s\t%8s\t%8s\n" % ("end_time", "phase", "snr", "chisq", "sigmasq", "channel")
+                self.to_trigger_file(os.path.join(self.out_path, self.out_file), header)
+		
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
-		self.timedeq = deque(maxlen = 10000)
 
 	def do_on_message(self, bus, message):
 		return False
@@ -116,8 +162,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			# will happen
 			if mapinfo.data:
 				for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
-					fdata += "%s\t%s\t%s\t%s\t%s\t%s\n" % (channel, row.end_time + row.end_time_ns*1e-9, row.phase, row.snr, row.chisq, row.sigmasq)
-				self.timedeq.append(buftime)
+					fdata += "%s\t%s\t%s\t%s\t%s\t%s\n" % (row.end_time + row.end_time_ns*1e-9, row.phase, row.snr, row.chisq, row.sigmasq, channel)
 			memory.unmap(mapinfo)
 
 		# Save a "latest"
@@ -199,8 +244,8 @@ class LinkedAppSync(pipeparts.AppSync):
 options, filenames = parse_command_line()
 
 data_source_info = multichannel_datasource.DataSourceInfo(options)
-instrument, = data_source_info.channel_dict
-channels = data_source_info.channel_dict[instrument].keys()
+instrument = data_source_info.instrument
+channels = data_source_info.channel_dict.keys()
 
 # building the event loop and pipeline
 mainloop = GObject.MainLoop()
@@ -209,23 +254,46 @@ handler = MultiChannelHandler(mainloop, pipeline, out_file = options.out_file, o
 
 # multiple channel src
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
-
+src = {}
 for channel in channels:
-	samp_rate = data_source_info.channel_dict[instrument][channel]   
-	print >>sys.stderr, "test " + instrument + " " + channel
-	head[channel] = idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [samp_rate], instrument, channel_name = channel, width=32)[samp_rate]
-	head[channel] = pipeparts.mkfirbank(pipeline, head[channel], fir_matrix = numpy.ones((2,1)), time_domain = True)
-	head[channel] = pipeparts.mktogglecomplex(pipeline, head[channel])
-	head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, format=Z64LE, rate=%i" % int(samp_rate))
-	head[channel] = pipeparts.mktaginject(pipeline, head[channel], "instrument=%s,channel-name=%s" %( instrument, channel) )
-	head[channel] = pipeparts.mktrigger(pipeline, head[channel], int(samp_rate), autocorrelation_matrix = numpy.ones((1,21), dtype=numpy.complex))
-	head[channel] = pipeparts.mkqueue(pipeline, head[channel])
+	samp_rate = data_source_info.channel_dict[channel]['fsamp']  
+	max_samp_rate = samp_rate 
+	#min_samp_rate = min(64., max_samp_rate)
+	min_samp_rate = samp_rate/2.
+	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
+	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2.**i for i in range(n_rates)], instrument, channel_name = channel, width=32).items():
+		# FIXME: don't hardcode q and frequency
+		flow = rate/4.*0.8
+		fhigh = rate/2.*0.8
+		qlow = 4
+		qhigh = 40
+		# omicron params, make sure to use .INI file before uncommenting
+		#flow = data_source_info.channel_dict[channel]['flow']  
+		#fhigh = data_source_info.channel_dict[channel]['fhigh']  
+		#qhigh = data_source_info.channel_dict[channel]['qhigh']  
+		dur = max([duration(phi, q) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
+		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
+		# printing out fir matrix info, for testing purposes
+		#for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh):
+		#	print >>sys.stderr, "sine-gaussian array size=(%d,%d)" % numpy.array([sine_gaussian(phi, q, t_arr)]).reshape((-1, 1)).shape
+		#	print >>sys.stderr, "trivial array size=(%d,%d)" % numpy.ones((2, 1)).shape
+		#	print >>sys.stderr, "channel=%s, rate=%d" % (channel, rate)
+		#	print >>sys.stderr, "phi=%d, q=%d" % (phi, q)
+			
+		#thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)]) , time_domain = True)
+		#thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)]).reshape((-1, 1)) , time_domain = True)
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.ones((2,1)), time_domain = True)
+		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
+		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % int(rate))
+		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel) )
+		thishead = pipeparts.mktrigger(pipeline, thishead, int(rate), autocorrelation_matrix = numpy.ones((1,21), dtype=numpy.complex))
+		thishead = pipeparts.mkqueue(pipeline, thishead)
+		src[(channel, rate)] = thishead	
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline..."
 appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
-appsinks = set(appsync.add_sink(pipeline, head[channel], name = "sink_%s_%s" % (instrument, channel)) for channel in channels) 
-
+appsinks = set(appsync.add_sink(pipeline, src[x], name = "sink_%s_%s" % x) for x in src.keys()) 
   
 # Allow Ctrl+C or sig term to gracefully shut down the program for online
 # sources, otherwise it will just kill it

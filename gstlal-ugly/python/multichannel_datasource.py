@@ -73,21 +73,27 @@ def channel_dict_from_channel_file(channel_file):
 	The file here comes from the output of a configuration file parser.
 	"""
 
-	dict_out = {}
+	channel_dict = {}
 	channel_list = open(channel_file)
 	for channel in channel_list:
+		channel_name, fsamp = channel.split()
 		ifo, channel_info = channel.split(':')
-		channel_name, samp_rate = channel_info.split()		
-		dict_out.setdefault(ifo, {})[channel_name] = float(samp_rate)
+		channel_dict[channel_name] = {'fsamp': float(fsamp),
+					      'ifo': ifo,
+					      'flow': None,
+					      'fhigh': None,
+					      'qhigh' : None,
+					      'frametype' : None}
+
 	channel_list.close()
-	return dict_out
+	return channel_dict
 
 def channel_dict_from_channel_ini(options):
 	"""!
 	Given a channel list INI, produces a dictionary keyed by ifo, filtered by frame type.
 	"""
 
-	dict_out = {}
+	channel_dict = {}
 
 	# known/permissible values of safety and fidelity flags
 	known_safety   = set(("safe", " unsafe", " unsafeabove2kHz", "unknown"))
@@ -108,7 +114,17 @@ def channel_dict_from_channel_ini(options):
 
 		# ensure only channels whose sections aren't excluded are added to the dict
 		if name not in options.section_exclude:	
-			
+		
+			# extract the low frequency 
+			flow = config.getfloat(name, 'flow')
+
+			# figure out whether to use Nyquist for each channel or a specific limit
+			# NOTE: if useNyquist, we just use the max frequency allowed by Omega
+			fhigh  = config.get(name, 'fhigh')
+			useNyquist = fhigh == "Nyquist"
+			if not useNyquist:
+				fhigh = float(fhigh)
+				
 			# set up each channel
 			for channel in config.get(name, 'channels').strip().split('\n'):
             			
@@ -137,22 +153,21 @@ def channel_dict_from_channel_ini(options):
             			if (channel not in options.channel_exclude and
 				      safety not in options.safety_exclude and
 				    fidelity not in options.fidelity_exclude):
-					# add ifo, channel & sampling rate to dict
-					ifo, channel = channel.split(':')
-					dict_out.setdefault(ifo, {})[channel] = fsamp
+					
+					# add ifo, channel name & omicron parameters to dict
+					channel_name = channel
+					ifo,_  = channel.split(':')
+					if useNyquist:
+						fhigh = fsamp/2.
 
-	return dict_out				
+					channel_dict[channel_name] = {'fsamp': fsamp,
+								      'ifo': ifo,
+								      'flow': flow,
+								      'fhigh': fhigh,
+								      'qhigh' : qhigh,
+								      'frametype' : frametype}
 
-def channel_list_from_channel_dict(instrument, channel_dict):
-	"""!
-	Given a channel dictionary, and instrument tag, will produce a list of channels, in the form
-	["H1:channel1", "H1:channel2", ...], given instrument = "H1".
-	"""
-	out = []
-	for channel in channel_dict[instrument]:
-		out.append("%s:%s" % (instrument, channel))
-	return out	
-
+	return channel_dict				
 
 
 class DataSourceInfo(object):
@@ -202,8 +217,11 @@ class DataSourceInfo(object):
 		if extension == 'ini':
 			self.channel_dict = channel_dict_from_channel_ini(options)
 		else:
-			self.channel_dict = channel_dict_from_channel_file(options.channel_list)
-		
+			self.channel_dict = channel_dict_from_channel_file(options.channel_list)	
+			
+		# set instrument; it is assumed all channels from a given channel list are from the same instrument		
+		self.instrument = self.channel_dict[next(iter(self.channel_dict))]['ifo']
+
 		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		if options.shared_memory_partition is not None:
@@ -250,7 +268,7 @@ class DataSourceInfo(object):
 				self.frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([self.seg])) for instrument, seglist in self.frame_segments.items())
 		else:
 			## if no frame segments provided, set them to an empty segment list dictionary
-			self.frame_segments = segments.segmentlistdict((instrument, None) for instrument in self.channel_dict)
+			self.frame_segments = segments.segmentlistdict({self.instrument: None})
 		
 		## frame cache file
 		self.frame_cache = options.frame_cache
@@ -408,22 +426,22 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 	"""
 
 	if data_source_info.data_source == "white":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[instrument][channel]) for channel in data_source_info.channel_dict[instrument].keys()}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[channel]['fsamp']) for channel in data_source_info.channel_dict.keys()}
 	elif data_source_info.data_source == "silence":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = instrument, channel_name = channel, wave = 4) for channel in data_source_info.channel_dict[instrument].keys()}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = instrument, channel_name = channel, wave = 4) for channel in data_source_info.channel_dict.keys()}
 	elif data_source_info.data_source == "frames":
 		src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channel_list_from_channel_dict(instrument, data_source_info.channel_dict))
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = data_source_info.channel_dict.keys())
 		# allow frame reading and decoding to occur in a different
 		# thread
-		head = dict.fromkeys(data_source_info.channel_dict[instrument].keys(), None)
+		head = dict.fromkeys(data_source_info.channel_dict.keys(), None)
 		for channel in head:	
 			head[channel] = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * Gst.SECOND)
-			pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel), head[channel].get_static_pad("sink"))
+			pipeparts.src_deferred_link(demux, channel, head[channel].get_static_pad("sink"))
 			if data_source_info.frame_segments[instrument] is not None:
 				# FIXME:  make segmentsrc generate segment samples at the channel sample rate?
 				# FIXME:  make gate leaky when I'm certain that will work.
-				head[channel] = pipeparts.mkgate(pipeline, head[channel], threshold = 1, control = pipeparts.mksegmentsrc(pipeline, data_source_info.frame_segments[instrument]), name = "%s_%s_frame_segments_gate" % (instrument, channel))
+				head[channel] = pipeparts.mkgate(pipeline, head[channel], threshold = 1, control = pipeparts.mksegmentsrc(pipeline, data_source_info.frame_segments[instrument]), name = "%s_frame_segments_gate" % channel)
 				pipeparts.framecpp_channeldemux_check_segments.set_probe(head[channel].get_static_pad("src"), data_source_info.frame_segments[instrument])
 		
 			# fill in holes, skip duplicate data
@@ -439,13 +457,13 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 			# impossible code path
 			raise ValueError(data_source_info.data_source)
 
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channel_list_from_channel_dict(instrument, data_source_info.channel_dict))
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = data_source_info.channel_dict.keys())
 
 		# channels
-		head = dict.fromkeys(data_source_info.channel_dict[instrument].keys(), None)
+		head = dict.fromkeys(data_source_info.channel_dict.keys(), None)
 		for channel in head:		
 			head[channel] = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND* 60 * 1) # 1 minute of buffering
-			pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel), head[channel].get_static_pad("sink"))
+			pipeparts.src_deferred_link(demux, channel, head[channel].get_static_pad("sink"))
 		
 			# fill in holes, skip duplicate data
 			head[channel] = pipeparts.mkaudiorate(pipeline, head[channel], skip_to_first = True, silent = False)
@@ -460,7 +478,7 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 		head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
 		# progress report
 		if verbose:
-			head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_%s_progress_src" % (instrument, channel))
+			head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_src" % channel)
 		 
 	return head
 
