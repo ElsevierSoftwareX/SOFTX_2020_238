@@ -213,7 +213,8 @@ class Metric(object):
 		return None
 
 
-	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
+	#def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
+	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float64).eps):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
@@ -234,7 +235,7 @@ class Metric(object):
 		#condition = w < mxw * thresh
 		eff_dimension = len(S) - len(S[condition])
 		S[condition] = 0.0
-		#print "singular values", S/max(S), numpy.product(S[S>0])
+		print "singular values", S, numpy.product(S[S>0])
 		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
 		return g, eff_dimension, numpy.product(S[S>0])
 
