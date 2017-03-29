@@ -61,7 +61,7 @@ def duration(phi, q, tolerance = 1e-7):
 	# phi is the central frequency of the frequency band
 	return 2.*q/(2.*numpy.pi*phi)*numpy.log(1./tolerance)
 
-def sine_gaussian(phi, q, time_arr):
+def sine_gaussian(phi, phi_0, q, time_arr):
         # edges should be 1e-7 times peak
 	dt = time_arr[1]-time_arr[0]
 	rate = 1./dt
@@ -70,7 +70,7 @@ def sine_gaussian(phi, q, time_arr):
 	# phi is the central frequency of the sine gaussian
 	dur = duration(phi,q)
 	tau = q/(2.*numpy.pi*phi)
-	sg_vals = numpy.sin(2.*numpy.pi*phi*time_arr)*numpy.exp(-1.*time_arr**2./tau**2.)
+	sg_vals = numpy.cos(2.*numpy.pi*phi*time_arr + phi_0)*numpy.exp(-1.*time_arr**2./tau**2.)
 	return sg_vals 
 
 #
@@ -258,8 +258,9 @@ src = {}
 for channel in channels:
 	samp_rate = data_source_info.channel_dict[channel]['fsamp']  
 	max_samp_rate = samp_rate 
-	#min_samp_rate = min(64., max_samp_rate)
-	min_samp_rate = samp_rate/2.
+	# FIXME: pipeline will hang if min sampling rate < 64
+	min_samp_rate = min(64., max_samp_rate)
+	#min_samp_rate = samp_rate/2.
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
 	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2.**i for i in range(n_rates)], instrument, channel_name = channel, width=32).items():
 		# FIXME: don't hardcode q and frequency
@@ -273,15 +274,12 @@ for channel in channels:
 		#qhigh = data_source_info.channel_dict[channel]['qhigh']  
 		dur = max([duration(phi, q) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
-		# printing out fir matrix info, for testing purposes
-		#for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh):
-		#	print >>sys.stderr, "sine-gaussian array size=(%d,%d)" % numpy.array([sine_gaussian(phi, q, t_arr)]).reshape((-1, 1)).shape
-		#	print >>sys.stderr, "trivial array size=(%d,%d)" % numpy.ones((2, 1)).shape
-		#	print >>sys.stderr, "channel=%s, rate=%d" % (channel, rate)
-		#	print >>sys.stderr, "phi=%d, q=%d" % (phi, q)
-			
-		#thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)]) , time_domain = True)
-		#thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)]).reshape((-1, 1)) , time_domain = True)
+		#print >>sys.stderr, "rate=%d, min_samp_rate=%d, max_samp_rate=%d" % (rate, min_samp_rate, max_samp_rate)
+		#print >>sys.stderr, "flow=%f, fhigh=%f" % (flow, fhigh)
+		#print >>sys.stderr, "duration=%f, time_array_length=%d" % (dur, t_arr.size)
+		#print >>sys.stderr, "_________________________________"
+		phase = [0, numpy.pi/2.]
+		#thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]) , time_domain = True)
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.ones((2,1)), time_domain = True)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % int(rate))
