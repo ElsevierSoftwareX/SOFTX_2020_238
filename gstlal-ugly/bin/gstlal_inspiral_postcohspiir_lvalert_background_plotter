@@ -110,14 +110,15 @@ cmd += ["--input-stats", input_stats_fname]
 cmd += ["--input-zerolag", input_zerolag_fname]
 cmd += ["--zerolag-format", "single"]
 cmd += ["--cohsnr", str(cohsnr)]
-cmd += ["--combchisq", str(cmbchisq)]
+cmd += ["--cmbchisq", str(cmbchisq)]
 cmd += ["--ifos", ifos]
+print cmd
 
 proc = subprocess.Popen(cmd)
 proc_out, proc_err = proc.communicate()
 #
 # Background plots
 #
-gracedb.writeLog(gid, "%s CohSNR/CombChisq" % ifos, filename = outfname, filecontents = open(outfname).read(), tagname = "background")
+gracedb.writeLog(gid, "%s CohSNR/CmbChisq" % ifos, filename = outfname, filecontents = open(outfname).read(), tagname = "background")
 
 

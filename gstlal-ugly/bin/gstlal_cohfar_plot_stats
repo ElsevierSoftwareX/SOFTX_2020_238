@@ -110,10 +110,10 @@ if options.ifos == "L1H1":
 	ifos = "H1L1"
 else:
 	ifos = options.ifos
-pdb.set_trace()
+
 fap_name = "background_fap:%s_lgsnr_lgchisq:array" % ifos
-nevent_name = "%s_nevent:param" % ifos
-duration_name = "%s_duration:param" % ifos
+nevent_name = "background_rates:%s_nevent:param" % ifos
+duration_name = "background_rates:%s_duration:param" % ifos
 hist_trials_name = "hist_trials:param"
 
 fap = array_from_xml(options.input_stats, fap_name)
@@ -124,7 +124,7 @@ lgfar = np.log10(fap * nevent / (float(duration)*hist_trials))
 
 zerolags = postcoh_table_from_xml(options.input_zerolag)
 all_cohsnr = np.log10(zerolags.getColumnByName("cohsnr"))
-all_chisq = np.log10(zerolags.getColumnByName("chisq"))
+all_chisq = np.log10(zerolags.getColumnByName("cmbchisq"))
 event_cohsnr = np.log10(options.cohsnr)
 event_chisq = np.log10(options.cmbchisq)
 
