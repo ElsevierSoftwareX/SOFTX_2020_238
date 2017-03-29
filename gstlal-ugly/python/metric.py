@@ -180,7 +180,7 @@ class Metric(object):
 		return m
 
 
-	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = 1e-9, max_d2 = 5e-6):
+	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
@@ -189,9 +189,9 @@ class Metric(object):
 		x[i] = deltas[i]
 		d2 = 1. - self.match(w1, self.waveform(center+x))
 		if (d2 > max_d2):
-			return self.__set_diagonal_metric_tensor_component(i, center, deltas / 6.523, g, w1)
+			return self.__set_diagonal_metric_tensor_component(i, center, deltas / 8, g, w1)
 		if (d2 < min_d2):
-			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 1.687, g, w1)
+			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
 		else:
 			g[i,i] = d2 / x[i] / x[i]
 			return x[i]
@@ -213,8 +213,7 @@ class Metric(object):
 		return None
 
 
-	#def set_metric_tensor(self, center, deltas):
-	def __call__(self, center, deltas = None, thresh = numpy.finfo(numpy.float32).eps * 1):
+	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
@@ -227,14 +226,17 @@ class Metric(object):
 		# Then the rest
 		[self.__set_offdiagonal_metric_tensor_component(ij, center, deltas, g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
 
-		w, v = numpy.linalg.eigh(g)
-		mxw = numpy.max(w)
-		condition = w < mxw * thresh
-		if numpy.any(condition):
-			w[condition] = thresh * mxw
-			g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
-			self.metric_is_valid = False
-		return g
+		U, S, V = numpy.linalg.svd(g)
+		condition = S < max(S) * thresh
+		#condition = numpy.logical_or((S < 1), (S < max(S) * thresh))
+		#w, v = numpy.linalg.eigh(g)
+		#mxw = numpy.max(w)
+		#condition = w < mxw * thresh
+		eff_dimension = len(S) - len(S[condition])
+		S[condition] = 0.0
+		#print "singular values", S/max(S), numpy.product(S[S>0])
+		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
+		return g, eff_dimension, numpy.product(S[S>0])
 
 
 	def distance(self, metric_tensor, x, y):

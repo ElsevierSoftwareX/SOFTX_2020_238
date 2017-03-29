@@ -59,7 +59,7 @@ def packing_density(n):
 	
 class HyperCube(object):
 
-	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None):
+	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, effective_dimension = None, det = None):
 		"""
 		Define a hypercube with boundaries given by boundaries, e.g.,
 
@@ -81,9 +81,11 @@ class HyperCube(object):
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
-			self.metric_tensor = self.metric(self.center, self.deltas / 2.)
+			self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 2.)
 		else:
 			self.metric_tensor = metric_tensor
+			self.effective_dimension = effective_dimension
+			self.det = det
 		self.size = self._size()
 		self.tiles = []
 		self.constraint_func = constraint_func
@@ -96,7 +98,9 @@ class HyperCube(object):
 		return (tuple(self.center), tuple(self.deltas)) == (tuple(other.center), tuple(other.deltas))
 
 	def template_volume(self):
-		n = self.N()
+		#n = self.N()
+		n = self.effective_dimension
+		#print "template_volume ", (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
 		return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
 
 	def N(self):
@@ -127,7 +131,7 @@ class HyperCube(object):
 		leftbound[dim,1] = self.center[dim]
 		rightbound[dim,0] = self.center[dim]
 		if reuse_metric:
-			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor)
+			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det)
 		else:
 			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric)
 
@@ -155,7 +159,9 @@ class HyperCube(object):
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
 			metric_tensor = self.metric_tensor
-		return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
+		#return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
+		#print "volume ", numpy.product(self.deltas) * self.det**.5
+		return numpy.product(self.deltas) * self.det**.5
 
 	def mass_volume(self):
 		# FIXME this assumes m_1 m_2 are the first coordinates, not necessarily true
@@ -185,9 +191,10 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.5, max_mass_vol = 50.):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 2.0, max_mass_vol = 100.):
 		size = self.cube.size
 		splitdim = numpy.argmax(size)
+		#splitdim = numpy.argmax(size[:2])
 
 		# Figure out how many templates go inside
 		if not self.parent:
@@ -197,13 +204,15 @@ class Node(object):
 			# check metric consistency with sibling
 			numtmps = self.cube.num_templates(mismatch)
 			parent_numtmps = self.parent.cube.num_templates(mismatch) / 2.
+			sib_numtmps = self.sibling.cube.num_templates(mismatch)
+			#numtmps = (numtmps + parent_numtmps + sib_numtmps) / 3.
 			vratio = numtmps / parent_numtmps
 		# FIXME assumes m1 m2 are first coords
 		q = self.cube.center[0] / self.cube.center[1]
 		#if .9 < q < 1.1:
 		#	numtmps *= 3.0
 		#print self.cube.center, numtmps, vratio, split_num_templates
-		if self.cube.constraint_func(self.cube.vertices) and ((numtmps > split_num_templates) or self.cube.mass_volume() > max_mass_vol):
+		if (self.cube.constraint_func(self.cube.vertices) and ((numtmps > split_num_templates) or self.cube.mass_volume() > max_mass_vol)):
 			bifurcation += 1
 			if numtmps < 5**len(size) and (1./vtol < vratio < vtol) and self.cube.mass_volume() < max_mass_vol:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
