@@ -39,6 +39,7 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf")):
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
+	#return 1.
 	if n==1:
 		return 1.
 	if n==2:
@@ -154,14 +155,7 @@ class HyperCube(object):
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
 			metric_tensor = self.metric_tensor
-		# Figure out the pseudo determinant
-		# FIXME not sure if this is adequate
-		w, v = numpy.linalg.eigh(self.metric_tensor)
-		mxw = numpy.max(w)
-		# use 4 * machine espilon to be safe
-		volume_element = numpy.product(w[w/mxw > numpy.finfo(numpy.float32).eps * 4])**.5
-		#return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
-		return numpy.product(self.deltas) * volume_element
+		return numpy.product(self.deltas) * numpy.linalg.det(metric_tensor)**.5
 
 	def mass_volume(self):
 		# FIXME this assumes m_1 m_2 are the first coordinates, not necessarily true
@@ -191,7 +185,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 2.0, max_mass_vol = 50.):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.5, max_mass_vol = 50.):
 		size = self.cube.size
 		splitdim = numpy.argmax(size)
 
@@ -203,13 +197,11 @@ class Node(object):
 			# check metric consistency with sibling
 			numtmps = self.cube.num_templates(mismatch)
 			parent_numtmps = self.parent.cube.num_templates(mismatch) / 2.
-			sib_numtmps = self.parent.cube.num_templates(mismatch) / 2.
 			vratio = numtmps / parent_numtmps
-			#numtmps = (numtmps + parent_numtmps + sib_numtmps) / 3.
 		# FIXME assumes m1 m2 are first coords
 		q = self.cube.center[0] / self.cube.center[1]
-		if .9 < q < 1.1:
-			numtmps *= 3.0
+		#if .9 < q < 1.1:
+		#	numtmps *= 3.0
 		#print self.cube.center, numtmps, vratio, split_num_templates
 		if self.cube.constraint_func(self.cube.vertices) and ((numtmps > split_num_templates) or self.cube.mass_volume() > max_mass_vol):
 			bifurcation += 1
@@ -226,7 +218,7 @@ class Node(object):
 			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 		else:
 			if verbose:
-				print "Reached final depth in level %03d at %s with edge lengths %s" % (bifurcation, self.cube.center, self.cube.deltas)
+				print "Reached final depth in level %03d at %s with edge lengths %s and template fraction %.2f" % (bifurcation, self.cube.center, self.cube.deltas, numtmps)
 
 	# FIXME can this be made a generator?
 	def leafnodes(self, out = set()):
