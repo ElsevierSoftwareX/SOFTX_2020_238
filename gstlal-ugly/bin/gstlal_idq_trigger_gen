@@ -274,17 +274,13 @@ for channel in channels:
 		#qhigh = data_source_info.channel_dict[channel]['qhigh']  
 		dur = max([duration(phi, q) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
-		#print >>sys.stderr, "rate=%d, min_samp_rate=%d, max_samp_rate=%d" % (rate, min_samp_rate, max_samp_rate)
-		#print >>sys.stderr, "flow=%f, fhigh=%f" % (flow, fhigh)
-		#print >>sys.stderr, "duration=%f, time_array_length=%d" % (dur, t_arr.size)
-		#print >>sys.stderr, "_________________________________"
 		phase = [0, numpy.pi/2.]
-		#thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]) , time_domain = True)
-		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.ones((2,1)), time_domain = True)
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]) , time_domain = True)
+		#thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.ones((2,1)), time_domain = True)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % int(rate))
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel) )
-		thishead = pipeparts.mktrigger(pipeline, thishead, int(rate), autocorrelation_matrix = numpy.ones((1,21), dtype=numpy.complex))
+		thishead = pipeparts.mktrigger(pipeline, thishead, int(rate), autocorrelation_matrix = numpy.ones((len(list(phi_ql(flow, fhigh, qlow, qhigh))), 21), dtype=numpy.complex))
 		thishead = pipeparts.mkqueue(pipeline, thishead)
 		src[(channel, rate)] = thishead	
 
