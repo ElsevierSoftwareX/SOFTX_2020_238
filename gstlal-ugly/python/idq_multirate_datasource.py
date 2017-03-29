@@ -53,33 +53,6 @@ except KeyError as e:
 	print >> sys.stderr, "You must set the environment variable GSTLAL_FIR_WHITEN to either 0 or 1.  1 enables causal whitening. 0 is the traditional acausal whitening filter"
 	raise
 
-## 
-# @file
-#
-# A file that contains the multirate_datasource module code
-#
-# ###Review Status
-#
-# | Names                                          | Hash                                     | Date       | Diff to Head of Master      |
-# | ---------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e | 2014-06-18 | <a href="@gstlal_cgit_diff/python/multirate_datasource.py?id=HEAD&id2=8a6ea41398be79c00bdc27456ddeb1b590b0f68e">multirate_datasource.py</a> |
-
-# #### Actions
-#
-# - Is the h(t) gate really necessary? It shouldn't really be used unless
-# there is something really wrong with the data. Wishlist: Tee off from 
-# the control panel and record on/off (This is already done).
-#
-# - Task for the review team: Check what data was analysed and how much
-# data was "lost" due to application of internal data quality.
-#
-# - There seems to be a bug in resampler (even) in the latest version of gstreamer; 
-# (produces one few sample). We need to better understand the consequence of this bug.
-
-##
-# @package python.multirate_datasource
-#
-# multirate_datasource module
 
 ## #### produced whitened h(t) at (possibly) multiple sample rates
 # ##### Gstreamer graph describing this function
