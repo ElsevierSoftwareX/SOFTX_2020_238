@@ -387,7 +387,11 @@ for graceid in graceids:
         if options.credible_intervals:
                 if options.verbose:
                         print >> sys.stderr, "determining credible intervals ..."
-                credible_intervals = dict((cred, hpd_credible_interval(cred, Rr_posterior)) for cred in options.credible_intervals)
+                try:
+                        credible_intervals = dict((cred, hpd_credible_interval(cred, Rr_posterior)) for cred in options.credible_intervals)
+                except:
+                        print >> sys.stderr, "unable to get credible intervals, setting value to None"
+                        credible_intervals = None
         else:
 	        credible_intervals = None
         if credible_intervals is not None:
