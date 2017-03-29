@@ -118,6 +118,14 @@ class Metric(object):
 			length = self.working_length,
 			sampleUnits = lal.Unit("strain")
 		)
+		self.w1w2 = lal.CreateCOMPLEX16FrequencySeries(
+			name = "template",
+			epoch = 0.0,
+			f0 = 0.0,
+			deltaF = self.df,
+			sampleUnits = lal.Unit("strain"),
+			length = self.working_length
+		)
 
 
 	def waveform(self, coords):
@@ -152,6 +160,8 @@ class Metric(object):
 			fseries = hplus
 			lal.WhitenCOMPLEX16FrequencySeries(fseries, self.psd)
 			fseries = add_quadrature_phase(fseries, self.working_length)
+			del hplus
+			del hcross
 		except RuntimeError:
 			print p
 			raise
@@ -162,53 +172,29 @@ class Metric(object):
 			n = numpy.real((numpy.conj(w) * w).sum())**.5 / self.duration**.5
 			return n
 
-		w1w2 = lal.CreateCOMPLEX16FrequencySeries(
-			name = "template",
-			epoch = w1.epoch,
-			f0 = 0.0,
-			deltaF = self.df,
-			sampleUnits = lal.Unit("strain"),
-			length = self.working_length
-		)
-		w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
-		lal.COMPLEX16FreqTimeFFT(self.tseries, w1w2, self.revplan)
+		self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
+		lal.COMPLEX16FreqTimeFFT(self.tseries, self.w1w2, self.revplan)
 		m = numpy.real(numpy.abs(numpy.array(self.tseries.data.data)).max()) / norm(w1.data.data) / norm(w2.data.data)
 		if m > 1.0000001:
 			raise ValueError("Match is greater than 1 : %f" % m)
 		return m
 
 
-	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
+	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = 1e-9, max_d2 = 5e-6):
+
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
 		# this is a diagonal component or not
 		x = numpy.zeros(len(deltas))
 		x[i] = deltas[i]
-		# Check the match
 		d2 = 1. - self.match(w1, self.waveform(center+x))
-		# The match must like close but not beyond machine
-		# epsilon to be a good approximation
-		#print center, deltas, d2
-		if (d2 > 5e-2):
-			return self.__set_diagonal_metric_tensor_component(i, center, deltas / 10., g, w1)
-		if (d2 < 5e-3):
-			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
+		if (d2 > max_d2):
+			return self.__set_diagonal_metric_tensor_component(i, center, deltas / 6.523, g, w1)
+		if (d2 < min_d2):
+			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 1.687, g, w1)
 		else:
-			component = [((d2 / x[i] / x[i]), x[i])]
-			#return component[0], x[i]
-			#print center, x, d2, component
-			for factor in (1. / 2**(i+1) for i in range(9)):
-				x[i] = deltas[i] * factor
-				d2 = 1. - self.match(w1, self.waveform(center+x))
-				component.append((d2 / x[i] / x[i], x[i]))
-				#print center, x, d2, component
-			#print numpy.mean(numpy.array(component))
-			# take the biggest metric component
-			gii, delta = sorted(component, key = lambda x: x[0])[-1]
-			g[i,i] = gii
-			#g[i,i] = numpy.mean(component)
-			return delta
-			#return numpy.mean(component), x[i]
+			g[i,i] = d2 / x[i] / x[i]
+			return x[i]
 
 	def __set_offdiagonal_metric_tensor_component(self, (i,j), center, deltas, g, w1):
 		# make the vector to solve for the metric by choosing
@@ -228,7 +214,7 @@ class Metric(object):
 
 
 	#def set_metric_tensor(self, center, deltas):
-	def __call__(self, center, deltas = None):
+	def __call__(self, center, deltas = None, thresh = numpy.finfo(numpy.float32).eps * 1):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
@@ -241,20 +227,14 @@ class Metric(object):
 		# Then the rest
 		[self.__set_offdiagonal_metric_tensor_component(ij, center, deltas, g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
 
-		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
 		mxw = numpy.max(w)
-		self.metric_is_valid = True
-		#if numpy.any(w < 0):
-		#	print w
-		#	raise ValueError("Negative eigen values of metric")
-		if numpy.any(w < 0):
-			w[w<0.] = numpy.finfo(numpy.float32).eps * mxw
+		condition = w < mxw * thresh
+		if numpy.any(condition):
+			w[condition] = thresh * mxw
 			g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
 			self.metric_is_valid = False
 		return g
-
-
 
 
 	def distance(self, metric_tensor, x, y):
