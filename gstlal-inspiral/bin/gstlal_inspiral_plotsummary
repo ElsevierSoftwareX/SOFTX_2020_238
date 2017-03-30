@@ -1706,13 +1706,10 @@ class Segments(object):
 		self.base = base
 
 	def add_contents(self, contents):
-		if contents.sim_inspiral_table is not None:
-			# skip injection documents
-			return
-
-		for name, seglistdict in contents.all_segs_dict.items():
-			self.all_segs_dict.setdefault(name, segments.segmentlistdict())
-			self.all_segs_dict[name] += seglistdict
+		# only process non-injection documents
+		if contents.sim_inspiral_table is None:
+			for name, seglists in contents.all_segs_dict.items():
+				self.all_segs_dict.setdefault(name, segments.segmentlistdict()) |= seglists
 
 	def finish(self):
 		for name, segs in self.all_segs_dict.items():
@@ -1813,6 +1810,7 @@ if options.plot_group is None:
 # Process files
 #
 
+
 seg_class = Segments(base = os.path.join(options.output_dir, options.user_tag))
 
 for n, filename in enumerate(filenames):
@@ -1831,14 +1829,14 @@ for n, filename in enumerate(filenames):
 	connection.close()
 	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
 
+seg_class.finish()
+
 
 #
 # Finish and write plots, deleting them as we go to save memory
 #
 
-seg_class.finish()
 
-n = 0
 filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[1], "%s", path = options.output_dir)
 while len(plots):
 	for fig, filename_fragment, is_open_box in plots.pop(0).finish():
@@ -1850,10 +1848,9 @@ while len(plots):
 		except ValueError:
 			# broken at UWM
 			pass
-		for format in options.format:
+		for fmt in options.format:
 			if filename_fragment and fig:
-				filename = filename_template % (options.user_tag, options.plot_group[n], filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
+				filename = filename_template % (options.user_tag, options.plot_group[n], filename_fragment, ("openbox" if is_open_box else "closedbox"), fmt)
 				if options.verbose:
 					print >>sys.stderr, "writing %s ..." % filename
 				fig.savefig(filename)
-	n += 1
