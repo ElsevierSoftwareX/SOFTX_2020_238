@@ -21,7 +21,7 @@ struct gstlal_peak_state *gstlal_peak_state_new(guint channels, gstlal_peak_type
 	new->samples = g_malloc0(sizeof(guint) * channels);
 	new->interpsamples = g_malloc0(sizeof(double) * channels);
 	new->num_events = 0;
-	new->pad = 0;
+	new->pad = GSTLAL_PEAK_INTERP_LENGTH;
 	new->thresh = 0;
 	new->type = type;
 
