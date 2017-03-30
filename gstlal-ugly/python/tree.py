@@ -29,17 +29,17 @@ def uber_constraint(vertices, mtotal = 100, ns_spin = 0.05):
 			return True
 	return False
 
-def mass_sym_constraint(vertices, mass_ratio  = float("inf")):
+def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float("inf")):
 	# Assumes m_1 and m_2 are first
 	for vertex in vertices:
 		m1,m2 = vertex[0:2]
-		if m2 < m1 and m1/m2 < mass_ratio:
+		if m2 <= m1 and float(m1/m2) <= mass_ratio and (m1+m2) < total_mass:
 			return True
 	return False
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	#return 1.
+	return 1.25
 	if n==1:
 		return 1.
 	if n==2:
@@ -184,7 +184,8 @@ class Node(object):
 	have sub-nodes that split the hypercube.
 	"""
 
-	template_count = [0]
+	template_count = [1]
+	bad_aspect_count = [0]
 
 	def __init__(self, cube, parent = None):
 		self.cube = cube
@@ -193,7 +194,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.1, max_mass_vol = float("inf")):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.25, max_mass_vol = float(50*50)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		aspect_ratio = max(size) / min(size)
@@ -208,16 +209,16 @@ class Node(object):
 			parent_numtmps = self.parent.cube.num_templates(mismatch) / 2.
 			sib_numtmps = self.sibling.cube.num_templates(mismatch)
 			#numtmps = (numtmps + parent_numtmps + sib_numtmps) / 3.
-			vratio = numtmps / parent_numtmps
+			vratio = numtmps / sib_numtmps
 		# FIXME assumes m1 m2 are first coords
 		q = self.cube.center[0] / self.cube.center[1]
 		#if .9 < q < 1.1:
 		#	numtmps *= 3.0
 		#print self.cube.center, numtmps, vratio, split_num_templates
-		if (self.cube.constraint_func(self.cube.vertices) and ((numtmps > split_num_templates) or self.cube.mass_volume() > max_mass_vol)):
+		if (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps > split_num_templates) or self.cube.mass_volume() > max_mass_vol)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 5**len(size) and (1./vtol < vratio < vtol) and self.cube.mass_volume() < max_mass_vol:
+			if numtmps < 3**len(size) and (1./vtol < vratio < vtol) and self.cube.mass_volume() < max_mass_vol:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
@@ -230,9 +231,11 @@ class Node(object):
 			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 		else:
 			if verbose:
-				print "%d tmps : level %03d @ %s : deltas %s (%s) : vol frac. %.2f : aspect ratio %.2f" % (self.template_count[0], bifurcation, self.cube.center, self.cube.deltas, size, numtmps, aspect_ratio)
-			if self.cube.constraint_func(self.cube.vertices) and aspect_ratio > 2.5:
-				raise ValueError("detected a large aspect ratio.  Placement is not trustworthy.  Try increasing the size of skinny dimensions (e.g., increase the spin interval)")
+				print "%d tmps : level %03d @ %s : deltas %s : vol frac. %.2f : aspect ratio %.2f" % (self.template_count[0], bifurcation, self.cube.center, self.cube.deltas, numtmps, aspect_ratio)
+			if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and aspect_ratio > 2.5:
+				self.bad_aspect_count[0] = self.bad_aspect_count[0] + 1
+				if (aspect_ratio > 20.0) or (self.template_count[0] >= 10 and float(self.bad_aspect_count[0]) / self.template_count[0] > 0.1):
+					raise ValueError("detected a large aspect ratio.  Placement is not trustworthy.  Try increasing the size of skinny dimensions (e.g., increase the spin interval)")
 
 	# FIXME can this be made a generator?
 	def leafnodes(self, out = set()):
@@ -245,6 +248,6 @@ class Node(object):
 		if self.left:
 			self.left.leafnodes(out)
 
-		if not self.right and not self.left and self.cube.constraint_func(self.cube.vertices):
+		if not self.right and not self.left and self.cube.constraint_func(self.cube.vertices + [self.cube.center]):
 			out.add(self.cube)
 		return out
