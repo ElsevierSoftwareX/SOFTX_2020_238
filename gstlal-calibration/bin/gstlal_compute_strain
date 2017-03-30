@@ -649,14 +649,15 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
 	exc = calibration_parts.caps_and_progress(pipeline, head_dict["exc"], hoft_caps, "exc")
 
 # If we use the coherence channels multiple times in the pipeline, we need to tee the channels
-lowfreq_coh_use = int(not options.no_kappatst) + int(not options.no_kappapu) + int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_srcQ) + int(not options.no_fs) + int(not options.no_dq_vector and (not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs))
-highfreq_coh_use = int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_srcQ) + int(not options.no_fs) + int(not options.no_dq_vector and (not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs)) 
-if lowfreq_coh_use >= 2:
-	pcaly_line1_coh = pipeparts.mktee(pipeline, pcaly_line1_coh)
-	sus_coh = pipeparts.mktee(pipeline, sus_coh)
-	darm_coh = pipeparts.mktee(pipeline, darm_coh)
-if highfreq_coh_use >= 2:
-	pcaly_line2_coh = pipeparts.mktee(pipeline, pcaly_line2_coh)
+if not options.no_coherence:
+	lowfreq_coh_use = int(not options.no_kappatst) + int(not options.no_kappapu) + int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_srcQ) + int(not options.no_fs) + int(not options.no_dq_vector and (not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs))
+	highfreq_coh_use = int(not options.no_kappac) + int(not options.no_fcc) + int(not options.no_srcQ) + int(not options.no_fs) + int(not options.no_dq_vector and (not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs)) 
+	if lowfreq_coh_use >= 2:
+		pcaly_line1_coh = pipeparts.mktee(pipeline, pcaly_line1_coh)
+		sus_coh = pipeparts.mktee(pipeline, sus_coh)
+		darm_coh = pipeparts.mktee(pipeline, darm_coh)
+	if highfreq_coh_use >= 2:
+		pcaly_line2_coh = pipeparts.mktee(pipeline, pcaly_line2_coh)
 
 # Set up computations for \kappa_a, \kappa_tst,\kappa_c, \kappa_pu, f_cc, if applicable
 if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not options.no_kappapu or not options.no_srcQ or not options.no_fs:
@@ -1471,14 +1472,12 @@ if not options.no_fs:
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if not options.no_srcQ:
 	srcQ_inv_out = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv)
-	srcQ_out = pipeparts.mkpow(pipeline, srcQ_inv_out, exponent = -1.0)
-	srcQ_out = calibration_parts.mkresample(pipeline, srcQ_out, 1, record_kappa_caps)
-	srcQ_out = pipeparts.mkprogressreport(pipeline, srcQ_out, "progress_SRC_Q_%s" % instrument)
+	srcQ_inv_out = calibration_parts.mkresample(pipeline, srcQ_inv_out, 1, record_kappa_caps)
+	srcQ_inv_out = pipeparts.mkprogressreport(pipeline, srcQ_inv_out, "progress_SRC_Q_%s" % instrument)
 
 	smooth_srcQ_inv_nogate = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv_nogate)
-	smooth_srcQ_nogate = pipeparts.mkpow(pipeline, smooth_srcQ_inv_nogate, exponent = -1.0)
-	smooth_srcQ_nogate = calibration_parts.mkresample(pipeline, smooth_srcQ_nogate, 1, record_kappa_caps)
-	smooth_srcQ_nogate = pipeparts.mkprogressreport(pipeline, smooth_srcQ_nogate, "progress_SRC_Q_nogate_%s" % instrument)
+	smooth_srcQ_inv_nogate = calibration_parts.mkresample(pipeline, smooth_srcQ_inv_nogate, 1, record_kappa_caps)
+	smooth_srcQ_inv_nogate = pipeparts.mkprogressreport(pipeline, smooth_srcQ_inv_nogate, "progress_SRC_Q_nogate_%s" % instrument)
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -1535,8 +1534,8 @@ if not options.no_fs:
 
 # Link the src_Q to the muxer
 if not options.no_srcQ:
-	calibration_parts.mkqueue(pipeline, srcQ_out, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_srcQ_nogate, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, srcQ_inv_out, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q_INVERSE%s" % (instrument, chan_prefix, chan_suffix)))
+	calibration_parts.mkqueue(pipeline, smooth_srcQ_inv_nogate, max_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q_INVERSE_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Check that all frames are long enough, that they have all of the channels by requring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
 def check_complete_frames(pad, info, (output_start, frame_duration, wings_start, wings_end)):
