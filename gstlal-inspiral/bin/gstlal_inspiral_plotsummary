@@ -260,8 +260,12 @@ class CoincDatabase(object):
 		self.seglists -= self.veto_segments
 
 		# get all the segments in the database to use as a summary
-		for name, in set(connection.cursor().execute("SELECT name from segment_definer")):
-			self.all_segs_dict[name] = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str(name)).coalesce()
+		for llwsegs in ligolw_segments.LigolwSegments(xmldoc).coalesce():
+			for instrument in llwsegs.instruments:
+				# do the intersection in the loop to get a
+				# new object each time to avoid confusion
+				# from shared references
+				self.all_segs_dict.setdefault(llwsegs.name, segments.segmentlistdict())[instrument] |= llwsegs.active & llwsegs.valid
 
 		# get the live time
 		if verbose:
