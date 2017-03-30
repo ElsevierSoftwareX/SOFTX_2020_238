@@ -48,6 +48,7 @@ matplotlib.rcParams.update({
 })
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
+import operator
 from optparse import OptionParser
 import os
 import scipy
@@ -1700,7 +1701,6 @@ WHERE
 class Segments(object):
 	def __init__(self, base):
 		self.all_segs_dict = {}
-		self.extent = None
 		self.data = []
 		self.table = []
 		self.base = base
@@ -1709,19 +1709,16 @@ class Segments(object):
 		# only process non-injection documents
 		if contents.sim_inspiral_table is None:
 			for name, seglists in contents.all_segs_dict.items():
-				self.all_segs_dict.setdefault(name, segments.segmentlistdict()) |= seglists
+				# need to use operator because Python won't
+				# allow a function call on the LHS of |=
+				# for some mystery reason.
+				operator.ior(self.all_segs_dict.setdefault(name, segments.segmentlistdict()), seglists)
 
 	def finish(self):
-		for name, segs in self.all_segs_dict.items():
-			try:
-				if self.extent is None:
-					self.extent = segs.extent_all()
-				else:
-					self.extent &=segs.extent_all()
-			except ValueError:
-					pass
+		self.extent = segments.segmentlist(seglists.extent_all() for seglists in self.all_segs_dict.values()).extent()
 
-			for ifo, seglist in segs.items():
+		for name, seglists in self.all_segs_dict.items():
+			for ifo, seglist in seglists.items():
 				for seg in seglist:
 					self.data.append(["%s: %s" % (str(ifo), str(name)), "", "%.2f-%.2f" % (float(seg[0]), float(seg[1])), float(seg[0])*1000 + 315964800000 - 17000, float(seg[1])*1000 + 315964800000 - 17000])
 
