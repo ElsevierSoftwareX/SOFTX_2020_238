@@ -153,8 +153,8 @@ class HyperCube(object):
 		return "coordinate center: %s\nedge lengths: %s" % (self.center, self.deltas)
 
 	def dl(self, mismatch):
-		# From Owen 1995 (2.15)
-		return 2 * mismatch**.5 / self.N()**.5
+		# From Owen 1995
+		return mismatch**.5
 
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
@@ -184,6 +184,8 @@ class Node(object):
 	have sub-nodes that split the hypercube.
 	"""
 
+	template_count = [0]
+
 	def __init__(self, cube, parent = None):
 		self.cube = cube
 		self.right = None
@@ -191,9 +193,10 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.5, max_mass_vol = float("inf")):
-		size = self.cube.size
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.1, max_mass_vol = float("inf")):
+		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
+		aspect_ratio = max(size) / min(size)
 
 		# Figure out how many templates go inside
 		if not self.parent:
@@ -212,6 +215,7 @@ class Node(object):
 		#	numtmps *= 3.0
 		#print self.cube.center, numtmps, vratio, split_num_templates
 		if (self.cube.constraint_func(self.cube.vertices) and ((numtmps > split_num_templates) or self.cube.mass_volume() > max_mass_vol)):
+			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
 			if numtmps < 5**len(size) and (1./vtol < vratio < vtol) and self.cube.mass_volume() < max_mass_vol:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
@@ -226,7 +230,9 @@ class Node(object):
 			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 		else:
 			if verbose:
-				print "Reached final depth in level %03d at %s with edge lengths %s and template fraction %.2f" % (bifurcation, self.cube.center, self.cube.deltas, numtmps)
+				print "%d tmps : level %03d @ %s : deltas %s (%s) : vol frac. %.2f : aspect ratio %.2f" % (self.template_count[0], bifurcation, self.cube.center, self.cube.deltas, size, numtmps, aspect_ratio)
+			if self.cube.constraint_func(self.cube.vertices) and aspect_ratio > 2.5:
+				raise ValueError("detected a large aspect ratio.  Placement is not trustworthy.  Try increasing the size of skinny dimensions (e.g., increase the spin interval)")
 
 	# FIXME can this be made a generator?
 	def leafnodes(self, out = set()):
