@@ -222,6 +222,10 @@ nodes = bank.leafnodes()
 patches = []
 expected = 0
 bad_metrics = 0
+
+if args.verbose:
+	print >> sys.stderr, "Writing output document"
+
 for n, c in enumerate(nodes):
 
 	tiles = c.tile(mismatch = mismatch)
@@ -242,14 +246,9 @@ for n, c in enumerate(nodes):
 			tbl.append(row)
 			previous_tiles.append(t)
 
-        if args.verbose:
-		print "Placed %04d tiles in hyperrectangle %d/%d with boundary:" % (len(tiles), n+1, len(nodes))
-		for row in c.boundaries:
-			print "\t", row
-                print "\tcurrent bank size: %d" % len(tbl)
 	patches.append(c.boundaries)
 
-print "bad metrics ", bad_metrics
+#print "bad metrics ", bad_metrics
 
 numpy.save("patches.npy", numpy.array(patches))
 
