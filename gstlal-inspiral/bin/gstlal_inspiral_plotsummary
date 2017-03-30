@@ -155,6 +155,10 @@ def parse_command_line():
 
 	if options.plot_group is not None:
 		options.plot_group = sorted(map(int, options.plot_group))
+
+	if options.plot_group is None or set(options.plot_group) & set((2, 6)):
+		raise ValueError("Must provide --likelihood-file to generate plots in groups 2 and/or 6.")
+
 	if not options.format:
 		options.format = ["png"]
 
@@ -162,9 +166,6 @@ def parse_command_line():
 		filenames = []
 	if options.input_cache:
 		filenames.extend(c.path for c in map(CacheEntry, open(options.input_cache)))
-
-	if options.likelihood_file is None:
-		raise ValueError("Must provide likelihood file.")
 
 	return options, filenames
 
@@ -851,7 +852,7 @@ FROM
 			return
 		for on_instruments in contents.on_instruments_combos:
 			if on_instruments not in self.plots:
-				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession, self.nonzero_horizon_seglistdict)
+				self.plots[on_instruments] = self.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession, self.nonzero_horizon_seglistdict)
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
@@ -1765,7 +1766,10 @@ options, filenames = parse_command_line()
 #
 
 
-snr_min, ranking_data, seglists, nonzero_horizon_seglistdict = load_distributions([options.likelihood_file], verbose = options.verbose)
+if options.likelihood_file is not None:
+	snr_min, ranking_data, seglists, nonzero_horizon_seglistdict = load_distributions([options.likelihood_file], verbose = options.verbose)
+else:
+	snr_min, ranking_data, seglists, nonzero_horizon_seglistdict = 4., None, None, None
 if ranking_data is not None:
 	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 else:
