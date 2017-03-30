@@ -180,7 +180,12 @@ class Metric(object):
 		return m
 
 
-	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
+	#def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
+	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
+
+		min_d2 = numpy.finfo(numpy.float32).eps / self.working_length * 1
+		max_d2 = numpy.finfo(numpy.float32).eps / self.working_length * 10000
+		#max_d2 = numpy.finfo(numpy.float32).eps / self.working_length * 1000
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
@@ -235,7 +240,7 @@ class Metric(object):
 		#condition = w < mxw * thresh
 		eff_dimension = len(S) - len(S[condition])
 		S[condition] = 0.0
-		print "singular values", S, numpy.product(S[S>0])
+		#print "singular values", S, numpy.product(S[S>0])
 		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
 		return g, eff_dimension, numpy.product(S[S>0])
 
