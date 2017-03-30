@@ -156,7 +156,7 @@ def parse_command_line():
 	if options.plot_group is not None:
 		options.plot_group = sorted(map(int, options.plot_group))
 
-	if options.plot_group is None or set(options.plot_group) & set((2, 6)):
+	if options.plot_group is None or set(options.plot_group) & set((1, 5)):
 		raise ValueError("Must provide --likelihood-file to generate plots in groups 2 and/or 6.")
 
 	if not options.format:
