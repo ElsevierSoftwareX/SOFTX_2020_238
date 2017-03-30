@@ -194,7 +194,7 @@ if args.Mq:
 	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: True, metric = g_ij))
 else:
 	coord_limits_2 = coord_limits
-	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = tree.mass_sym_constraint, metric = g_ij))
+	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint(x, args.max_q, args.max_mtotal), metric = g_ij))
 
 
 if args.verbose:
