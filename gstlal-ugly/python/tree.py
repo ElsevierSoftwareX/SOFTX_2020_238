@@ -191,10 +191,9 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 2.0, max_mass_vol = 100.):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.5, max_mass_vol = float("inf")):
 		size = self.cube.size
 		splitdim = numpy.argmax(size)
-		#splitdim = numpy.argmax(size[:2])
 
 		# Figure out how many templates go inside
 		if not self.parent:
