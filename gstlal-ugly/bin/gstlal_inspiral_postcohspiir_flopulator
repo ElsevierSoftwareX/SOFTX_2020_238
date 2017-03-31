@@ -1,0 +1,211 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017  
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# A program to compute the total cost of filtering to filter a segment of 
+# data with a number of templates given a latency limit, either the filtering
+# method to be SPIIR
+# filtering, direct filtering or FFT. One template is used to represent all
+# temlates in duration. This program also calculates the cost of computing
+# coherent statistic.
+
+
+import numpy as np
+import sys
+from optparse import OptionParser
+from glue.lal import CacheEntry
+from gstlal.cbc_template_iir import Bank
+import pdb
+
+class FilteringFlopulator(object):
+	def __init__(self, iir_bank_cache, N_d, N_dd, fft_latency, verbose = False):
+		"""
+		N_td: template duration
+		N_r: sample rate
+		N_tplt: number of template
+		N_dd: data duration
+		N_d: number of detectors
+		nop_ps: number of operations per second
+		nops: number of operations in total
+		"""
+		self.N_d = N_d
+		self.N_dd = N_dd
+		self.latency = float(fft_latency)
+		self.bank_info_dict = {}
+		self.df_cost_dict = {}
+		self.sf_cost_dict = {}
+		self.ff_cost_dict = {}
+		self.verbose = verbose
+		self.N_total_tplt = 0
+		#pdb.set_trace()
+		for bank_name in [CacheEntry(line).path for line in
+				open(iir_bank_cache)]:
+			(N_tplt, N_td, N_spiir, max_rate) = self.__get_iir_bank_info(bank_name)
+			self.N_total_tplt += N_tplt
+			self.bank_info_dict.setdefault(bank_name,
+					[]).extend([N_tplt,
+						N_td, N_spiir,
+						max_rate])
+
+
+
+	def __get_iir_bank_info(self, bank_name):
+		iir_bank = Bank()
+		iir_bank.read_from_xml(bank_name)
+		template_duration = iir_bank.sngl_inspiral_table[0].template_duration
+		ntemplate = len(iir_bank.sngl_inspiral_table)
+		nfilter = 0
+		max_rate = 0
+		for rate in iir_bank.A.keys():
+			nfilter += len(iir_bank.D[rate][0])
+			nsample = int(rate)
+			if max_rate < nsample:
+				max_rate = nsample
+		return (ntemplate, template_duration, nfilter, max_rate)
+
+	def print_cost(self):
+		#print "Number of template %d\n" % options.num_template
+		print "Data duration %ld seconds, %d days" % (self.N_dd,
+				self.N_dd/ 86400.0)
+		print "Number of templates %ld" % (self.N_total_tplt)
+		print "Number of ifo %d" % (self.N_d)
+	
+		print "Direct filtering flops %e MFLOP, total cost %e MFLOP\n" % \
+		(self.df_cost_dict["flops"], self.df_cost_dict["cost"])
+
+		print "SPIIR filtering flops %e MFLOP, total cost %e MFLOP\n" % \
+		(self.sf_cost_dict["flops"], self.sf_cost_dict["cost"])
+
+		print "FFT filtering flops %e MFLOP, total cost %e MFLOP, no \
+		latency cosntrain\n" % \
+		(self.ff_cost_dict["flops"][0], self.ff_cost_dict["cost"][0])
+
+		print "FFT filtering flops %e MFLOP, total cost %e MFLOP, \
+		latency constrain, %d second \n" % \
+		(self.ff_cost_dict["flops"][1], self.ff_cost_dict["cost"][1], self.latency)
+
+
+	def calc_spiir_filtering_cost(self):
+		nop_ps = 0 
+		nop = 0
+		for bank_name, info in self.bank_info_dict.items():
+			N_td = info[1]
+			N_tplt = info[0]
+			N_spiir = info[2]
+			N_r = info[3]
+			nop_ps += 4 * N_spiir * N_tplt * N_r * self.N_d
+			nop += 4 * N_spiir * N_tplt * N_r * self.N_d * self.N_dd
+	
+		flops = float(nop_ps)/1e6
+		cost = float(nop)/1e6
+		self.sf_cost_dict["flops"] = flops
+		self.sf_cost_dict["cost"] = cost
+
+	def calc_fft_filtering_cost(self):
+		nop_ps_no_constrain = 0 
+		nop_no_constrain = 0
+		nop_ps_latency = 0
+		nop_latency = 0
+		for bank_name, info in self.bank_info_dict.items():
+			N_td = info[1]
+			N_tplt = info[0]
+			N_r = info[3]
+			N_fft = N_td * N_r
+			nops_fft = N_fft * np.log2(N_fft)
+			# complex template, ignore the addition part
+			# see Leo Singer's thesis: page 58, Section 3.2.3.2
+			# flops = (1 + N_td/ latency) * (2 * N_r * N_tplt * log2
+			# (N_fft))
+			nop_ps_no_constrain += 2 * nops_fft/ float(N_td) * N_tplt * self.N_d
+			nop_no_constrain += 2 * nops_fft/ float(N_td) * N_tplt * self.N_d * self.N_dd
+
+			nop_ps_latency += (1 + N_td/ self.latency) * 2 * \
+			nops_fft / float(N_td) * N_tplt * self.N_d
+			nop_latency += (1 + N_td/ self.latency) * 2 * \
+			nops_fft / float(N_td) * N_tplt * self.N_d * self.N_dd
+
+
+		flops = float(nop_ps_no_constrain)/1e6
+		cost = float(nop_no_constrain)/1e6
+		self.ff_cost_dict.setdefault("flops", []).append(flops)
+		self.ff_cost_dict.setdefault("cost", []).append(cost)
+
+		flops = float(nop_ps_latency)/1e6
+		cost = float(nop_latency)/1e6
+		self.ff_cost_dict["flops"].append(flops)
+		self.ff_cost_dict["cost"].append(cost)
+
+
+	def calc_direct_filtering_cost(self):
+		nop_ps = 0 
+		nop = 0
+		for bank_name, info in self.bank_info_dict.items():
+			N_td = info[1]
+			N_tplt = info[0]
+			N_r = info[3]
+			# complex template, ignore the addition part
+			nop_ps += 2 * N_td * N_r * N_tplt * N_r * self.N_d
+			nop += 2 * N_td * N_r * N_r * N_tplt * self.N_d * self.N_dd
+
+		flops = float(nop_ps)/1e6
+		cost = float(nop)/1e6
+		self.df_cost_dict["flops"] = flops
+		self.df_cost_dict["cost"] = cost
+
+def parse_command_line():
+	parser = OptionParser()
+	#parser.add_option("--num-template", default = 1, help = "Number of
+	#		templates in consideration.")
+	#parser.add_option("--sample-rate", default = 4096, help = "Sampling
+	#rate")
+
+	parser.add_option("--iir-bank-cache", metavar = "file", help = """The 
+			SPIIR bank cache used to estimate the flops, required.""")
+	parser.add_option("--data-duration", default = 86400, help = """The
+			duration of the data to be processed.""")
+
+	parser.add_option("--fft-latency", default = 1, help = """Latency of
+			FFT method required.""")
+	
+	parser.add_option("--num-ifo", default = 2, help = """Number of
+			detectors.""")
+	parser.add_option("--num-sky-direction", default = 3072, help = """Number
+			of sky directions considered for coherent search.""")
+
+	options, filenames = parser.parse_args()
+
+	required_options = ("iir_bank_cache",)
+
+	missing_options = [option for option in required_options if \
+			getattr(options, option) is None]
+
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ",".\
+		join("--%s" % option.replace("_", "-") for option in missing_options)
+
+	return options
+
+
+options = parse_command_line()
+filter_flopulator = FilteringFlopulator(options.iir_bank_cache, options.num_ifo,
+		options.data_duration, options.fft_latency)
+filter_flopulator.calc_direct_filtering_cost()
+filter_flopulator.calc_spiir_filtering_cost()
+filter_flopulator.calc_fft_filtering_cost()
+filter_flopulator.print_cost()
+#print_cost(options, direct_flops, cost)
