@@ -92,7 +92,7 @@ setrlimit(resource.RLIMIT_RSS, None)
 setrlimit(resource.RLIMIT_STACK, 1024*1024)
 
 def now():
-	return lal.LIGOTimeGPS(lal.UTCToGPS(tim.gmtime()), 0)
+	return lal.LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
 	
 
 ###################################################################################################
@@ -270,6 +270,9 @@ if options.full_calibration is None and options.partial_calibration is None or (
 if int(options.record_factors_sr) > int(options.compute_factors_sr):
 	raise ValueError("--record-factors-sr must be less than or equal to --compute-factors-sr")
 
+if not options.factors_from_filters_file and (not options.no_fs or not options.no_srcQ) and ((options.data_source == "frames" and int(options.gps_start_time) < 1176000000) or (options.data_source == "lvshm" and now() < 1176000000)):
+	raise ValueError("Cannot compute SRC detuning parameters as the needed EPICS channels are not in the frames until GPS time 1176000000. Use command line options --no-srcQ and --no-fs.")
+
 if options.gps_start_time is not None:
 	if options.gps_end_time is None:
 		raise ValueError("must provide both --gps-start-time and --gps-end-time")
@@ -340,6 +343,12 @@ chan_prefix = options.chan_prefix
 # If td is true we will perform filtering in the time domain (direct convolution) in all FIR filtering routines below
 td = not options.frequency_domain_filtering
 
+# If we are using EPICS from frames and cancelling calibration lines, we need EP10 to cancel the ESD line. Otherwise, we just cancel the other lines if possible.
+if not options.factors_from_filters_file and options.cancel_callines and ((options.data_source == "frames" and options.gps_start_time > 1176000000) or (options.data_source == "lvshm" and now() > 1176000000)):
+	cancel_esd_act_line = True
+elif not options.factors_from_filters_file:
+	cancel_esd_act_line = False
+
 #
 # Load in the filters file that contains filter coefficients, etc.
 #
@@ -398,15 +407,25 @@ try:
 	src_pcal_line_freq = float(filters["src_pcal_line_freq"])
 	pcal_corr_at_src_freq_real = float(filters["src_pcal_corr_re"])
 	pcal_corr_at_src_freq_imag = float(filters["src_pcal_corr_im"])
-	cancel_src_pcal_line = True
+	if src_pcal_line_freq > 10.0:
+		cancel_src_pcal_line = True
+	else:
+		cancel_src_pcal_line = False
 except:
 	cancel_src_pcal_line = False
 	if not options.no_srcQ or not options.no_fs:
 		raise ValueError("Cannot compute SRC spring frequency or Q, as the calibration line frequency is not contained in the specified filters file.")
 try:
+	high_pcal_line_freq = float(filters["high_pcal_line_freq"])
+	pcal_corr_at_high_line_freq_real = float(filters["high_pcal_corr_re"])
+	pcal_corr_at_high_line_freq_imag = float(filters["high_pcal_corr_im"])
+	cancel_high_pcal_line = True
+except:
+	cancel_high_pcal_line = False
+try:
 	roaming_pcal_line_freq = float(filters["roaming_pcal_line_freq"])
-	pcal_corr_at_roaming_line_freq_real = float(filters["roaming_pcal_corr_re"])
-	pcal_corr_at_roaming_line_freq_imag = float(filters["roaming_pcal_corr_im"])
+	pcal_corr_at_roaming_line_real = float(filters["roaming_pcal_corr_re"])
+	pcal_corr_at_roaming_line_imag = float(filters["roaming_pcal_corr_im"])
 	cancel_roaming_pcal_line = True
 except:
 	cancel_roaming_pcal_line = False
@@ -535,6 +554,16 @@ if not options.factors_from_filters_file:
 	if not options.no_kappac or not options.no_fcc:
 		channel_list.extend(((instrument, options.EP6_real), (instrument, options.EP6_imag), (instrument, options.EP7_real), (instrument, options.EP7_imag), (instrument, options.EP8_real), (instrument, options.EP8_imag), (instrument, options.EP9_real), (instrument, options.EP9_imag)))
 		headkeys.extend(("EP6_real", "EP6_imag", "EP7_real", "EP7_imag", "EP8_real", "EP8_imag", "EP9_real", "EP9_imag"))
+
+	# EP10 is needed to cancel the ESD line
+	if options.cancel_callines and cancel_esd_act_line:
+		channel_list.extend(((instrument, options.EP10_real), (instrument, options.EP10_imag)))
+		headkeys.extend(("EP10_real", "EP10_imag"))
+
+	# These are needed if we compute the optical spring frequency and/or Q-factor of the Signal Recycling Cavity (SRC)
+	if not options.no_fs or not options.no_srcQ:
+		channel_list.extend(((instrument, options.EP11_real), (instrument, options.EP11_imag), (instrument, options.EP12_real), (instrument, options.EP12_imag), (instrument, options.EP13_real), (instrument, options.EP13_imag), (instrument, options.EP14_real), (instrument, options.EP14_imag)))
+		headkeys.extend(("EP11_real", "EP11_imag", "EP12_real", "EP12_imag", "EP13_real", "EP13_imag", "EP14_real", "EP14_imag"))
 
 # If we are using pre-computed coherence to gate kappas
 if not options.no_coherence:
@@ -969,40 +998,75 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 if options.cancel_callines:
 	# if we didn't compute the kappas, we still need to get the pcal channel
-	if options.no_kappac and options.no_fcc and options.no_kappatst and options.no_kappapu and options.no_srcQ and options.no_fs:
-		pcaltee = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
+	if options.no_kappatst and options.no_kappapu and options.no_kappac and options.no_fcc and options.no_srcQ and options.no_fs:
+		pcal = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
+		pcaltee = pipeparts.mktee(pipeline, pcal)
+		# Demodulate pcal at the ~30 Hz pcal line
+		pcal_at_darm_act_freq = calibration_parts.demodulate(pipeline, pcal_tee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
+
+	# Reconstruct a calibrated (negative) pcal at only the ~30 Hz pcal line
 	pcaly_line1 = calibration_parts.mkresample(pipeline, pcal_at_darm_act_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 	pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "lal_demodulate", line_frequency = -1.0 * darm_act_line_freq, prefactor_real = -2.0)
 	cancel_pcaly_line1, trash = calibration_parts.split_into_real(pipeline, pcaly_line1)
 	pipeparts.mkfakesink(pipeline, trash)
 
+	# Make sure we have demodulated pcal at the ~300 Hz pcal line
+	if options.no_kappac and options.no_fcc and options.no_srcQ and options.no_fs:
+		pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
+	# Reconstruct a calibrated (negative) pcal at only the ~300 Hz pcal line
 	pcaly_line2 = calibration_parts.mkresample(pipeline, pcal_at_opt_gain_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 	pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "lal_demodulate", line_frequency = -1.0 * opt_gain_fcc_line_freq, prefactor_real = -2.0)
 	cancel_pcaly_line2, trash = calibration_parts.split_into_real(pipeline, pcaly_line2)
 	pipeparts.mkfakesink(pipeline, trash)
 
+	# Add the first two components together. We will add this to h(t) to cancel these lines
+	cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length2)))
+
 	if cancel_esd_act_line:
+		# Make sure we have demodulated the ESD excitation channel at the ~30 Hz ESD line
+		if options.no_kappac and options.no_fcc and options.no_kappatst and options.no_kappapu and options.no_srcQ and options.no_fs:
+			tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 		esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
+		# Reconstruct a calibrated (negative) ESD injection at the ~30 Hz ESD line
 		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		esd_act_line_cancel = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = -2.0)
 		esd_act_line_cancel, trash = calibration_parts.split_into_real(pipeline, esd_act_line_cancel)
 		pipeparts.mkfakesink(pipeline, trash)
+		# Add into the total line cancellation stream
+		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_callines, queue_length2), calibration_parts.mkqueue(pipeline, esd_act_line_cancel, queue_length1)))
 
-	if cancel_roaming_pcal_line:
-		pcaly_line3 = calibration_parts.demodulate(pipeline, pcaltee, roaming_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_roaming_line_freq_real, pcal_corr_at_roaming_line_freq_imag)
+	if cancel_high_pcal_line:
+		# Demodulate pcal at the ~1kHz pcal line
+		pcaly_line3 = calibration_parts.demodulate(pipeline, pcaltee, high_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_high_line_freq_real, pcal_corr_at_high_line_freq_imag)
+		# Reconstruct a calibrated (negative) pcal at only the ~1kHz pcal line
 		pcaly_line3 = calibration_parts.mkresample(pipeline, pcaly_line3, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
-		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = -2.0)
+		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * high_pcal_line_freq, prefactor_real = -2.0)
 		cancel_pcaly_line3, trash = calibration_parts.split_into_real(pipeline, pcaly_line3)
 		pipeparts.mkfakesink(pipeline, trash)
+		# Add into the total line cancellation stream
+		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_callines, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line3, queue_length2)))
 
-	if cancel_esd_act_line and cancel_roaming_pcal_line:
-		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length1), calibration_parts.mkqueue(pipeline, esd_act_line_cancel, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line3, queue_length2)))
-	elif cancel_esd_act_line:
-		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length2), calibration_parts.mkqueue(pipeline, esd_act_line_cancel, queue_length1)))
-	elif cancel_roaming_pcal_line:
-		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line3, queue_length2)))
-	else:
-		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_pcaly_line1, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line2, queue_length2)))
+	if cancel_roaming_pcal_line:
+		# Demodulate pcal at the ~3kHz pcal line
+		pcaly_line4 = calibration_parts.demodulate(pipeline, pcaltee, roaming_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_roaming_line_real, pcal_corr_at_roaming_line_imag)
+		# Reconstruct a calibrated (negative) pcal at only the ~3kHz pcal line
+		pcaly_line4 = calibration_parts.mkresample(pipeline, pcaly_line4, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line4 = pipeparts.mkgeneric(pipeline, pcaly_line4, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = -2.0)
+		cancel_pcaly_line4, trash = calibration_parts.split_into_real(pipeline, pcaly_line4)
+		pipeparts.mkfakesink(pipeline, trash)
+		# Add into the total line cancellation stream
+		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_callines, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line4, queue_length2)))
+
+	if cancel_src_pcal_line:
+		# Demodulate pcal at the ~8 Hz pcal line
+		pcaly_line0 = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
+		# Reconstruct a calibrated (negative) pcal at only the ~3kHz pcal line
+		pcaly_line0 = calibration_parts.mkresample(pipeline, pcaly_line0, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line0 = pipeparts.mkgeneric(pipeline, pcaly_line0, "lal_demodulate", line_frequency = -1.0 * src_pcal_line_freq, prefactor_real = -2.0)
+		cancel_pcaly_line0, trash = calibration_parts.split_into_real(pipeline, pcaly_line0)
+		pipeparts.mkfakesink(pipeline, trash)
+		# Add into the total line cancellation stream
+		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_callines, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line0, queue_length2)))
 
 #
 # CONTROL BRANCH
