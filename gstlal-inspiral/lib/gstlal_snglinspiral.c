@@ -235,7 +235,6 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 				XLALGPSAdd(&end_time, (double) input->interpsamples[channel] / rate);
 				XLALGPSAddGPS(&parent->end, &end_time);
 			}
-			XLALGPSAdd(&event->epoch, (double) (input->samples[channel] - input->pad) / rate);
 			event->deltaT = 1. / rate;
 
 			parent->end_time_gmst = XLALGreenwichMeanSiderealTime(&parent->end);
