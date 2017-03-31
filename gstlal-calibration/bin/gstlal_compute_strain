@@ -910,6 +910,8 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 	if not options.no_fs or not options.no_srcQ:
 		# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
 		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
+		if options.cancel_callines and cancel_src_pcal_line:
+			pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
 
 		# demodulate DARM_ERR at SRC detuning line frequency
 		derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
@@ -1058,10 +1060,11 @@ if options.cancel_callines:
 		cancel_callines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, cancel_callines, queue_length1), calibration_parts.mkqueue(pipeline, cancel_pcaly_line4, queue_length2)))
 
 	if cancel_src_pcal_line:
-		# Demodulate pcal at the ~8 Hz pcal line
-		pcaly_line0 = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
+		# Make sure we have demodulated pcal at the ~8 Hz pcal line
+		if options.no_fs and options.no_srcQ:
+			pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
 		# Reconstruct a calibrated (negative) pcal at only the ~3kHz pcal line
-		pcaly_line0 = calibration_parts.mkresample(pipeline, pcaly_line0, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line0 = calibration_parts.mkresample(pipeline, pcal_at_src_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		pcaly_line0 = pipeparts.mkgeneric(pipeline, pcaly_line0, "lal_demodulate", line_frequency = -1.0 * src_pcal_line_freq, prefactor_real = -2.0)
 		cancel_pcaly_line0, trash = calibration_parts.split_into_real(pipeline, pcaly_line0)
 		pipeparts.mkfakesink(pipeline, trash)
