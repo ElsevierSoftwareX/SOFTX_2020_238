@@ -88,6 +88,7 @@ def parse_command_line():
 	parser.add_option("--zerolag-format", default = "", metavar = "name", help = "format support, single | multi")
 	parser.add_option("--cohsnr", type = "float", help = "if format is single, read the cohsnr")
 	parser.add_option("--cmbchisq", type = "float", help = "if format is single, read the combined chisq")
+	parser.add_option("--far-factor", type = "float", default = 12, help = "a factor multiplied to event far")
 	parser.add_option("--input-zerolag", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--ifos", metavar = "name", help = "set the ifos to plot pdf and cdf")
 	options, tmp = parser.parse_args()
@@ -120,22 +121,29 @@ fap = array_from_xml(options.input_stats, fap_name)
 nevent = int(param_from_xml(options.input_stats, nevent_name))
 duration = int(param_from_xml(options.input_stats, duration_name))
 hist_trials = int(param_from_xml(options.input_stats, hist_trials_name))
-lgfar = np.log10(fap * nevent / (float(duration)*hist_trials))
+lgfar = np.log10(fap * nevent / (float(duration)*hist_trials) * float(options.far_factor))
 
 zerolags = postcoh_table_from_xml(options.input_zerolag)
 all_cohsnr = np.log10(zerolags.getColumnByName("cohsnr"))
 all_chisq = np.log10(zerolags.getColumnByName("cmbchisq"))
 event_cohsnr = np.log10(options.cohsnr)
 event_chisq = np.log10(options.cmbchisq)
-
 # cohsnr
 xmin = 0.54
 xmax = 3.0
+xstep = 0.0082
 # chisq
 ymin = -1.2
 ymax = 4.0
-x = np.arange(xmin, xmax, 0.0082)
-y = np.arange(ymin, ymax, 0.0173)
+ystep = 0.0173
+
+x = np.arange(xmin, xmax, xstep)
+y = np.arange(ymin, ymax, ystep)
+
+cohsnr_idx = min(max(event_cohsnr - xmin, 0)/xstep, 299)
+chisq_idx = min(max(event_chisq - ymin, 0)/ystep, 299)
+event_far = fap[chisq_idx, cohsnr_idx] * nevent / (float(duration)*hist_trials) * float(options.far_factor)
+print "event far %e\n" % event_far
 
 pyplot.figure()
 X, Y = np.meshgrid(x, y)
@@ -146,8 +154,8 @@ CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
 CM = pyplot.scatter(all_cohsnr, all_chisq, color = 'k', marker = 'o', s = 6, facecolors = 'none')
 CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
 pyplot.legend((CM, CM2), ('spiir zerolags', 'spiir event'), loc='lower right')
-pyplot.ylim(-1,3)
-pyplot.xlim(0.7,3)
+pyplot.ylim(-0.2,3)
+pyplot.xlim(0.7,2.2)
 pyplot.xlabel(r'$\log_{10}(\rho_c)$')	
 pyplot.ylabel(r'$\log_{10}(\xi_c^2/\rho_c^2)$')	
 pyplot.savefig(options.output)

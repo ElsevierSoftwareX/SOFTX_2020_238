@@ -48,11 +48,13 @@ def gen_zerolag_fname(path):
   ls_out = ""
   try:
     ls_out = subprocess.check_output(["grep", "zerolag"], stdin = ls_proc.stdout)
-except:
+  except:
     print "no zerolag file yet"
     return
   ls_proc.wait()
-  input_zerolag_fname = ",".join(ls_out.split("\n"))
+  ls_out_list = ls_out.split("\n")
+  ls_out_list_full_path = ["%s/" % path + one_out for one_out in ls_out_list]
+  input_zerolag_fname = ",".join(ls_out_list_full_path)
   return input_zerolag_fname
 	
 def parse_command_line():
@@ -91,7 +93,7 @@ xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
 coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 postcoh_table_row = postcoh_table_def.PostcohInspiralTable.get_table(xmldoc)[0]
-ifos = coinc_inspiral_row.ifos
+ifos = "".join(coinc_inspiral_row.ifos.split(","))
 path = sngl_inspiral_table[0].search
 outfname = 'gracedb/%s/%s_%s_snrchi.png' % (gid, gid, ifos)
 
