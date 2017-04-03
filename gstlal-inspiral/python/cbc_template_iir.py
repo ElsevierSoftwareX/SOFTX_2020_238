@@ -867,16 +867,22 @@ class Bank(object):
 
 			# Read root-level scalar parameters
 			self.template_bank_filename = param.get_pyvalue(root, 'template_bank_filename')
+			# Get sngl inspiral table
+			sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
+
+			# put the bank table in
+			self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable)
+			for row in sngl_inspiral_table:
+				self.sngl_inspiral_table.append(row)
+
 			if os.path.isfile(self.template_bank_filename):
 				pass
 			else:
 
 				# FIXME teach the trigger generator to get this information a better way
 				self.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
-
-				self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
 				tmpxmldoc = ligolw.Document()
-				tmpxmldoc.appendChild(ligolw.LIGO_LW()).appendChild(self.sngl_inspiral_table)
+				tmpxmldoc.appendChild(ligolw.LIGO_LW()).appendChild(sngl_inspiral_table)
 				utils.write_filename(tmpxmldoc, self.template_bank_filename, gz = True, verbose = verbose)
 				tmpxmldoc.unlink()	# help garbage collector
 

@@ -84,6 +84,13 @@ class FilteringFlopulator(object):
 				self.N_dd/ 86400.0)
 		print "Number of templates %ld" % (self.N_total_tplt)
 		print "Number of ifo %d" % (self.N_d)
+		N_spiir_string = ",".join("%d" % N_spiir for [tmp1, tmp2, N_spiir, tmp3] \
+				in self.bank_info_dict.values())
+		N_td_string = ",".join("%d" % N_td for [tmp1, N_td, tmp2, tmp3] \
+				in self.bank_info_dict.values())
+	
+		print "Number of SPIIR filters %s" % (N_spiir_string)
+		print "Template durations %s" % (N_td_string)
 	
 		print "Direct filtering flops %e MFLOP, total cost %e MFLOP\n" % \
 		(self.df_cost_dict["flops"], self.df_cost_dict["cost"])

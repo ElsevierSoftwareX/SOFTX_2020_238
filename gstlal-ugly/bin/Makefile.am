@@ -29,6 +29,7 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_iir_inspiral_pipe \
 	gstlal_inspiral_postcohspiir_workflow \
 	gstlal_inspiral_postcohspiir_online \
+	gstlal_inspiral_postcohspiir_flopulator \
 	gstlal_inspiral_postcohspiir_lvalert_background_plotter \
 	gstlal_inspiral_postcohspiir_offline \
 	gstlal_inspiral_postcohspiir_extract_zerolag \
