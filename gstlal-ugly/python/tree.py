@@ -39,7 +39,7 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	return 1.25
+	#return 1.00
 	if n==1:
 		return 1.
 	if n==2:
@@ -163,9 +163,10 @@ class HyperCube(object):
 		#print "volume ", numpy.product(self.deltas) * self.det**.5
 		return numpy.product(self.deltas) * self.det**.5
 
-	def mass_volume(self):
+	def coord_volume(self):
 		# FIXME this assumes m_1 m_2 are the first coordinates, not necessarily true
-		return numpy.product(self.deltas[0:2])
+		#return numpy.product(self.deltas[0:2])
+		return numpy.product(self.deltas)
 
 	def num_templates(self, mismatch):
 		# Adapted from Owen 1995 (2.16). The ideal number of
@@ -194,31 +195,32 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.25, max_mass_vol = float(50*50)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.1, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
-		aspect_ratio = max(size) / min(size)
+		coord_volume = self.cube.coord_volume()
+		aspect_ratios = size / min(size)
+		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios > 2.0]))
+		aspect_ratio = max(aspect_ratios)
 
-		# Figure out how many templates go inside
 		if not self.parent:
 			numtmps = float("inf")
 			vratio = float("inf")
+			sib_aspect_factor = 1.0
+			parent_aspect_factor = 1.0
 		else:
-			# check metric consistency with sibling
-			numtmps = self.cube.num_templates(mismatch)
-			parent_numtmps = self.parent.cube.num_templates(mismatch) / 2.
-			sib_numtmps = self.sibling.cube.num_templates(mismatch)
-			#numtmps = (numtmps + parent_numtmps + sib_numtmps) / 3.
-			vratio = numtmps / sib_numtmps
-		# FIXME assumes m1 m2 are first coords
-		q = self.cube.center[0] / self.cube.center[1]
-		#if .9 < q < 1.1:
-		#	numtmps *= 3.0
-		#print self.cube.center, numtmps, vratio, split_num_templates
-		if (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps > split_num_templates) or self.cube.mass_volume() > max_mass_vol)):
+			par_size = self.parent.cube.num_tmps_per_side(mismatch)
+			par_aspect_ratios = par_size / min(par_size)
+			par_aspect_factor = max(1., numpy.product(par_aspect_ratios[par_aspect_ratios > 2.0]))
+			numtmps = self.cube.num_templates(mismatch) * aspect_factor
+			par_numtmps = self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
+			par_vratio = numtmps / par_numtmps
+		if coord_volume > max_coord_vol:
+			numtmps *= 4
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps > split_num_templates) or ((numtmps > split_num_templates/4.) and not (1./vtol < par_vratio < vtol)))):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 3**len(size) and (1./vtol < vratio < vtol) and self.cube.mass_volume() < max_mass_vol:
+			if numtmps < 3**len(size) and (1./vtol < par_vratio < vtol):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
@@ -231,11 +233,7 @@ class Node(object):
 			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 		else:
 			if verbose:
-				print "%d tmps : level %03d @ %s : deltas %s : vol frac. %.2f : aspect ratio %.2f" % (self.template_count[0], bifurcation, self.cube.center, self.cube.deltas, numtmps, aspect_ratio)
-			if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and aspect_ratio > 2.5:
-				self.bad_aspect_count[0] = self.bad_aspect_count[0] + 1
-				if (aspect_ratio > 20.0) or (self.template_count[0] >= 10 and float(self.bad_aspect_count[0]) / self.template_count[0] > 0.1):
-					raise ValueError("detected a large aspect ratio.  Placement is not trustworthy.  Try increasing the size of skinny dimensions (e.g., increase the spin interval)")
+				print "%d tmps : level %03d @ %s : deltas %s : vol frac. %.2f : aspect ratio %.2f : coord vol %.2f" % (self.template_count[0], bifurcation, self.cube.center, self.cube.deltas, numtmps, aspect_ratio, self.cube.coord_volume())
 
 	# FIXME can this be made a generator?
 	def leafnodes(self, out = set()):
