@@ -1,28 +1,65 @@
-M1bi=6.17
-M1bf=12.5
-M2bi=6.16
-M2bf=12.2
-M1i=5.5
-M1f=12
-M2i=5.5
-M2f=12
-FLOW=30
-PSD=psd_for_treebank.xml.gz
+# SMALL TEST CASE
+#M1bi=1.02
+M1bi=1
+M1bf=2
+M2bi=1
+M2bf=2
+S1bi=-0.0
+S1bf=0.0
+S2bi=-0.0
+S2bf=0.0
 
-all : banksim_match_vs_injm1.png
+FLOW = 30
+MM=0.97
+SBMM=0.97
 
-treebank.xml.gz:
-	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 $(M1bf) --max-mass2 $(M2bf)  --min-mass2 $(M2bi) --min-mass1 $(M1bi) --min-match 0.97 --flow $(FLOW) --psd-file $(PSD) --stochastic --disable-neighbors
+M1i=5.0
+M1f=10
+M2i=5.0
+M2f=10
+#S1i = 0
+#S1f = .85
+S1i = 0
+S1f = 0
 
-sbank.xml.gz:
-	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow 30 --reference-psd $(PSD) --output-filename $@ --instrument H1 --spin1-min 0 --spin1-max 0 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned --convergence-threshold 5000 --match-min 0.97 --fhigh-max 1024.0
+#all : banksim_match_vs_injm1.png
 
-sbank_treebank_trials.xml.gz: treebank.xml.gz
-	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow 30 --reference-psd $(PSD) --output-filename $@ --instrument H1 --spin1-min 0 --spin1-max 0 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned --trial-waveforms $^ --match-min 0.97 --fhigh-max 1024.0
+all: BBH1_treebank.xml.gz BBH2_treebank.xml.gz BNS_treebank.xml.gz NSBH1_treebank.xml.gz NSBH2_treebank.xml.gz
+	ligolw_add --output spin_treebank.xml.gz $^ --verbose
 
-sbank_treebank_trials_seeded.xml.gz: sbank_treebank_trials.xml.gz
-	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow 30 --reference-psd $(PSD) --output-filename $@ --instrument H1 --spin1-min 0 --spin1-max 0 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned --bank-seed $^ --fhigh-max 1024.0
+BBH1_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 30.00 --max-mass2 30.00  --min-mass2 2.00 --min-mass1 2.00 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.985 --max-spin1z 0.985 --min-spin2z -0.985 --max-spin2z 0.985 --output-name $@ --max-mtotal 400 --max-q 20
 
+BBH2_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 399.0 --max-mass2 399.0  --min-mass2 2.0 --min-mass1 30.0 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.985 --max-spin1z 0.985 --min-spin2z -0.985 --max-spin2z 0.985 --output-name $@ --max-mtotal 400 --max-q 20
+
+BNS_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant TaylorF2  --max-mass1 2.00 --max-mass2 2.00  --min-mass2 1.00 --min-mass1 1.00 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.4 --max-spin1z 0.4 --min-spin2z -0.4 --max-spin2z 0.4 --output-name $@ --max-mtotal 400 --max-q 20
+
+NSBH1_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 15.0 --max-mass2 2.00 --min-mass2 1.00 --min-mass1 2.00 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.985 --max-spin1z 0.985 --min-spin2z -0.0 --max-spin2z 0.0 --output-name $@ --max-mtotal 400 --max-q 20
+
+NSBH2_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 40.0 --max-mass2 2.00 --min-mass2 1.00 --min-mass1 15.00 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.985 --max-spin1z 0.985 --min-spin2z -0.0 --max-spin2z 0.0 --output-name $@ --max-mtotal 400 --max-q 20
+
+nonspin_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 399.0 --max-mass2 399.0  --min-mass2 1.0 --min-mass1 1.0 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.0 --max-spin1z 0.0 --min-spin2z -0.0 --max-spin2z 0.0 --output-name $@ --max-mtotal 400 --max-q 20
+
+test_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 $(M1bf) --max-mass2 $(M2bf)  --min-mass2 $(M2bi) --min-mass1 $(M1bi) --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z $(S1bi) --max-spin1z $(S1bf) --min-spin2z $(S2bi) --max-spin2z $(S2bf) --output-name $@ --max-mtotal 40 --max-q 4
+
+
+
+
+
+
+
+
+
+
+H1-SBANK_SMALL-0-999999999.xml.gz:
+	# This produces 1269 templates
+	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow $(FLOW) --reference-psd  psd_for_treebank.xml.gz --instrument H1 --spin1-min $(S1bi) --spin1-max $(S1bf) --checkpoint 50 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned-spin --output-filename $@ --match-min $(SBMM) --fhigh-max 1024 --spin2-max $(S2bf) --spin2-min $(S2bi)
 
 H1-TMPLTBANK_H1_BNS_NSBH_BBH-941365351-2048.xml.gz:
 	# I've written here PhenomB, but I don't think lalapps_tmpltbank actually uses the approximant for anything.
@@ -43,7 +80,7 @@ H1-TMPLTBANK_H1_BNS_NSBH_BBH-941365351-2048.xml.gz:
 H1-TMPLTBANK_H1_SMALL-941365351-2048.xml.gz:
 	# This produces 3248 templates!
 	lalapps_tmpltbank --grid-spacing Hexagonal --space Tau0Tau3 \
-		--order twoPN --minimal-match 0.97 --spectrum-type aLIGOZDHiP \
+		--order twoPN --minimal-match 0.97 --spectrum-type aLIGONoSRMLoP \
 		--minimum-mass $(M1bi) --maximum-mass $(M1bf) \
 		--approximant IMRPhenomB --low-frequency-cutoff $(FLOW) \
 		--dynamic-range-exponent 69.0 --disable-high-pass --user-tag SMALL \
@@ -54,20 +91,20 @@ H1-TMPLTBANK_H1_SMALL-941365351-2048.xml.gz:
 		# For some crazy reason, if I add --max-total-mass 100, I get 2x more templates!?
 
 HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml:
-	lalapps_inspinj --max-mass1 $(M1f) --max-mass2 $(M2f)  --min-mass2 $(M2i) --min-mass1 $(M1i) --m-distr componentMass --max-spin1 0.0 --max-spin2 0.0 --time-step 1 --taper-injection startend --gps-end-time 1000010000 --min-distance 10000 --max-distance 1000000 --waveform IMRPhenomD --polarization uniform --gps-start-time 1000000000 --l-distr random --d-distr volume --i-distr uniform --max-inc 179.99 --min-spin2 0.0 --min-spin1 0.0 --enable-spin  --f-lower $(FLOW) --seed 1234 --output HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+	lalapps_inspinj --aligned --max-mass1 $(M1f) --max-mass2 $(M2f)  --min-mass2 $(M2i) --min-mass1 $(M1i) --m-distr componentMass --max-spin1 $(S1f) --max-spin2 0.0 --time-step 10 --taper-injection startend --gps-end-time 1000010000 --min-distance 10000 --max-distance 1000000 --waveform IMRPhenomD --polarization uniform --gps-start-time 1000000000 --l-distr random --d-distr volume --i-distr uniform --max-inc 179.99 --min-spin2 0.0 --min-spin1 $(S1i) --enable-spin  --f-lower $(FLOW) --seed 1234 --output HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
 
 
-treebank.h5: treebank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
-	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd $(PSD) --instrument=H1 --user-tag treebank
+treebank.h5: test_treebank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag treebank
 
-sbank.h5:  sbank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
-	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd $(PSD) --instrument=H1 --user-tag sbank
+sbank.h5:  H1-SBANK_SMALL-0-999999999.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag sbank
 
 tmpltbank.h5: H1-TMPLTBANK_H1_SMALL-941365351-2048.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
-	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd $(PSD) --instrument=H1 --user-tag tmpltbank
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow 30.0 --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag tmpltbank
 
-banksim_match_vs_injm1.png: %.h5
+banksim_match_vs_injm1.png: treebank.h5
 	lalapps_cbc_sbank_plot_sim $<
 
 clean :
-	  rm treebank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml banksim.h5 *.png
+	  rm  BBH*_treebank.xml.gz BNS_treebank.xml.gz NSBH*_treebank.xml.gz spin_treebank.xml.gz
