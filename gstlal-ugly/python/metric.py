@@ -185,7 +185,7 @@ class Metric(object):
 
 		min_d2 = numpy.finfo(numpy.float32).eps / self.working_length / 10.
 		#max_d2 = numpy.finfo(numpy.float32).eps / self.working_length * 100000
-		max_d2 = numpy.finfo(numpy.float32).eps / self.working_length * 1000.
+		max_d2 = numpy.finfo(numpy.float32).eps / self.working_length * 500.0
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
