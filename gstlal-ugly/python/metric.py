@@ -164,7 +164,8 @@ class Metric(object):
 			del hcross
 		except RuntimeError:
 			print p
-			raise
+			#raise
+			return None
 		return fseries
 
 	def match(self, w1, w2):
@@ -172,27 +173,32 @@ class Metric(object):
 			n = numpy.real((numpy.conj(w) * w).sum())**.5 / self.duration**.5
 			return n
 
-		self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
-		lal.COMPLEX16FreqTimeFFT(self.tseries, self.w1w2, self.revplan)
-		m = numpy.real(numpy.abs(numpy.array(self.tseries.data.data)).max()) / norm(w1.data.data) / norm(w2.data.data)
-		if m > 1.0000001:
-			raise ValueError("Match is greater than 1 : %f" % m)
-		return m
+		try:
+			self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
+			lal.COMPLEX16FreqTimeFFT(self.tseries, self.w1w2, self.revplan)
+			m = numpy.real(numpy.abs(numpy.array(self.tseries.data.data)).max()) / norm(w1.data.data) / norm(w2.data.data)
+			if m > 1.0000001:
+				raise ValueError("Match is greater than 1 : %f" % m)
+			return m
+		except AttributeError:
+			return None
 
 
 	#def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
 	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
 
-		min_d2 = numpy.finfo(numpy.float32).eps / self.working_length / 10.
-		#max_d2 = numpy.finfo(numpy.float32).eps / self.working_length * 100000
-		max_d2 = numpy.finfo(numpy.float32).eps / self.working_length * 500.0
+		min_d2 = numpy.finfo(numpy.float32).eps * .01
+		max_d2 = numpy.finfo(numpy.float32).eps * 100
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
 		# this is a diagonal component or not
 		x = numpy.zeros(len(deltas))
 		x[i] = deltas[i]
-		d2 = 1. - self.match(w1, self.waveform(center+x))
+		try:
+			d2 = 1. - self.match(w1, self.waveform(center+x))
+		except TypeError:
+			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 1.1, g, w1)
 		if (d2 > max_d2):
 			return self.__set_diagonal_metric_tensor_component(i, center, deltas / 8, g, w1)
 		if (d2 < min_d2):
