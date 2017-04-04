@@ -39,7 +39,7 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	#return 1.00
+	return 1.25
 	if n==1:
 		return 1.
 	if n==2:
@@ -195,7 +195,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.1, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 2.0, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		coord_volume = self.cube.coord_volume()
@@ -216,8 +216,8 @@ class Node(object):
 			par_numtmps = self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
 			par_vratio = numtmps / par_numtmps
 		if coord_volume > max_coord_vol:
-			numtmps *= 4
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps > split_num_templates) or ((numtmps > split_num_templates/4.) and not (1./vtol < par_vratio < vtol)))):
+			numtmps *= 2
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps > split_num_templates) or ((numtmps > split_num_templates/2.) and not (1./vtol < par_vratio < vtol)))):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
 			if numtmps < 3**len(size) and (1./vtol < par_vratio < vtol):
