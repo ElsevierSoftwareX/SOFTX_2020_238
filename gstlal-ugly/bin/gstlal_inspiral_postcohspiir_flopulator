@@ -23,6 +23,12 @@
 # filtering, direct filtering or FFT. One template is used to represent all
 # temlates in duration. This program also calculates the cost of computing
 # coherent statistic.
+# several simplifications:
+# 1. only consider multiplication/division operation, ignore addition, cuz the
+# cost for former operations are a couple of times of later either using CPU or GPU.
+# 2. only consider single-rate filtering. For multi-rate filtering, it can be
+# assumed that multi-rate filtering improves all methods the same.
+# 3. for FFT filtering, assume that overlap of each block is half block size.
 
 
 import numpy as np
@@ -92,22 +98,25 @@ class FilteringFlopulator(object):
 		print "Number of SPIIR filters %s" % (N_spiir_string)
 		print "Template durations %s" % (N_td_string)
 	
-		print "Direct filtering flops %e MFLOP, total cost %e MFLOP\n" % \
+		print "Direct filtering %e MFLOPS, total cost %e MFLO\n" % \
 		(self.df_cost_dict["flops"], self.df_cost_dict["cost"])
 
-		print "SPIIR filtering flops %e MFLOP, total cost %e MFLOP\n" % \
+		print "SPIIR filtering %e MFLOPS, total cost %e MFLO\n" % \
 		(self.sf_cost_dict["flops"], self.sf_cost_dict["cost"])
 
-		print "FFT filtering flops %e MFLOP, total cost %e MFLOP, no \
-		latency cosntrain\n" % \
-		(self.ff_cost_dict["flops"][0], self.ff_cost_dict["cost"][0])
+		print "FFT filtering %e MFLOPS, total cost %e MFLO, no \
+		latency cosntrain\n" % (self.ff_cost_dict["flops"][0], self.ff_cost_dict["cost"][0])
 
-		print "FFT filtering flops %e MFLOP, total cost %e MFLOP, \
-		latency constrain, %d second \n" % \
-		(self.ff_cost_dict["flops"][1], self.ff_cost_dict["cost"][1], self.latency)
+		print "FFT filtering %e MFLOPS, total cost %e MFLO, \
+		latency constrain, %d second \n" % (self.ff_cost_dict["flops"][1], self.ff_cost_dict["cost"][1], self.latency)
 
 
 	def calc_spiir_filtering_cost(self):
+		""" 
+		Each SPIIR filtering a*y_0 + b*x_1 requires 4 + 2
+		multiplications (a, y_0 and b are complex values, x_1 is a real
+		value), ignore the addition (also 6 operations)
+		"""
 		nop_ps = 0 
 		nop = 0
 		for bank_name, info in self.bank_info_dict.items():
@@ -115,8 +124,8 @@ class FilteringFlopulator(object):
 			N_tplt = info[0]
 			N_spiir = info[2]
 			N_r = info[3]
-			nop_ps += 4 * N_spiir * N_tplt * N_r * self.N_d
-			nop += 4 * N_spiir * N_tplt * N_r * self.N_d * self.N_dd
+			nop_ps += 6 * N_spiir * N_tplt * N_r * self.N_d
+			nop += 6 * N_spiir * N_tplt * N_r * self.N_d * self.N_dd
 	
 		flops = float(nop_ps)/1e6
 		cost = float(nop)/1e6
@@ -124,6 +133,13 @@ class FilteringFlopulator(object):
 		self.sf_cost_dict["cost"] = cost
 
 	def calc_fft_filtering_cost(self):
+		"""
+		The FFT filtering is iFFT (FFT(data) * FFT(template)). 
+		For a block with size N, each FFT requires N log N opearations. 
+		The cost is 6 N log N (real data FFT and complex iFFT) + 4N(complex multiplication)
+		igoring FFT(template). Here data is
+		real, templates are complex.
+		"""
 		nop_ps_no_constrain = 0 
 		nop_no_constrain = 0
 		nop_ps_latency = 0
@@ -132,19 +148,21 @@ class FilteringFlopulator(object):
 			N_td = info[1]
 			N_tplt = info[0]
 			N_r = info[3]
-			N_fft = N_td * N_r
-			nops_fft = N_fft * np.log2(N_fft)
+			N_fft = 2 * N_td * N_r # account for overlap
+			nops_fft = 6 * N_fft * np.log2(N_fft) + 4 * N_fft
 			# complex template, ignore the addition part
-			# see Leo Singer's thesis: page 58, Section 3.2.3.2
+			# compare with Leo Singer's thesis: page 58, Section 3.2.3.2
 			# flops = (1 + N_td/ latency) * (2 * N_r * N_tplt * log2
 			# (N_fft))
-			nop_ps_no_constrain += 2 * nops_fft/ float(N_td) * N_tplt * self.N_d
-			nop_no_constrain += 2 * nops_fft/ float(N_td) * N_tplt * self.N_d * self.N_dd
+			nop_ps_no_constrain +=  nops_fft/ float(N_td) * N_tplt * self.N_d
+			nop_no_constrain += nops_fft/ float(N_td) * N_tplt * self.N_d * self.N_dd
 
-			nop_ps_latency += (1 + N_td/ self.latency) * 2 * \
-			nops_fft / float(N_td) * N_tplt * self.N_d
-			nop_latency += (1 + N_td/ self.latency) * 2 * \
-			nops_fft / float(N_td) * N_tplt * self.N_d * self.N_dd
+			N_fft =  2 * self.latency * N_r # account for overlap
+			nops_fft = 6 * N_fft * np.log2(N_fft) + 4 * N_fft
+			nop_ps_latency += N_td/ self.latency * \
+			nops_fft * N_tplt * self.N_d
+			nop_latency += N_td/ self.latency * \
+			nops_fft * N_tplt * self.N_d * self.N_dd
 
 
 		flops = float(nop_ps_no_constrain)/1e6
