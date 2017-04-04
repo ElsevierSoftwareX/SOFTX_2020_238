@@ -105,7 +105,7 @@ class FilteringFlopulator(object):
 		(self.sf_cost_dict["flops"], self.sf_cost_dict["cost"])
 
 		print "FFT filtering %e MFLOPS, total cost %e MFLO, no \
-		latency cosntrain\n" % (self.ff_cost_dict["flops"][0], self.ff_cost_dict["cost"][0])
+		latency constrain\n" % (self.ff_cost_dict["flops"][0], self.ff_cost_dict["cost"][0])
 
 		print "FFT filtering %e MFLOPS, total cost %e MFLO, \
 		latency constrain, %d second \n" % (self.ff_cost_dict["flops"][1], self.ff_cost_dict["cost"][1], self.latency)
