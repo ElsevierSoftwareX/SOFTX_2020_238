@@ -39,7 +39,7 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	#return 1.25
+	return 1.25
 	prefactor=1.0
 	if n==1:
 		return prefactor
@@ -82,7 +82,7 @@ class HyperCube(object):
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
-			self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 100000.)
+			self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 50000.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -196,7 +196,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.10, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.05, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		coord_volume = self.cube.coord_volume()
@@ -210,19 +210,21 @@ class Node(object):
 			sib_aspect_factor = 1.0
 			parent_aspect_factor = 1.0
 		else:
-			par_size = self.parent.cube.num_tmps_per_side(mismatch)
+			par_size = self.sibling.cube.num_tmps_per_side(mismatch) #self.parent.cube.num_tmps_per_side(mismatch)
 			par_aspect_ratios = par_size / min(par_size)
 			par_aspect_factor = max(1., numpy.product(par_aspect_ratios[par_aspect_ratios > 2.0]))
 			numtmps = self.cube.num_templates(mismatch) * aspect_factor
-			par_numtmps = self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
+			par_numtmps = self.sibling.cube.num_templates(mismatch) * par_aspect_factor #self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
 			par_vratio = numtmps / par_numtmps
+			# take an average to smooth things out a bit
+			numtmps = (numtmps + par_numtmps) / 2.0
 		q = self.cube.center[0] / self.cube.center[1]
 		if (coord_volume > max_coord_vol):
-			numtmps *= 2
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps > split_num_templates) or ((numtmps > split_num_templates/2.) and not (1./vtol < par_vratio < vtol)))):
+			numtmps *= 1
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 2**len(size) and (1./vtol < par_vratio < vtol):
+			if numtmps < 8**len(size) and (1./vtol < par_vratio < vtol):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
