@@ -213,8 +213,8 @@ parser.add_option("--EP9-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_L
 parser.add_option("--EP9-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG", help = "Set the name of the channel containing the imaginary part of A_pu at the PCal line used for the \kappa_c and f_cc calculation. (Default = CAL-CS_TDEP_PCALY_LINE2_REF_A_USUM_IMAG")
 parser.add_option("--EP1-real", metavar = "name", default = "CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_REAL", help = "Set the name of the channel containing the real part of the \kappa_tst reference factors. (Default = CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_REAL)")
 parser.add_option("--EP1-imag", metavar = "name", default = "CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_IMAG", help = "Set the name of the channel containing the imaginary part of the \kappa_tst reference factors. (Default = CAL-CS_TDEP_REF_INVA_CLGRATIO_TST_IMAG)")
-parser.add_option("--EP10-real", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_TST_REAL", help = "Set the name of the channel containing the real part of A_tst at the ESD line used for cancellation of the ESD line. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_TST_REAL")
-parser.add_option("--EP10-imag", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_TST_IMAG", help = "Set the name of the channel containing the imaginary part of A_tst at the ESD line used for cancellation of the ESD line. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_TST_IMAG")
+parser.add_option("--EP10-real", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_TST_NOLOCK_REAL", help = "Set the name of the channel containing the real part of A_tst at the ESD line used for cancellation of the ESD line. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_TST_REAL")
+parser.add_option("--EP10-imag", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_TST_NOLOCK_IMAG", help = "Set the name of the channel containing the imaginary part of A_tst at the ESD line used for cancellation of the ESD line. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_TST_IMAG")
 parser.add_option("--EP11-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_C_NOCAVPOLE_REAL", help = "Set the name of the channel containing the real part of C_res at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_C_NOCAVPOLE_REAL")
 parser.add_option("--EP11-imag", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_C_NOCAVPOLE_IMAG", help = "Set the name of the channel containing the imaginary part of C_res at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_C_NOCAVPOLE_IMAG")
 parser.add_option("--EP12-real", metavar = "name", default = "CAL-CS_TDEP_PCALY_LINE0_REF_D_REAL", help = "Set the name of the channel containing the real part of D at the PCal line used for the src_Q and f_s calculation. (Default = CAL-CS_TDEP_PCALY_LINE0_REF_D_REAL")
@@ -270,8 +270,8 @@ if options.full_calibration is None and options.partial_calibration is None or (
 if int(options.record_factors_sr) > int(options.compute_factors_sr):
 	raise ValueError("--record-factors-sr must be less than or equal to --compute-factors-sr")
 
-if not options.factors_from_filters_file and (not options.no_fs or not options.no_srcQ) and ((options.data_source == "frames" and int(options.gps_start_time) < 1176000000) or (options.data_source == "lvshm" and now() < 1176000000)):
-	raise ValueError("Cannot compute SRC detuning parameters as the needed EPICS channels are not in the frames until GPS time 1176000000. Use command line options --no-srcQ and --no-fs.")
+if not options.factors_from_filters_file and (not options.no_fs or not options.no_srcQ) and ((options.data_source == "frames" and int(options.gps_start_time) < 1175954418) or (options.data_source == "lvshm" and now() < 1175954418)):
+	raise ValueError("Cannot compute SRC detuning parameters as the needed EPICS channels are not in the frames until GPS time 1175954418. Use command line options --no-srcQ and --no-fs.")
 
 if options.gps_start_time is not None:
 	if options.gps_end_time is None:
@@ -344,7 +344,7 @@ chan_prefix = options.chan_prefix
 td = not options.frequency_domain_filtering
 
 # If we are using EPICS from frames and cancelling calibration lines, we need EP10 to cancel the ESD line. Otherwise, we just cancel the other lines if possible.
-if not options.factors_from_filters_file and options.cancel_callines and ((options.data_source == "frames" and options.gps_start_time > 1176000000) or (options.data_source == "lvshm" and now() > 1176000000)):
+if not options.factors_from_filters_file and options.cancel_callines and ((options.data_source == "frames" and options.gps_start_time > 1175954418) or (options.data_source == "lvshm" and now() > 1175954418)):
 	cancel_esd_act_line = True
 elif not options.factors_from_filters_file:
 	cancel_esd_act_line = False
@@ -1030,6 +1030,9 @@ if options.cancel_callines:
 			tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 		esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
 		# Reconstruct a calibrated (negative) ESD injection at the ~30 Hz ESD line
+		if not options.no_kappatst:
+			# Multiply by the real part of kappa_tst
+			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, esd_act_line, queue_length1), calibration_parts.mkqueue(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_ktstRtee, matrix=[[1.0, 0.0]])), queue_length2)))
 		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		esd_act_line_cancel = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = -2.0)
 		esd_act_line_cancel, trash = calibration_parts.split_into_real(pipeline, esd_act_line_cancel)
@@ -1215,7 +1218,8 @@ filter_latency = max(res_filter_latency, tst_filter_latency, pumuim_filter_laten
 strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, res, res_queue_length), calibration_parts.mkqueue(pipeline, ctrl, ctrl_queue_length)))
 # Remove the calibration lines, if we want
 if options.cancel_callines:
-	strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, strain, queue_length2), calibration_parts.mkqueue(pipeline, cancel_callines, max_queue_length)))
+	strain = pipeparts.mktee(pipeline, strain)
+	cleaned_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.mkqueue(pipeline, strain, queue_length2), calibration_parts.mkqueue(pipeline, cancel_callines, max_queue_length)))
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
@@ -1223,14 +1227,24 @@ except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
 
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
-	
+
+if options.cancel_callines:
+	try:
+		cleaned_strain = pipeparts.mkaudioamplify(pipeline, cleaned_strain, 1.0/float(filters["arm_length"]))
+	except KeyError:
+		cleaned_strain = pipeparts.mkaudioamplify(pipeline, cleaned_strain, 1.0/3994.5)
+
+	cleaned_strain = pipeparts.mkprogressreport(pipeline, cleaned_strain, "progress_hoft_cleaned_%s" % instrument)
 # Put the units back to strain before writing to frames
 straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
+cleaned_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
 if not options.no_dq_vector:
 	straintee = pipeparts.mktee(pipeline, strain)
 	strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 else:
 	strain = pipeparts.mktaginject(pipeline, strain, straintagstr)
+if options.cancel_callines:
+	cleaned_strain = pipeparts.mktaginject(pipeline, cleaned_strain, cleaned_straintagstr)
 
 #
 # CALIB_STATE_VECTOR BRANCH
@@ -1581,6 +1595,8 @@ else:
 
 # Link the strain branch to the muxer
 calibration_parts.mkqueue(pipeline, strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)))
+if options.cancel_callines:
+	calibration_parts.mkqueue(pipeline, cleaned_strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_STRAIN_CLEAN%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_tst to the muxer
 if not options.no_kappatst:
