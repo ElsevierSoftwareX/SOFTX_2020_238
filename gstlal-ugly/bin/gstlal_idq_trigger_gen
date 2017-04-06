@@ -19,10 +19,10 @@
 
 
 ####################
-# 
+#
 #     preamble
 #
-####################   
+####################
 
 
 from optparse import OptionParser
@@ -48,39 +48,42 @@ from gstlal import simplehandler
 from glue.ligolw import utils as ligolw_utils
 
 ####################
-# 
+#
 #    functions
 #
-####################   
+####################
+
 
 #
 # construct sine gaussian waveforms that taper to 1e-7 at edges of window
 #
+
 def duration(phi, q, tolerance = 1e-7):
-        # return the duration of the waveform such that its edges will die out to tolerance of the peak.
+	# return the duration of the waveform such that its edges will die out to tolerance of the peak.
 	# phi is the central frequency of the frequency band
 	return 2.*q/(2.*numpy.pi*phi)*numpy.log(1./tolerance)
 
 def sine_gaussian(phi, phi_0, q, time_arr):
-        # edges should be 1e-7 times peak
+	# edges should be 1e-7 times peak
 	dt = time_arr[1]-time_arr[0]
 	rate = 1./dt
-	assert phi < rate/2. 
+	assert phi < rate/2.
 
 	# phi is the central frequency of the sine gaussian
 	dur = duration(phi,q)
 	tau = q/(2.*numpy.pi*phi)
 	sg_vals = numpy.cos(2.*numpy.pi*phi*time_arr + phi_0)*numpy.exp(-1.*time_arr**2./tau**2.)
-	return sg_vals 
+	return sg_vals
 
 #
 # number of tiles in frequency and Q
 #
+
 def N_Q(q_min, q_max, mismatch = 0.05):
-        return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
+	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
 
 def N_phi(phi_min, phi_max, q,  mismatch = 0.05):
-       return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
+	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
 
 def Qq(q_min, q_max, mismatch = 0.05):
 	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch))
@@ -114,28 +117,28 @@ def parse_command_line():
 	return options, filenames
 
 ####################
-# 
+#
 #      classes
 #
-####################   
+####################
 
 
 class MultiChannelHandler(simplehandler.Handler):
 	def __init__(self, *args, **kwargs):
 		self.out_file = kwargs.pop("out_file")
 		self.out_path = kwargs.pop("out_path")
-                # if file already exists, delete it first
-                # FIXME this may not be the most elegant solution,
-                #       but it'll do for now
-                try:
-                        os.remove(os.path.join(self.out_path, self.out_file))
-                except OSError:
-                        pass
-                # create header for trigger file
-                #header = "# start_time stop_time time frequency unnormalized_energy normalized_energy chisqdof significance channel\n"
-                header = "# %16s\t%16s\t%16s\t%4s\t%4s\t%16s\n" % ("end_time", "phase", "snr", "chisq", "sigmasq", "channel")
-                self.to_trigger_file(os.path.join(self.out_path, self.out_file), header)
-		
+		# if file already exists, delete it first
+		# FIXME this may not be the most elegant solution,
+		#       but it'll do for now
+		try:
+			os.remove(os.path.join(self.out_path, self.out_file))
+		except OSError:
+			pass
+		# create header for trigger file
+		#header = "# start_time stop_time time frequency unnormalized_energy normalized_energy chisqdof significance channel\n"
+		header = "# %16s\t%16s\t%16s\t%4s\t%4s\t%16s\n" % ("end_time", "phase", "snr", "chisq", "sigmasq", "channel")
+		self.to_trigger_file(os.path.join(self.out_path, self.out_file), header)
+
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
 	def do_on_message(self, bus, message):
@@ -145,7 +148,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		buf = elem.emit("pull-sample").get_buffer()
 		buftime = int(buf.pts / 1e9)
 		channel = sink_dict[elem]
-		fdata = ""	
+		fdata = ""
 		for i in range(buf.n_memory()):
 			memory = buf.peek_memory(i)
 			result, mapinfo = memory.map(Gst.MapFlags.READ)
@@ -167,20 +170,20 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# Save a "latest"
 		self.to_trigger_file(os.path.join(self.out_path, self.out_file), fdata)
-		
+
 		del buf
 		return Gst.FlowReturn.OK
 
 	def to_trigger_file(self, path, data):
 		with open(path, 'a') as f:
- 			f.write(data)
+			f.write(data)
 
 
 class LinkedAppSync(pipeparts.AppSync):
 	def __init__(self, appsink_new_buffer, sink_dict = {}):
 		super(LinkedAppSync, self).__init__(appsink_new_buffer, sink_dict.keys())
-		self.sink_dict = sink_dict	
-	
+		self.sink_dict = sink_dict
+
 	def attach(self, appsink):
 		"""
 		connect this AppSync's signal handlers to the given appsink
@@ -200,7 +203,7 @@ class LinkedAppSync(pipeparts.AppSync):
 		_, instrument, channel = appsink.name.split("_", 2)
 		self.sink_dict.setdefault(appsink, "%s:%s" % (instrument, channel))
 		return appsink
-	
+
 	def pull_buffers(self, elem):
 		"""
 		for internal use.  must be called with lock held.
@@ -211,29 +214,29 @@ class LinkedAppSync(pipeparts.AppSync):
 			# retrieve the timestamps of all elements that
 			# aren't at eos and all elements at eos that still
 			# have buffers in them
-			#timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
+			# timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
 			# if all elements are at eos and none have buffers,
 			# then we're at eos
-			#if not timestamps:
+			# if not timestamps:
 			#	return Gst.FlowReturn.EOS
 			# find the element with the oldest timestamp.  None
 			# compares as less than everything, so we'll find
 			# any element (that isn't at eos) that doesn't yet
 			# have a buffer (elements at eos and that are
 			# without buffers aren't in the list)
-			#timestamp, elem_with_oldest = min(timestamps)
+			# timestamp, elem_with_oldest = min(timestamps)
 			# if there's an element without a buffer, quit for
 			# now --- we require all non-eos elements to have
 			# buffers before proceding
-			#if timestamp is None:
+			# if timestamp is None:
 			#	return Gst.FlowReturn.OK
 			# clear timestamp and pass element to handler func.
 			# function call is done last so that all of our
 			# book-keeping has been taken care of in case an
 			# exception gets raised
-			#self.appsinks[elem_with_oldest] = None
-			#self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
-		
+			# self.appsinks[elem_with_oldest] = None
+			# self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
+
 			# no time ordering:
 			if not elem in self.appsinks:
 				return Gst.FlowReturn.EOS
@@ -244,12 +247,12 @@ class LinkedAppSync(pipeparts.AppSync):
 
 
 ####################
-# 
+#
 #       main
 #
-####################   
+####################
 
-  
+
 # parsing and setting up some core structures
 options, filenames = parse_command_line()
 
@@ -266,7 +269,7 @@ handler = MultiChannelHandler(mainloop, pipeline, out_file = options.out_file, o
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
 src = {}
 for channel in channels:
-	samp_rate = data_source_info.channel_dict[channel]['fsamp']  
+	samp_rate = data_source_info.channel_dict[channel]['fsamp']
 	max_samp_rate = samp_rate 
 	min_samp_rate = min(32., max_samp_rate)
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
@@ -277,9 +280,9 @@ for channel in channels:
 		qlow = 4
 		qhigh = 40
 		# omicron params, make sure to use .INI file before uncommenting
-		#flow = data_source_info.channel_dict[channel]['flow']  
-		#fhigh = data_source_info.channel_dict[channel]['fhigh']  
-		#qhigh = data_source_info.channel_dict[channel]['qhigh']  
+		#flow = data_source_info.channel_dict[channel]['flow']
+		#fhigh = data_source_info.channel_dict[channel]['fhigh']
+		#qhigh = data_source_info.channel_dict[channel]['qhigh']
 		dur = max([duration(phi, q) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
 		phase = [0, numpy.pi/2.]
@@ -291,13 +294,13 @@ for channel in channels:
 		thishead = pipeparts.mktrigger(pipeline, thishead, int(rate))
 		#thishead = pipeparts.mktrigger(pipeline, thishead, int(rate), autocorrelation_matrix = numpy.ones((len(list(phi_ql(flow, fhigh, qlow, qhigh))), 21), dtype=numpy.complex))
 		thishead = pipeparts.mkqueue(pipeline, thishead)
-		src[(channel, rate)] = thishead	
+		src[(channel, rate)] = thishead
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline..."
 appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
-appsinks = set(appsync.add_sink(pipeline, src[x], name = "sink_%s_%s" % x) for x in src.keys()) 
-  
+appsinks = set(appsync.add_sink(pipeline, src[x], name = "sink_%s_%s" % x) for x in src.keys())
+
 # Allow Ctrl+C or sig term to gracefully shut down the program for online
 # sources, otherwise it will just kill it
 if data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
@@ -313,14 +316,4 @@ if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds o
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 mainloop.run()
-  
-   
-   
-   
-   
-   
-   
-   
-   
-  
- 
+
