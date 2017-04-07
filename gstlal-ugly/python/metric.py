@@ -195,8 +195,8 @@ class Metric(object):
 
 		#min_d2 = numpy.finfo(numpy.float32).eps * 1
 		#max_d2 = numpy.finfo(numpy.float32).eps * 4
-		min_d2 = 1e-6
-		max_d2 = 1e-5
+		min_d2 = 5e-7
+		max_d2 = 2e-6
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
