@@ -419,14 +419,20 @@ try:
 	high_pcal_line_freq = float(filters["high_pcal_line_freq"])
 	pcal_corr_at_high_line_freq_real = float(filters["high_pcal_corr_re"])
 	pcal_corr_at_high_line_freq_imag = float(filters["high_pcal_corr_im"])
-	cancel_high_pcal_line = True
+	if high_pcal_line_freq > 0:
+		cancel_high_pcal_line = True
+	else:
+		cancel_high_pcal_line = False
 except:
 	cancel_high_pcal_line = False
 try:
 	roaming_pcal_line_freq = float(filters["roaming_pcal_line_freq"])
 	pcal_corr_at_roaming_line_real = float(filters["roaming_pcal_corr_re"])
 	pcal_corr_at_roaming_line_imag = float(filters["roaming_pcal_corr_im"])
-	cancel_roaming_pcal_line = True
+	if roaming_pcal_line_freq > 0.0:
+		cancel_roaming_pcal_line = True
+	else:
+		cancel_roaming_pcal_line = False
 except:
 	cancel_roaming_pcal_line = False
 try:
