@@ -344,7 +344,7 @@ chan_prefix = options.chan_prefix
 td = not options.frequency_domain_filtering
 
 # If we are using EPICS from frames and cancelling calibration lines, we need EP10 to cancel the ESD line. Otherwise, we just cancel the other lines if possible.
-if not options.factors_from_filters_file and options.cancel_callines and ((options.data_source == "frames" and options.gps_start_time > 1175954418) or (options.data_source == "lvshm" and now() > 1175954418)):
+if (not options.factors_from_filters_file) and options.cancel_callines and ((options.data_source == "frames" and int(options.gps_start_time) > 1175954418) or (options.data_source == "lvshm" and now() > 1175954418)):
 	cancel_esd_act_line = True
 elif not options.factors_from_filters_file:
 	cancel_esd_act_line = False
@@ -571,23 +571,23 @@ if not options.factors_from_filters_file:
 
 # If we are using pre-computed coherence to gate kappas
 if not options.no_coherence:
-	if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+	if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ:
 		channel_list.extend(((instrument, options.coh_unc_sus_line1_channel), (instrument, options.coh_unc_pcaly_line1_channel), (instrument, options.coh_unc_darm_line1_channel)))
 		headkeys.extend(("pcaly_line1_coh", "sus_coh", "darm_coh"))
-	if not options.no_kappac or not options.no_fcc:
+	if not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ:
 		channel_list.append((instrument, options.coh_unc_pcaly_line2_channel))
 		headkeys.append("pcaly_line2_coh")
 
 # We also need excitation channels for computing kappas
-if not options.no_kappatst  or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+if not options.no_kappatst  or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ or (options.cancel_callines and cancel_esd_act_line):
 	channel_list.append((instrument, options.tst_exc_channel_name))
 	headkeys.append("tstexc")
-if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
+if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not options.no_fs or not options.no_srcQ:
 	channel_list.append((instrument, options.exc_channel_name))
 	headkeys.append("exc")
 
 # We need to make sure we have DARM_ERR and the PCAL channel for computing \kappas
-if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not options.no_kappapu:
+if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not options.no_kappapu or not options.no_fs or not options.no_srcQ:
 	channel_list.append((instrument, options.pcal_channel_name))
 	headkeys.append("pcal")
 	if options.partial_calibration:
@@ -663,22 +663,22 @@ for key in headkeys:
 		head_dict[key] = calibration_parts.mkresample(pipeline, head_dict[key], 0, compute_calib_factors_caps)
 
 if not options.no_coherence:
-	if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+	if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ:
 		pcaly_line1_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line1_coh"], coh_caps, "pcaly_line1_coh")
 		pcaly_line1_coh = calibration_parts.mkresample(pipeline, pcaly_line1_coh, 0, compute_calib_factors_caps)
 		sus_coh = calibration_parts.caps_and_progress(pipeline, head_dict["sus_coh"], coh_caps, "sus_coh")
 		sus_coh = calibration_parts.mkresample(pipeline, sus_coh, 0, compute_calib_factors_caps)
 		darm_coh = calibration_parts.caps_and_progress(pipeline, head_dict["darm_coh"], coh_caps, "darm_coh")
 		darm_coh = calibration_parts.mkresample(pipeline, darm_coh, 0, compute_calib_factors_caps)
-	if not options.no_kappac or not options.no_fcc:
+	if not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ:
 		pcaly_line2_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line2_coh"], coh_caps, "pcaly_line2_coh")
 		pcaly_line2_coh = calibration_parts.mkresample(pipeline, pcaly_line2_coh, 0, compute_calib_factors_caps)
 
-if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ or (options.cancel_callines and cancel_esd_act_line):
 	tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % options.tst_exc_sample_rate
 	tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
 
-if not options.no_kappac or not options.no_fcc or not options.no_kappapu:
+if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not options.no_fs or not options.no_srcQ:
 	exc = calibration_parts.caps_and_progress(pipeline, head_dict["exc"], hoft_caps, "exc")
 
 # If we use the coherence channels multiple times in the pipeline, we need to tee the channels
@@ -1032,7 +1032,14 @@ if options.cancel_callines:
 		# Make sure we have demodulated the ESD excitation channel at the ~30 Hz ESD line
 		if options.no_kappac and options.no_fcc and options.no_kappatst and options.no_kappapu and options.no_srcQ and options.no_fs:
 			tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
-		esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
+		if options.factors_from_filters_file:
+			esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
+		else:
+			# We still need EP10 from the frames
+			EP10_real = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_real"], hoft_caps, "ER10_real")
+			EP10_imag = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_imag"], hoft_caps, "ER10_imag")
+			EP10 = calibration_parts.merge_into_complex(pipeline, EP10_real, EP10_imag, long_queue, short_queue)
+			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [tstexc_at_esd_act_freq, long_queue], [EP10, short_queue]))
 		# Reconstruct a calibrated (negative) ESD injection at the ~30 Hz ESD line
 		if not options.no_kappatst:
 			# Multiply by the real part of kappa_tst
