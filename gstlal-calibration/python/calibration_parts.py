@@ -72,14 +72,24 @@ def mkmultiplier(pipeline, srcs, sync = True):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, mix_mode="product")
 	if srcs is not None:
 		for src in srcs:
-			src.link(elem)
+			if type(src) is list:
+				mkqueue(pipeline, src[0], src[1]).link(elem)
+			else:
+				src.link(elem)
 	return elem
 
 def mkadder(pipeline, srcs, sync = True):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync)
 	if srcs is not None:
 		for src in srcs:
-			src.link(elem)
+			if type(src) is list:
+				mkqueue(pipeline, src[0], src[1]).link(elem)
+			else:
+				src.link(elem)
+	return elem
+
+def mkgate(pipeline, src, control, threshold, queue_length1, queue_length2, **properties):
+	elem = pipeparts.mkgate(pipeline, mkqueue(pipeline, src, queue_length1), control = mkqueue(pipeline, control, queue_length2), threshold = threshold, **properties)
 	return elem
 
 def mkinterleave(pipeline, src1, src2, queue_length1, queue_length2):
