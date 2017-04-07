@@ -83,7 +83,7 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 50000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 5000.)
 			except RuntimeError:
 				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center+self.deltas / 4.0, self.deltas / 50000.)
 		else:
@@ -224,7 +224,7 @@ class Node(object):
 		q = self.cube.center[0] / self.cube.center[1]
 		if (coord_volume > max_coord_vol):
 			numtmps *= 1
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or not (1./vtol < par_vratio < vtol))):
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps > split_num_templates/3.) and not (1./vtol < par_vratio < vtol)))):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
 			if numtmps < 1**len(size) and (1./vtol < par_vratio < vtol):
