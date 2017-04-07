@@ -100,7 +100,7 @@ def parse_command_line():
 	parser.add_argument("--flow", action="store", type=float,\
 					default=30.0, help="Low frequency cutoff for overlap calculations.")
 	parser.add_argument("--fhigh", action="store", type=float,\
-					default=1024.0, help="High frequency cutoff for overlap calculations.")
+					default=4096.0, help="High frequency cutoff for overlap calculations.")
 	parser.add_argument("--approximant", action="store", type=str,\
 					default="IMRPhenomD", help="Specify approximant.")
 	parser.add_argument("--psd-file", action="store",\

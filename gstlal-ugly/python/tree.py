@@ -39,8 +39,8 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	return 1.25
-	prefactor=1.0
+	# return 1.25
+	prefactor=1.00
 	if n==1:
 		return prefactor
 	if n==2:
@@ -82,7 +82,10 @@ class HyperCube(object):
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
-			self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 50000.)
+			try:
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 50000.)
+			except RuntimeError:
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center+self.deltas / 4.0, self.deltas / 50000.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -196,7 +199,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.05, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.1, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		coord_volume = self.cube.coord_volume()
@@ -221,10 +224,10 @@ class Node(object):
 		q = self.cube.center[0] / self.cube.center[1]
 		if (coord_volume > max_coord_vol):
 			numtmps *= 1
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates)):
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or not (1./vtol < par_vratio < vtol))):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 8**len(size) and (1./vtol < par_vratio < vtol):
+			if numtmps < 1**len(size) and (1./vtol < par_vratio < vtol):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)

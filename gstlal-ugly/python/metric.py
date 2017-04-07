@@ -131,7 +131,13 @@ class Metric(object):
 	def waveform(self, coords):
 		# Generalize to different waveform coords
 		p = self.coord_func(coords)
-		
+
+		def fmin(m1, m2):
+			mc = (m1*m2)**.6 / (m1+m2)**.2 * 5e-6
+			return  1./numpy.pi / mc * (5./256. * mc / 1.)**(3./8.)
+
+		flow = max(min(fmin(p[0], p[1]), self.flow), 10)
+
 		try:
 			parameters = {}
 			parameters['m1'] = lal.MSUN_SI * p[0]
@@ -149,7 +155,7 @@ class Metric(object):
 			parameters['eccentricity'] = 0.
 			parameters['meanPerAno'] = 0.
 			parameters['deltaF'] = self.df
-			parameters['f_min'] = self.flow
+			parameters['f_min'] = flow
 			parameters['f_max'] = self.fhigh
 			parameters['f_ref'] = 0.
 			parameters['LALparams'] = None
