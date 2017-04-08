@@ -1,3 +1,15 @@
+gstlal-calibration (1.1.5-1) unstable; urgency=low
+
+  * Bug fix for time immediately before and after data dropouts
+  * New algorithm to compute SRC detuning parameters
+  * Addition of channels GDS-CALIB_F_S, GDS-CALIB_SRC_Q_INVERSE
+  * Improved queueing using low-latency option
+  * Addition of option --cancel-callines to remove calibration lines
+  * New element lal_resmaple
+  * New element lal_complexfirbank
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Fri, 07 Apr 2017 22:59:55 -0500
+
 gstlal-calibration (1.1.4-1) unstable; urgency=low
 
   * Bug fix in NOGATE channels
