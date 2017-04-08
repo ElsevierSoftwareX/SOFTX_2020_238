@@ -83,9 +83,9 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 5000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 10000.)
 			except RuntimeError:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center+self.deltas / 4.0, self.deltas / 5000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center+self.deltas / 4.0, self.deltas / 10000.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -199,7 +199,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.05, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.1, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		coord_volume = self.cube.coord_volume()
@@ -219,8 +219,8 @@ class Node(object):
 			numtmps = self.cube.num_templates(mismatch) * aspect_factor
 			par_numtmps = self.sibling.cube.num_templates(mismatch) * par_aspect_factor #self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
 			par_vratio = numtmps / par_numtmps
-			# take an average to smooth things out a bit
-			# numtmps = (numtmps + par_numtmps) / 2.0
+			# take the bigger of self and sibling
+			numtmps = max(numtmps, par_numtmps)
 		q = self.cube.center[0] / self.cube.center[1]
 		if (coord_volume > max_coord_vol):
 			numtmps *= 1
