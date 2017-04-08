@@ -1151,7 +1151,7 @@ tst_filter_settle_time += float(len(tstfilt)-tstdelay)/tstchainsr
 tst_filter_latency += float(tstdelay)/tstchainsr
 # resample the TST actuation chain to the full sample rate
 if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappapu:
-	tst = calibration_parts.mkresample(pipeline, tst, 3, hoft_caps)
+	tst = calibration_parts.mkstockresample(pipeline, tst, hoft_caps)
 
 # resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
 pumuim = calibration_parts.mkstockresample(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
@@ -1163,7 +1163,7 @@ pumuim_filter_settle_time += float(len(pumuimfilt)-pumuimdelay)/pumuimchainsr
 pumuim_filter_latency += float(pumuimdelay)/pumuimchainsr
 # resample the PUM/UIM actuation chain to the full sample rate
 if tstchainsr != pumuimchainsr or options.apply_kappapu or options.apply_kappatst:
-	pumuim = calibration_parts.mkresample(pipeline, pumuim, 3, hoft_caps)
+	pumuim = calibration_parts.mkstockresample(pipeline, pumuim, hoft_caps)
 
 # apply kappa_tst
 if options.apply_kappatst:
@@ -1179,7 +1179,7 @@ if options.apply_kappapu:
 # Add the TST and PUM/UIM chains together to form the full actuation chain
 ctrl = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [tst, long_queue], [pumuim, short_queue]))
 if tstchainsr != hoftsr or not options.apply_kappatst or not options.apply_kappapu:
-	ctrl = calibration_parts.mkresample(pipeline, ctrl, 3, hoft_caps)
+	ctrl = calibration_parts.mkstockresample(pipeline, ctrl, hoft_caps)
 
 #
 # RESIDUAL BRANCH
