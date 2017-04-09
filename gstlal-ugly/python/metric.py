@@ -110,6 +110,9 @@ class Metric(object):
 		self.metric_tensor = None
 		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
+		# 1 microsecond offset
+		self.delta_t = 1e-3
+		self.t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t)
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "workspace",
 			epoch = 0,
@@ -136,7 +139,8 @@ class Metric(object):
 			mc = (m1*m2)**.6 / (m1+m2)**.2 * 5e-6
 			return  1./numpy.pi / mc * (5./256. * mc / 1.)**(3./8.)
 
-		flow = max(min(fmin(p[0], p[1]), self.flow), 10)
+		flow = self.flow
+		#flow = max(min(fmin(p[0], p[1]), self.flow), 10)
 
 		try:
 			parameters = {}
@@ -174,15 +178,19 @@ class Metric(object):
 			return None
 		return fseries
 
-	def match(self, w1, w2):
+	def match(self, w1, w2, dt = None):
 		def norm(w):
-			n = numpy.real((numpy.conj(w) * w).sum())**.5 / self.duration**.5
+			#n = numpy.real((numpy.conj(w) * w).sum())**.5 / self.duration**.5
+			n = numpy.real((numpy.conj(w) * w).sum())**.5
 			return n
 
 		try:
-			self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
+			if dt is None:
+				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
+			else:
+				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data * self.t_factor
 			lal.COMPLEX16FreqTimeFFT(self.tseries, self.w1w2, self.revplan)
-			m = numpy.real(numpy.abs(numpy.array(self.tseries.data.data)).max()) / norm(w1.data.data) / norm(w2.data.data)
+			m = numpy.real(numpy.abs(numpy.array(self.tseries.data.data)).max()) / norm(w1.data.data) / norm(w2.data.data) * self.duration
 			if m > 1.0000001:
 				raise ValueError("Match is greater than 1 : %f" % m)
 			return m
@@ -215,6 +223,11 @@ class Metric(object):
 			g[i,i] = d2 / x[i] / x[i]
 			return x[i]
 
+	def __set_tt_metric_tensor_component(self, center, w1):
+
+		d2 = 1. - self.match(w1, w1, dt = True)
+		return d2 / self.delta_t / self.delta_t, self.delta_t
+
 	def __set_offdiagonal_metric_tensor_component(self, (i,j), center, deltas, g, w1):
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
@@ -231,21 +244,31 @@ class Metric(object):
 		g[i,j] = g[j,i] = (d2 - g[i,i] * deltas[i]**2 - g[j,j] * deltas[j]**2) / 2 / deltas[i] / deltas[j]
 		return None
 
+	def __set_offdiagonal_time_metric_tensor_component(self, j, center, deltas, g, g_tt, delta_t, w1):
+		# make the vector to solve for the metric by choosing
+		# either a principle axis or a bisector depending on if
+		# this is a diagonal component or not
+		x = numpy.zeros(len(deltas))
+		x[j] = deltas[j]
+
+		# Check the match
+		d2 = 1 - self.match(w1, self.waveform(center+x), dt = True)
+		return  (d2 - g_tt * delta_t**2 - g[j,j] * deltas[j]**2) / 2 / delta_t / deltas[j]
 
 	#def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
 	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float64).eps):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
-		# if not provided, guess
-		if deltas is None:
-			deltas = center * 0.01
-			deltas[deltas==0.] += 0.01
+		g_tt, delta_t = self.__set_tt_metric_tensor_component(center, w1)
 		# First get the diagonal components
 		deltas = numpy.array([self.__set_diagonal_metric_tensor_component(i, center, deltas, g, w1) for i in range(len(center))])
 		# Then the rest
 		[self.__set_offdiagonal_metric_tensor_component(ij, center, deltas, g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
-
+		g_tj = [self.__set_offdiagonal_time_metric_tensor_component(j, center, deltas, g, g_tt, delta_t, w1) for j in range(len(deltas))]
+		# project out the time component Owen 2.28
+		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
+			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 		U, S, V = numpy.linalg.svd(g)
 		condition = S < max(S) * thresh
 		#condition = numpy.logical_or((S < 1), (S < max(S) * thresh))
