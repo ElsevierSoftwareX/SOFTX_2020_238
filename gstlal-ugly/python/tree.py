@@ -85,7 +85,8 @@ class HyperCube(object):
 			try:
 				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 10000.)
 			except RuntimeError:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center+self.deltas / 4.0, self.deltas / 10000.)
+				print "metric @", self.center, " failed, trying, ", self.center - self.deltas / numpy.pi
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / numpy.pi, self.deltas / 10000.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -199,7 +200,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.1, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.10, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		coord_volume = self.cube.coord_volume()
@@ -224,10 +225,10 @@ class Node(object):
 		q = self.cube.center[0] / self.cube.center[1]
 		if (coord_volume > max_coord_vol):
 			numtmps *= 1
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps > split_num_templates/2.) and not (1./vtol < par_vratio < vtol)))):
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps > split_num_templates/3.) and not (1./vtol < par_vratio < vtol)))):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 3**len(size) and (1./vtol < par_vratio < vtol):
+			if numtmps < 5**len(size) and (1./vtol < par_vratio < vtol):
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
