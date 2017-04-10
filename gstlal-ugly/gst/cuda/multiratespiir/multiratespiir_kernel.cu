@@ -830,7 +830,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 		int mem_len = SPSTATEUP(i)->mem_len;
 		int spiir_grid	= numTemplates;	
 		int spiir_block	= ((numFilters + WARPSIZE - 1) >> LOGWARPSIZE) * WARPSIZE;
-		CUDA_CHECK(cudaMemset(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates));
+		CUDA_CHECK(cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates, stream));
 		cuda_iir_filter_kernel_coarse<<<spiir_grid, spiir_block, 0, stream>>>
 		(
 			SPSTATE(i)->d_a1,
@@ -952,7 +952,7 @@ gint spiirup (SpiirState **spstate, gint num_in_multiup, guint num_depths, float
 		int mem_len = SPSTATEUP(i)->mem_len;
 		int spiir_grid	= numTemplates;	
 		int spiir_block	= ((numFilters + WARPSIZE - 1) >> LOGWARPSIZE) * WARPSIZE;
-		CUDA_CHECK(cudaMemset(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates));
+		CUDA_CHECK(cudaMemsetAsync(SPSTATEUP(i)->d_mem, 0, sizeof(COMPLEX_F) * mem_len * numTemplates, stream));
 		cuda_iir_filter_kernel_coarse<<<spiir_grid, spiir_block, 0, stream>>>
 		(
 			SPSTATE(i)->d_a1,

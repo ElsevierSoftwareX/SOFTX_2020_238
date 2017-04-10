@@ -636,10 +636,10 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
 			if verbose:
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
+			snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=10, max_size_bytes=100000000)
 
 			if postcoh is None:
 				# make a queue for postcoh, otherwise it will be in the same thread with the first bank	
-				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 				postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, cohsnr_thresh = cuda_postcoh_cohsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = postcoh_count)
 				postcoh_count += 1
 			else:
