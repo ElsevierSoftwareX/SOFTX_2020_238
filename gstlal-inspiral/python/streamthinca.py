@@ -40,7 +40,6 @@
 #
 
 
-import bisect
 import time
 
 
@@ -68,86 +67,11 @@ from gstlal import snglinspiraltable
 
 
 class SnglInspiral(snglinspiraltable.GSTLALSnglInspiral):
+	# copied from ligolw_thinca.SnglInspiral
 	__slots__ = ()
 
 	def __cmp__(self, other):
-		# copied from ligolw_thinca.SnglInspiral
 		return cmp(self.end, other)
-
-
-#
-# sngl_inspiral<-->sngl_inspiral comparison function
-#
-
-
-def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
-	# NOTE:  we also require the masses and spin of the two events to
-	# match, but the InspiralEventList class ensures that all event
-	# pairs that make it this far are from the same template so we
-	# don't need to explicitly test for that here.
-	return float(abs(event_a.end + offset_a - event_b.end - offset_b)) > light_travel_time + delta_t
-
-
-#
-# InspiralEventList customization making use of the fact that we demand
-# exact template co-incidence to increase performance.  NOTE:  the use of
-# this class defeats ligolw_thinca()'s ability to apply veto segments.  We
-# don't use that feature in StreamThinca so this isn't a problem for us,
-# but it's something to be aware of if this gets used somewhere else.
-#
-
-
-class InspiralEventList(ligolw_thinca.InspiralEventList):
-	@staticmethod
-	def template(event):
-		"""
-		Returns an immutable hashable object (it can be used as a
-		dictionary key) uniquely identifying the template that
-		produced the given event.
-		"""
-		return event.mass1, event.mass2, event.spin1x, event.spin1y, event.spin1z, event.spin2x, event.spin2y, event.spin2z
-
-	def make_index(self):
-		self.index = {}
-		for event in self:
-			self.index.setdefault(self.template(event), []).append(event)
-		for events in self.index.values():
-			events.sort(key = lambda event: event.end)
-
-	def get_coincs(self, event_a, offset_a, light_travel_time, delta_t, comparefunc):
-		#
-		# event_a's end time, with the time shift applied
-		#
-
-		end = event_a.end + offset_a - self.offset
-
-		#
-		# all events sharing event_a's template
-		#
-
-		try:
-			events = self.index[self.template(event_a)]
-		except KeyError:
-			# that template didn't produce any events in this
-			# instrument
-			return []
-
-		#
-		# extract the subset of events from this list that pass
-		# coincidence with event_a (use bisection searches for the
-		# minimum and maximum allowed end times to quickly identify
-		# a subset of the full list)
-		#
-
-		return [event_b for event_b in events[bisect.bisect_left(events, end - self.dt) : bisect.bisect_right(events, end + self.dt)] if not comparefunc(event_a, offset_a, event_b, self.offset, light_travel_time, delta_t)]
-
-
-#
-# Replace the InspiralEventList class in ligolw_thinca with ours
-#
-
-
-ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 #
@@ -339,19 +263,17 @@ class StreamThinca(object):
 			return min(event.end for event in events) not in seg
 
 		# find coincs.  NOTE:  do not pass veto segments to this
-		# function.  See comments in InspiralEventList above
+		# function.
 		ligolw_thinca.ligolw_thinca(
 			xmldoc,
 			process_id = process_id,
 			coinc_definer_row = ligolw_thinca.InspiralCoincDef,
-			event_comparefunc = event_comparefunc,
 			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
 			likelihood_func = self.ln_likelihood_func,
 			likelihood_params_func = self.ln_likelihood_params_func,
 			min_log_L = self.min_log_L,
-			min_instruments = self.min_instruments,
-			max_dt = self.max_dt
+			min_instruments = self.min_instruments
 		)
 
 		# assign the FAP and FAR if provided with the data to do so

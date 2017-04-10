@@ -49,8 +49,8 @@ from glue.ligolw import utils as ligolw_utils
 from glue.text_progress_bar import ProgressBar
 import lal
 from lal import rate
-import lalsimulation
 from pylal import snglcoinc
+import lalsimulation
 
 
 # FIXME:  caution, this information might get organized differently later.
