@@ -103,6 +103,7 @@ def parse_command_line():
 	multichannel_datasource.append_options(parser)
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	parser.add_option("--out-file", metavar = "filename", default = "output_triggers.trg", help = "Set the filename in which to save the output.")
+	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	#
@@ -125,6 +126,8 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.durations = kwargs.pop("durations")
 		self.out_file = kwargs.pop("out_file")
 		self.out_path = kwargs.pop("out_path")
+		self.last_save_time = None
+		self.cadence = options.cadence
 		# if file already exists, delete it first
                 # FIXME this may not be the most elegant solution,
                 #       but it'll do for now
@@ -133,10 +136,8 @@ class MultiChannelHandler(simplehandler.Handler):
                 except OSError:
                         pass
                 # create header for trigger file
-                #header = "# start_time stop_time time frequency unnormalized_energy normalized_energy chisqdof significance channel\n"
-                header = "# %16s\t%16s\t%16s\t%16s\t%16s\t%4s\t%4s\t%16s\t%4s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "channel", "rate")
-                self.to_trigger_file(os.path.join(self.out_path, self.out_file), header)
-		
+                #self.header = "# start_time stop_time time frequency unnormalized_energy normalized_energy chisqdof significance channel\n"
+                self.header = "# %16s\t%16s\t%16s\t%16s\t%16s\t%4s\t%4s\t%16s\t%12s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "channel", "rate")
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
 	def do_on_message(self, bus, message):
@@ -145,6 +146,8 @@ class MultiChannelHandler(simplehandler.Handler):
 	def bufhandler(self, elem, sink_dict):
 		buf = elem.emit("pull-sample").get_buffer()
 		buftime = int(buf.pts / 1e9)
+		if self.last_save_time is None:
+			self.last_save_time = int(buftime)
 		channel, rate  = sink_dict[elem]
 		duration = self.durations[(channel, float(rate))]
 		fdata = ""	
@@ -171,12 +174,16 @@ class MultiChannelHandler(simplehandler.Handler):
 			memory.unmap(mapinfo)
 
 		# Save a "latest"
-		self.to_trigger_file(os.path.join(self.out_path, self.out_file), fdata)
-		
+		if (buftime - self.last_save_time) >= self.cadence:
+			self.last_save_time = int(buftime)
+		self.to_trigger_file(os.path.join(self.out_path, "%d_%s" % (self.last_save_time, self.out_file)), fdata)
+
 		del buf
 		return Gst.FlowReturn.OK
 
 	def to_trigger_file(self, path, data):
+		if not os.path.isfile(path):
+			data = self.header + data 
 		with open(path, 'a') as f:
  			f.write(data)
 
