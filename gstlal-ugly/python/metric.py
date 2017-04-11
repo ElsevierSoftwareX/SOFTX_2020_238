@@ -111,7 +111,7 @@ class Metric(object):
 		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
 		# 1 microsecond offset
-		self.delta_t = 1e-3
+		self.delta_t = 1e-6
 		self.t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t)
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "workspace",
@@ -180,7 +180,6 @@ class Metric(object):
 
 	def match(self, w1, w2, dt = None):
 		def norm(w):
-			#n = numpy.real((numpy.conj(w) * w).sum())**.5 / self.duration**.5
 			n = numpy.real((numpy.conj(w) * w).sum())**.5
 			return n
 
@@ -189,8 +188,7 @@ class Metric(object):
 				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
 			else:
 				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data * self.t_factor
-			lal.COMPLEX16FreqTimeFFT(self.tseries, self.w1w2, self.revplan)
-			m = numpy.real(numpy.abs(numpy.array(self.tseries.data.data)).max()) / norm(w1.data.data) / norm(w2.data.data) * self.duration
+			m = numpy.real(numpy.abs(self.w1w2.data.data[:].sum())) / norm(w1.data.data) / norm(w2.data.data)
 			if m > 1.0000001:
 				raise ValueError("Match is greater than 1 : %f" % m)
 			return m
@@ -201,10 +199,8 @@ class Metric(object):
 	#def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
 	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
 
-		#min_d2 = numpy.finfo(numpy.float32).eps * 1
-		#max_d2 = numpy.finfo(numpy.float32).eps * 4
-		min_d2 = 5e-7
-		max_d2 = 2e-6
+		min_d2 = numpy.finfo(numpy.float32).eps * 1.2
+		max_d2 = numpy.finfo(numpy.float32).eps * 5.0
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
