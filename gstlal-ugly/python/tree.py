@@ -214,21 +214,30 @@ class Node(object):
 			sib_aspect_factor = 1.0
 			parent_aspect_factor = 1.0
 		else:
-			par_size = self.sibling.cube.num_tmps_per_side(mismatch) #self.parent.cube.num_tmps_per_side(mismatch)
+			par_size = self.parent.cube.num_tmps_per_side(mismatch)
 			par_aspect_ratios = par_size / min(par_size)
 			par_aspect_factor = max(1., numpy.product(par_aspect_ratios[par_aspect_ratios > 2.0]))
+			par_numtmps = self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
+
+			sib_size = self.sibling.cube.num_tmps_per_side(mismatch)
+			sib_aspect_ratios = sib_size / min(sib_size)
+			sib_aspect_factor = max(1., numpy.product(sib_aspect_ratios[sib_aspect_ratios > 2.0]))
+			sib_numtmps = self.sibling.cube.num_templates(mismatch) * sib_aspect_factor
+
 			numtmps = self.cube.num_templates(mismatch) * aspect_factor
-			par_numtmps = self.sibling.cube.num_templates(mismatch) * par_aspect_factor #self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
 			par_vratio = numtmps / par_numtmps
+			sib_vratio = numtmps / sib_numtmps
+			volume_split_condition = (1./vtol < par_vratio < vtol) and (1./vtol < sib_vratio < vtol)
+
 			# take the bigger of self and sibling
 			numtmps = max(numtmps, par_numtmps)
 		q = self.cube.center[0] / self.cube.center[1]
 		if (coord_volume > max_coord_vol):
 			numtmps *= 1
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps > split_num_templates/2.) and not (1./vtol < par_vratio < vtol)))):
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps > split_num_templates/3.) and not volume_split_condition))):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 2**len(size) and (1./vtol < par_vratio < vtol):
+			if numtmps < 2**len(size) and volume_split_condition:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
