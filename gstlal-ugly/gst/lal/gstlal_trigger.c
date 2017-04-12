@@ -85,6 +85,7 @@ G_DEFINE_TYPE_WITH_CODE(
 
 
 #define DEFAULT_SNR_THRESH 5.5
+#define DEFAULT_SNR_MAX FALSE
 
 
 /* FIXME the function placements should be moved around to avoid putting this static prototype here */
@@ -289,7 +290,8 @@ enum property {
 	ARG_N = 1,
 	ARG_SNR_THRESH,
 	ARG_AUTOCORRELATION_MATRIX,
-	ARG_AUTOCORRELATION_MASK
+	ARG_AUTOCORRELATION_MASK,
+	ARG_MAX_SNR
 };
 
 
@@ -390,6 +392,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			g_value_take_boxed(value, g_value_array_new(0));
 			}
 		g_mutex_unlock(&element->bank_lock);
+		break;
+
+	case ARG_MAX_SNR:
+		element->snr_max = g_value_get_boolean(value);
 		break;
 
 	default:
@@ -813,6 +819,18 @@ static void gstlal_trigger_class_init(GSTLALTriggerClass *klass)
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_MAX_SNR,
+		g_param_spec_boolean(
+			"max-snr",
+			"Max SNR trigger in buffer",
+			"Set flag to return single loudest trigger from buffer",
+			DEFAULT_SNR_MAX,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 

@@ -87,6 +87,7 @@ typedef struct {
 	gsl_matrix_complex *autocorrelation_matrix;
 	gsl_matrix_int *autocorrelation_mask;
 	gsl_vector *autocorrelation_norm;
+	gboolean snr_max;
 	/*
 	 * FIXME: currently we only support including SNR snippets in single
 	 * precision mode
