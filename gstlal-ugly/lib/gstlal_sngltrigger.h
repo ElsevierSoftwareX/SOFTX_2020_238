@@ -61,7 +61,7 @@ SnglTriggerTable;
 /*
  * FIXME: only support single precision SNR snippets at the moment
  */
-GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, char *channel_name, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff);
+GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, char *channel_name, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff, gboolean snr_max);
 
 
 G_END_DECLS

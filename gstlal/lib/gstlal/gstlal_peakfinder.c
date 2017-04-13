@@ -198,6 +198,70 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 	return 1;
 }
 
+int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
+{
+	int i, out = -1;
+	switch (state->type)
+	{
+		case GSTLAL_PEAK_FLOAT:
+		{
+			float max_val = 0;
+			for(i = 0; i < state->channels; i++)
+			{
+				if(fabs(state->values.as_float[i]) > max_val)
+				{
+					max_val = state->values.as_float[i];
+					out = i;
+				}
+			}
+			break;
+		}
+
+		case GSTLAL_PEAK_DOUBLE:
+		{
+			double max_val = 0;
+			for(i = 0; i < state->channels; i++)
+			{
+				if(abs(state->values.as_double[i]) > max_val)
+				{
+					max_val = state->values.as_double[i];
+					out = i;
+				}
+			}
+			break;
+		}
+
+		case GSTLAL_PEAK_COMPLEX:
+		{
+			float max_val = 0;
+			for(i = 0; i < state->channels; i++)
+			{
+				if(cabsf(state->values.as_float_complex[i]) > max_val)
+				{
+					max_val = state->values.as_float_complex[i];
+					out = i;
+				}
+			}
+			break;
+		}
+
+		case GSTLAL_PEAK_DOUBLE_COMPLEX:
+		{
+			double max_val = 0;
+			for(i = 0; i < state->channels; i++)
+			{
+				if(cabs(state->values.as_double_complex[i]) > max_val)
+				{
+					max_val = state->values.as_double_complex[i];
+					out = i;
+				}
+			}
+			break;
+		}
+	}
+
+	return out;
+}
 
 /*
  * Type specific functions

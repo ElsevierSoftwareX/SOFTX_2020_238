@@ -919,10 +919,11 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, mask_matrix = 
 		properties["sigmasq"] = sigmasq
 	return mkgeneric(pipeline, src, "lal_itac", **properties)
 
-def mktrigger(pipeline, src, n, autocorrelation_matrix = None, mask_matrix = None, snr_thresh = 0, sigmasq = None):
+def mktrigger(pipeline, src, n, autocorrelation_matrix = None, mask_matrix = None, snr_thresh = 0, sigmasq = None, max_snr = False):
 	properties = {
 		"n": n,
-		"snr_thresh": snr_thresh
+		"snr_thresh": snr_thresh,
+		"max_snr": max_snr
 	}
 	if autocorrelation_matrix is not None:
 		properties["autocorrelation_matrix"] = pipeio.repack_complex_array_to_real(autocorrelation_matrix)

@@ -347,6 +347,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 	}
 
+	case ARG_MAX_SNR:
+		element->snr_max = g_value_get_boolean(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -443,7 +447,7 @@ static GstFlowReturn push_gap(GSTLALTrigger *element, guint samps)
 	/* Clearing the max data structure causes the resulting buffer to be a GAP */
 	gstlal_peak_state_clear(element->maxdata);
 	/* create the output buffer */
-	srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->channel_name, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
+	srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->channel_name, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime, element->snr_max);
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
 	/* push the result */
@@ -493,7 +497,7 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 			gstlal_double_complex_series_around_peak(element->maxdata, dataptr.as_double_complex, (double complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			/* create the output buffer */
-			srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->channel_name, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL, element->difftime);
+			srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->channel_name, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL, element->difftime, element->snr_max);
 			}
 		else if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
@@ -501,13 +505,13 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
 			/* create the output buffer */
 			/* FIXME snr snippets not supported for double precision yet */
-			srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->channel_name, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view), element->difftime);
+			srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->channel_name, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view), element->difftime, element->snr_max);
 			}
 		else
 			g_assert_not_reached();
 		}
 	else
-		srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->channel_name, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
+		srcbuf = gstlal_sngltrigger_new_buffer_from_peak(element->maxdata, element->channel_name, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime, element->snr_max);
 		
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
