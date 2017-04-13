@@ -719,8 +719,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 	if not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
 		derr_at_darm_act_freq = pipeparts.mktee(pipeline, derr_at_darm_act_freq)
 
-	# resample and demodulate the TST excitation channel at the ESD actuation line frequency
-	tstexc = calibration_parts.mkresample(pipeline, tstexc, 3, hoft_caps)
+	# demodulate the TST excitation channel at the ESD actuation line frequency
 	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
 	if options.cancel_callines and cancel_esd_act_line:
 		tstexc_at_esd_act_freq = pipeparts.mktee(pipeline, tstexc_at_esd_act_freq)
@@ -1035,13 +1034,11 @@ if options.cancel_callines:
 		if options.factors_from_filters_file:
 			esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
 		else:
-			# We still need EP10 from the frames
-			EP10_real = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_real"], hoft_caps, "ER10_real")
-			EP10_imag = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_imag"], hoft_caps, "ER10_imag")
-			EP10 = calibration_parts.merge_into_complex(pipeline, EP10_real, EP10_imag, long_queue, short_queue)
+			# EP10 was read from the frames
+			EP10 = calibration_parts.merge_into_complex(pipeline, head_dict["EP10_real"], head_dict["EP10_imag"], long_queue, short_queue)
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [tstexc_at_esd_act_freq, long_queue], [EP10, short_queue]))
 		# Reconstruct a calibrated (negative) ESD injection at the ~30 Hz ESD line
-		if not options.no_kappatst:
+		if options.apply_kappatst:
 			# Multiply by the real part of kappa_tst
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [esd_act_line, long_queue], [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_ktstRtee, matrix=[[1.0, 0.0]])), short_queue]))
 		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
