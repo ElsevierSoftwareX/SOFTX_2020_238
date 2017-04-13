@@ -266,7 +266,8 @@ class CoincDatabase(object):
 				# do the intersection in the loop to get a
 				# new object each time to avoid confusion
 				# from shared references
-				self.all_segs_dict.setdefault(llwsegs.name, segments.segmentlistdict())[instrument] |= llwsegs.active & llwsegs.valid
+				# FIXME:  should be populating valid segments
+				self.all_segs_dict.setdefault(llwsegs.name, segments.segmentlistdict())[instrument] |= llwsegs.active #& llwsegs.valid
 
 		# get the live time
 		if verbose:
