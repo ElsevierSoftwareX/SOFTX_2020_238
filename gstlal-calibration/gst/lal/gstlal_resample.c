@@ -95,17 +95,17 @@ static void const_upsample_other(const gint8 *src, gint8 *dst, guint64 src_size,
  * lie on lines connecting input samples 
  */
 #define DEFINE_LINEAR_UPSAMPLE(DTYPE, COMPLEX) \
-static void linear_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX *end_sample) \
+static void linear_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX **end_sample) \
 { \
 	/* First, fill in previous data using the last sample of the previous input buffer */ \
 	DTYPE COMPLEX slope; /* first derivative between points we are connecting */ \
 	guint i; \
-	if(*end_sample != 0.0) { \
-		slope = *src - *end_sample; \
-		*dst = *end_sample; \
+	if(*end_sample) { \
+		slope = *src - **end_sample; \
+		*dst = **end_sample; \
 		dst++; \
 		for(i = 1; i < cadence; i++, dst++) \
-			*dst = *end_sample + slope * i / cadence; \
+			*dst = **end_sample + slope * i / cadence; \
 	} \
  \
 	/* Now, process the current input buffer */ \
@@ -119,7 +119,9 @@ static void linear_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE
 	} \
  \
 	/* Save the last input sample for the next buffer, so that we can find the slope */ \
-	*end_sample = *src; \
+	if(!(*end_sample)) \
+		*end_sample = g_malloc(sizeof(double complex)); \
+	**end_sample = *src; \
 }
 
 DEFINE_LINEAR_UPSAMPLE(float, )
@@ -133,33 +135,33 @@ DEFINE_LINEAR_UPSAMPLE(double, complex)
  * two points depends on those two points and the previous point. 
  */
 #define DEFINE_QUADRATIC_UPSAMPLE(DTYPE, COMPLEX) \
-static void quadratic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX *end_sample, DTYPE COMPLEX *before_end_sample) \
+static void quadratic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX **end_sample, DTYPE COMPLEX **before_end_sample) \
 { \
 	/* First, fill in previous data using the last samples of the previous input buffer */ \
 	DTYPE COMPLEX dxdt0 = 0.0, half_d2xdt2 = 0.0; /* first derivative and half of second derivative at initial point */ \
 	guint i; \
-	if(*before_end_sample != 0.0) { \
-		g_assert(*end_sample != 0.0); \
-		dxdt0 = (*src - *before_end_sample) / 2.0; \
-		half_d2xdt2 = *src - *end_sample - dxdt0; \
-		*dst = *end_sample; \
+	if(*before_end_sample) { \
+		g_assert(*end_sample); \
+		dxdt0 = (*src - **before_end_sample) / 2.0; \
+		half_d2xdt2 = *src - **end_sample - dxdt0; \
+		*dst = **end_sample; \
 		dst++; \
 		for(i = 1; i < cadence; i++, dst++) \
-			*dst = *end_sample + dxdt0 * i / cadence + (i * i * half_d2xdt2) / (cadence * cadence); \
+			*dst = **end_sample + dxdt0 * i / cadence + (i * i * half_d2xdt2) / (cadence * cadence); \
 	} \
  \
 	/* This needs to happen even if the first section was skipped */ \
-	if(*end_sample != 0.0) { \
-		if(*before_end_sample == 0.0) { \
+	if(*end_sample) { \
+		if(!(*before_end_sample)) { \
 			/* In this case, we also must fill in data from end_sample to the start of src, assuming an initial slope of zero */ \
-			half_d2xdt2 = *src - *end_sample - dxdt0; \
-			*dst = *end_sample; \
+			half_d2xdt2 = *src - **end_sample - dxdt0; \
+			*dst = **end_sample; \
 			dst++; \
 			for(i = 1; i < cadence; i++, dst++) \
-				*dst = *end_sample + (i * i * half_d2xdt2) / (cadence * cadence); \
+				*dst = **end_sample + (i * i * half_d2xdt2) / (cadence * cadence); \
 		} \
 		if(src_size > 1) { \
-			dxdt0 = (*(src + 1) - *end_sample) / 2.0; \
+			dxdt0 = (*(src + 1) - **end_sample) / 2.0; \
 			half_d2xdt2 = *(src + 1) - *src - dxdt0; \
 			*dst = *src; \
 			dst++; \
@@ -192,11 +194,18 @@ static void quadratic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DT
 	} \
  \
 	/* Save the last two samples for the next buffer */ \
-	if(src_size == 1) \
-		*before_end_sample = *end_sample; \
-	else \
-		*before_end_sample = *(src - 1); \
-	*end_sample = *src; \
+	if(src_size == 1 && *end_sample) { \
+		if(!(*before_end_sample)) \
+			*before_end_sample = g_malloc(sizeof(complex double)); \
+		**before_end_sample = **end_sample; \
+	} else if(src_size > 1) { \
+		if(!(*before_end_sample)) \
+			*before_end_sample = g_malloc(sizeof(complex double)); \
+		**before_end_sample = *(src - 1); \
+	} \
+	if(!(*end_sample)) \
+		*end_sample = g_malloc(sizeof(complex double)); \
+	**end_sample = *src; \
 }
 
 DEFINE_QUADRATIC_UPSAMPLE(float, )
@@ -210,32 +219,32 @@ DEFINE_QUADRATIC_UPSAMPLE(double, complex)
  * depends on those two points and the previous and following point. 
  */
 #define DEFINE_CUBIC_UPSAMPLE(DTYPE, COMPLEX) \
-static void cubic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX *dxdt0, DTYPE COMPLEX *end_sample, DTYPE COMPLEX *before_end_sample) \
+static void cubic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX *dxdt0, DTYPE COMPLEX **end_sample, DTYPE COMPLEX **before_end_sample) \
 { \
 	/* First, fill in previous data using the last samples of the previous input buffer */ \
 	DTYPE COMPLEX dxdt1, half_d2xdt2_0, sixth_d3xdt3; /* first derivative at end point, half of second derivative and one sixth of third derivative at initial point */ \
 	guint i; \
-	if(*before_end_sample != 0.0) { \
-		g_assert(*end_sample != 0.0); \
-		dxdt1 = (*src - *before_end_sample) / 2.0; \
-		half_d2xdt2_0 =  3 * (*end_sample - *before_end_sample) - dxdt1 - 2 * *dxdt0; \
-		sixth_d3xdt3 = 2 * (*before_end_sample - *end_sample) + dxdt1 + *dxdt0; \
-		*dst = *before_end_sample; \
+	if(*before_end_sample) { \
+		g_assert(*end_sample); \
+		dxdt1 = (*src - **before_end_sample) / 2.0; \
+		half_d2xdt2_0 =  3 * (**end_sample - **before_end_sample) - dxdt1 - 2 * *dxdt0; \
+		sixth_d3xdt3 = 2 * (**before_end_sample - **end_sample) + dxdt1 + *dxdt0; \
+		*dst = **before_end_sample; \
 		dst++; \
 		for(i = 1; i < cadence; i++, dst++) \
-			*dst = *before_end_sample + *dxdt0 * i / cadence + (i * i * half_d2xdt2_0) / (cadence * cadence) + (i * i * i * sixth_d3xdt3) / (cadence * cadence* cadence); \
+			*dst = **before_end_sample + *dxdt0 * i / cadence + (i * i * half_d2xdt2_0) / (cadence * cadence) + (i * i * i * sixth_d3xdt3) / (cadence * cadence* cadence); \
 		/* Save the slope at the end point as the slope at the next initial point */ \
 		*dxdt0 = dxdt1; \
 	} \
  \
-	if(*end_sample != 0 && src_size > 1) { \
-		dxdt1 = (*(src + 1) - *end_sample) / 2.0; \
-		half_d2xdt2_0 =  3 * (*src - *end_sample) - dxdt1 - 2 * *dxdt0; \
-		sixth_d3xdt3 = 2 * (*end_sample - *src) + dxdt1 + *dxdt0; \
-		*dst = *end_sample; \
+	if(*end_sample && src_size > 1) { \
+		dxdt1 = (*(src + 1) - **end_sample) / 2.0; \
+		half_d2xdt2_0 =  3 * (*src - **end_sample) - dxdt1 - 2 * *dxdt0; \
+		sixth_d3xdt3 = 2 * (**end_sample - *src) + dxdt1 + *dxdt0; \
+		*dst = **end_sample; \
 		dst++; \
 		for(i = 1; i < cadence; i++, dst++) \
-			*dst = *end_sample + *dxdt0 * i / cadence + (i * i * half_d2xdt2_0) / (cadence * cadence) + (i * i * i * sixth_d3xdt3) / (cadence * cadence* cadence); \
+			*dst = **end_sample + *dxdt0 * i / cadence + (i * i * half_d2xdt2_0) / (cadence * cadence) + (i * i * i * sixth_d3xdt3) / (cadence * cadence* cadence); \
 		/* Save the slope at the end point as the slope at the next initial point */ \
 		*dxdt0 = dxdt1; \
 	} \
@@ -255,12 +264,21 @@ static void cubic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 	} \
  \
 	/* Save the last two samples for the next buffer */ \
-	if(src_size == 1) { \
-		*before_end_sample = *end_sample; \
-		*end_sample = *src; \
+	if(src_size == 1 && *end_sample) { \
+		if(!(*before_end_sample)) \
+			*before_end_sample = g_malloc(sizeof(complex double)); \
+		**before_end_sample = **end_sample; \
+		**end_sample = *src; \
+	} else if(src_size == 1) { \
+		*end_sample = g_malloc(sizeof(complex double)); \
+		**end_sample = *src; \
 	} else { \
-		*before_end_sample = *src; \
-		*end_sample = *(src + 1); \
+		if(!(*before_end_sample)) \
+			*before_end_sample = g_malloc(sizeof(complex double)); \
+		if(!(*end_sample)) \
+			*end_sample = g_malloc(sizeof(complex double)); \
+		**before_end_sample = *src; \
+		**end_sample = *(src + 1); \
 	} \
 }
 
@@ -306,7 +324,7 @@ static void downsample_other(const gint8 *src, gint8 *dst, guint64 dst_size, gin
  * middle sample has the timestamp of the outgoing sample 
  */
 #define DEFINE_AVG_DOWNSAMPLE(DTYPE, COMPLEX) \
-static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint64 dst_size, guint inv_cadence, guint leading_samples, guint *weight, DTYPE COMPLEX *end_sample) \
+static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint64 dst_size, guint inv_cadence, guint leading_samples, guint *weight, DTYPE COMPLEX **end_sample) \
 { \
 	/*
 	 * If inverse cadence (rate in / rate out) is even, we take inv_cadence/2 samples
@@ -318,7 +336,10 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 	if(!(inv_cadence % 2) && dst_size != 0) { \
 		/* First, see if we need to fill in a sample corresponding to the end of the last input buffer */ \
 		if(*weight + leading_samples >= inv_cadence) { \
-			*dst = *end_sample; \
+			if(*end_sample) \
+				*dst = **end_sample; \
+			else \
+				*dst = 0.0; \
 			const DTYPE COMPLEX *src_end; \
 			for(src_end = src + leading_samples - inv_cadence / 2; src < src_end; src++) \
 				*dst += *src; \
@@ -327,7 +348,10 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 			dst++; \
 		/* Otherwise, we need to use up the leftover samples from the previous input buffer to make the first output sample of this buffer */ \
 		} else { \
-			*dst = *end_sample; \
+			if(*end_sample) \
+				*dst = **end_sample; \
+			else \
+				*dst = 0.0; \
 			const DTYPE COMPLEX *src_end; \
 			for(src_end = src + leading_samples + inv_cadence / 2; src < src_end; src++) \
 				*dst += *src; \
@@ -350,10 +374,12 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
  \
 		/* Save the sum of the unused samples in end_sample and the number of unused samples in weight */ \
 		*weight = (src_size + inv_cadence / 2 - leading_samples) % inv_cadence; \
-		*end_sample = *src / 2; \
+		if(!(*end_sample)) \
+			*end_sample = g_malloc(sizeof(complex double)); \
+		**end_sample = *src / 2; \
 		src++; \
 		for(i = 1; i < *weight; i++, src++) \
-			*end_sample += *src; \
+			**end_sample += *src; \
  \
 	/*
 	 * If inverse cadence (rate in / rate out) is odd, we take the average of samples starting
@@ -363,7 +389,10 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 	} else if(inv_cadence % 2 && dst_size != 0) { \
 		/* First, see if we need to fill in a sample corresponding to the end of the last input buffer */ \
 		if(*weight + leading_samples >= inv_cadence) { \
-			*dst = *end_sample; \
+			if(*end_sample) \
+				*dst = **end_sample; \
+			else \
+				*dst = 0.0; \
 			const DTYPE COMPLEX *src_end; \
 			for(src_end = src + leading_samples - inv_cadence / 2; src < src_end; src++) \
 				*dst += *src; \
@@ -371,7 +400,10 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 			dst++; \
 		/* Otherwise, we need to use up the leftover samples from the previous input buffer to make the first output sample of this buffer */ \
 		} else { \
-			*dst = *end_sample; \
+			if(*end_sample) \
+				*dst = **end_sample; \
+			else \
+				*dst = 0.0; \
 			const DTYPE COMPLEX *src_end; \
 			for(src_end = src + leading_samples + 1 + inv_cadence / 2; src < src_end; src++) \
 				*dst += *src; \
@@ -390,10 +422,12 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
  \
 		/* Save the sum of the unused samples in end_sample and the number of unused samples in weight */ \
 		*weight = (src_size + inv_cadence / 2 - leading_samples) % inv_cadence; \
-		*end_sample = *src; \
+		if(!(*end_sample)) \
+			*end_sample = g_malloc(sizeof(complex double)); \
+		**end_sample = *src; \
 		src++; \
 		for(i = 1; i < *weight; i++, src++) \
-			*end_sample += *src; \
+			**end_sample += *src; \
  \
 	/*
 	 * If the size of the outgoing buffer has been computed to be zero, all we want to
@@ -401,16 +435,18 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 	 */ \
 	} else { \
 		guint i; \
+		if(!(*end_sample)) \
+			*end_sample = g_malloc(sizeof(complex double)); \
 		if(*weight == 0 && !(inv_cadence % 2)) { \
 			/* Then the first input sample should be divided by two, since it is the first to affect the next output sample. */ \
-			*end_sample = *src / 2; \
+			**end_sample = *src / 2; \
 			src++; \
 			for(i = 1; i < src_size; i++, src++) \
-				*end_sample += *src; \
+				**end_sample += *src; \
 		} else { \
 			/* Then each sample contributes its full value to end_sample. */ \
 			for(i = 0; i < src_size; i++, src++) \
-				*end_sample += *src; \
+				**end_sample += *src; \
 		} \
 		*weight += src_size; \
 	} \
@@ -423,7 +459,7 @@ DEFINE_AVG_DOWNSAMPLE(double, complex)
 
 
 /* Based on given parameters, this function calls the proper resampling function */
-static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, enum gstlal_resample_data_type data_type, guint cadence, guint inv_cadence, guint polynomial_order, void *dxdt0, void *end_sample, void *before_end_sample, guint leading_samples)
+static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, enum gstlal_resample_data_type data_type, guint cadence, guint inv_cadence, guint polynomial_order, void *dxdt0, void **end_sample, void **before_end_sample, guint leading_samples)
 {
 	/* Sanity checks */
 	g_assert_cmpuint(src_size % unit_size, ==, 0);
@@ -461,16 +497,16 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 	} else if(cadence > 1 && polynomial_order == 1) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			linear_upsample_float(src, dst, src_size, cadence, end_sample);
+			linear_upsample_float(src, dst, src_size, cadence, (float **) end_sample);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			linear_upsample_double(src, dst, src_size, cadence, end_sample);
+			linear_upsample_double(src, dst, src_size, cadence, (double **) end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			linear_upsample_floatcomplex(src, dst, src_size, cadence, end_sample);
+			linear_upsample_floatcomplex(src, dst, src_size, cadence, (complex float **) end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			linear_upsample_doublecomplex(src, dst, src_size, cadence, end_sample);
+			linear_upsample_doublecomplex(src, dst, src_size, cadence, (complex double **) end_sample);
 			break;
 		default:
 			g_assert_not_reached();
@@ -480,16 +516,16 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 	} else if(cadence > 1 && polynomial_order == 2) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			quadratic_upsample_float(src, dst, src_size, cadence, end_sample, before_end_sample);
+			quadratic_upsample_float(src, dst, src_size, cadence, (float **) end_sample, (float **) before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			quadratic_upsample_double(src, dst, src_size, cadence, end_sample, before_end_sample);
+			quadratic_upsample_double(src, dst, src_size, cadence, (double **) end_sample, (double **) before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			quadratic_upsample_floatcomplex(src, dst, src_size, cadence, end_sample, before_end_sample);
+			quadratic_upsample_floatcomplex(src, dst, src_size, cadence, (complex float **) end_sample, (complex float **) before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			quadratic_upsample_doublecomplex(src, dst, src_size, cadence, end_sample, before_end_sample);
+			quadratic_upsample_doublecomplex(src, dst, src_size, cadence, (complex double **) end_sample, (complex double **) before_end_sample);
 			break;
 		default:
 			g_assert_not_reached();
@@ -499,16 +535,16 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 	} else if(cadence > 1 && polynomial_order == 3) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			cubic_upsample_float(src, dst, src_size, cadence, dxdt0, end_sample, before_end_sample);
+			cubic_upsample_float(src, dst, src_size, cadence, dxdt0, (float **) end_sample, (float **) before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			cubic_upsample_double(src, dst, src_size, cadence, dxdt0, end_sample, before_end_sample);
+			cubic_upsample_double(src, dst, src_size, cadence, dxdt0, (double **) end_sample, (double **) before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			cubic_upsample_floatcomplex(src, dst, src_size, cadence, dxdt0, end_sample, before_end_sample);
+			cubic_upsample_floatcomplex(src, dst, src_size, cadence, dxdt0, (complex float **) end_sample, (complex float **) before_end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			cubic_upsample_doublecomplex(src, dst, src_size, cadence, dxdt0, end_sample, before_end_sample);
+			cubic_upsample_doublecomplex(src, dst, src_size, cadence, dxdt0, (complex double **) end_sample, (complex double **) before_end_sample);
 			break;
 		default:
 			g_assert_not_reached();
@@ -543,16 +579,16 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 	} else if(inv_cadence > 1 && polynomial_order > 0) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			avg_downsample_float(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, end_sample);
+			avg_downsample_float(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, (float **) end_sample);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			avg_downsample_double(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, end_sample);
+			avg_downsample_double(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, (double **) end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			avg_downsample_floatcomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, end_sample);
+			avg_downsample_floatcomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, (complex float **) end_sample);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			avg_downsample_doublecomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, end_sample);
+			avg_downsample_doublecomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, (complex double **) end_sample);
 			break;
 		default:
 			g_assert_not_reached();
@@ -879,8 +915,8 @@ static gboolean start(GstBaseTransform *trans)
 	element->need_discont = TRUE;
 	element->need_gap = FALSE;
 	element->dxdt0 = 0.0;
-	element->end_sample = 0.0;
-	element->before_end_sample = 0.0;
+	element->end_sample = NULL;
+	element->before_end_sample = NULL;
 	element->leading_samples = 0;
 
 	return TRUE;
@@ -911,8 +947,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->offset0 = element->next_out_offset = gst_util_uint64_scale_ceil(GST_BUFFER_OFFSET(inbuf), element->rate_out, element->rate_in);
 		element->need_discont = TRUE;
 		element->dxdt0 = 0.0;
-		element->end_sample = 0.0;
-		element->before_end_sample = 0.0;
+		element->end_sample = NULL;
+		element->before_end_sample = NULL;
 		element->leading_samples = 0;
 		if(element->polynomial_order > 0)
 			element->need_buffer_resize = TRUE;
@@ -920,7 +956,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
-	if(element->rate_out > element->rate_in && ((element->polynomial_order > 0 && element->end_sample == 0.0) || (element->polynomial_order > 2 && element->before_end_sample == 0.0)))
+	if(element->rate_out > element->rate_in && ((element->polynomial_order > 0 && element->end_sample == NULL) || (element->polynomial_order > 2 && element->before_end_sample == NULL)))
 		element->need_buffer_resize = TRUE;
 
 	guint inv_cadence = element->rate_in / element->rate_out;
@@ -945,7 +981,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			 * If using any interpolation, each input buffer leaves one or two samples at the end to add 
 			 * to the next buffer. If these are absent, we need to reduce the output buffer size.
 			 */
-			if(element->polynomial_order > 2 && element->end_sample == 0.0)
+			if(element->polynomial_order > 2 && element->end_sample == NULL)
 				outbuf_size -= 2 * element->unit_size * element->rate_out / element->rate_in;
 			else
 				outbuf_size -= element->unit_size * element->rate_out / element->rate_in;
@@ -990,7 +1026,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
-		resample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->data_type, element->rate_out / element->rate_in, element->rate_in / element->rate_out, element->polynomial_order, (void *) &element->dxdt0, (void *) &element->end_sample, (void *) &element->before_end_sample, element->leading_samples);
+		resample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->data_type, element->rate_out / element->rate_in, element->rate_in / element->rate_out, element->polynomial_order, (void *) &element->dxdt0, (void **) &element->end_sample, (void **) &element->before_end_sample, element->leading_samples);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, FALSE);
 		gst_buffer_unmap(outbuf, &outmap);
 	} else {

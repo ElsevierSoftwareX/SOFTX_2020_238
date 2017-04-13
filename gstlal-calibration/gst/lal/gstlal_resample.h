@@ -89,8 +89,8 @@ struct _GSTLALResample {
 
 	/* filter */
 	double complex dxdt0;
-	double complex end_sample;
-	double complex before_end_sample;
+	double complex *end_sample;
+	double complex *before_end_sample;
 };
 
 
