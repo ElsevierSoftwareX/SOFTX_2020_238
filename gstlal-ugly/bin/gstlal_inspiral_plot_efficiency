@@ -14,8 +14,8 @@ import sys
 from optparse import OptionParser
 
 import lal
+from lal import rate
 from glue.ligolw import utils as ligolw_utils
-from pylal import rate
 from pylal import imr_utils
 
 import matplotlib

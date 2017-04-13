@@ -68,10 +68,9 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
 import lal
+from lal import rate
 import lalsimulation
-from pylal import rate
 from pylal import snglcoinc
-from pylal.inject import light_travel_time
 
 
 from gstlal import stats as gstlalstats

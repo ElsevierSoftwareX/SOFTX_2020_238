@@ -57,8 +57,8 @@ from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue import segments
 from lal import LIGOTimeGPS
+from lal import rate
 from lal.utils import CacheEntry
-from pylal import rate
 from optparse import OptionParser
 
 class DefaultContentHandler(ligolw.LIGOLWContentHandler):

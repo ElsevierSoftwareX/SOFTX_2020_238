@@ -37,8 +37,8 @@ import numpy
 from glue.ligolw import utils as ligolw_utils
 from gstlal import plotsegments
 from lal import GPSToUTC
+from lal import rate
 from pylal import imr_utils
-from pylal import rate
 
 # FIXME Currently this program assumes there are only two ifos
 def parse_sensitivity_docs(database, cumulative_segments_file, simdb_query_end_time):

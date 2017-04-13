@@ -95,8 +95,8 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import time_slide as ligolw_time_slide
 import lal
 from lal import LIGOTimeGPS
+from lal import rate
 from lal import series as lalseries
-from pylal import rate
 
 from gstlal import bottle
 from gstlal import reference_psd

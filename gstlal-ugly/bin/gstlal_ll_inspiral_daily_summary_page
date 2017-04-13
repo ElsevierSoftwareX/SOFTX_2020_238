@@ -8,9 +8,9 @@ from glue.ligolw import utils
 from glue.ligolw import table
 from glue import segments
 from glue.lal import Cache
-from pylal import rate
 import lal
 from lal import LIGOTimeGPS
+from lal import rate
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt

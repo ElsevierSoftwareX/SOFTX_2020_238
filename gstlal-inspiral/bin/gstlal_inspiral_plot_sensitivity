@@ -45,9 +45,9 @@ from glue import segmentsUtils
 from glue import iterutils
 
 import lal
+from lal import rate
 from lal.utils import CacheEntry
 
-from pylal import rate
 from pylal import imr_utils
 from pylal import git_version
 

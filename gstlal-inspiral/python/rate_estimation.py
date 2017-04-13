@@ -59,7 +59,7 @@ import sys
 
 
 from glue.text_progress_bar import ProgressBar
-from pylal import rate
+from lal import rate
 
 
 from gstlal import emcee

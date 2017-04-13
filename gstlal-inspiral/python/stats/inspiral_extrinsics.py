@@ -48,8 +48,8 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
 from glue.text_progress_bar import ProgressBar
 import lal
+from lal import rate
 import lalsimulation
-from pylal import rate
 from pylal import snglcoinc
 
 

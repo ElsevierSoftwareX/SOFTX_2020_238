@@ -36,8 +36,8 @@ from urlparse import urlparse
 cgitb.enable()
 form = cgi.FieldStorage()
 import pylab
-from pylal import rate
 import lal
+from lal import rate
 
 
 def now():
