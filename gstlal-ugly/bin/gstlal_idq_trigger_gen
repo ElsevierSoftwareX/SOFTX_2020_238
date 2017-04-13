@@ -128,13 +128,6 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.out_path = kwargs.pop("out_path")
 		self.last_save_time = None
 		self.cadence = options.cadence
-		# if file already exists, delete it first
-                # FIXME this may not be the most elegant solution,
-                #       but it'll do for now
-                try:
-                        os.remove(os.path.join(self.out_path, self.out_file))
-                except OSError:
-                        pass
                 # create header for trigger file
                 #self.header = "# start_time stop_time time frequency unnormalized_energy normalized_energy chisqdof significance channel\n"
                 self.header = "# %16s\t%16s\t%16s\t%16s\t%16s\t%4s\t%4s\t%16s\t%12s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "channel", "rate")
@@ -192,6 +185,7 @@ class LinkedAppSync(pipeparts.AppSync):
 	def __init__(self, appsink_new_buffer, sink_dict = {}):
 		super(LinkedAppSync, self).__init__(appsink_new_buffer, sink_dict.keys())
 		self.sink_dict = sink_dict	
+		self.time_ordering = 'full'
 	
 	def attach(self, appsink):
 		"""
@@ -219,39 +213,68 @@ class LinkedAppSync(pipeparts.AppSync):
 		"""
 
 		while 1:
-			# time ordering:
-			# retrieve the timestamps of all elements that
-			# aren't at eos and all elements at eos that still
-			# have buffers in them
-			#timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
-			# if all elements are at eos and none have buffers,
-			# then we're at eos
-			#if not timestamps:
-			#	return Gst.FlowReturn.EOS
-			# find the element with the oldest timestamp.  None
-			# compares as less than everything, so we'll find
-			# any element (that isn't at eos) that doesn't yet
-			# have a buffer (elements at eos and that are
-			# without buffers aren't in the list)
-			#timestamp, elem_with_oldest = min(timestamps)
-			# if there's an element without a buffer, quit for
-			# now --- we require all non-eos elements to have
-			# buffers before proceding
-			#if timestamp is None:
-			#	return Gst.FlowReturn.OK
-			# clear timestamp and pass element to handler func.
-			# function call is done last so that all of our
-			# book-keeping has been taken care of in case an
-			# exception gets raised
-			#self.appsinks[elem_with_oldest] = None
-			#self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
-			# no time ordering:
-			if not elem in self.appsinks:
-				return Gst.FlowReturn.EOS
-			if self.appsinks[elem] is None:
-				return Gst.FlowReturn.OK
-			self.appsinks[elem] = None
-			self.appsink_new_buffer(elem, self.sink_dict)
+			if self.time_ordering == 'full':
+				# retrieve the timestamps of all elements that
+				# aren't at eos and all elements at eos that still
+				# have buffers in them
+				timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
+				# if all elements are at eos and none have buffers,
+				# then we're at eos
+				if not timestamps:
+					return Gst.FlowReturn.EOS
+				# find the element with the oldest timestamp.  None
+				# compares as less than everything, so we'll find
+				# any element (that isn't at eos) that doesn't yet
+				# have a buffer (elements at eos and that are
+				# without buffers aren't in the list)
+				timestamp, elem_with_oldest = min(timestamps)
+				# if there's an element without a buffer, quit for
+				# now --- we require all non-eos elements to have
+				# buffers before proceding
+				if timestamp is None:
+					return Gst.FlowReturn.OK
+				# clear timestamp and pass element to handler func.
+				# function call is done last so that all of our
+				# book-keeping has been taken care of in case an
+				# exception gets raised
+				self.appsinks[elem_with_oldest] = None
+				self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
+	
+			elif self.time_ordering == 'partial':
+				# retrieve the timestamps of elements of a given channel
+				# that aren't at eos and all elements at eos that still
+				# have buffers in them
+				channel = self.sink_dict[elem][0]
+				timestamps = [(t, e) for e, t in self.appsinks.items() if self.sink_dict[e][0] == channel and (e not in self.at_eos or t is not None)]
+				# if all elements are at eos and none have buffers,
+				# then we're at eos
+				if not timestamps:
+					return Gst.FlowReturn.EOS
+				# find the element with the oldest timestamp.  None
+				# compares as less than everything, so we'll find
+				# any element (that isn't at eos) that doesn't yet
+				# have a buffer (elements at eos and that are
+				# without buffers aren't in the list)
+				timestamp, elem_with_oldest = min(timestamps)
+				# if there's an element without a buffer, quit for
+				# now --- we require all non-eos elements to have
+				# buffers before proceding
+				if timestamp is None:
+					return Gst.FlowReturn.OK
+				# clear timestamp and pass element to handler func.
+				# function call is done last so that all of our
+				# book-keeping has been taken care of in case an
+				# exception gets raised
+				self.appsinks[elem_with_oldest] = None
+				self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
+			
+			elif self.time_ordering == 'none':
+				if not elem in self.appsinks:
+					return Gst.FlowReturn.EOS
+				if self.appsinks[elem] is None:
+					return Gst.FlowReturn.OK
+				self.appsinks[elem] = None
+				self.appsink_new_buffer(elem, self.sink_dict)
 
 
 ####################
@@ -298,13 +321,13 @@ for channel in channels:
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
 		phase = [0, numpy.pi/2.]
 		durations[(channel, rate)] = dur
+		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60)
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate))
-		#thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.ones((2,1)), time_domain = True)
+		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % int(rate))
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel) )
 		thishead = pipeparts.mktrigger(pipeline, thishead, int(rate))
-		#thishead = pipeparts.mktrigger(pipeline, thishead, int(rate), autocorrelation_matrix = numpy.ones((len(list(phi_ql(flow, fhigh, qlow, qhigh))), 21), dtype=numpy.complex))
 		thishead = pipeparts.mkqueue(pipeline, thishead)
 		src[(channel, rate)] = thishead	
 
