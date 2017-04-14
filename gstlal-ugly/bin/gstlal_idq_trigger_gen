@@ -163,7 +163,7 @@ class MultiChannelHandler(simplehandler.Handler):
 					trigger_time = row.end_time + row.end_time_ns * 1e-9
 					start_time = trigger_time - duration/2
 					stop_time = trigger_time + duration/2
-					fdata += "%18s\t%18s\t%18s\t%18s\t%18s\t%s\t%s\t%s\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, channel, float(rate))
+					fdata += "%18f\t%18f\t%18f\t%18f\t%18f\t%f\t%f\t%s\t%f\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, channel, float(rate))
 			memory.unmap(mapinfo)
 
 		# Save a "latest"
@@ -327,7 +327,7 @@ for channel in channels:
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % int(rate))
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel) )
-		thishead = pipeparts.mktrigger(pipeline, thishead, int(rate))
+		thishead = pipeparts.mktrigger(pipeline, thishead, int(rate), max_snr = True)
 		thishead = pipeparts.mkqueue(pipeline, thishead)
 		src[(channel, rate)] = thishead	
 

@@ -34,11 +34,11 @@
 #include <gstlal_sngltrigger.h>
 
 
-GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, char *channel_name, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff timediff, gboolean snr_max)
+GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, char *channel_name, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff timediff, gboolean max_snr)
 {
 	GstBuffer *srcbuf = gst_buffer_new();
 
-	int snr_max_index = -1;
+	int max_snr_index = -1;
 
 	if (!srcbuf) {
 		GST_ERROR_OBJECT(pad, "Could not allocate sngl-trigger buffer");
@@ -56,20 +56,20 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 	GST_BUFFER_PTS(srcbuf) = time + timediff;
 	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
-	if(snr_max)
-	{
-		snr_max_index = gstlal_peak_max_over_channels(input);
-		g_assert(snr_max_index >= 0 && snr_max_index < input->channels);
-	}
-
 	if (input->num_events) {
+		if(max_snr)
+		{
+			max_snr_index = gstlal_peak_max_over_channels(input);
+			g_assert(max_snr_index >= 0 && max_snr_index < input->channels);
+		}
+
 		guint channel;
 		for(channel = 0; channel < input->channels; channel++) {
 			struct GSTLALSnglTrigger *event;
 			SnglTriggerTable *parent;
 			double complex maxdata_channel = 0;
 
-			if(snr_max && channel != snr_max_index)
+			if(max_snr && channel != max_snr_index)
 				continue;
 
 			switch (input->type)
