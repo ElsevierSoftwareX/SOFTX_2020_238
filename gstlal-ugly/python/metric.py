@@ -200,7 +200,7 @@ class Metric(object):
 	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
 
 		min_d2 = numpy.finfo(numpy.float32).eps * 1.2
-		max_d2 = numpy.finfo(numpy.float32).eps * 5.0
+		max_d2 = numpy.finfo(numpy.float32).eps * 8
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
