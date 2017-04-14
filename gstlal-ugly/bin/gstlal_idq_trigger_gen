@@ -130,7 +130,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.cadence = options.cadence
                 # create header for trigger file
                 #self.header = "# start_time stop_time time frequency unnormalized_energy normalized_energy chisqdof significance channel\n"
-                self.header = "# %16s\t%16s\t%16s\t%16s\t%16s\t%4s\t%4s\t%16s\t%12s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "channel", "rate")
+                self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%s\t%8s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "channel", "rate")
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
 	def do_on_message(self, bus, message):
@@ -163,7 +163,7 @@ class MultiChannelHandler(simplehandler.Handler):
 					trigger_time = row.end_time + row.end_time_ns * 1e-9
 					start_time = trigger_time - duration/2
 					stop_time = trigger_time + duration/2
-					fdata += "%18f\t%18f\t%18f\t%18f\t%18f\t%f\t%f\t%s\t%f\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, channel, float(rate))
+					fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%s\t%8.1f\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, channel, float(rate))
 			memory.unmap(mapinfo)
 
 		# Save a "latest"
