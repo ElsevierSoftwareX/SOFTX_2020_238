@@ -1,3 +1,10 @@
+gstlal-calibration (1.1.5-2) unstable; urgency=low
+
+  * Bug fix for upsampling zeros
+  * Bug fix for reading EP10 from frames
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Fri, 14 Apr 2017 11:02:16 -0500
+
 gstlal-calibration (1.1.5-1) unstable; urgency=low
 
   * Bug fix for time immediately before and after data dropouts
