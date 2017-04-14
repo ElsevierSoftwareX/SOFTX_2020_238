@@ -52,7 +52,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from lalburst import ligolw_burca2
 from pylal import ligolw_thinca
-from pylal import snglcoinc
+from lalburst import snglcoinc
 from gstlal import far
 from lal.utils import CacheEntry
 

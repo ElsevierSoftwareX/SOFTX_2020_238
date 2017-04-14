@@ -78,7 +78,7 @@ from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
 import lal
 from lal import rate
-from pylal import snglcoinc
+from lalburst import snglcoinc
 import lalsimulation
 
 

@@ -49,7 +49,7 @@ from glue.ligolw import utils as ligolw_utils
 from glue.text_progress_bar import ProgressBar
 import lal
 from lal import rate
-from pylal import snglcoinc
+from lalburst import snglcoinc
 import lalsimulation
 
 
