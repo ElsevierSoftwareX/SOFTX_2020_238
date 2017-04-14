@@ -1,7 +1,0 @@
-all: cache_for_injections
-
-cache_for_injections :
-	cd gstlal_inspiral && ls -f | grep DIST_STATS | lalapps_path2cache > ../dist_stats.cache && cd ..
-	cd gstlal_svd_bank && ls -f | grep SVD | lalapps_path2cache > ../svd_bank.cache && cd ..
-	cd gstlal_inspiral_create_prior_diststats && ls -f | grep CREATE_PRIOR | lalapps_path2cache > ../prior.cache && cd ..
-	cd gstlal_reference_psd && ls -f | grep PSD | lalapps_path2cache > ../psd.cache && cd ..
