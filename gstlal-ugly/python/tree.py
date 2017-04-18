@@ -39,8 +39,9 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	# return 1.25
-	prefactor=0.50
+	return 1.0
+	#prefactor=n**-.5
+	#prefactor = 1
 	if n==1:
 		return prefactor
 	if n==2:
@@ -83,10 +84,10 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 10000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1000.0 , self.deltas / 2500.)
 			except RuntimeError:
-				print "metric @", self.center, " failed, trying, ", self.center - self.deltas / numpy.pi
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / numpy.pi, self.deltas / 10000.)
+				print "metric @", self.center - self.deltas / 1000.0, " failed, trying, ", self.center - self.deltas / 100.0
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 100.0, self.deltas / 2500.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -102,11 +103,13 @@ class HyperCube(object):
 		# FIXME actually make the cube hashable and call that
 		return (tuple(self.center), tuple(self.deltas)) == (tuple(other.center), tuple(other.deltas))
 
-	def template_volume(self):
+	def template_volume(self, mismatch):
 		#n = self.N()
 		n = self.effective_dimension
 		#print "template_volume ", (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
-		return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
+		#return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
+		a = 2 * mismatch**.5 / n**.5
+		return a**n
 
 	def N(self):
 		return len(self.boundaries)
@@ -177,7 +180,7 @@ class HyperCube(object):
 		# Adapted from Owen 1995 (2.16). The ideal number of
 		# templates required to cover the space with
 		# non-overlapping spheres.
-		return self.volume() / self.template_volume()
+		return self.volume() / self.template_volume(mismatch)
 
 	def match(self, other):
 		return self.metric.metric_match(self.metric_tensor, self.center, other.center)
@@ -200,7 +203,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.03, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.1, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		coord_volume = self.cube.coord_volume()
@@ -225,6 +228,8 @@ class Node(object):
 			sib_numtmps = self.sibling.cube.num_templates(mismatch) * sib_aspect_factor
 
 			numtmps = self.cube.num_templates(mismatch) * aspect_factor
+			par_splitdim = numpy.argmax(par_size)
+
 			par_vratio = numtmps / par_numtmps
 			sib_vratio = numtmps / sib_numtmps
 			volume_split_condition = (1./vtol < par_vratio < vtol) and (1./vtol < sib_vratio < vtol)
@@ -234,10 +239,11 @@ class Node(object):
 		q = self.cube.center[0] / self.cube.center[1]
 		if (coord_volume > max_coord_vol):
 			numtmps *= 1
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps > split_num_templates/3.) and not volume_split_condition))):
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps >= split_num_templates/2.0) and not volume_split_condition))):
+		#if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 2**len(size) and volume_split_condition:
+			if numtmps < 3**len(size) and volume_split_condition:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
