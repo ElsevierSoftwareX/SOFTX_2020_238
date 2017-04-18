@@ -139,8 +139,8 @@ class Metric(object):
 			mc = (m1*m2)**.6 / (m1+m2)**.2 * 5e-6
 			return  1./numpy.pi / mc * (5./256. * mc / 1.)**(3./8.)
 
-		flow = self.flow
-		#flow = max(min(fmin(p[0], p[1]), self.flow), 10)
+		#flow = self.flow
+		flow = max(min(fmin(p[0], p[1]), self.flow), 10)
 
 		try:
 			parameters = {}
@@ -199,8 +199,10 @@ class Metric(object):
 	#def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
 	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
 
+		#min_d2 = numpy.finfo(numpy.float32).eps * 1.2
+		#max_d2 = numpy.finfo(numpy.float32).eps * 8
 		min_d2 = numpy.finfo(numpy.float32).eps * 1.2
-		max_d2 = numpy.finfo(numpy.float32).eps * 8
+		max_d2 = numpy.finfo(numpy.float32).eps * 5.0
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
