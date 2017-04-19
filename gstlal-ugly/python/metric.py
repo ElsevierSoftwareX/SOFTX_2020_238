@@ -137,7 +137,7 @@ class Metric(object):
 
 		def fmin(m1, m2):
 			mc = (m1*m2)**.6 / (m1+m2)**.2 * 5e-6
-			return  1./numpy.pi / mc * (5./256. * mc / 1.)**(3./8.)
+			return  1./numpy.pi / mc * (5./256. * mc / 4.)**(3./8.)
 
 		#flow = self.flow
 		flow = max(min(fmin(p[0], p[1]), self.flow), 10)
@@ -199,10 +199,10 @@ class Metric(object):
 	#def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
 	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
 
-		#min_d2 = numpy.finfo(numpy.float32).eps * 1.2
-		#max_d2 = numpy.finfo(numpy.float32).eps * 8
-		min_d2 = numpy.finfo(numpy.float32).eps * 1.2
-		max_d2 = numpy.finfo(numpy.float32).eps * 5.0
+		#max_match = 1.0 - 6 * numpy.finfo(numpy.float32).eps
+		#min_match = 1.0 - 24 * numpy.finfo(numpy.float32).eps
+		max_match = 1.0 - 4 * numpy.finfo(numpy.float32).eps
+		min_match = 1.0 - 40 * numpy.finfo(numpy.float32).eps
 
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
@@ -210,15 +210,17 @@ class Metric(object):
 		x = numpy.zeros(len(deltas))
 		x[i] = deltas[i]
 		try:
-			d2 = 1. - self.match(w1, self.waveform(center+x))
+			plus_match = self.match(w1, self.waveform(center+x))
 		except TypeError:
 			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 1.1, g, w1)
-		if (d2 > max_d2):
+		if (plus_match < min_match):
 			return self.__set_diagonal_metric_tensor_component(i, center, deltas / 8, g, w1)
-		if (d2 < min_d2):
+		if (plus_match > max_match):
 			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
 		else:
-			g[i,i] = d2 / x[i] / x[i]
+			minus_match = self.match(w1, self.waveform(center-x))
+			# - 1/2 the second partial derivative
+			g[i,i] = -0.5 * (plus_match + minus_match - 2.0) / x[i]**2
 			return x[i]
 
 	def __set_tt_metric_tensor_component(self, center, w1):
@@ -236,10 +238,15 @@ class Metric(object):
 		# evaluate symmetrically
 		if j <= i:
 			return
+		fii = -2 * g[i,i] * deltas[i]**2 + 2.0
+		fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
 
 		# Check the match
-		d2 = 1 - self.match(w1, self.waveform(center+x))
-		g[i,j] = g[j,i] = (d2 - g[i,i] * deltas[i]**2 - g[j,j] * deltas[j]**2) / 2 / deltas[i] / deltas[j]
+		#d2 = 1 - self.match(w1, self.waveform(center+x))
+		plus_match = self.match(w1, self.waveform(center+x))
+		minus_match = self.match(w1, self.waveform(center-x))
+		#g[i,j] = g[j,i] = (d2 - g[i,i] * deltas[i]**2 - g[j,j] * deltas[j]**2) / 2 / deltas[i] / deltas[j]
+		g[i,j] = g[j,i] = -0.5 * (plus_match + minus_match - fii - fjj + 2.0) / 2 / deltas[i] / deltas[j]
 		return None
 
 	def __set_offdiagonal_time_metric_tensor_component(self, j, center, deltas, g, g_tt, delta_t, w1):
