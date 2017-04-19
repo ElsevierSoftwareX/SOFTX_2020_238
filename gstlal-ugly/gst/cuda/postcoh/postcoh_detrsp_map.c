@@ -280,20 +280,24 @@ static int to_xml(DetSkymap *det_map, const char *detrsp_fname, const char *detr
 
 	return 0;
 }
-static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pout)
+static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pnorder, gchar **pout)
 {
 	int option_index = 0;
 	struct option long_opts[] =
 	{
-		{"ifos-horizons",	required_argument,	0,	'i'},
+		{"ifo-horizons",	required_argument,	0,	'i'},
+		{"chealpix-order",	required_argument,	0,	'n'},
 		{"output-filename",	required_argument,	0,	'o'},
 		{0, 0, 0, 0}
 	};
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:o:", long_opts, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "i:n:o:", long_opts, &option_index)) != -1) {
 		switch (opt) {
 			case 'i':
 				*pin = g_strdup((gchar *)optarg);
+				break;
+			case 'n':
+				*pnorder = g_strdup((gchar *)optarg);
 				break;
 			case 'o':
 				*pout = g_strdup((gchar *)optarg);
@@ -307,9 +311,10 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pout)
 int main(int argc, char *argv[])
 {
 	gchar **pin = (gchar **)malloc(sizeof(gchar *));
+	gchar **pnorder = (gchar **)malloc(sizeof(gchar *));
 	gchar **pout = (gchar **)malloc(sizeof(gchar *));
 
-	parse_opts(argc, argv, pin, pout);
+	parse_opts(argc, argv, pin, pnorder, pout);
 	
 	gchar ** in_ifo_strings = g_strsplit(*pin, ",", -1);
 	gchar ** one_ifo_string = NULL;
@@ -336,7 +341,8 @@ int main(int argc, char *argv[])
 
 	/* GPS interval = 1800 seconds.
 	 * norder is 4, for depth of number of pixels created  */
-	DetSkymap *det_map = create_detresponse_skymap(ifo_names, nifo, horizons, 1800 ,4);
+	int norder = atoi(*pnorder);
+	DetSkymap *det_map = create_detresponse_skymap(ifo_names, nifo, horizons, 1800 ,norder);
 
 	to_xml(det_map, *pout, mapname->str, 0);
 	g_string_free(mapname, TRUE);
