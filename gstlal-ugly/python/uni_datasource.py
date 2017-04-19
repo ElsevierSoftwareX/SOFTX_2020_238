@@ -237,7 +237,12 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None, psd_fft_leng
 	# FIXME:  this could be omitted if ht_gate_threshold is None, but
 	# we need to collect whitened h(t) segments, however something
 	# could be done to collect those if these gates aren't here.
-	ht_gate_window = max(max_rate // 4, 1)	# samples
+	# ht_gate_window = max(max_rate // 4, 1)	# samples
+	# NOTE: ht_gate_window set to 0 to reduce latency from 4s to 0s. previous
+	# setting = 0.25s. For each data block at 4s, it has to wait extra 0.25s
+	# to finish processing causing 4s latency.
+
+	ht_gate_window = 0 
 	head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold if ht_gate_threshold is not None else float("+inf"), hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
 	# emit signals so that a user can latch on to them
 	head.set_property("emit-signals", True)
