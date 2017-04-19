@@ -321,8 +321,8 @@ for channel in channels:
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
 		phase = [0, numpy.pi/2.]
 		durations[(channel, rate)] = dur
-		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60)
-		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate))
+		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = dur/2)
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % int(rate))
