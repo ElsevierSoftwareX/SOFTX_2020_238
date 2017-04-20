@@ -199,35 +199,30 @@ class Metric(object):
 	#def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
 	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
 
-		#max_match = 1.0 - 6 * numpy.finfo(numpy.float32).eps
-		#min_match = 1.0 - 24 * numpy.finfo(numpy.float32).eps
-		max_match = 1.0 - 10 * numpy.finfo(numpy.float32).eps
-		min_match = 1.0 - 100 * numpy.finfo(numpy.float32).eps
-
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
 		# this is a diagonal component or not
 		x = numpy.zeros(len(deltas))
 		x[i] = deltas[i]
+
+		# get the positive side of the central difference
 		try:
 			plus_match = self.match(w1, self.waveform(center+x))
 		except TypeError:
 			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 1.1, g, w1)
-		if (plus_match < min_match):
-			return self.__set_diagonal_metric_tensor_component(i, center, deltas / 8, g, w1)
-		if (plus_match > max_match):
-			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
-		else:
-			minus_match = self.match(w1, self.waveform(center-x))
-			minus_match2 = self.match(w1, self.waveform(center-2*x))
-			plus_match2 = self.match(w1, self.waveform(center+2*x))
-			# second order
-			#d2mbydx2 = (plus_match + minus_match - 2.0) / x[i]**2
-			# forth order
-			d2mbydx2 = (4./3. * (plus_match + minus_match) - 1./12. * (plus_match2 + minus_match2) - 5./2.) / x[i]**2
-			# - 1/2 the second partial derivative
-			g[i,i] = -0.5 * d2mbydx2
-			return x[i]
+
+		# then the negative side
+		minus_match = self.match(w1, self.waveform(center-x))
+		# second order
+		d2mbydx2 = (plus_match + minus_match - 2.0) / x[i]**2
+		# fourth order
+		#minus_match2 = self.match(w1, self.waveform(center-2*x))
+		#plus_match2 = self.match(w1, self.waveform(center+2*x))
+		#d2mbydx2 = (4./3. * (plus_match + minus_match) - 1./12. * (plus_match2 + minus_match2) - 5./2.) / x[i]**2
+
+		# - 1/2 the second partial derivative
+		g[i,i] = -0.5 * d2mbydx2
+		return x[i]
 
 	def __set_tt_metric_tensor_component(self, center, w1):
 
@@ -238,42 +233,38 @@ class Metric(object):
 		# evaluate symmetrically
 		if j <= i:
 			return None
-		# make the vector to solve for the metric by choosing
-		# either a principle axis or a bisector depending on if
-		# this is a diagonal component or not
-		xmm = numpy.zeros(len(deltas))
-		xmp = numpy.zeros(len(deltas))
-		xpm = numpy.zeros(len(deltas))
-		xpp = numpy.zeros(len(deltas))
+		# NOTE: SECOND ORDER, BUT NEEDED IF USING FOURTH ORDER FOR DIAG
+		# xmm = numpy.zeros(len(deltas))
+		# xmp = numpy.zeros(len(deltas))
+		# xpm = numpy.zeros(len(deltas))
+		# xpp = numpy.zeros(len(deltas))
 
-		xmm[i] = -deltas[i]
-		xmm[j] = -deltas[j]
-		xmp[i] = -deltas[i]
-		xmp[j] = +deltas[j]
-		xpm[i] = +deltas[i]
-		xpm[j] = -deltas[j]
-		xpp[i] = +deltas[i]
-		xpp[j] = +deltas[j]
+		# xmm[i] = -deltas[i]
+		# xmm[j] = -deltas[j]
+		# xmp[i] = -deltas[i]
+		# xmp[j] = +deltas[j]
+		# xpm[i] = +deltas[i]
+		# xpm[j] = -deltas[j]
+		# xpp[i] = +deltas[i]
+		# xpp[j] = +deltas[j]
 
-		# second order
-		d2mbydxdy = (self.match(w1, self.waveform(center+xmm)) + self.match(w1, self.waveform(center+xpp)) - self.match(w1, self.waveform(center+xmp)) - self.match(w1, self.waveform(center+xpm))) / 4. / xpp[i] / xpp[j]
+		# d2mbydxdy = (self.match(w1, self.waveform(center+xmm)) + self.match(w1, self.waveform(center+xpp)) - self.match(w1, self.waveform(center+xmp)) - self.match(w1, self.waveform(center+xpm))) / 4. / xpp[i] / xpp[j]
 
-		g[i,j] = g[j,i] = -0.5 * d2mbydxdy
+		# g[i,j] = g[j,i] = -0.5 * d2mbydxdy
+		# return None
+
+		# NOTE: SECOND ORDER, ASSUMES SECOND ORDER FOR DIAG
+		x = numpy.zeros(len(deltas))
+		x[i] = deltas[i]
+		x[j] = deltas[j]
+		fii = -2 * g[i,i] * deltas[i]**2 + 2.0
+		fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
+
+		# Second order
+		plus_match = self.match(w1, self.waveform(center+x))
+		minus_match = self.match(w1, self.waveform(center-x))
+		g[i,j] = g[j,i] = -0.5 * (plus_match + minus_match - fii - fjj + 2.0) / 2 / deltas[i] / deltas[j]
 		return None
-
-		#x = numpy.zeros(len(deltas))
-		#x[i] = deltas[i]
-		#x[j] = deltas[j]
-		#fii = -2 * g[i,i] * deltas[i]**2 + 2.0
-		#fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
-
-		# Check the match
-		#d2 = 1 - self.match(w1, self.waveform(center+x))
-		#plus_match = self.match(w1, self.waveform(center+x))
-		#minus_match = self.match(w1, self.waveform(center-x))
-		#g[i,j] = g[j,i] = (d2 - g[i,i] * deltas[i]**2 - g[j,j] * deltas[j]**2) / 2 / deltas[i] / deltas[j]
-		#g[i,j] = g[j,i] = -0.5 * (plus_match + minus_match - fii - fjj + 2.0) / 2 / deltas[i] / deltas[j]
-		#return None
 
 	def __set_offdiagonal_time_metric_tensor_component(self, j, center, deltas, g, g_tt, delta_t, w1):
 		# make the vector to solve for the metric by choosing
