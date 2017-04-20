@@ -32,6 +32,8 @@
 
 /* The quality of downsampler should be choosen carefully. Tests show that
  * quality = 6 will produce 1.5 times single events than quality = 9
+ * The real filter length = base_len * sample_ratio.
+ * e.g. if we downsample 2x, filt_len = 192 * 2 = 384
  */
 #define DOWN_FILT_LEN 192 
 #define DOWN_QUALITY 9
