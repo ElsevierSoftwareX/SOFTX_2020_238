@@ -83,10 +83,10 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1000.0 , self.deltas / 10000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1000.0 , self.deltas / 2500.)
 			except RuntimeError:
 				print "metric @", self.center - self.deltas / 1000.0, " failed, trying, ", self.center - self.deltas / 100.0
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 100.0, self.deltas / 10000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 100.0, self.deltas / 2500.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -105,8 +105,8 @@ class HyperCube(object):
 	def template_volume(self, mismatch):
 		#n = self.N()
 		n = self.effective_dimension
-		#print "template_volume ", (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
 		return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
+		# NOTE code below assumes templates are cubes
 		#a = 2 * mismatch**.5 / n**.5
 		#return a**n
 
@@ -144,7 +144,6 @@ class HyperCube(object):
 
 	def tile(self, mismatch, stochastic = False):
 		self.tiles.append(self.center)
-		#self.tiles.append(self.center + numpy.random.randn(len(self.center))/6.0 * self.deltas/2.)
 		return list(self.tiles)
 
 	def __contains__(self, coords):
@@ -203,7 +202,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.03, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.05, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		coord_volume = self.cube.coord_volume()
@@ -232,7 +231,8 @@ class Node(object):
 
 			par_vratio = numtmps / par_numtmps
 			sib_vratio = numtmps / sib_numtmps
-			volume_split_condition = (1./vtol < par_vratio < vtol) and (1./vtol < sib_vratio < vtol)
+			#volume_split_condition = (1./vtol < par_vratio < vtol) and (1./vtol < sib_vratio < vtol)
+			volume_split_condition = (1./vtol < sib_vratio < vtol)
 
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps)
