@@ -39,8 +39,8 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	#return 1.0
-	prefactor = 1
+	return 1.0
+	prefactor = 1.0
 	if n==1:
 		return prefactor
 	if n==2:
@@ -105,10 +105,10 @@ class HyperCube(object):
 	def template_volume(self, mismatch):
 		#n = self.N()
 		n = self.effective_dimension
-		return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
+		#return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
 		# NOTE code below assumes templates are cubes
-		#a = 2 * mismatch**.5 / n**.5
-		#return a**n
+		a = 2 * mismatch**.5 / n**.5
+		return a**n
 
 	def N(self):
 		return len(self.boundaries)
@@ -202,7 +202,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.05, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.01, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		coord_volume = self.cube.coord_volume()
@@ -240,11 +240,11 @@ class Node(object):
 		q = self.cube.center[0] / self.cube.center[1]
 		if (coord_volume > max_coord_vol):
 			numtmps *= 1
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps >= split_num_templates/2.0) and not volume_split_condition))):
-		#if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates)):
+		#if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps >= split_num_templates/2.0) and not volume_split_condition))):
+		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 3**len(size) and volume_split_condition:
+			if numtmps < 2**len(size):# and volume_split_condition:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
