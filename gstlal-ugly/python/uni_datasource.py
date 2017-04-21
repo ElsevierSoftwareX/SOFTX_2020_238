@@ -242,7 +242,7 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None, psd_fft_leng
 	# setting = 0.25s. For each data block at 4s, it has to wait extra 0.25s
 	# to finish processing causing 4s latency.
 
-	ht_gate_window = 0 
+	ht_gate_window = max(max_rate // 4, 1)
 	head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold if ht_gate_threshold is not None else float("+inf"), hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
 	# emit signals so that a user can latch on to them
 	head.set_property("emit-signals", True)
