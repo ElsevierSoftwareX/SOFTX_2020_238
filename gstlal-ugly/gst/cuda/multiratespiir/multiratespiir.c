@@ -1227,7 +1227,8 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       element->deviceID = (element->stream_id) % deviceCount ;
       printf("device for spiir %s %d\n", element->bank_fname, element->deviceID);
       CUDA_CHECK(cudaSetDevice(element->deviceID));
-      cudaStreamCreateWithFlags(&element->stream, cudaStreamNonBlocking);
+      // cudaStreamCreateWithFlags(&element->stream, cudaStreamNonBlocking);
+      cudaStreamCreate(&element->stream);
 
       cuda_multirate_spiir_read_ndepth_and_rate(element->bank_fname, &element->num_depths, &element->rate);
 
