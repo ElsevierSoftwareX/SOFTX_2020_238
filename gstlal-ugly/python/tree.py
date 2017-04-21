@@ -83,10 +83,10 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1000.0 , self.deltas / 2500.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1000.0 , self.deltas / 1000.)
 			except RuntimeError:
 				print "metric @", self.center - self.deltas / 1000.0, " failed, trying, ", self.center - self.deltas / 100.0
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 100.0, self.deltas / 2500.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 100.0, self.deltas / 1000.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -201,11 +201,12 @@ class Node(object):
 		self.left = None
 		self.parent = parent
 		self.sibling = None
+		self.direction = None
 
 	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.01, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
-		coord_volume = self.cube.coord_volume()
+		self.direction = numpy.argmax(size / self.cube.deltas)
 		aspect_ratios = size / min(size)
 		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios > 2.0]))
 		aspect_ratio = max(aspect_ratios)
@@ -222,12 +223,12 @@ class Node(object):
 			par_numtmps = self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
 
 			sib_size = self.sibling.cube.num_tmps_per_side(mismatch)
+			sib_direction = numpy.argmax(sib_size / self.sibling.cube.deltas)
 			sib_aspect_ratios = sib_size / min(sib_size)
 			sib_aspect_factor = max(1., numpy.product(sib_aspect_ratios[sib_aspect_ratios > 2.0]))
 			sib_numtmps = self.sibling.cube.num_templates(mismatch) * sib_aspect_factor
 
 			numtmps = self.cube.num_templates(mismatch) * aspect_factor
-			par_splitdim = numpy.argmax(par_size)
 
 			par_vratio = numtmps / par_numtmps
 			sib_vratio = numtmps / sib_numtmps
@@ -237,9 +238,9 @@ class Node(object):
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps)
 
-		q = self.cube.center[0] / self.cube.center[1]
-		if (coord_volume > max_coord_vol):
-			numtmps *= 1
+			if not (self.parent.parent and (self.direction == self.parent.direction self.parent.parent.direction == sib_direction):
+				numtmps += 2
+
 		#if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps >= split_num_templates/2.0) and not volume_split_condition))):
 		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
