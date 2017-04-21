@@ -238,7 +238,7 @@ class Node(object):
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps)
 
-			if not (self.parent.parent and (self.direction == self.parent.direction self.parent.parent.direction == sib_direction):
+			if not (self.parent.parent and (self.direction == self.parent.direction == self.parent.parent.direction == sib_direction)):
 				numtmps += 2
 
 		#if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps >= split_num_templates/2.0) and not volume_split_condition))):
