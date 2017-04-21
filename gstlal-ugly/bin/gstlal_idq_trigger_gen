@@ -29,6 +29,7 @@ from optparse import OptionParser
 from collections import deque
 import os
 import sys
+import resource
 import StringIO
 
 import gi
@@ -46,6 +47,25 @@ from gstlal import sngltriggertable
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw import utils as ligolw_utils
+
+#
+# Make sure we have sufficient resources
+# We allocate far more memory than we need, so this is okay
+#
+
+def setrlimit(res, lim):
+	hard_lim = resource.getrlimit(res)[1]
+	resource.setrlimit(res, (lim if lim is not None else hard_lim, hard_lim))
+
+# set the number of processes and total set size up to hard limit and
+# shrink the per-thread stack size (default is 10 MiB)
+setrlimit(resource.RLIMIT_NPROC, None)
+setrlimit(resource.RLIMIT_AS, None)
+setrlimit(resource.RLIMIT_RSS, None)
+# FIXME:  tests at CIT show that this next tweak has no effect.  it's
+# possible that SL7 has lowered the default stack size from SL6 and we
+# don't need to do this anymore.  remove?
+setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 ####################
 # 
