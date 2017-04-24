@@ -52,8 +52,6 @@ typedef struct {
 	PyObject_HEAD
 	SnglInspiralTable row;
 	COMPLEX8TimeSeries *snr;
-	/* FIXME:  this should be incorporated into the LAL structure */
-	EventIDColumn event_id;
 } gstlal_GSTLALSnglInspiral;
 
 
@@ -123,7 +121,7 @@ static struct PyMemberDef members[] = {
 	{"spin2y", T_FLOAT, offsetof(gstlal_GSTLALSnglInspiral, row.spin2y), 0, "spin2y"},
 	{"spin2z", T_FLOAT, offsetof(gstlal_GSTLALSnglInspiral, row.spin2z), 0, "spin2z"},
 	{"_process_id", T_LONG, offsetof(gstlal_GSTLALSnglInspiral, row.process_id), 0, "process_id (long)"},
-	{"_event_id", T_LONG, offsetof(gstlal_GSTLALSnglInspiral, event_id.id), 0, "event_id (long)"},
+	{"_event_id", T_LONG, offsetof(gstlal_GSTLALSnglInspiral, row.event_id), 0, "event_id (long)"},
 	{NULL,}
 };
 
@@ -235,11 +233,6 @@ static PyObject *__new__(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	if(!new)
 		return NULL;
 
-	/* link the event_id pointer in the sngl_inspiral row structure
-	 * to the event_id structure */
-	new->row.event_id = &new->event_id;
-	new->event_id.id = 0;
-
 	/* done */
 	return (PyObject *) new;
 }
@@ -282,8 +275,6 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 			return NULL;
 		}
 		((gstlal_GSTLALSnglInspiral*)item)->row = gstlal_snglinspiral->parent;
-		/* repoint event_id to event_id structure */
-		((gstlal_GSTLALSnglInspiral*)item)->row.event_id = &((gstlal_GSTLALSnglInspiral*)item)->event_id;
 		/* duplicate the SNR time series */
 		if(gstlal_snglinspiral->length)
 		{
