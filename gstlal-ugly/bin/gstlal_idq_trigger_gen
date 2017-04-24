@@ -91,7 +91,12 @@ def sine_gaussian(phi, phi_0, q, time_arr):
 	dur = duration(phi,q)
 	tau = q/(2.*numpy.pi*phi)
 	sg_vals = numpy.cos(2.*numpy.pi*phi*time_arr + phi_0)*numpy.exp(-1.*time_arr**2./tau**2.)
-	return sg_vals 
+
+	# normalize sine gaussians to have unit length in their vector space
+	inner_product = numpy.sum(sg_vals**2.*dt)
+	norm_factor = 1./inner_product
+
+	return norm_factor*sg_vals 
 
 #
 # number of tiles in frequency and Q
