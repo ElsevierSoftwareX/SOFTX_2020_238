@@ -180,11 +180,14 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 static gboolean setcaps(GSTLALTrigger *element, GstPad *pad, GstCaps *caps)
 {
 	guint width = 0;
+	int tmp_channels = 0;
 	GstStructure *str = gst_caps_get_structure(caps, 0);
 	const gchar *format = gst_structure_get_string(str, "format");
 	gboolean success = TRUE;
 	gst_structure_get_int(str, "rate", &(element->rate));
-	gst_structure_get_int(str, "channels", &(element->channels));
+	/* Using temp to type cast from int to unsigned int (guint) */
+	gst_structure_get_int(str, "channels", &(tmp_channels));
+	element->channels = (guint)tmp_channels;
 
 	/*
 	 * update the element metadata

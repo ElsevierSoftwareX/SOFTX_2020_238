@@ -206,9 +206,10 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 		case GSTLAL_PEAK_FLOAT:
 		{
 			float max_val = 0;
-			for(i = 0; i < state->channels; i++)
+			/* Type casting unsigned int (guint) to int */
+			for(i = 0; i < (int)state->channels; i++)
 			{
-				if(fabs(state->values.as_float[i]) > max_val)
+				if(fabsf(state->values.as_float[i]) > max_val)
 				{
 					max_val = state->values.as_float[i];
 					out = i;
@@ -220,9 +221,10 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 		case GSTLAL_PEAK_DOUBLE:
 		{
 			double max_val = 0;
-			for(i = 0; i < state->channels; i++)
+			/* Type casting unsigned int (guint) to int */
+			for(i = 0; i < (int)state->channels; i++)
 			{
-				if(abs(state->values.as_double[i]) > max_val)
+				if(fabs(state->values.as_double[i]) > max_val)
 				{
 					max_val = state->values.as_double[i];
 					out = i;
@@ -234,7 +236,8 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 		case GSTLAL_PEAK_COMPLEX:
 		{
 			float max_val = 0;
-			for(i = 0; i < state->channels; i++)
+			/* Type casting unsigned int (guint) to int */
+			for(i = 0; i < (int)state->channels; i++)
 			{
 				if(cabsf(state->values.as_float_complex[i]) > max_val)
 				{
@@ -248,7 +251,8 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 		case GSTLAL_PEAK_DOUBLE_COMPLEX:
 		{
 			double max_val = 0;
-			for(i = 0; i < state->channels; i++)
+			/* Type casting unsigned int (guint) to int */
+			for(i = 0; i < (int)state->channels; i++)
 			{
 				if(cabs(state->values.as_double_complex[i]) > max_val)
 				{
@@ -258,6 +262,10 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 			}
 			break;
 		}
+
+		default:
+		g_assert(state->type < GSTLAL_PEAK_TYPE_COUNT);
+
 	}
 
 	return out;

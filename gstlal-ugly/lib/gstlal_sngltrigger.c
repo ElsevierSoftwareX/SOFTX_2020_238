@@ -60,7 +60,8 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 		if(max_snr)
 		{
 			max_snr_index = gstlal_peak_max_over_channels(input);
-			g_assert(max_snr_index >= 0 && max_snr_index < input->channels);
+			/* Type casting unsigned int (guint) to int */
+			g_assert(max_snr_index >= 0 && max_snr_index < (int)input->channels);
 		}
 
 		guint channel;
@@ -69,7 +70,8 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 			SnglTriggerTable *parent;
 			double complex maxdata_channel = 0;
 
-			if(max_snr && channel != max_snr_index)
+			/* Type casting unsigned int (guint) to int */
+			if(max_snr && (int)channel != max_snr_index)
 				continue;
 
 			switch (input->type)
