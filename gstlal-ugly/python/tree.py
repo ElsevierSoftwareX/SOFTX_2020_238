@@ -39,7 +39,7 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 
 def packing_density(n):
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	return 1.0
+	return 0.7
 	prefactor = 1.0
 	if n==1:
 		return prefactor
@@ -83,10 +83,10 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1000.0 , self.deltas / 1000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1000.0 , self.deltas / 50000.)
 			except RuntimeError:
 				print "metric @", self.center - self.deltas / 1000.0, " failed, trying, ", self.center - self.deltas / 100.0
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 100.0, self.deltas / 1000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 100.0, self.deltas / 50000.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -203,7 +203,8 @@ class Node(object):
 		self.sibling = None
 		self.direction = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.01, max_coord_vol = float(100)):
+	#def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.01, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.25, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		self.direction = numpy.argmax(size / self.cube.deltas)
@@ -216,6 +217,7 @@ class Node(object):
 			vratio = float("inf")
 			sib_aspect_factor = 1.0
 			parent_aspect_factor = 1.0
+			splitdim_condition = False
 		else:
 			par_size = self.parent.cube.num_tmps_per_side(mismatch)
 			par_aspect_ratios = par_size / min(par_size)
@@ -234,18 +236,19 @@ class Node(object):
 			sib_vratio = numtmps / sib_numtmps
 			#volume_split_condition = (1./vtol < par_vratio < vtol) and (1./vtol < sib_vratio < vtol)
 			volume_split_condition = (1./vtol < sib_vratio < vtol)
+			#splitdim_condition = (splitdim / splitdim2 < 1.01)
 
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps)
 
-			if not (self.parent.parent and (self.direction == self.parent.direction == self.parent.parent.direction == sib_direction)):
-				numtmps += 2
+			splitdim_condition = volume_split_condition
+			#splitdim_condition = (self.parent.parent and self.parent.parent.parent and (self.direction == self.parent.direction == self.parent.parent.direction == self.parent.parent.parent.direction == sib_direction)) and volume_split_condition
 
-		#if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps >= split_num_templates/2.0) and not volume_split_condition))):
+		#if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps >= split_num_templates/2.0) and not splitdim_condition))):
 		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 2**len(size):# and volume_split_condition:
+			if numtmps < 5**len(size) and splitdim_condition:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
