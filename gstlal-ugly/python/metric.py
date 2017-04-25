@@ -206,13 +206,19 @@ class Metric(object):
 		x[i] = deltas[i]
 
 		# get the positive side of the central difference
-		try:
-			plus_match = self.match(w1, self.waveform(center+x))
-		except TypeError:
-			return self.__set_diagonal_metric_tensor_component(i, center, deltas * 1.1, g, w1)
+		plus_match = self.match(w1, self.waveform(center+x))
+		if plus_match is None:
+			print "\nhere plus\n"
+			plus_match = self.match(w1, self.waveform(center+10*x))
+			#return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
 
-		# then the negative side
+		# get the negative side of the central difference
 		minus_match = self.match(w1, self.waveform(center-x))
+		if minus_match is None:
+			print "\nhere negative\n"
+			minus_match = self.match(w1, self.waveform(center-10*x))
+			#return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
+
 		# second order
 		d2mbydx2 = (plus_match + minus_match - 2.0) / x[i]**2
 		# fourth order
@@ -278,7 +284,7 @@ class Metric(object):
 		return  (d2 - g_tt * delta_t**2 - g[j,j] * deltas[j]**2) / 2 / delta_t / deltas[j]
 
 	#def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
-	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float64).eps):
+	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
