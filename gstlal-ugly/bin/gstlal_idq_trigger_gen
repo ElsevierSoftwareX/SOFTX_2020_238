@@ -332,10 +332,10 @@ head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instr
 src = {}
 for channel in channels:
 	samp_rate = data_source_info.channel_dict[channel]['fsamp']  
-	max_samp_rate = samp_rate 
-	min_samp_rate = min(32., max_samp_rate)
+	max_samp_rate = int(samp_rate) 
+	min_samp_rate = min(32, max_samp_rate)
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
-	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2.**i for i in range(n_rates)], instrument, channel_name = channel, width=32).items():
+	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], instrument, channel_name = channel, width=32).items():
 		# FIXME: don't hardcode q and frequency
 		flow = rate/4.*0.8
 		fhigh = rate/2.*0.8
@@ -353,9 +353,9 @@ for channel in channels:
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = dur/2)
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
-		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % int(rate))
+		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel) )
-		thishead = pipeparts.mktrigger(pipeline, thishead, int(rate), max_snr = True)
+		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
 		thishead = pipeparts.mkqueue(pipeline, thishead)
 		src[(channel, rate)] = thishead	
 
