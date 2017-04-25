@@ -201,54 +201,47 @@ class Node(object):
 		self.left = None
 		self.parent = parent
 		self.sibling = None
-		self.direction = None
 
-	#def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.01, max_coord_vol = float(100)):
 	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.25, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
-		self.direction = numpy.argmax(size / self.cube.deltas)
 		aspect_ratios = size / min(size)
 		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios > 2.0]))
 		aspect_ratio = max(aspect_ratios)
 
 		if not self.parent:
 			numtmps = float("inf")
-			vratio = float("inf")
 			sib_aspect_factor = 1.0
 			parent_aspect_factor = 1.0
-			splitdim_condition = False
+			volume_split_condition = False
 		else:
+			# Get the number of parent templates
 			par_size = self.parent.cube.num_tmps_per_side(mismatch)
 			par_aspect_ratios = par_size / min(par_size)
 			par_aspect_factor = max(1., numpy.product(par_aspect_ratios[par_aspect_ratios > 2.0]))
 			par_numtmps = self.parent.cube.num_templates(mismatch) * par_aspect_factor / 2.0
 
+			# get the number of sibling templates
 			sib_size = self.sibling.cube.num_tmps_per_side(mismatch)
-			sib_direction = numpy.argmax(sib_size / self.sibling.cube.deltas)
 			sib_aspect_ratios = sib_size / min(sib_size)
 			sib_aspect_factor = max(1., numpy.product(sib_aspect_ratios[sib_aspect_ratios > 2.0]))
 			sib_numtmps = self.sibling.cube.num_templates(mismatch) * sib_aspect_factor
 
+			# get our number of templates
 			numtmps = self.cube.num_templates(mismatch) * aspect_factor
 
-			par_vratio = numtmps / par_numtmps
+			# check that the metric is not varying too much
 			sib_vratio = numtmps / sib_numtmps
-			#volume_split_condition = (1./vtol < par_vratio < vtol) and (1./vtol < sib_vratio < vtol)
 			volume_split_condition = (1./vtol < sib_vratio < vtol)
-			#splitdim_condition = (splitdim / splitdim2 < 1.01)
 
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps)
 
-			splitdim_condition = volume_split_condition
-			#splitdim_condition = (self.parent.parent and self.parent.parent.parent and (self.direction == self.parent.direction == self.parent.parent.direction == self.parent.parent.parent.direction == sib_direction)) and volume_split_condition
 
-		#if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates or ((numtmps >= split_num_templates/2.0) and not splitdim_condition))):
 		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps > split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 5**len(size) and splitdim_condition:
+			if numtmps < 5**len(size) and volume_split_condition:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
