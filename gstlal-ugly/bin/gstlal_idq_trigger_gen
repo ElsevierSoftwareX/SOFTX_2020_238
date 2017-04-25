@@ -47,6 +47,7 @@ from gstlal import sngltriggertable
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw import utils as ligolw_utils
+from lal import gpstime
 
 #
 # Make sure we have sufficient resources
@@ -155,7 +156,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.cadence = options.cadence
                 # create header for trigger file
                 #self.header = "# start_time stop_time time frequency unnormalized_energy normalized_energy chisqdof significance channel\n"
-                self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "rate", "channel")
+                self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%9s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "latency", "rate", "channel")
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
 	def do_on_message(self, bus, message):
@@ -186,9 +187,11 @@ class MultiChannelHandler(simplehandler.Handler):
 			if mapinfo.data:
 				for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
 					trigger_time = row.end_time + row.end_time_ns * 1e-9
+					current_time = gpstime.gps_time_now().gpsSeconds + gpstime.gps_time_now().gpsNanoSeconds * 1e-9
+					latency = numpy.ceil(current_time - buftime)
 					start_time = trigger_time - duration/2
 					stop_time = trigger_time + duration/2
-					fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, float(rate), channel)
+					fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%9d\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, latency, float(rate), channel)
 			memory.unmap(mapinfo)
 
 		# Save a "latest"
