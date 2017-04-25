@@ -137,10 +137,10 @@ class Metric(object):
 
 		def fmin(m1, m2):
 			mc = (m1*m2)**.6 / (m1+m2)**.2 * 5e-6
-			return  1./numpy.pi / mc * (5./256. * mc / 4.)**(3./8.)
+			return  1./numpy.pi / mc * (5./256. * mc / 1.)**(3./8.)
 
-		flow = self.flow
-		#flow = max(min(fmin(p[0], p[1]), self.flow), 10)
+		#flow = self.flow
+		flow = max(min(fmin(p[0], p[1]), self.flow), 10)
 
 		try:
 			parameters = {}
