@@ -30,7 +30,7 @@
 #define __GSTLAL_RESAMPLE_H__
 
 #include <complex.h>
-
+#include <math.h>
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
@@ -63,9 +63,9 @@ struct _GSTLALResample {
 
 	/* stream info */
 
-	guint rate_in;
-	guint rate_out;
-	guint unit_size;
+	gint32 rate_in;
+	gint32 rate_out;
+	gint unit_size;
 	enum gstlal_resample_data_type {
 		GSTLAL_RESAMPLE_F32 = 0,
 		GSTLAL_RESAMPLE_F64,
@@ -73,7 +73,7 @@ struct _GSTLALResample {
 		GSTLAL_RESAMPLE_Z128
 	} data_type;
 	gboolean need_buffer_resize;
-	guint leading_samples;
+	gint16 leading_samples;
 
 	/* timestamp book-keeping */
 
@@ -85,12 +85,16 @@ struct _GSTLALResample {
 	gboolean need_gap;
 
 	/* properties */
-	guint polynomial_order;
+	guint quality;
+	gboolean zero_latency;
 
 	/* filter */
 	double complex dxdt0;
-	double complex *end_sample;
-	double complex *before_end_sample;
+	double complex *end_samples;
+	gint32 num_end_samples;
+	gint32 *index_end_samples;
+	gint32 max_end_samples;
+	double *sinc_table;
 };
 
 

@@ -32,6 +32,7 @@
 
 
 #include <string.h>
+#include <math.h>
 #include <complex.h>
 
 
@@ -48,6 +49,11 @@
 #include <gstlal_resample.h>
 
 
+/* Ideally, these should be odd */
+#define SHORT_SINC_LENGTH 33
+#define LONG_SINC_LENGTH 193
+
+
 /*
  * ============================================================================
  *
@@ -61,10 +67,10 @@
  * First, the constant upsample functions, which just copy inputs to n outputs 
  */
 #define DEFINE_CONST_UPSAMPLE(size) \
-static void const_upsample_ ## size(const gint ## size *src, gint ## size *dst, guint64 src_size, guint cadence) \
+static void const_upsample_ ## size(const gint ## size *src, gint ## size *dst, guint64 src_size, gint32 cadence) \
 { \
 	const gint ## size *src_end; \
-	guint i; \
+	gint32 i; \
  \
 	for(src_end = src + src_size; src < src_end; src++) { \
 		for(i = 0; i < cadence; i++, dst++) \
@@ -78,10 +84,10 @@ DEFINE_CONST_UPSAMPLE(32)
 DEFINE_CONST_UPSAMPLE(64)
 
 
-static void const_upsample_other(const gint8 *src, gint8 *dst, guint64 src_size, gint unit_size, guint cadence)
+static void const_upsample_other(const gint8 *src, gint8 *dst, guint64 src_size, gint unit_size, gint32 cadence)
 {
 	const gint8 *src_end;
-	guint i;
+	gint32 i;
 
 	for(src_end = src + src_size * unit_size; src < src_end; src += unit_size) {
 		for(i = 0; i < cadence; i++, dst += unit_size)
@@ -95,17 +101,17 @@ static void const_upsample_other(const gint8 *src, gint8 *dst, guint64 src_size,
  * lie on lines connecting input samples 
  */
 #define DEFINE_LINEAR_UPSAMPLE(DTYPE, COMPLEX) \
-static void linear_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX **end_sample) \
+static void linear_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, gint32 cadence, DTYPE COMPLEX *end_samples, gint32 *num_end_samples) \
 { \
 	/* First, fill in previous data using the last sample of the previous input buffer */ \
 	DTYPE COMPLEX slope; /* first derivative between points we are connecting */ \
-	guint i; \
-	if(*end_sample) { \
-		slope = *src - **end_sample; \
-		*dst = **end_sample; \
+	gint32 i; \
+	if(*num_end_samples > 0) { \
+		slope = *src - *end_samples; \
+		*dst = *end_samples; \
 		dst++; \
 		for(i = 1; i < cadence; i++, dst++) \
-			*dst = **end_sample + slope * i / cadence; \
+			*dst = *end_samples + slope * i / cadence; \
 	} \
  \
 	/* Now, process the current input buffer */ \
@@ -119,9 +125,7 @@ static void linear_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE
 	} \
  \
 	/* Save the last input sample for the next buffer, so that we can find the slope */ \
-	if(!(*end_sample)) \
-		*end_sample = g_malloc(sizeof(double complex)); \
-	**end_sample = *src; \
+	*end_samples = *src; \
 }
 
 DEFINE_LINEAR_UPSAMPLE(float, )
@@ -135,33 +139,33 @@ DEFINE_LINEAR_UPSAMPLE(double, complex)
  * two points depends on those two points and the previous point. 
  */
 #define DEFINE_QUADRATIC_UPSAMPLE(DTYPE, COMPLEX) \
-static void quadratic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX **end_sample, DTYPE COMPLEX **before_end_sample) \
+static void quadratic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, gint32 cadence, DTYPE COMPLEX *end_samples, gint32 *num_end_samples) \
 { \
 	/* First, fill in previous data using the last samples of the previous input buffer */ \
 	DTYPE COMPLEX dxdt0 = 0.0, half_d2xdt2 = 0.0; /* first derivative and half of second derivative at initial point */ \
-	guint i; \
-	if(*before_end_sample) { \
-		g_assert(*end_sample); \
-		dxdt0 = (*src - **before_end_sample) / 2.0; \
-		half_d2xdt2 = *src - **end_sample - dxdt0; \
-		*dst = **end_sample; \
+	gint32 i; \
+	if(*num_end_samples > 1) { \
+		g_assert(end_samples); \
+		dxdt0 = (*src - end_samples[1]) / 2.0; \
+		half_d2xdt2 = *src - end_samples[0] - dxdt0; \
+		*dst = end_samples[0]; \
 		dst++; \
 		for(i = 1; i < cadence; i++, dst++) \
-			*dst = **end_sample + dxdt0 * i / cadence + (i * i * half_d2xdt2) / (cadence * cadence); \
+			*dst = end_samples[0] + dxdt0 * i / cadence + (i * i * half_d2xdt2) / (cadence * cadence); \
 	} \
  \
 	/* This needs to happen even if the first section was skipped */ \
-	if(*end_sample) { \
-		if(!(*before_end_sample)) { \
-			/* In this case, we also must fill in data from end_sample to the start of src, assuming an initial slope of zero */ \
-			half_d2xdt2 = *src - **end_sample - dxdt0; \
-			*dst = **end_sample; \
+	if(*num_end_samples >= 1) { \
+		if(*num_end_samples < 2) { \
+			/* In this case, we also must fill in data from end_samples to the start of src, assuming an initial slope of zero */ \
+			half_d2xdt2 = *src - end_samples[0] - dxdt0; \
+			*dst = end_samples[0]; \
 			dst++; \
 			for(i = 1; i < cadence; i++, dst++) \
-				*dst = **end_sample + (i * i * half_d2xdt2) / (cadence * cadence); \
+				*dst = end_samples[0] + (i * i * half_d2xdt2) / (cadence * cadence); \
 		} \
 		if(src_size > 1) { \
-			dxdt0 = (*(src + 1) - **end_sample) / 2.0; \
+			dxdt0 = (*(src + 1) - end_samples[0]) / 2.0; \
 			half_d2xdt2 = *(src + 1) - *src - dxdt0; \
 			*dst = *src; \
 			dst++; \
@@ -194,18 +198,15 @@ static void quadratic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DT
 	} \
  \
 	/* Save the last two samples for the next buffer */ \
-	if(src_size == 1 && *end_sample) { \
-		if(!(*before_end_sample)) \
-			*before_end_sample = g_malloc(sizeof(complex double)); \
-		**before_end_sample = **end_sample; \
+	if(src_size == 1 && *num_end_samples >= 1) { \
+		*num_end_samples = 2; \
+		end_samples[1] = end_samples[0]; \
 	} else if(src_size > 1) { \
-		if(!(*before_end_sample)) \
-			*before_end_sample = g_malloc(sizeof(complex double)); \
-		**before_end_sample = *(src - 1); \
-	} \
-	if(!(*end_sample)) \
-		*end_sample = g_malloc(sizeof(complex double)); \
-	**end_sample = *src; \
+		*num_end_samples = 2; \
+		end_samples[1] = *(src - 1); \
+	} else \
+		*num_end_samples = 1; \
+	end_samples[0] = *src; \
 }
 
 DEFINE_QUADRATIC_UPSAMPLE(float, )
@@ -219,32 +220,32 @@ DEFINE_QUADRATIC_UPSAMPLE(double, complex)
  * depends on those two points and the previous and following point. 
  */
 #define DEFINE_CUBIC_UPSAMPLE(DTYPE, COMPLEX) \
-static void cubic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint cadence, DTYPE COMPLEX *dxdt0, DTYPE COMPLEX **end_sample, DTYPE COMPLEX **before_end_sample) \
+static void cubic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, gint32 cadence, DTYPE COMPLEX *dxdt0, DTYPE COMPLEX *end_samples, gint32 *num_end_samples) \
 { \
 	/* First, fill in previous data using the last samples of the previous input buffer */ \
 	DTYPE COMPLEX dxdt1, half_d2xdt2_0, sixth_d3xdt3; /* first derivative at end point, half of second derivative and one sixth of third derivative at initial point */ \
-	guint i; \
-	if(*before_end_sample) { \
-		g_assert(*end_sample); \
-		dxdt1 = (*src - **before_end_sample) / 2.0; \
-		half_d2xdt2_0 =  3 * (**end_sample - **before_end_sample) - dxdt1 - 2 * *dxdt0; \
-		sixth_d3xdt3 = 2 * (**before_end_sample - **end_sample) + dxdt1 + *dxdt0; \
-		*dst = **before_end_sample; \
+	gint32 i; \
+	if(*num_end_samples > 1) { \
+		g_assert(end_samples); \
+		dxdt1 = (*src - end_samples[1]) / 2.0; \
+		half_d2xdt2_0 =  3 * (end_samples[0] - end_samples[1]) - dxdt1 - 2 * *dxdt0; \
+		sixth_d3xdt3 = 2 * (end_samples[1] - end_samples[0]) + dxdt1 + *dxdt0; \
+		*dst = end_samples[1]; \
 		dst++; \
 		for(i = 1; i < cadence; i++, dst++) \
-			*dst = **before_end_sample + *dxdt0 * i / cadence + (i * i * half_d2xdt2_0) / (cadence * cadence) + (i * i * i * sixth_d3xdt3) / (cadence * cadence* cadence); \
+			*dst = end_samples[1] + *dxdt0 * i / cadence + (i * i * half_d2xdt2_0) / (cadence * cadence) + (i * i * i * sixth_d3xdt3) / (cadence * cadence* cadence); \
 		/* Save the slope at the end point as the slope at the next initial point */ \
 		*dxdt0 = dxdt1; \
 	} \
  \
-	if(*end_sample && src_size > 1) { \
-		dxdt1 = (*(src + 1) - **end_sample) / 2.0; \
-		half_d2xdt2_0 =  3 * (*src - **end_sample) - dxdt1 - 2 * *dxdt0; \
-		sixth_d3xdt3 = 2 * (**end_sample - *src) + dxdt1 + *dxdt0; \
-		*dst = **end_sample; \
+	if(*num_end_samples > 0 && src_size > 1) { \
+		dxdt1 = (*(src + 1) - end_samples[0]) / 2.0; \
+		half_d2xdt2_0 =  3 * (*src - end_samples[0]) - dxdt1 - 2 * *dxdt0; \
+		sixth_d3xdt3 = 2 * (end_samples[0] - *src) + dxdt1 + *dxdt0; \
+		*dst = end_samples[0]; \
 		dst++; \
 		for(i = 1; i < cadence; i++, dst++) \
-			*dst = **end_sample + *dxdt0 * i / cadence + (i * i * half_d2xdt2_0) / (cadence * cadence) + (i * i * i * sixth_d3xdt3) / (cadence * cadence* cadence); \
+			*dst = end_samples[0] + *dxdt0 * i / cadence + (i * i * half_d2xdt2_0) / (cadence * cadence) + (i * i * i * sixth_d3xdt3) / (cadence * cadence* cadence); \
 		/* Save the slope at the end point as the slope at the next initial point */ \
 		*dxdt0 = dxdt1; \
 	} \
@@ -264,21 +265,17 @@ static void cubic_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 	} \
  \
 	/* Save the last two samples for the next buffer */ \
-	if(src_size == 1 && *end_sample) { \
-		if(!(*before_end_sample)) \
-			*before_end_sample = g_malloc(sizeof(complex double)); \
-		**before_end_sample = **end_sample; \
-		**end_sample = *src; \
+	if(src_size == 1 && *num_end_samples > 0) { \
+		end_samples[1] = end_samples[0]; \
+		end_samples[0] = *src; \
+		*num_end_samples = 2; \
 	} else if(src_size == 1) { \
-		*end_sample = g_malloc(sizeof(complex double)); \
-		**end_sample = *src; \
+		end_samples[0] = *src; \
+		*num_end_samples = 1; \
 	} else { \
-		if(!(*before_end_sample)) \
-			*before_end_sample = g_malloc(sizeof(complex double)); \
-		if(!(*end_sample)) \
-			*end_sample = g_malloc(sizeof(complex double)); \
-		**before_end_sample = *src; \
-		**end_sample = *(src + 1); \
+		end_samples[1] = *src; \
+		end_samples[0] = *(src + 1); \
+		*num_end_samples = 2; \
 	} \
 }
 
@@ -292,7 +289,7 @@ DEFINE_CUBIC_UPSAMPLE(double, complex)
  * Simple downsampling functions that just pick every nth value 
  */
 #define DEFINE_DOWNSAMPLE(size) \
-static void downsample_ ## size(const gint ## size *src, gint ## size *dst, guint64 dst_size, guint inv_cadence, guint leading_samples) \
+static void downsample_ ## size(const gint ## size *src, gint ## size *dst, guint64 dst_size, gint32 inv_cadence, gint16 leading_samples) \
 { \
 	/* increnent the pointer to the input buffer data to point to the first outgoing sample */ \
 	src += leading_samples; \
@@ -308,7 +305,7 @@ DEFINE_DOWNSAMPLE(32)
 DEFINE_DOWNSAMPLE(64)
 
 
-static void downsample_other(const gint8 *src, gint8 *dst, guint64 dst_size, gint unit_size, guint inv_cadence, guint leading_samples)
+static void downsample_other(const gint8 *src, gint8 *dst, guint64 dst_size, gint unit_size, guint16 inv_cadence, gint16 leading_samples)
 {
 	/* increnent the pointer to the input buffer data to point to the first outgoing sample */	
 	src += unit_size * leading_samples; \
@@ -324,7 +321,7 @@ static void downsample_other(const gint8 *src, gint8 *dst, guint64 dst_size, gin
  * middle sample has the timestamp of the outgoing sample 
  */
 #define DEFINE_AVG_DOWNSAMPLE(DTYPE, COMPLEX) \
-static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint64 dst_size, guint inv_cadence, guint leading_samples, guint *weight, DTYPE COMPLEX **end_sample) \
+static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint64 dst_size, gint32 inv_cadence, gint16 leading_samples, DTYPE COMPLEX *end_samples, gint32 *num_end_samples) \
 { \
 	/*
 	 * If inverse cadence (rate in / rate out) is even, we take inv_cadence/2 samples
@@ -335,34 +332,34 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 	 */ \
 	if(!(inv_cadence % 2) && dst_size != 0) { \
 		/* First, see if we need to fill in a sample corresponding to the end of the last input buffer */ \
-		if(*weight + leading_samples >= inv_cadence) { \
-			if(*end_sample) \
-				*dst = **end_sample; \
+		if(*num_end_samples + leading_samples >= inv_cadence) { \
+			if(*num_end_samples > 0) \
+				*dst = *end_samples; \
 			else \
 				*dst = 0.0; \
 			const DTYPE COMPLEX *src_end; \
 			for(src_end = src + leading_samples - inv_cadence / 2; src < src_end; src++) \
 				*dst += *src; \
 			*dst += *src / 2; \
-			*dst /= (*weight + leading_samples - inv_cadence / 2); \
+			*dst /= (*num_end_samples + leading_samples - inv_cadence / 2); \
 			dst++; \
 		/* Otherwise, we need to use up the leftover samples from the previous input buffer to make the first output sample of this buffer */ \
 		} else { \
-			if(*end_sample) \
-				*dst = **end_sample; \
+			if(*num_end_samples > 0) \
+				*dst = *end_samples; \
 			else \
 				*dst = 0.0; \
 			const DTYPE COMPLEX *src_end; \
 			for(src_end = src + leading_samples + inv_cadence / 2; src < src_end; src++) \
 				*dst += *src; \
 			*dst += *src / 2; \
-			*dst /= (*weight + leading_samples + inv_cadence / 2); \
+			*dst /= (*num_end_samples + leading_samples + inv_cadence / 2); \
 			dst++; \
 		} \
  \
 		/* Process current buffer */ \
 		const DTYPE COMPLEX *dst_end; \
-		guint i; \
+		gint16 i; \
 		for(dst_end = dst + dst_size - 1; dst < dst_end; dst++) { \
 			*dst = *src / 2; \
 			src++; \
@@ -372,14 +369,12 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 			*dst /= inv_cadence; \
 		} \
  \
-		/* Save the sum of the unused samples in end_sample and the number of unused samples in weight */ \
-		*weight = (src_size + inv_cadence / 2 - leading_samples) % inv_cadence; \
-		if(!(*end_sample)) \
-			*end_sample = g_malloc(sizeof(complex double)); \
-		**end_sample = *src / 2; \
+		/* Save the sum of the unused samples in end_samples and the number of unused samples in num_end_samples */ \
+		*num_end_samples = (src_size + inv_cadence / 2 - leading_samples) % inv_cadence; \
+		*end_samples = *src / 2; \
 		src++; \
-		for(i = 1; i < *weight; i++, src++) \
-			**end_sample += *src; \
+		for(i = 1; i < *num_end_samples; i++, src++) \
+			*end_samples += *src; \
  \
 	/*
 	 * If inverse cadence (rate in / rate out) is odd, we take the average of samples starting
@@ -388,67 +383,63 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 	 */ \
 	} else if(inv_cadence % 2 && dst_size != 0) { \
 		/* First, see if we need to fill in a sample corresponding to the end of the last input buffer */ \
-		if(*weight + leading_samples >= inv_cadence) { \
-			if(*end_sample) \
-				*dst = **end_sample; \
+		if(*num_end_samples + leading_samples >= inv_cadence) { \
+			if(*num_end_samples > 0) \
+				*dst = *end_samples; \
 			else \
 				*dst = 0.0; \
 			const DTYPE COMPLEX *src_end; \
 			for(src_end = src + leading_samples - inv_cadence / 2; src < src_end; src++) \
 				*dst += *src; \
-			*dst /= (*weight + leading_samples - inv_cadence / 2); \
+			*dst /= (*num_end_samples + leading_samples - inv_cadence / 2); \
 			dst++; \
 		/* Otherwise, we need to use up the leftover samples from the previous input buffer to make the first output sample of this buffer */ \
 		} else { \
-			if(*end_sample) \
-				*dst = **end_sample; \
+			if(*num_end_samples > 0) \
+				*dst = *end_samples; \
 			else \
 				*dst = 0.0; \
 			const DTYPE COMPLEX *src_end; \
 			for(src_end = src + leading_samples + 1 + inv_cadence / 2; src < src_end; src++) \
 				*dst += *src; \
-			*dst /= (*weight + leading_samples + 1 + inv_cadence / 2); \
+			*dst /= (*num_end_samples + leading_samples + 1 + inv_cadence / 2); \
 			dst++; \
 		} \
  \
 		/* Process current buffer */ \
 		const DTYPE COMPLEX *dst_end; \
-		guint i; \
+		gint32 i; \
 		for(dst_end = dst + dst_size - 1; dst < dst_end; dst++) { \
 			for(i = 0; i < inv_cadence; i++, src++) \
 				*dst += *src; \
 			*dst /= inv_cadence; \
 		} \
  \
-		/* Save the sum of the unused samples in end_sample and the number of unused samples in weight */ \
-		*weight = (src_size + inv_cadence / 2 - leading_samples) % inv_cadence; \
-		if(!(*end_sample)) \
-			*end_sample = g_malloc(sizeof(complex double)); \
-		**end_sample = *src; \
+		/* Save the sum of the unused samples in end_samples and the number of unused samples in num_end_samples */ \
+		*num_end_samples = (src_size + inv_cadence / 2 - leading_samples) % inv_cadence; \
+		*end_samples = *src; \
 		src++; \
-		for(i = 1; i < *weight; i++, src++) \
-			**end_sample += *src; \
+		for(i = 1; i < *num_end_samples; i++, src++) \
+			*end_samples += *src; \
  \
 	/*
 	 * If the size of the outgoing buffer has been computed to be zero, all we want to
-	 * do is store the additional data from the input buffer in end_sample and weight.
+	 * do is store the additional data from the input buffer in end_samples and num_end_samples.
 	 */ \
 	} else { \
-		guint i; \
-		if(!(*end_sample)) \
-			*end_sample = g_malloc(sizeof(complex double)); \
-		if(*weight == 0 && !(inv_cadence % 2)) { \
+		guint16 i; \
+		if(*num_end_samples == 0 && !(inv_cadence % 2)) { \
 			/* Then the first input sample should be divided by two, since it is the first to affect the next output sample. */ \
-			**end_sample = *src / 2; \
+			*end_samples = *src / 2; \
 			src++; \
 			for(i = 1; i < src_size; i++, src++) \
-				**end_sample += *src; \
+				*end_samples += *src; \
 		} else { \
-			/* Then each sample contributes its full value to end_sample. */ \
+			/* Then each sample contributes its full value to end_samples. */ \
 			for(i = 0; i < src_size; i++, src++) \
-				**end_sample += *src; \
+				*end_samples += *src; \
 		} \
-		*weight += src_size; \
+		*num_end_samples += src_size; \
 	} \
 }
 
@@ -458,8 +449,236 @@ DEFINE_AVG_DOWNSAMPLE(float, complex)
 DEFINE_AVG_DOWNSAMPLE(double, complex)
 
 
+/*
+ * Downsampling functions that reduce aliasing by filtering the inputs
+ * with a sinc table [ sin(pi * x * cadence) / (pi * x * cadence) ]
+ */
+#define DEFINE_SINC_DOWNSAMPLE(DTYPE, COMPLEX) \
+static void sinc_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE COMPLEX *dst, guint64 src_size, guint64 dst_size, gint32 inv_cadence, gint16 leading_samples, DTYPE COMPLEX *end_samples, gint32 *num_end_samples, gint32 *index_end_samples, gint32 max_end_samples, double *sinc_table) \
+{ \
+	/*
+	 * If this is the start of stream or right after a discont, record the location
+	 * corresponding to the first output sample produced relative to the start of end_samples
+	 * and set the location of the latest end sample to the end of end_samples.
+	 */ \
+	if(*index_end_samples == -1) { \
+		*index_end_samples = leading_samples; \
+		index_end_samples[1] = max_end_samples - 1; \
+	} \
+ \
+	DTYPE COMPLEX *end_samples_end; \
+	end_samples_end = end_samples + index_end_samples[1]; \
+ \
+	/* move the pointer to the element of end_samples corresponding to the next output sample */ \
+	end_samples += *index_end_samples; \
+	guint16 i; \
+	gint32 j, k; \
+	/* If we have enough input to produce output and this is the first output buffer (or first after a discontinuity)... */ \
+	if(dst_size && *num_end_samples < max_end_samples) { \
+		DTYPE COMPLEX *ptr_before, *ptr_after, *ptr_end; \
+		for(i = 0; i < dst_size; i++, dst++) { \
+			/*
+			 * In this case, the inputs in end_samples are in chronological order, so it is simple
+			 * to determine whether the sinc table is centered in end_samples or src
+			 */ \
+			*dst = (DTYPE) *sinc_table * (*index_end_samples < *num_end_samples ? *end_samples : *(src + *index_end_samples - *num_end_samples)); \
+			sinc_table++; \
+ \
+			/*
+			 * First, deal with dependence of output sample on elements of end_samples before and
+			 * after center of sinc table. j is the number of steps to reach a boundary of *end_samples
+			 */ \
+			j = *index_end_samples < *num_end_samples - *index_end_samples - 1 ? *index_end_samples : *num_end_samples - *index_end_samples - 1; \
+			ptr_end = end_samples + j; \
+			for(ptr_before = end_samples - 1, ptr_after = end_samples + 1; ptr_after <= ptr_end; ptr_after++, ptr_before--, sinc_table++) \
+				*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+ \
+			/* Next, deal with potential "one-sided" dependence of output sample on elements of end_samples after center of sinc table. */ \
+			j = *num_end_samples - *index_end_samples - 1 < max_end_samples / 2 ? *num_end_samples - *index_end_samples - 1 : max_end_samples / 2; \
+			ptr_end = end_samples + j; \
+			for(ptr_after = end_samples + *index_end_samples + 1; ptr_after <= ptr_end; ptr_after++, sinc_table++) \
+				*dst += (DTYPE) *sinc_table * *ptr_after; \
+ \
+			/* Next, deal with dependence of output sample on current input samples before and after center of sinc table */ \
+			j = *index_end_samples - *num_end_samples < max_end_samples / 2 ? *index_end_samples - *num_end_samples : max_end_samples / 2; \
+			ptr_end = (DTYPE COMPLEX *) src + *index_end_samples - *num_end_samples + j; \
+			for(ptr_before = (DTYPE COMPLEX *) src + *index_end_samples - *num_end_samples - 1, ptr_after = ptr_end - j + 1; ptr_after <= ptr_end; ptr_after++, ptr_before--, sinc_table++) \
+				*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+ \
+			/* Next, deal with dependence of output sample on current input samples after and end_samples before center of sinc table, which is in end_samples */ \
+			if(*index_end_samples < *num_end_samples) { \
+				j = *index_end_samples < max_end_samples / 2 ? 2 * *index_end_samples - *num_end_samples + 1 : max_end_samples / 2 - *num_end_samples + *index_end_samples + 1; \
+				ptr_end = (DTYPE COMPLEX *) src + j - 1; \
+				for(ptr_before = end_samples - (*num_end_samples - *index_end_samples), ptr_after = (DTYPE COMPLEX *) src; ptr_after <= ptr_end; ptr_after++, ptr_before--, sinc_table++) \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+			} else { \
+				/* Next, deal with dependence of output sample on current input samples after and end_samples before center of sinc table, which is in src */ \
+				j = *num_end_samples < max_end_samples / 2 - (*index_end_samples - *num_end_samples) ? *num_end_samples : max_end_samples / 2 - (*index_end_samples - *num_end_samples); \
+				ptr_end = (DTYPE COMPLEX *) src + 2 * (*index_end_samples - *num_end_samples) + j; \
+				for(ptr_before = end_samples_end, ptr_after = ptr_end - j + 1; ptr_after <= ptr_end; ptr_after++, ptr_before--, sinc_table++) \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+			} \
+ \
+			/* Next, deal with potential "one-sided" dependence of output sample on current input samples after center of sinc table. */ \
+			j = max_end_samples / 2 - (2 * *index_end_samples > *num_end_samples - 1 ? *index_end_samples : (*num_end_samples - *index_end_samples - 1)); \
+			ptr_end = (DTYPE COMPLEX *) src + *index_end_samples - *num_end_samples + max_end_samples / 2; \
+			for(ptr_after = ptr_end - j + 1; ptr_after <= ptr_end; ptr_after++, sinc_table++) \
+				*dst += (DTYPE) *sinc_table * *ptr_after; \
+ \
+			/* We've now reached the end of the sinc table. Move the pointer back. */ \
+			sinc_table -= (1 + max_end_samples / 2); \
+ \
+			/* Also need to increment end_samples. *index_end_samples is used to find our place in *src, so it is reduced later */ \
+			end_samples += (inv_cadence - ((*index_end_samples % max_end_samples) + inv_cadence < max_end_samples ? 0 : max_end_samples)); \
+			*index_end_samples += inv_cadence; \
+		} \
+		/* *index_end_samples += inv_cadence; */ \
+ \
+	} else if(dst_size) { \
+		/* We have enough input to produce output and this is not the first output buffer */ \
+		g_assert_cmpint(*num_end_samples, ==, max_end_samples); \
+		/* artificially increase index_end_samples[1] so that comparison to *index_end_samples tells us whether the sinc table is centered in end_samples or src. */ \
+		index_end_samples[1] += *index_end_samples > index_end_samples[1] ? max_end_samples : 0; \
+		DTYPE COMPLEX *ptr_before, *ptr_after, *ptr_end; \
+		gint32 j1, j2, j3; \
+		for(i = 0; i < dst_size; i++, dst++) { \
+			int h = 1; \
+			if(*index_end_samples <= index_end_samples[1]) { \
+				/*
+			 	 * sinc table is centered in end_samples. First, deal with dependence of output sample on
+			 	 * elements of end_samples before and after center of sinc table. There are 2 possible end
+			 	 * points for a for loop: we hit the boundary of end_samples in either chronology or memory.
+				 */ \
+				*dst = (DTYPE) *sinc_table * *end_samples; \
+				sinc_table++; \
+				j1 = index_end_samples[1] - *index_end_samples; \
+				j2 = *index_end_samples % max_end_samples; \
+				j3 = max_end_samples - *index_end_samples % max_end_samples - 1; \
+				/* Number of steps in for loop is minimum of above */ \
+				j = j1 < (j2 < j3 ? j2 : j3) ? j1 : (j2 < j3 ? j2 : j3); \
+				ptr_end = end_samples + j; \
+				for(ptr_before = end_samples - 1, ptr_after = end_samples + 1; ptr_after <= ptr_end; ptr_after++, ptr_before--, sinc_table++, h++) \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+				if(j2 <= j1 && j2 < j3) { \
+					ptr_before += max_end_samples; \
+					j = j1 - j2; \
+				} else if(j3 <= j1 && j3 < j2) { \
+					ptr_after -= max_end_samples; \
+					j = j1 - j3; \
+				} else \
+					j = 0; \
+				ptr_end = ptr_after + j; \
+				while(ptr_after < ptr_end) { \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+					ptr_after++; \
+					ptr_before--; \
+					sinc_table++; \
+					h++; \
+				} \
+				/* Now deal with dependence of output sample on current input samples after and end_samples before center of sinc table */ \
+				j2 = 1 + (j2 - j1 - 1 + max_end_samples) % max_end_samples; \
+				j1 = max_end_samples / 2 - j1; \
+				j = j1 < j2 ? j1 : j2; \
+				ptr_after = (DTYPE COMPLEX *) src; \
+				ptr_end = ptr_after + j; \
+				while(ptr_after < ptr_end) { \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+					ptr_after++; \
+					ptr_before--; \
+					sinc_table++; \
+					h++; \
+				} \
+ \
+				j = j1 - j2; \
+				ptr_before += max_end_samples; \
+				ptr_end += j; \
+				while(ptr_after < ptr_end) { \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+					ptr_after++; \
+					ptr_before--; \
+					sinc_table++; \
+					h++; \
+				} \
+			} else { \
+				/*
+				 * sinc table is centered in src. First, deal with dependence of output samples on current
+				 * input samples before and after center of sinc table.
+				 */ \
+				*dst = (DTYPE) *sinc_table * *(src + *index_end_samples - index_end_samples[1] - 1); \
+				sinc_table++; \
+				j1 = max_end_samples / 2; \
+				j2 = *index_end_samples - index_end_samples[1] - 1; \
+				j = j1 < j2 ? j1 : j2; \
+				ptr_end = (DTYPE COMPLEX *) src + *index_end_samples - index_end_samples[1] - 1 + j; \
+				for(ptr_before = ptr_end - j - 1, ptr_after = ptr_end - j + 1; ptr_after <= ptr_end; ptr_after++, ptr_before--, sinc_table++, h++) \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+ \
+				/* Now deal with dependence of output sample on current input samples after and end_samples before center of sinc table */ \
+				j1 -= j2; \
+				j2 = 1 + index_end_samples[1] % max_end_samples; \
+				j = j1 < j2 ? j1 : j2; \
+				ptr_before = end_samples_end; \
+				ptr_end = ptr_after + j; \
+				while(ptr_after < ptr_end) { \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+					ptr_after++; \
+					ptr_before--; \
+					sinc_table++; \
+					h++; \
+				} \
+ \
+				j = j1 - j2; \
+				ptr_before += max_end_samples; \
+				ptr_end += j; \
+				while(ptr_after < ptr_end) { \
+					*dst += (DTYPE) *sinc_table * (*ptr_before + *ptr_after); \
+					ptr_after++; \
+					ptr_before--; \
+					sinc_table++; \
+					h++; \
+				} \
+			} \
+			/* We've now reached the end of the sinc table. Move the pointer back. */ \
+			sinc_table -= (1 + max_end_samples / 2); \
+ \
+			/* Also need to increment end_samples. *index_end_samples is used to find our place in *src, so it is reduced later */ \
+			end_samples += (inv_cadence - ((*index_end_samples % max_end_samples) + inv_cadence < max_end_samples ? 0 : max_end_samples)); \
+			*index_end_samples += inv_cadence; \
+		} \
+		/* *index_end_samples += inv_cadence; */ \
+	} \
+	/* Move *index_end_samples back to the appropriate location within end_samples */ \
+	*index_end_samples %= max_end_samples; \
+ \
+	/* Store current input samples we will need later in end_samples */ \
+	end_samples_end += ((index_end_samples[1] + src_size) % max_end_samples - index_end_samples[1] % max_end_samples); \
+	index_end_samples[1] = (index_end_samples[1] + src_size) % max_end_samples; \
+	src += (src_size - 1); \
+	j = index_end_samples[1] + 1 < (gint32) src_size ? index_end_samples[1] + 1 : (gint32) src_size; \
+	for(k = 0; k < j; k++, src--, end_samples_end--) \
+		*end_samples_end = *src; \
+ \
+	/* A second for loop is necessary in case we hit the boundary of end_samples before we've stored the end samples */ \
+	end_samples_end += max_end_samples; \
+	j = index_end_samples[1] + 1 < (gint32) src_size ? ((gint32) src_size < max_end_samples ? (gint32) src_size : max_end_samples)  - index_end_samples[1] - 1 : 0; \
+	for(k = 0; k < j; k++, src--, end_samples_end--) \
+		*end_samples_end = *src; \
+ \
+	/* record how many samples are stored in end_samples */ \
+	*num_end_samples += src_size; \
+	if(*num_end_samples > max_end_samples) \
+		*num_end_samples = max_end_samples; \
+}
+
+
+DEFINE_SINC_DOWNSAMPLE(float, )
+DEFINE_SINC_DOWNSAMPLE(double, )
+DEFINE_SINC_DOWNSAMPLE(float, complex)
+DEFINE_SINC_DOWNSAMPLE(double, complex)
+
+
 /* Based on given parameters, this function calls the proper resampling function */
-static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, enum gstlal_resample_data_type data_type, guint cadence, guint inv_cadence, guint polynomial_order, void *dxdt0, void **end_sample, void **before_end_sample, guint leading_samples)
+static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, enum gstlal_resample_data_type data_type, gint32 cadence, gint32 inv_cadence, guint quality, void *dxdt0, void *end_samples, gint16 leading_samples, gint32 *num_end_samples, gint32 *index_end_samples, gint32 max_end_samples, double *sinc_table)
 {
 	/* Sanity checks */
 	g_assert_cmpuint(src_size % unit_size, ==, 0);
@@ -472,10 +691,10 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 
 	/* 
 	 * cadence is # of output samples per input sample, so if cadence > 1, we are upsampling.
-	 * polynomial_order is the degree of the polynomial used to interpolate between points,
-	 * so polynomial_order = 0 means we are just copying input samples n times.
+	 * quality is the degree of the polynomial used to interpolate between points,
+	 * so quality = 0 means we are just copying input samples n times.
 	 */
-	if(cadence > 1 && polynomial_order == 0) {
+	if(cadence > 1 && quality == 0) {
 		switch(unit_size) {
 		case 1:
 			const_upsample_8(src, dst, src_size, cadence);
@@ -494,57 +713,57 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 			break;
 		}
 
-	} else if(cadence > 1 && polynomial_order == 1) {
+	} else if(cadence > 1 && quality == 1) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			linear_upsample_float(src, dst, src_size, cadence, (float **) end_sample);
+			linear_upsample_float(src, dst, src_size, cadence, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			linear_upsample_double(src, dst, src_size, cadence, (double **) end_sample);
+			linear_upsample_double(src, dst, src_size, cadence, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			linear_upsample_floatcomplex(src, dst, src_size, cadence, (complex float **) end_sample);
+			linear_upsample_floatcomplex(src, dst, src_size, cadence, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			linear_upsample_doublecomplex(src, dst, src_size, cadence, (complex double **) end_sample);
+			linear_upsample_doublecomplex(src, dst, src_size, cadence, end_samples, num_end_samples);
 			break;
 		default:
 			g_assert_not_reached();
 			break;
 		}
 
-	} else if(cadence > 1 && polynomial_order == 2) {
+	} else if(cadence > 1 && quality == 2) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			quadratic_upsample_float(src, dst, src_size, cadence, (float **) end_sample, (float **) before_end_sample);
+			quadratic_upsample_float(src, dst, src_size, cadence, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			quadratic_upsample_double(src, dst, src_size, cadence, (double **) end_sample, (double **) before_end_sample);
+			quadratic_upsample_double(src, dst, src_size, cadence, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			quadratic_upsample_floatcomplex(src, dst, src_size, cadence, (complex float **) end_sample, (complex float **) before_end_sample);
+			quadratic_upsample_floatcomplex(src, dst, src_size, cadence, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			quadratic_upsample_doublecomplex(src, dst, src_size, cadence, (complex double **) end_sample, (complex double **) before_end_sample);
+			quadratic_upsample_doublecomplex(src, dst, src_size, cadence, end_samples, num_end_samples);
 			break;
 		default:
 			g_assert_not_reached();
 			break;
 		}
 
-	} else if(cadence > 1 && polynomial_order == 3) {
+	} else if(cadence > 1 && quality == 3) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			cubic_upsample_float(src, dst, src_size, cadence, dxdt0, (float **) end_sample, (float **) before_end_sample);
+			cubic_upsample_float(src, dst, src_size, cadence, dxdt0, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			cubic_upsample_double(src, dst, src_size, cadence, dxdt0, (double **) end_sample, (double **) before_end_sample);
+			cubic_upsample_double(src, dst, src_size, cadence, dxdt0, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			cubic_upsample_floatcomplex(src, dst, src_size, cadence, dxdt0, (complex float **) end_sample, (complex float **) before_end_sample);
+			cubic_upsample_floatcomplex(src, dst, src_size, cadence, dxdt0, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			cubic_upsample_doublecomplex(src, dst, src_size, cadence, dxdt0, (complex double **) end_sample, (complex double **) before_end_sample);
+			cubic_upsample_doublecomplex(src, dst, src_size, cadence, dxdt0, end_samples, num_end_samples);
 			break;
 		default:
 			g_assert_not_reached();
@@ -553,11 +772,11 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 
 	/* 
 	 * inv_cadence is # of input samples per output sample, so if inv_cadence > 1, we are downsampling.
-	 * The meaning of "polynomial_order" when downsampling is simpler: if polynomial_order = 0, we
-	 * just pick every nth input sample, and if polynomial_order > 0, we take an average.
+	 * The meaning of "quality" when downsampling is simpler: if quality = 0, we
+	 * just pick every nth input sample, and if quality > 0, we take an average.
 	 */
 
-	} else if(inv_cadence > 1 && polynomial_order == 0) {
+	} else if(inv_cadence > 1 && quality == 0) {
 		switch(unit_size) {
 		case 1:
 			downsample_8(src, dst, dst_size, inv_cadence, leading_samples);
@@ -576,19 +795,37 @@ static void resample(const void *src, guint64 src_size, void *dst, guint64 dst_s
 			break;
 		}
 
-	} else if(inv_cadence > 1 && polynomial_order > 0) {
+	} else if(inv_cadence > 1 && quality == 1) {
 		switch(data_type) {
 		case GSTLAL_RESAMPLE_F32:
-			avg_downsample_float(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, (float **) end_sample);
+			avg_downsample_float(src, dst, src_size, dst_size, inv_cadence, leading_samples, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_F64:
-			avg_downsample_double(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, (double **) end_sample);
+			avg_downsample_double(src, dst, src_size, dst_size, inv_cadence, leading_samples, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_Z64:
-			avg_downsample_floatcomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, (complex float **) end_sample);
+			avg_downsample_floatcomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, end_samples, num_end_samples);
 			break;
 		case GSTLAL_RESAMPLE_Z128:
-			avg_downsample_doublecomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, dxdt0, (complex double **) end_sample);
+			avg_downsample_doublecomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, end_samples, num_end_samples);
+			break;
+		default:
+			g_assert_not_reached();
+			break;
+		}
+	} else if(inv_cadence > 1 && quality > 1) {
+		switch(data_type) {
+		case GSTLAL_RESAMPLE_F32:
+			sinc_downsample_float(src, dst, src_size, dst_size, inv_cadence, leading_samples, end_samples, num_end_samples, index_end_samples, max_end_samples, sinc_table);
+			break;
+		case GSTLAL_RESAMPLE_F64:
+			sinc_downsample_double(src, dst, src_size, dst_size, inv_cadence, leading_samples, end_samples, num_end_samples, index_end_samples, max_end_samples, sinc_table);
+			break;
+		case GSTLAL_RESAMPLE_Z64:
+			sinc_downsample_floatcomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, end_samples, num_end_samples, index_end_samples, max_end_samples, sinc_table);
+			break;
+		case GSTLAL_RESAMPLE_Z128:
+			sinc_downsample_doublecomplex(src, dst, src_size, dst_size, inv_cadence, leading_samples, end_samples, num_end_samples, index_end_samples, max_end_samples, sinc_table);
 			break;
 		default:
 			g_assert_not_reached();
@@ -609,8 +846,13 @@ static void set_metadata(GSTLALResample *element, GstBuffer *buf, guint64 outsam
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate_out);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate_out) - GST_BUFFER_PTS(buf);
+	if(element->zero_latency) {
+		GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0 + (element->rate_out * element->max_end_samples / 2) / element->rate_in, GST_SECOND, element->rate_out);
+		GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate_out) - gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate_out);
+	} else {
+		GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate_out);
+		GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate_out) - GST_BUFFER_PTS(buf);
+	}
 	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -754,7 +996,6 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	default:
 		g_assert_not_reached();
 	}
-
 	return caps;
 }
 
@@ -768,7 +1009,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALResample *element = GSTLAL_RESAMPLE(trans);
 	gboolean success = TRUE;
-	gint rate_in, rate_out;
+	gint32 rate_in, rate_out;
 	gsize unit_size;
 
 	/*
@@ -813,7 +1054,6 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		element->rate_out = rate_out;
 		element->unit_size = unit_size;
 	}
-
 	return success;
 }
 
@@ -826,8 +1066,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
 	GSTLALResample *element = GSTLAL_RESAMPLE(trans);
-	guint cadence = element->rate_out / element->rate_in;
-	guint inv_cadence = element->rate_in / element->rate_out;
+	guint16 cadence = element->rate_out / element->rate_in;
+	guint16 inv_cadence = element->rate_in / element->rate_out;
 	g_assert(inv_cadence > 1 || cadence > 1);
 	/* input and output unit sizes are the same */
 	gsize unit_size;
@@ -873,10 +1113,10 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 			*othersize = size * cadence;
 		else {
 			*othersize = size / inv_cadence;
-			guint *weight = (void *) &element->dxdt0;
-			if(size % inv_cadence || (element->polynomial_order > 0 && *weight < (inv_cadence + 1) / 2)) {
+			guint16 *weight = (void *) &element->dxdt0;
+			if(size % inv_cadence || (element->quality == 1 && *weight < (inv_cadence + 1) / 2) || (element->quality > 1 && element->num_end_samples < element->max_end_samples)) {
 				element->need_buffer_resize = TRUE;
-				*othersize += 1;
+				*othersize += (element->num_end_samples / inv_cadence + 2); /* max possible size */
 			}
 		}
 		break;
@@ -915,8 +1155,11 @@ static gboolean start(GstBaseTransform *trans)
 	element->need_discont = TRUE;
 	element->need_gap = FALSE;
 	element->dxdt0 = 0.0;
-	element->end_sample = NULL;
-	element->before_end_sample = NULL;
+	element->end_samples = NULL;
+	element->sinc_table = NULL;
+	element->index_end_samples = NULL;
+	element->max_end_samples = 0;
+	element->num_end_samples = 0;
 	element->leading_samples = 0;
 
 	return TRUE;
@@ -947,19 +1190,58 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->offset0 = element->next_out_offset = gst_util_uint64_scale_ceil(GST_BUFFER_OFFSET(inbuf), element->rate_out, element->rate_in);
 		element->need_discont = TRUE;
 		element->dxdt0 = 0.0;
-		element->end_sample = NULL;
-		element->before_end_sample = NULL;
+		element->num_end_samples = 0;
+		if(element->rate_in > element->rate_out && element->quality > 1) {
+			/* 
+			 * In this case, we are filtering inputs with a sinc table. max_end_samples is the
+			 * maximum number of samples that could need to be stored between buffers. It is
+			 * one less than the length of the sinc table in samples. To make the gain as close
+			 * to one as possible below the output Nyquist rate, we cut off the sinc table at either
+			 * relative maxima or minima.
+			 */
+			if(!element->sinc_table) {
+				element->max_end_samples = ((1 + (SHORT_SINC_LENGTH + (element->quality - 2) * (LONG_SINC_LENGTH - SHORT_SINC_LENGTH)) * element->rate_in / element->rate_out) / 2) * 2;
+
+				/* end_samples stores input samples needed to produce output with the next buffer(s) */
+				element->end_samples = g_malloc(element->max_end_samples * element->unit_size);
+
+				/* index_end_samples records locations in end_samples of the next output sample and the newest sample in end_samples. */
+				element->index_end_samples = g_malloc(2 * sizeof(gint32));
+
+				/* To save memory, we use symmetry and only record half of the sinc table */
+				element->sinc_table = g_malloc((element->max_end_samples / 2) * sizeof(double));
+				*(element->sinc_table) = 1.0;
+				gint32 i;
+				for(i = 1; i <= element->max_end_samples / 2; i++)
+					element->sinc_table[i] = sin(M_PI * i * element->rate_out / element->rate_in) / (M_PI * i * element->rate_out / element->rate_in);
+
+				/* normalize sinc_table to make the DC gain exactly 1 */
+				double normalization = 1.0;
+				for(i = 1; i <= element->max_end_samples / 2; i++)
+					normalization += 2 * element->sinc_table[i];
+
+				for(i = 0; i <= element->max_end_samples / 2; i++)
+					element->sinc_table[i] /= normalization;
+			}
+			/* tell the downsampling function about the discont */
+			*element->index_end_samples = -1;
+
+		} else if(element->rate_out > element->rate_in && element->quality > 1 && !element->end_samples)
+			element->end_samples = g_malloc(2 * element->unit_size);
+		else if(element->quality > 0 && !element->end_samples)
+			element->end_samples = g_malloc(element->unit_size);
 		element->leading_samples = 0;
-		if(element->polynomial_order > 0)
+		element->num_end_samples = 0;
+		if(element->quality > 0)
 			element->need_buffer_resize = TRUE;
 	}
 
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
-	if(element->rate_out > element->rate_in && ((element->polynomial_order > 0 && element->end_sample == NULL) || (element->polynomial_order > 2 && element->before_end_sample == NULL)))
+	if(element->rate_out > element->rate_in && ((element->quality > 0 && element->num_end_samples == 0) || (element->quality > 2 && element->num_end_samples < 2)))
 		element->need_buffer_resize = TRUE;
 
-	guint inv_cadence = element->rate_in / element->rate_out;
+	guint16 inv_cadence = element->rate_in / element->rate_out;
 	if(element->rate_in > element->rate_out) {
 		/* leading_samples is the number of input samples that come before the first timestamp that is a multiple of the output sampling period */
 		element->leading_samples = gst_util_uint64_scale_int_round(GST_BUFFER_PTS(inbuf), element->rate_in, 1000000000) % inv_cadence;
@@ -981,13 +1263,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			 * If using any interpolation, each input buffer leaves one or two samples at the end to add 
 			 * to the next buffer. If these are absent, we need to reduce the output buffer size.
 			 */
-			if(element->polynomial_order > 2 && element->end_sample == NULL)
+			if(element->quality > 2 && element->num_end_samples == 0)
 				outbuf_size -= 2 * element->unit_size * element->rate_out / element->rate_in;
 			else
 				outbuf_size -= element->unit_size * element->rate_out / element->rate_in;
-		}
-		else if(element->rate_in > element->rate_out) {
-			guint inbuf_samples = gst_buffer_get_size(inbuf) / element->unit_size;
+		} else if(element->rate_in > element->rate_out) {
+			guint64 inbuf_samples = gst_buffer_get_size(inbuf) / element->unit_size;
 
 			/*
 			 * Assuming we are simply picking every nth sample, the number of samples in the 
@@ -997,7 +1278,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			outbuf_size = ((inbuf_samples - element->leading_samples + inv_cadence - 1) / inv_cadence) * element->unit_size;
 
 			/* We now adjust the size if we are applying a tukey window when downsampling */
-			if(element->polynomial_order > 0) {
+			if(element->quality == 1) {
 				/* trailing_samples is the number of input samples that come after the last timestamp that is a multiple of the output sampling period */
 				guint trailing_samples = (inbuf_samples - element->leading_samples - 1) % inv_cadence;
 				outbuf_size -= element->unit_size * (1 - trailing_samples / (inv_cadence / 2));
@@ -1005,6 +1286,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				guint *weight = (void *) &element->dxdt0;
 				if(element->leading_samples + *weight >= inv_cadence && *weight + inbuf_samples >= inv_cadence)
 					outbuf_size += element->unit_size;
+			} else if(element->quality > 1 && element->num_end_samples == element->max_end_samples)
+				outbuf_size = element->unit_size * ((inbuf_samples + (-element->max_end_samples / 2 - element->leading_samples - 1) % inv_cadence) / inv_cadence);
+			else if(element->quality > 1) {
+				if((gint32) inbuf_samples + element->num_end_samples >= element->max_end_samples)
+					outbuf_size = element->unit_size * ((inbuf_samples + element->num_end_samples - element->leading_samples - element->max_end_samples / 2 + inv_cadence - 1) / inv_cadence);
+				else
+					outbuf_size = 0;
 			}
 		}
 		if(outbuf_size < 0)
@@ -1026,7 +1314,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
-		resample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->data_type, element->rate_out / element->rate_in, element->rate_in / element->rate_out, element->polynomial_order, (void *) &element->dxdt0, (void **) &element->end_sample, (void **) &element->before_end_sample, element->leading_samples);
+		resample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->data_type, element->rate_out / element->rate_in, element->rate_in / element->rate_out, element->quality, (void *) &element->dxdt0, (void *) element->end_samples, element->leading_samples, &element->num_end_samples, element->index_end_samples, element->max_end_samples, element->sinc_table);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, FALSE);
 		gst_buffer_unmap(outbuf, &outmap);
 	} else {
@@ -1068,7 +1356,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 
 enum property {
-	ARG_POLYNOMIAL_ORDER = 1,
+	ARG_QUALITY = 1,
+	ARG_ZERO_LATENCY
 };
 
 
@@ -1079,10 +1368,12 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_POLYNOMIAL_ORDER:
-		element->polynomial_order = g_value_get_uint(value);
+	case ARG_QUALITY:
+		element->quality = g_value_get_uint(value);
 		break;
-
+	case ARG_ZERO_LATENCY:
+		element->zero_latency = g_value_get_boolean(value);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -1099,16 +1390,48 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_POLYNOMIAL_ORDER:
-		g_value_set_uint(value, element->polynomial_order);
+	case ARG_QUALITY:
+		g_value_set_uint(value, element->quality);
 		break;
-
+	case ARG_ZERO_LATENCY:
+		g_value_set_boolean(value, element->zero_latency);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
+}
+
+
+/*
+ * finalize()
+ */
+
+
+static void finalize(GObject *object)
+{
+	GSTLALResample *element = GSTLAL_RESAMPLE(object);
+
+	/*
+	 * free resources
+	 */
+
+	if(element->sinc_table) {
+		g_free(element->sinc_table);
+		element->sinc_table = NULL;
+	}
+	if(element->end_samples) {
+		g_free(element->end_samples);
+		element->end_samples = NULL;
+	}
+
+	/*
+	 * chain to parent class' finalize() method
+	 */
+
+	G_OBJECT_CLASS(gstlal_resample_parent_class)->finalize(object);
 }
 
 
@@ -1134,27 +1457,42 @@ static void gstlal_resample_class_init(GSTLALResampleClass *klass)
 	gst_element_class_set_details_simple(element_class,
 		"Resamples a data stream",
 		"Filter/Audio",
-		"Resamples a stream with adjustable (or no) interpolation.",
+		"Resamples a stream with adjustable quality.",
 		"Aaron Viets <aaron.viets@ligo.org>"
 	);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_POLYNOMIAL_ORDER,
+		ARG_QUALITY,
 		g_param_spec_uint(
-			"polynomial-order",
-			"Interpolating Polynomial Order",
+			"quality",
+			"Quality of Resampling",
 			"When upsampling, this is the order of the polynomial used to interpolate between\n\t\t\t"
 			"input samples. 0 yields a constant upsampling, 1 is linear interpolation, 3 is a\n\t\t\t"
 			"cubic spline. When downsampling, this determines whether we just pick every nth\n\t\t\t"
-			"sample, or apply a Tukey window to n input samples surrounding output sample timestamps.",
+			"sample (0), apply a Tukey window to (rate-in / rate-out) input samples surrounding\n\t\t\t"
+			"output sample timestamps (1), or filter with a sinc table to reduce aliasing\n\t\t\t"
+			"effects (2 - 3).",
 			0, 3, 0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_ZERO_LATENCY,
+		g_param_spec_boolean(
+			"zero-latency",
+			"Zero Latency",
+			"If set to true, applies a timestamp shift in order to make the latency zero.\n\t\t\t"
+			"Default is false",
+			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
