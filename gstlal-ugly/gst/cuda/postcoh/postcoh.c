@@ -901,7 +901,7 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 			cluster_peak_pos[ipeak] = bubbled_peak_pos[ipeak - final_peaks];
 
 
-		npeak = final_peaks == 0 ? 0 : final_peaks + 1;
+		npeak = npeak == 0 ? 0 : final_peaks + 1;
 		memcpy(peak_pos, cluster_peak_pos, sizeof(int) * state->max_npeak);
 		pklist->npeak[0] = npeak;
 
