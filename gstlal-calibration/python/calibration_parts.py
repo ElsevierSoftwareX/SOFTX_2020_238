@@ -461,53 +461,47 @@ def compute_fcc(pipeline, SR, SI, fpcal2, queue_length1, queue_length2):
 	fcc = mkmultiplier(pipeline, list_srcs(pipeline, mkqueue(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), queue_length1), mkqueue(pipeline, pipeparts.mkpow(pipeline, SI, exponent=-1.0), queue_length2)))
 	return fcc
 
-def compute_Xi_from_filters_file(pipeline, pcalfpcal0, darmfpcal0, fpcal0, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc, queue_length1, queue_length2):
+def compute_Xi_from_filters_file(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc, queue_length1, queue_length2):
 
 	#
-	# Xi = 1 + ((EP11*kc) / (1 + i * f_src/f_cc)) * (pcalfpcal0/derrfpcal0 - EP12*(ktst*EP13 + kpu*EP14))
+	# Xi = -1 + ((EP11*kc) / (1 + i * f_src/f_cc)) * (pcalfpcal4/derrfpcal4 - EP12*(ktst*EP13 + kpu*EP14))
 	#
 
-	kc = pipeparts.mktee(pipeline, kc)
-	ones = pipeparts.mkpow(pipeline, kc, exponent = 0.0)
-	ones = pipeparts.mktee(pipeline, ones)
-	complex_minus_ones = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, ones, matrix=[[-1,0]]))
 	Atst = complex_audioamplify(pipeline, ktst, EP13_real, EP13_imag)
 	Apu = complex_audioamplify(pipeline, kpu, EP14_real, EP14_imag) 
 	A = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, Atst, queue_length1), mkqueue(pipeline, Apu, queue_length2)))
 	minusAD = complex_audioamplify(pipeline, A, -1.0 * EP12_real, -1.0 * EP12_imag)
-	pcal_over_derr = complex_division(pipeline, pcalfpcal0, darmfpcal0, queue_length2, queue_length1)
+	pcal_over_derr = complex_division(pipeline, pcalfpcal4, darmfpcal4, queue_length2, queue_length1)
 	pcal_over_derr_res = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, pcal_over_derr, queue_length2), mkqueue(pipeline, minusAD, queue_length1)))
-	fpcal0_over_fcc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkpow(pipeline, fcc, exponent = -1.0), fpcal0)
-	i_fpcal0_over_fcc_plus_one = merge_into_complex(pipeline, ones, fpcal0_over_fcc, queue_length1, queue_length2)
-	i_fpcal0_over_fcc_plus_one_inv = complex_inverse(pipeline, i_fpcal0_over_fcc_plus_one)
+	fpcal4_over_fcc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkpow(pipeline, fcc, exponent = -1.0), fpcal4)
+	i_fpcal4_over_fcc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fpcal4_over_fcc, matrix = [[0, 1]]))
+	i_fpcal4_over_fcc_plus_one = pipeparts.mkgeneric(pipeline, i_fpcal4_over_fcc, "lal_add_constant", value = 1.0)
+	i_fpcal4_over_fcc_plus_one_inv = complex_inverse(pipeline, i_fpcal4_over_fcc_plus_one)
 	kc_EP11 = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kc, matrix = [[EP11_real, EP11_imag]]))
-	Xi_minus_one = mkmultiplier(pipeline, list_srcs(pipeline, mkqueue(pipeline, kc_EP11, queue_length1), mkqueue(pipeline, i_fpcal0_over_fcc_plus_one_inv, queue_length1), mkqueue(pipeline, pcal_over_derr_res, queue_length2)))
-	Xi = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, complex_minus_ones, queue_length1), mkqueue(pipeline, Xi_minus_one, queue_length2)))
+	Xi_plus_one = mkmultiplier(pipeline, list_srcs(pipeline, mkqueue(pipeline, kc_EP11, queue_length1), mkqueue(pipeline, i_fpcal4_over_fcc_plus_one_inv, queue_length1), mkqueue(pipeline, pcal_over_derr_res, queue_length2)))
+	Xi = pipeparts.mkgeneric(pipeline, Xi_plus_one, "lal_add_constant", value = -1.0)
 
 	return Xi
 
-def compute_Xi(pipeline, pcalfpcal0, darmfpcal0, fpcal0, EP11, EP12, EP13, EP14, ktst, kpu, kc, fcc, queue_length1, queue_length2):
+def compute_Xi(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP14, ktst, kpu, kc, fcc, queue_length1, queue_length2):
 
 	#
-	# Xi = 1 + ((EP11*kc) / (1 + i * f_src/f_cc)) * (pcalfpcal0/derrfpcal0 - EP12*(ktst*EP13 + kpu*EP14))
+	# Xi = -1 + ((EP11*kc) / (1 + i * f_src/f_cc)) * (pcalfpcal4/derrfpcal4 - EP12*(ktst*EP13 + kpu*EP14))
 	#
 
-	kc = pipeparts.mktee(pipeline, kc)
 	complex_kc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kc, matrix=[[1,0]]))
-	ones = pipeparts.mkpow(pipeline, kc, exponent = 0.0)
-	ones = pipeparts.mktee(pipeline, ones)
-	complex_minus_ones = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, ones, matrix=[[-1,0]]))
 	Atst = mkmultiplier(pipeline, list_srcs(pipeline, mkqueue(pipeline, EP13, queue_length1), mkqueue(pipeline, ktst, queue_length2)))
 	Apu = mkmultiplier(pipeline, list_srcs(pipeline, mkqueue(pipeline, EP14, queue_length1), mkqueue(pipeline, kpu, queue_length2)))
 	A = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, Atst, queue_length1), mkqueue(pipeline, Apu, queue_length2)))
 	minusAD = mkmultiplier(pipeline, list_srcs(pipeline, mkqueue(pipeline, complex_audioamplify(pipeline, EP12, -1.0, 0.0), queue_length1), mkqueue(pipeline, A, queue_length2)))
-	pcal_over_derr = complex_division(pipeline, pcalfpcal0, darmfpcal0, queue_length2, queue_length1)
+	pcal_over_derr = complex_division(pipeline, pcalfpcal4, darmfpcal4, queue_length2, queue_length1)
 	pcal_over_derr_res = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, pcal_over_derr, queue_length2), mkqueue(pipeline, minusAD, queue_length1)))
-	fpcal0_over_fcc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkpow(pipeline, fcc, exponent = -1.0), fpcal0)
-	i_fpcal0_over_fcc_plus_one = merge_into_complex(pipeline, ones, fpcal0_over_fcc, queue_length1, queue_length2)
-	i_fpcal0_over_fcc_plus_one_inv = complex_inverse(pipeline, i_fpcal0_over_fcc_plus_one)
-	Xi_minus_one = mkmultiplier(pipeline, list_srcs(pipeline, mkqueue(pipeline, EP11, queue_length1), mkqueue(pipeline, complex_kc, queue_length1), mkqueue(pipeline, i_fpcal0_over_fcc_plus_one_inv, queue_length1), mkqueue(pipeline, pcal_over_derr_res, queue_length2)))
-	Xi = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, complex_minus_ones, queue_length1), mkqueue(pipeline, Xi_minus_one, queue_length2)))
+	fpcal4_over_fcc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkpow(pipeline, fcc, exponent = -1.0), fpcal4)
+	i_fpcal4_over_fcc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fpcal4_over_fcc, matrix = [[0, 1]]))
+	i_fpcal4_over_fcc_plus_one = pipeparts.mkgeneric(pipeline, i_fpcal4_over_fcc, "lal_add_constant", value = 1.0)
+	i_fpcal4_over_fcc_plus_one_inv = complex_inverse(pipeline, i_fpcal4_over_fcc_plus_one)
+	Xi_plus_one = mkmultiplier(pipeline, list_srcs(pipeline, mkqueue(pipeline, EP11, queue_length1), mkqueue(pipeline, complex_kc, queue_length1), mkqueue(pipeline, i_fpcal4_over_fcc_plus_one_inv, queue_length1), mkqueue(pipeline, pcal_over_derr_res, queue_length2)))
+	Xi = pipeparts.mkgeneric(pipeline, Xi_plus_one, "lal_add_constant", value = -1.0)
 
 	return Xi
 
