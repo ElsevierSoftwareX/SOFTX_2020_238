@@ -55,8 +55,8 @@ def mkstockresample(pipeline, head, caps):
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	return head
 
-def mkresample(pipeline, head, polynomial_order, caps):
-	head = pipeparts.mkgeneric(pipeline, head, "lal_resample", polynomial_order = polynomial_order)
+def mkresample(pipeline, head, quality, zero_latency, caps):
+	head = pipeparts.mkgeneric(pipeline, head, "lal_resample", quality = quality, zero_latency = zero_latency)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	return head
 
@@ -273,7 +273,7 @@ def demodulate(pipeline, head, freq, td, caps, integration_samples, prefactor_re
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
-	head = mkresample(pipeline, head, 1, caps)
+	head = mkresample(pipeline, head, 3, True, caps)
 	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td)
 
 	return head

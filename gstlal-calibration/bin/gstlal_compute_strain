@@ -660,19 +660,19 @@ if options.data_source == "frames" and frame_segments is not None:
 for key in headkeys:
 	if key.startswith("EP"):
 		head_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
-		head_dict[key] = calibration_parts.mkresample(pipeline, head_dict[key], 0, compute_calib_factors_caps)
+		head_dict[key] = calibration_parts.mkresample(pipeline, head_dict[key], 0, False, compute_calib_factors_caps)
 
 if not options.no_coherence:
 	if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ:
 		pcaly_line1_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line1_coh"], coh_caps, "pcaly_line1_coh")
-		pcaly_line1_coh = calibration_parts.mkresample(pipeline, pcaly_line1_coh, 0, compute_calib_factors_caps)
+		pcaly_line1_coh = calibration_parts.mkresample(pipeline, pcaly_line1_coh, 0, False, compute_calib_factors_caps)
 		sus_coh = calibration_parts.caps_and_progress(pipeline, head_dict["sus_coh"], coh_caps, "sus_coh")
-		sus_coh = calibration_parts.mkresample(pipeline, sus_coh, 0, compute_calib_factors_caps)
+		sus_coh = calibration_parts.mkresample(pipeline, sus_coh, 0, False, compute_calib_factors_caps)
 		darm_coh = calibration_parts.caps_and_progress(pipeline, head_dict["darm_coh"], coh_caps, "darm_coh")
-		darm_coh = calibration_parts.mkresample(pipeline, darm_coh, 0, compute_calib_factors_caps)
+		darm_coh = calibration_parts.mkresample(pipeline, darm_coh, 0, False, compute_calib_factors_caps)
 	if not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ:
 		pcaly_line2_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line2_coh"], coh_caps, "pcaly_line2_coh")
-		pcaly_line2_coh = calibration_parts.mkresample(pipeline, pcaly_line2_coh, 0, compute_calib_factors_caps)
+		pcaly_line2_coh = calibration_parts.mkresample(pipeline, pcaly_line2_coh, 0, False, compute_calib_factors_caps)
 
 if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ or (options.cancel_callines and cancel_esd_act_line):
 	tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % options.tst_exc_sample_rate
@@ -1010,7 +1010,7 @@ if options.cancel_callines:
 		pcal_at_darm_act_freq = calibration_parts.demodulate(pipeline, pcal_tee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
 
 	# Reconstruct a calibrated (negative) pcal at only the ~30 Hz pcal line
-	pcaly_line1 = calibration_parts.mkresample(pipeline, pcal_at_darm_act_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	pcaly_line1 = calibration_parts.mkresample(pipeline, pcal_at_darm_act_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 	pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "lal_demodulate", line_frequency = -1.0 * darm_act_line_freq, prefactor_real = -2.0)
 	cancel_pcaly_line1, trash = calibration_parts.split_into_real(pipeline, pcaly_line1)
 	pipeparts.mkfakesink(pipeline, trash)
@@ -1019,7 +1019,7 @@ if options.cancel_callines:
 	if options.no_kappac and options.no_fcc and options.no_srcQ and options.no_fs:
 		pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
 	# Reconstruct a calibrated (negative) pcal at only the ~300 Hz pcal line
-	pcaly_line2 = calibration_parts.mkresample(pipeline, pcal_at_opt_gain_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	pcaly_line2 = calibration_parts.mkresample(pipeline, pcal_at_opt_gain_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 	pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "lal_demodulate", line_frequency = -1.0 * opt_gain_fcc_line_freq, prefactor_real = -2.0)
 	cancel_pcaly_line2, trash = calibration_parts.split_into_real(pipeline, pcaly_line2)
 	pipeparts.mkfakesink(pipeline, trash)
@@ -1041,7 +1041,7 @@ if options.cancel_callines:
 		if options.apply_kappatst:
 			# Multiply by the real part of kappa_tst
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [esd_act_line, long_queue], [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_ktstRtee, matrix=[[1.0, 0.0]])), short_queue]))
-		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		esd_act_line_cancel = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = -2.0)
 		esd_act_line_cancel, trash = calibration_parts.split_into_real(pipeline, esd_act_line_cancel)
 		pipeparts.mkfakesink(pipeline, trash)
@@ -1052,7 +1052,7 @@ if options.cancel_callines:
 		# Demodulate pcal at the ~1kHz pcal line
 		pcaly_line3 = calibration_parts.demodulate(pipeline, pcaltee, high_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_high_line_freq_real, pcal_corr_at_high_line_freq_imag)
 		# Reconstruct a calibrated (negative) pcal at only the ~1kHz pcal line
-		pcaly_line3 = calibration_parts.mkresample(pipeline, pcaly_line3, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line3 = calibration_parts.mkresample(pipeline, pcaly_line3, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * high_pcal_line_freq, prefactor_real = -2.0)
 		cancel_pcaly_line3, trash = calibration_parts.split_into_real(pipeline, pcaly_line3)
 		pipeparts.mkfakesink(pipeline, trash)
@@ -1063,7 +1063,7 @@ if options.cancel_callines:
 		# Demodulate pcal at the ~3kHz pcal line
 		pcaly_line4 = calibration_parts.demodulate(pipeline, pcaltee, roaming_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_roaming_line_real, pcal_corr_at_roaming_line_imag)
 		# Reconstruct a calibrated (negative) pcal at only the ~3kHz pcal line
-		pcaly_line4 = calibration_parts.mkresample(pipeline, pcaly_line4, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line4 = calibration_parts.mkresample(pipeline, pcaly_line4, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		pcaly_line4 = pipeparts.mkgeneric(pipeline, pcaly_line4, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = -2.0)
 		cancel_pcaly_line4, trash = calibration_parts.split_into_real(pipeline, pcaly_line4)
 		pipeparts.mkfakesink(pipeline, trash)
@@ -1075,7 +1075,7 @@ if options.cancel_callines:
 		if options.no_fs and options.no_srcQ:
 			pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
 		# Reconstruct a calibrated (negative) pcal at only the ~3kHz pcal line
-		pcaly_line0 = calibration_parts.mkresample(pipeline, pcal_at_src_freq, 3, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line0 = calibration_parts.mkresample(pipeline, pcal_at_src_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		pcaly_line0 = pipeparts.mkgeneric(pipeline, pcaly_line0, "lal_demodulate", line_frequency = -1.0 * src_pcal_line_freq, prefactor_real = -2.0)
 		cancel_pcaly_line0, trash = calibration_parts.split_into_real(pipeline, pcaly_line0)
 		pipeparts.mkfakesink(pipeline, trash)
@@ -1165,12 +1165,12 @@ if tstchainsr != pumuimchainsr or options.apply_kappapu or options.apply_kappats
 # apply kappa_tst
 if options.apply_kappatst:
 	# Only apply the real part of \kappa_tst as a correction to A_tst
-	ktst_for_tst = calibration_parts.mkresample(pipeline, smooth_ktstRtee, 3, hoft_caps)
+	ktst_for_tst = calibration_parts.mkresample(pipeline, smooth_ktstRtee, 3, False, hoft_caps)
 	tst = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [ktst_for_tst, ktst_queue_length], [tst, tst_queue_length]))
 # apply kappa_pu
 if options.apply_kappapu:
 	# Only apply the real part of \kappa_pu as a correction to A_pu
-	kpu_for_pu = calibration_parts.mkresample(pipeline, smooth_kpuRtee, 3, hoft_caps)
+	kpu_for_pu = calibration_parts.mkresample(pipeline, smooth_kpuRtee, 3, False, hoft_caps)
 	pumuim = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [kpu_for_pu, kpu_queue_length], [pumuim, pumuim_queue_length]))
 
 # Add the TST and PUM/UIM chains together to form the full actuation chain
@@ -1212,7 +1212,7 @@ if options.dewhitening:
 
 # Apply factors to actuation and sensing chains, if applicable
 if options.apply_kappac:
-	kc_modify_res = calibration_parts.mkresample(pipeline, smooth_kctee, 3, hoft_caps)
+	kc_modify_res = calibration_parts.mkresample(pipeline, smooth_kctee, 3, False, hoft_caps)
 	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [res, reskc_queue_length], [pipeparts.mkpow(pipeline, kc_modify_res, exponent = -1.0), kc_queue_length]))
 
 filter_settle_time = max(res_filter_settle_time, tst_filter_settle_time, pumuim_filter_settle_time)
@@ -1506,78 +1506,78 @@ record_kappa_caps = "audio/x-raw, format=F32LE, rate=%d" % options.record_factor
 if not options.no_kappapu:
 
 	kpuRout = pipeparts.mkaudioconvert(pipeline, smooth_kpuRtee)
-	kpuRout = calibration_parts.mkresample(pipeline, kpuRout, 1, record_kappa_caps)
+	kpuRout = calibration_parts.mkresample(pipeline, kpuRout, 1, False, record_kappa_caps)
 	kpuRout = pipeparts.mkprogressreport(pipeline, kpuRout, "progress_kappa_pu_real_%s" % instrument)
 
 	kpuIout = pipeparts.mkaudioconvert(pipeline, smooth_kpuItee)
-	kpuIout = calibration_parts.mkresample(pipeline, kpuIout, 1, record_kappa_caps)
+	kpuIout = calibration_parts.mkresample(pipeline, kpuIout, 1, False, record_kappa_caps)
 	kpuIout = pipeparts.mkprogressreport(pipeline, kpuIout, "progress_kappa_pu_imag_%s" % instrument)
 
 	smooth_kpuR_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kpuR_nogate)
-	smooth_kpuR_nogate = calibration_parts.mkresample(pipeline, smooth_kpuR_nogate, 1, record_kappa_caps)
+	smooth_kpuR_nogate = calibration_parts.mkresample(pipeline, smooth_kpuR_nogate, 1, False, record_kappa_caps)
 	smooth_kpuR_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpuR_nogate, "progress_kappa_pu_real_nogate_%s" % instrument)
 
 	smooth_kpuI_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kpuI_nogate)
-	smooth_kpuI_nogate = calibration_parts.mkresample(pipeline, smooth_kpuI_nogate, 1, record_kappa_caps)
+	smooth_kpuI_nogate = calibration_parts.mkresample(pipeline, smooth_kpuI_nogate, 1, False, record_kappa_caps)
 	smooth_kpuI_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpuI_nogate, "progress_kappa_pu_imag_nogate_%s" % instrument)
 
 # Resample the \kappa_tst channels at the specified recording sample rate and change them to single precision channels
 if not options.no_kappatst:
 
 	ktstRout = pipeparts.mkaudioconvert(pipeline, smooth_ktstRtee)
-	ktstRout = calibration_parts.mkresample(pipeline, ktstRout, 1, record_kappa_caps)
+	ktstRout = calibration_parts.mkresample(pipeline, ktstRout, 1, False, record_kappa_caps)
 	ktstRout = pipeparts.mkprogressreport(pipeline, ktstRout, "progress_kappa_tst_real_%s" % instrument)
 
 	ktstIout = pipeparts.mkaudioconvert(pipeline, smooth_ktstItee)
-	ktstIout = calibration_parts.mkresample(pipeline, ktstIout, 1, record_kappa_caps)
+	ktstIout = calibration_parts.mkresample(pipeline, ktstIout, 1, False, record_kappa_caps)
 	ktstIout = pipeparts.mkprogressreport(pipeline, ktstIout, "progress_kappa_tst_imag_%s" % instrument)
 
 	smooth_ktstR_nogate = pipeparts.mkaudioconvert(pipeline, smooth_ktstR_nogate)
-	smooth_ktstR_nogate = calibration_parts.mkresample(pipeline, smooth_ktstR_nogate, 1, record_kappa_caps)
+	smooth_ktstR_nogate = calibration_parts.mkresample(pipeline, smooth_ktstR_nogate, 1, False, record_kappa_caps)
 	smooth_ktstR_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstR_nogate, "progress_kappa_tst_real_nogate_%s" % instrument)
 
 	smooth_ktstI_nogate = pipeparts.mkaudioconvert(pipeline, smooth_ktstI_nogate)
-	smooth_ktstI_nogate = calibration_parts.mkresample(pipeline, smooth_ktstI_nogate, 1, record_kappa_caps)
+	smooth_ktstI_nogate = calibration_parts.mkresample(pipeline, smooth_ktstI_nogate, 1, False, record_kappa_caps)
 	smooth_ktstI_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstI_nogate, "progress_kappa_tst_imag_nogate_%s" % instrument)
 
 # Resample the \kappa_c channels at the specified recording sample rate and change it to a single precision channel
 if not options.no_kappac:
 	kcout = pipeparts.mkaudioconvert(pipeline, smooth_kctee)
-	kcout = calibration_parts.mkresample(pipeline, kcout, 1, record_kappa_caps)
+	kcout = calibration_parts.mkresample(pipeline, kcout, 1, False, record_kappa_caps)
 	kcout = pipeparts.mkprogressreport(pipeline, kcout, "progress_kappa_c_%s" % instrument)
 
 	smooth_kc_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kc_nogate)
-	smooth_kc_nogate = calibration_parts.mkresample(pipeline, smooth_kc_nogate, 1, record_kappa_caps)
+	smooth_kc_nogate = calibration_parts.mkresample(pipeline, smooth_kc_nogate, 1, False, record_kappa_caps)
 	smooth_kc_nogate = pipeparts.mkprogressreport(pipeline, smooth_kc_nogate, "progress_kappa_c_nogate_%s" % instrument)
 
 # Resample the f_cc channels at the specified recording sample rate and change it to a single precision channel
 if not options.no_fcc:
 	fccout = pipeparts.mkaudioconvert(pipeline, smooth_fcctee)
-	fccout = calibration_parts.mkresample(pipeline, fccout, 1, record_kappa_caps)
+	fccout = calibration_parts.mkresample(pipeline, fccout, 1, False, record_kappa_caps)
 	fccout = pipeparts.mkprogressreport(pipeline, fccout, "progress_f_cc_%s" % instrument)
 
 	smooth_fcc_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fcc_nogate)
-	smooth_fcc_nogate = calibration_parts.mkresample(pipeline, smooth_fcc_nogate, 1, record_kappa_caps)
+	smooth_fcc_nogate = calibration_parts.mkresample(pipeline, smooth_fcc_nogate, 1, False, record_kappa_caps)
 	smooth_fcc_nogate = pipeparts.mkprogressreport(pipeline, smooth_fcc_nogate, "progress_f_cc_nogate_%s" % instrument)
 
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if not options.no_fs:
 	fsout = pipeparts.mkaudioconvert(pipeline, smooth_fs)
-	fsout = calibration_parts.mkresample(pipeline, fsout, 1, record_kappa_caps)
+	fsout = calibration_parts.mkresample(pipeline, fsout, 1, False, record_kappa_caps)
 	fsout = pipeparts.mkprogressreport(pipeline, fsout, "progress_f_s_%s" % instrument)
 
 	smooth_fs_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fs_nogate)
-	smooth_fs_nogate = calibration_parts.mkresample(pipeline, smooth_fs_nogate, 1, record_kappa_caps)
+	smooth_fs_nogate = calibration_parts.mkresample(pipeline, smooth_fs_nogate, 1, False, record_kappa_caps)
 	smooth_fs_nogate = pipeparts.mkprogressreport(pipeline, smooth_fs_nogate, "progress_f_s_nogate_%s" % instrument)
 
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if not options.no_srcQ:
 	srcQ_inv_out = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv)
-	srcQ_inv_out = calibration_parts.mkresample(pipeline, srcQ_inv_out, 1, record_kappa_caps)
+	srcQ_inv_out = calibration_parts.mkresample(pipeline, srcQ_inv_out, 1, False, record_kappa_caps)
 	srcQ_inv_out = pipeparts.mkprogressreport(pipeline, srcQ_inv_out, "progress_SRC_Q_%s" % instrument)
 
 	smooth_srcQ_inv_nogate = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv_nogate)
-	smooth_srcQ_inv_nogate = calibration_parts.mkresample(pipeline, smooth_srcQ_inv_nogate, 1, record_kappa_caps)
+	smooth_srcQ_inv_nogate = calibration_parts.mkresample(pipeline, smooth_srcQ_inv_nogate, 1, False, record_kappa_caps)
 	smooth_srcQ_inv_nogate = pipeparts.mkprogressreport(pipeline, smooth_srcQ_inv_nogate, "progress_SRC_Q_nogate_%s" % instrument)
 
 #

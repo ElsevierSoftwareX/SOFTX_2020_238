@@ -79,8 +79,16 @@ struct _GSTLALAddConstant {
 	gint unit_size;
 	gint rate;
 
+	enum gstlal_add_constant_data_type {
+		GSTLAL_ADD_CONSTANT_F32 = 0,
+		GSTLAL_ADD_CONSTANT_F64,
+		GSTLAL_ADD_CONSTANT_Z64,
+		GSTLAL_ADD_CONSTANT_Z128
+	} data_type;
+
 	/* properties */
 	gdouble value;
+	gdouble value_imag;
 };
 
 
