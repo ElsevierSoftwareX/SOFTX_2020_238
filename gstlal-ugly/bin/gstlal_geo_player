@@ -14,11 +14,9 @@ from scipy import pi, exp, cos
 
 import lal
 from glue.ligolw import utils as ligolw_utils
-from pylal import datatypes as laltypes
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import pipeio
-from lal import LIGOTimeGPS
 
 #
 # =============================================================================
@@ -79,9 +77,9 @@ def look_and_listen(self):
 	if self.td_whitening:
 		psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(self.psd_file_name, contenthandler = lal.series.PSDContentHandler))
 		psd = psds["G1"]
-		psd.data = psd.data[:analysis_rate/psd.deltaF/2+1]
+		psd.data.data = psd.data.data[:analysis_rate/psd.deltaF/2+1]
 		psd = reference_psd.interpolate_psd(psd, 1./fft_length)
-		psd.data = psd.data[:-1]
+		psd.data.data = psd.data.data[:-1]
 		kernel1,latency1,sample_rate = reference_psd.psd_to_linear_phase_whitening_fir_kernel(psd)
 		kernel2,theta = reference_psd.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel1)
 		latency2 = 0
@@ -189,7 +187,7 @@ class GTK_Main:
 		window.show_all()
 
 		self.psd_file_name = 'G1-GEO_PLAYER_PSD-SUS-CHN11_DQ.xml.gz'
-		self.psd = laltypes.REAL8FrequencySeries(name = "PSD", epoch = LIGOTimeGPS(0, 0), f0 = 0.0, deltaF = 0, sampleUnits = laltypes.LALUnit(""), data = numpy.empty(0))
+		self.psd = lal.CreateREAL8FrequencySeries(name = "PSD", epoch = lal.LIGOTimeGPS(0), f0 = 0.0, deltaF = 0.0, sampleUnits = lal.Unit(""), length = 0)
 
 
 	def start_stop(self, w):

@@ -14,9 +14,6 @@ from glue.ligolw import lsctables
 from glue.ligolw import table
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
-from pylal.inspiral_metric import compute_metric
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
-from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
 
 from optparse import OptionParser
 

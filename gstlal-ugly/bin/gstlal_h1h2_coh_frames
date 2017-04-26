@@ -56,8 +56,6 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
 
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
-
 __author__ = "Madeline Wade <madeline.wade@ligo.org>"
 
 #
@@ -206,13 +204,13 @@ class COHhandler(simplehandler.Handler):
 		self.psd2_change = 1
 	
 	def fixed_filters(self, psd1, psd2):
-		self.psd1 = REAL8FrequencySeries(
+		self.psd1 = lal.CreateREAL8FrequencySeries(
 			name = "PSD1",
 			f0 = 0.0,
 			deltaF = psd1.deltaF,
 			length = len(psd1.data.data))
 		self.psd1.data.data = psd1.data.data
-		self.psd2 = REAL8FrequencySeries(
+		self.psd2 = lal.CreateREAL8FrequencySeries(
 			name = "PSD2",
 			f0 = 0.0,
 			deltaF = psd2.deltaF,

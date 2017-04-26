@@ -7,7 +7,6 @@ from glue.ligolw import table
 from glue.ligolw import utils
 from glue.ligolw import ilwd
 from glue.ligolw.utils import process as ligolw_process
-from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
 from gstlal import metric as metric_module
 import os,sys,argparse
 from gstlal import inspiral, inspiral_pipe

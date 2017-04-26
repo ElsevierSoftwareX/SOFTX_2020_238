@@ -41,10 +41,9 @@ from scipy.interpolate import interp1d
 from matplotlib import pyplot
 from gstlal import reference_psd
 
-from pylal import git_version
 __author__ = "Chad Hanna <channa@ligo.caltech.edu>, Satya Mohapatra <satya@physics.umass.edu>"
-__version__ = "git id %s" % git_version.id
-__date__ = git_version.date
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
 
 def compute_horizon_interpolator(psd_files, verbose = False):
 	sites = ('H1', 'L1', 'V1')
