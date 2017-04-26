@@ -327,7 +327,7 @@ AX_PYTHON_SYMBOL([lal], [LIGOTimeGPS])
 
 
 #
-# Check for glue and pylal
+# Check for glue
 #
 
 
