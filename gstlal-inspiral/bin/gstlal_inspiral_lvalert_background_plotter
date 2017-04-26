@@ -42,7 +42,7 @@ os.environ["MPLCONFIGDIR"] = "/tmp"
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from ligo.gracedb import rest as gracedb
-from pylal.ligolw_thinca import InspiralCoincDef
+from lalinspiral.thinca import InspiralCoincDef
 
 
 from gstlal import far

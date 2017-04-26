@@ -51,8 +51,8 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from lalburst import ligolw_burca2
-from pylal import ligolw_thinca
 from lalburst import snglcoinc
+from lalinspiral import thinca
 from gstlal import far
 from lal.utils import CacheEntry
 
@@ -206,7 +206,7 @@ for n, url in enumerate(urls, 1):
 	#
 
 	try:
-		coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+		coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	except KeyError:
 		if options.verbose:
 			print >>sys.stderr, "document does not contain inspiral coincidences.  skipping."

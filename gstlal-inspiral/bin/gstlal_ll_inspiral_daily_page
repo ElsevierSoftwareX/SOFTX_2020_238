@@ -195,7 +195,7 @@ if __name__ == '__main__':
 		progressbar.increment()
 		subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "--extract", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
-		subprocess.check_call(["ligolw_inspinjfind", "--verbose", "%s.xml" % injdb[injection_file]])
+		subprocess.check_call(["lalapps_inspinjfind", "--verbose", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()
 		subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "--replace", "%s.xml" % injdb[injection_file]])
 		progressbar.increment()

@@ -52,7 +52,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
-from pylal import ligolw_thinca
+from lalinspiral import thinca
 from gstlal import far
 
 
@@ -148,7 +148,7 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	#
 
 	xmldoc = dbtables.get_xml(connection)
-	coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+	coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	xmldoc.unlink()
 	ranking_data.collect_zero_lag_rates(connection, coinc_def_id)
 

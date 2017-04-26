@@ -47,14 +47,14 @@ from glue import iterutils
 from glue import segments
 from glue.ligolw import lsctables
 import lal
-from pylal import ligolw_thinca
+from lalinspiral import thinca
 from gstlal import snglinspiraltable
 
 
 #
 # =============================================================================
 #
-#                      pylal.ligolw_thinca Customizations
+#                      lalinspiral.thinca Customizations
 #
 # =============================================================================
 #
@@ -66,7 +66,7 @@ from gstlal import snglinspiraltable
 
 
 class SnglInspiral(snglinspiraltable.GSTLALSnglInspiral):
-	# copied from ligolw_thinca.SnglInspiral
+	# copied from thinca.SnglInspiral
 	__slots__ = ()
 
 	def __cmp__(self, other):
@@ -227,8 +227,8 @@ class StreamThinca(object):
 			return []
 
 		# we need our own copies of these other tables because
-		# sometimes ligolw_thinca wants to modify the attributes of
-		# a row object after appending it to a table, which isn't
+		# sometimes thinca wants to modify the attributes of a row
+		# object after appending it to a table, which isn't
 		# possible if the tables are SQL-based.  these do not store
 		# any state so we create them on the fly when needed
 		coinc_event_map_table = lsctables.New(lsctables.CoincMapTable)
@@ -263,10 +263,10 @@ class StreamThinca(object):
 
 		# find coincs.  NOTE:  do not pass veto segments to this
 		# function.
-		ligolw_thinca.ligolw_thinca(
+		thinca.ligolw_thinca(
 			xmldoc,
 			process_id = process_id,
-			coinc_definer_row = ligolw_thinca.InspiralCoincDef,
+			coinc_definer_row = thinca.InspiralCoincDef,
 			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
 			likelihood_func = self.ln_likelihood_func,
@@ -292,7 +292,7 @@ class StreamThinca(object):
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
-		self.last_coincs = ligolw_thinca.sngl_inspiral_coincs(xmldoc)
+		self.last_coincs = thinca.sngl_inspiral_coincs(xmldoc)
 
 		# synchronize the database' coinc_event table's ID
 		# generator with ours
