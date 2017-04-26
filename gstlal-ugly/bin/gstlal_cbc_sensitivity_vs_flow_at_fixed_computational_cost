@@ -39,9 +39,8 @@ matplotlib.rcParams.update({
 from matplotlib import pyplot
 import lal
 from glue.ligolw import utils as ligolw_utils
-import pylal.coherent_inspiral_metric as metric
-import pylal.coherent_inspiral_metric_detector_details as detector_details
-import pylal.coherent_inspiral_metric_plots as metric_plots
+import gstlal.coherent_inspiral_metric as metric
+import gstlal.coherent_inspiral_metric_detector_details as detector_details
 import scipy
 import numpy
 from scipy import pi,sin,cos,exp,log

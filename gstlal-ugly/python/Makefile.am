@@ -10,6 +10,9 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	aggregator.py \
+	coherent_inspiral_metric_detector_details.py \
+	coherent_inspiral_metric_plots.py \
+	coherent_inspiral_metric.py \
 	gviz_api.py \
 	metric.py \
 	multichannel_datasource.py \
