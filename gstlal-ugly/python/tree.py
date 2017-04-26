@@ -40,6 +40,7 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 def packing_density(n):
 	# this packing density puts two in a cell, we split if there are two or
 	# more expected in a cell
+	return 1.0
 	return 0.50
 	#prefactor = 0.5
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
@@ -204,7 +205,7 @@ class Node(object):
 		self.parent = parent
 		self.sibling = None
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.05, max_coord_vol = float(100)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.01, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		aspect_ratios = size / min(size)
@@ -216,6 +217,7 @@ class Node(object):
 			sib_aspect_factor = 1.0
 			parent_aspect_factor = 1.0
 			volume_split_condition = False
+			metric_diff = 1.0
 		else:
 			# Get the number of parent templates
 			par_size = self.parent.cube.num_tmps_per_side(mismatch)
@@ -232,6 +234,8 @@ class Node(object):
 			# get our number of templates
 			numtmps = self.cube.num_templates(mismatch) * aspect_factor
 
+			metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
+			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
 			# check that the metric is not varying too much
 			sib_vratio = numtmps / sib_numtmps
 			volume_split_condition = (1./vtol < sib_vratio < vtol)
@@ -239,11 +243,12 @@ class Node(object):
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps)
 
-
-		if  (self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps >= split_num_templates)):
+		metric_tol = 0.1
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps >= split_num_templates or metric_diff > metric_tol):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if numtmps < 5**len(size) and volume_split_condition:
+			#if numtmps < 5**len(size) and metric_diff < max(mismatch, 0.01):#volume_split_condition:
+			if metric_diff <= metric_tol:#volume_split_condition:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
