@@ -177,7 +177,7 @@ td {
 """
 
 def now():
-	#FIXME use pylal when available
+	#FIXME use lal when available
 	return time.time() - 315964785
 
 class GstlalWebSummary(object):

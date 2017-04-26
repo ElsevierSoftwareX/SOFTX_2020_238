@@ -25,15 +25,15 @@
 import sys, os, subprocess, re, time, glob, shutil
 from optparse import OptionParser
 from glue.text_progress_bar import ProgressBar
-from pylal.datatypes import LIGOTimeGPS
 from gstlal import aggregator
 import lal
+from lal import LIGOTimeGPS
 from multiprocessing import Pool
 from gstlal import inspiral_pipe
 from copy import copy
 
 def now():
-	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()))
 
 def process_mass_bin(args): 
 	massbin, result_dirs, n, d, options, tag, typecode, cluster_file = args

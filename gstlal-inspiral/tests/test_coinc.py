@@ -13,14 +13,14 @@ from fixtures import *
 from gstlal.pipeutil import *
 
 import gstlal.pipeparts as pipeparts
-from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
+from gstlal.snglinspiraltable import GSTLALSnglInspiral
 from itertools import groupby
 
 
 class CoincTestFixture(PipelineTestFixture):
 	
 	def single_detector_new_buffer(self, elem, user_data):
-		sngls = SnglInspiralTable.from_buffer(elem.get_property("last-buffer"))
+		sngls = GSTLALSnglInspiral.from_buffer(elem.get_property("last-buffer"))
 		for sngl in sngls:
 			if sngl.mass1 in self.triggers_by_mass1:
 				triggers = self.triggers_by_mass1[sngl.mass1]
@@ -30,7 +30,7 @@ class CoincTestFixture(PipelineTestFixture):
 			triggers.append((sngl.end_time * gst.SECOND + sngl.end_time_ns, sngl.ifo))
 
 	def coinc_new_buffer(self, elem, user_data):
-		sngls = SnglInspiralTable.from_buffer(elem.get_property("last-buffer"))
+		sngls = GSTLALSnglInspiral.from_buffer(elem.get_property("last-buffer"))
 		for coinc in zip(*[sngls[i::len(self.ifos)] for i in range(len(self.ifos))]):
 			mass1 = coinc[0].mass1
 			trigger_records = frozenset(

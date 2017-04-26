@@ -13,7 +13,7 @@ from fixtures import *
 from gstlal.pipeutil import *
 from gstlal.lloidparts import mkelems_fast
 from gstlal.pipeparts import mkappsink
-import pylal.xlal.datatypes.snglinspiraltable as sngl
+import gstlal.snglinspiraltable import GSTLALSnglInspiral
 import random
 
 
@@ -60,11 +60,11 @@ class TestSkymap(PipelineTestFixture):
 		# Uncomment to get pipeline graph
 		gst.DEBUG_BIN_TO_DOT_FILE(self.pipeline, gst.DEBUG_GRAPH_SHOW_ALL, "skymap")
 
-		sngl_inspiral_len = len(buffer(sngl.SnglInspiralTable()))
+		sngl_inspiral_len = len(buffer(GSTLALSnglInspiral()))
 		buf = gst.buffer_new_and_alloc(sngl_inspiral_len * len(ifos))
 		mid_time = (start_time + stop_time) / 2
 		for i_ifo, ifo in enumerate(ifos):
-			s = sngl.SnglInspiralTable()
+			s = GSTLALSnglInspiral()
 			s.end_time = mid_time
 			s.end_time_ns = long(500 * gst.MSECOND + random.random() * 2 * gst.MSECOND)
 			s.sigmasq = 1.0

@@ -79,8 +79,8 @@ __all__ = [
 def instruments_rate_given_noise(singles_counts, num_templates, segs, delta_t, min_instruments = 2):
 	"""
 	Models the expected number of background coincidence events.  Most
-	of the work is performed by pylal.snglcoinc.CoincSynthesizer.  The
-	output of that code is corrected using the assumption that the
+	of the work is performed by lalburst.snglcoinc.CoincSynthesizer.
+	The output of that code is corrected using the assumption that the
 	events whose total counts are provided as input to this function
 	are occuring in distinct "bins" (= templates) and that they can
 	only form a coincidence if they are in the same bin.
