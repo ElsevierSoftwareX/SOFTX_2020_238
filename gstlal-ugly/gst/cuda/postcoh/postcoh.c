@@ -901,7 +901,7 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 			cluster_peak_pos[ipeak] = bubbled_peak_pos[ipeak - final_peaks];
 
 
-		npeak = npeak == 0 ? 0 : final_peaks + 1;
+		npeak = final_peaks;
 		memcpy(peak_pos, cluster_peak_pos, sizeof(int) * state->max_npeak);
 		pklist->npeak[0] = npeak;
 
@@ -1222,7 +1222,7 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 		}
 	}
 
-	npeak = final_peaks;
+	npeak = npeak == 0 ? 0 : final_peaks + 1;
 	memcpy(peak_pos, cluster_peak_pos, sizeof(int) * npeak);
 	pklist->npeak[0] = npeak;
 
