@@ -157,8 +157,8 @@ def parse_command_line():
 	if options.plot_group is not None:
 		options.plot_group = sorted(map(int, options.plot_group))
 
-	if options.plot_group is None or set(options.plot_group) & set((1, 5)):
-		raise ValueError("Must provide --likelihood-file to generate plots in groups 2 and/or 6.")
+	if (options.plot_group is None or set(options.plot_group) & set((1, 5))) and options.likelihood_file is None:
+		raise ValueError("Must provide --likelihood-file to generate plots in groups 1 and/or 5.")
 
 	if not options.format:
 		options.format = ["png"]
@@ -1780,11 +1780,7 @@ else:
 #
 
 
-# how many there could be, so we know how many digits for the filenames
-max_plot_groups = None
-
-def new_plots(plots = None, far_thresh = None, remove_precession = False, isolate_precession = False):
-	global max_plot_groups
+def new_plots(plots, fapfar, far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
 	l = (
 		SummaryTable(),
 		MissedFoundPlots(far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict),
@@ -1794,14 +1790,11 @@ def new_plots(plots = None, far_thresh = None, remove_precession = False, isolat
 		RateVsThreshold(fapfar = fapfar, snr_min = snr_min),
 		InjectionParameterDistributionPlots(),
 	)
-	max_plot_groups = len(l)
 	if plots is None:
 		plots = range(len(l))
-	return [l[i] for i in plots]
+	return [(i, l[i]) for i in plots]
 
-plots = new_plots(options.plot_group, options.far_threshold, options.remove_precession, options.isolate_precession)
-if options.plot_group is None:
-	options.plot_group = range(len(plots))
+plots = new_plots(options.plot_group, fapfar, options.far_threshold, options.remove_precession, options.isolate_precession, nonzero_horizon_seglistdict)
 
 
 #
@@ -1820,9 +1813,9 @@ for n, filename in enumerate(filenames):
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
 	seg_class.add_contents(contents)
-	for n, plot in zip(options.plot_group, plots):
+	for plot_group, plot in plots:
 		if options.verbose:
-			print >>sys.stderr, "adding to plot group %d ..." % n
+			print >>sys.stderr, "adding to plot group %d ..." % plot_group
 		plot.add_contents(contents)
 	connection.close()
 	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
@@ -1837,7 +1830,8 @@ seg_class.finish()
 
 filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[1], "%s", path = options.output_dir)
 while len(plots):
-	for fig, filename_fragment, is_open_box in plots.pop(0).finish():
+	plot_group, plot = plots.pop(0)
+	for fig, filename_fragment, is_open_box in plot.finish():
 		try:
 			fig.tight_layout(rect=(0.03, 0.02, 0.98, 0.98))
 		except AttributeError:
@@ -1848,7 +1842,7 @@ while len(plots):
 			pass
 		for fmt in options.format:
 			if filename_fragment and fig:
-				filename = filename_template % (options.user_tag, options.plot_group[n], filename_fragment, ("openbox" if is_open_box else "closedbox"), fmt)
+				filename = filename_template % (options.user_tag, plot_group, filename_fragment, ("openbox" if is_open_box else "closedbox"), fmt)
 				if options.verbose:
 					print >>sys.stderr, "writing %s ..." % filename
 				fig.savefig(filename)
