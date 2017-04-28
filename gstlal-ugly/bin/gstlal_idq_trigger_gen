@@ -94,8 +94,8 @@ def sine_gaussian(phi, phi_0, q, time_arr):
 	sg_vals = numpy.cos(2.*numpy.pi*phi*time_arr + phi_0)*numpy.exp(-1.*time_arr**2./tau**2.)
 
 	# normalize sine gaussians to have unit length in their vector space
-	inner_product = numpy.sum(sg_vals**2.*dt)
-	norm_factor = 1./inner_product
+	inner_product = numpy.sum(sg_vals*sg_vals)
+	norm_factor = 1./(inner_product**0.5)
 
 	return norm_factor*sg_vals 
 
