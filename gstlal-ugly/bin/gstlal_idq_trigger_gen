@@ -345,7 +345,7 @@ for channel in channels:
 		#flow = data_source_info.channel_dict[channel]['flow']  
 		#fhigh = data_source_info.channel_dict[channel]['fhigh']  
 		#qhigh = data_source_info.channel_dict[channel]['qhigh']  
-		dur = max([duration(phi, q) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
+		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
 		phase = [0, numpy.pi/2.]
 		durations[(channel, rate)] = dur
