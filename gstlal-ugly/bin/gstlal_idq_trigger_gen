@@ -99,6 +99,18 @@ def sine_gaussian(phi, phi_0, q, time_arr):
 
 	return norm_factor*sg_vals 
 
+def half_sine_gaussian(sg_arr):
+	samples = sg_arr.size/2 + 1
+
+	# only take first half of sine gaussian + peak
+	hsg_vals = sg_arr[:samples]
+	
+	# renormalize
+	inner_product = numpy.sum(hsg_vals*hsg_vals)
+	norm_factor = 1./(inner_product**0.5)
+
+	return norm_factor*hsg_vals
+
 #
 # number of tiles in frequency and Q
 #
@@ -188,7 +200,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
 					trigger_time = row.end_time + row.end_time_ns * 1e-9
 					current_time = gpstime.gps_time_now().gpsSeconds + gpstime.gps_time_now().gpsNanoSeconds * 1e-9
-					latency = numpy.ceil(current_time - buftime)
+					latency = numpy.round(current_time - buftime)
 					start_time = trigger_time - duration/2
 					stop_time = trigger_time + duration/2
 					fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%9d\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, latency, float(rate), channel)
@@ -339,19 +351,18 @@ for channel in channels:
 		# FIXME: don't hardcode q and frequency
 		flow = rate/4.*0.8
 		fhigh = rate/2.*0.8
-		qlow = 2
-		qhigh = 8
+		qlow = 4
+		qhigh = 40
 		# omicron params, make sure to use .INI file before uncommenting
 		#flow = data_source_info.channel_dict[channel]['flow']  
 		#fhigh = data_source_info.channel_dict[channel]['fhigh']  
 		#qhigh = data_source_info.channel_dict[channel]['qhigh']  
 		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
-		#print >>sys.stderr, "dur = %f, rate = %d" % (dur, rate)
 		phase = [0, numpy.pi/2.]
 		durations[(channel, rate)] = dur
-		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 3)
-		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = int(rate*dur/2))
+		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = 0)
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
@@ -378,15 +389,4 @@ if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds o
 # run
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
-mainloop.run()
-  
-   
-   
-   
-   
-   
-   
-   
-   
-  
- 
+mainloop.run() 
