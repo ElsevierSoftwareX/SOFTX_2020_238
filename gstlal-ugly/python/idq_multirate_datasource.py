@@ -1,4 +1,5 @@
 # Copyright (C) 2009--2013  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2017 	    Patrick Godwin
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -114,7 +115,7 @@ except KeyError as e:
 #
 # }
 # @enddot
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True, statevector = None, dqvector = None, channel_name = "hoft"):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = 0, width = 64, cutoff = 12, quality = 9,  unit_normalize = True, statevector = None, dqvector = None, channel_name = "hoft"):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -128,6 +129,8 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	- veto_segments: segments to mark as gaps after whitening
 	- track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
 	- width: type convert to either 32 or 64 bit floati
+	- cutoff: high pass frequency cutoff
+	- quality: quality factor of whitening, determines power loss at highest frequencies
 	- channel_name: channel to whiten and downsample
 	"""
 
@@ -145,7 +148,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# sample rate of your data source.
 	#
 
-	quality = 9
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max(rates))
 	head = pipeparts.mkresample(pipeline, head, quality = quality)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_%d_timestamps" % (instrument, channel_name,  max(rates)))
@@ -183,9 +185,10 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		pipeparts.mkfakesink(pipeline, whiten)
 
 		# high pass filter
-		kernel = reference_psd.one_second_highpass_kernel(max(rates), cutoff = 12)
-		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
-		head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = max(rates), time_domain = False, latency = (len(kernel) - 1) // 2)
+		if cutoff is not None:
+			kernel = reference_psd.one_second_highpass_kernel(max(rates), cutoff = cutoff)
+			assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
+			head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = max(rates), time_domain = False, latency = (len(kernel) - 1) // 2)
 
 		# FIXME at some point build an initial kernel from a reference psd
 		psd_fir_kernel = reference_psd.PSDFirKernel()

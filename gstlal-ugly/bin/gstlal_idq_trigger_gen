@@ -335,28 +335,28 @@ for channel in channels:
 	max_samp_rate = int(samp_rate) 
 	min_samp_rate = min(32, max_samp_rate)
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
-	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], instrument, channel_name = channel, width=32).items():
+	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], instrument, channel_name = channel, width=32, quality=1, cutoff=None).items():
 		# FIXME: don't hardcode q and frequency
 		flow = rate/4.*0.8
 		fhigh = rate/2.*0.8
-		qlow = 4
-		qhigh = 40
+		qlow = 2
+		qhigh = 8
 		# omicron params, make sure to use .INI file before uncommenting
 		#flow = data_source_info.channel_dict[channel]['flow']  
 		#fhigh = data_source_info.channel_dict[channel]['fhigh']  
 		#qhigh = data_source_info.channel_dict[channel]['qhigh']  
 		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
+		#print >>sys.stderr, "dur = %f, rate = %d" % (dur, rate)
 		phase = [0, numpy.pi/2.]
 		durations[(channel, rate)] = dur
-		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
+		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 3)
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([sine_gaussian(phi, phi_0, q, t_arr) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = int(rate*dur/2))
-		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1)
+		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel) )
 		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
-		thishead = pipeparts.mkqueue(pipeline, thishead)
 		src[(channel, rate)] = thishead	
 
 if options.verbose:
