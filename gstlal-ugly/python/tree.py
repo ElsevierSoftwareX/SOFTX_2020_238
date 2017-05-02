@@ -41,8 +41,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there are two or
 	# more expected in a cell
 	return 1.0
-	return 0.50
-	#prefactor = 0.5
+	#prefactor = 1.
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
 	if n==1:
 		return prefactor
@@ -86,10 +85,10 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1000.0 , self.deltas / 50000.)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 1234.0 , self.deltas / 1000.)
 			except RuntimeError:
-				print "metric @", self.center - self.deltas / 1000.0, " failed, trying, ", self.center - self.deltas / 100.0
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 100.0, self.deltas / 50000.)
+				print "metric @", self.center - self.deltas / 1000.0, " failed, trying, ", self.center - self.deltas / 60.0
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 123.0, self.deltas / 1000.)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -236,15 +235,24 @@ class Node(object):
 
 			metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
 			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
+
+			#w, v = numpy.linalg.eigh(self.cube.metric_tensor)
+			#ws, vs = numpy.linalg.eigh(self.sibling.cube.metric_tensor)
+			#offsets = numpy.arccos([numpy.dot(v[i], vs[j]) for i, j in zip(numpy.argsort(w), numpy.argsort(ws))])
+			#print "offsets: ", offsets
+			#metric_diff = max(offsets)
 			# check that the metric is not varying too much
 			sib_vratio = numtmps / sib_numtmps
 			volume_split_condition = (1./vtol < sib_vratio < vtol)
 
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps)
+		q = self.cube.center[1] / self.cube.center[0]
 
+		#q_condition = (1.0 >= q >= 0.95) or (0.54 >= q >= 0.44) or (0.27 >= q >= 0.22) or (0.145 >= q >= 0.105)
 		metric_tol = 0.1
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps >= split_num_templates or metric_diff > metric_tol):
+		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps >= split_num_templates or ((numtmps >= split_num_templates/2.) and metric_diff > metric_tol)):
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and (numtmps >= split_num_templates):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
 			#if numtmps < 5**len(size) and metric_diff < max(mismatch, 0.01):#volume_split_condition:
