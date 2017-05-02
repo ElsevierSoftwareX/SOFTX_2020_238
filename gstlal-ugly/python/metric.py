@@ -110,9 +110,10 @@ class Metric(object):
 		self.metric_tensor = None
 		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
-		# 1 microsecond offset
-		self.delta_t = 1e-6
+		# 3 microsecond offset
+		self.delta_t = 3e-6
 		self.t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t)
+		self.neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-self.delta_t))
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "workspace",
 			epoch = 0,
@@ -139,8 +140,8 @@ class Metric(object):
 			mc = (m1*m2)**.6 / (m1+m2)**.2 * 5e-6
 			return  1./numpy.pi / mc * (5./256. * mc / 1.)**(3./8.)
 
-		flow = self.flow
-		#flow = max(min(fmin(p[0], p[1]), self.flow), 10)
+		#flow = self.flow
+		flow = max(min(fmin(p[0], p[1]), self.flow), 10)
 
 		try:
 			parameters = {}
@@ -186,7 +187,9 @@ class Metric(object):
 		try:
 			if dt is None:
 				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
-			else:
+			elif dt == "neg":
+				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data * self.neg_t_factor
+			elif dt == "pos":
 				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data * self.t_factor
 			m = numpy.real(numpy.abs(self.w1w2.data.data[:].sum())) / norm(w1.data.data) / norm(w2.data.data)
 			if m > 1.0000001:
@@ -209,14 +212,18 @@ class Metric(object):
 		plus_match = self.match(w1, self.waveform(center+x))
 		if plus_match is None:
 			print "\nhere plus\n"
-			plus_match = self.match(w1, self.waveform(center+10*x))
+			center += 31.159*x
+			plus_match = self.match(w1, self.waveform(center))
 			#return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
+		factor = 4 * numpy.finfo(numpy.float32).eps / (1. - plus_match)
+		x *= factor**.5
+		plus_match = self.match(w1, self.waveform(center+x))
 
 		# get the negative side of the central difference
 		minus_match = self.match(w1, self.waveform(center-x))
 		if minus_match is None:
 			print "\nhere negative\n"
-			minus_match = self.match(w1, self.waveform(center-10*x))
+			minus_match = self.match(w1, self.waveform(center-31.159*x))
 			#return self.__set_diagonal_metric_tensor_component(i, center, deltas * 2, g, w1)
 
 		# second order
@@ -232,8 +239,10 @@ class Metric(object):
 
 	def __set_tt_metric_tensor_component(self, center, w1):
 
-		d2 = 1. - self.match(w1, w1, dt = True)
-		return d2 / self.delta_t / self.delta_t, self.delta_t
+		minus_match = self.match(w1, w1, dt = "neg")
+		plus_match = self.match(w1, w1, dt = "pos")
+		d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t**2
+		return -0.5 * d2mbydx2, self.delta_t
 
 	def __set_offdiagonal_metric_tensor_component(self, (i,j), center, deltas, g, w1):
 		# evaluate symmetrically
@@ -278,10 +287,16 @@ class Metric(object):
 		# this is a diagonal component or not
 		x = numpy.zeros(len(deltas))
 		x[j] = deltas[j]
+		fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
+		ftt = -2 * g_tt * delta_t**2 + 2.0
 
-		# Check the match
-		d2 = 1 - self.match(w1, self.waveform(center+x), dt = True)
-		return  (d2 - g_tt * delta_t**2 - g[j,j] * deltas[j]**2) / 2 / delta_t / deltas[j]
+		# Second order
+		plus_match = self.match(w1, self.waveform(center+x), dt="pos")
+		minus_match = self.match(w1, self.waveform(center-x), dt="neg")
+		return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
+
+		#d2 = 1 - self.match(w1, self.waveform(center+x), dt = "pos")
+		#return  (d2 - g_tt * delta_t**2 - g[j,j] * deltas[j]**2) / 2 / delta_t / deltas[j]
 
 	#def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
 	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
