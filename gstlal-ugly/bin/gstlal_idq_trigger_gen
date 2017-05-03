@@ -212,8 +212,10 @@ class MultiChannelHandler(simplehandler.Handler):
 						trigger_time = row.end_time + row.end_time_ns * 1e-9
 						current_time = gpstime.gps_time_now().gpsSeconds + gpstime.gps_time_now().gpsNanoSeconds * 1e-9
 						latency = numpy.round(current_time - buftime)
-						start_time = trigger_time - duration/2
-						stop_time = trigger_time + duration/2
+						start_time = trigger_time - duration
+						# NOTE
+						# Setting stop time to trigger time for use with half sine gaussians
+						stop_time = trigger_time
 						self.fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%9d\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, latency, float(rate), channel)
 				memory.unmap(mapinfo)
 
@@ -377,7 +379,7 @@ for channel in channels:
 		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
 		phase = [0, numpy.pi/2.]
-		durations[(channel, rate)] = dur
+		durations[(channel, rate)] = dur/2.
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = 0)
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
