@@ -150,7 +150,7 @@ class BackgroundStatsUpdater(object):
 				self.collection_time.append(int(itime))
 
 
-	def __wait_last_process_finish(self):
+	def wait_last_process_finish(self):
 		if self.procs is not None:
 			for proc in self.procs:
 				if proc.poll() is None:
@@ -158,7 +158,7 @@ class BackgroundStatsUpdater(object):
 
 
 	def update_fap_stats(self, cur_buftime):
-		self.__wait_last_process_finish()
+		self.wait_last_process_finish()
 		# list all the files in the path
 		#nprefix = len(self.input_prefix_list[0].split("_"))
 		ls_proc = subprocess.Popen(["ls", self.path], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
@@ -320,6 +320,7 @@ class FinalSink(object):
 				snapshot_filename = self.get_output_filename(self.output_prefix, self.t_snapshot_start, self.snapshot_duration)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_snapshot_start = buf_timestamp
+				# FIXME: make sure combine stats won't delete any files that are being read by update_fap_stats
 				self.bsupdater.combine_stats(buf_timestamp)
 				self.nevent_clustered = 0
 
@@ -788,7 +789,10 @@ class FinalSink(object):
 		return fname
 
 	def snapshot_output_file(self, filename, verbose = False):
-		self.__wait_internal_process_finish()
+		# make sure the last round of output dumping is finished 
+		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
+			self.thread_snapshot.join()
+	
 		# free the memory
 		del self.postcoh_document_cpy
 		self.postcoh_document_cpy = self.postcoh_document
@@ -806,10 +810,7 @@ class FinalSink(object):
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
 			self.thread_snapshot.join()
 	
-		if self.bsupdater.procs is not None:
-			for proc in self.bsupdater.procs:
-				if proc.poll() is None:
-					proc.wait()
+		self.bsupdater.wait_last_process_finish()
 
 	def write_output_file(self, filename = None, verbose = False):
 		self.__wait_internal_process_finish()
