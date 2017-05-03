@@ -50,6 +50,7 @@ tagSnglTriggerTable
 	struct tagSnglTriggerTable *next;
 	CHAR ifo[LIGOMETA_IFO_MAX];
 	CHAR channel[LIGOMETA_CHANNEL_MAX];
+	guint channel_index;
 	LIGOTimeGPS end;
 	REAL4 phase;
 	REAL4 snr;

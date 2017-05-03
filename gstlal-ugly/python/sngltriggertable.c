@@ -66,6 +66,7 @@ typedef struct {
 static struct PyMemberDef members[] = {
 	{"end_time", T_INT, offsetof(gstlal_GSTLALSnglTrigger, row.end.gpsSeconds), 0, "end_time"},
 	{"end_time_ns", T_INT, offsetof(gstlal_GSTLALSnglTrigger, row.end.gpsNanoSeconds), 0, "end_time_ns"},
+	{"channel_index", T_INT, offsetof(gstlal_GSTLALSnglTrigger, row.channel_index), 0, "channel_index"},
 	{"phase", T_FLOAT, offsetof(gstlal_GSTLALSnglTrigger, row.phase), 0, "phase"},
 	{"snr", T_FLOAT, offsetof(gstlal_GSTLALSnglTrigger, row.snr), 0, "snr"},
 	{"chisq", T_FLOAT, offsetof(gstlal_GSTLALSnglTrigger, row.chisq), 0, "chisq"},

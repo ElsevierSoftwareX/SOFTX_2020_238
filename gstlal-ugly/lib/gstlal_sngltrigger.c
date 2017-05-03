@@ -126,6 +126,7 @@ GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *inp
 			strcpy(parent->channel, channel_name);
 			parent->snr = cabs(maxdata_channel);
 			parent->phase = carg(maxdata_channel);
+			parent->channel_index = channel;
 
 			XLALINT8NSToGPS(&event->epoch, time);
 			{
