@@ -142,6 +142,15 @@ state_vector_on_off_dict = {
 }
 
 
+## #### Default dictionary of DQ vector on/off bits by ifo
+# Used as the default argument to dq_vector_on_off_dict_from_bit_lists()
+dq_vector_on_off_dict = {
+	"H1" : [0x7, 0x0],
+	"H2" : [0x7, 0x0],
+	"L1" : [0x7, 0x0],
+	"V1" : [0x7, 0x0]
+}
+
 def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vector_on_off_dict = state_vector_on_off_dict):
 	"""!
 	Produce a dictionary (keyed by detector) of on / off bit tuples from a
@@ -337,6 +346,7 @@ class GWDataSourceInfo(object):
 
 		## A dictionary of the requested channels, e.g., {"H1":"LDAS-STRAIN", "L1":"LDAS-STRAIN"}
 		self.channel_dict = channel_dict_from_channel_list(options.channel_name)
+		self.state_channel_type = None
 
 		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
@@ -348,9 +358,10 @@ class GWDataSourceInfo(object):
 		if options.framexmit_addr is not None:
 			self.framexmit_addr.update( framexmit_dict_from_framexmit_list(options.framexmit_addr) )
 		self.framexmit_iface = options.framexmit_iface
-
+ 
 		## Seek event. Default is None, i.e., no seek
 		self.seekevent = None
+
 
 		## Analysis segment. Default is None
 		self.seg = None
@@ -374,6 +385,7 @@ class GWDataSourceInfo(object):
 			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 			## Seek event from the gps start and stop time if given
 			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
+ 
 		elif options.gps_end_time is not None:
 			raise ValueError("must provide both --gps-start-time and --gps-end-time")
 		elif options.data_source not in self.live_sources:
@@ -381,7 +393,7 @@ class GWDataSourceInfo(object):
 
 		if options.frame_segments_file is not None:
 			## Frame segments from a user defined file
-			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler=ContentHandler), options.frame_segments_name).coalesce()
+			self.frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, contenthandler = ContentHandler), options.frame_segments_name).coalesce()
 			if self.seg is not None:
 				# Clip frame segments to seek segment if it
 				# exists (not required, just saves some
@@ -391,22 +403,25 @@ class GWDataSourceInfo(object):
 			## if no frame segments provided, set them to an empty segment list dictionary
 			self.frame_segments = segments.segmentlistdict((instrument, None) for instrument in self.channel_dict)
 
-		## DQ (state vector) channel dictionary, e.g., { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
-		self.dq_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+		## DQ and state vector channel dictionary, e.g., { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+		self.state_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+		self.dq_channel_dict = { "H1": "DMT-DQ_VECTOR", "H2": "DMT-DQ_VECTOR","L1": "DMT-DQ_VECTOR", "V1": "DMT-DQ_VECTOR" }
 
-		## DQ channel type, e.g., "LLD"
-		self.dq_channel_type = "LLD"
+		if options.state_channel_name is not None:
+			state_channel_dict_from_options = channel_dict_from_channel_list( options.state_channel_name )
+			instrument = state_channel_dict_from_options.keys()[0]
+			self.state_channel_dict.update( state_channel_dict_from_options )
+			if "ODC_" in self.state_channel_dict[instrument].split("-")[1]:
+				self.state_channel_type = "ODC"
 
 		if options.dq_channel_name is not None:
 			dq_channel_dict_from_options = channel_dict_from_channel_list( options.dq_channel_name )
 			instrument = dq_channel_dict_from_options.keys()[0]
 			self.dq_channel_dict.update( dq_channel_dict_from_options )
-			dq_channel = self.dq_channel_dict[instrument]
-			if "ODC_" in dq_channel.split("-")[1]:
-				self.dq_channel_type = "ODC"
 	
 		## Dictionary of state vector on, off bits like {"H1" : [0x7, 0x160], "H2" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
+		self.dq_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits)
 		
 		## frame cache file
 		self.frame_cache = options.frame_cache
@@ -477,10 +492,15 @@ def append_options(parser):
 -	--framexmit-iface [string]
 		Set the address of the framexmit interface.
 
--	--dq-channel-name [string]
-		Set the name of the data quality (or state vector) channel.
+-	--state-channel-name [string]
+		Set the name of the state vector channel.
 		This channel will be used to control the flow of data via the on/off bits.
-		Can be given multiple times as --dq-channel-name=IFO=DQ-CHANNEL-NAME
+		Can be given multiple times as --state-channel-name=IFO=STATE-CHANNEL-NAME
+
+-	--dq-channel-name [string]
+		Set the name of the data quality channel.
+		This channel will be used to control the flow of data via the on/off bits.
+		Can be given multiple times as --state-channel-name=IFO=DQ-CHANNEL-NAME
 
 -	--shared-memory-partition [string]
 		Set the name of the shared memory partition for a given instrument.
@@ -502,6 +522,16 @@ def append_options(parser):
 -	--state-vector-off-bits [hex]
 		Set the state vector off bits to process (optional).
 		The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.
+		Only currently has meaning for online (lvshm, framexmit) data
+
+-	--dq-vector-on-bits [hex]
+		Set the state vector on bits to process (optional).
+		The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.
+		Only currently has meaning for online (lvshm, framexmit) data
+
+-	--dq-vector-off-bits [hex]
+		Set the dq vector off bits to process (optional).
+		The default is 0x0 for all detectors. Override with IFO=bits can be given multiple times.
 		Only currently has meaning for online (lvshm, framexmit) data
 
 	#### Typical usage case examples
@@ -533,13 +563,17 @@ def append_options(parser):
 	group.add_option("--nds-channel-type", metavar = "type", default = "online", help = "Set the port of the remote host that serves nds data. This is required only if --data-source=nds. default==online")	
 	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
 	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
-	group.add_option("--dq-channel-name", metavar = "name", action = "append", help = "Set the name of the data quality (or state vector) channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
+	group.add_option("--state-channel-name", metavar = "name", action = "append", help = "Set the name of the state vector channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
+	group.add_option("--dq-channel-name", metavar = "name", action = "append", help = "Set the name of the data quality channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
 	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")
 	group.add_option("--state-vector-on-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
 	group.add_option("--state-vector-off-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
+	group.add_option("--dq-vector-on-bits", metavar = "bits", default = [], action = "append", help = "Set the DQ vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
+	group.add_option("--dq-vector-off-bits", metavar = "bits", default = [], action = "append", help = "Set the DQ vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
 	parser.add_option_group(group)
+
 
 
 ## @cond DONTDOCUMENT
@@ -583,6 +617,7 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 	# FIXME:  remove
 	if seekevent is not None:
 		do_seek(pipeline, seekevent)
+ 
 	return pipeparts.mkgate(pipeline, src, threshold = 1, control = segsrc, **kwargs)
 
 
@@ -646,6 +681,7 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 # @enddot
 #
 #
+
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	"""!
 	All the conditionals and stupid pet tricks for reading real or
@@ -659,6 +695,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	instrument source.  A code wishing to have multiple basicsrcs will need to call
 	this function for each instrument.
 	"""
+	dqvector = statevector = None
 
 	if gw_data_source_info.data_source == "white":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, volume = 1.0)
@@ -676,22 +713,23 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = "V")
 		else:
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
 		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
 		# allow frame reading and decoding to occur in a diffrent
 		# thread
 		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * gst.SECOND)
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_pad("sink"))
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_static_pad("sink"))
 		if gw_data_source_info.frame_segments[instrument] is not None:
 			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
 			# FIXME:  make gate leaky when I'm certain that will work.
 			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]), name = "%s_frame_segments_gate" % instrument)
-			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_pad("src"), gw_data_source_info.frame_segments[instrument])
+			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_static_pad("src"), gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove this when pipeline can handle disconts
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 	elif gw_data_source_info.data_source in ("framexmit", "lvshm"):
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
+		dq_vector_on_bits, dq_vector_off_bits = gw_data_source_info.dq_vector_on_off_bits[instrument]
 
 		if gw_data_source_info.data_source == "lvshm":
 			# FIXME make wait_time adjustable through web interface or command line or both
@@ -702,20 +740,23 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# impossible code path
 			raise ValueError(gw_data_source_info.data_source)
 
-		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
+		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True)
 		pipeparts.framecpp_channeldemux_set_units(src, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
 
 		# strain
 		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_pad("sink"))
-		# state vector
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_static_pad("sink"))
+		# State vector and DQ vector
 		# FIXME:  don't hard-code channel name
 		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), statevector.get_pad("sink"))
-		if gw_data_source_info.dq_channel_type == "ODC" or gw_data_source_info.dq_channel_dict[instrument] == "Hrec_Flag_Quality":
+		dqvector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
+		if gw_data_source_info.state_channel_type == "ODC" or gw_data_source_info.state_channel_dict[instrument] == "Hrec_Flag_Quality":
 			# FIXME: This goes away when the ODC channel format is fixed.
 			statevector = pipeparts.mkgeneric(pipeline, statevector, "lal_fixodc")
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
+		dqvector = pipeparts.mkstatevector(pipeline, dqvector, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			t = float(lal.UTCToGPS(time.gmtime()))
@@ -724,8 +765,21 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			gap = elem.get_property("gap-samples")
 			return "%.9f %d %d %d" % (t, on, off, gap)
 
+		@bottle.route("/%s/dq_vector_on_off_gap.txt" % instrument)
+		def dq_vector_state(elem = dqvector):
+			t = float(lal.UTCToGPS(time.gmtime()))
+			on = elem.get_property("on-samples")
+			off = elem.get_property("off-samples")
+			gap = elem.get_property("gap-samples")
+			return "%.9f %d %d %d" % (t, on, off, gap)
+
+		statevector = pipeparts.mktee(pipeline, statevector)
+		dqvector = pipeparts.mktee(pipeline, dqvector)
 		# use state vector to gate strain
-		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector, default_state = False, name = "%s_state_vector_gate" % instrument)
+		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector), default_state = False, name = "%s_state_vector_gate" % instrument)
+
+		# use dq vector to gate strain
+		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector), default_state = False, name = "%s_dq_vector_gate" % instrument)
 
 		# fill in holes, skip duplicate data
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
@@ -738,6 +792,10 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
 
 		# 10 minutes of buffering
+		dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
+		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, silent = False)
+		statevector = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 12)
+		dqvector = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 12)
 		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10)
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
@@ -768,7 +826,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = gst.SECOND * 64)
 
-	#
 	# seek the pipeline
 	# FIXME:  remove
 	#
@@ -777,10 +834,12 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		do_seek(pipeline, gw_data_source_info.seekevent)
 
 	#
+ 
+	#
 	# done
 	#
 
-	return src
+	return src, statevector, dqvector
 
 
 ## 

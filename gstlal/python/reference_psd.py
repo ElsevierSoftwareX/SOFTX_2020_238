@@ -30,7 +30,7 @@ import math
 import numpy
 import os
 import scipy
-import scipy.fftpack
+from scipy import fftpack
 from scipy import interpolate
 import sys
 import signal
@@ -48,6 +48,7 @@ import gst
 
 from glue.ligolw import utils
 import lal
+from lal import LIGOTimeGPS
 from pylal import datatypes as laltypes
 from pylal import series as lalseries
 
@@ -336,225 +337,258 @@ def effective_distance_factor(inclination, fp, fc):
 	cos2i = math.cos(inclination)**2
 	return 1.0 / math.sqrt(fp**2 * (1+cos2i)**2 / 4 + fc**2 * cos2i)
 
+class PSDFirKernel(object):
 
-def psd_to_fir_kernel(psd):
-	"""
-	Compute an acausal finite impulse-response filter kernel from a power
-	spectral density conforming to the LAL normalization convention,
-	such that if zero-mean unit-variance Gaussian random noise is fed
-	into an FIR filter using the kernel the filter's output will
-	possess the given PSD.  The PSD must be provided as a
-	REAL8FrequencySeries object (see
-	pylal.xlal.datatypes.real8frequencyseries).
+	def __init__(self):
+		self.revplan = None
+		self.fwdplan = None
 
-	The return value is the tuple (kernel, latency, sample rate).  The
-	kernel is a numpy array containing the filter kernel, the latency
-	is the filter latency in samples and the sample rate is in Hz.  The
-	kernel and latency can be used, for example, with gstreamer's stock
-	audiofirfilter element.
-	"""
-	#
-	# this could be relaxed with some work
-	#
+	def psd_to_linear_phase_whitening_fir_kernel(self, psd, invert = True, nyquist = None):
+		"""
+		Compute an acausal finite impulse-response filter kernel from a power
+		spectral density conforming to the LAL normalization convention,
+		such that if colored Gaussian random noise with the given PSD is fed
+		into an FIR filter using the kernel the filter's output will
+		be zero-mean unit-variance Gaussian random noise.  The PSD must be
+		provided as a lal.REAL8FrequencySeries object.
 
-	assert psd.f0 == 0.0
+		The phase response of this filter is 0, just like whitening done in
+		the frequency domain.
 
-	#
-	# extract the PSD bins and determine sample rate for kernel
-	#
+		The return value is the tuple (kernel, latency, sample rate).  The
+		kernel is a numpy array containing the filter kernel, the latency
+		is the filter latency in samples and the sample rate is in Hz.  The
+		kernel and latency can be used, for example, with gstreamer's stock
+		audiofirfilter element.
+		"""
+		#
+		# this could be relaxed with some work
+		#
 
-	data = psd.data / 2
-	sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
+		assert psd.f0 == 0.0
 
-	#
-	# remove LAL normalization
-	#
+		#
+		# extract the PSD bins and determine sample rate for kernel
+		#
 
-	data *= sample_rate
+		data = psd.data.data / 2
+		sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
 
-	#
-	# compute the FIR kernel.  it always has an odd number of samples
-	# and no DC offset.
-	#
+		#
+		# remove LAL normalization
+		#
 
-	data[0] = data[-1] = 0.0
-	try:
-		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) / (2 * len(data) - 1)
-		kernel = numpy.hstack((kernel[::-1], kernel[1:]))
-	except AttributeError:
-		# this computer's scipy.fftpack is missing idct()
+		data *= sample_rate
+
+		#
+		# Change Nyquist frequency if requested
+		#
+
+		if nyquist is not None:
+			assert nyquist <= sample_rate / 2.
+			sample_rate = nyquist * 2
+			data = data[:int(nyquist / psd.deltaF) + 1]
+
+		#
+		# compute the FIR kernel.  it always has an odd number of samples
+		# and no DC offset.
+		#
+
+		data[0] = data[-1] = 0.0
+		if invert:
+			data_nonzeros = (data != 0.)
+			data[data_nonzeros] = 1./data[data_nonzeros]
 		# repack data:  data[0], data[1], 0, data[2], 0, ....
 		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
-		tmp[0] = data[0]
-		tmp[1::2] = data[1:]
+		tmp[len(data)-1:] = data
+		#tmp[:len(data)] = data
 		data = tmp
-		del tmp
-		kernel = scipy.fftpack.irfft(numpy.sqrt(data))
-		kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
 
-	#
-	# apply a Tukey window whose flat bit is 50% of the kernel.
-	# preserve the FIR kernel's square magnitude
-	#
+		kernel_fseries = lal.CreateCOMPLEX16FrequencySeries(
+			name = "double sided psd",
+			epoch = LIGOTimeGPS(0),
+			f0 = 0.0,
+			deltaF = psd.deltaF,
+			length = len(data),
+			sampleUnits = lal.Unit("strain s")
+		)
 
-	norm_before = numpy.dot(kernel, kernel)
-	kernel *= lal.CreateTukeyREAL8Window(len(kernel), .5).data.data
-	kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
-
-	#
-	# the kernel's latency
-	#
-
-	latency = (len(kernel) - 1) / 2
-
-	#
-	# done
-	#
-
-	return kernel, latency, sample_rate
+		kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
+			name = "timeseries of whitening kernel",
+			epoch = LIGOTimeGPS(0.),
+			f0 = 0.,
+			deltaT = 1.0 / sample_rate,
+			length = len(data),
+			sampleUnits = lal.Unit("strain")
+		)
 
 
-def psd_to_linear_phase_whitening_fir_kernel(psd):
-	"""
-	Compute an acausal finite impulse-response filter kernel from a power
-	spectral density conforming to the LAL normalization convention,
-	such that if colored Gaussian random noise with the given PSD is fed
-	into an FIR filter using the kernel the filter's output will
-	be zero-mean unit-variance Gaussian random noise.  The PSD must be
-	provided as a REAL8FrequencySeries object (see
-	pylal.xlal.datatypes.real8frequencyseries).
+		# FIXME check for change in length
+		if self.revplan is None:
+			self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(len(data), 1)
 
-	The phase response of this filter is 0, just like whitening done in
-	the frequency domain.
+		kernel_fseries.data.data = numpy.sqrt(data) + 0.j
+		lal.COMPLEX16FreqTimeFFT(kernel_tseries, kernel_fseries, self.revplan)
+		kernel = numpy.real(kernel_tseries.data.data)
+		kernel = numpy.roll(kernel, (len(data) - 1) / 2)[:] / sample_rate * 2
 
-	The return value is the tuple (kernel, latency, sample rate).  The
-	kernel is a numpy array containing the filter kernel, the latency
-	is the filter latency in samples and the sample rate is in Hz.  The
-	kernel and latency can be used, for example, with gstreamer's stock
-	audiofirfilter element.
-	"""
-	#
-	# this could be relaxed with some work
-	#
+		#
+		# apply a Tukey window whose flat bit is 50% of the kernel.
+		# preserve the FIR kernel's square magnitude
+		#
 
-	assert psd.f0 == 0.0
+		norm_before = numpy.dot(kernel, kernel)
+		kernel *= lal.CreateTukeyREAL8Window(len(data), .5).data.data
+		kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
 
-	#
-	# extract the PSD bins and determine sample rate for kernel
-	#
+		#
+		# the kernel's latency
+		#
 
-	data = psd.data / 2
-	sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
+		latency = (len(data) - 1) / 2
 
-	#
-	# remove LAL normalization
-	#
+		#
+		# done
+		#
 
-	data *= sample_rate
-
-	#
-	# compute the FIR kernel.  it always has an odd number of samples
-	# and no DC offset.
-	#
-
-	data[0] = data[-1] = 0.0
-	data_nonzeros = (data != 0.)
-	data[data_nonzeros] = 1./data[data_nonzeros]
-	try:
-		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) / (2 * len(data) - 1)
-		kernel = numpy.hstack((kernel[::-1], kernel[1:]))
-	except AttributeError:
-		# this computer's scipy.fftpack is missing idct()
-		# repack data:  data[0], data[1], 0, data[2], 0, ....
-		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
-		tmp[0] = data[0]
-		tmp[1::2] = data[1:]
-		data = tmp
-		del tmp
-		kernel = scipy.fftpack.irfft(numpy.sqrt(data))
-		kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
-
-	#
-	# apply a Tukey window whose flat bit is 50% of the kernel.
-	# preserve the FIR kernel's square magnitude
-	#
-
-	norm_before = numpy.dot(kernel, kernel)
-	kernel *= lal.CreateTukeyREAL8Window(len(kernel), .5).data.data
-	kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
-
-	#
-	# the kernel's latency
-	#
-
-	latency = (len(kernel) - 1) / 2
-
-	#
-	# done
-	#
-
-	return kernel, latency, sample_rate
+		return kernel, latency, sample_rate
 
 
-def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(linear_phase_kernel):
-	"""
-	Compute the minimum-phase response filter (zero latency) associated with a
-	linear-phase response filter (latency equal to half the filter length). 
+	def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(self, linear_phase_kernel, sample_rate):
+		"""
+		Compute the minimum-phase response filter (zero latency) associated with a
+		linear-phase response filter (latency equal to half the filter length). 
 
-	From "Design of Optimal Minimum-Phase Digital FIR Filters Using
-	Discrete Hilbert Transforms", IEEE Trans. Signal Processing, vol. 48,
-	pp. 1491-1495, May 2000.
+		From "Design of Optimal Minimum-Phase Digital FIR Filters Using
+		Discrete Hilbert Transforms", IEEE Trans. Signal Processing, vol. 48,
+		pp. 1491-1495, May 2000.
 
-	The return value is the tuple (kernel, phase response).  The kernel is
-	a numpy array containing the filter kernel.  The kernel can be used,
-	for example, with gstreamer's stock audiofirfilter element.
-	"""
-	#
-	# compute abs of FFT of kernel
-	#
+		The return value is the tuple (kernel, phase response).  The kernel is
+		a numpy array containing the filter kernel.  The kernel can be used,
+		for example, with gstreamer's stock audiofirfilter element.
+		"""
+		#
+		# compute abs of FFT of kernel
+		#
 
-	absX = abs(scipy.fftpack.fft(linear_phase_kernel))
+		# FIXME check for change in length
+		if self.fwdplan is None:
+			self.fwdplan = lal.CreateForwardCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)
+		if self.revplan is None:
+			self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)
 
-	#
-	# compute the cepstrum of the kernel
-	# (i.e., the iFFT of the log of the abs of the FFT of the kernel)
-	#
+		deltaF = 1. / (len(linear_phase_kernel) / sample_rate)
+		working_length = len(linear_phase_kernel)
+		deltaT = 1. / sample_rate
 
-	cepstrum = scipy.fftpack.ifft(scipy.log(absX))
+		kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
+			name = "timeseries of whitening kernel",
+			epoch = LIGOTimeGPS(0.),
+			f0 = 0.,
+			deltaT = 1.0 / sample_rate,
+			length = working_length,
+			sampleUnits = lal.Unit("strain")
+		)
+		kernel_tseries.data.data = linear_phase_kernel
 
-	#
-	# compute sgn
-	#
+		absX = lal.CreateCOMPLEX16FrequencySeries(
+			name = "absX",
+			epoch = LIGOTimeGPS(0),
+			f0 = 0.0,
+			deltaF = deltaF,
+			length = working_length,
+			sampleUnits = lal.Unit("strain s")
+		)
 
-	sgn = scipy.ones(len(linear_phase_kernel))
-	sgn[0] = 0.
-	sgn[(len(sgn)+1)/2] = 0.
-	sgn[(len(sgn)+1)/2:] *= -1.
+		logabsX = lal.CreateCOMPLEX16FrequencySeries(
+			name = "absX",
+			epoch = LIGOTimeGPS(0),
+			f0 = 0.0,
+			deltaF = deltaF,
+			length = working_length,
+			sampleUnits = lal.Unit("strain s")
+		)
 
-	#
-	# compute theta
-	#
+		cepstrum = lal.CreateCOMPLEX16TimeSeries(
+			name = "cepstrum",
+			epoch = LIGOTimeGPS(0.),
+			f0 = 0.,
+			deltaT = deltaT,
+			length = working_length,
+			sampleUnits = lal.Unit("strain")
+		)
 
-	theta = -1.j * scipy.fftpack.fft(sgn * cepstrum)
+		theta = lal.CreateCOMPLEX16FrequencySeries(
+			name = "theta",
+			epoch = LIGOTimeGPS(0),
+			f0 = 0.0,
+			deltaF = deltaF,
+			length = working_length,
+			sampleUnits = lal.Unit("strain s")
+		)
 
-	#
-	# compute minimum phase kernel
-	#
+		min_phase_kernel = lal.CreateCOMPLEX16TimeSeries(
+			name = "min phase kernel",
+			epoch = LIGOTimeGPS(0.),
+			f0 = 0.,
+			deltaT = deltaT,
+			length = working_length,
+			sampleUnits = lal.Unit("strain")
+		)
 
-	minimum_phase_kernel = scipy.real(scipy.fftpack.ifft(absX * scipy.exp(1.j * theta)))
+		lal.COMPLEX16TimeFreqFFT(absX, kernel_tseries, self.fwdplan)
+		absX.data.data[:] = numpy.roll(abs(absX.data.data), -working_length / 2 + 1)[:] * sample_rate
 
-	#
-	# this kernel needs to be reversed to follow conventions used with the
-	# audiofirfilter and lal_firbank elements
-	#
+		#
+		# compute the cepstrum of the kernel
+		# (i.e., the iFFT of the log of the abs of the FFT of the kernel)
+		#
 
-	minimum_phase_kernel = minimum_phase_kernel[-1::-1]
+		logabsX.data.data = numpy.log(absX.data.data)
+		logabsX.data.data[:] = numpy.roll(logabsX.data.data, +working_length / 2 + 1)[:]
+		lal.COMPLEX16FreqTimeFFT(cepstrum, logabsX, self.revplan)
+		cepstrum.data.data /= sample_rate
 
-	#
-	# done
-	#
+		#
+		# compute sgn
+		#
 
-	return minimum_phase_kernel, -theta
+		sgn = 1 * scipy.ones(working_length)
+		sgn[0] = 0.
+		sgn[(len(sgn)+1)/2] = 0.
+		sgn[(len(sgn)+1)/2:] *= -1
+		cepstrum.data.data *= sgn
+
+		#
+		# compute theta
+		#
+		lal.COMPLEX16TimeFreqFFT(theta, cepstrum, self.fwdplan)
+		theta.data.data *= -1.j
+		theta.data.data[:] = numpy.roll(theta.data.data, -working_length / 2)[:] * sample_rate
+
+		#
+		# compute minimum phase kernel
+		#
+
+		tmp  = absX.data.data * scipy.exp(1.j * theta.data.data)[:]
+		absX.data.data[:]  = absX.data.data * scipy.exp(1.j * theta.data.data)[:]
+		absX.data.data[:] = numpy.roll(absX.data.data, +working_length / 2 + 1)[:] / sample_rate
+		lal.COMPLEX16FreqTimeFFT(min_phase_kernel, absX, self.revplan)
+
+		kernel = numpy.real(min_phase_kernel.data.data)
+
+		#
+		# this kernel needs to be reversed to follow conventions used with the
+		# audiofirfilter and lal_firbank elements
+		#
+
+		kernel = kernel[-1::-1]
+
+		#
+		# done
+		#
+
+		return kernel, -1 * theta.data.data
 
 
 def interpolate_psd(psd, deltaF):
@@ -665,3 +699,18 @@ def polyfit(psd, minsample, maxsample, order, verbose = False):
 		sampleUnits = psd.sampleUnits,
 		data = olddata
 	)
+
+
+def one_second_highpass_kernel(rate, cutoff = 12):
+	highpass_filter_fd =  numpy.ones(rate, dtype=complex)
+	highpass_filter_fd[:int(cutoff)] = 0.
+	highpass_filter_fd[-int(cutoff):] = 0.
+	highpass_filter_fd[rate/2-1:rate/2+1] = 0.
+	highpass_filter_td = fftpack.ifft(highpass_filter_fd)
+	highpass_filter_td = numpy.roll(numpy.real(highpass_filter_td), rate/2)
+	highpass_filter_kernel = numpy.zeros(len(highpass_filter_td)+1)
+	highpass_filter_kernel[:-1] = highpass_filter_td[:]
+	x = numpy.arange(len(highpass_filter_kernel))
+	mid = len(x) / 2.
+	highpass_filter_kernel *= 1. - (x-mid)**2 / mid**2
+	return highpass_filter_kernel

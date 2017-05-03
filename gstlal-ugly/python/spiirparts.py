@@ -533,7 +533,20 @@ def parse_shift_string(shift_string):
 	return out
 
 
-def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_string = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh = 5.0, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_snapshot_interval = 0, cohfar_assignfar_refresh_interval = 86400, cohfar_assignfar_silent_time = 2147483647, cohfar_assignfar_input_fname = None):
+def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
+		control_time_shift_string = None, psd_fft_length = 8,
+		fir_whitener = 0,
+		ht_gate_threshold = None, veto_segments = None, verbose = False,
+		nxydump_segment = None, chisq_type = 'autochisq', track_psd =
+		False, block_duration = gst.SECOND, blind_injections = None,
+		cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh =
+		5.0, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials
+		= 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None,
+		cohfar_accumbackground_output_prefix = None,
+		cohfar_accumbackground_snapshot_interval = 0,
+		cohfar_assignfar_refresh_interval = 86400,
+		cohfar_assignfar_silent_time = 2147483647,
+		cohfar_assignfar_input_fname = None):
 #	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
@@ -573,13 +586,33 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd, control_time_shift_str
 			if instrument_from_bank == instrument:
 				sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
-		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if verbose:
 		  print "%s: max rate of all banks %d Hz" % (instrument, sngl_max_rate)
 		if veto_segments is not None:		
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = \
+			uni_datasource.mkwhitened_src(pipeline, src,
+					sngl_max_rate, instrument, psd =
+					psd[instrument], psd_fft_length =
+					psd_fft_length, ht_gate_threshold =
+					ht_gate_threshold, veto_segments =
+					veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment =
+					nxydump_segment, track_psd = track_psd,
+					zero_pad = 0, width = 32, fir_whitener =
+					fir_whitener, statevector = statevector,
+					dqvector = dqvector)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = \
+			uni_datasource.mkwhitened_src(pipeline, src,
+					sngl_max_rate, instrument, psd =
+					psd[instrument], psd_fft_length =
+					psd_fft_length, ht_gate_threshold =
+					ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, 
+					nxydump_segment = nxydump_segment,
+					track_psd = track_psd, zero_pad = 0,
+					width = 32, fir_whitener =
+					fir_whitener, statevector =
+					statevector, dqvector = dqvector)
 
 	#
 	# construct trigger generators
@@ -698,9 +731,25 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 		max_instru_rates[instrument] = sngl_max_rate
 		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:		
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = \
+			uni_datasource.mkwhitened_src(pipeline, src,
+					sngl_max_rate, instrument, psd =
+					psd[instrument], psd_fft_length =
+					psd_fft_length, ht_gate_threshold =
+					ht_gate_threshold, veto_segments =
+					veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment =
+					nxydump_segment, track_psd = track_psd,
+					zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = \
+			uni_datasource.mkwhitened_src(pipeline, src,
+					sngl_max_rate, instrument, psd =
+					psd[instrument], psd_fft_length =
+					psd_fft_length, ht_gate_threshold =
+					ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, 
+					nxydump_segment = nxydump_segment,
+					track_psd = track_psd, zero_pad = 0,
+					width = 32)
 
 	#
 	# construct trigger generators
