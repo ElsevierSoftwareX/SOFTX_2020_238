@@ -111,10 +111,9 @@ def channel_dict_from_channel_ini(options):
 
 	# generate dictionary of channels
 	for name in sections:
-
+		
 		# ensure only channels whose sections aren't excluded are added to the dict
 		if name not in options.section_exclude:	
-		
 			# extract the low frequency 
 			flow = config.getfloat(name, 'flow')
 
@@ -164,8 +163,8 @@ def channel_dict_from_channel_ini(options):
 								      'ifo': ifo,
 								      'flow': flow,
 								      'fhigh': fhigh,
-								      'qhigh' : qhigh,
-								      'frametype' : frametype}
+								      'qhigh' : config.get(name, 'qhigh'),
+								      'frametype' : options.frame_type}
 
 	return channel_dict				
 
