@@ -164,14 +164,14 @@ def parse_command_line():
 class MultiChannelHandler(simplehandler.Handler):
 	def __init__(self, *args, **kwargs):
 		self.lock = threading.Lock()
-		self.durations = kwargs.pop("durations")
+		self.basis_params = kwargs.pop("basis_params")
 		self.description = kwargs.pop("description")
 		self.out_path = kwargs.pop("out_path")
 		self.instrument = kwargs.pop("instrument")
 		self.last_save_time = None
 		self.cadence = options.cadence
 		# create header for trigger file
-		self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%9s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "latency", "rate", "channel")
+		self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%10s\t%10s\t%9s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "frequency", "Q", "latency", "rate", "channel")
 		self.fdata = ""
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
@@ -192,7 +192,6 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.fdata = ""
 
 			channel, rate  = sink_dict[elem]
-			duration = self.durations[(channel, float(rate))]
 			for i in range(buf.n_memory()):
 				memory = buf.peek_memory(i)
 				result, mapinfo = memory.map(Gst.MapFlags.READ)
@@ -212,11 +211,12 @@ class MultiChannelHandler(simplehandler.Handler):
 						trigger_time = row.end_time + row.end_time_ns * 1e-9
 						current_time = gpstime.gps_time_now().gpsSeconds + gpstime.gps_time_now().gpsNanoSeconds * 1e-9
 						latency = numpy.round(current_time - buftime)
+						freq, q, duration = self.basis_params[(channel, int(rate))][row.channel_index]
 						start_time = trigger_time - duration
 						# NOTE
 						# Setting stop time to trigger time for use with half sine gaussians
 						stop_time = trigger_time
-						self.fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%9d\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, latency, float(rate), channel)
+						self.fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%10.3f\t%9d\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, freq, q, latency, int(rate), channel)
 				memory.unmap(mapinfo)
 
 			del buf
@@ -350,13 +350,13 @@ data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument = data_source_info.instrument
 channels = data_source_info.channel_dict.keys()
 
-# dictionary of durations keyed by ifo, rate
-durations = {}
+# dictionary of basis parameters keyed by ifo, rate
+basis_params = {}
 
 # building the event loop and pipeline
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
-handler = MultiChannelHandler(mainloop, pipeline, durations = durations, description = options.description, out_path = options.out_path, instrument = instrument)
+handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument)
 
 # multiple channel src
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
@@ -379,7 +379,7 @@ for channel in channels:
 		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
 		phase = [0, numpy.pi/2.]
-		durations[(channel, rate)] = dur/2.
+		basis_params[(channel, rate)] = [(phi, q, dur/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = 0)
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
