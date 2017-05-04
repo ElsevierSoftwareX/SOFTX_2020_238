@@ -482,7 +482,7 @@ if 1==1:
   appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-postcoh"), name = "sink_%d" % n) for (n, src) in enumerate(postcohsrcs))
  
   if options.write_pipeline is not None:
-    pipeparts.connect_appsink_dump_dot(pipeline, postcohsrcs, options.write_pipeline, options.verbose)
+    pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
     pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
   if options.data_source in ("lvshm", "framexmit"):
