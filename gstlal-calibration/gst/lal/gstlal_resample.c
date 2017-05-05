@@ -45,6 +45,13 @@
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
+
+
+/*
+ * our own stuff
+ */
+
+
 #include <gstlal/gstlal.h>
 #include <gstlal_resample.h>
 
@@ -1213,7 +1220,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				*(element->sinc_table) = 1.0;
 				gint32 i;
 				for(i = 1; i <= element->max_end_samples / 2; i++)
-					element->sinc_table[i] = sin(M_PI * i * element->rate_out / element->rate_in) / (M_PI * i * element->rate_out / element->rate_in);
+					element->sinc_table[i] = pow(cos(M_PI * i / (element->max_end_samples * 1.15)), 6) * sin(M_PI * i * element->rate_out / element->rate_in) / (M_PI * i * element->rate_out / element->rate_in);
 
 				/* normalize sinc_table to make the DC gain exactly 1 */
 				double normalization = 1.0;
