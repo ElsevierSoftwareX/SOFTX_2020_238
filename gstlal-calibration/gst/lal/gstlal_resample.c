@@ -1202,9 +1202,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			/* 
 			 * In this case, we are filtering inputs with a sinc table. max_end_samples is the
 			 * maximum number of samples that could need to be stored between buffers. It is
-			 * one less than the length of the sinc table in samples. To make the gain as close
-			 * to one as possible below the output Nyquist rate, we cut off the sinc table at either
-			 * relative maxima or minima.
+			 * one less than the length of the sinc table in samples. The sinc table is tapered
+			 * at the ends using a hann window to the third power.
 			 */
 			if(!element->sinc_table) {
 				element->max_end_samples = ((1 + (SHORT_SINC_LENGTH + (element->quality - 2) * (LONG_SINC_LENGTH - SHORT_SINC_LENGTH)) * element->rate_in / element->rate_out) / 2) * 2;
