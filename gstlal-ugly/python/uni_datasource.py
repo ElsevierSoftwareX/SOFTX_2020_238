@@ -238,22 +238,16 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
+		if statevector:
+			pipeparts.mkfakesink(pipeline, statevector)
+		if dqvector:
+			pipeparts.mkfakesink(pipeline, dqvector)
+	
 		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		# make the buffers going downstream smaller, this can
 		# really help with RAM
 		# add a reblock to reduce htgate latency when fft whitening 
 		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
-
-
-	#
-	# convert to desired precision
-	#
-
-	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,\
-			width=%d, rate=%d, channels=1" % (width, max_rate))
-	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max_rate))
-
 
 	# export PSD in ascii text format
 	# FIXME:  also make them available in XML format as a single document
@@ -297,6 +291,17 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		whiten.connect_after("notify::f-nyquist", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::delta-f", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::psd-units", psd_units_or_resolution_changed, psd)
+
+
+
+	#
+	# convert to desired precision
+	#
+
+	head = pipeparts.mkaudioconvert(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,\
+			width=%d, rate=%d, channels=1" % (width, max_rate))
+	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max_rate))
 
 
 	#
