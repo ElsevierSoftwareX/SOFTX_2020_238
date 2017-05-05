@@ -51,7 +51,7 @@ class image_glob(elem):
 		cap = elem("caption", ["Table: " + caption], """ style="caption-side: bottom; text-align: left; font-size: 12px; font-style: italic; padding: 15px;" """)
 		td = elem("td", [])
 		tr = elem("tr", [td])
-		for img in glob.glob(globpat):
+		for img in sorted(glob.glob(globpat)):
 			td += [elem("a", [elem("img", [], """ src="%s" width=500 """ % img)], """ class="fancybox" href="%s" rel="group" """ % img)]
 		self.content = [cap, tr]
 			
