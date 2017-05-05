@@ -56,7 +56,6 @@
 #include <gstlal_resample.h>
 
 
-/* Ideally, these should be odd */
 #define SHORT_SINC_LENGTH 33
 #define LONG_SINC_LENGTH 193
 
@@ -1203,10 +1202,14 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			 * In this case, we are filtering inputs with a sinc table. max_end_samples is the
 			 * maximum number of samples that could need to be stored between buffers. It is
 			 * one less than the length of the sinc table in samples. The sinc table is tapered
-			 * at the ends using a hann window to the third power.
+			 * at the ends using a hann window to the third power. The cut-off frequency is also
+			 * slightly below the Nyquist frequency in order to minimize aliasing. Given the
+			 * parameter choices here, input signals are attenuated by a factor < 1% at the
+			 * Nyquist frequency, regardless of the length of the sinc filter.
 			 */
 			if(!element->sinc_table) {
-				element->max_end_samples = ((1 + (SHORT_SINC_LENGTH + (element->quality - 2) * (LONG_SINC_LENGTH - SHORT_SINC_LENGTH)) * element->rate_in / element->rate_out) / 2) * 2;
+				int sinc_length_at_low_rate = SHORT_SINC_LENGTH + (element->quality - 2) * (LONG_SINC_LENGTH - SHORT_SINC_LENGTH);
+				element->max_end_samples = ((gint32) (1 + (1.0 + 4.825 / sinc_length_at_low_rate) * sinc_length_at_low_rate * element->rate_in / element->rate_out) / 2) * 2;
 
 				/* end_samples stores input samples needed to produce output with the next buffer(s) */
 				element->end_samples = g_malloc(element->max_end_samples * element->unit_size);
@@ -1218,8 +1221,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				element->sinc_table = g_malloc((element->max_end_samples / 2) * sizeof(double));
 				*(element->sinc_table) = 1.0;
 				gint32 i;
-				for(i = 1; i <= element->max_end_samples / 2; i++)
-					element->sinc_table[i] = pow(cos(M_PI * i / (element->max_end_samples * 1.15)), 6) * sin(M_PI * i * element->rate_out / element->rate_in) / (M_PI * i * element->rate_out / element->rate_in);
+				double sin_arg;
+				for(i = 1; i <= element->max_end_samples / 2; i++) {
+					sin_arg = M_PI * i * element->rate_out / element->rate_in / (1.0 + 4.825 / sinc_length_at_low_rate);
+					element->sinc_table[i] = pow(cos(M_PI * i / (element->max_end_samples * 1.15)), 6) * sin(sin_arg) / sin_arg;
+				}
 
 				/* normalize sinc_table to make the DC gain exactly 1 */
 				double normalization = 1.0;
