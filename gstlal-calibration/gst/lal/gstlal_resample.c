@@ -1218,7 +1218,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				element->index_end_samples = g_malloc(2 * sizeof(gint32));
 
 				/* To save memory, we use symmetry and only record half of the sinc table */
-				element->sinc_table = g_malloc((element->max_end_samples / 2) * sizeof(double));
+				element->sinc_table = g_malloc((1 + element->max_end_samples / 2) * sizeof(double));
 				*(element->sinc_table) = 1.0;
 				gint32 i;
 				double sin_arg;
