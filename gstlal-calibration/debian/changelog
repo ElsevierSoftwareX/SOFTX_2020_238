@@ -1,3 +1,10 @@
+gstlal-calibration (1.1.7-1) unstable; urgency=low
+
+  * Added sinc filter in resampler to reduce excess noise in kappas
+  * Simplified calculation of SRC detuning parameters
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sat, 06 May 2017 16:28:34 -0500
+
 gstlal-calibration (1.1.6-1) unstable; urgency=low
 
   * Bug fix for upsampling zeros
