@@ -344,7 +344,7 @@ chan_prefix = options.chan_prefix
 td = not options.frequency_domain_filtering
 
 # If we are using EPICS from frames and removing calibration lines, we need EP10 to remove the ESD line. Otherwise, we just remove the other lines if possible.
-if (not options.factors_from_filters_file) and options.remove_callines and ((options.data_source == "frames" and int(options.gps_start_time) > 1175954418) or (options.data_source == "lvshm" and now() > 1175954418)):
+if (not options.factors_from_filters_file) and options.remove_callines and ((options.ifo == "H1" and options.data_source == "frames" and int(options.gps_start_time) > 1175954418) or (options.ifo == "H1" and options.data_source == "lvshm" and now() > 1175954418) or (options.ifo == "L1" and options.data_source == "frames" and int(options.gps_start_time) > 1180184418) or (options.ifo == "L1" and options.data_source == "lvshm" and now() > 1180184418)):
 	remove_esd_act_line = True
 elif not options.factors_from_filters_file:
 	remove_esd_act_line = False
