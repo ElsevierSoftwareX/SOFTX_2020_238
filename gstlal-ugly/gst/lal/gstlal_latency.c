@@ -124,8 +124,8 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	gint latency = current_time - buffer_time;
 
 	if (!silent) {
-		g_print("%s: current time = %9d, buffer time = %9d, latency = %9d\n",
-			GST_OBJECT_NAME(element), current_time, buffer_time, latency);
+		g_print("current time = %9d, buffer time = %9d, latency = %3d, %s\n",
+			current_time, buffer_time, latency, GST_OBJECT_NAME(element));
 	}
 	
 	return GST_FLOW_OK;
