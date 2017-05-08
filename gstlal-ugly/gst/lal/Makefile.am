@@ -10,6 +10,7 @@ libgstlalugly_la_SOURCES = \
 	gstlal_interpolator.h gstlal_interpolator.c \
 	gstlal_tdwhiten.h gstlal_tdwhiten.c \
 	gstlal_trigger.h gstlal_trigger.c \
+	gstlal_latency.h gstlal_latency.c \
 	#gstlal_specgram.h gstlal_specgram.c \
 	#gstlal_mean.h gstlal_mean.c \
 	#gstlal_pad.h gstlal_pad.c \

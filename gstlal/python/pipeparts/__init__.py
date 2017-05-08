@@ -933,6 +933,9 @@ def mktrigger(pipeline, src, n, autocorrelation_matrix = None, mask_matrix = Non
 		properties["sigmasq"] = sigmasq
 	return mkgeneric(pipeline, src, "lal_trigger", **properties)
 
+def mklatency(pipeline, src, silent = False):
+	return mkgeneric(pipeline, src, "lal_latency", silent = silent)
+
 def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse, H2_latency, srate):
 	elem = mkgeneric(pipeline, None, "lal_lho_coherent_null", block_stride = srate, H1_impulse = H1_impulse, H2_impulse = H2_impulse, H1_latency = H1_latency, H2_latency = H2_latency)
 	for peer, padname in ((H1src, "H1sink"), (H2src, "H2sink")):
