@@ -262,12 +262,9 @@ class CoincDatabase(object):
 
 		# get all the segments in the database to use as a summary
 		for llwsegs in ligolw_segments.LigolwSegments(xmldoc).coalesce():
-			for instrument in llwsegs.instruments:
-				# do the intersection in the loop to get a
-				# new object each time to avoid confusion
-				# from shared references
-				# FIXME:  should be populating valid segments
-				self.all_segs_dict.setdefault(llwsegs.name, segments.segmentlistdict())[instrument] |= llwsegs.active #& llwsegs.valid
+			seglists = self.all_segs_dict.setdefault(llwsegs.name, segments.segmentlistdict())
+			# FIXME:  should be populating valid segments upstream
+			seglists |= segments.segmentlistdict.fromkeys(llwsegs.instruments, llwsegs.active) #& llwsegs.valid)
 
 		# get the live time
 		if verbose:
@@ -1716,7 +1713,8 @@ class Segments(object):
 				operator.ior(self.all_segs_dict.setdefault(name, segments.segmentlistdict()), seglists)
 
 	def finish(self):
-		self.extent = segments.segmentlist(seglists.extent_all() for seglists in self.all_segs_dict.values()).extent()
+		segs = reduce(segments.segmentlistdict.__or__, self.all_segs_dict.values(), segments.segmentlistdict())
+		self.extent = segs.extent_all()
 
 		for name, seglists in self.all_segs_dict.items():
 			for ifo, seglist in seglists.items():
