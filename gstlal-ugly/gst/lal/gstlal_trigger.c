@@ -402,7 +402,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case ARG_MAX_SNR:
-		element->max_snr = g_value_get_boolean(value);
+		g_value_set_boolean(value, element->max_snr);
 		break;
 
 	default:
@@ -895,6 +895,7 @@ static void gstlal_trigger_init(GSTLALTrigger *element)
 	element->last_gap = TRUE;
 	element->EOS = FALSE;
 	element->snr_mat = NULL;
+	element->max_snr = FALSE;
 	element->autocorrelation_matrix = NULL;
 	element->autocorrelation_mask = NULL;
 	element->autocorrelation_norm = NULL;
