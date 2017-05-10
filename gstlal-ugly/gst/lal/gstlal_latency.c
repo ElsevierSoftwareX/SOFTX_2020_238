@@ -30,7 +30,8 @@
  * stuff from C
  */
 
-
+#define _XOPEN_SOURCE
+#include <time.h>
 #include <string.h>
 #include <math.h>
 
@@ -115,19 +116,29 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 
 	GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 
-	LIGOTimeGPS current_gpstime = LIGOTIMEGPSZERO;
-	XLALGPSTimeNow(&current_gpstime);
-	gint current_time = current_gpstime.gpsSeconds;
-	
-	gint buffer_time = (int) GST_TIME_AS_SECONDS(GST_BUFFER_PTS(buf));
-	
-	gint latency = current_time - buffer_time;
+	GstDateTime *current_gst_time = gst_date_time_new_now_utc();
+	gchar *current_utc_time = gst_date_time_to_iso8601_string(current_gst_time);
 
+	// parse DateTime to gps time
+	struct tm tm;
+	strptime(current_utc_time, "%Y-%m-%dT%H:%M:%SZ", &tm);
+
+	gdouble current_s = (double) XLALUTCToGPS(&tm);
+	gdouble current_us = (double) gst_date_time_get_microsecond(current_gst_time) * pow(10,-6);
+
+	gdouble current_time = current_s + current_us;
+	gdouble buffer_time = (double) GST_TIME_AS_SECONDS(GST_BUFFER_PTS(buf));
+	
+	gdouble latency = current_time - buffer_time;
+	 
 	if (!silent) {
-		g_print("current time = %9d, buffer time = %9d, latency = %3d, %s\n",
-			current_time, buffer_time, latency, GST_OBJECT_NAME(element));
+		g_print("current time = %9.3f, buffer time = %9d, latency = %6.3f, %s\n",
+			current_time, (int) buffer_time, latency, GST_OBJECT_NAME(element));
 	}
 	
+	gst_date_time_unref(current_gst_time);
+	g_free(current_utc_time);
+
 	return GST_FLOW_OK;
 }
 
@@ -248,7 +259,7 @@ static void gstlal_latency_class_init(GSTLALLatencyClass *klass)
 
 static void gstlal_latency_init(GSTLALLatency *element)
 {
-//	gst_base_transform_set_passthrough(GST_BASE_TRANSFORM(element), TRUE);
+	gst_base_transform_set_passthrough(GST_BASE_TRANSFORM(element), TRUE);
 
 	element->silent = DEFAULT_SILENT;
 }
