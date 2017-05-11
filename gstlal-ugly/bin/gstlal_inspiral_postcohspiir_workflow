@@ -181,7 +181,8 @@ def gen_bankJob_options(ifo, daggen_options):
 		"sampleRate": daggen_options.sampleRate,
 		"req-min-match": daggen_options.req_min_match,
 		"autocorrelation-length": daggen_options.autocorrelation_length,
-		"padding": daggen_options.padding
+		"padding": daggen_options.padding,
+		"downsample": ""
 		}
 	return opts
 
