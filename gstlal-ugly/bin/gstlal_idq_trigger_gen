@@ -170,8 +170,10 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.instrument = kwargs.pop("instrument")
 		self.last_save_time = None
 		self.cadence = options.cadence
+		self.file_flag = False
 		# create header for trigger file
-		self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%10s\t%10s\t%9s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "frequency", "Q", "latency", "rate", "channel")
+		#self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%10s\t%10s\t%9s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "frequency", "Q", "latency", "rate", "channel")
+		self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
 		self.fdata = ""
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
@@ -186,8 +188,13 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.last_save_time = buftime
 
 			# Save triggers once every cadence
-			if (buftime - self.last_save_time) >= self.cadence:
-				self.to_trigger_file()
+			if ((buftime - self.last_save_time) >= self.cadence) and ( self.file_flag is True or buftime%self.cadence == 0):
+				# Use file_flag to check if buftime%cadence = 0.
+				# Flag is set after first time this is true.
+				if self.file_flag is True :
+					self.to_trigger_file()
+				else :
+					self.file_flag = True
 				self.last_save_time = buftime
 				self.fdata = ""
 
@@ -213,10 +220,12 @@ class MultiChannelHandler(simplehandler.Handler):
 						latency = numpy.round(current_time - buftime)
 						freq, q, duration = self.basis_params[(channel, int(rate))][row.channel_index]
 						start_time = trigger_time - duration
+						channel_tag = '%s_%i_%s' %(channel, int(rate)/2, rate)
 						# NOTE
 						# Setting stop time to trigger time for use with half sine gaussians
 						stop_time = trigger_time
-						self.fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%10.3f\t%9d\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, freq, q, latency, int(rate), channel)
+						#self.fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%10.3f\t%9d\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, row.phase, row.snr, row.chisq, row.sigmasq, freq, q, latency, int(rate), channel)
+						self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag)
 				memory.unmap(mapinfo)
 
 			del buf
