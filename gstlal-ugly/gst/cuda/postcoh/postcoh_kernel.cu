@@ -39,6 +39,7 @@ const int GAMMA_ITMAX = 50;
 
 #define MIN_EPSILON 1e-7
 #define MAXIFOS 6
+#define BACKGROUND_NSKY_RATIO 4
 
 
 #if 0
@@ -592,12 +593,12 @@ __global__ void ker_coh_max_and_chisq
 			//trial_offset = rand()% rand_range + 1;
 			trial_offset = itrial * trial_sample_inv;
 			output_offset = peak_cur + (itrial - 1)* max_npeak;
-		for (int seed_pix = threadIdx.x; seed_pix < num_sky_directions/16; seed_pix += blockDim.x)
+		for (int seed_pix = threadIdx.x; seed_pix < num_sky_directions/BACKGROUND_NSKY_RATIO; seed_pix += blockDim.x)
 		{
 			// matrix u is stored in column order
 			// mu = u_map + nifo * nifo * i;			
 
-			ipix = (seed_pix * 16) + (itrial & 15);
+			ipix = (seed_pix * BACKGROUND_NSKY_RATIO) + (itrial & (BACKGROUND_NSKY_RATIO -1));
 			for (int j = 0; j < nifo; ++j)
 			{
 				/* this is a simplified algorithm to get map_idx */
