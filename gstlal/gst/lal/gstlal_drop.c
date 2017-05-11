@@ -261,6 +261,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 	guint dropsize = (guint) element->drop_samples*element->unit_size;
 
+	GST_LOG_OBJECT (element,
+		"Sinkbuf of timestamp %" GST_TIME_FORMAT ", duration %"
+		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
+		G_GUINT64_FORMAT ", dropsize is %u, dropsample %u", 
+		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (sinkbuf)),
+		GST_TIME_ARGS (GST_BUFFER_DURATION (sinkbuf)),
+		GST_BUFFER_OFFSET (sinkbuf), GST_BUFFER_OFFSET_END (sinkbuf), dropsize, element->drop_samples);
+
+
+
 	/*
 	 * check validity of timestamp and offsets
 	 */
@@ -275,8 +285,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	/*
 	 * process buffer
 	 */
-
-	if(!dropsize) {
+	if(element->drop_samples <= 0) {
 		/* pass entire buffer */
 		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
 			sinkbuf = gst_buffer_make_metadata_writable(sinkbuf);
@@ -286,17 +295,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(G_UNLIKELY(result != GST_FLOW_OK))
 			GST_WARNING_OBJECT(element, "gst_pad_push() failed: %s", gst_flow_get_name(result));
 		element->need_discont = FALSE;
-	} else if(GST_BUFFER_SIZE(sinkbuf) <= dropsize) {
+		GST_DEBUG_OBJECT(element, "pass entire buffer");
+		result = GST_FLOW_OK;
+	} else if(GST_BUFFER_SIZE(sinkbuf) <= element->drop_samples*element->unit_size) {
 		/* drop entire buffer */
-		gst_buffer_unref(sinkbuf);
 		element->drop_samples -= GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 		element->need_discont = TRUE;
+		GST_DEBUG_OBJECT(element, "drop entire buffer");
+		gst_buffer_unref(sinkbuf);
 		result = GST_FLOW_OK;
 	} else {
 		/* drop part of buffer, pass the rest */
 		GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, dropsize, GST_BUFFER_SIZE(sinkbuf) - dropsize);
 		GstClockTime toff = gst_util_uint64_scale_int_round(element->drop_samples, GST_SECOND, element->rate);
-		gst_buffer_unref(sinkbuf);
 		gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + element->drop_samples;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_END(sinkbuf);
@@ -310,6 +321,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		/* never come back */
 		element->drop_samples = 0;
 		element->need_discont = FALSE;
+		GST_DEBUG_OBJECT(element, "drop part of buffer, pass rest");
+		gst_buffer_unref(sinkbuf);
+		result = GST_FLOW_OK;
 	}
 
 	/*
