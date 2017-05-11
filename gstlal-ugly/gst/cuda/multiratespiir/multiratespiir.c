@@ -874,6 +874,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   if (G_UNLIKELY (GST_BUFFER_IS_DISCONT (inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
     GST_DEBUG_OBJECT (element, "reset spstate");
     spiir_state_reset (element->spstate, element->num_depths, element->stream);
+    /* FIXME: need to push_drain of data in the adapter ? if upstream never produces discontinous data, no need to push_drain. */
     gst_adapter_clear (element->adapter);
     
     element->need_discont = TRUE;
