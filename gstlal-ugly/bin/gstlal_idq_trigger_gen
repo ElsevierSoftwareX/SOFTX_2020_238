@@ -226,8 +226,9 @@ class MultiChannelHandler(simplehandler.Handler):
 		# NOTE
 		# This method should only be called by an instance that is locked.
 		# Use T050017 filenaming convention.
-		fname = '%s-%s-%d-%d.%s' % (self.instrument, self.description, self.last_save_time, self.cadence, "trg")
-		path = os.path.join(self.out_path, str(fname.split("-")[2])[:5])
+		tag = '%s-%s' % (self.instrument[:1], self.description)
+		fname = '%s-%d-%d.%s' % (tag, self.last_save_time, self.cadence, "trg")
+		path = os.path.join(self.out_path, tag, tag+"-"+str(fname.split("-")[2])[:5])
 		fpath = os.path.join(path, fname)
 		tmpfile = fpath+"~"
 		try:
