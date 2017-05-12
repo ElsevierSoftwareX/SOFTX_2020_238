@@ -220,7 +220,7 @@ class MultiChannelHandler(simplehandler.Handler):
 						latency = numpy.round(current_time - buftime)
 						freq, q, duration = self.basis_params[(channel, int(rate))][row.channel_index]
 						start_time = trigger_time - duration
-						channel_tag = '%s_%i_%s' %(channel, int(rate)/2, rate)
+						channel_tag = ('%s_%i_%s' %(channel, int(rate)/2, rate)).replace(":","_",1)
 						# NOTE
 						# Setting stop time to trigger time for use with half sine gaussians
 						stop_time = trigger_time
