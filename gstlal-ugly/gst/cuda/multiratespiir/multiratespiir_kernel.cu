@@ -70,6 +70,7 @@ __global__ void downsample2x (const float amplifier,
 					const int filt_len, 
 					int last_sample,
 					float *mem, 
+					float *mem_copy,
 					const int len, 
 					float *queue_in, 
 					const int last_sample_in,
@@ -106,7 +107,7 @@ __global__ void downsample2x (const float amplifier,
 	/* for the first block, get the head filt_len -1data from mem */
 	if (bx < 1) {
 		for (i=tx;	i<filt_len-1; i+=tdx) 
-			tmp_mem[i] = mem[i];
+			tmp_mem[i] = mem_copy[i];
 	}
 	else { /* get the first filt_len-1 from queue_in */
 		in_start = 2 * bx * tdx + last_sample_in;
@@ -689,12 +690,14 @@ gint multi_downsample (SpiirState **spstate, float *in_multidown, gint num_in_mu
 	uint share_mem_sz = (2 * block.x + 4 * SPSTATEDOWN(i)->sinc_len) * sizeof (float);
 	GST_LOG ("downsample: depth %d, out_processed %d, threads %d, blocks %d, amplifier %f, share_mem_sz %d", i, out_processed, block.x, grid.x, SPSTATEDOWN(i)->amplifier, share_mem_sz);
 
+	CUDA_CHECK(cudaMemcpyAsync(SPSTATEDOWN(i)->d_mem_copy, SPSTATEDOWN(i)->d_mem, (SPSTATEDOWN(i)->sinc_len - 1) * sizeof(float), cudaMemcpyDeviceToDevice, stream));
 	downsample2x <<<grid, block, share_mem_sz, stream>>> (SPSTATEDOWN(i)->amplifier,
 							2, 
 							SPSTATEDOWN(i)->d_sinc_table,
 							SPSTATEDOWN(i)->sinc_len, 
 							SPSTATEDOWN(i)->last_sample, 
 							SPSTATEDOWN(i)->d_mem, 
+							SPSTATEDOWN(i)->d_mem_copy,
 							out_processed, 
 							pos_inqueue,
 							SPSTATE(i)->queue_last_sample,

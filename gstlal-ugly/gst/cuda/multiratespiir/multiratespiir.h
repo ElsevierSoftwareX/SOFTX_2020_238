@@ -60,6 +60,7 @@ typedef struct _Complex_F{
 typedef struct _ResamplerState{
   float *d_sinc_table;
   float *d_mem; 		/* fixed length to store input */
+  float *d_mem_copy;     /* fixed length to store input */
   gint channels;
   gint mem_len;
   gint last_sample;

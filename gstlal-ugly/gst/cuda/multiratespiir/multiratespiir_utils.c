@@ -375,9 +375,11 @@ resampler_state_create (gint inrate, gint outrate, gint channels, gint num_exe_s
 	state->mem_len = state->filt_len - 1 + num_alloc_samples;
 	mem_alloc_size = state->mem_len * channels * sizeof(float);
 	CUDA_CHECK(cudaMalloc((void **) &(state->d_mem), mem_alloc_size));
+	CUDA_CHECK(cudaMalloc((void **) &(state->d_mem_copy), mem_alloc_size));
 
 	//state->mem = (float *)malloc(mem_alloc_size);
 	CUDA_CHECK(cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream));
+	CUDA_CHECK(cudaMemsetAsync(state->d_mem_copy, 0, mem_alloc_size, stream));
 	state->last_sample = state->filt_len/2;
 	//GST_LOG ("flit len:%d, sinc len %d, amplifier %d, mem len %d%d", state->filt_len, state->sinc_len, state->amplifier, state->mem_len, state->channels);
 	//printf("inrate %d, outrate %d, amplifier %f\n", inrate, outrate, state->amplifier);
@@ -389,6 +391,7 @@ resampler_state_reset (ResamplerState *state, cudaStream_t stream)
 {
 	gint mem_alloc_size = state->mem_len * state->channels * sizeof(float);
 	CUDA_CHECK(cudaMemsetAsync(state->d_mem, 0, mem_alloc_size, stream));
+	CUDA_CHECK(cudaMemsetAsync(state->d_mem_copy, 0, mem_alloc_size, stream));
 	state->last_sample = state->filt_len/2;
 
 }
@@ -398,6 +401,7 @@ resampler_state_destroy (ResamplerState *state)
   if (state->d_sinc_table)
     cudaFree(state->d_sinc_table) ;
   cudaFree(state->d_mem) ;
+  cudaFree(state->d_mem_copy) ;
 }
 
 
