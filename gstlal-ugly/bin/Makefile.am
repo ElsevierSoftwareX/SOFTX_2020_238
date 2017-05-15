@@ -23,6 +23,7 @@ dist_bin_SCRIPTS = \
 	gstlal_ninja_smooth_reference_psd \
 	gstlal_median_of_psds \
 	gstlal_psd_pipe \
+	gstlal_plot_channel_psd \
 	gstlal_segments_operations \
 	gstlal_recolor_frames_pipe \
 	gstlal_inj_frames \

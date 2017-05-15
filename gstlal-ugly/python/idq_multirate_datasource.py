@@ -181,7 +181,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		# reduced to account for the loss of the zero padding to
 		# keep the Hann window the same as implied by the
 		# user-supplied parameters.
-		whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head, max_size_time = 2 * psd_fft_length * Gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_%s_lal_whiten" % (instrument, channel_name))
+		whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head, max_size_time = 2 * psd_fft_length * Gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_%s_lalwhiten" % (instrument, channel_name))
 		pipeparts.mkfakesink(pipeline, whiten)
 
 		# high pass filter
@@ -222,11 +222,11 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			head = pipeparts.mkgate(pipeline, head, control = dqvector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
 		# Drop initial data to let the PSD settle
 		head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max(rates))
-		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_timestamps_fir" % (instrument, channel_name))
+		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_timestampsfir" % (instrument, channel_name))
 		
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
-		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_%s_lal_whiten" % (instrument, channel_name))
+		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_%s_lalwhiten" % (instrument, channel_name))
 		# make the buffers going downstream smaller, this can
 		# really help with RAM
 		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
@@ -274,7 +274,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
 	else:
 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
-	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_%d_timestamps__white" % (instrument, channel_name, max(rates)))
+	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_%d_timestampwhite" % (instrument, channel_name, max(rates)))
 
 	#
 	# optionally add vetoes
@@ -336,7 +336,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		else:
 			head[rate] = head[max(rates)]
 		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw, rate=%d" % rate)
-		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_%s_%d_timestamps_white" % (instrument, channel_name, rate))
+		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_%s_%d_timestampswhite" % (instrument, channel_name, rate))
 
 		head[rate] = pipeparts.mktee(pipeline, head[rate])
 

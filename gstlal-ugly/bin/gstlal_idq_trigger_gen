@@ -29,6 +29,7 @@ from optparse import OptionParser
 from collections import deque
 import os
 import sys
+import socket
 import resource
 import StringIO
 import threading
@@ -42,13 +43,20 @@ Gst.init(None)
 import lal
 
 import numpy
+from gstlal import pipeio
 from gstlal import datasource
 from gstlal import idq_multirate_datasource
 from gstlal import multichannel_datasource
 from gstlal import sngltriggertable
 from gstlal import pipeparts
 from gstlal import simplehandler
+from gstlal import httpinterface
+from gstlal import bottle
 from glue.ligolw import utils as ligolw_utils
+from glue import iterutils
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
 from lal import gpstime
 
 #
@@ -162,6 +170,13 @@ def parse_command_line():
 
 
 class MultiChannelHandler(simplehandler.Handler):
+	"""
+	A subclass of simplehandler.Handler to be used with 
+	multiple channels.
+
+	Implements additional message handling for dealing with spectrum
+	messages and creates trigger files for use in iDQ.
+	"""
 	def __init__(self, *args, **kwargs):
 		self.lock = threading.Lock()
 		self.basis_params = kwargs.pop("basis_params")
@@ -175,9 +190,37 @@ class MultiChannelHandler(simplehandler.Handler):
 		#self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%10s\t%10s\t%9s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "frequency", "Q", "latency", "rate", "channel")
 		self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
 		self.fdata = ""
+		
+		# set up bottle routes for spectra by each whitener
+		self.psds = {}
+		bottle.route("/psds.xml")(self.web_get_psd_xml)
+
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
 	def do_on_message(self, bus, message):
+		"""!
+		Handle application-specific message types, 
+		e.g., spectrum messages.
+		
+		@param bus A reference to the pipeline's bus
+		@param message A reference to the incoming message
+		"""
+		#
+		# return value of True tells parent class that we have done
+		# all that is needed in response to the message, and that
+		# it should ignore it.  a return value of False means the
+		# parent class should do what it thinks should be done
+		#
+		if message.type == Gst.MessageType.ELEMENT:
+			if message.get_structure().get_name() == "spectrum":
+				# get the channel name & psd.
+				instrument, info = message.src.get_name().split("_", 1)
+				channel, _ = info.rsplit("_", 1)
+				psd = pipeio.parse_spectrum_message(message)
+				
+				# save psd
+				self.psds[channel] = psd
+				return True		
 		return False
 
 	def bufhandler(self, elem, sink_dict):
@@ -248,6 +291,20 @@ class MultiChannelHandler(simplehandler.Handler):
 		with open(tmpfile, 'w') as f:
  			f.write(data)
 		shutil.move(tmpfile, fpath)
+
+	def gen_psd_xmldoc(self):
+		xmldoc = lal.series.make_psd_xmldoc(self.psds)
+		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_idq", {})
+		ligolw_process.set_process_end_time(process)
+		return xmldoc
+
+	def web_get_psd_xml(self):
+		with self.lock:
+			output = StringIO.StringIO()
+			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output)
+			outstr = output.getvalue()
+			output.close()
+		return outstr
 
 
 class LinkedAppSync(pipeparts.AppSync):
@@ -352,8 +409,10 @@ class LinkedAppSync(pipeparts.AppSync):
 #
 ####################   
 
-  
+#  
 # parsing and setting up some core structures
+#
+
 options, filenames = parse_command_line()
 
 data_source_info = multichannel_datasource.DataSourceInfo(options)
@@ -363,7 +422,58 @@ channels = data_source_info.channel_dict.keys()
 # dictionary of basis parameters keyed by ifo, rate
 basis_params = {}
 
+#
+# create a new, empty, Bottle application and make it the current
+# default, then start http server to serve it up
+#
+
+bottle.default_app.push()
+# uncomment the next line to show tracebacks when something fails
+# in the web server
+#bottle.app().catchall = False
+import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
+httpservers = httpinterface.HTTPServers(
+	# FIXME:  either switch to using avahi's native name
+	# uniquification system or adopt a naturally unique naming
+	# scheme (e.g., include a search identifier and job
+	# number).
+	service_name = "gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
+	service_properties = {},
+	verbose = options.verbose
+)
+
+#
+# Set up a registry of the resources that this job provides
+#
+
+@bottle.route("/")
+@bottle.route("/index.html")
+def index(channel_list = channels):
+	# get the host and port to report in the links from the
+	# request we've received so that the URLs contain the IP
+	# address by which client has contacted us
+	netloc = bottle.request.urlparts[1]
+	server_address = "http://%s" % netloc
+	yield "<html><body>\n<h3>%s %s</h3>\n<p>\n" % (netloc, " ".join(sorted(channel_list)))
+	for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+		# don't create links back to this page
+		if route.rule in ("/", "/index.html"):
+			continue
+		# only create links for GET methods
+		if route.method != "GET":
+			continue
+		yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
+	yield "</p>\n</body></html>"
+# FIXME:  get service-discovery working, then don't do this
+open("registry.txt", "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
+
+#
 # building the event loop and pipeline
+#
+
+if options.verbose:
+	print >>sys.stderr, "assembling pipeline..."
+
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
 handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument)
@@ -400,6 +510,9 @@ for channel in channels:
 		src[(channel, rate)] = thishead	
 
 if options.verbose:
+	print >>sys.stderr, "done."
+
+if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline..."
 appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
 appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for (channel, rate) in src.keys()) 
@@ -418,4 +531,37 @@ if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds o
 # run
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
-mainloop.run() 
+mainloop.run()
+
+if options.verbose:
+	print >>sys.stderr, "running pipeline..."
+
+
+#
+# Shutdown the web interface servers and garbage collect the Bottle
+# app.  This should release the references the Bottle app's routes
+# hold to the pipeline's data (like template banks and so on).
+#
+
+
+del httpservers
+bottle.default_app.pop()
+
+
+#
+# Set pipeline state to NULL and garbage collect the handler
+#
+
+
+if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline could not be set to NULL")
+del handler.pipeline
+del handler
+
+#
+# close program manually if data source is live
+#
+
+
+if options.data_source in ("lvshm", "framexmit"):
+        sys.exit(0)
