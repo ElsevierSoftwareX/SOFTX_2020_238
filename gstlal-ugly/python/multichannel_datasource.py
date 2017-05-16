@@ -212,8 +212,8 @@ class DataSourceInfo(object):
 			assert fidelity in self.known_fidelity, '--fidelity-exclude=%s is not understood. Must be one of %s'%(fidelity, ", ".join(self.known_fidelity))
 
 		# dictionary of the requested channels, e.g., {"H1": {"LDAS-STRAIN": 16384}, "L1": {"LDAS-STRAIN": 16384}}
-		name, extension = options.channel_list.rsplit('.', 1)
-		if extension == 'ini':
+		name, self.extension = options.channel_list.rsplit('.', 1)
+		if self.extension == 'ini':
 			self.channel_dict = channel_dict_from_channel_ini(options)
 		else:
 			self.channel_dict = channel_dict_from_channel_file(options.channel_list)	
