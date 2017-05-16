@@ -234,6 +234,9 @@ class DataSourceInfo(object):
 
 		## Analysis segment. Default is None
 		self.seg = None
+		
+		## Set latency output
+		self.latency_output = options.latency_output
 
 		if options.gps_start_time is not None:
 			if options.gps_end_time is None:
@@ -337,6 +340,8 @@ def append_options(parser):
 -	--channel-exclude [string]
 		Set the channel names  to be excluded. Can be given multiple times.
 
+-	--latency-output
+		Set whether to print out latency (in seconds) at various stages of the detector.
 
 	#### Typical usage case examples
 
@@ -362,7 +367,8 @@ def append_options(parser):
 	group.add_option("--section-exclude", default=[], type="string", action="append", help="Exclude these sections of the INI file from the final omegascan config. We require an exact match to exclude a section.")
 	group.add_option("--safety-exclude", default=[], type="string", action="append", help="Exclude any channel with this safety value. Can supply multiple values by repeating this argument. Each must be one of (add here)")
 	group.add_option("--fidelity-exclude", default=[], type="string", action="append", help="Exclude any channel with this fidelity value. Can supply multiple values by repeating this argument. Each must be on of (add here)")
-	group.add_option("--channel-exclude", default=[], action="append", type="string", help="Exclude this channel (requires exact match). Can be repeated")
+	group.add_option("--channel-exclude", default=[], action="append", type="string", help="Exclude this channel (requires exact match). Can be repeated.")
+	group.add_option("--latency-output", action = "store_true", help = "Print out latency output (s) at different stages of the pipeline (measured as current time - buffer time).")
 	parser.add_option_group(group)
 
 ##
@@ -463,7 +469,9 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 		for channel in head:		
 			head[channel] = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND* 60 * 1) # 1 minute of buffering
 			pipeparts.src_deferred_link(demux, channel, head[channel].get_static_pad("sink"))
-		
+			if data_source_info.latency_output:
+				head[channel] = pipeparts.mklatency(pipeline, head[channel], name = 'stage1_afterFrameXmit_%s' % channel)
+
 			# fill in holes, skip duplicate data
 			head[channel] = pipeparts.mkaudiorate(pipeline, head[channel], skip_to_first = True, silent = False)
 

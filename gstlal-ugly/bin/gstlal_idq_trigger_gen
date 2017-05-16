@@ -486,7 +486,11 @@ for channel in channels:
 	max_samp_rate = int(samp_rate) 
 	min_samp_rate = min(32, max_samp_rate)
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
+	if data_source_info.latency_output:
+		head[channel] = pipeparts.mklatency(pipeline, head[channel], name = 'stage2_beforeWhitening_%s' % channel)
 	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], instrument, channel_name = channel, width=32, quality=1, cutoff=None).items():
+		if data_source_info.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage3_afterWhitening_%s_%s' % (str(rate).zfill(5), channel))
 		if data_source_info.extension == 'ini':
 			# use omicron params with .ini files
 			flow = data_source_info.channel_dict[channel]['flow']  
@@ -504,11 +508,15 @@ for channel in channels:
 		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 1e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = 0)
+		if data_source_info.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel) )
 		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
+		if data_source_info.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage5_afterTrigger_%s_%s' % (str(rate).zfill(5), channel))
 		src[(channel, rate)] = thishead	
 
 if options.verbose:
