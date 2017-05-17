@@ -167,8 +167,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		result = GST_FLOW_OK;
 	} else if(gst_buffer_get_size(sinkbuf) <= element->drop_samples * element->unit_size) {
 		/* drop entire buffer */
-		gst_buffer_unref(sinkbuf);
 		element->drop_samples -= GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+		gst_buffer_unref(sinkbuf);
 		element->need_discont = TRUE;
 	} else {
 		/* drop part of buffer, pass the rest */
