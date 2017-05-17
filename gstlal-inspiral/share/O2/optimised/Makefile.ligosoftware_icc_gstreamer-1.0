@@ -195,8 +195,6 @@ env.sh :
 	@echo 'GST_REGISTRY_1_0=$${LAL_PATH}/registry.bin' >> $@
 	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH GST_REGISTRY_1_0' >> $@
 
-	#@echo 'export GSTLAL_FIR_WHITEN=0' >> $@
-
 #####################
 # Check time stamps #
 #####################
@@ -665,73 +663,73 @@ logs/tar.txt : $(FFTW_TAR_TARGET) $(PYFFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_T
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(GSTLALINSPIRAL_TAR_TARGET) : $(GSTLALCALIB_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc
 
 $(GSTLALCALIB_TAR_TARGET) : $(GSTLALUGLY_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(GSTLALUGLY_TAR_TARGET) : $(GSTLAL_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(GSTLAL_TAR_TARGET) : $(DOXYGEN_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(DOXYGEN_TAR_TARGET) : $(PYLAL_TAR_TARGET)
 	wget --no-check-certificate ftp://ftp.stack.nl/pub/users/dimitri/$(DOXYGEN).src.tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(PYLAL_TAR_TARGET) : $(GLUE_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(PYLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(PYLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(GLUE_TAR_TARGET) : $(LALAPPS_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALAPPS_TAR_TARGET) : $(LALSTOCH_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALSTOCH_TAR_TARGET) : $(LALINFER_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALSTOCHASTIC).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSTOCHASTIC).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALINFER_TAR_TARGET) : $(LALPULSAR_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALINFERENCE).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINFERENCE).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALPULSAR_TAR_TARGET) : $(LALINSPIRAL_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALPULSAR).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALPULSAR).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALINSPIRAL_TAR_TARGET) : $(LALDETCHAR_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALINSPIRAL).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINSPIRAL).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALDETCHAR_TAR_TARGET) : $(LALBURST_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALDETCHAR).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALDETCHAR).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALBURST_TAR_TARGET) : $(LALSIM_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALBURST).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALBURST).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALSIM_TAR_TARGET) : $(LALMETAIO_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALSIMULATION).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSIMULATION).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALMETAIO_TAR_TARGET) : $(LALFRAME_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALMETAIO).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALMETAIO).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LALFRAME_TAR_TARGET) : $(LAL_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LALFRAME).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALFRAME).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LAL_TAR_TARGET) : $(GDS_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(GDS_TAR_TARGET) : $(LDASTOOLSFRAMECPP_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(GDS).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GDS).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(LDASTOOLSFRAMECPP_TAR_TARGET) : $(LDASTOOLSAL_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(LDASTOOLSFRAMECPP).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LDASTOOLSFRAMECPP).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(LDASTOOLSAL_TAR_TARGET) : $(SWIG_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(LDASTOOLSAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LDASTOOLSAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(SWIG_TAR_TARGET) : $(METAIO_TAR_TARGET)
 	wget --no-check-certificate http://downloads.sourceforge.net/project/swig/swig/$(SWIG)/$(SWIG).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(METAIO_TAR_TARGET) : $(LIBFRAME_TAR_TARGET)
-	wget --no-check-certificate https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/$(METAIO).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(METAIO).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(LIBFRAME_TAR_TARGET) : $(OPROFILE_TAR_TARGET)
 	wget --no-check-certificate http://lappweb.in2p3.fr/virgo/FrameL/$(LIBFRAME).tar.gz --directory-prefix=$(TAR_DIR) -nc
