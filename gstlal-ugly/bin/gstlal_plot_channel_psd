@@ -56,11 +56,11 @@ matplotlib.rcParams.update({
 #
 # ### Usage:
 #
-#		gstlal_plot_channel_psd OUTPUT-NAME PSD-FILE-1 PSD-FILE-2
+#		gstlal_plot_channel_psd -o OUTPUT-NAME PSD-FILE-1 PSD-FILE-2
 #
 # e.g.,
 #
-#		gstlal_plot_channel_psd psd.png psd.xml.gz
+#		gstlal_plot_channel_psd -o psd.png psd.xml.gz
 #
 
 color_scheme = ['#332288', '#88CCEE', '#44AA99', '#117733', '#999933', '#DDCC77', '#CC6677', '#882255', '#AA4499']
@@ -135,15 +135,12 @@ def plot_psds(psds, plot_width = 640):
 
 
 options, filenames = parse_command_line()
-
-index = 0
 for fname in filenames:
-	index += 1
 	if options.output:
 		outname = options.output
 	else:
-		outname = os.path.join(os.path.splitext(fname)[0], "%d" % index)
-
+		outname = os.path.splitext(fname)[0] + ".png"
+	
 	fig = plot_psds(
 		series.read_psd_xmldoc(
 			ligolw_utils.load_filename(
