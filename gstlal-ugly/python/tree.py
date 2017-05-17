@@ -92,10 +92,10 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 5e4)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 2.0e4)
 			except RuntimeError:
 				print "metric @", self.center, " failed, trying, ", self.center - self.deltas / 2.
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., self.deltas / 5e4)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., self.deltas / 2.0e4)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -114,10 +114,10 @@ class HyperCube(object):
 	def template_volume(self, mismatch):
 		#n = self.N()
 		n = self.effective_dimension
-		#return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
+		return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
 		# NOTE code below assumes templates are cubes
-		a = 2 * mismatch**.5 / n**.5
-		return a**n
+		#a = 2 * mismatch**.5 / n**.5
+		#return a**n
 
 	def N(self):
 		return len(self.boundaries)
