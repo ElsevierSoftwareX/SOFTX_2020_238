@@ -126,6 +126,10 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		/* temporary struct to store tmplt max in one max_npeak data */
 		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt));
 		CUDA_CHECK(cudaMemsetAsync(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt, stream));
+		
+		// add for new postcoh kernel optimized by Xiaoyang Guo
+		pklist->d_snglsnr_buffer = NULL;
+		pklist->len_snglsnr_buffer = 0;
 
 		pklist->d_cohsnr_skymap = NULL;
 		pklist->cohsnr_skymap = NULL;

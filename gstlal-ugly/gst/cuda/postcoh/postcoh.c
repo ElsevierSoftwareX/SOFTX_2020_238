@@ -1283,10 +1283,15 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo, postcoh->stream);
 
 			GST_LOG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d, max_snglsnr %f\n", ligo_time.gpsSeconds, cur_ifo, c_npeak, state->snglsnr_max);
+
+			/* 
+			// because you use new postcoh kernel optimized by Xiaoyang Guo now, you cannot use 
+			// the following memory copy code any more
+			// new postcoh kernel need transposed state->d_snglsnr[cur_ifo] matrix and there is no transpose in the following code 
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
-			/* copy the snglsnr to the right cuda memory */
+			// copy the snglsnr to the right cuda memory
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
-				/* when the snglsnr can be put in as one chunk */
+				// when the snglsnr can be put in as one chunk 
 				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice, postcoh->stream));
 				GST_LOG("load snr to gpu as a chunk");
 			} else {
@@ -1299,6 +1304,23 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice, postcoh->stream));
 				GST_LOG("load snr to gpu as as two chunks");
 			}
+			*/			
+
+			// this is necessory for new postcoh kernel
+			// 1. expand temporal memory space if necessary
+			g_assert(pklist->len_snglsnr_buffer >= 0);
+			if (one_take_size > pklist->len_snglsnr_buffer) {
+				// re-malloc pklist->d_snglsnr_buffer
+				if (pklist->d_snglsnr_buffer != NULL) {
+					cudaFree(pklist->d_snglsnr_buffer);
+				}
+				cudaMalloc((void**)&pklist->d_snglsnr_buffer, one_take_size);
+				pklist->len_snglsnr_buffer = one_take_size;
+			}
+			// 2. copy snglsnr to temporal gpu memory d_snglsnr_buffer
+			CUDA_CHECK(cudaMemcpyAsync(pklist->d_snglsnr_buffer, snglsnr, one_take_size, cudaMemcpyHostToDevice, postcoh->stream));
+			// 3. do transpose, at the same time, snr data will be moved to proper positions in state->d_snglsnr[cur_ifo]
+			transpose_snglsnr(pklist->d_snglsnr_buffer, state->d_snglsnr[cur_ifo], state->snglsnr_start_load, one_take_len, state->snglsnr_len, state->ntmplt, postcoh->stream);
 			}
 
 		}
