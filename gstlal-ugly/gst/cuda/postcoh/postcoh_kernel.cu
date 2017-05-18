@@ -599,14 +599,14 @@ __global__ void ker_coh_max_and_chisq
             //trial_offset = rand()% rand_range + 1;
             trial_offset = itrial * trial_sample_inv;
             output_offset = peak_cur + (itrial - 1)* max_npeak;
-        for (int seed_pix = srcLane; seed_pix < num_sky_directions/16; seed_pix += WARP_SIZE)
+        for (int seed_pix = srcLane; seed_pix < num_sky_directions/BACKGROUND_NSKY_RATIO; seed_pix += WARP_SIZE)
         {
             snr_tmp = 0.0;
             al_all = 0.0;
             // matrix u is stored in column order
             // mu = u_map + nifo * nifo * i;            
 
-            ipix = (seed_pix * 16) + (itrial & 15);
+            ipix = (seed_pix * BACKGROUND_NSKY_RATIO) + (itrial & (BACKGROUND_NSKY_RATIO - 1));
             for (int j = 0; j < nifo; ++j)
             {
                 /* this is a simplified algorithm to get map_idx */
