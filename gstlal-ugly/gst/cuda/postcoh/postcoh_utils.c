@@ -133,6 +133,89 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 }
 
 void
+cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
+{
+
+	int ntoken = 0;
+
+	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
+	strcpy(fname_cpy, fname);
+	char *token = strtok_r(fname, ",", &end_ifo);
+	int mem_alloc_size = 0, ntmplt = 0, match_ifo = 0;
+
+	/* parsing for nifo */
+	while (token != NULL) {
+		token = strtok_r(NULL, ",", &end_ifo);
+		ntoken++;
+	}
+
+	int nifo = ntoken;
+	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct));
+	XmlArray *array_sigmasq = (XmlArray *)malloc(sizeof(XmlArray));
+
+	state->sigmasq = (float **)malloc(sizeof(float *) * nifo );
+	float **sigmasq = state->sigmasq;
+	sigmasq[0] = NULL;
+
+	end_ifo = NULL;
+	token = strtok_r(fname_cpy, ",", &end_ifo);
+	//printf("fname_cpy %s\n", fname_cpy);
+	sprintf((char *)xns[0].tag, "sigmasq:array");
+	xns[0].processPtr = readArray;
+	xns[0].data = &(array_sigmasq[0]);
+
+	/* start parsing again */
+	while (token != NULL) {
+		char *end_token;
+		char *token_bankname = strtok_r(token, ":", &end_token);
+		token_bankname = strtok_r(NULL, ":", &end_token);
+
+		parseFile(token_bankname, xns, 2);
+
+		for (int i=0; i<nifo; i++) {
+			if (strncmp(token, IFO_MAP[i], 2) == 0) {
+				match_ifo = i;
+				break;
+			}
+		
+		}
+
+		ntmplt = array_sigmasq[0].dim[0];
+
+		printf("parse match ifo %d, %s, ntmplt %d\n", match_ifo, token_bankname, ntmplt);
+		mem_alloc_size = sizeof(float) * ntmplt;
+
+		if (sigmasq[0] == NULL) {
+			for (int i = 0; i < nifo; i++) {
+				sigmasq[i] = (float *)malloc(mem_alloc_size);
+				memset(sigmasq[i], 0, mem_alloc_size);
+			}
+
+		}
+
+		for (int j=0; j<ntmplt; j++) {
+			sigmasq[match_ifo][j] = (float)((float *)(array_sigmasq[0].data))[j];
+			printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
+		}
+
+		freeArraydata(array_sigmasq);
+		token = strtok_r(NULL, ",", &end_ifo);
+		/*
+		 * Cleanup function for the XML library.
+		 */
+		xmlCleanupParser();
+		/*
+		 * this is to debug memory for regression tests
+		 */
+		xmlMemoryDump();
+
+//		printf("next token %s \n", token);
+
+	}
+
+}
+
+void
 cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
 	// FIXME: sanity check that the size of U matrix and diff matrix for
@@ -310,7 +393,8 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 			}
 //			printf("match ifo %d, norm %d: %f\n", match_ifo, j, tmp_norm[j]);
 		}
-
+		/* copy the autocorr array to GPU device;
+		 * copy the array address to GPU device */
 		CUDA_CHECK(cudaMemcpyAsync(autocorr[match_ifo], tmp_autocorr, mem_alloc_size, cudaMemcpyHostToDevice, stream));
 		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_autocorr_matrix[match_ifo]), &(autocorr[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, stream));
 		CUDA_CHECK(cudaMemcpyAsync(autocorr_norm[match_ifo], tmp_norm, sizeof(float) * ntmplt, cudaMemcpyHostToDevice, stream));

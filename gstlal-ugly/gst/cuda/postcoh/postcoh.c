@@ -41,6 +41,9 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define EPSILON 5
 #define PEAKFINDER_CLUSTER_WINDOW 5
 #define RAD2DEG 57.2957795
+#define L_MAPPING 0
+#define H_MAPPING 1
+#define V_MAPPING 2
 
 static void additional_initializations(GType type)
 {
@@ -90,7 +93,7 @@ enum
 {
 	PROP_0,
 	PROP_DETRSP_FNAME,
-	PROP_AUTOCORRELATION_FNAME,
+	PROP_SPIIR_BANK_FNAME,
 	PROP_SNGL_TMPLT_FNAME,
 	PROP_HIST_TRIALS,
 	PROP_TRIAL_INTERVAL,
@@ -132,15 +135,16 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			g_mutex_unlock(element->prop_lock);
 			break;
 
-		case PROP_AUTOCORRELATION_FNAME: 
+		case PROP_SPIIR_BANK_FNAME: 
 
        			/* must make sure stream_id has already loaded */
 			g_assert(element->stream_id != NOT_INIT);
 			g_mutex_lock(element->prop_lock);
 			cuda_postcoh_device_set_init(element);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
-			element->autocorr_fname = g_value_dup_string(value);
-			cuda_postcoh_autocorr_from_xml(element->autocorr_fname, element->state, element->stream);
+			element->spiir_bank_fname = g_value_dup_string(value);
+			cuda_postcoh_autocorr_from_xml(element->spiir_bank_fname, element->state, element->stream);
+			cuda_postcoh_sigmasq_from_xml(element->spiir_bank_fname, element->state);
 			g_cond_broadcast(element->prop_avail);
 			g_mutex_unlock(element->prop_lock);
 			break;
@@ -200,8 +204,8 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 			g_value_set_string(value, element->detrsp_fname);
 			break;
 
-		case PROP_AUTOCORRELATION_FNAME:
-			g_value_set_string(value, element->autocorr_fname);
+		case PROP_SPIIR_BANK_FNAME:
+			g_value_set_string(value, element->spiir_bank_fname);
 			break;
 
 		case PROP_SNGL_TMPLT_FNAME:
@@ -928,7 +932,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	
 	GstClockTime ts = GST_BUFFER_TIMESTAMP(outbuf);
 
-	int livetime = (int) ((ts - postcoh->t0)/GST_SECOND);
+	int livetime = (int) ((ts - postcoh->t0)/GST_SECOND), cur_tmplt_idx;
 
 	SnglInspiralTable *sngl_table = postcoh->sngl_table;
 
@@ -960,14 +964,18 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->chisq_L = pklist->chisq_L[peak_cur];
 			output->chisq_H = pklist->chisq_H[peak_cur];
 			output->chisq_V = pklist->chisq_V[peak_cur];
-	
+			cur_tmplt_idx = pklist->tmplt_idx[peak_cur];
+
+			output->deff_L = state->sigmasq[L_MAPPING][cur_tmplt_idx]/ pklist->snglsnr_L[peak_cur]; 
+			output->deff_H = state->sigmasq[H_MAPPING][cur_tmplt_idx]/ pklist->snglsnr_H[peak_cur]; 
+			output->deff_V = state->sigmasq[V_MAPPING][cur_tmplt_idx]/ pklist->snglsnr_V[peak_cur]; 
 			output->is_background = 0;
 			output->livetime = livetime;
 			strncpy(output->ifos, state->cur_ifos, ifos_size);
 			output->ifos[2*state->cur_nifo] = '\0';
 		       	strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
 			output->pivotal_ifo[2] = '\0';
-			output->tmplt_idx = pklist->tmplt_idx[peak_cur];
+			output->tmplt_idx = cur_tmplt_idx;
 			output->pix_idx = pklist->pix_idx[peak_cur];
 			output->cohsnr = sqrt(pklist->cohsnr[peak_cur]); /* the returned snr from cuda kernel is snr^2 */
 			output->nullsnr = pklist->nullsnr[peak_cur];
@@ -1504,7 +1512,7 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_AUTOCORRELATION_FNAME,
+		PROP_SPIIR_BANK_FNAME,
 		g_param_spec_string(
 			"autocorrelation-fname",
 			"Autocorrelation matrix filename",

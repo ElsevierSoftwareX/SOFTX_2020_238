@@ -134,7 +134,8 @@ typedef struct _PeakList {
 	
 	float *cohsnr_skymap;
 	float *nullsnr_skymap;
-
+	
+	/* structure on GPU device */
 	int *d_npeak;
 	int *d_peak_pos;
 	int *d_len_idx;
@@ -182,9 +183,17 @@ typedef struct _PeakList {
 } PeakList;
 
 typedef struct _PostcohState {
+  /* parent pointer in host device, each children pointer is in host device, 
+   * pointing to a detector snglsnr array in GPU device */
   COMPLEX_F **d_snglsnr;
+  /* parent pointer in host device, each children pointer is in GPU device,
+   * pointing to a detector snglsnr array in GPU device*/
   COMPLEX_F **dd_snglsnr;
+  /* parent pointer in host device, each children pointer is in GPU device,
+   * pointing to a detector autocorrelation array in GPU device*/
   COMPLEX_F **dd_autocorr_matrix;
+  /* parent pointer in host device, each children pointer is in GPU device,
+   * pointing to a detector autocorrealtion norm value in GPU device*/
   float **dd_autocorr_norm;
   int autochisq_len;
   int snglsnr_len;
@@ -192,7 +201,13 @@ typedef struct _PostcohState {
   int snglsnr_start_exe;
   gint nifo;
   gint8 *ifo_mapping;
+  /* sigmasq read from bank to compute effective distance */
+  float **sigmasq;
+  /* parent pointer in host device, each children pointer is in host device,
+   * pointing to the coherent U map of a certain time in GPU device*/
   float **d_U_map;
+  /* parent pointer in host device, each children pointer is in host device,
+   * pointing to the coherent time arrival diff map of a certain time in GPU device*/
   float **d_diff_map;
   int gps_step;
   unsigned long nside;
@@ -232,7 +247,7 @@ struct _CudaPostcoh {
   gint bps;
 
   char *detrsp_fname;
-  char *autocorr_fname;
+  char *spiir_bank_fname;
   gint exe_len;
   gint preserved_len;
   float max_dt;
