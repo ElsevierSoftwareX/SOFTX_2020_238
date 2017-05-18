@@ -25,6 +25,18 @@ import itertools
 import scipy
 from lal import LIGOTimeGPS
 import sys
+import math
+
+# Round a number up to the nearest power of 2
+def ceil_pow_2(x):
+	x = int(math.ceil(x))
+	x -= 1
+	n = 1
+	while n and (x & (x + 1)):
+		x |= x >> n
+		n *= 2
+	return x + 1
+
 
 def add_quadrature_phase(fseries, n):
 	"""
@@ -110,10 +122,15 @@ class Metric(object):
 		self.metric_tensor = None
 		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
-		# 3 microsecond offset
-		self.delta_t = 3e-6
-		self.t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t)
-		self.neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-self.delta_t))
+		#FIXME
+		self.delta_t = {}
+		self.t_factor = {}
+		self.neg_t_factor = {}
+		for t in numpy.array([1.,2.,4.,8.,16.,32.,64.,128.,256.,512.,1024]):
+			self.delta_t[t] = 5e-6 * 1 * t # 1 M time spacing
+			print self.delta_t[t]
+			self.t_factor[t] = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t[t])
+			self.neg_t_factor[t] = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-self.delta_t[t]))
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "workspace",
 			epoch = 0,
@@ -179,18 +196,16 @@ class Metric(object):
 			return None
 		return fseries
 
-	def match(self, w1, w2, dt = None):
+	def match(self, w1, w2, t_factor = None):
 		def norm(w):
 			n = numpy.real((numpy.conj(w) * w).sum())**.5
 			return n
 
 		try:
-			if dt is None:
+			if t_factor is None:
 				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
-			elif dt == "neg":
-				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data * self.neg_t_factor
-			elif dt == "pos":
-				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data * self.t_factor
+			else:
+				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data * t_factor
 			m = numpy.real(numpy.abs(self.w1w2.data.data[:].sum())) / norm(w1.data.data) / norm(w2.data.data)
 			if m > 1.0000001:
 				raise ValueError("Match is greater than 1 : %f" % m)
@@ -231,10 +246,13 @@ class Metric(object):
 
 	def __set_tt_metric_tensor_component(self, center, w1):
 
-		minus_match = self.match(w1, w1, dt = "neg")
-		plus_match = self.match(w1, w1, dt = "pos")
-		d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t**2
-		return -0.5 * d2mbydx2, self.delta_t
+		# FIXME FIXME assumes m1 and m2 are first coords
+		M = center[0] + center[1]
+		ix = ceil_pow_2(M)
+		minus_match = self.match(w1, w1, t_factor = self.neg_t_factor[ix])
+		plus_match = self.match(w1, w1, t_factor = self.t_factor[ix])
+		d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t[ix]**2
+		return -0.5 * d2mbydx2, self.delta_t[ix]
 
 	def __set_offdiagonal_metric_tensor_component(self, (i,j), center, deltas, g, w1):
 		# evaluate symmetrically
@@ -261,6 +279,9 @@ class Metric(object):
 		return None
 
 	def __set_offdiagonal_time_metric_tensor_component(self, j, center, deltas, g, g_tt, delta_t, w1):
+		# FIXME FIXME assumes m1 and m2 are first coords
+		M = center[0] + center[1]
+		ix = ceil_pow_2(M)
 		# make the vector to solve for the metric by choosing
 		# either a principle axis or a bisector depending on if
 		# this is a diagonal component or not
@@ -270,8 +291,8 @@ class Metric(object):
 		ftt = -2 * g_tt * delta_t**2 + 2.0
 
 		# Second order
-		plus_match = self.match(w1, self.waveform(center+x), dt="pos")
-		minus_match = self.match(w1, self.waveform(center-x), dt="neg")
+		plus_match = self.match(w1, self.waveform(center+x), t_factor = self.t_factor[ix])
+		minus_match = self.match(w1, self.waveform(center-x), t_factor = self.neg_t_factor[ix])
 		return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
 
 	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
@@ -323,4 +344,16 @@ class Metric(object):
 
 
 	def explicit_match(self, c1, c2):
-		return self.match(self.waveform(c1), self.waveform(c2))
+		def fftmatch(w1, w2):
+			def norm(w):
+				n = numpy.real((numpy.conj(w) * w).sum())**.5 / self.duration**.5
+				return n
+
+			self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
+			lal.COMPLEX16FreqTimeFFT(self.tseries, self.w1w2, self.revplan)
+			m = numpy.real(numpy.abs(numpy.array(self.tseries.data.data)).max()) / norm(w1.data.data) / norm(w2.data.data)
+			if m > 1.0000001:
+				raise ValueError("Match is greater than 1 : %f" % m)
+			return m
+
+		return fftmatch(self.waveform(c1), self.waveform(c2))
