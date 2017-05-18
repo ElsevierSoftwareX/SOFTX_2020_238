@@ -45,15 +45,16 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 	return True
 
 def packing_density(n):
-	# this packing density puts two in a cell, we split if there are two or
-	# more expected in a cell
-	return 1.0
-	prefactor = 1.
+	# this packing density puts two in a cell, we split if there is more
+	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
+	prefactor = 1.0
 	if n==1:
 		return prefactor
 	if n==2:
 		return prefactor * numpy.pi / 6 * 3 **.5
+		# assumes square not hexagonal
+		#return prefactor / 2**.5
 	if n==3:
 		return prefactor * numpy.pi / 6 * 2 **.5
 	if n==4:
@@ -92,10 +93,10 @@ class HyperCube(object):
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 2.0e4)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 1.0e4)
 			except RuntimeError:
 				print "metric @", self.center, " failed, trying, ", self.center - self.deltas / 2.
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., self.deltas / 2.0e4)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., self.deltas / 1.0e4)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
