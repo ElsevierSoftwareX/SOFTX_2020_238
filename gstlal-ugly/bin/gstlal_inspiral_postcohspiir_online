@@ -66,7 +66,9 @@ from optparse import OptionParser
 import signal
 import subprocess
 import socket
+import itertools
 import time
+import pdb
 
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -139,6 +141,16 @@ resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thr
 
 def now():
   return XLALUTCToGPS(time.gmtime())
+
+def get_ifo_combos(ifo_list):
+  ifo_combos = []
+  for combo_len in range(2, len(ifo_list)+1):
+    this_combo_list = list(itertools.combinations(ifo_list, combo_len))
+    combo_str_list = ["".join(list(i_combo_list)) for i_combo_list in this_combo_list]
+    ifo_combos.extend(combo_str_list)
+
+  return ifo_combos
+
 
 #
 # =============================================================================
@@ -281,6 +293,15 @@ def parse_command_line():
   #FIXME: job tag and output can not be both none
   #	if options.job_tag is None and options.output is None:
   #		raise ValueError("must provide --job-tag or --output for output file naming purpose")
+
+  #pdb.set_trace()
+  ifo_list = detectors.channel_dict.keys()
+  if options.cuda_postcoh_output_skymap == 1:
+    ifo_combos = get_ifo_combos(ifo_list)
+    for i_ifo_combo in ifo_combos:
+      skymap_path = "%s_skymap" % i_ifo_combo
+      if not os.path.exists(skymap_path):
+        os.mkdir(skymap_path)
 
   return options, filenames, process_params, iir_banks, detectors
 ################################################################
@@ -466,6 +487,7 @@ if 1==1:
 		  gracedb_group = options.finalsink_gracedb_group,
 		  gracedb_search = options.finalsink_gracedb_search,
 		  gracedb_pipeline = options.finalsink_gracedb_pipeline,
+		  output_skymap = options.cuda_postcoh_output_skymap,
 		  verbose = options.verbose)
 
 

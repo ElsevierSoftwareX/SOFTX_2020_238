@@ -159,12 +159,13 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state, cudaStream_t str
 
 	end_ifo = NULL;
 	token = strtok_r(fname_cpy, ",", &end_ifo);
-	//printf("fname_cpy %s\n", fname_cpy);
+	printf("fname_cpy %s\n", fname_cpy);
 	sprintf((char *)xns[0].tag, "sigmasq:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_sigmasq[0]);
 
 	/* start parsing again */
+#if 0
 	while (token != NULL) {
 		char *end_token;
 		char *token_bankname = strtok_r(token, ":", &end_token);
@@ -194,8 +195,8 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state, cudaStream_t str
 		}
 
 		for (int j=0; j<ntmplt; j++) {
-			sigmasq[match_ifo][j] = (float)((float *)(array_sigmasq[0].data))[j];
-			printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
+			//sigmasq[match_ifo][j] = (float)((float *)(array_sigmasq[0].data))[j];
+			//printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
 		}
 
 		freeArraydata(array_sigmasq);
@@ -213,8 +214,8 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state, cudaStream_t str
 
 	}
 
+#endif
 }
-
 void
 cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
