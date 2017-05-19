@@ -150,7 +150,7 @@ struct _CudaMultirateSPIIR {
 
   gint gap_handle;
 
-  // for ACCELERATE_MEMORY_COPY
+  // for ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
   float* h_snglsnr_buffer;
   int len_snglsnr_buffer;
 };

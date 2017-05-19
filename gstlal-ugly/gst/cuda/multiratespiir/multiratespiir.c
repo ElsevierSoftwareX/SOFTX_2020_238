@@ -49,7 +49,7 @@
 #define GST_CAT_DEFAULT cuda_multirate_spiir_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
-#define ACCELERATE_MEMORY_COPY
+#define ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
 
 
 static void additional_initializations(GType type)
@@ -221,7 +221,7 @@ cuda_multirate_spiir_init (CudaMultirateSPIIR * element,
 // gst_pad_set_query_type_function (trans->srcpad,
 //      cuda_multirate_spiir_query_type);
 
-  // for ACCELERATE_MEMORY_COPY
+  // for ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
   element->h_snglsnr_buffer = NULL;
   element->len_snglsnr_buffer = 0;
 }
@@ -730,7 +730,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
 
   //GST_DEBUG_OBJECT (element, "tmp_out_len %d, out len predicted %d", tmp_out_len, out_len);
 
-#ifdef ACCELERATE_MEMORY_COPY
+#ifdef ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
   // to accelerate gpu memory copy, first gpu->cpu(pinned memory)->cpu(gstbuffer)
   // remember copy from h_snglsnr_buffer to gstbuffer
   // should update this part of code after porting to 1.0
@@ -781,7 +781,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
 
     g_assert(last_num_out_spiirup == out_len);
 
-#ifdef ACCELERATE_MEMORY_COPY
+#ifdef ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
     memcpy((void*)GST_BUFFER_DATA(outbuf), outdata, outsize);
 #endif
 
