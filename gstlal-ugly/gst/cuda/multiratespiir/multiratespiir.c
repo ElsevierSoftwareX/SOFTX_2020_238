@@ -731,7 +731,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
   g_assert(element->len_snglsnr_buffer > 0 || (element->len_snglsnr_buffer == 0 && element->h_snglsnr_buffer == NULL));
   if (outsize > element->len_snglsnr_buffer) {
     if (element->h_snglsnr_buffer != NULL){
-      cudaFree(element->h_snglsnr_buffer);
+      cudaFreeHost(element->h_snglsnr_buffer);
     } 
     cudaMallocHost((void**)&element->h_snglsnr_buffer, outsize);
     element->len_snglsnr_buffer = outsize;
