@@ -218,6 +218,8 @@ cuda_multirate_spiir_init (CudaMultirateSPIIR * element,
 //  gst_pad_set_query_function (trans->srcpad, cuda_multirate_spiir_query);
 // gst_pad_set_query_type_function (trans->srcpad,
 //      cuda_multirate_spiir_query_type);
+  element->h_snglsnr_buffer = NULL;
+  element->len_snglsnr_buffer = 0;
 }
 
 /* vmethods */
@@ -723,7 +725,19 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
   outsize = out_len * sizeof(float) * element->outchannels;
 
   //GST_DEBUG_OBJECT (element, "tmp_out_len %d, out len predicted %d", tmp_out_len, out_len);
-  outdata = (float *) GST_BUFFER_DATA(outbuf);
+  // to accelerate gpu memory copy, first gpu->cpu(pinned memory)->cpu(gstbuffer)
+  // remember copy from h_snglsnr_buffer to gstbuffer
+  // should update this part of code after porting to 1.0
+  g_assert(element->len_snglsnr_buffer > 0 || (element->len_snglsnr_buffer == 0 && element->h_snglsnr_buffer == NULL));
+  if (outsize > element->len_snglsnr_buffer) {
+    if (element->h_snglsnr_buffer != NULL){
+      cudaFree(element->h_snglsnr_buffer);
+    } 
+    cudaMallocHost((void**)&element->h_snglsnr_buffer, outsize);
+    element->len_snglsnr_buffer = outsize;
+  }
+  // outdata = (float *) GST_BUFFER_DATA(outbuf);
+  outdata = (float*) element->h_snglsnr_buffer;
    
   while (num_in_multidown > 0) {
     
@@ -759,6 +773,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
 
     g_assert(last_num_out_spiirup == out_len);
 
+    memcpy((void*)GST_BUFFER_DATA(outbuf), outdata, outsize);
 
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {

@@ -149,6 +149,9 @@ struct _CudaMultirateSPIIR {
   cudaStream_t stream;
 
   gint gap_handle;
+
+  float* h_snglsnr_buffer;
+  int len_snglsnr_buffer;
 };
 
 struct _CudaMultirateSPIIRClass {
