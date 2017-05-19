@@ -44,12 +44,15 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define L_MAPPING 0
 #define H_MAPPING 1
 #define V_MAPPING 2
+#define ACCELERATE_POSTCOH_MEMORY_COPY
 
 static void additional_initializations(GType type)
 {
 	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cuda_postcoh", 0, "cuda_postcoh element");
 }
 
+#ifdef ACCELERATE_POSTCOH_MEMORY_COPY
+// This function is just copy from gst_adapter_peek and change malloc to cudaMallocHost
 // FIXME: temporarily used to speed up cudaMemcpy, will be deleted when transfered to gstreamer1.x
 const guint8* gst_adapter_peek_cuda	(	GstAdapter * 	adapter, guint 	size )	
 {
@@ -102,7 +105,7 @@ int DEFAULT_SIZE = 16;
 
   return adapter->assembled_data;
 }
-
+#endif
 
 
 
@@ -1334,8 +1337,12 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			PeakList *pklist = state->peak_list[cur_ifo];
 
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
+#ifdef ACCELERATE_POSTCOH_MEMORY_COPY
 			// temporal solution for low memory copy speed
 			snglsnr = (COMPLEX_F *) gst_adapter_peek_cuda(data->adapter, one_take_size);
+#else 
+			snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
+#endif
 //			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo, postcoh->stream);
 
