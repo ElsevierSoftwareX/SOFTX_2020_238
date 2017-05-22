@@ -21,8 +21,7 @@
 # make gstlal -f Makefile.ligosoftware_icc_gstreamer-1.0
 
 # albert.einstein for git checkout
-#USER=albert.einstein
-USER=duncan.meacher
+USER=albert.einstein
 
 # Set directories and paths
 SRC_DIR:=${PWD}/src
