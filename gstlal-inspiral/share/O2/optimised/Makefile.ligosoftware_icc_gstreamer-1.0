@@ -4,10 +4,25 @@
 # run: make env.sh, then source the resulting environment file and run: make
 #
 # example command:
-# time make logs/gstlal.txt -f Makefile.ligosoftware_icc_gstreamer-1.0 1> make.out 2> make.err
+# make env.sh -f Makefile.ligosoftware_icc_gstreamer-1.0
+# source env.sh
+# time make gstlal -f Makefile.ligosoftware_icc_gstreamer-1.0 1> make.out 2> make.err
+#
+# If you would like to rebuild only part of the software stack, such as lalsuite
+# or gstlal up, but it starts from the beginning if using the above command,
+# then use the touch (-t) option on the previous package.
+#
+# To rebuild lalsuite:
+# make gds -f Makefile.ligosoftware_icc_gstreamer-1.0 -t
+# make lalsuite -f Makefile.ligosoftware_icc_gstreamer-1.0
+#
+# To rebuild gstlal:
+# make doxygen -f Makefile.ligosoftware_icc_gstreamer-1.0 -t
+# make gstlal -f Makefile.ligosoftware_icc_gstreamer-1.0
 
 # albert.einstein for git checkout
-USER=albert.einstein
+#USER=albert.einstein
+USER=duncan.meacher
 
 # Set directories and paths
 SRC_DIR:=${PWD}/src
@@ -23,8 +38,8 @@ LALSUITE_GIT=0
 GSTLAL_GIT=0
 
 # Set package release versions
-GSTLALINSPIRAL=gstlal-inspiral-1.4.1
-GSTLALCALIBRATION=gstlal-calibration-1.1.4
+GSTLALINSPIRAL=gstlal-inspiral-1.4.2
+GSTLALCALIBRATION=gstlal-calibration-1.1.7
 GSTLALUGLY=gstlal-ugly-1.3.1
 GSTLAL=gstlal-1.2.1
 DOXYGEN=doxygen-1.8.9.1
@@ -32,16 +47,16 @@ PYLAL=pylal-0.13.1
 GLUE=glue-1.54.1
 LALAPPS=lalapps-6.21.0
 LALSTOCHASTIC=lalstochastic-1.1.20
-LALINFERENCE=lalinference-1.9.0
+LALINFERENCE=lalinference-1.9.2
 LALPULSAR=lalpulsar-1.16.0
 LALINSPIRAL=lalinspiral-1.7.7
 LALDETCHAR=laldetchar-0.3.5
 LALBURST=lalburst-1.4.4
-LALSIMULATION=lalsimulation-1.7.0
+LALSIMULATION=lalsimulation-1.7.3
 LALMETAIO=lalmetaio-1.3.1
 LALFRAME=lalframe-1.4.3
 LAL=lal-6.18.0
-GDS=gds-2.17.14
+GDS=gds-2.17.15
 LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.5.5
 LDASTOOLSAL=ldas-tools-al-2.5.6
 SWIG=swig-3.0.7
@@ -255,7 +270,7 @@ $(GSTLALUGLY_TARGET) : $(GSTLAL_TARGET)
 	fi ;
 
 # gstlal
-$(GSTLAL_TARGET) : $(DOXYGEN_TARGET) $(GSTLAL_GIT_TARGET)
+$(GSTLAL_TARGET) : $(DOXYGEN_TARGET)
 	@echo $(GREEN)gstlal$(WHITE) 1>&2
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		cd $(GSTLAL_REPO)/gstlal && echo | ./00init.sh ; \
@@ -655,6 +670,8 @@ $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 #########################
 
 # patches
+patch : logs/patch.txt
+
 logs/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
