@@ -639,7 +639,7 @@ fftw : logs/fftw.txt
 logs/fftw.txt : $(LOGS_DIR)/patch.txt $(FFTW_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-# ./configure, make, make install run twice to install single and double precission libs
+# ./configure, make, make install run thrice to install single and double precision, and long double libs 
 $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 	@echo $(GREEN)fftw$(WHITE) 1>&2
 	tar -xzf $(TAR_DIR)/$(FFTW).tar.gz -C $(SRC_DIR)
@@ -647,6 +647,8 @@ $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 		./configure CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES) && make clean && \
 		./configure CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse2 --enable-avx --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
+		make -j$(CORES) && make install -j$(CORES) && make clean && \
+		./configure CFLAGS="-O3 -march=native -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib" LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-fma --enable-threads --enable-long-double --prefix=$(INSTALL_DIR) && \
 		make -j$(CORES) && make install -j$(CORES)
 
 #########################
