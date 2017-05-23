@@ -498,6 +498,9 @@ for channel in channels:
 			qhigh = data_source_info.channel_dict[channel]['qhigh']  
 		else:
 			# FIXME: don't hardcode q and frequency
+			# NOTE: as long as this fudge factor (0.8) for the high frequency cutoff is
+			#       less than the factor in the chebychev low pass cutoff in the downsampler
+			#       this should be fine
 			flow = rate/4.*0.8
 			fhigh = rate/2.*0.8
 			qhigh = 40
