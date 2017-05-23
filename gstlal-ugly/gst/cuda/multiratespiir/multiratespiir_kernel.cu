@@ -45,7 +45,6 @@ extern "C" {
 #define NB_MAX 32
 
 //#define ORIGINAL
-#define SM30
 #define CUT_FILTERS 0 // set to 0 to keep all the filtering results
 #if 0
 // deprecated: we have cuda_debug.h for gpu debug now
@@ -265,7 +264,7 @@ __global__ void cuda_iir_filter_kernel_fine
 	COMPLEX_F *cudaB0, 
 	int *cudaShift,
 	COMPLEX_F *cudaPrevSnr, 
-#ifdef SM35
+#if __CUDA_ARCH__ >= 350
 	const float * __restrict__ cudaData, 
 #else
 	float *cudaData,
@@ -323,7 +322,7 @@ __global__ void cuda_iir_filter_kernel_fine
 
 		for (int i = 0; i < len; ++i)
 		{
-#ifdef SM35
+#if __CUDA_ARCH__ >= 350
 			data = __ldg(&cudaData[(shift + i + queue_first_sample) % queue_len]);
 #else
 		data = cudaData[(shift + i + queue_first_sample) % queue_len];

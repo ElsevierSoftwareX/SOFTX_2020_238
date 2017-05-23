@@ -44,11 +44,70 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define L_MAPPING 0
 #define H_MAPPING 1
 #define V_MAPPING 2
+#define ACCELERATE_POSTCOH_MEMORY_COPY
 
 static void additional_initializations(GType type)
 {
 	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cuda_postcoh", 0, "cuda_postcoh element");
 }
+
+#ifdef ACCELERATE_POSTCOH_MEMORY_COPY
+// This function is just copy from gst_adapter_peek and change malloc to cudaMallocHost
+// FIXME: temporarily used to speed up cudaMemcpy, will be deleted when transfered to gstreamer1.x
+const guint8* gst_adapter_peek_cuda	(	GstAdapter * 	adapter, guint 	size )	
+{
+int DEFAULT_SIZE = 16;
+  GstBuffer *cur;
+  GSList *cur_list;
+  guint copied;
+
+  g_return_val_if_fail (GST_IS_ADAPTER (adapter), NULL);
+  g_return_val_if_fail (size > 0, NULL);
+
+  /* we don't have enough data, return NULL. This is unlikely
+ *    * as one usually does an _available() first instead of peeking a
+ *       * random size. */
+  if (G_UNLIKELY (size > adapter->size))
+    return NULL;
+
+  /* we have enough assembled data, return it */
+  if (adapter->assembled_len >= size)
+    return adapter->assembled_data;
+
+  /* our head buffer has enough data left, return it */
+  cur = adapter->buflist->data;
+  if (GST_BUFFER_SIZE (cur) >= size + adapter->skip)
+    return GST_BUFFER_DATA (cur) + adapter->skip;
+
+  if (adapter->assembled_size < size) {
+    adapter->assembled_size = (size / DEFAULT_SIZE + 1) * DEFAULT_SIZE;
+    GST_DEBUG_OBJECT (adapter, "setting size of internal buffer to %u",
+        adapter->assembled_size);
+    //CUDA_CHECK(cudaFreeHost((void*)adapter->assembled_data));
+    //assert(adapter->assembled_data == NULL);
+    CUDA_CHECK(cudaMallocHost((void**)&(adapter->assembled_data), adapter->assembled_size));
+        //g_realloc (adapter->assembled_data, adapter->assembled_size);
+  }
+  adapter->assembled_len = size;
+  copied = GST_BUFFER_SIZE (cur) - adapter->skip;
+  memcpy (adapter->assembled_data, GST_BUFFER_DATA (cur) + adapter->skip,
+      copied);
+
+  cur_list = g_slist_next (adapter->buflist);
+  while (copied < size) {
+    g_assert (cur_list);
+    cur = cur_list->data;
+    cur_list = g_slist_next (cur_list);
+    memcpy (adapter->assembled_data + copied, GST_BUFFER_DATA (cur),
+        MIN (GST_BUFFER_SIZE (cur), size - copied));
+    copied = MIN (size, copied + GST_BUFFER_SIZE (cur));
+  }
+
+  return adapter->assembled_data;
+}
+#endif
+
+
 
 
 GST_BOILERPLATE_FULL(
@@ -1278,15 +1337,25 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			PeakList *pklist = state->peak_list[cur_ifo];
 
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
+#ifdef ACCELERATE_POSTCOH_MEMORY_COPY
+			// temporal solution for low memory copy speed
+			snglsnr = (COMPLEX_F *) gst_adapter_peek_cuda(data->adapter, one_take_size);
+#else 
 			snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
+#endif
 //			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo, postcoh->stream);
 
 			GST_LOG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d, max_snglsnr %f\n", ligo_time.gpsSeconds, cur_ifo, c_npeak, state->snglsnr_max);
+
+			/* 
+			// because you use new postcoh kernel optimized by Xiaoyang Guo now, you cannot use 
+			// the following memory copy code any more
+			// new postcoh kernel need transposed state->d_snglsnr[cur_ifo] matrix and there is no transpose in the following code 
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
-			/* copy the snglsnr to the right cuda memory */
+			// copy the snglsnr to the right cuda memory
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
-				/* when the snglsnr can be put in as one chunk */
+				// when the snglsnr can be put in as one chunk 
 				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice, postcoh->stream));
 				GST_LOG("load snr to gpu as a chunk");
 			} else {
@@ -1299,6 +1368,23 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice, postcoh->stream));
 				GST_LOG("load snr to gpu as as two chunks");
 			}
+			*/			
+
+			// this is necessory for new postcoh kernel
+			// 1. expand temporal memory space if necessary
+			g_assert(pklist->len_snglsnr_buffer >= 0);
+			if (one_take_size > pklist->len_snglsnr_buffer) {
+				// re-malloc pklist->d_snglsnr_buffer
+				if (pklist->d_snglsnr_buffer != NULL) {
+					cudaFree(pklist->d_snglsnr_buffer);
+				}
+				cudaMalloc((void**)&pklist->d_snglsnr_buffer, one_take_size);
+				pklist->len_snglsnr_buffer = one_take_size;
+			}
+			// 2. copy snglsnr to temporal gpu memory d_snglsnr_buffer
+			CUDA_CHECK(cudaMemcpyAsync(pklist->d_snglsnr_buffer, snglsnr, one_take_size, cudaMemcpyHostToDevice, postcoh->stream));
+			// 3. do transpose, at the same time, snr data will be moved to proper positions in state->d_snglsnr[cur_ifo]
+			transpose_snglsnr(pklist->d_snglsnr_buffer, state->d_snglsnr[cur_ifo], state->snglsnr_start_load, one_take_len, state->snglsnr_len, state->ntmplt, postcoh->stream);
 			}
 
 		}

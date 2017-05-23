@@ -149,6 +149,10 @@ struct _CudaMultirateSPIIR {
   cudaStream_t stream;
 
   gint gap_handle;
+
+  // for ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
+  float* h_snglsnr_buffer;
+  int len_snglsnr_buffer;
 };
 
 struct _CudaMultirateSPIIRClass {
