@@ -61,7 +61,6 @@ LDASTOOLSAL=ldas-tools-al-2.5.6
 SWIG=swig-3.0.7
 METAIO=metaio-8.4.0
 LIBFRAME=libframe-8.30
-OPROFILE=oprofile-1.1.0
 GSTPYTHON=gst-python-1.4.0
 GSTPLUGINSGOOD=gst-plugins-good-1.4.5
 GSTPLUGINSBASE=gst-plugins-base-1.4.5
@@ -96,7 +95,6 @@ LDASTOOLSAL_TARGET=$(INSTALL_DIR)/lib/libldastoolsal.so
 SWIG_TARGET=$(INSTALL_DIR)/bin/swig
 METAIO_TARGET=$(INSTALL_DIR)/lib/libmetaio.so
 LIBFRAME_TARGET=$(INSTALL_DIR)/lib/libFrame.so
-OPROFILE_TARGET=$(INSTALL_DIR)/lib/oprofile/libopagent.so
 GSTPYTHON_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpythonplugin.so
 GSTGOOD_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpng.so
 GSTBASE_TARGET=$(INSTALL_DIR)/lib/libgstapp-1.0.so
@@ -131,7 +129,6 @@ LDASTOOLSAL_TAR_TARGET=$(TAR_DIR)/$(LDASTOOLSAL).tar.gz
 SWIG_TAR_TARGET=$(TAR_DIR)/$(SWIG).tar.gz
 METAIO_TAR_TARGET=$(TAR_DIR)/$(METAIO).tar.gz
 LIBFRAME_TAR_TARGET=$(TAR_DIR)/$(LIBFRAME).tar.gz
-OPROFILE_TAR_TARGET=$(TAR_DIR)/$(OPROFILE).tar.gz
 GSTPYTHON_TAR_TARGET=$(TAR_DIR)/$(GSTPYTHON).tar.xz
 GSTGOOD_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz
 GSTBASE_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz
@@ -473,7 +470,7 @@ $(LALFRAME_TARGET) : $(LAL_TARGET)
 	fi ;
 
 # lal
-$(LAL_TARGET) : $(OPROFILE_TARGET) $(LIBFRAME_TARGET) $(METAIO_TARGET) $(SWIG_TARGET) $(LDASTOOLSAL_TARGET)  $(LDASTOOLSFRAMECPP_TARGET) $(GDS_TARGET)
+$(LAL_TARGET) : $(LIBFRAME_TARGET) $(METAIO_TARGET) $(SWIG_TARGET) $(LDASTOOLSAL_TARGET)  $(LDASTOOLSFRAMECPP_TARGET) $(GDS_TARGET)
 	@echo $(GREEN)lal$(WHITE) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lal && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
@@ -551,26 +548,14 @@ $(METAIO_TARGET) : $(LIBFRAME_TARGET)
 # libframe
 libframe : logs/libframe.txt
 
-logs/libframe.txt : $(LOGS_DIR)/oprofile.txt $(LIBFRAME_TARGET)
+logs/libframe.txt : $(LOGS_DIR)/gstreamer.txt $(LIBFRAME_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(LIBFRAME_TARGET) : $(OPROFILE_TARGET)
+$(LIBFRAME_TARGET) : $(GSTPYTHON_TARGET)
 	@echo $(GREEN)libframe$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(LIBFRAME).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(LIBFRAME) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(LIBFRAME) && make -j$(CORES) && make install -j$(CORES)
-
-# oprofile
-oprofile : logs/oprofile.txt
-
-logs/oprofile.txt : $(LOGS_DIR)/gstreamer.txt $(OPROFILE_TARGET)
-	@echo $^ | sed -e "s@ @\n@g" > $@
-
-$(OPROFILE_TARGET) : $(GSTPYTHON_TARGET)
-	@echo $(GREEN)oprofile$(WHITE) 1>&2
-	tar -xf $(TAR_DIR)/$(OPROFILE).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(OPROFILE)/ && ./configure --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(OPROFILE)/ && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer (all)
 gstreamer : logs/gstreamer.txt
@@ -675,7 +660,7 @@ logs/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 #tarballs
-logs/tar.txt : $(FFTW_TAR_TARGET) $(PYFFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(OPROFILE_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
+logs/tar.txt : $(FFTW_TAR_TARGET) $(PYFFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(GSTLALINSPIRAL_TAR_TARGET) : $(GSTLALCALIB_TAR_TARGET)
@@ -747,11 +732,8 @@ $(SWIG_TAR_TARGET) : $(METAIO_TAR_TARGET)
 $(METAIO_TAR_TARGET) : $(LIBFRAME_TAR_TARGET)
 	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(METAIO).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
-$(LIBFRAME_TAR_TARGET) : $(OPROFILE_TAR_TARGET)
+$(LIBFRAME_TAR_TARGET) : $(GSTPYTHON_TAR_TARGET)
 	wget --no-check-certificate http://lappweb.in2p3.fr/virgo/FrameL/$(LIBFRAME).tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(OPROFILE_TAR_TARGET) : $(GSTPYTHON_TAR_TARGET)
-	wget --no-check-certificate http://prdownloads.sourceforge.net/oprofile/$(OPROFILE).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(GSTPYTHON_TAR_TARGET) : $(GSTGOOD_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-python/$(GSTPYTHON).tar.xz --directory-prefix=$(TAR_DIR) -nc
@@ -846,9 +828,6 @@ clean-metaio :
 
 clean-libframe :
 	rm -rf logs/libframe.txt $(LIBFRAME_TARGET)
-
-clean-oprofile :
-	rm -rf logs/oprofile.txt $(OPROFILE_TARGET)
 
 clean-gstreamer :
 	rm -rf logs/gstreamer.txt $(GSTREAMER_TARGET) $(GSTBASE_TARGET) $(GSTGOOD_TARGET) $(GSTPYTHON_TARGET)
