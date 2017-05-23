@@ -180,7 +180,7 @@ __global__ void cuda_iir_filter_kernel_coarse
 #if __CUDA_ARCH__ >= 350
 	const float * __restrict__ cudaData, 
 #else
-	float *cudaData,
+	const float *cudaData,
 #endif
 	float *cudaSnr,
 	gint mem_len, 
@@ -267,7 +267,7 @@ __global__ void cuda_iir_filter_kernel_fine
 #if __CUDA_ARCH__ >= 350
 	const float * __restrict__ cudaData, 
 #else
-	float *cudaData,
+	const float *cudaData,
 #endif
 	float *cudaSnr,
 	gint mem_len, 
