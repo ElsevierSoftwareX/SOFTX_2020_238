@@ -20,6 +20,7 @@
 import os
 import numpy
 import scipy
+import cmath
 from scipy import integrate
 from scipy import interpolate
 import math
@@ -61,6 +62,12 @@ lsctables.use_in(DefaultContentHandler)
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
     pass
+
+def tukeywindow(data, samps = 200.):
+	assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
+	tp = float(samps) / len(data)
+	return lal.CreateTukeyREAL8Window(len(data), tp).data.data
+
 
 def ceil_pow_2(x):
     """ Return the smallest power of 2 that is larger than x.
@@ -394,9 +401,8 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 	)
 
 
-	data = numpy.zeros((sampleRate * working_duration,))
-	norm = numpy.sqrt(numpy.dot(hplus.data.data, numpy.conj(hplus.data.data)))
-	data[-hplus.data.length:] = hplus.data.data / norm
+	tmptdata = numpy.zeros(working_length,)
+	tmptdata[-hplus.data.length:] = hplus.data.data
 
 
 	tmptseries = laltypes.REAL8TimeSeries(
@@ -405,7 +411,7 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 		f0 = 0.0,
 		deltaT = 1.0 / sampleRate,
 		sampleUnits = laltypes.LALUnit("strain"),
-		data = data
+		data = tmptdata
 	)
 		
 	lalfft.XLALREAL8TimeFreqFFT(fworkspace, tmptseries, fwdplan)
@@ -442,12 +448,26 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 
 	#data = tseries.data[-length_max:]
 
+
+	data = tseries.data.data
+
+	data *= tukeywindow(data, samps = 32)
 	filter_len = min(length_max, 1.0 * len(hplus.data.data))
 	data = tseries.data[-filter_len:]
 
-	#pdb.set_trace()
+
+	#data = data[-length_max:]
+	#pdb.set_trace()	
+	#
+	# normalize so that inner product of template with itself
+	# is 2
+	#
+
+	norm = abs(numpy.dot(data, numpy.conj(data)))
+	data *= cmath.sqrt(2 / norm)
+
 	amp, phase = calc_amp_phase(numpy.imag(data), numpy.real(data))
-	return amp, phase
+	return amp, phase, norm
 
 def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, working_length, working_duration, length_max, spin1x=0., spin1y=0., spin1z=0., spin2x=0., spin2y=0., spin2z=0.):
     """ Generates whitened waveform from given parameters and PSD, then returns the amplitude and the phase.
@@ -525,8 +545,8 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 
     if is_freq_whiten:
 	# hp.data.data *= lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
-	lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
-	return lalwhiten_amp, lalwhiten_phase
+	lalwhiten_amp, lalwhiten_phase, lalwhiten_norm = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
+	return lalwhiten_amp, lalwhiten_phase, lalwhiten_norm
     else:
 	amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
 	amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
@@ -631,7 +651,7 @@ class Bank(object):
 		# FIXME: This is a hack to calculate the maximum length of given table, we 
 		# know that working_f_low_extra_time is about 1/10 of the maximum duration
 		working_f_low_extra_time = .1 * tchirp + 1.0
-		length_max = working_f_low_extra_time * 10 * sampleRate
+		length_max = int(round(working_f_low_extra_time * 10 * sampleRate))
 
 		# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
 		working_length = ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
@@ -673,7 +693,7 @@ class Bank(object):
 			m2 = row.mass2
 			fFinal = row.f_final
 
-			amp, phase = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, True, working_length, working_duration, length_max, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
+			amp, phase, norm_h = gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, True, working_length, working_duration, length_max, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
 			
 			iir_type_flag = 1
 
@@ -688,37 +708,38 @@ class Bank(object):
 				# get the IIR response
 				u = spawaveform.iirresponse(length, a1, b0, delay)
 
-				#u_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
-				#u_pad[-len(u):] = u
+				u_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+				u_pad[-len(u):] = u
 
 				u_rev = u[::-1]
 				u_rev_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
 				u_rev_pad[-len(u_rev):] = u_rev
 
-				norm_u = 1.0/numpy.sqrt(2.0)*((u_rev_pad * numpy.conj(u_rev_pad)).sum()**0.5)
-				u_rev_pad /= norm_u
-				#u_pad /= norm_u
+				# normalize the approximate waveform so its inner-product is 2
+				norm_u = abs(numpy.dot(u_rev_pad, numpy.conj(u_rev_pad)))
+				u_rev_pad *= cmath.sqrt(2 / norm_u)
+				u_pad *= cmath.sqrt(2 / norm_u)
 
 				# normalize the iir coefficients
-				b0 /= norm_u
+				b0 *= cmath.sqrt(2 / norm_u)
 
 				# get the original waveform
 				h = amp * numpy.exp(1j * phase)
 				h_pad = numpy.zeros(length * 1, dtype=numpy.double)
 				h_pad[-len(h):] = h.real
 
-				norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
-				h_pad /= norm_h
+				# normalize the original waveform so its inner-product is 2
+				# norm_h = numpy.sqrt(abs(numpy.dot(h_pad, numpy.conj(h_pad))))
+				# h_pad /= norm_h
 
 			
-				h_pad1 = numpy.zeros(length * 1, dtype=numpy.cdouble)
-				h_pad1[-len(h):] = h
+				#norm_h1 = numpy.sqrt(abs(numpy.dot(h_pad1, numpy.conj(h
+				#norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
+				#h_pad *= cmath.sqrt(1 / norm_h)
 
-				norm_h1 = numpy.sqrt(abs(numpy.dot(h_pad1, numpy.conj(h_pad1))))
-				h_pad1 /= norm_h1
 			
 				# compute the SNR
-				spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad1)))/numpy.sqrt(2)
+				spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))
 				
 				if(abs(original_epsilon - epsilon) < 1e-5):
 					original_match = spiir_match
@@ -731,16 +752,45 @@ class Bank(object):
 
 			if(spiir_match < req_min_match):
 				opIIR = OptimizerIIR(length, a1, b0, delay)
-				opIIR.setTemplate(opIIR.cnormalize(h_pad1))
+				opIIR.setTemplate(opIIR.cnormalize(h_pad))
 				opIIR.normalizeCoef()
 				opIIR.runHierarchyLagOp(300)
 				a1 = opIIR.a1
 				b0 = opIIR.b0
 				delay = opIIR.delay
 				spiir_match = opIIR.innerProd(opIIR.template, opIIR._iir_sum_res)
+		#
+		# sigmasq = 2 \sum_{k=0}^{N-1} |\tilde{h}_{k}|^2 / S_{k} \Delta f
+		#
+		# XLALWhitenCOMPLEX16FrequencySeries() computed
+		#
+		# \tilde{h}'_{k} = \sqrt{2 \Delta f} \tilde{h}_{k} / \sqrt{S_{k}}
+		#
+		# and XLALCOMPLEX16FreqTimeFFT() computed
+		#
+		# h'_{j} = \Delta f \sum_{k=0}^{N-1} exp(2\pi i j k / N) \tilde{h}'_{k}
+		#
+		# therefore, "norm" is
+		#
+		# \sum_{j} |h'_{j}|^{2} = (\Delta f)^{2} \sum_{j} \sum_{k=0}^{N-1} \sum_{k'=0}^{N-1} exp(2\pi i j (k-k') / N) \tilde{h}'_{k} \tilde{h}'^{*}_{k'}
+		#                       = (\Delta f)^{2} \sum_{k=0}^{N-1} \sum_{k'=0}^{N-1} \tilde{h}'_{k} \tilde{h}'^{*}_{k'} \sum_{j} exp(2\pi i j (k-k') / N)
+		#                       = (\Delta f)^{2} N \sum_{k=0}^{N-1} |\tilde{h}'_{k}|^{2}
+		#                       = (\Delta f)^{2} N 2 \Delta f \sum_{k=0}^{N-1} |\tilde{h}_{k}|^{2} / S_{k}
+		#                       = (\Delta f)^{2} N sigmasq
+		#
+		# and \Delta f = 1 / (N \Delta t), so "norm" is
+		#
+		# \sum_{j} |h'_{j}|^{2} = 1 / (N \Delta t^2) sigmasq
+		#
+		# therefore
+		#
+		# sigmasq = norm * N * (\Delta t)^2
+		#
+
+
 
 			#self.sigmasq.append(1.0 * norm_h / sampleRate)
-			self.sigmasq.append(norm_h/2. * len(h) / sampleRate**2. )
+			self.sigmasq.append(norm_h * len(h) / sampleRate**2. )
 			
 			# This is actually the cross correlation between the original waveform and this approximation
 			# FIXME: also update the waveform
