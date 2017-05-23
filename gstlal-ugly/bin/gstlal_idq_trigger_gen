@@ -152,6 +152,7 @@ def parse_command_line():
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
+	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	#
@@ -193,7 +194,8 @@ class MultiChannelHandler(simplehandler.Handler):
 		
 		# set up bottle routes for spectra by each whitener
 		self.psds = {}
-		bottle.route("/psds.xml")(self.web_get_psd_xml)
+		if not options.disable_web_service:
+			bottle.route("/psds.xml")(self.web_get_psd_xml)
 
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
@@ -422,50 +424,51 @@ channels = data_source_info.channel_dict.keys()
 # dictionary of basis parameters keyed by ifo, rate
 basis_params = {}
 
-#
-# create a new, empty, Bottle application and make it the current
-# default, then start http server to serve it up
-#
+if not options.disable_web_service:	
+	#
+	# create a new, empty, Bottle application and make it the current
+	# default, then start http server to serve it up
+	#
 
-bottle.default_app.push()
-# uncomment the next line to show tracebacks when something fails
-# in the web server
-#bottle.app().catchall = False
-import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
-httpservers = httpinterface.HTTPServers(
-	# FIXME:  either switch to using avahi's native name
-	# uniquification system or adopt a naturally unique naming
-	# scheme (e.g., include a search identifier and job
-	# number).
-	service_name = "gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
-	service_properties = {},
-	verbose = options.verbose
-)
+	bottle.default_app.push()
+	# uncomment the next line to show tracebacks when something fails
+	# in the web server
+	#bottle.app().catchall = False
+	import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
+	httpservers = httpinterface.HTTPServers(
+		# FIXME:  either switch to using avahi's native name
+		# uniquification system or adopt a naturally unique naming
+		# scheme (e.g., include a search identifier and job
+		# number).
+		service_name = "gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
+		service_properties = {},
+		verbose = options.verbose
+	)
 
-#
-# Set up a registry of the resources that this job provides
-#
-
-@bottle.route("/")
-@bottle.route("/index.html")
-def index(channel_list = channels):
-	# get the host and port to report in the links from the
-	# request we've received so that the URLs contain the IP
-	# address by which client has contacted us
-	netloc = bottle.request.urlparts[1]
-	server_address = "http://%s" % netloc
-	yield "<html><body>\n<h3>%s %s</h3>\n<p>\n" % (netloc, " ".join(sorted(channel_list)))
-	for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
-		# don't create links back to this page
-		if route.rule in ("/", "/index.html"):
-			continue
-		# only create links for GET methods
-		if route.method != "GET":
-			continue
-		yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
-	yield "</p>\n</body></html>"
-# FIXME:  get service-discovery working, then don't do this
-open("registry.txt", "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
+	#
+	# Set up a registry of the resources that this job provides
+	#
+	
+	@bottle.route("/")
+	@bottle.route("/index.html")
+	def index(channel_list = channels):
+		# get the host and port to report in the links from the
+		# request we've received so that the URLs contain the IP
+		# address by which client has contacted us
+		netloc = bottle.request.urlparts[1]
+		server_address = "http://%s" % netloc
+		yield "<html><body>\n<h3>%s %s</h3>\n<p>\n" % (netloc, " ".join(sorted(channel_list)))
+		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+			# don't create links back to this page
+			if route.rule in ("/", "/index.html"):
+				continue
+			# only create links for GET methods
+			if route.method != "GET":
+				continue
+			yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
+		yield "</p>\n</body></html>"
+	# FIXME:  get service-discovery working, then don't do this
+	open("registry.txt", "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
 #
 # building the event loop and pipeline
@@ -523,9 +526,6 @@ for channel in channels:
 		src[(channel, rate)] = thishead	
 
 if options.verbose:
-	print >>sys.stderr, "done."
-
-if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline..."
 appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
 appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for (channel, rate) in src.keys()) 
@@ -544,22 +544,26 @@ if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds o
 # run
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
-mainloop.run()
 
 if options.verbose:
 	print >>sys.stderr, "running pipeline..."
 
+mainloop.run()
 
-#
-# Shutdown the web interface servers and garbage collect the Bottle
-# app.  This should release the references the Bottle app's routes
-# hold to the pipeline's data (like template banks and so on).
-#
+if options.verbose:
+	print >>sys.stderr, "shutting down pipeline..."
 
-
-del httpservers
-bottle.default_app.pop()
-
+if not options.disable_web_service:
+	#
+	# Shutdown the web interface servers and garbage collect the Bottle
+	# app.  This should release the references the Bottle app's routes
+	# hold to the pipeline's data (like template banks and so on).
+	#
+	
+	
+	del httpservers
+	bottle.default_app.pop()
+	
 
 #
 # Set pipeline state to NULL and garbage collect the handler
