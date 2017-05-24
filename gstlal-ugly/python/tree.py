@@ -53,8 +53,6 @@ def packing_density(n):
 		return prefactor
 	if n==2:
 		return prefactor * numpy.pi / 6 * 3 **.5
-		# assumes square not hexagonal
-		#return prefactor / 2**.5
 	if n==3:
 		return prefactor * numpy.pi / 6 * 2 **.5
 	if n==4:
@@ -91,12 +89,17 @@ class HyperCube(object):
 		self.center = numpy.array([c[0] + (c[1] - c[0]) / 2. for c in boundaries])
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
+		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
+		deltas = 5e-7 * numpy.ones(len(self.center))
+		deltas[0:2] *= self.center[0:2]
+		deltas[2:] = 1.3e-4
+
 		if self.metric is not None and metric_tensor is None:
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, self.deltas / 1.0e4)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, deltas)
 			except RuntimeError:
 				print "metric @", self.center, " failed, trying, ", self.center - self.deltas / 2.
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., self.deltas / 1.0e4)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., deltas)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
