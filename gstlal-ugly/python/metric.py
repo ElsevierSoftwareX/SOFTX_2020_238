@@ -122,15 +122,22 @@ class Metric(object):
 		self.metric_tensor = None
 		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
-		#FIXME
+		# FIXME NOTE this code is written to allow different spacing
+		# depending on mass if that is a good idea, but right now it
+		# just does the same spacing
 		self.delta_t = {}
 		self.t_factor = {}
 		self.neg_t_factor = {}
+		delta_t = 5e-6
+		t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * delta_t)
+		neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-delta_t))
 		for t in numpy.array([1.,2.,4.,8.,16.,32.,64.,128.,256.,512.,1024]):
-			self.delta_t[t] = 5e-6 * 1 * t # 1 M time spacing
-			print self.delta_t[t]
-			self.t_factor[t] = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t[t])
-			self.neg_t_factor[t] = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-self.delta_t[t]))
+			#self.delta_t[t] = 3e-6 * t # 1 M time spacing
+			#self.t_factor[t] = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t[t])
+			#self.neg_t_factor[t] = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-self.delta_t[t]))
+			self.delta_t[t] = delta_t
+			self.t_factor[t] = t_factor
+			self.neg_t_factor[t] = neg_t_factor
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "workspace",
 			epoch = 0,
