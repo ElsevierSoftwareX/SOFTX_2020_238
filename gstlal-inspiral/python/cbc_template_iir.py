@@ -447,16 +447,20 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 	#
 
 	#data = tseries.data[-length_max:]
+	#data = data[-length_max:]
 
 
 	data = tseries.data.data
 
 	data *= tukeywindow(data, samps = 32)
 	filter_len = min(length_max, 1.0 * len(hplus.data.data))
+	# the time domain data is chosen to be the same length as the original
+	# template. The length_max from tchirp and the working_length are too
+	# long, may cause too many spiir filters. 
+	# FIXME: should we allow a little more time for low-frequency boundary?
 	data = tseries.data[-filter_len:]
 
 
-	#data = data[-length_max:]
 	#pdb.set_trace()	
 	#
 	# normalize so that inner product of template with itself
@@ -507,12 +511,14 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
     Phase :
 	The phase of the whitened template
     """
-    # FIXME: currently only works for the non-spin or spin-aligned case
+    # FIXME: currently only works for the non-spin or spin-aligned case,
+    # the latest waveform for IMR is IMRPhenomD and SEOBR4_ROM
     if (m1+m2) <=4:
 	approximant_string = "SpinTaylorT4"
     else:
 	approximant_string = "IMRPhenomB"
 
+    # NOTE: There is also ChooseFDWaveform. IMRPhenomB is FD
     hp,hc = lalsimulation.SimInspiralChooseTDWaveform(0,				# reference phase, phi ref
 		    				    1./sampleRate,			# delta T
 						    m1*lal.MSUN_SI,			# mass 1 in kg
@@ -548,6 +554,11 @@ def gen_whitened_amp_phase(psd, m1, m2, sampleRate, flower, is_freq_whiten, work
 	lalwhiten_amp, lalwhiten_phase, lalwhiten_norm = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
 	return lalwhiten_amp, lalwhiten_phase, lalwhiten_norm
     else:
+        # FIXME: the hp, hc are now in frequency domain. 
+        # Need to transform them first into time domain to perform following whitening
+        print >> sys.stderr, "Time domain whitening not supported"
+        sys.exit()
+ 
 	amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
 	amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
 
@@ -653,7 +664,7 @@ class Bank(object):
 		working_f_low_extra_time = .1 * tchirp + 1.0
 		length_max = int(round(working_f_low_extra_time * 10 * sampleRate))
 
-		# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
+		# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples, this is for psd length to whiten the template later.
 		working_length = ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
 		working_duration = float(working_length) / sampleRate
 
@@ -738,7 +749,7 @@ class Bank(object):
 				#h_pad *= cmath.sqrt(1 / norm_h)
 
 			
-				# compute the SNR
+				# compute the SNR, FIXME: verify if the calculation of overplap here is correct ?
 				spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))
 				
 				if(abs(original_epsilon - epsilon) < 1e-5):
