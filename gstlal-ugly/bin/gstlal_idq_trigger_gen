@@ -513,13 +513,13 @@ for channel in channels:
 		phase = [0, numpy.pi/2.]
 		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 1e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
-		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(dur*rate), latency = 0)
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = False, block_stride = int(rate), latency = 0)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
-		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel) )
+		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
 		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage5_afterTrigger_%s_%s' % (str(rate).zfill(5), channel))
