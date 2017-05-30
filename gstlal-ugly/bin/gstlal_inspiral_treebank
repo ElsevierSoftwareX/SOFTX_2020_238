@@ -176,22 +176,12 @@ mismatch = 1.0 - args.min_match
 
 # Initialize the tree root and then split with a given splitsize
 def trans_M_q(coord_limits):
-	M = []
-	q = []
-	for mass1 in coord_limits[0]:
-		for mass2 in coord_limits[1]:
-			M.append(mass1 + mass2)
-			q.append(mass1 / mass2)
-	#M_q_vertices = zip(M,q)
-	q = list(map(lambda x: x if x < 1.0 else x**-1, q))
-	print q
-	M_limits = [min(M), max(M)]
-	q_limits = [min(q), max(q)]
-	return [M_limits, q_limits]
+	Mlimits = [metric_module.mc_from_m1_m2(coord_limits[0][0], coord_limits[1][0]), metric_module.mc_from_m1_m2(coord_limits[0][1], coord_limits[1][1])]
+	return [Mlimits] +  coord_limits[1:]
 
 if args.Mq:
 	coord_limits_2 = trans_M_q(coord_limits)
-	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: True, metric = g_ij))
+	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint_mc(x, args.max_q, args.max_mtotal, coord_limits[0][0]), metric = g_ij))
 else:
 	coord_limits_2 = coord_limits
 	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint(x, args.max_q, args.max_mtotal), metric = g_ij))
