@@ -98,10 +98,39 @@ def m1_m2_s1z_s2z_func(coords):
 
 
 def M_q_func(coords):
-	mass2 = coords[0] / (coords[1] + 1)
-	mass1 = coords[0] - mass2
+	mass2 = coords[1]
+	mass1 = m1_from_mc_m2(coords[0], mass2)
 	return (mass1, mass2, 0., 0., 0., 0., 0., 0.)
 
+def m1_from_mc_m2(mc, m2):
+	a = mc**5 / m2**3
+	q = -m2 * a
+	p = -a
+
+	def tk(p,q,k):
+		t1 = 2 * (-p / 3.)**.5
+		arg = 3. * q / (2. * p) * (-3. / p)**.5
+		arg2 = math.acos(arg)
+		t2 = math.cos(1./3. * arg2 - 2. * math.pi * k / 3.)
+		return t1 * t2
+
+	def t0(p,q):
+		arg = -3. * abs(q) / 2. / p * (-3. / p)**.5
+		arg = 1./3. * math.acosh(arg)
+		return 2 * (-p / 3.)**.5 * math.cosh(arg)
+
+	for k in (0,1,2):
+		try:
+			m1 = tk(p,q,k)
+			if m1 >= m2:
+				return m1
+		except ValueError:
+			pass
+
+	return t0(p,q)
+
+def mc_from_m1_m2(m1, m2):
+	return (m1 * m2)**(.6) / (m1 + m2)**.2
 
 #
 # Metric object that numerically evaluates the waveform metric
@@ -128,7 +157,7 @@ class Metric(object):
 		self.delta_t = {}
 		self.t_factor = {}
 		self.neg_t_factor = {}
-		delta_t = 5e-6
+		delta_t = 1e-5
 		t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * delta_t)
 		neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-delta_t))
 		for t in numpy.array([1.,2.,4.,8.,16.,32.,64.,128.,256.,512.,1024]):
