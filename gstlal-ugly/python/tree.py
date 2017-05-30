@@ -44,6 +44,25 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 		return False
 	return True
 
+def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = float("inf"), min_m1 = 0):
+	# Assumes m_1 and m_2 are first
+	Q = []
+	M = []
+	M1 = []
+	for vertex in vertices:
+		mc,m2 = vertex[0:2]
+		m1 = metric_module.m1_from_mc_m2(mc, m2)
+		Q.append(m1/m2)
+		M.append(m1+m2)
+		M1.append(m1)
+	minq_condition = all([q < 1. / mass_ratio for q in Q])
+	minm1_condition = all([m1 < min_m1 for m1 in M1])
+	maxq_condition = all([q > mass_ratio for q in Q])
+	mtotal_condition = all([m > total_mass for m in M])
+	if minq_condition or minm1_condition or maxq_condition or mtotal_condition:
+		return False
+	return True
+
 def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
@@ -184,8 +203,6 @@ class HyperCube(object):
 		return numpy.product(self.deltas) * self.det**.5
 
 	def coord_volume(self):
-		# FIXME this assumes m_1 m_2 are the first coordinates, not necessarily true
-		#return numpy.product(self.deltas[0:2])
 		return numpy.product(self.deltas)
 
 	def num_templates(self, mismatch):
@@ -219,7 +236,7 @@ class Node(object):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		aspect_ratios = size / min(size)
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
+		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>1.67]) / 1.67**len(aspect_ratios[aspect_ratios>1.67]))
 		if numpy.isnan(aspect_factor):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
@@ -251,7 +268,7 @@ class Node(object):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if metric_diff <= metric_tol and aspect_factor <= 1.0:
+			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
