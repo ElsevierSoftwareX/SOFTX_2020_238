@@ -110,7 +110,7 @@ class HyperCube(object):
 		self.metric = metric
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = 5e-7 * numpy.ones(len(self.center))
-		deltas[0:2] *= self.center[0:2]
+		#deltas[0:2] *= self.center[0:2]**.5
 		deltas[2:] = 1.3e-4
 
 		if self.metric is not None and metric_tensor is None:
@@ -236,7 +236,7 @@ class Node(object):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		aspect_ratios = size / min(size)
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>1.67]) / 1.67**len(aspect_ratios[aspect_ratios>1.67]))
+		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>1.5]) / 1.5**len(aspect_ratios[aspect_ratios>1.5]))
 		if numpy.isnan(aspect_factor):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
