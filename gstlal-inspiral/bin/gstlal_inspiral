@@ -489,17 +489,11 @@ def parse_command_line():
 		# the injections are now present in the data so we don't want to do them twice
 		detectors.injection_filename = None
 
-	# Choose to optionally reconstruct segments around injections (not blind injections!)
-	if options.injections:
-		reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections)
-	else:
-		reconstruction_segment_list = None
-
 	if options.zero_lag_ranking_stat_file is None and likelihood_url_namedtuples_list:
 		options.zero_lag_ranking_stat_file = [None] * len(likelihood_url_namedtuples_list)
 
 	# we're done
-	return options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_url_namedtuples_list
+	return options, filenames, process_params, svd_banks, detectors, likelihood_url_namedtuples_list
 
 
 #
@@ -546,7 +540,7 @@ class OneTimeSignalHandler(object):
 #
 
 
-options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_url_namedtuples_list = parse_command_line()
+options, filenames, process_params, svd_banks, detectors, likelihood_url_namedtuples_list = parse_command_line()
 
 if not options.check_time_stamps:
 	pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
@@ -672,6 +666,14 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 
 	banks = inspiral.parse_bank_files(svd_bank_url_dict, verbose = options.verbose)
+
+	# Choose to optionally reconstruct segments around injections (not blind injections!)
+	if options.injections:
+		offset_padding = max([int(abs(float(offset)))+2 for bank in banks.items()[0][-1] for offset in bank.sngl_inspiral_table.get_end()]) # Add 2 to achieve rounding up and adding 1
+		reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections, pad = offset_padding)
+	else:
+		reconstruction_segment_list = None
+
 
 	@bottle.route("/bank.txt")
 	def get_filter_length_and_chirpmass(banks = banks):
