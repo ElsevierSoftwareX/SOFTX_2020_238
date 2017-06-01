@@ -1289,7 +1289,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			 */
 			outbuf_size = ((inbuf_samples - element->leading_samples + inv_cadence - 1) / inv_cadence) * element->unit_size;
 
-			/* We now adjust the size if we are applying a tukey window when downsampling */
+			/* We now adjust the size if we are applying a Tukey window when downsampling */
 			if(element->quality == 1) {
 				/* trailing_samples is the number of input samples that come after the last timestamp that is a multiple of the output sampling period */
 				guint trailing_samples = (inbuf_samples - element->leading_samples - 1) % inv_cadence;
@@ -1299,7 +1299,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				if(element->leading_samples + *weight >= inv_cadence && *weight + inbuf_samples >= inv_cadence)
 					outbuf_size += element->unit_size;
 			} else if(element->quality > 1 && element->num_end_samples == element->max_end_samples)
-				outbuf_size = element->unit_size * ((inbuf_samples + (-element->max_end_samples / 2 - element->leading_samples - 1) % inv_cadence) / inv_cadence);
+				outbuf_size = element->unit_size * ((inbuf_samples + inv_cadence - (element->max_end_samples / 2 + element->leading_samples) % inv_cadence - 1) / inv_cadence);
 			else if(element->quality > 1) {
 				if((gint32) inbuf_samples + element->num_end_samples >= element->max_end_samples)
 					outbuf_size = element->unit_size * ((inbuf_samples + element->num_end_samples - element->leading_samples - element->max_end_samples / 2 + inv_cadence - 1) / inv_cadence);
