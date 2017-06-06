@@ -67,7 +67,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 1.0
+	prefactor = 1.5
 	if n==1:
 		return prefactor
 	if n==2:
@@ -109,7 +109,7 @@ class HyperCube(object):
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
-		deltas = numpy.finfo(numpy.float32).eps * 2 * numpy.ones(len(self.center))
+		deltas = numpy.finfo(numpy.float32).eps * 5.0 * numpy.ones(len(self.center))
 		#deltas = 5e-7 * numpy.ones(len(self.center))
 		deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
@@ -238,7 +238,7 @@ class Node(object):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		aspect_ratios = size / min(size)
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
+		aspect_factor = 1.0#max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
 		if numpy.isnan(aspect_factor):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
