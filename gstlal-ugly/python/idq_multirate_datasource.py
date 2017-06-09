@@ -105,13 +105,14 @@ from gstlal import datasource
 #
 # }
 # @enddot
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = int(0.25 * Gst.SECOND), zero_pad = 0, width = 64, cutoff = 12, quality = 9,  unit_normalize = True, channel_name = "hoft"):
+def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd = None, psd_fft_length = 32, gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = int(0.25 * Gst.SECOND), zero_pad = 0, width = 64, cutoff = 12, quality = 9,  unit_normalize = True, channel_name = "hoft"):
 	"""!
 	Build pipeline stage to whiten and downsample auxiliary channels.
 
 	- pipeline: the gstreamer pipeline to add this to
 	- src: the gstreamer element that will be providing data to this 
 	- rates: a list of the requested sample rates, e.g., [512,1024].
+	- native_rate: Native sampling rate of channel
 	- instrument: the instrument to process
 	- psd: a psd frequency series
 	- psd_fft_length: length of fft used for whitening
@@ -124,15 +125,14 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	- channel_name: channel to whiten and downsample
 	"""
 
-	head = pipeparts.mkchecktimestamps(pipeline, src, "%s_%s_%d_timestamps" % (instrument, channel_name,  max(rates)))
+	head = pipeparts.mkchecktimestamps(pipeline, src, "%s_%s_%d_timestamps" % (instrument, channel_name,  native_rate))
 
 	# test for downsampling + cheb filter to see if it's working properly
-	#downsample_rate = int(max(rates)/2)
-	#head = pipeparts.mkaudioamplify(pipeline, head, 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), downsample_rate)))
+	#downsample_rate = int(native_rate/2)
+	#head = pipeparts.mkaudioamplify(pipeline, head, 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, native_rate, downsample_rate)))
 	#head = pipeparts.mkaudiocheblimit(pipeline, head, cutoff = 0.9 * (downsample_rate/2))
 	#head = pipeparts.mkaudioundersample(pipeline, head)   
 	#head = pipeparts.mkcapsfilter(pipeline, head, caps = "audio/x-raw, rate=%d" % downsample_rate)
-
 
 	#	
 	# add a reblock element.  the whitener's gap support isn't 100% yet
@@ -167,8 +167,8 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	# FIXME at some point build an initial kernel from a reference psd
 	psd_fir_kernel = reference_psd.PSDFirKernel()
-	fir_matrix = numpy.zeros((1, 1 + max(rates) * psd_fft_length), dtype=numpy.float64)
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, block_stride = max(rates)/4, time_domain = False, latency = 0)
+	fir_matrix = numpy.zeros((1, 1 + native_rate * psd_fft_length), dtype=numpy.float64)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, block_stride = native_rate/4, time_domain = False, latency = 0)
 
 	def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
 		psd_data = numpy.array(whiten.get_property("mean-psd"))
@@ -187,7 +187,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	whiten.connect_after("notify::mean-psd", set_fir_psd, head, psd_fir_kernel)
 
 	# Drop initial data to let the PSD settle
-	head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max(rates))
+	head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * native_rate)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_timestampsfir" % (instrument, channel_name))
 	
 	#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
@@ -232,10 +232,10 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	if width == 64:
-		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (native_rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
 	else:
-		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
-	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_%d_timestampwhite" % (instrument, channel_name, max(rates)))
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (native_rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
+	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_%d_timestampwhite" % (instrument, channel_name, native_rate))
 
 	#
 	# optionally add vetoes
@@ -252,7 +252,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# FIXME:  this could be omitted if gate_threshold is None, but
 	# we need to collect whitened h(t) segments, however something
 	# could be done to collect those if these gates aren't here.
-	gate_window = max(max(rates) // 4, 1)	# samples
+	gate_window = max(native_rate // 4, 1)	# samples
 	head = datasource.mkhtgate(pipeline, head, threshold = gate_threshold if gate_threshold is not None else float("+inf"), hold_length = gate_window, attack_length = gate_window, name = "%s_%s_gate" % (instrument, channel_name))
 	# emit signals so that a user can latch on to them
 	head.set_property("emit-signals", True)
@@ -288,25 +288,26 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# adjust for the reduction in variance due to the downsampler.
 	#
 
-	for rate in sorted(set(rates))[:-1]:
-		# downsample. make sure each output stream is unit
-		# normalized, otherwise the audio resampler removes power
-		# according to the rate difference and filter rolloff
-		if unit_normalize:
-			head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
-		else:
-			head[rate] = head[max(rates)]
+	for rate in sorted(set(rates)):
+		if rate != native_rate:
+			# downsample. make sure each output stream is unit
+			# normalized, otherwise the audio resampler removes power
+			# according to the rate difference and filter rolloff
+			if unit_normalize:
+				head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, native_rate, rate)))
+			else:
+				head[rate] = head[max(rates)]
 
-		# low pass filter + audio undersampler to downsample
-		# NOTE: as long as this fudge factor (0.9) for the high frequency cutoff is
-		#       higher than the cutoff for the FIR bank basis, this should be fine
-		head[rate] = pipeparts.mkaudiocheblimit(pipeline, head[rate], cutoff = 0.9 * (rate/2))
-		head[rate] = pipeparts.mkaudioundersample(pipeline, head[rate])   
-		head[rate] = pipeparts.mkcapsfilter(pipeline, head[rate], caps = "audio/x-raw, rate=%d" % rate)
+			# low pass filter + audio undersampler to downsample
+			# NOTE: as long as this fudge factor (0.9) for the high frequency cutoff is
+			#       higher than the cutoff for the FIR bank basis, this should be fine
+			head[rate] = pipeparts.mkaudiocheblimit(pipeline, head[rate], cutoff = 0.9 * (rate/2))
+			head[rate] = pipeparts.mkaudioundersample(pipeline, head[rate])
+			head[rate] = pipeparts.mkcapsfilter(pipeline, head[rate], caps = "audio/x-raw, rate=%d" % rate)
 	
-		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_%s_%d_timestampswhite" % (instrument, channel_name, rate))
+			head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_%s_%d_timestampswhite" % (instrument, channel_name, rate))
 
-		head[rate] = pipeparts.mktee(pipeline, head[rate])
+			head[rate] = pipeparts.mktee(pipeline, head[rate])
 
 	#
 	# done.  return value is a dictionary of tee elements indexed by
