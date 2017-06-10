@@ -200,13 +200,13 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.last_hdf_save_time = dict.fromkeys(self.keys, None)
 		self.hdf_cadence = 10
 		self.reduction_cadence = 100
+		self.init_gps_time = int(aggregator.now())
 
 		# dataframe properties
-		gps_now_time_quanta = aggregator.gps_to_minimum_time_quanta(int(aggregator.now()))
 		columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'phase', 'sigmasq', 'chisq', 'snr']
 		self.dataframes = {}
 		for (channel, rate) in self.keys:
-			self.dataframes[(channel, rate)] = pandas.DataFrame(numpy.nan, index = self.to_dataframe_index(gps_now_time_quanta), columns = columns)
+			self.dataframes[(channel, rate)] = pandas.DataFrame(numpy.nan, index = self.to_dataframe_index(self.init_gps_time), columns = columns)
 		
 		# set up bottle routes for spectra by each whitener
 		self.psds = {}
@@ -245,10 +245,16 @@ class MultiChannelHandler(simplehandler.Handler):
 			buf = elem.emit("pull-sample").get_buffer()
 			buftime = int(buf.pts / 1e9)
 			channel, rate  = sink_dict[elem]
+
+			# set save times appropriately
 			if self.last_save_time is None:
 				self.last_save_time = buftime
 			if self.last_hdf_save_time[(channel, int(rate))] is None:
 				self.last_hdf_save_time[(channel, int(rate))] = buftime
+				# check if dataframe needs to be reindexed with new gps times before first buffer
+				if (buftime - self.truncate_int(self.init_gps_time, aggregator.MIN_TIME_QUANTA)) >= aggregator.MIN_TIME_QUANTA:
+					self.dataframes[(channel, int(rate))].reindex(self.to_dataframe_index(buftime))
+			# create path if it doesn't already exist
 			if not os.path.exists(self.to_agg_path(buftime, channel = channel, rate = rate)):
 				aggregator.makedir(self.to_agg_path(buftime, channel = channel, rate = rate))
 			
@@ -264,6 +270,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.to_hdf5(channel, int(rate), buftime)
 				self.last_hdf_save_time[(channel, int(rate))] = buftime
 
+			# read buffer contents
 			for i in range(buf.n_memory()):
 				memory = buf.peek_memory(i)
 				result, mapinfo = memory.map(Gst.MapFlags.READ)
@@ -307,8 +314,9 @@ class MultiChannelHandler(simplehandler.Handler):
 			current_save_index = self.truncate_int(buftime, aggregator.MIN_TIME_QUANTA) - self.hdf_cadence
 			for save_index in numpy.arange(last_save_index, current_save_index, self.hdf_cadence):
 				self.dataframes[(channel, rate)].loc[save_index].to_hdf(os.path.join(self.to_agg_path(save_index, channel, rate), '%d.h5' % save_index), 'data', format = 'table', mode = 'w')
-			max_index = self.dataframes[(channel, rate)].loc[last_save_index:current_save_index].groupby(level=0)['snr'].idxmax().values
-			self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
+			max_index = self.dataframes[(channel, rate)].loc[last_save_index:current_save_index].groupby(level=0)['snr'].idxmax().dropna().values
+			if max_index.size > 0:
+				self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
 			self.dataframes[(channel, rate)].reindex(self.to_dataframe_index(buftime))
 		else:
 			# case 2: save current triggers
@@ -317,11 +325,12 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.dataframes[(channel, rate)].loc[save_index].to_hdf(os.path.join(self.to_agg_path(save_index, channel, rate), '%d.h5' % save_index), 'data', format = 'table', mode = 'w')
 			# case 3: save current triggers from current directory and aggregate
 			if (buftime - self.truncate_int(self.last_hdf_save_time[(channel, rate)], self.reduction_cadence)) >= self.reduction_cadence:
-				max_index = self.dataframes[(channel, rate)].loc[last_save_index:current_save_index].groupby(level=0)['snr'].idxmax().values
-				self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
+				max_index = self.dataframes[(channel, rate)].loc[last_save_index:current_save_index].groupby(level=0)['snr'].idxmax().dropna().values
+				if max_index.size > 0:
+					self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
 			
 	def to_dataframe_index(self, gps_time):
-		index_t = numpy.arange(gps_time, gps_time + aggregator.MIN_TIME_QUANTA, dtype = numpy.int)
+		index_t = numpy.arange(self.truncate_int(gps_time, aggregator.MIN_TIME_QUANTA), self.truncate_int(gps_time, aggregator.MIN_TIME_QUANTA) + aggregator.MIN_TIME_QUANTA, dtype = numpy.int)
 		index_cadence = numpy.fromiter(( self.truncate_int(x, self.hdf_cadence) for x in index_t), dtype = numpy.int)
 		return pandas.MultiIndex.from_tuples(list(zip(index_cadence, index_t)), names = ['gps_time_cadence', 'gps_time'])
 
