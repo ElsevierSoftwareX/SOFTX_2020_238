@@ -60,7 +60,6 @@ from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
-from lal import gpstime
 
 #
 # Make sure we have sufficient resources
@@ -288,9 +287,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				if mapinfo.data:
 					for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
 						trigger_time = row.end_time + row.end_time_ns * 1e-9
-						# FIXME: use aggregator.now() to grab current time
-						current_time = gpstime.gps_time_now().gpsSeconds + gpstime.gps_time_now().gpsNanoSeconds * 1e-9
-						latency = numpy.round(current_time - buftime)
+						latency = numpy.round(int(aggregator.now()) - buftime)
 						freq, q, duration = self.basis_params[(channel, int(rate))][row.channel_index]
 						start_time = trigger_time - duration
 						channel_tag = ('%s_%i_%i' %(channel, int(rate)/4, int(rate)/2)).replace(":","_",1)
