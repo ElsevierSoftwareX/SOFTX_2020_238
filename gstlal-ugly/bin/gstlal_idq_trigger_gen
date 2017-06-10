@@ -191,7 +191,6 @@ class MultiChannelHandler(simplehandler.Handler):
 		# iDQ saving properties
 		self.last_save_time = None
 		self.cadence = options.cadence
-		self.file_flag = False
 		# create header for trigger file
 		#self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%10s\t%10s\t%9s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "frequency", "Q", "latency", "rate", "channel")
 		self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
@@ -255,13 +254,8 @@ class MultiChannelHandler(simplehandler.Handler):
 			
 			# Save triggers once every cadence
 			# iDQ file saving
-			if ((buftime - self.last_save_time) >= self.cadence) and ( self.file_flag is True or buftime%self.cadence == 0):
-				# Use file_flag to check if buftime%cadence = 0.
-				# Flag is set after first time this is true.
-				if self.file_flag is True :
-					self.to_trigger_file()
-				else :
-					self.file_flag = True
+			if ((buftime - self.truncate_int(self.last_save_time, self.cadence)) >= self.cadence):
+				self.to_trigger_file()
 				self.last_save_time = buftime
 				self.fdata = ""
 
@@ -342,10 +336,11 @@ class MultiChannelHandler(simplehandler.Handler):
 	
 	def truncate_int(self, x, n):
 		"""
-		Truncates an integer by positive powers of 10.
+		Truncates an integer by removing its remainder
+		from integer division by another integer n.
 		e.g. truncate_int(163, 10) = 160
 		"""
-		assert n > 0 and n % 10 == 0
+		assert n > 0
 		return (x / n) * n
 
 	def to_trigger_file(self):
@@ -353,7 +348,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		# This method should only be called by an instance that is locked.
 		# Use T050017 filenaming convention.
 		tag = '%s-%s' % (self.instrument[:1], self.description)
-		fname = '%s-%d-%d.%s' % (tag, self.last_save_time, self.cadence, "trg")
+		fname = '%s-%d-%d.%s' % (tag, self.truncate_int(self.last_save_time, self.cadence), self.cadence, "trg")
 		path = os.path.join(self.out_path, tag, tag+"-"+str(fname.split("-")[2])[:5])
 		fpath = os.path.join(path, fname)
 		tmpfile = fpath+"~"
