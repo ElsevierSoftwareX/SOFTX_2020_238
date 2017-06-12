@@ -34,6 +34,7 @@ import resource
 import StringIO
 import threading
 import shutil
+import traceback
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -300,15 +301,11 @@ class MultiChannelHandler(simplehandler.Handler):
 						self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag)
 						# save dataframe compatible data
 						buftime_index = self.truncate_int(buftime, self.hdf_cadence)
-						# FIXME:
-						# workaround for out of index error caused by
-						# reindexing being done for the first second after
-						# a new aggregator path has been made, every
-						# aggregator cadence
 						try:
 							self.dataframes[(channel, int(rate))].loc[buftime_index, buftime] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
 						except ValueError:
-							pass
+							print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, int(rate))
+							traceback.print_exc()
 
 				memory.unmap(mapinfo)
 
@@ -318,28 +315,46 @@ class MultiChannelHandler(simplehandler.Handler):
 	def to_hdf5(self, channel, rate, buftime):
 		last_save_index = self.truncate_int(self.last_hdf_save_time[(channel, rate)], self.hdf_cadence) - self.hdf_cadence
 		# case 1: save current triggers from prev leaf directory, aggregate, reindex and clean out dataframe, move to new leaf directory
+		# FIXME: Doesn't save last 10 second chunk of triggers,
+		#        and also has an indexing error in first 10 sec,
+		#        probably an 'off by one' implementation, will
+		#        need to look into this, but have workaround
+		#        for now.
 		if (buftime - self.truncate_int(self.last_hdf_save_time[(channel, rate)], aggregator.MIN_TIME_QUANTA)) >= aggregator.MIN_TIME_QUANTA:
 			current_save_index = self.truncate_int(buftime, aggregator.MIN_TIME_QUANTA) - self.hdf_cadence
 			for save_index in numpy.arange(last_save_index, current_save_index, self.hdf_cadence):
-				self.dataframes[(channel, rate)].loc[save_index].to_hdf(os.path.join(self.to_agg_path(save_index, channel, rate), '%d.h5' % save_index), 'data', format = 'table', mode = 'w')
+				try:
+					self.dataframes[(channel, rate)].loc[save_index].to_hdf(os.path.join(self.to_agg_path(save_index, channel, rate), '%d.h5' % save_index), 'data', format = 'table', mode = 'w')
+				except KeyError:
+					traceback.print_exc()
 			# find gps times of max snr triggers per cadence and save to file
 			last_reduce_index = self.truncate_int(buftime, self.reduce_cadence) - self.hdf_cadence
 			max_index = self.dataframes[(channel, rate)].loc[last_reduce_index:current_save_index].groupby(level=0)['snr'].idxmax().dropna().values
 			if max_index.size > 0:
-				self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
-			self.dataframes[(channel, rate)].reindex(self.to_dataframe_index(buftime))
+				try:
+					self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
+				except KeyError:
+					traceback.print_exc()
+			# reindex to clean out dataframe and save new triggers
+			self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(self.to_dataframe_index(self.truncate_int(self.last_hdf_save_time[(channel, rate)], aggregator.MIN_TIME_QUANTA) + aggregator.MIN_TIME_QUANTA))
 		else:
 			# case 2: save current triggers
 			current_save_index = self.truncate_int(buftime, self.hdf_cadence) - self.hdf_cadence
 			for save_index in numpy.arange(last_save_index, current_save_index, self.hdf_cadence):
-				self.dataframes[(channel, rate)].loc[save_index].to_hdf(os.path.join(self.to_agg_path(save_index, channel, rate), '%d.h5' % save_index), 'data', format = 'table', mode = 'w')
+				try:
+					self.dataframes[(channel, rate)].loc[save_index].to_hdf(os.path.join(self.to_agg_path(save_index, channel, rate), '%d.h5' % save_index), 'data', format = 'table', mode = 'w')
+				except KeyError:
+					traceback.print_exc()
 			# case 3: save current triggers from current directory and aggregate
 			if (buftime - self.truncate_int(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)) >= self.reduce_cadence:
 				# find gps times of max snr triggers per cadence and save to file
 				last_reduce_index = self.truncate_int(buftime, self.reduce_cadence) - self.hdf_cadence
 				max_index = self.dataframes[(channel, rate)].loc[last_reduce_index:current_save_index].groupby(level=0)['snr'].idxmax().dropna().values
 				if max_index.size > 0:
-					self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
+					try:
+						self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
+					except KeyError:
+						traceback.print_exc()
 			
 	def to_dataframe_index(self, gps_time):
 		"""
