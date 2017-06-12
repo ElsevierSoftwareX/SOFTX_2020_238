@@ -764,7 +764,8 @@ class Data(object):
 			if self.stream_thinca.last_coincs and self.zero_lag_ranking_stats is not None:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					if coinc_event.likelihood is not None and coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
-						self.zero_lag_ranking_stats.zero_lag_likelihood_rates[frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)][coinc_event.likelihood,] += 1
+						instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
+						self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
 
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
@@ -827,9 +828,12 @@ class Data(object):
 
 	def __flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
-		# non-coincident sngls.  add them to the distribution
+		# non-coincident sngls.  add them to the distribution.  as
+		# above in appsink_new_buffer() we skip singles collected
+		# during times when only one instrument was one.
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
-			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
+			if len(self.seglistdicts["whitehtsegments"].keys_at(event.end)) > 1:
+				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
 		self.coincs_document.commit()
 
 		# update zero-lag bin counts in coinc_params_distributions
@@ -854,9 +858,8 @@ class Data(object):
 		# FIXME proper clustering is really needed (see above)
 		if self.stream_thinca.last_coincs and self.zero_lag_ranking_stats is not None:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
-				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-				instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
-				if coinc_event.likelihood is not None and not any(offset_vector.values()):
+				if coinc_event.likelihood is not None and coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
+					instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
 					self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
 
 		# do GraceDB alerts
