@@ -307,6 +307,9 @@ class Handler(simplehandler.Handler):
 				# save
 				self.psds[instrument] = psd
 
+				# don't record horizon distance for Virgo.  FIXME:  remove after O2
+				if instrument == "V1": return True
+
 				# update horizon distance history
 				#
 				# FIXME:  get canonical masses from the template bank bin that we're analyzing

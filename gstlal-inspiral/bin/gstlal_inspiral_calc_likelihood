@@ -261,6 +261,7 @@ for n, url in enumerate(urls, 1):
 			if row.coinc_def_id != coinc_def_id:
 				continue
 			instruments = lsctables.instrumentsproperty.get(coinc_inspiral_index[row.coinc_event_id].ifos)
+			instruments -= set(("V1",))	# don't claim Virgo participated or was on. FIXME:  remove after O2
 			ln_likelihood_ratio = row.likelihood
 			if any(offset_vectors[row.time_slide_id].values()):
 				ranking_data.background_likelihood_rates[frozenset(instruments)][ln_likelihood_ratio,] += 1.
