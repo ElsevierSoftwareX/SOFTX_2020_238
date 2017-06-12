@@ -18,6 +18,7 @@
  */
 
 #include "postcohinspiral_table_utils.h"
+// FIXME: The current code works. But it misses 4 fields in output compared with the online pipeline output: eta, fap_l, h, v
 
 void postcohinspiral_table_init(XmlTable *table)
 {
