@@ -729,7 +729,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 			if instrument_from_bank == instrument:
 				sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
-		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		src, statevector, dqvector  = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:		
 			hoftdicts[instrument] = \
 			uni_datasource.mkwhitened_src(pipeline, src,
@@ -739,7 +739,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 					ht_gate_threshold, veto_segments =
 					veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment =
 					nxydump_segment, track_psd = track_psd,
-					zero_pad = 0, width = 32)
+					zero_pad = 0, width = 32, fir_whitener = 0, statevector = statevector, dqvector = dqvector)
 		else:
 			hoftdicts[instrument] = \
 			uni_datasource.mkwhitened_src(pipeline, src,
@@ -749,7 +749,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 					ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, 
 					nxydump_segment = nxydump_segment,
 					track_psd = track_psd, zero_pad = 0,
-					width = 32)
+					width = 32, fir_whitener = 0, statevector = statevector, dqvector = dqvector)
 
 	#
 	# construct trigger generators
