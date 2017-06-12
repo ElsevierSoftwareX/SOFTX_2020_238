@@ -23,7 +23,6 @@ Produce a fits file from binary sky map file
 import struct
 from lalinference import fits
 import pdb
-pdb.set_trace()
 from optparse import Option, OptionParser
 
 parser = OptionParser(
@@ -54,7 +53,10 @@ for chunk in iter(lambda: f.read(4), ''):
 min_skymap = min(postcoh_skymap)
 range_skymap = max(postcoh_skymap) - min_skymap
 for i in range(len(postcoh_skymap)):
-	postcoh_skymap[i] = (postcoh_skymap[i] - min_skymap)/ range_skymap
+	postcoh_skymap[i] = np.exp(postcoh_skymap[i]/2)
+sum_skymap = sum(postcoh_skymap)
+for i in range(len(postcoh_skymap)):
+	postcoh_skymap[i] = postcoh_skymap[i]/sum_skymap
 
 log.info("begin to write skymap in fits format")
 #FIXME: gps_time/ runtime are not input
