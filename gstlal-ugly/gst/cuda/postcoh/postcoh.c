@@ -1025,9 +1025,10 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->chisq_V = pklist->chisq_V[peak_cur];
 			cur_tmplt_idx = pklist->tmplt_idx[peak_cur];
 
-			//output->deff_L = state->sigmasq[L_MAPPING][cur_tmplt_idx]/ pklist->snglsnr_L[peak_cur]; 
-			//output->deff_H = state->sigmasq[H_MAPPING][cur_tmplt_idx]/ pklist->snglsnr_H[peak_cur]; 
-			//output->deff_V = state->sigmasq[V_MAPPING][cur_tmplt_idx]/ pklist->snglsnr_V[peak_cur]; 
+			output->deff_L = sqrt(state->sigmasq[L_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_L[peak_cur]; 
+			output->deff_H = sqrt(state->sigmasq[H_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_H[peak_cur]; 
+			if (pklist->snglsnr_V[peak_cur] > 0)
+				output->deff_V = sqrt(state->sigmasq[V_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_V[peak_cur]; 
 			output->is_background = 0;
 			output->livetime = livetime;
 			strncpy(output->ifos, state->cur_ifos, ifos_size);

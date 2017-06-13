@@ -137,14 +137,15 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 }
 
 void
-cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
+cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 {
 
 	int ntoken = 0;
 
 	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
 	strcpy(fname_cpy, fname);
-	char *token = strtok_r(fname, ",", &end_ifo);
+	//printf("fname_cpy %s\n", fname_cpy);
+	char *token = strtok_r(fname_cpy, ",", &end_ifo);
 	int mem_alloc_size = 0, ntmplt = 0, match_ifo = 0;
 
 	/* parsing for nifo */
@@ -157,25 +158,25 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state, cudaStream_t str
 	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct));
 	XmlArray *array_sigmasq = (XmlArray *)malloc(sizeof(XmlArray));
 
-	state->sigmasq = (float **)malloc(sizeof(float *) * nifo );
-	float **sigmasq = state->sigmasq;
+	state->sigmasq = (double **)malloc(sizeof(double *) * nifo );
+	double **sigmasq = state->sigmasq;
 	sigmasq[0] = NULL;
 
 	end_ifo = NULL;
+	strcpy(fname_cpy, fname);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
-	printf("fname_cpy %s\n", fname_cpy);
+	//printf("fname_cpy %s\n", fname_cpy);
 	sprintf((char *)xns[0].tag, "sigmasq:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_sigmasq[0]);
 
 	/* start parsing again */
-#if 0
 	while (token != NULL) {
 		char *end_token;
 		char *token_bankname = strtok_r(token, ":", &end_token);
 		token_bankname = strtok_r(NULL, ":", &end_token);
 
-		parseFile(token_bankname, xns, 2);
+		parseFile(token_bankname, xns, 1);
 
 		for (int i=0; i<nifo; i++) {
 			if (strncmp(token, IFO_MAP[i], 2) == 0) {
@@ -187,19 +188,19 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state, cudaStream_t str
 
 		ntmplt = array_sigmasq[0].dim[0];
 
-		printf("parse match ifo %d, %s, ntmplt %d\n", match_ifo, token_bankname, ntmplt);
-		mem_alloc_size = sizeof(float) * ntmplt;
+		//printf("sigmasq, parse match ifo %d, %s, ntmplt %d\n", match_ifo, token_bankname, ntmplt);
+		mem_alloc_size = sizeof(double) * ntmplt;
 
 		if (sigmasq[0] == NULL) {
 			for (int i = 0; i < nifo; i++) {
-				sigmasq[i] = (float *)malloc(mem_alloc_size);
+				sigmasq[i] = (double *)malloc(mem_alloc_size);
 				memset(sigmasq[i], 0, mem_alloc_size);
 			}
 
 		}
 
 		for (int j=0; j<ntmplt; j++) {
-			//sigmasq[match_ifo][j] = (float)((float *)(array_sigmasq[0].data))[j];
+			sigmasq[match_ifo][j] = (double)((double *)(array_sigmasq[0].data))[j];
 			//printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
 		}
 
@@ -218,7 +219,6 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state, cudaStream_t str
 
 	}
 
-#endif
 }
 void
 cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
@@ -325,7 +325,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 
 	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
 	strcpy(fname_cpy, fname);
-	char *token = strtok_r(fname, ",", &end_ifo);
+	char *token = strtok_r(fname_cpy, ",", &end_ifo);
 	int mem_alloc_size = 0, autochisq_len = 0, ntmplt = 0, match_ifo = 0;
 
 	/* parsing for nifo */
@@ -346,6 +346,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	cudaMalloc((void **)&(state->dd_autocorr_norm), sizeof(float *) * nifo);
 
 	end_ifo = NULL;
+	strcpy(fname_cpy, fname);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
 	//printf("fname_cpy %s\n", fname_cpy);
 	sprintf((char *)xns[0].tag, "autocorrelation_bank_real:array");

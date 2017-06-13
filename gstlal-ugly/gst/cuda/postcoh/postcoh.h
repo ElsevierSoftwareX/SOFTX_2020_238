@@ -52,7 +52,7 @@ G_BEGIN_DECLS
 #endif
 
 #ifndef MIN_OUTPUT_SKYMAP_SNR
-#define MIN_OUTPUT_SKYMAP_SNR 20
+#define MIN_OUTPUT_SKYMAP_SNR 8
 #endif
 
 typedef struct _CudaPostcoh CudaPostcoh;
@@ -204,7 +204,7 @@ typedef struct _PostcohState {
   gint nifo;
   gint8 *ifo_mapping;
   /* sigmasq read from bank to compute effective distance */
-  float **sigmasq;
+  double **sigmasq;
   /* parent pointer in host device, each children pointer is in host device,
    * pointing to the coherent U map of a certain time in GPU device*/
   float **d_U_map;
