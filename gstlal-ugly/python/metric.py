@@ -97,10 +97,15 @@ def m1_m2_s1z_s2z_func(coords):
 	return (coords[0], coords[1], 0., 0., coords[2], 0., 0., coords[3])
 
 
+# FIXME FIXME This assumes that the third and fourth coordinates are z1 and z2.  will not work for precessing.
 def M_q_func(coords):
 	mass2 = coords[1]
 	mass1 = m1_from_mc_m2(coords[0], mass2)
-	return (mass1, mass2, 0., 0., 0., 0., 0., 0.)
+	out = [mass1, mass2, 0., 0., 0., 0., 0., 0.]
+	# FIXME assumes s1z s2z for the third and forth coordinates
+	for i,c in enumerate(coords[2:]):
+		out[i*3+4] = c
+	return tuple(out)
 
 def m1_from_mc_m2(mc, m2):
 	a = mc**5 / m2**3
