@@ -278,9 +278,10 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.last_save_time = buftime
 
 			# hdf file saving
-			if (buftime - self.truncate_int(self.last_hdf_save_time[(channel, int(rate))], self.hdf_cadence)) >= self.hdf_cadence:
-				self.to_hdf5(channel, int(rate), buftime)
-				self.last_hdf_save_time[(channel, int(rate))] = buftime
+			if options.triggers_from_dataframe:
+				if (buftime - self.truncate_int(self.last_hdf_save_time[(channel, int(rate))], self.hdf_cadence)) >= self.hdf_cadence:
+					self.to_hdf5(channel, int(rate), buftime)
+					self.last_hdf_save_time[(channel, int(rate))] = buftime
 
 			# read buffer contents
 			for i in range(buf.n_memory()):
@@ -313,11 +314,12 @@ class MultiChannelHandler(simplehandler.Handler):
 							self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag)
 						# save dataframe compatible data
 						buftime_index = self.truncate_int(buftime, self.hdf_cadence)
-						try:
-							self.dataframes[(channel, int(rate))].loc[buftime_index, buftime] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
-						except ValueError:
-							print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, int(rate))
-							traceback.print_exc()
+						if options.triggers_from_dataframe:
+							try:
+								self.dataframes[(channel, int(rate))].loc[buftime_index, buftime] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
+							except ValueError:
+								print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, int(rate))
+								traceback.print_exc()
 
 				memory.unmap(mapinfo)
 
@@ -665,6 +667,7 @@ for channel in channels:
 		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 1e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
+		#print >>sys.stderr, len(list(half_sine_gaussian(sine_gaussian(phi, 0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = 0.2)))
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch) for phi_0 in phase]), time_domain = time_domain, block_stride = int(rate), latency = 0)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
