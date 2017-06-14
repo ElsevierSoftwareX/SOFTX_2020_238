@@ -127,19 +127,19 @@ def half_sine_gaussian(sg_arr):
 #
 # number of tiles in frequency and Q
 #
-def N_Q(q_min, q_max, mismatch = 0.05):
+def N_Q(q_min, q_max, mismatch = 0.2):
         return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
 
-def N_phi(phi_min, phi_max, q,  mismatch = 0.05):
+def N_phi(phi_min, phi_max, q,  mismatch = 0.2):
        return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
 
-def Qq(q_min, q_max, mismatch = 0.05):
-	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch))
+def Qq(q_min, q_max, mismatch = 0.2):
+	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch = mismatch))
 	return [q_min*(q_max/q_min)**((0.5+q)/N_q) for q in range(int(N_q))]
 
-def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.05):
-	for q in Qq(q_min, q_max):
-		nphi = N_phi(phi_min, phi_max, q)
+def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.2):
+	for q in Qq(q_min, q_max, mismatch = mismatch):
+		nphi = N_phi(phi_min, phi_max, q, mismatch = mismatch)
 		for l in range(int(nphi)):
 			yield (phi_min*(phi_max/phi_min)**((0.5+l)/nphi), q)
 
@@ -158,6 +158,8 @@ def parse_command_line():
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--triggers-from-dataframe", action = "store_true", default = False, help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
+	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
+
 	#
 	# parse the arguments and sanity check
 	#
@@ -656,13 +658,13 @@ for channel in channels:
 			fhigh = rate/2.*0.8
 			qhigh = 40
 		qlow = 4
-		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)])
+		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
 		phase = [0, numpy.pi/2.]
-		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 1e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh)]
+		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 1e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
-		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh) for phi_0 in phase]), time_domain = time_domain, block_stride = int(rate), latency = 0)
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch) for phi_0 in phase]), time_domain = time_domain, block_stride = int(rate), latency = 0)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
