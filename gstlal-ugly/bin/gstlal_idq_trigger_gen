@@ -159,6 +159,7 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--triggers-from-dataframe", action = "store_true", default = False, help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
+	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
 
 	#
 	# parse the arguments and sanity check
@@ -656,7 +657,7 @@ for channel in channels:
 			#       this should be fine
 			flow = rate/4.*0.8
 			fhigh = rate/2.*0.8
-			qhigh = 40
+			qhigh = options.qhigh
 		qlow = 4
 		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
