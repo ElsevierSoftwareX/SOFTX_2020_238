@@ -514,7 +514,10 @@ class FinalSink(object):
 
 		# FIXME: upload skymap if output_skymap is turned on
 		if self.output_skymap == 1:
-			skymap_loc = "%s_skymap/%s_%d_%d_%d" % (trigger.ifos, trigger.pivotal_ifo, trigger.end_time, trigger.end_time_ns, trigger.tmplt_idx)
+			skymap_url = "%s_skymap" % trigger.ifos
+			if not os.path.exists(skymap_url):
+				os.mkdir(skymap_url)
+			skymap_loc = "%s/%s_%d_%d_%d" % (skymap_url, trigger.pivotal_ifo, trigger.end_time, trigger.end_time_ns, trigger.tmplt_idx)
 
 
 		if self.verbose:
