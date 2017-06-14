@@ -471,6 +471,7 @@ if 1==1:
     )
 
   finalsink = postcoh_finalsink.FinalSink(
+		  process_params = process_params,
 		  pipeline = pipeline,
 		  need_online_perform = options.finalsink_need_online_perform,
 		  ifos = lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""),

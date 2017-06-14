@@ -454,7 +454,7 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 
 	data *= tukeywindow(data, samps = 32)
 	filter_len = min(length_max, 1.0 * len(hplus.data.data))
-	# the time domain data is chosen to be the same length as the original
+	# the time domain whitened data is chosen to be the same length as the original
 	# template. The length_max from tchirp and the working_length are too
 	# long, may cause too many spiir filters. 
 	# FIXME: should we allow a little more time for low-frequency boundary?
@@ -465,6 +465,7 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
 	#
 	# normalize so that inner product of template with itself
 	# is 2
+	# the norm is very close to the inner product of the original tseries.data (1.0018)
 	#
 
 	norm = abs(numpy.dot(data, numpy.conj(data)))

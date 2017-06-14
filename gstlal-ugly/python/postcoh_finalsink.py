@@ -114,6 +114,8 @@ class PostcohDocument(object):
 		assert self.filename is not None
 		ligolw_utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
+
+
 class OnlinePerformer(object):
 
 	def __init__(self, parent_lock):
@@ -210,7 +212,7 @@ class BackgroundStatsUpdater(object):
 
 
 class FinalSink(object):
-	def __init__(self, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, background_update_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal_spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
+	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, background_update_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
 	#
 	# initialize
 	#
@@ -238,11 +240,13 @@ class FinalSink(object):
 		self.gracedb_pipeline = gracedb_pipeline
 		self.gracedb_service_url = gracedb_service_url
 
+		# the postcoh doc stores clustered postcoh triggers and is snapshotted
 		self.postcoh_document = PostcohDocument()
 		self.postcoh_document_cpy = None
-		# this table will go to snapshot file, it stores clustered peaks
 		self.postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
+		# coinc doc to be uploaded to gracedb
+		self.coincs_document = CoincsDocFromPostcoh(path, process_params, instruments = re.findall('..', ifos))
 		# snapshot parameters
 		self.path = path
 		self.output_prefix = output_prefix
@@ -268,6 +272,9 @@ class FinalSink(object):
 		self.last_submitted_trigger = []
 		self.last_trigger.append((0, 1))
 		self.last_submitted_trigger.append((0, 1))
+
+		# skymap
+		self.output_skymap = output_skymap
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -448,29 +455,8 @@ class FinalSink(object):
 		gracedb_ids = []
 		common_messages = []
 
-		sngl_inspiral_columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")
-
-		# This appears to be a silly for loop since
-		# coinc_event_index will only have one value, but we're
-		# future proofing this at the point where it could have
-		# multiple clustered events
-
-			
-		xmldoc = ligolw.Document()
-		xmldoc.appendChild(ligolw.LIGO_LW())
-
-		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = sngl_inspiral_columns))
-		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
-		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
-		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
-		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
-		xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
-		xmldoc.childNodes[-1].appendChild(lsctables.New(postcoh_table_def.PostcohInspiralTable))
-		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentDefTable, columns = ligolw_segments.LigolwSegmentList.segment_def_columns))
-		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentSumTable, columns = ligolw_segments.LigolwSegmentList.segment_sum_columns))
-		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentTable, columns = ligolw_segments.LigolwSegmentList.segment_columns))
-
-		self.assemble_coinc_table(xmldoc, trigger)
+		self.coincs_document.assemble_tables(trigger)
+		xmldoc = self.coincs_document.xmldoc
 		filename = "%s_%s_%d_%d.xml" % (trigger.ifos, trigger.end_time, trigger.tmplt_idx, trigger.pix_idx)
 		#
 		# construct message and send to gracedb.
@@ -488,7 +474,7 @@ class FinalSink(object):
 		ligolw_utils.write_fileobj(xmldoc, message, gz = False, trap_signals = None)
 		ligolw_utils.write_filename(xmldoc, filename, gz = False, trap_signals = None)
 		xmldoc.unlink()
-		
+	
 		print >>sys.stderr, "sending %s to gracedb ..." % filename
 		gracedb_upload_itrial = 1
 		# FIXME: make this optional from cmd line?
@@ -527,7 +513,7 @@ class FinalSink(object):
 				gracedb_upload_itrial += 1
 
 		# FIXME: upload skymap if output_skymap is turned on
-		if output_skymap == 1:
+		if self.output_skymap == 1:
 			skymap_loc = "%s_skymap/%s_%d_%d_%d" % (trigger.ifos, trigger.pivotal_ifo, trigger.end_time, trigger.end_time_ns, trigger.tmplt_idx)
 
 
@@ -575,7 +561,10 @@ class FinalSink(object):
 				except:
 					gracedb_upload_itrial += 1
 
-
+		# delete the xmldoc and get a new empty one for next upload
+		coincs_document = self.coincs_document.get_another()
+		del self.coincs_document
+		self.coincs_document = coincs_document
 	
 	def get_output_filename(self, output_prefix, t_snapshot_start, snapshot_duration):
 		fname = "%s_%d_%d.xml.gz" % (output_prefix, t_snapshot_start, snapshot_duration)
@@ -595,8 +584,10 @@ class FinalSink(object):
 
 		# set a new document for postcoh_document
 		postcoh_document = self.postcoh_document.get_another()
-		self.postcoh_document = postcoh_document
+		# remember to delete the old postcoh doc
 		del self.postcoh_table
+		del self.postcoh_document
+		self.postcoh_document = postcoh_document
 		self.postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
 	def __wait_internal_process_finish(self):
@@ -614,17 +605,101 @@ class FinalSink(object):
 			self.postcoh_document.set_filename(filename)
 		self.postcoh_document.write_output_file(verbose = verbose)
 
-	def assemble_coinc_table(self, xmldoc, trigger):
-		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-		coinc_def_table = lsctables.CoincDefTable.get_table(xmldoc)
-		coinc_table = lsctables.CoincTable.get_table(xmldoc)
-		coinc_map_table = lsctables.CoincMapTable.get_table(xmldoc)
-		coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(xmldoc)
-		time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
-		postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(xmldoc)
+class CoincsDocFromPostcoh(object):
+	sngl_inspiral_columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id", "Gamma0", "Gamma1")
 
+	def __init__(self, url, process_params, instruments = ['H1', 'L1'], comment = None, verbose = False):
+		#
+		# build the XML document
+		#
+		self.get_another = lambda: CoincsDocFromPostcoh(url = url, process_params = process_params, instruments = instruments, comment = comment, verbose = verbose)
+	
+		self.url = url
+		self.xmldoc = ligolw.Document()
+		self.xmldoc.appendChild(ligolw.LIGO_LW())
+		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"gstlal_inspiral_postcohspiir_online", process_params, comment = comment, ifos = instruments)
+	
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = self.sngl_inspiral_columns))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(postcoh_table_def.PostcohInspiralTable))
+		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentDefTable, columns = ligolw_segments.LigolwSegmentList.segment_def_columns))
+		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentSumTable, columns = ligolw_segments.LigolwSegmentList.segment_sum_columns))
+		#xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SegmentTable, columns = ligolw_segments.LigolwSegmentList.segment_columns))
 
-		#sngl_inspiral_table = self.postcoh_table 
+	# path here is the job id
+	def assemble_tables(self, trigger):
+		self.assemble_snglinspiral_table(trigger)
+		coinc_def_table = lsctables.CoincDefTable.get_table(self.xmldoc)
+		coinc_table = lsctables.CoincTable.get_table(self.xmldoc)
+		coinc_map_table = lsctables.CoincMapTable.get_table(self.xmldoc)
+		coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(self.xmldoc)
+		time_slide_table = lsctables.TimeSlideTable.get_table(self.xmldoc)
+		postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(self.xmldoc)
+
+		row = coinc_def_table.RowType()
+		row.search = "inspiral"
+		row.description = "sngl_inspiral<-->sngl_inspiral coincidences"
+		row.coinc_def_id = "coinc_definer:coinc_def_id:3"
+		row.search_coinc_type = 0
+		coinc_def_table.append(row)
+
+		row = coinc_table.RowType()
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
+		row.instruments = ','.join(re.findall('..',trigger.ifos)) #FIXME: for more complex detector names
+		row.nevents = 2
+		row.process_id = "process:process_id:1"
+		row.coinc_def_id = "coinc_definer:coinc_def_id:3"
+		row.time_slide_id = "time_slide:time_slide_id:6"
+		row.likelihood = 0
+		coinc_table.append(row)
+		
+		row = coinc_inspiral_table.RowType()
+		row.false_alarm_rate = trigger.fap
+		row.mchirp = trigger.mchirp 
+		row.minimum_duration = trigger.template_duration
+		row.mass = trigger.mtotal
+		row.end_time = trigger.end_time
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
+		row.snr = trigger.cohsnr
+		row.end_time_ns = trigger.end_time_ns
+		row.combined_far = trigger.far
+		row.ifos = ','.join(re.findall('..',trigger.ifos)) #FIXME: for more complex detector names
+		coinc_inspiral_table.append(row)
+
+		row = coinc_map_table.RowType()
+		row.event_id = "sngl_inspiral:event_id:1"
+		row.table_name = "sngl_inspiral"
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
+		coinc_map_table.append(row)
+
+		row = coinc_map_table.RowType()
+		row.event_id = "sngl_inspiral:event_id:2"
+		row.table_name = "sngl_inspiral"
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
+		coinc_map_table.append(row)
+
+		row = time_slide_table.RowType()
+		row.instrument = "H1"
+		row.time_slide_id = "time_slide:time_slide_id:6"
+		row.process_id = "process:process_id:1"
+		row.offset = 0
+		time_slide_table.append(row)
+
+		row = time_slide_table.RowType()
+		row.instrument = "L1"
+		row.time_slide_id = "time_slide:time_slide_id:6"
+		row.process_id = "process:process_id:1"
+		row.offset = 0
+		time_slide_table.append(row)
+
+		postcoh_table.append(trigger)
+
+	def assemble_snglinspiral_table(self, trigger):
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(self.xmldoc)
 		row = sngl_inspiral_table.RowType()
 		for standard_column in ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"):
 		  try:
@@ -636,7 +711,7 @@ class FinalSink(object):
 		# Setting the L1 row
 		row.process_id = "process:process_id:1"
 		row.ifo = "L1"
-		row.search = self.path
+		row.search = self.url
 		row.channel = "GDS-CALIB_STRAIN" 
 		row.end_time = trigger.end_time_L
 		row.end_time_ns = trigger.end_time_ns_L
@@ -707,7 +782,7 @@ class FinalSink(object):
 		# Setting the the other row
 		row.process_id = "process:process_id:1"
 		row.ifo = "H1"
-		row.search = self.path
+		row.search = self.url
 		row.channel = "GDS-CALIB_STRAIN" 
 		row.end_time = trigger.end_time_H
 		row.end_time_ns = trigger.end_time_ns_H 
@@ -754,7 +829,7 @@ class FinalSink(object):
 		row.cont_chisq_dof = 0
 		row.sigmasq = 0
 		row.rsqveto_duration = 0
-		row.Gamma0 = 0
+		row.Gamma0 = 0 
 		row.Gamma1 = 0
 		row.Gamma2 = 0
 		row.Gamma3 = 0
@@ -771,65 +846,5 @@ class FinalSink(object):
 		row.spin2y = trigger.spin2y 
 		row.spin2z = trigger.spin2z
 		row.event_id = "sngl_inspiral:event_id:2"
-		
 		sngl_inspiral_table.append(row)
-
-		row = coinc_def_table.RowType()
-		row.search = "inspiral"
-		row.description = "sngl_inspiral<-->sngl_inspiral coincidences"
-		row.coinc_def_id = "coinc_definer:coinc_def_id:3"
-		row.search_coinc_type = 0
-		coinc_def_table.append(row)
-
-		row = coinc_table.RowType()
-		row.coinc_event_id = "coinc_event:coinc_event_id:1"
-		row.instruments = ','.join(re.findall('..',trigger.ifos)) #FIXME: for more complex detector names
-		row.nevents = 2
-		row.process_id = "process:process_id:1"
-		row.coinc_def_id = "coinc_definer:coinc_def_id:3"
-		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.likelihood = 0
-		coinc_table.append(row)
-		
-		row = coinc_inspiral_table.RowType()
-		row.false_alarm_rate = trigger.fap
-		row.mchirp = trigger.mchirp 
-		row.minimum_duration = trigger.template_duration
-		row.mass = trigger.mtotal
-		row.end_time = trigger.end_time
-		row.coinc_event_id = "coinc_event:coinc_event_id:1"
-		row.snr = trigger.cohsnr
-		row.end_time_ns = trigger.end_time_ns
-		row.combined_far = trigger.far
-		row.ifos = ','.join(re.findall('..',trigger.ifos)) #FIXME: for more complex detector names
-		coinc_inspiral_table.append(row)
-
-		row = coinc_map_table.RowType()
-		row.event_id = "sngl_inspiral:event_id:1"
-		row.table_name = "sngl_inspiral"
-		row.coinc_event_id = "coinc_event:coinc_event_id:1"
-		coinc_map_table.append(row)
-
-		row = coinc_map_table.RowType()
-		row.event_id = "sngl_inspiral:event_id:2"
-		row.table_name = "sngl_inspiral"
-		row.coinc_event_id = "coinc_event:coinc_event_id:1"
-		coinc_map_table.append(row)
-
-		row = time_slide_table.RowType()
-		row.instrument = "H1"
-		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.process_id = "process:process_id:1"
-		row.offset = 0
-		time_slide_table.append(row)
-
-		row = time_slide_table.RowType()
-		row.instrument = "L1"
-		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.process_id = "process:process_id:1"
-		row.offset = 0
-		time_slide_table.append(row)
-
-		postcoh_table.append(trigger)
-
 
