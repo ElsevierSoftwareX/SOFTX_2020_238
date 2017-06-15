@@ -541,6 +541,9 @@ if 1==1:
   if options.verbose:
     print >>sys.stderr, "setting pipeline state to playing ..."
   if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+    msg = pipeline.get_bus().poll(gst.MESSAGE_ERROR,0)
+    if msg is not None:
+      print msg.parse_error()
     raise RuntimeError, "pipeline did not enter playing state"
 
   if options.write_pipeline is not None:
