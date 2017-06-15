@@ -45,7 +45,7 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 	return True
 
 def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = float("inf"), min_m1 = 0):
-	# Assumes m_1 and m_2 are first
+	# Assumes m_c and m_2 are first
 	Q = []
 	M = []
 	M1 = []
@@ -55,7 +55,7 @@ def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = fl
 		Q.append(m1/m2)
 		M.append(m1+m2)
 		M1.append(m1)
-	minq_condition = all([q < 1. / mass_ratio for q in Q])
+	minq_condition = False#all([q < 1. / mass_ratio for q in Q])
 	minm1_condition = all([m1 < min_m1 for m1 in M1])
 	maxq_condition = all([q > mass_ratio for q in Q])
 	mtotal_condition = all([m > total_mass for m in M])
