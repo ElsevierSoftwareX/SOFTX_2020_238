@@ -176,19 +176,19 @@ env.sh :
 	@echo 'unset LD_LIBRARY_PATH LIBRARY_PATH LD_PRELOAD' >> $@
 	@echo 'LAL_PATH=${PWD}/opt' >> $@
 	@echo 'export CFLAGS="-O3 -march=native -lfftw3 -lfftw3f -lfftw3_threads -lfftw3f_threads -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lm -lpthread -Wno-write-strings -lirc -limf -Wl,-rpath,${PWD}/opt/lib"' >> $@
-	@if [ ${CLUSTER} == *"ligo.caltech.edu" ] ; then \
+	@if [[ ${CLUSTER} == *"ligo.caltech.edu" ]] ; then \
 		echo "source ${ICC_CIT} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
-	elif [ ${CLUSTER} == *"ligo-wa.caltech.edu" ] ; then \
+	elif [[ ${CLUSTER} == *"ligo-wa.caltech.edu" ]] ; then \
 		echo "source ${ICC_LHO} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
-	elif [ ${CLUSTER} == *"ligo-la.caltech.edu" ] ; then \
+	elif [[ ${CLUSTER} == *"ligo-la.caltech.edu" ]] ; then \
 		echo "source ${ICC_LLO} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
-	elif [ ${CLUSTER} == *"nemo.uwm.edu" ] ; then \
+	elif [[ ${CLUSTER} == *"nemo.uwm.edu" ]] ; then \
 		echo "source ${ICC_UWM} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L/opt/intel/composer_xe_2015.5.223/mkl/lib/intel64"' >> $@ ; \
-	elif [ ${CLUSTER} == *"atlas.local" ] ; then \
+	elif [[ ${CLUSTER} == *"atlas.local" ]] ; then \
 		echo "source ${ICC_ATLAS} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L/opt/intel/2015/lib/intel64 -L/opt/intel/2015/mkl/lib/intel64"' >> $@ ; \
 	fi
