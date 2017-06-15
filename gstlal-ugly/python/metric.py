@@ -162,7 +162,7 @@ class Metric(object):
 		self.delta_t = {}
 		self.t_factor = {}
 		self.neg_t_factor = {}
-		delta_t = numpy.finfo(numpy.float32).eps * 2
+		delta_t = 1e-6
 		t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * delta_t)
 		neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-delta_t))
 		for t in numpy.array([1.,2.,4.,8.,16.,32.,64.,128.,256.,512.,1024]):

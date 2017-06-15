@@ -109,7 +109,7 @@ class HyperCube(object):
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
-		deltas = numpy.finfo(numpy.float32).eps * 1.2 * numpy.ones(len(self.center))
+		deltas = 1e-6 * numpy.ones(len(self.center))
 		#deltas = 5e-7 * numpy.ones(len(self.center))
 		deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
