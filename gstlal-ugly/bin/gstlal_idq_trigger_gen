@@ -209,7 +209,12 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.last_hdf_save_time = dict.fromkeys(self.keys, None)
 		self.hdf_cadence = 10
 		self.reduce_cadence = 100
-		self.init_gps_time = int(aggregator.now())
+
+		# set initialization time
+		if options.data_source in ("framexmit", "lvshm"):
+			self.init_gps_time = int(aggregator.now())
+		else:
+			self.init_gps_time = int(options.gps_start_time)
 
 		# dataframe properties
 		columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'phase', 'sigmasq', 'chisq', 'snr']
@@ -274,7 +279,12 @@ class MultiChannelHandler(simplehandler.Handler):
 					self.to_trigger_file(self.to_dataframe_string(buftime))
 				else:
 					self.to_trigger_file()
-					self.fdata = ""
+				self.fdata = ""
+				self.last_save_time = buftime
+
+			# save current triggers in dataframe before dataframe is reindexed
+			if options.triggers_from_dataframe and ((buftime - self.truncate_int(self.last_save_time, aggregator.MIN_TIME_QUANTA) >= aggregator.MIN_TIME_QUANTA)):
+				self.to_trigger_file(self.to_dataframe_string(buftime))
 				self.last_save_time = buftime
 
 			# hdf file saving
@@ -318,6 +328,7 @@ class MultiChannelHandler(simplehandler.Handler):
 							try:
 								self.dataframes[(channel, int(rate))].loc[buftime_index, buftime] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
 							except ValueError:
+								print >>sys.stderr, "last hdf save time= %d" % self.last_hdf_save_time[(channel, int(rate))]
 								print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, int(rate))
 								traceback.print_exc()
 
@@ -332,8 +343,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		if (last_save_index + self.hdf_cadence) % aggregator.MIN_TIME_QUANTA == 0:
 			last_save_index = last_save_index + self.hdf_cadence
 		# case 1: save current triggers from prev leaf directory, aggregate, reindex and clean out dataframe, move to new leaf directory
-		# FIXME: Doesn't save last 10 second chunk of triggers,
-		#        and also has an indexing error in first 10 sec,
+		# FIXME: Doesn't save last hdf save cadence of triggers,
 		#        probably an 'off by one' implementation, will
 		#        need to look into this, but have workaround
 		#        for now.
@@ -379,19 +389,15 @@ class MultiChannelHandler(simplehandler.Handler):
 		dataframe from last save time to gps time
 		to a string.
 		"""
-		df_data = ""
 		idx = pandas.IndexSlice
 		time_format = lambda x: '%20.9f' % x
 		col1_format = lambda x: '%10.3f' % x
 		col2_format = lambda x: '%8.3f' % x
 		trigger_format = {'start_time': time_format, 'stop_time': time_format, 'trigger_time': time_format, 'frequency': col1_format, 'phase': col2_format, 'sigmasq': col2_format, 'chisq': col2_format, 'snr': col1_format}
 		for (channel, rate) in self.keys:
-			channel_tag_str = ('%s_%i_%i' %(channel, int(rate)/4, int(rate)/2)).replace(":","_",1)
-			channel_tag = pandas.Series(numpy.array([channel_tag_str for i in range(self.last_save_time,gps_time + 1)]))
-			gps_index = self.truncate_int(gps_time, self.hdf_cadence)
+			channel_tag = ('%s_%i_%i' %(channel, int(rate)/4, int(rate)/2)).replace(":","_",1)
 			if not self.dataframes[(channel, int(rate))].loc[idx[:, self.last_save_time:gps_time], :].dropna().empty:
-				df_data += self.dataframes[(channel, int(rate))].loc[idx[:, self.last_save_time:gps_time], :].assign(channel_tag = channel_tag.values).dropna().to_string(col_space = 3, header = False, index = False, formatters = trigger_format) + "\n"
-		return df_data
+				self.fdata += self.dataframes[(channel, int(rate))].loc[idx[:, self.last_save_time:gps_time], :].assign(channel_tag = channel_tag).dropna().to_string(col_space = 4, header = False, index = False, formatters = trigger_format) + "\n"
 
 	def to_dataframe_index(self, gps_time):
 		"""
@@ -415,7 +421,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			path = os.path.join(path, channel)
 		path = os.path.join(path, aggregator.gps_to_leaf_directory(gps_time, level = level))
 		if rate is not None:
-			path = os.path.join(path, str(rate).zfill(5))
+			path = os.path.join(path, str(rate).zfill(4))
 		return path
 	
 	def truncate_int(self, x, n):
