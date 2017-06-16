@@ -238,7 +238,7 @@ class Node(object):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		aspect_ratios = size / min(size)
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
+		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>1.5]) / 1.5**len(aspect_ratios[aspect_ratios>1.5]))
 		if numpy.isnan(aspect_factor):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
@@ -270,7 +270,7 @@ class Node(object):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
+			if False:#metric_diff <= metric_tol:# and aspect_factor <= 1.0:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
