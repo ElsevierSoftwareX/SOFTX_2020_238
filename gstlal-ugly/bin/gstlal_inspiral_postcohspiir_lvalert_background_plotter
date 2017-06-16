@@ -82,9 +82,11 @@ def parse_command_line():
 	
 
 options, gid = parse_command_line()
+if not os.path.exists('gracedb'):
+	os.mkdir('gracedb')
 
 try:
-	os.mkdir("gracedb/" + gid)
+	os.mkdir('gracedb/' + gid)
 except OSError:
 	pass
 
