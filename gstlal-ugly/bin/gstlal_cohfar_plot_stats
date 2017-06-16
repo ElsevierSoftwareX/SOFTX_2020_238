@@ -157,6 +157,6 @@ pyplot.legend((CM, CM2), ('spiir zerolags', 'spiir event'), loc='lower right')
 pyplot.ylim(-0.2,3)
 pyplot.xlim(0.7,2.2)
 pyplot.xlabel(r'$\log_{10}(\rho_c)$')	
-pyplot.ylabel(r'$\log_{10}(\xi_c^2/\rho_c^2)$')	
+pyplot.ylabel(r'$\log_{10}(\xi_c^2)$')	
 pyplot.savefig(options.output)
 
