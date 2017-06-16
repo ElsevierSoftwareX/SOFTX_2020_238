@@ -351,11 +351,11 @@ class MultiChannelHandler(simplehandler.Handler):
 					print >>sys.stderr, "Error saving dataframe to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 					traceback.print_exc()
 			# find gps times of max snr triggers per cadence and save to file
-			last_reduce_index = self.truncate_int(buftime, self.reduce_cadence) - self.hdf_cadence
-			max_index = self.dataframes[(channel, rate)].loc[last_reduce_index:current_save_index].groupby(level=0)['snr'].idxmax().dropna().values
+			last_reduce_index = self.truncate_int(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)
+			max_index = self.dataframes[(channel, rate)].loc[last_reduce_index:(current_save_index - self.hdf_cadence)].groupby(level=0)['snr'].idxmax().dropna().values
 			if max_index.size > 0:
 				try:
-					self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
+					self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(last_reduce_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
 				except (KeyError, AttributeError):
 					print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 					traceback.print_exc()
@@ -373,11 +373,11 @@ class MultiChannelHandler(simplehandler.Handler):
 			# case 3: save current triggers from current directory and aggregate
 			if (buftime - self.truncate_int(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)) >= self.reduce_cadence:
 				# find gps times of max snr triggers per cadence and save to file
-				last_reduce_index = self.truncate_int(buftime, self.reduce_cadence) - self.hdf_cadence
-				max_index = self.dataframes[(channel, rate)].loc[last_reduce_index:current_save_index].groupby(level=0)['snr'].idxmax().dropna().values
+				last_reduce_index = self.truncate_int(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)
+				max_index = self.dataframes[(channel, rate)].loc[last_reduce_index:(current_save_index - self.hdf_cadence)].groupby(level=0)['snr'].idxmax().dropna().values
 				if max_index.size > 0:
 					try:
-						self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(current_save_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
+						self.dataframes[(channel, rate)].loc[max_index].to_hdf(os.path.join(self.to_agg_path(last_reduce_index, channel, rate), 'aggregates.h5'), 'max', format = 'table', mode = 'a', append = True)
 					except (KeyError, AttributeError):
 						print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 						traceback.print_exc()
