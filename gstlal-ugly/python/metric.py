@@ -358,7 +358,15 @@ class Metric(object):
 		condition = S < max(S) * thresh
 		eff_dimension = len(S) - len(S[condition])
 		S[condition] = 0.0
-		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
+		#g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
+
+		# FIXME this is a hack to get rid of negative eigenvalues
+		w, v = numpy.linalg.eigh(g)
+		mxw = numpy.max(w)
+		if numpy.any(w < 1e-6 * mxw):
+			w[w<0.] = 1e-6 * mxw
+			g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
+			self.metric_is_valid = False
 
 		return g, eff_dimension, numpy.product(S[S>0])
 
