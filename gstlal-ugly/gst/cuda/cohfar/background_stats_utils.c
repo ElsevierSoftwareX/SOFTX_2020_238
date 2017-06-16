@@ -124,6 +124,8 @@ background_stats_reset(BackgroundStats **stats, int ncombo)
 	  gsl_vector_long_set_zero((gsl_vector_long *)rates->lgsnr_bins->data);
 	  gsl_vector_long_set_zero((gsl_vector_long *)rates->lgchisq_bins->data);
 	  gsl_matrix_long_set_zero((gsl_matrix_long *)rates->hist->data);
+	  stats[icombo]->nevent = 0;
+	  stats[icombo]->duration = 0;
   }
 
 }
