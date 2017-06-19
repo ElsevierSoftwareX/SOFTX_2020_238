@@ -353,6 +353,13 @@ class Metric(object):
 		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
+		w, v = numpy.linalg.eigh(g)
+		if numpy.any(w < 0.):
+			print center, deltas
+			raise ValueError("negative eigenvalues")
+		return g, len(w), numpy.linalg.det(g)
+
+		# FIXME delete this
 		# find effective dimension
 		U, S, V = numpy.linalg.svd(g)
 		condition = S < max(S) * thresh
