@@ -55,7 +55,7 @@ def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = fl
 		Q.append(m1/m2)
 		M.append(m1+m2)
 		M1.append(m1)
-	minq_condition = False#all([q < 1. / mass_ratio for q in Q])
+	minq_condition = all([q < 0.95 for q in Q])
 	minm1_condition = all([m1 < min_m1 for m1 in M1])
 	maxq_condition = all([q > mass_ratio for q in Q])
 	mtotal_condition = all([m > total_mass for m in M])
@@ -84,10 +84,28 @@ def packing_density(n):
 		return prefactor * numpy.pi**3 / 105
 	if n==8:
 		return prefactor * numpy.pi**4 / 384
+
+def mc_m2_singularity(c):
+	center = c.copy()
+	F = 1. / 2**.2
+	if F*.90 < center[0] / center[1] <= F:
+		center[1] *= 1.11
+	if F*1.11 > center[0] / center[1] > F:
+		center[1] *= 0.90
+	return center
+	
+def m1_m2_singularity(c):
+	center = c.copy()
+	F = 1.
+	if F*.90 < center[0] / center[1] <= F:
+		center[1] *= 1.11
+	if F*1.11 > center[0] / center[1] > F:
+		center[1] *= 0.90
+	return center
 	
 class HyperCube(object):
 
-	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, effective_dimension = None, det = None):
+	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, effective_dimension = None, det = None, singularity = None):
 		"""
 		Define a hypercube with boundaries given by boundaries, e.g.,
 
@@ -114,13 +132,21 @@ class HyperCube(object):
 		deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
 		#deltas[2:] = 1.0e-5
+		self.singularity = singularity
 
 		if self.metric is not None and metric_tensor is None:
+			#try:
+			if self.singularity is not None:
+				center = self.singularity(self.center)
+			else:
+				center = self.center
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center, deltas)
-			except RuntimeError:
-				print "metric @", self.center, " failed, trying, ", self.center - self.deltas / 2.
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., deltas)
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(center, deltas)
+			except ValueError:
+				center *= 0.999
+				self.metric_tensor, self.effective_dimension, self.det = self.metric(center, deltas)
+			#	print "metric @", self.center, " failed, trying, ", self.center - self.deltas / 2.
+			#	self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., deltas)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
@@ -172,9 +198,9 @@ class HyperCube(object):
 		leftbound[dim,1] = self.center[dim]
 		rightbound[dim,0] = self.center[dim]
 		if reuse_metric:
-			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det)
+			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity)
 		else:
-			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric)
+			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, singularity = self.singularity), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, singularity = self.singularity)
 
 	def tile(self, mismatch, stochastic = False):
 		self.tiles.append(self.center)
@@ -238,7 +264,7 @@ class Node(object):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		aspect_ratios = size / min(size)
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>1.5]) / 1.5**len(aspect_ratios[aspect_ratios>1.5]))
+		aspect_factor = 1.#max(1., numpy.product(aspect_ratios[aspect_ratios>1.67]) / 1.67**len(aspect_ratios[aspect_ratios>1.67]))
 		if numpy.isnan(aspect_factor):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
@@ -266,11 +292,11 @@ class Node(object):
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
-		metric_tol = 0.03
+		metric_tol = 0.01
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
-			if False:#metric_diff <= metric_tol:# and aspect_factor <= 1.0:
+			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
