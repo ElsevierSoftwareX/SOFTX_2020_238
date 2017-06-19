@@ -181,10 +181,10 @@ def trans_M_q(coord_limits):
 
 if args.Mq:
 	coord_limits_2 = trans_M_q(coord_limits)
-	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint_mc(x, args.max_q, args.max_mtotal, coord_limits[0][0]), metric = g_ij))
+	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint_mc(x, args.max_q, args.max_mtotal, coord_limits[0][0]), metric = g_ij, singularity = tree.mc_m2_singularity))
 else:
 	coord_limits_2 = coord_limits
-	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint(x, args.max_q, args.max_mtotal), metric = g_ij))
+	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint(x, args.max_q, args.max_mtotal), metric = g_ij, singularity = tree.m1_m2_singularity))
 
 
 if args.verbose:
