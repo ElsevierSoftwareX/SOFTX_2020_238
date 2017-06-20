@@ -14,6 +14,7 @@ pkgpython_PYTHON = \
 	chirptime.py \
 	far.py \
 	hoftcache.py \
+	imr_utils.py \
 	inspiral_pipe.py \
 	inspiral.py \
 	lloidparts.py \
@@ -32,7 +33,7 @@ pkgpython_PYTHON = \
 	templates.py \
 	webpage.py
 
-pkgpyexec_LTLIBRARIES = _rate_estimation.la _snglinspiraltable.la
+pkgpyexec_LTLIBRARIES = _rate_estimation.la _snglinspiraltable.la _spawaveform.la
 
 _rate_estimation_la_SOURCES = rate_estimation.c
 _rate_estimation_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS) -DMODULE_NAME="\"gstlal._rate_estimation\""
@@ -47,6 +48,6 @@ _snglinspiraltable_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSL_LIBS) $(PYTHON_L
 
 _spawaveform_la_SOURCES = _spawaveform.c
 _spawaveform_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS) -DMODULE_NAME="\"gstlal._spawaveform\""
-_spawaveform_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) -fno-strict-aliasing -DMODULE_NAME="\"gstlal._spawaveform\""
-_spawaveform_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(PYTHON_LIBS) -module -avoid-version
+_spawaveform_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSL_CFLAGS) -fno-strict-aliasing -DMODULE_NAME="\"gstlal._spawaveform\""
+_spawaveform_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSL_LIBS) $(PYTHON_LIBS) -module -avoid-version
 
