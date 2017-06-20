@@ -473,15 +473,15 @@ class PSDFirKernel(object):
 		if self.revplan is None:
 			self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)
 
-		deltaF = 1. / (len(linear_phase_kernel) / sample_rate)
-		working_length = len(linear_phase_kernel)
 		deltaT = 1. / sample_rate
+		deltaF = 1. / (len(linear_phase_kernel) * deltaT)
+		working_length = len(linear_phase_kernel)
 
 		kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "timeseries of whitening kernel",
 			epoch = LIGOTimeGPS(0.),
 			f0 = 0.,
-			deltaT = 1.0 / sample_rate,
+			deltaT = deltaT,
 			length = working_length,
 			sampleUnits = lal.Unit("strain")
 		)
