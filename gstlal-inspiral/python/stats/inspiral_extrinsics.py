@@ -377,6 +377,11 @@ class SNRPDF(object):
 		return dict((instrument, (NegInf if horizon_distance < min_distance else int(round(math.log(horizon_distance / horizon_distance_norm) / self.log_distance_tolerance)))) for instrument, horizon_distance in horizon_distances.items())
 
 
+	@property
+	def quants(self):
+		return [NegInf] + range(int(math.ceil(math.log(self.min_ratio) / self.log_distance_tolerance)), 1)
+
+
 	def quantized_horizon_distances(self, quants):
 		if math.isinf(self.log_distance_tolerance):
 			return dict((instrument, 0. if math.isinf(quant) else 1.) for instrument, quant in quants)
