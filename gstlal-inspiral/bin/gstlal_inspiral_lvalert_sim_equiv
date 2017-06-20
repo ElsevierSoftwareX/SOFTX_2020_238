@@ -53,7 +53,7 @@ from glue.ligolw.utils import process as ligolw_process
 from gstlal import lvalert_helper
 import lal
 from ligo.gracedb import rest as gracedb
-from pylal import spawaveform
+from gstlal import spawaveform
 
 
 #

@@ -60,7 +60,7 @@ from lal import LIGOTimeGPS
 import lalsimulation as lalsim
 
 
-from pylal import spawaveform
+from gstlal import spawaveform
 
 
 from gstlal import reference_psd
