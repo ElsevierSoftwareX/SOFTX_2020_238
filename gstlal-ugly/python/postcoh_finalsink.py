@@ -278,10 +278,6 @@ class FinalSink(object):
 		# skymap
 		self.output_skymap = output_skymap
 
-		# logs files
-		if not os.path.exists("logs"):
-			os.mkdir("logs")
-
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
