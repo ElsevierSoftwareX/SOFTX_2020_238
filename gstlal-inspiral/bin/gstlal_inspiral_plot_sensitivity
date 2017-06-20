@@ -48,7 +48,7 @@ import lal
 from lal import rate
 from lal.utils import CacheEntry
 
-from pylal import imr_utils
+from gstlal import imr_utils
 
 __author__ = "Stephen Privitera <sprivite@caltech.edu>, Chad Hanna <channa@perimeterinstitute.ca>, Kipp Cannon <kipp.cannon@ligo.org>"
 __version__ = "git id %s" % ""	# FIXME

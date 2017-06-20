@@ -16,7 +16,7 @@ from optparse import OptionParser
 import lal
 from lal import rate
 from glue.ligolw import utils as ligolw_utils
-from pylal import imr_utils
+from gstlal import imr_utils
 
 import matplotlib
 matplotlib.use('Agg')
