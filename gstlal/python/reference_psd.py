@@ -549,7 +549,7 @@ class PSDFirKernel(object):
 		# compute sgn
 		#
 
-		sgn = 1 * scipy.ones(working_length)
+		sgn = scipy.ones(working_length)
 		sgn[0] = 0.
 		sgn[(len(sgn)+1)/2] = 0.
 		sgn[(len(sgn)+1)/2:] *= -1
@@ -566,7 +566,6 @@ class PSDFirKernel(object):
 		# compute minimum phase kernel
 		#
 
-		tmp  = absX.data.data * scipy.exp(1.j * theta.data.data)[:]
 		absX.data.data[:]  = absX.data.data * scipy.exp(1.j * theta.data.data)[:]
 		absX.data.data[:] = numpy.roll(absX.data.data, +working_length / 2 + 1)[:] / sample_rate
 		lal.COMPLEX16FreqTimeFFT(min_phase_kernel, absX, self.revplan)
@@ -584,7 +583,7 @@ class PSDFirKernel(object):
 		# done
 		#
 
-		return kernel, -1 * theta.data.data
+		return kernel, -theta.data.data
 
 
 def interpolate_psd(psd, deltaF):
