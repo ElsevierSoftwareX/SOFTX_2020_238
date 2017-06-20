@@ -1,4 +1,4 @@
-# Copyright (C) 2016  Kipp Cannon
+# Copyright (C) 2016,2017  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -337,7 +337,7 @@ class SNRPDF(object):
 
 
 	# FIXME:  is the default choice of distance quantization appropriate?
-	def __init__(self, snr_cutoff, log_distance_tolerance = math.log(1.05)):
+	def __init__(self, snr_cutoff, log_distance_tolerance = math.log(1.05), min_ratio = 0.1):
 		"""
 		snr_cutoff sets the minimum SNR below which it is
 		impossible to obtain a candidate (the trigger SNR
@@ -345,9 +345,10 @@ class SNRPDF(object):
 		"""
 		self.snr_cutoff = snr_cutoff
 		self.log_distance_tolerance = log_distance_tolerance
+		self.min_ratio = min_ratio
 
 
-	def quantize_horizon_distances(self, horizon_distances, min_ratio = 0.1):
+	def quantize_horizon_distances(self, horizon_distances):
 		"""
 		if two horizon distances, D1 and D2, differ by less than
 
@@ -368,7 +369,7 @@ class SNRPDF(object):
 		# check for no-op:  map all (non-zero) values to 1
 		if math.isinf(self.log_distance_tolerance):
 			return dict((instrument, 1 if horizon_distance > 0. else NegInf) for instrument, horizon_distance in horizon_distances.items())
-		min_distance = min_ratio * horizon_distance_norm
+		min_distance = self.min_ratio * horizon_distance_norm
 		return dict((instrument, (NegInf if horizon_distance < min_distance else int(round(math.log(horizon_distance / horizon_distance_norm) / self.log_distance_tolerance)))) for instrument, horizon_distance in horizon_distances.items())
 
 
@@ -663,7 +664,7 @@ class SNRPDF(object):
 		if len(xml) != 1:
 			raise ValueError("XML tree must contain exactly one %s element named %s" % (ligolw.LIGO_LW.tagName, name))
 		xml, = xml
-		self = cls(snr_cutoff = ligolw_param.get_pyvalue(xml, u"snr_cutoff"), log_distance_tolerance = ligolw_param.get_pyvalue(xml, u"log_distance_tolerance"))
+		self = cls(snr_cutoff = ligolw_param.get_pyvalue(xml, u"snr_cutoff"), log_distance_tolerance = ligolw_param.get_pyvalue(xml, u"log_distance_tolerance"), min_ratio = ligolw_param.get_pyvalue(xml, u"min_ratio"))
 		for elem in xml.childNodes:
 			if elem.tagName != ligolw.LIGO_LW.tagName:
 				continue
@@ -692,6 +693,7 @@ class SNRPDF(object):
 		xml.Name = u"%s:%s" % (name, u"inspiral_snr_pdf")
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"snr_cutoff", self.snr_cutoff))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"log_distance_tolerance", self.log_distance_tolerance))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_ratio", self.min_ratio))
 		for i, (key, (ignored, binnedarray, ignored)) in enumerate(self.snr_joint_pdf_cache.items()):
 			elem = xml.appendChild(binnedarray.to_xml(u"%d:pdf" % i))
 			elem.appendChild(ligolw_param.Param.from_pyvalue(u"instruments:key", lsctables.instrumentsproperty.set(key[0])))
