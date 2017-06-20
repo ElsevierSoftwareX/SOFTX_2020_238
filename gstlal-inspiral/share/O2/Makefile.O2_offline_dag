@@ -242,7 +242,6 @@ inj_tisi.xml :
 vetoes.xml.gz : $(VETOES_FILES)
 	ligolw_add --output $@ $(VETOES_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
-	gzip $@
 
 %_vetoes.xml : $(VETODEF)
 	ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
@@ -259,7 +258,6 @@ segments.xml.gz : $(SEGMENTS_FILES) frame.cache CAT1_vetoes.xml.gz
 CAT1_vetoes.xml.gz : $(CAT1_VETOES_FILES)
 	ligolw_add --output $@ $(CAT1_VETOES_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
-	gzip $@
 
 %_CAT1_vetoes.xml : $(VETODEF)
 	ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
