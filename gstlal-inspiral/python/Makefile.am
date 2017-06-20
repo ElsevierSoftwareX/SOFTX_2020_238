@@ -25,6 +25,7 @@ pkgpython_PYTHON = \
 	plotsensitivity.py \
 	rate_estimation.py \
 	snglinspiraltable.py \
+	spawaveform.py \
 	spiirparts.py \
 	streamthinca.py \
 	svd_bank.py \
@@ -43,3 +44,9 @@ _snglinspiraltable_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS) -DMODULE_NAME
 _snglinspiraltable_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSL_CFLAGS) $(gstreamer_CFLAGS) -fno-strict-aliasing -DMODULE_NAME="\"gstlal._snglinspiraltable\""
 _snglinspiraltable_la_LIBADD = $(top_builddir)/lib/libgstlalinspiral.la
 _snglinspiraltable_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSL_LIBS) $(PYTHON_LIBS) -module -avoid-version
+
+_spawaveform_la_SOURCES = _spawaveform.c
+_spawaveform_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS) -DMODULE_NAME="\"gstlal._spawaveform\""
+_spawaveform_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) -fno-strict-aliasing -DMODULE_NAME="\"gstlal._spawaveform\""
+_spawaveform_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(PYTHON_LIBS) -module -avoid-version
+
