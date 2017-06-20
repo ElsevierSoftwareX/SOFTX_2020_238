@@ -47,7 +47,7 @@ const char SPADocstring[] =
 "related to them.\n\n"
 "EXAMPLE CODE: (you could cut and paste this into the interpreter)\n"
 "\n"
-"from pylal import spawaveform\n"
+"from gstlal import spawaveform\n"
 "import numpy\n"
 "import pylab\n"
 "import scipy\n"
@@ -551,7 +551,7 @@ static struct PyMethodDef methods[] = {
 	 "If the inplace=True, the input array A is overwritten by U, instead of the default\n"
 	 "behavior which is to allocate new space for U and preserve A.  Both variables continue\n"
 	 "to exist but point to the same data! USE THIS OPTION WITH CARE!\n\n"
-	 "EXAMPLE:\n\tfrom pylal import spawaveform\n"
+	 "EXAMPLE:\n\tfrom gstlal import spawaveform\n"
 	 "\timport numpy\n"
 	 "\tA = numpy.random.randn(4,3)\n"
 	 "\tprint A\n"
@@ -579,7 +579,7 @@ static struct PyMethodDef methods[] = {
 /* The init function for this module */
 void init_spawaveform(void)
 	{
-	(void) Py_InitModule3("pylal._spawaveform", methods, SPADocstring);
+	(void) Py_InitModule3(MODULE_NAME, methods, SPADocstring);
 	import_array();
 	/* FIXME someday handle errors
 	 * SVMError = PyErr_NewException("_spawaveform.SPAWaveformError", NULL, NULL);
