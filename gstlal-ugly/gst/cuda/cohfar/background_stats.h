@@ -49,7 +49,7 @@
 #define	BACKGROUND_XML_FAP_NAME	"background_fap"	
 #define BACKGROUND_XML_SNR_CHISQ_SUFFIX "_lgsnr_lgchisq"
 
-
+#define NSTATS_TO_PROMPT 50
 typedef struct {
 	double	cmin;
 	double	cmax;
@@ -97,5 +97,14 @@ typedef struct {
 	long nevent;
 	long duration;
 } BackgroundStats;
+
+
+typedef	BackgroundStats** BackgroundStatsPointer;
+typedef struct {
+	BackgroundStatsPointer *plist;
+	int size;
+	int pos;
+} BackgroundStatsPointerList; 
+
 
 #endif /* __BACKGROUND_STATS_H__ */

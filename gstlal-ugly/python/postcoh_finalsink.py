@@ -268,6 +268,8 @@ class FinalSink(object):
 
 		# trigger control
 		self.trigger_control_doc = "trigger_control.txt"
+		if not os.path.exists(self.trigger_control_doc):
+			file(self.trigger_control_doc, 'w').close()
 		self.last_trigger = []
 		self.last_submitted_trigger = []
 		self.last_trigger.append((0, 1))
@@ -275,6 +277,11 @@ class FinalSink(object):
 
 		# skymap
 		self.output_skymap = output_skymap
+
+		# logs files
+		if not os.path.exists("logs"):
+			os.mkdir("logs")
+
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -314,7 +321,7 @@ class FinalSink(object):
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
 					# FIXME: Currently hard-coded for single detector far H and L
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__chisq_ratio_veto(self.candidate) is False:
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__chisq_ratio_veto(self.candidate) is False and self.__prompt_fap_veto(self.candidate) is False:
 						self.__do_gracedb_alert(self.candidate)
 					if self.need_online_perform:
 						self.onperformer.update_eye_candy(self.candidate)
@@ -389,6 +396,13 @@ class FinalSink(object):
 		candidate.far_l = candidate.far_l * self.far_factor
 		candidate.far_h = candidate.far_h * self.far_factor
 
+	def __prompt_fap_veto(self, candidate):
+		# FIXME: hard-code the fap veto threshold to be 0.01
+		if candidate.fap < 0.01:
+			return False
+		else:
+			return True
+	
 	def __chisq_ratio_veto(self, candidate):
 		chisq_ratio = candidate.chisq_H/candidate.chisq_L
 		if chisq_ratio > self.chisq_ratio_thresh or chisq_ratio < 1.0/self.chisq_ratio_thresh:

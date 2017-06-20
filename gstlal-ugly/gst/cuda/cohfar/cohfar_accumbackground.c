@@ -137,11 +137,28 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start))
 		element->t_roll_start = GST_BUFFER_TIMESTAMP(inbuf);
 
+	/* 
+	 * initialize stats files 
+	 */
+	BackgroundStats **stats_snapshot = element->stats_snapshot;
+	BackgroundStats **stats_prompt = element->stats_prompt;
+	BackgroundStatsPointerList *stats_list = element->stats_list;
+	/* reset stats_prompt */
+	background_stats_rates_reset(stats_prompt, element->ncombo);
+	
 	/*
-	 * calculate output buffer entries
+	 * reset stats in the stats_list in order to input new background points
+	 */
+	int pos = stats_list->pos;
+	BackgroundStats **cur_stats_in_list = stats_list->plist[pos];
+	background_stats_rates_reset(cur_stats_in_list, element->ncombo);
+
+
+	/*
+	 * calculate number of output postcoh entries
 	 */
 	int outentries = 0;
-	BackgroundStats **stats = element->stats;
+
 	PostcohInspiralTable *intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *intable_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
 	for (; intable<intable_end; intable++) 
@@ -163,7 +180,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	}
 
 	/*
-	 * shapshot background rates
+	 * update background rates
 	 */
 
 	intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
@@ -173,35 +190,67 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
 			//printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
-			//FIXME: add single detector stats
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1)
-				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats[icombo]->rates, stats[icombo]);
+				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats_snapshot[icombo]->rates, stats_snapshot[icombo]);
 
 			nifo = strlen(intable->ifos)/IFO_LEN;
+			/* add single detector stats */
 			for (isingle=0; isingle< nifo; isingle++)
-				background_stats_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats[isingle]->rates, stats[isingle]);
-
+				background_stats_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats_snapshot[isingle]->rates, stats_snapshot[isingle]);
+			/* add stats to stats_list for prompt FAP estimation */
+			if (icombo > -1)
+				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, cur_stats_in_list[icombo]->rates, cur_stats_in_list[icombo]);
 
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 		} 
 	}
+	/*
+	 * calculate immediate FAP using stats_prompt from stats_list
+	 */
+	int ilist = 0, ncombo = element->ncombo;
+	for (ilist=0; ilist<stats_list->size; ilist++) {
+		cur_stats_in_list = stats_list->plist[(pos+ilist)%NSTATS_TO_PROMPT];
+		for (icombo=0; icombo<ncombo; icombo++)
+			background_stats_rates_add(stats_prompt[icombo]->rates, cur_stats_in_list[icombo]->rates, stats_prompt[icombo]);
+	}
+	for (icombo=0; icombo<ncombo; icombo++) {
+		background_stats_rates_to_pdf_hist(stats_prompt[icombo]->rates, stats_prompt[icombo]->pdf);
+		background_stats_pdf_to_fap(stats_prompt[icombo]->pdf, stats_prompt[icombo]->fap);
+	}
+	/*
+	 * assign prompt FAP to 'fap' field of our trigger
+	 */
+	outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 
+	int ientry = 0;
+	for (ientry=0; ientry<outentries; ientry++) {
+		icombo = get_icombo(outtable->ifos);
+		outtable->fap = background_stats_bins2D_get_val((double)outtable->cohsnr, (double)outtable->cmbchisq, stats_prompt[icombo]->fap);
+		outtable++;
+	}
+	
+	/*
+	 * shuffle one step down in stats_list 
+	 */
+	stats_list->pos = (stats_list->pos + 1) % NSTATS_TO_PROMPT;
+
+	/* snapshot background xml file when reaching the snapshot point*/
 	GstClockTime t_cur = GST_BUFFER_TIMESTAMP(inbuf);
 	element->t_end = t_cur;
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	if (element->snapshot_interval > 0 && duration >= element->snapshot_interval) {
-		/* snapshot background xml file */
 		gint gps_time = (int) (element->t_roll_start / GST_SECOND);
 		GString *tmp_fname = g_string_new(element->output_fname_prefix);
 		g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
-		background_stats_to_xml(stats, element->ncombo, element->hist_trials, tmp_fname->str);
+		background_stats_to_xml(stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
 		g_string_free(tmp_fname, TRUE);
-		background_stats_reset(stats, element->ncombo);
+		background_stats_reset(stats_snapshot, element->ncombo);
 		element->t_roll_start = t_cur;
 	}
+
 	/*
 	 * set the outbuf meta data
 	 */
@@ -252,7 +301,7 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	GString *tmp_fname = g_string_new(element->output_fname_prefix);
 	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
-	background_stats_to_xml(element->stats, element->ncombo, element->hist_trials, tmp_fname->str);
+	background_stats_to_xml(element->stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
 	g_string_free(tmp_fname, TRUE);
     }
       break;
@@ -280,7 +329,9 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			element->ifos = g_value_dup_string(value);
 			element->nifo = strlen(element->ifos) / IFO_LEN;
 			element->ncombo = get_ncombo(element->nifo);
-			element->stats = background_stats_create(element->ifos);
+			element->stats_snapshot = background_stats_create(element->ifos);
+			element->stats_prompt = background_stats_create(element->ifos);
+			element->stats_list = background_stats_list_create(element->ifos);
 			break;
 
 		case PROP_HISTORY_FNAME:
@@ -288,7 +339,7 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			/* must make sure ifos have been loaded */
 			g_assert(element->ifos != NULL);
 			element->history_fname = g_value_dup_string(value);
-			background_stats_from_xml(element->stats, element->ncombo, &(element->hist_trials), element->history_fname);
+			background_stats_from_xml(element->stats_snapshot, element->ncombo, &(element->hist_trials), element->history_fname);
 			break;
 
 		case PROP_OUTPUT_FNAME_PREFIX:
@@ -361,7 +412,7 @@ static void cohfar_accumbackground_dispose(GObject *object)
 {
 	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(object);
 
-	if(element->stats) {
+	if(element->stats_snapshot) {
 		// FIXME: free stats
 	}
 	G_OBJECT_CLASS(parent_class)->dispose(object);
@@ -514,7 +565,8 @@ static void cohfar_accumbackground_init(CohfarAccumbackground *element, CohfarAc
 	gst_pad_set_chain_function(element->sinkpad,
 					GST_DEBUG_FUNCPTR(cohfar_accumbackground_chain));
 
-	element->stats = NULL;
+	element->stats_snapshot = NULL;
+	element->stats_prompt = NULL;
 	element->t_roll_start = GST_CLOCK_TIME_NONE;
 	element->snapshot_interval = NOT_INIT;
 }

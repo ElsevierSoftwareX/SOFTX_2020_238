@@ -159,6 +159,45 @@ background_stats_create(char *ifos)
   return stats;
 }
 
+BackgroundStatsPointerList *
+background_stats_list_create(char *ifos)
+{
+  int nifo = 0, ncombo = 0, icombo = 0;
+  nifo = strlen(ifos) / IFO_LEN;
+
+  ncombo = get_ncombo(nifo);
+  BackgroundStatsPointerList * stats_list = (BackgroundStatsPointerList *) malloc(sizeof(BackgroundStatsPointerList));
+  stats_list->size = NSTATS_TO_PROMPT;
+  stats_list->pos = 0;
+  stats_list->plist = (BackgroundStatsPointer *) malloc(sizeof(BackgroundStatsPointer)*NSTATS_TO_PROMPT);
+
+  int ilist = 0;
+  BackgroundStats **stats = NULL;
+
+  for (ilist=0; ilist<NSTATS_TO_PROMPT; ilist++) {
+    stats = (BackgroundStats **) malloc(sizeof(BackgroundStats *) * ncombo);
+    for (icombo=0; icombo<ncombo; icombo++) {
+      stats[icombo] = (BackgroundStats *) malloc(sizeof(BackgroundStats));
+      BackgroundStats *cur_stats = stats[icombo];
+      //printf("len %s, %d\n", IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]));
+      cur_stats->ifos = malloc(strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
+      strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
+      cur_stats->rates = (BackgroundRates *) malloc(sizeof(BackgroundRates));
+      BackgroundRates *rates = cur_stats->rates;
+      rates->lgsnr_bins = bins1D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN);
+      rates->lgchisq_bins = bins1D_create_long(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+      rates->hist = bins2D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+      cur_stats->pdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+      cur_stats->fap = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+      cur_stats->nevent = 0;
+      cur_stats->duration = 0;
+    }
+    stats_list->plist[ilist] = stats;
+  }
+  return stats_list;
+}
+
+
 /*
  * background rates utils
  */
@@ -210,6 +249,36 @@ background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2, Bac
 	gsl_matrix_long_add((gsl_matrix_long *)rates1->hist->data, (gsl_matrix_long *)rates2->hist->data);
 	cur_stats->nevent = gsl_vector_long_sum((gsl_vector_long *)rates1->lgsnr_bins->data);
 }
+
+/*
+ * background fap direnctly from rates
+ */
+
+void
+background_stats_rates_to_pdf_hist(BackgroundRates *rates, Bins2D *pdf)
+{
+
+	gsl_vector_long *snr = rates->lgsnr_bins->data;
+	gsl_vector_long *chisq = rates->lgchisq_bins->data;
+
+	long nevent = gsl_vector_long_sum(snr);
+	if (nevent == 0)
+		return;
+	int nbin_x = pdf->nbin_x, nbin_y = pdf->nbin_y;
+	int ibin_x, ibin_y;
+	gsl_matrix *pdfdata = pdf->data;
+
+	/*
+	 * set the pdf = rate / nevent for each bin
+	 */
+	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
+		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) {
+			gsl_matrix_set(pdfdata, ibin_x, ibin_y, (double)gsl_matrix_long_get(rates->hist, ibin_x, ibin_y)/(double)nevent);
+		}
+	}
+}
+
+
 
 /*
  * background fap utils, consistent with the matlab pdf code
@@ -345,6 +414,8 @@ background_stats_pdf_to_fap(Bins2D *pdf, Bins2D *fap)
 	// no data values, return
 	if (pdf_sum < 1e-5)
 		return;
+
+	/* cdf is our rankings statistic */
 	gsl_matrix *cdfdata = gsl_matrix_calloc(pdfdata->size1, pdfdata->size2);
 
 	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
@@ -360,7 +431,7 @@ background_stats_pdf_to_fap(Bins2D *pdf, Bins2D *fap)
 			gsl_matrix_set(cdfdata, ibin_x, ibin_y, tmp);
 		}
 	}
-	/* cdf is our rankings statistic */
+	/* get fap from cdf data */
 	double cur_cdf, cur_fap;
 	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
 		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) {

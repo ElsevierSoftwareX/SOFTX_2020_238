@@ -61,7 +61,9 @@ typedef struct {
 	char *ifos;
 	int nifo;
 	int ncombo; // ifo combination
-	BackgroundStats **stats;
+	BackgroundStats **stats_snapshot;
+	BackgroundStats **stats_prompt;
+	BackgroundStatsPointerList *stats_list;
 
 	int snapshot_interval;
 	int hist_trials;
