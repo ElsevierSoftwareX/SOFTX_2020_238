@@ -123,9 +123,17 @@ duration = int(param_from_xml(options.input_stats, duration_name))
 hist_trials = int(param_from_xml(options.input_stats, hist_trials_name))
 lgfar = np.log10(fap * nevent / (float(duration)*hist_trials) * float(options.far_factor))
 
-zerolags = postcoh_table_from_xml(options.input_zerolag)
-all_cohsnr = np.log10(zerolags.getColumnByName("cohsnr"))
-all_chisq = np.log10(zerolags.getColumnByName("cmbchisq"))
+if options.input_zerolag is not 'None':
+	zerolags = postcoh_table_from_xml(options.input_zerolag)
+	if len(ifos) == 2:
+		snr_name = 'snglsnr_%s' % ifos[0]
+		chisq_name = 'chisq_%s' % ifos[0]
+		all_cohsnr = np.log10(zerolags.getColumnByName(snr_name))
+		all_chisq = np.log10(zerolags.getColumnByName(chisq_name))
+	else:
+
+		all_cohsnr = np.log10(zerolags.getColumnByName("cohsnr"))
+		all_chisq = np.log10(zerolags.getColumnByName("cmbchisq"))
 event_cohsnr = np.log10(options.cohsnr)
 event_chisq = np.log10(options.cmbchisq)
 # cohsnr
@@ -150,12 +158,16 @@ X, Y = np.meshgrid(x, y)
 levels = np.arange(-13, -2, 2)
 CS = pyplot.contour(lgfar, levels, origin = 'lower', extent = (xmin, xmax, ymin, ymax))
 CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
-
-CM = pyplot.scatter(all_cohsnr, all_chisq, color = 'k', marker = 'o', s = 6, facecolors = 'none')
 CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
-pyplot.legend((CM, CM2), ('spiir zerolags', 'spiir event'), loc='lower right')
-pyplot.ylim(-0.2,3)
-pyplot.xlim(0.7,2.2)
+
+if options.input_zerolag is not 'None':
+	CM = pyplot.scatter(all_cohsnr, all_chisq, color = 'k', marker = 'o', s = 6, facecolors = 'none')
+	pyplot.legend((CM, CM2), ('spiir zerolags', 'spiir event'), loc='lower right')
+else:
+	pyplot.legend((CM2), ('spiir event'), loc='lower right')
+
+pyplot.ylim(-1,3)
+pyplot.xlim(0.2,2.2)
 pyplot.xlabel(r'$\log_{10}(\rho_c)$')	
 pyplot.ylabel(r'$\log_{10}(\xi_c^2)$')	
 pyplot.savefig(options.output)
