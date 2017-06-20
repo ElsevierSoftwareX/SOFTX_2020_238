@@ -343,6 +343,10 @@ class SNRPDF(object):
 		impossible to obtain a candidate (the trigger SNR
 		threshold).
 		"""
+		if log_distance_tolerance <= 0.:
+			raise ValueError("require log_distance_tolerance > 0")
+		if not 0. <= min_ratio < 1.:
+			raise ValueError("require 0 <= min_ratio < 1")
 		self.snr_cutoff = snr_cutoff
 		self.log_distance_tolerance = log_distance_tolerance
 		self.min_ratio = min_ratio
