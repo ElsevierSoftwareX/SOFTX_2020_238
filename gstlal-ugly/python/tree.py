@@ -88,19 +88,19 @@ def packing_density(n):
 def mc_m2_singularity(c):
 	center = c.copy()
 	F = 1. / 2**.2
-	if F*.90 < center[0] / center[1] <= F:
-		center[1] *= 1.11
-	if F*1.11 > center[0] / center[1] > F:
-		center[1] *= 0.90
+	if F*.67 < center[0] / center[1] <= F:
+		center[1] = 0.67 * F * center[0]
+	if F*1.5 > center[0] / center[1] > F:
+		center[1] = 1.5 * F * center[0]
 	return center
 	
 def m1_m2_singularity(c):
 	center = c.copy()
 	F = 1.
-	if F*.90 < center[0] / center[1] <= F:
-		center[1] *= 1.11
-	if F*1.11 > center[0] / center[1] > F:
-		center[1] *= 0.90
+	if F*.80 < center[0] / center[1] <= F:
+		center[1] *= 1.25
+	if F*1.25 > center[0] / center[1] > F:
+		center[1] *= 0.80
 	return center
 	
 class HyperCube(object):
@@ -143,7 +143,7 @@ class HyperCube(object):
 			try:
 				self.metric_tensor, self.effective_dimension, self.det = self.metric(center, deltas)
 			except ValueError:
-				center *= 0.999
+				center *= 0.99
 				self.metric_tensor, self.effective_dimension, self.det = self.metric(center, deltas)
 			#	print "metric @", self.center, " failed, trying, ", self.center - self.deltas / 2.
 			#	self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., deltas)
@@ -264,7 +264,7 @@ class Node(object):
 		size = self.cube.num_tmps_per_side(mismatch)
 		splitdim = numpy.argmax(size)
 		aspect_ratios = size / min(size)
-		aspect_factor = 1.#max(1., numpy.product(aspect_ratios[aspect_ratios>1.67]) / 1.67**len(aspect_ratios[aspect_ratios>1.67]))
+		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
 		if numpy.isnan(aspect_factor):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
@@ -292,7 +292,7 @@ class Node(object):
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
-		metric_tol = 0.01
+		metric_tol = 0.03
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
