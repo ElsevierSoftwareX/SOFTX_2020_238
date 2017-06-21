@@ -162,7 +162,7 @@ class Metric(object):
 		self.delta_t = {}
 		self.t_factor = {}
 		self.neg_t_factor = {}
-		delta_t = 1e-6
+		delta_t = 1e-5
 		t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * delta_t)
 		neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-delta_t))
 		for t in numpy.array([1.,2.,4.,8.,16.,32.,64.,128.,256.,512.,1024]):
@@ -353,11 +353,11 @@ class Metric(object):
 		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
-		w, v = numpy.linalg.eigh(g)
-		if numpy.any(w < 0.):
-			print center, deltas
-			raise ValueError("negative eigenvalues")
-		return g, len(w), numpy.linalg.det(g)
+		#w, v = numpy.linalg.eigh(g)
+		#if numpy.any(w < 0.):
+		#	print center, deltas
+		#	raise ValueError("negative eigenvalues")
+		#return g, len(w), numpy.linalg.det(g)
 
 		# FIXME delete this
 		# find effective dimension
@@ -370,8 +370,8 @@ class Metric(object):
 		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
 		mxw = numpy.max(w)
-		if numpy.any(w < 1e-6 * mxw):
-			w[w<0.] = 1e-6 * mxw
+		if numpy.any(w < thresh * mxw):
+			w[w<thresh * mxw] = thresh * mxw
 			g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
 			self.metric_is_valid = False
 
