@@ -431,7 +431,7 @@ class SNRPDF(object):
 			age = 0
 		if verbose:
 			print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
-			progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
+			progressbar = ProgressBar(text = "%s candidates" % ", ".join(sorted(key[0])))
 		else:
 			progressbar = None
 		binnedarray = self.joint_pdf_of_snrs(key[0], self.quantized_horizon_distances(key[1]), self.snr_cutoff, progressbar = progressbar)
@@ -493,6 +493,9 @@ class SNRPDF(object):
 		be a glue.text_progress_bar.ProgressBar instance for
 		verbosity.
 		"""
+		if progressbar is not None:
+			progressbar.max = n_samples
+
 		# get instrument names in alphabetical order
 		instruments = sorted(instruments)
 		if len(instruments) < 1:
@@ -528,6 +531,8 @@ class SNRPDF(object):
 		# to give a non-zero contribution, who knows.  anyway, for
 		# finite SNR, 0 is the correct value.
 		if DH_times_8.min() == 0.:
+			if progressbar is not None:
+				progressbar.update(progressbar.max)
 			return pdf
 
 		# we select random uniformly-distributed right ascensions
@@ -538,8 +543,6 @@ class SNRPDF(object):
 		# run the sampler the requested # of iterations.  save some
 		# symbols to avoid doing module attribute look-ups in the
 		# loop
-		if progressbar is not None:
-			progressbar.max = n_samples
 		acos = math.acos
 		random_uniform = random.uniform
 		twopi = 2. * math.pi
@@ -553,6 +556,8 @@ class SNRPDF(object):
 		# have something that we can iterate over
 		rice_rvs = lambda x: numpy.sqrt(stats.ncx2.rvs(2., x**2.)).reshape(x.shape)
 		for i in xrange(n_samples):
+			if progressbar is not None:
+				progressbar.increment()
 			# select random sky location and source orbital
 			# plane inclination and choice of polarization
 			ra = random_uniform(0., twopi)
@@ -636,8 +641,6 @@ class SNRPDF(object):
 			for snr, weight in zip(rice_rvs(snr_times_D / numpy.reshape(D_Dhi_Dlo_sequence[:,0], (len(D_Dhi_Dlo_sequence), 1))), D_Dhi_Dlo_sequence[:,1]**3. - D_Dhi_Dlo_sequence[:,2]**3.):
 				pdf[tuple(snr)] += weight
 
-			if progressbar is not None:
-				progressbar.increment()
 		# check for divide-by-zeros that weren't caught.  also
 		# finds NaNs if they're there
 		assert numpy.isfinite(pdf.array).all()
