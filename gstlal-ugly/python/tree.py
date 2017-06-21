@@ -89,9 +89,9 @@ def mc_m2_singularity(c):
 	center = c.copy()
 	F = 1. / 2**.2
 	if F*.67 < center[0] / center[1] <= F:
-		center[1] = 0.67 * F * center[0]
+		center[1] *= 1.5
 	if F*1.5 > center[0] / center[1] > F:
-		center[1] = 1.5 * F * center[0]
+		center[1] *= 0.67
 	return center
 	
 def m1_m2_singularity(c):
