@@ -98,7 +98,6 @@ import lal
 import lal.series
 from lal.utils import CacheEntry
 from glue import pipeline
-from glue.lal import Cache
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -127,10 +126,10 @@ def get_bank_params(bank_cache, options, verbose = False):
 	max_time = 0
 	template_mchirp_dict = {}
 	for n, cache in enumerate(bank_cache.values()[0]):
-		cache = Cache.fromfilenames([cache])
-		for c in cache.pfnlist():
-			svd_cache = Cache.fromfilenames([c])
-			for f in svd_cache.pfnlist():
+		cache = map(CacheEntry, open(cache))
+		for c in [ce.path for ce in cache]:
+			svd_cache = map(CacheEntry, open(c))
+			for f in [ce.path for ce in svd_cache]:
 				xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
 				snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
 				max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
@@ -220,15 +219,15 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 	for ifo, list_of_svd_caches in bank_cache.items():
 		bin_offset = 0
 		for j, svd_caches in enumerate(list_of_svd_caches):
-			svd_caches = Cache.fromfilenames([svd_caches])
-			for i, individual_svd_cache in enumerate(svd_caches.pfnlist()):
+			svd_caches = map(CacheEntry, open(svd_caches))
+			for i, individual_svd_cache in enumerate(ce.path for ce in svd_caches):
 				# First sort out the clipleft, clipright options
 				clipleft = []
 				clipright = []
 				ids = []
 				mchirp_interval = (float("inf"), 0)
-				individual_svd_cache = Cache.fromfilenames([individual_svd_cache])
-				for n, f in enumerate(individual_svd_cache.pfnlist()):
+				individual_svd_cache = map(CacheEntry, open(individual_svd_cache))
+				for n, f in enumerate(ce.path for ce in individual_svd_cache):
 					# handle template bank clipping
 					clipleft.append(options.overlap[j] / 2)
 					clipright.append(options.overlap[j] / 2)
@@ -256,7 +255,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 						"identity-transform":options.identity_transform,
 						"ortho-gate-fap":0.5},
 					input_files = {"reference-psd":psd},
-					input_cache_files = {"template-bank-cache":individual_svd_cache.pfnlist()},
+					input_cache_files = {"template-bank-cache":[ce.path for ce in individual_svd_cache]},
 					input_cache_file_name = os.path.basename(svd_bank_name).replace(".xml.gz", ".cache"),
 					output_files = {"write-svd":svd_bank_name}
 					)
