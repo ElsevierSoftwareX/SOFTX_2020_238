@@ -262,6 +262,7 @@ background_stats_rates_to_pdf_hist(BackgroundRates *rates, Bins2D *pdf)
 	gsl_vector_long *chisq = rates->lgchisq_bins->data;
 
 	long nevent = gsl_vector_long_sum(snr);
+	//printf("nevent %ld\n", nevent);
 	if (nevent == 0)
 		return;
 	int nbin_x = pdf->nbin_x, nbin_y = pdf->nbin_y;
@@ -273,7 +274,8 @@ background_stats_rates_to_pdf_hist(BackgroundRates *rates, Bins2D *pdf)
 	 */
 	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
 		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) {
-			gsl_matrix_set(pdfdata, ibin_x, ibin_y, (double)gsl_matrix_long_get(rates->hist, ibin_x, ibin_y)/(double)nevent);
+			//printf("hist x %d, y %d, value %ld\n", ibin_x, ibin_y, gsl_matrix_long_get(rates->hist, ibin_x, ibin_y));
+			gsl_matrix_set(pdfdata, ibin_x, ibin_y, ((double)gsl_matrix_long_get((gsl_matrix_long *)rates->hist->data, ibin_x, ibin_y))/((double)nevent));
 		}
 	}
 }
