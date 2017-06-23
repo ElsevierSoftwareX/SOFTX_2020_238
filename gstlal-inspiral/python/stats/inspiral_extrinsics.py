@@ -258,8 +258,14 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instrume
 		V = tuple(V_at_snr_threshold[i] for i in order[min_instruments - 1:])
 		if V[0] <= min_distance:
 			# fewer than the required minimum number of
-			# instruments are on, so no combination can see
-			# anything
+			# instruments can see sources in this configuration
+			# far enough way in this direction to form coincs.
+			# if this happens too often we report a convergence
+			# rate failure
+			# FIXME:  min_distance is a misnomer, it's compared
+			# to a volume-like thing with a mystery
+			# proportionality constant factored out, so who
+			# knows what to call it.  who cares.
 			fails += 1
 			if successes + fails >= n_samples and fails / float(successes + fails) > .90:
 				raise ValueError("convergence too slow:  success/fail ratio = %d/%d" % (successes, fails))
@@ -283,13 +289,15 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instrume
 		result[key] /= n_samples
 
 	#
-	# make sure it's normalized
+	# make sure it's normalized.  allow an all-0 result in the event
+	# that too few instruments are available to ever form coincs
 	#
 
 	total = sum(sorted(result.values()))
-	assert abs(total - 1.) < 1e-13, "result insufficiently well normalized: %s, sum = %g" % (result, total)
-	for key in result:
-		result[key] /= total
+	assert abs(total - 1.) < 1e-13 or total == 0., "result insufficiently well normalized: %s, sum = %g" % (result, total)
+	if total != 0.:
+		for key in result:
+			result[key] /= total
 
 	#
 	# done
@@ -309,25 +317,12 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instrume
 
 class SNRPDF(object):
 	#
-	# cache of pre-computed SNR joint PDFs.  structure is like
-	#
-	# 	= {
-	#		frozenset(("H1", ...)), frozenset([("H1", horiz_dist), ("L1", horiz_dist), ...]): (InterpBinnedArray, BinnedArray, age),
-	#		...
-	#	}
-	#
-	# at most max_cached_snr_joint_pdfs will be stored.  if a PDF is
-	# required that cannot be found in the cache, and there is no more
-	# room, the oldest PDF (the one with the *smallest* age) is pop()ed
-	# to make room, and the new one added with its age set to the
-	# highest age in the cache + 1.
-	#
-	# 5**3 * 4 = 5 quantizations in 3 instruments, 4 combos per
-	# quantized choice of horizon distances
+	# cache of pre-computed P(instruments | horizon distances, signal)
+	# probabilities and P(SNRs | instruments, horizon distances,
+	# signal) PDFs.
 	#
 
 	DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_snr_pdf.xml.gz")
-	max_cached_snr_joint_pdfs = float("+inf")
 	snr_joint_pdf_cache = {}
 
 	@ligolw_array.use_in
@@ -336,12 +331,28 @@ class SNRPDF(object):
 		pass
 
 
+	class cacheentry(object):
+		"""
+		One entry in the SNR PDF cache.  For internal use only.
+		"""
+		def __init__(self, lnP_instruments, pdf, binnedarray):
+			self.lnP_instruments = lnP_instruments
+			self.pdf = pdf
+			self.binnedarray = binnedarray
+
+
 	# FIXME:  is the default choice of distance quantization appropriate?
 	def __init__(self, snr_cutoff, log_distance_tolerance = math.log(1.05), min_ratio = 0.1):
 		"""
 		snr_cutoff sets the minimum SNR below which it is
 		impossible to obtain a candidate (the trigger SNR
 		threshold).
+
+		min_ratio sets the minimum sensitivity an instrument must
+		achieve to be considered to be on at all.  An instrument
+		whose horizon distance is less than min_ratio * the horizon
+		distance of the most sensitive instrument is considered to
+		be off (it's horizon distance is set to 0).
 		"""
 		if log_distance_tolerance <= 0.:
 			raise ValueError("require log_distance_tolerance > 0")
@@ -388,7 +399,7 @@ class SNRPDF(object):
 		return dict((instrument, math.exp(quant * self.log_distance_tolerance)) for instrument, quant in quants)
 
 
-	def snr_joint_pdf_keyfunc(self, instruments, horizon_distances):
+	def snr_joint_pdf_keyfunc(self, instruments, horizon_distances, min_instruments):
 		"""
 		Internal function defining the key for cache:  two element
 		tuple, first element is frozen set of instruments for which
@@ -398,56 +409,105 @@ class SNRPDF(object):
 		of the largest among them and then the fractions aquantized
 		to integer powers of a common factor
 		"""
-		return frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
+		return frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items()), min_instruments
 
 
-	def get_snr_joint_pdf_binnedarray(self, instruments, horizon_distances):
-		pdf, binnedarray, age = self.snr_joint_pdf_cache[self.snr_joint_pdf_keyfunc(instruments, horizon_distances)]
-		return binnedarray
+	def get_snr_joint_pdf_binnedarray(self, instruments, horizon_distances, min_instruments):
+		return self.snr_joint_pdf_cache[self.snr_joint_pdf_keyfunc(instruments, horizon_distances, min_instruments)].binnedarray
 
 
-	def get_snr_joint_pdf(self, instruments, horizon_distances):
-		pdf, binnedarray, age = self.snr_joint_pdf_cache[self.snr_joint_pdf_keyfunc(instruments, horizon_distances)]
-		return pdf
+	def get_snr_joint_pdf(self, instruments, horizon_distances, min_instruments):
+		return self.snr_joint_pdf_cache[self.snr_joint_pdf_keyfunc(instruments, horizon_distances, min_instruments)].pdf
 
 
-	def lnP_snrs(self, snrs, horizon_distances):
+	def lnP_instruments(self, instruments, horizon_distances, min_instruments):
+		return self.snr_joint_pdf_cache[self.snr_joint_pdf_keyfunc(instruments, horizon_distances, min_instruments)].lnP_instruments
+
+
+	def lnP_snrs(self, snrs, horizon_distances, min_instruments):
+		"""
+		snrs is an instrument-->SNR mapping containing one entry
+		for each instrument that sees a signal.  snrs cannot
+		contain instruments that are not listed in
+		horizon_distances.
+
+		horizon_distances is an instrument-->horizon distance mapping
+		containing one entry for each instrument in the network.
+		For instruments that are off set horizon distance to 0.
+		"""
+		# retrieve the PDF using the keys of the snrs mapping for
+		# the participating instruments
+		lnpdf = self.get_snr_joint_pdf(snrs, horizon_distances, min_instruments)
 		# PDF axes are in alphabetical order
-		instruments = sorted(snrs)
-		lnpdf = self.get_snr_joint_pdf(instruments, horizon_distances)
-		return lnpdf(*map(snrs.__getitem__, instruments))
+		return lnpdf(*(snr for instrument, snr in sorted(snrs.items())))
 
 
-	def add_to_cache(self, instruments, horizon_distances, verbose = False):
-		key = self.snr_joint_pdf_keyfunc(instruments, horizon_distances)
-		# already in cache?
-		if key in self.snr_joint_pdf_cache:
-			pdf, binnedarray, age = self.snr_joint_pdf_cache[key]
-			return pdf
-		# need to build
-		if self.snr_joint_pdf_cache:
-			age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
-		else:
-			age = 0
+	def add_to_cache(self, horizon_distances, min_instruments, verbose = False):
+		#
+		# input check
+		#
+
+		if len(horizon_distances) < min_instruments:
+			raise ValueError("require at least %d instruments, got %s" % (min_instruments, ", ".join(sorted(horizon_distances))))
+
+		#
+		# compute P(instruments | horizon distances, signal)
+		#
+
+		class fake_horizon_histories(dict):
+			# fake horizon distance history to pass to
+			# P_instruments_given_signal().  will be removed
+			# when all users of P_instruments_given_signal()
+			# are ported to the SNRPDF cache object and
+			# P_instruments_given_signal()'s signature can be
+			# changed to accept a fixed horizon distance
+			# dictionary
+			def randhorizons(self):
+				while 1:
+					yield self
+
+			# report names of on instruments
+			@property
+			def on_instruments(self):
+				return frozenset(key for key, value in self.items() if value != 0.)
+
 		if verbose:
-			print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
-			progressbar = ProgressBar(text = "%s candidates" % ", ".join(sorted(key[0])))
+			print >>sys.stderr, "For horizon distances %s:" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
+
+		horizon_histories = fake_horizon_histories(self.quantized_horizon_distances(self.quantize_horizon_distances(horizon_distances).items()))
+		if len(horizon_histories.on_instruments) < min_instruments:
+			# not enough instruments are on to form a coinc
+			# with the minimum required instruments.  by-pass
+			# P_instruments_given_signal() because it crashes
+			# in this case
+			P_instruments = dict.fromkeys((frozenset(instruments) for n in xrange(min_instruments, len(horizon_distances) + 1) for instruments in itertools.combinations(horizon_distances, n)), 0.0)
 		else:
-			progressbar = None
-		binnedarray = self.joint_pdf_of_snrs(key[0], self.quantized_horizon_distances(key[1]), self.snr_cutoff, progressbar = progressbar)
-		del progressbar
-		lnbinnedarray = binnedarray.copy()
-		with numpy.errstate(divide = "ignore"):
-			lnbinnedarray.array = numpy.log(lnbinnedarray.array)
-		pdf = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf)
-		self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
-		# if the cache is full, delete the entry with the smallest
-		# age
-		while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
-			del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
+			P_instruments = P_instruments_given_signal(horizon_histories, min_instruments = min_instruments, n_samples = 1000000)
+
 		if verbose:
-			print >>sys.stderr, "%d of %g slots in SNR PDF cache now in use" % (len(self.snr_joint_pdf_cache), self.max_cached_snr_joint_pdfs)
-		return pdf
+			for key_value in sorted((",".join(sorted(key)), value) for key, value in P_instruments.items()):
+				print >>sys.stderr, "\tP(%s | signal) = %g" % key_value
+			print >>sys.stderr, "generating P(snrs | signal) ..."
+
+		#
+		# compute P(snrs | instruments, horizon distances, signal)
+		#
+
+		for n in range(min_instruments, len(horizon_distances) + 1):
+			for instruments in itertools.combinations(sorted(horizon_distances), n):
+				instruments = frozenset(instruments)
+				key = self.snr_joint_pdf_keyfunc(instruments, horizon_distances, min_instruments)
+				# already in cache?
+				if key in self.snr_joint_pdf_cache:
+					continue
+				# need to build
+				with ProgressBar(text = "%s candidates" % ", ".join(sorted(instruments))) if verbose else None as progressbar:
+					binnedarray = self.joint_pdf_of_snrs(instruments, self.quantized_horizon_distances(key[1]), self.snr_cutoff, progressbar = progressbar)
+				lnbinnedarray = binnedarray.copy()
+				with numpy.errstate(divide = "ignore"):
+					lnbinnedarray.array = numpy.log(lnbinnedarray.array)
+				pdf = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf)
+				self.snr_joint_pdf_cache[key] = self.cacheentry(math.log(P_instruments[instruments]), pdf, binnedarray)
 
 
 	@staticmethod
@@ -676,7 +736,11 @@ class SNRPDF(object):
 		if len(xml) != 1:
 			raise ValueError("XML tree must contain exactly one %s element named %s" % (ligolw.LIGO_LW.tagName, name))
 		xml, = xml
-		self = cls(snr_cutoff = ligolw_param.get_pyvalue(xml, u"snr_cutoff"), log_distance_tolerance = ligolw_param.get_pyvalue(xml, u"log_distance_tolerance"), min_ratio = ligolw_param.get_pyvalue(xml, u"min_ratio"))
+		self = cls(
+			snr_cutoff = ligolw_param.get_pyvalue(xml, u"snr_cutoff"),
+			log_distance_tolerance = ligolw_param.get_pyvalue(xml, u"log_distance_tolerance"),
+			min_ratio = ligolw_param.get_pyvalue(xml, u"min_ratio")
+		)
 		for elem in xml.childNodes:
 			if elem.tagName != ligolw.LIGO_LW.tagName:
 				continue
@@ -684,19 +748,14 @@ class SNRPDF(object):
 
 			key = (
 				frozenset(lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(elem, u"instruments:key"))),
-				frozenset((inst.strip(), float(quant) if math.isinf(float(quant)) else int(quant)) for inst, quant in (inst_quant.split(u"=") for inst_quant in ligolw_param.get_pyvalue(elem, u"quantizedhorizons:key").split(u",")))
+				frozenset((inst.strip(), float(quant) if math.isinf(float(quant)) else int(quant)) for inst, quant in (inst_quant.split(u"=") for inst_quant in ligolw_param.get_pyvalue(elem, u"quantizedhorizons:key").split(u","))),
+				ligolw_param.get_pyvalue(elem, u"min_instruments:key")
 			)
 
-			if self.snr_joint_pdf_cache:
-				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
-			else:
-				age = 0
 			lnbinnedarray = binnedarray.copy()
 			with numpy.errstate(divide = "ignore"):
 				lnbinnedarray.array = numpy.log(lnbinnedarray.array)
-			self.snr_joint_pdf_cache[key] = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf), binnedarray, age
-			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
-				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
+			self.snr_joint_pdf_cache[key] = self.cacheentry(ligolw_param.get_pyvalue(elem, u"lnp_instruments"), rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf), binnedarray)
 		return self
 
 
@@ -706,10 +765,12 @@ class SNRPDF(object):
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"snr_cutoff", self.snr_cutoff))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"log_distance_tolerance", self.log_distance_tolerance))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_ratio", self.min_ratio))
-		for i, (key, (ignored, binnedarray, ignored)) in enumerate(self.snr_joint_pdf_cache.items()):
-			elem = xml.appendChild(binnedarray.to_xml(u"%d:pdf" % i))
+		for i, (key, entry) in enumerate(self.snr_joint_pdf_cache.items()):
+			elem = xml.appendChild(entry.binnedarray.to_xml(u"%d:pdf" % i))
+			elem.appendChild(ligolw_param.Param.from_pyvalue(u"lnp_instruments", entry.lnP_instruments))
 			elem.appendChild(ligolw_param.Param.from_pyvalue(u"instruments:key", lsctables.instrumentsproperty.set(key[0])))
 			elem.appendChild(ligolw_param.Param.from_pyvalue(u"quantizedhorizons:key", u",".join(u"%s=%.17g" % inst_quant for inst_quant in sorted(key[1]))))
+			elem.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments:key", key[2]))
 		return xml
 
 

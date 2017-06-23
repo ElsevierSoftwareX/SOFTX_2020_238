@@ -201,7 +201,7 @@ for gid in gid_list:
 	# function returns None if it can't make a plot, e.g., if there are
 	# more than 2 instruments involved (don't know how to make 3D PDF
 	# plots yet)
-	fig = plotfar.plot_snr_joint_pdf(coinc_param_distributions.SNRPDF, sngl_inspirals.keys(), coinc_param_distributions.horizon_history.getdict(coinc_inspiral.end), options.max_snr, sngls = [dict((row.ifo, (row.snr, row.chisq / row.chisq_dof)) for row in sngl_inspirals.values())])
+	fig = plotfar.plot_snr_joint_pdf(coinc_param_distributions.SNRPDF, sngl_inspirals.keys(), coinc_param_distributions.horizon_history.getdict(coinc_inspiral.end), coinc_param_distributions.min_instruments, options.max_snr, sngls = [dict((row.ifo, (row.snr, row.chisq / row.chisq_dof)) for row in sngl_inspirals.values())])
 	if fig is not None:
 		filename = "%s_%s_jointsnr_pdf.png" % (gid, "_".join(sorted(sngl_inspirals.keys())))
 		if not options.no_upload:

@@ -51,21 +51,6 @@ from lal.utils import CacheEntry
 #
 # =============================================================================
 #
-#                                    Utils
-#
-# =============================================================================
-#
-
-
-def all_instrument_combos(instruments, min_number):
-	for n in range(min_number, len(instruments) + 1):
-		for combo in itertools.combinations(instruments, n):
-			yield combo
-
-
-#
-# =============================================================================
-#
 #                                 Command Line
 #
 # =============================================================================
@@ -83,7 +68,7 @@ def parse_command_line():
 	parser.add_option("--horizon-distance-flow", metavar = "Hz", default = 10., type = "float", help = "When obtaining horizon distances from a collection PSD files, start horizon distance integral at this frequency in Hertz (default = 10 Hz).")
 	parser.add_option("--horizon-distance-masses", metavar = "m1,m2", action = "append", default = ["1.4,1.4"], help = "When obtaining horizon distances from a collection of PSD files, compute them for these masses in solar mass units (default = 1.4,1.4).  Can be given multiple times.")
 	parser.add_option("--instruments", metavar = "name[,name,...]", help = "Set the instruments to include in the network.  If PSD files alone are to be used to provide horizon distances, or --full is selected, then this option is required, otherwise it is optional.  If both --instruments and --horizon-distances are given, they must list the same instruments.")
-	parser.add_option("--min-instruments", metavar = "count", default = 2, type = "int", help = "Set the minimum number of instruments required to form a candidate (default = 2).")
+	parser.add_option("--min-instruments", metavar = "count", action = "append", default = [2], type = "int", help = "Set the minimum number of instruments required to form a candidate (default = 2).  Can be given multiple times.")
 	parser.add_option("--output", "-o", metavar = "filename", help = "Write SNR PDF cache to this file (required).")
 	parser.add_option("--seed", metavar = "filename", action = "append", default = [], help = "Seed the SNR PDF cache by loading pre-computed SNR PDFs from this file.  Can be given multiple times.")
 	parser.add_option("--seed-cache", metavar = "filename", help = "Seed the SNR PDF cache by loading pre-computed SNR PDFs from the files named in this LAL cache.")
@@ -127,7 +112,7 @@ def parse_command_line():
 
 	if options.instruments:
 		options.instruments = set(options.instruments.split(","))
-		if len(options.instruments) < options.min_instruments:
+		if len(options.instruments) < min(options.min_instruments):
 			raise ValueError("--instruments must have at least --min-instruments entries")
 
 	if options.horizon_distances is not None:
@@ -161,7 +146,7 @@ def parse_command_line():
 	if any((m1 <= 0. or m2 <= 0.) for m1, m2 in options.horizon_distance_masses):
 		raise ValueError("all --horizon-distances-masses must be > 0")
 
-	if options.min_instruments < 1:
+	if min(options.min_instruments) < 1:
 		raise ValueError("--min-instruments must be >= 1")
 
 	if not options.output:
@@ -263,9 +248,9 @@ if options.full:
 
 start_time = time.time()
 for n, horizon_distances in enumerate(options.horizon_distances, 1):
-	logging.info("horizon distance ratio %d/%d, %g minutes elapsed" % (n, len(options.horizon_distances), (time.time() - start_time) / 60.))
-	for trigger_instruments in all_instrument_combos(options.instruments, options.min_instruments):
-		snrpdf.add_to_cache(trigger_instruments, horizon_distances, verbose = options.verbose)
+	logging.info("Horizon distance ratio %d/%d, %g minutes elapsed:" % (n, len(options.horizon_distances), (time.time() - start_time) / 60.))
+	for min_instruments in options.min_instruments:
+		snrpdf.add_to_cache(horizon_distances, min_instruments, verbose = options.verbose)
 
 
 #

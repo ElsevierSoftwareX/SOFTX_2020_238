@@ -529,13 +529,9 @@ class GstlalWebSummary(object):
 		out = ""
 		for id in self.registry:
 			likelihood, nu, nu = self.found["likelihood"][id]
-			# FIXME dont hardcode IFOs
-			instruments = (u"H1",u"L1")
-			timenow = lal.GPSTimeNow()
-			horizon_distances = {}
-			for ifo in instruments:
-				horizon_distances[ifo] = likelihood.horizon_history[ifo][timenow]
-			fig = plotfar.plot_snr_joint_pdf(likelihood, instruments, horizon_distances, 200.)
+			# FIXME dont hardcode IFOs and min_instruments
+			instruments, min_instruments = (u"H1",u"L1"), 2
+			fig = plotfar.plot_snr_joint_pdf(likelihood, instruments, likelihood.horizon_history.getdict(lal.GPSTimeNow()), min_instruments, 200.)
 			out += self.to_png(fig = fig)
 		return out
 

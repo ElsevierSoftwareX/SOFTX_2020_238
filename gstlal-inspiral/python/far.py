@@ -461,7 +461,7 @@ class ThincaCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 		# instrument-->snr mapping
 		snrs = dict((name.split("_", 1)[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
 		# evaluate SNR PDF
-		lnP_snr_signal = self.SNRPDF.lnP_snrs(snrs, params.horizons)
+		lnP_snr_signal = self.SNRPDF.lnP_snrs(snrs, params.horizons, self.min_instruments)
 
 		# evaluate dt and dphi parameters
 		lnP_dt_dphi_signal = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "signal")

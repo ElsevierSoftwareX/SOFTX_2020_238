@@ -306,7 +306,7 @@ if options.plot_snr_snr_pdfs:
 		# they're stored as a frozen set of quantized key/value pairs, need
 		# to unquantize them and get a dictionary back
 		horizon_distances = coinc_params_distributions.SNRPDF.quantized_horizon_distances(horizon_distances)
-		fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions.SNRPDF, instruments, horizon_distances, options.max_snr, sngls = sngls)
+		fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions.SNRPDF, instruments, horizon_distances, coinc_params_distributions.min_instruments, options.max_snr, sngls = sngls)
 		if fig is not None:
 			plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
 			if options.verbose:

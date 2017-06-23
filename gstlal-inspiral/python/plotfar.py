@@ -216,12 +216,12 @@ def plot_rates(coinc_param_distributions):
 	return fig
 
 
-def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, max_snr, sngls = None):
+def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, min_instruments, max_snr, sngls = None):
 	if len(instruments) < 1:
 		raise ValueError("len(instruments) must be >= 1")
 
 	# retrieve the PDF in binned array form (not the interpolator)
-	binnedarray = snrpdf.get_snr_joint_pdf_binnedarray(instruments, horizon_distances)
+	binnedarray = snrpdf.get_snr_joint_pdf_binnedarray(instruments, horizon_distances, min_instruments)
 
 	# the range of the axes
 	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, max_snr
