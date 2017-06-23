@@ -240,6 +240,8 @@ reference_likelihood_file.xml.gz:
 		--n $(NUM_SPLIT_TEMPLATES) \
 		--sort-by mchirp \
 		--max-f-final $(HIGH_FREQUENCY_CUTOFF) \
+		--num-banks $(NUMBANKS) \
+		--write-svd-caches \
 		$<
 
 H1-TMPLTBANK-$(START)-2048.xml: H1_frame.cache
