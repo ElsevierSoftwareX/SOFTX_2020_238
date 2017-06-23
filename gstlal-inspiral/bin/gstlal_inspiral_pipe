@@ -126,14 +126,12 @@ def get_bank_params(bank_cache, options, verbose = False):
 	max_time = 0
 	template_mchirp_dict = {}
 	for n, cache in enumerate(bank_cache.values()[0]):
-		cache = map(CacheEntry, open(cache))
-		for c in [ce.path for ce in cache]:
-			svd_cache = map(CacheEntry, open(c))
-			for f in [ce.path for ce in svd_cache]:
-				xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
+		for ce in map(CacheEntry, open(cache)):
+			for ce in map(CacheEntry, open(ce.path)):
+				xmldoc = ligolw_utils.load_filename(ce.path, verbose = verbose, contenthandler = LIGOLWContentHandler)
 				snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
 				max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-				template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap[n]/2:-options.overlap[n]/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap[n]/2:-options.overlap[n]/2])]
+				template_mchirp_dict[ce.path] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap[n]/2:-options.overlap[n]/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap[n]/2:-options.overlap[n]/2])]
 				xmldoc.unlink()
 
 	return max_time, template_mchirp_dict
@@ -200,8 +198,7 @@ def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
 def inj_psd_node_gen(segsdict, options):
 	psd_nodes = {}
 	psd_cache_files = {}
-	for line in open(options.psd_cache):
-		ce = CacheEntry(line)
+	for ce in map(CacheEntry, open(options.psd_cache)):
 		psd_cache_files.setdefault(frozenset(lsctables.instrumentsproperty.get(ce.observatory)), []).append((ce.segment, ce.path))
 	for ifos in segsdict:
 		reference_psd_files = sorted(psd_cache_files[ifos], key = lambda (s, p): s)
@@ -508,7 +505,7 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 		lloid_output[sim_tag_from_inj_file(inj)] = {}
 	lloid_diststats = {}
 	if options.dist_stats_cache:
-		for ce in [CacheEntry(f) for f in open(options.dist_stats_cache)]:
+		for ce in map(CacheEntry, open(options.dist_stats_cache)):
 			lloid_diststats[ce.description.split("_")[0]] = [ce.path]
 	for ifos in segsdict:
 		for seg in segsdict[ifos]:
@@ -688,13 +685,13 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 	return rankpdf_nodes, rankpdf_zerolag_nodes, outnodes
 
 def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
-	rankpdf_nodes = sorted([CacheEntry(f).path for f in open(options.rank_pdf_cache)], key = lambda s: int(os.path.basename(s).split('-')[1].split('_')[0]))
+	rankpdf_nodes = sorted([CacheEntry(line).path for line in open(options.rank_pdf_cache)], key = lambda s: int(os.path.basename(s).split('-')[1].split('_')[0]))
 	rankpdf_zerolag_nodes = []
 	outnodes = {}
 	if options.num_files_per_background_bin == 1:
 		bgbin_lloid_map = {}
 		# Get list of all files for each background bin (will be same length for each bin)
-		for ce in [CacheEntry(f) for f in open(options.lloid_cache)]:
+		for ce in map(CacheEntry, open(options.lloid_cache)):
 			bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
 
 		if len(bgbin_lloid_map.values()[0]) == 1:
@@ -702,7 +699,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 			# thus no merging is needed yet
 			outnodes[None] = [dbs[0] for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k))]
 			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
-				outnodes[sim_tag_from_inj_file(options.injections_for_merger[i])] = [CacheEntry(f).path for f in open(inj_lloid_cache)]
+				outnodes[sim_tag_from_inj_file(options.injections_for_merger[i])] = [CacheEntry(line).path for line in open(inj_lloid_cache)]
 
 		else:
 			for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
@@ -723,7 +720,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 				outnodes.setdefault(None, []).append(sqlitenode)
 			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
 				bgbin_lloid_map = {}
-				for ce in [CacheEntry(f) for f in open(inj_lloid_cache)]:
+				for ce in map(CacheEntry, open(inj_lloid_cache)):
 					bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
 
 				for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
@@ -750,7 +747,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 		# numbered by iterating through segments in a given bin first
 		# (e.g. files 0000 to 0009 may all belong to bin 0000, then
 		# files 0010 to 0019 would all belong to bin 0001, etc)
-		for ce_list in chunks([CacheEntry(f) for f in open(options.lloid_cache)], options.num_files_per_background_bin):
+		for ce_list in chunks(map(CacheEntry, open(options.lloid_cache)), options.num_files_per_background_bin):
 			hi_index = ce_list[-1].description.split('_')[0]
 			noninjdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
 
@@ -770,7 +767,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 			outnodes.setdefault(None, []).append(sqlitenode)
 
 		for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
-			for ce_list in chunks([CacheEntry(f) for f in open(inj_lloid_cache)], options.num_files_per_background_bin):
+			for ce_list in chunks(map(CacheEntry, open(inj_lloid_cache)), options.num_files_per_background_bin):
 				hi_index = ce_list[-1].description.split('_')[0]
 				injdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
 
