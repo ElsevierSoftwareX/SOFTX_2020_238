@@ -271,8 +271,9 @@ class MultiChannelHandler(simplehandler.Handler):
 				if idq_aggregator.in_new_epoch(buftime, self.init_gps_time, aggregator.MIN_TIME_QUANTA):
 					self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
 			# create path if it doesn't already exist
-			if not os.path.exists(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime, channel = channel, rate = rate)):
-				aggregator.makedir(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime, channel = channel, rate = rate))
+			if options.triggers_from_dataframe:
+				if not os.path.exists(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime, channel = channel, rate = rate)):
+					aggregator.makedir(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime, channel = channel, rate = rate))
 			
 			# Save triggers once every cadence
 			# iDQ file saving

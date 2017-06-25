@@ -105,7 +105,7 @@ from gstlal import datasource
 #
 # }
 # @enddot
-def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd = None, psd_fft_length = 32, gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = int(0.25 * Gst.SECOND), zero_pad = 0, width = 64, cutoff = 12, quality = 9,  unit_normalize = True, channel_name = "hoft"):
+def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd = None, psd_fft_length = 32, veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = int(0.25 * Gst.SECOND), zero_pad = 0, width = 64, cutoff = 12, quality = 9,  unit_normalize = True, channel_name = "hoft"):
 	"""!
 	Build pipeline stage to whiten and downsample auxiliary channels.
 
@@ -116,7 +116,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	- instrument: the instrument to process
 	- psd: a psd frequency series
 	- psd_fft_length: length of fft used for whitening
-	- gate_threshold: gate channel if it crosses this value
 	- veto_segments: segments to mark as gaps after whitening
 	- track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
 	- width: type convert to either 32 or 64 bit floati
@@ -280,7 +279,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 			# normalized, otherwise the audio resampler removes power
 			# according to the rate difference and filter rolloff
 			if unit_normalize:
-				head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max_rate, rate)))
+				head[rate] = pipeparts.mkaudioamplify(pipeline, head[max_rate], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max_rate, rate)))
 			else:
 				head[rate] = head[max_rate]
 
