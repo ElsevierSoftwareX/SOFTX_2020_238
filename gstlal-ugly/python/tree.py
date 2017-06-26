@@ -16,10 +16,11 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import itertools
-import metric as metric_module
+from gstlal import metric as metric_module
 import numpy
 from numpy import random
 from scipy.special import gamma
+from gstlal.metric import DELTA
 
 def uber_constraint(vertices, mtotal = 100, ns_spin = 0.05):
 	# Assumes coords are m_1, m2, s1, s2
@@ -87,20 +88,18 @@ def packing_density(n):
 
 def mc_m2_singularity(c):
 	center = c.copy()
+	return center
 	F = 1. / 2**.2
-	if F*.67 < center[0] / center[1] <= F:
-		center[1] *= 1.5
-	if F*1.5 > center[0] / center[1] > F:
-		center[1] *= 0.67
+	if F*.85 < center[0] / center[1] <= F * 1.176:
+		center[1] = 0.85 * center[0]
 	return center
 	
 def m1_m2_singularity(c):
 	center = c.copy()
+	return center
 	F = 1.
-	if F*.80 < center[0] / center[1] <= F:
-		center[1] *= 1.25
-	if F*1.25 > center[0] / center[1] > F:
-		center[1] *= 0.80
+	if F*.85 < center[0] / center[1] <= F * 1.176:
+		center[1] = 0.85 * center[0]
 	return center
 	
 class HyperCube(object):
@@ -127,9 +126,9 @@ class HyperCube(object):
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
-		deltas = 1e-6 * numpy.ones(len(self.center))
+		deltas = DELTA * numpy.ones(len(self.center))
 		#deltas = 5e-7 * numpy.ones(len(self.center))
-		deltas[0:2] *= self.center[0:2]
+		#deltas[0:2] *= self.center[0:2]**2
 		#deltas[2:] = 1.3e-4
 		#deltas[2:] = 1.0e-5
 		self.singularity = singularity
@@ -285,15 +284,16 @@ class Node(object):
 			# get our number of templates
 			numtmps = self.cube.num_templates(mismatch)
 
-			metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
-			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
+			metric_diff = max(abs((numtmps - sib_numtmps) / (numtmps + sib_numtmps) / 2), abs((numtmps - par_numtmps) / (numtmps + par_numtmps) / 2))
+			#metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
+			#metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
 
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
-		metric_tol = 0.03
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
+		metric_tol = 0.003
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > metric_tol and numtmps >= split_num_templates / 2.0)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
 			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
