@@ -349,7 +349,7 @@ class NearestLeafTree(object):
 
 class HorizonHistories(dict):
 	def __iadd__(self, other):
-		for key, history in other.iteritems():
+		for key, history in other.items():
 			try:
 				self[key] += history
 			except KeyError:
@@ -375,7 +375,7 @@ class HorizonHistories(dict):
 		return max(maxkeys)
 
 	def getdict(self, x):
-		return dict((key, value[x]) for key, value in self.iteritems())
+		return dict((key, value[x]) for key, value in self.items())
 
 	def randhorizons(self):
 		"""
@@ -416,7 +416,7 @@ class HorizonHistories(dict):
 		are passed to the .weighted_mean() method of the histories
 		objects, see their documentation for more information.
 		"""
-		return dict((key, value.weighted_mean(*args, **kwargs)) for key, value in self.iteritems())
+		return dict((key, value.weighted_mean(*args, **kwargs)) for key, value in self.items())
 
 	@classmethod
 	def from_xml(cls, xml, name):
