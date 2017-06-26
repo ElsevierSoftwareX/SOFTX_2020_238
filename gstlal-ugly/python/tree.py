@@ -128,7 +128,7 @@ class HyperCube(object):
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = DELTA * numpy.ones(len(self.center))
 		#deltas = 5e-7 * numpy.ones(len(self.center))
-		#deltas[0:2] *= self.center[0:2]**2
+		deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
 		#deltas[2:] = 1.0e-5
 		self.singularity = singularity
