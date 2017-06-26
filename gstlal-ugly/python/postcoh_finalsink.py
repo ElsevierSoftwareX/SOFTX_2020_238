@@ -306,9 +306,9 @@ class FinalSink(object):
 
 			# extend newevents to cur_event_table and event_table_30s
 			self.cur_event_table.extend(newevents)
-			self.lookback_boundary = buf_timestamp - self.lookback_window
-			self.lookback_event_table.extend(newevents)
-			iterutils.inplace_filter(lambda row: row.end > self.lookback_boundary, self.lookback_event_table)
+			# self.lookback_boundary = buf_timestamp - self.lookback_window
+			# self.lookback_event_table.extend(newevents)
+			# iterutils.inplace_filter(lambda row: row.end > self.lookback_boundary, self.lookback_event_table)
 
 
 			if self.cluster_window == 0:
@@ -327,7 +327,7 @@ class FinalSink(object):
 					self.postcoh_table.append(self.candidate)	
 					# FIXME: Currently hard-coded for single detector far H and L
 					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__chisq_ratio_veto(self.candidate) is False:
-						self.__lookback_far(self.candidate)
+						# self.__lookback_far(self.candidate)
 						self.__do_gracedb_alert(self.candidate)
 					if self.need_online_perform:
 						self.onperformer.update_eye_candy(self.candidate)
@@ -399,10 +399,11 @@ class FinalSink(object):
 
 	def __set_far(self, candidate):
 		candidate.far = (max(candidate.far_2h, candidate.far_1d, candidate.far_1w)) * self.far_factor
-		candidate.far_l = candidate.far_l * self.far_factor
-		candidate.far_h = candidate.far_h * self.far_factor
+		candidate.far_h = (max(candidate.far_h_2h, candidate.far_h_1d, candidate.far_h_1w)) * self.far_factor
+		candidate.far_l = (max(candidate.far_l_2h, candidate.far_l_1d, candidate.far_l_1w)) * self.far_factor
+		candidate.far_v = (max(candidate.far_v_2h, candidate.far_v_1d, candidate.far_v_1w)) * self.far_factor
 
-	def __lookback_far(self, candidate):
+	# def __lookback_far(self, candidate):
 		# FIXME: hard-code to check event that's < 5e-7
 		# if candidate.far > 5e-7:
 		# 	return

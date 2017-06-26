@@ -169,11 +169,23 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 
 				/* FIXME: currently hardcoded for single detectors FAR */
 				cur_stats = element->stats_1w[1];
-				table->far_h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				table->far_h_1w = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 				cur_stats = element->stats_1w[0];
-				table->far_l = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				table->far_l_1w = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 				cur_stats = element->stats_1w[2];
-				table->far_v = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				table->far_v_1w = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_1d[1];
+				table->far_h_1d = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_1d[0];
+				table->far_l_1d = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_1d[2];
+				table->far_v_1d = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_2h[1];
+				table->far_h_2h = background_stats_bins2D_get_val((double)table->snglsnr_H, (double)table->chisq_H, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_2h[0];
+				table->far_l_2h = background_stats_bins2D_get_val((double)table->snglsnr_L, (double)table->chisq_L, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				cur_stats = element->stats_2h[2];
+				table->far_v_2h = background_stats_bins2D_get_val((double)table->snglsnr_V, (double)table->chisq_V, cur_stats->fap)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 	
 			}
 		}
