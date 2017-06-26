@@ -27,6 +27,9 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
+DELTA = 1e-6
+EIGEN_DELTA = 2.5e-5
+
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
 	x = int(math.ceil(x))
@@ -162,7 +165,7 @@ class Metric(object):
 		self.delta_t = {}
 		self.t_factor = {}
 		self.neg_t_factor = {}
-		delta_t = 1e-5
+		delta_t = DELTA
 		t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * delta_t)
 		neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-delta_t))
 		for t in numpy.array([1.,2.,4.,8.,16.,32.,64.,128.,256.,512.,1024]):
@@ -276,14 +279,16 @@ class Metric(object):
 			# random new nearby point
 			return self.__set_diagonal_metric_tensor_component(i, center + numpy.abs(numpy.random.randn()) * x, deltas, g, w1)
 
+		# second order
+		d2mbydx2 = (plus_match + minus_match - 2.) / x[i]**2
 		# fourth order
-		minus_match2 = self.match(w1, self.waveform(center-2*x))
-		plus_match2 = self.match(w1, self.waveform(center+2*x))
-		d2mbydx2 = (4./3. * (plus_match + minus_match) - 1./12. * (plus_match2 + minus_match2) - 5./2.) / x[i]**2
+		#minus_match2 = self.match(w1, self.waveform(center-2*x))
+		#plus_match2 = self.match(w1, self.waveform(center+2*x))
+		#d2mbydx2 = (4./3. * (plus_match + minus_match) - 1./12. * (plus_match2 + minus_match2) - 5./2.) / x[i]**2
 
 		# - 1/2 the second partial derivative
 		g[i,i] = -0.5 * d2mbydx2
-		return x[i]
+		return x[i] 
 
 	def __set_tt_metric_tensor_component(self, center, w1):
 
@@ -314,7 +319,12 @@ class Metric(object):
 		xpp[i] = +deltas[i]
 		xpp[j] = +deltas[j]
 
-		d2mbydxdy = (self.match(w1, self.waveform(center+xmm)) + self.match(w1, self.waveform(center+xpp)) - self.match(w1, self.waveform(center+xmp)) - self.match(w1, self.waveform(center+xpm))) / 4. / xpp[i] / xpp[j]
+		fii = -2 * g[i,i] * deltas[i]**2 + 2
+		fjj = -2 * g[j,j] * deltas[j]**2 + 2
+
+		d2mbydxdy = (self.match(w1, self.waveform(center+xpp)) + self.match(w1, self.waveform(center+xmm)) - fii - fjj + 2.) / 2. / xpp[i] / xpp[j]
+
+		#d2mbydxdy = (self.match(w1, self.waveform(center+xmm)) + self.match(w1, self.waveform(center+xpp)) - self.match(w1, self.waveform(center+xmp)) - self.match(w1, self.waveform(center+xpm))) / 4. / xpp[i] / xpp[j]
 
 		g[i,j] = g[j,i] = -0.5 * d2mbydxdy
 		return None
@@ -336,7 +346,7 @@ class Metric(object):
 		minus_match = self.match(w1, self.waveform(center-x), t_factor = self.neg_t_factor[ix])
 		return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
 
-	def __call__(self, center, deltas = None, thresh = 1. * numpy.finfo(numpy.float32).eps):
+	def __call__(self, center, deltas = None, thresh = EIGEN_DELTA):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
@@ -361,21 +371,23 @@ class Metric(object):
 
 		# FIXME delete this
 		# find effective dimension
-		U, S, V = numpy.linalg.svd(g)
-		condition = S < max(S) * thresh
-		eff_dimension = len(S) - len(S[condition])
-		S[condition] = 0.0
+		#U, S, V = numpy.linalg.svd(g)
+		#condition = S < max(S) * thresh
+		#eff_dimension = len(S) - len(S[condition])
+		#S[condition] = 0.0
 		#g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
 
 		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
 		mxw = numpy.max(w)
+		eff_dimension = len(w[w >= thresh * mxw])
 		if numpy.any(w < thresh * mxw):
 			w[w<thresh * mxw] = thresh * mxw
 			g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
 			self.metric_is_valid = False
 
-		return g, eff_dimension, numpy.product(S[S>0])
+		#return g, eff_dimension, numpy.product(S[S>0])
+		return g, eff_dimension, numpy.product(w)
 
 
 	def distance(self, metric_tensor, x, y):
