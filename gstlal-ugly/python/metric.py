@@ -28,7 +28,7 @@ import sys
 import math
 
 DELTA = 1e-6
-EIGEN_DELTA = 2.5e-5
+EIGEN_DELTA = 1.00e-4
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):

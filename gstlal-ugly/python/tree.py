@@ -292,8 +292,8 @@ class Node(object):
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
-		metric_tol = 0.003
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > metric_tol and numtmps >= split_num_templates / 2.0)):
+		metric_tol = 0.001
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
 			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
