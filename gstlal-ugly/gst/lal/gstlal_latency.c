@@ -34,6 +34,7 @@
 #include <time.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 /*
  *  stuff from gobject/gstreamer
@@ -132,8 +133,13 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	gdouble latency = current_time - buffer_time;
 	 
 	if (!silent) {
-		g_print("current time = %9.3f, buffer time = %9d, latency = %6.3f, %s\n",
+		FILE *out_file;
+		out_file = fopen("latency_output.txt", "a");
+
+		fprintf(out_file, "current time = %9.3f, buffer time = %9d, latency = %6.3f, %s\n",
 			current_time, (int) buffer_time, latency, GST_OBJECT_NAME(element));
+
+		fclose(out_file);
 	}
 	
 	gst_date_time_unref(current_gst_time);
