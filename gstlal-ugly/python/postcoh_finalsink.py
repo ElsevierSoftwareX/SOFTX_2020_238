@@ -225,7 +225,7 @@ class FinalSink(object):
 		# cluster parameters
 		self.cluster_window = cluster_window
 		self.candidate = None
-		self.boundary = None
+		self.cluster_boundary = None
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
 		# FIXME: hard-coded chisq_ratio_thresh to veto 
@@ -245,6 +245,11 @@ class FinalSink(object):
 		self.postcoh_document_cpy = None
 		self.postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(self.postcoh_document.xmldoc)
 
+		# save the last 30s zerolags to help check the significance of current candidate
+		# hard-coded to be 30s to be consistent with iDQ range
+		self.lookback_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
+		self.lookback_window = 30
+		self.lookback_boundary = None
 		# coinc doc to be uploaded to gracedb
 		self.coincs_document = CoincsDocFromPostcoh(path, process_params, instruments = re.findall('..', ifos))
 		# snapshot parameters
@@ -296,11 +301,15 @@ class FinalSink(object):
 				self.is_first_buf = False
 
 			if self.is_first_event and nevent > 0:
-				self.boundary = buf_timestamp + self.cluster_window
+				self.cluster_boundary = buf_timestamp + self.cluster_window
 				self.is_first_event = False
 
-			# extend newevents to cur_event_table
+			# extend newevents to cur_event_table and event_table_30s
 			self.cur_event_table.extend(newevents)
+			self.lookback_boundary = buf_timestamp - self.lookback_window
+			self.lookback_event_table.extend(newevents)
+			iterutils.inplace_filter(lambda row: row.end > self.lookback_boundary, self.lookback_event_table)
+
 
 			if self.cluster_window == 0:
 				self.postcoh_table.extend(newevents)
@@ -309,7 +318,7 @@ class FinalSink(object):
 			# the logic of clustering here is quite complicated, fresh up
 			# yourself before reading the code
 			# check if the newevents is over boundary
-			while self.cluster_window > 0 and self.boundary and buf_timestamp > self.boundary:
+			while self.cluster_window > 0 and self.cluster_boundary and buf_timestamp > self.cluster_boundary:
 				self.cluster(self.cluster_window)
 
 				if self.need_candidate_check:
@@ -317,7 +326,8 @@ class FinalSink(object):
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
 					# FIXME: Currently hard-coded for single detector far H and L
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__chisq_ratio_veto(self.candidate) is False and self.__prompt_fap_veto(self.candidate) is False:
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__chisq_ratio_veto(self.candidate) is False:
+						self.__lookback_far(self.candidate)
 						self.__do_gracedb_alert(self.candidate)
 					if self.need_online_perform:
 						self.onperformer.update_eye_candy(self.candidate)
@@ -358,33 +368,33 @@ class FinalSink(object):
 		if self.candidate is None:
 			self.candidate = self.__select_head_event()
 
-		if self.candidate is None or self.candidate.end > self.boundary:
-			self.boundary = self.boundary + cluster_window
+		if self.candidate is None or self.candidate.end > self.cluster_boundary:
+			self.cluster_boundary = self.cluster_boundary + cluster_window
 			self.candidate = None
 			return
-
-		# find the max cohsnr event within the boundary of cur_event_table
+		# the first event in cur_event_table
 		peak_event = self.__select_head_event()
+		# find the max cohsnr event within the boundary of cur_event_table
 		for row in self.cur_event_table:
-			if row.end <= self.boundary and row.cohsnr > peak_event.cohsnr:
+			if row.end <= self.cluster_boundary and row.cohsnr > peak_event.cohsnr:
 				peak_event = row
 
 		if peak_event is None:
 			# no event within the boundary, candidate is the peak, update boundary
-			self.boundary = self.boundary + cluster_window
+			self.cluster_boundary = self.cluster_boundary + cluster_window
 			self.need_candidate_check = True
 			return
 
-		if peak_event.end <= self.boundary and peak_event.cohsnr > self.candidate.cohsnr:
+		if peak_event.end <= self.cluster_boundary and peak_event.cohsnr > self.candidate.cohsnr:
 			self.candidate = peak_event
-			iterutils.inplace_filter(lambda row: row.end > self.boundary, self.cur_event_table)
+			iterutils.inplace_filter(lambda row: row.end > self.cluster_boundary, self.cur_event_table)
 			# update boundary
-			self.boundary = self.candidate.end + cluster_window
+			self.cluster_boundary = self.candidate.end + cluster_window
 			self.need_candidate_check = False
 		else:
-			iterutils.inplace_filter(lambda row: row.end > self.boundary, self.cur_event_table)
+			iterutils.inplace_filter(lambda row: row.end > self.cluster_boundary, self.cur_event_table)
 			# update boundary
-			self.boundary = self.boundary + cluster_window
+			self.cluster_boundary = self.cluster_boundary + cluster_window
 			self.need_candidate_check = True
 
 	def __set_far(self, candidate):
@@ -392,12 +402,29 @@ class FinalSink(object):
 		candidate.far_l = candidate.far_l * self.far_factor
 		candidate.far_h = candidate.far_h * self.far_factor
 
-	def __prompt_fap_veto(self, candidate):
-		# FIXME: hard-code the fap veto threshold to be 0.01
-		if candidate.fap < 0.01:
-			return False
-		else:
-			return True
+	def __lookback_far(self, candidate):
+		# FIXME: hard-code to check event that's < 5e-7
+		# if candidate.far > 5e-7:
+		# 	return
+		# else:
+		# 	count_events = sum((lookback_event.far < 1e-4) for lookback_event in self.lookback_event_table)
+		# 	if count_events > 1:
+		# 		# FAR estimation is not valide for this period, increase the FAR
+		# 		# FIXME: should derive FAR from count_events
+		# 	 	candidate.far = 9.99e-6
+
+			# all_snr_H = self.lookback_event_table.getColumnByName('snglsnr_H')
+			# all_snr_L = self.lookback_event_table.getColumnByName('snglsnr_L')
+			# all_snr_V = self.lookback_event_table.getColumnByName('snglsnr_V')
+			# all_chisq_H = self.lookback_event_table.getColumnByName('chisq_H')
+			# all_chisq_L = self.lookback_event_table.getColumnByName('chisq_L')
+			# all_chisq_V = self.lookback_event_table.getColumnByName('chisq_V')
+			# count_better_H = sum((snr > candidate.snglsnr_H && chisq < candidate.chisq_H) for (snr, chisq) in zip(all_snr_H, allchisq_H)) 
+			# count_better_L = sum((snr > candidate.snglsnr_L && chisq < candidate.chisq_L) for (snr, chisq) in zip(all_snr_L, allchisq_L)) 
+			# count_better_V = sum((snr > candidate.snglsnr_V && chisq < candidate.chisq_V) for (snr, chisq) in zip(all_snr_V, allchisq_V)) 
+			# if count_better_H > 0 or count_better_L > 0 or count_better_V > 0:
+			# 	candidate.far = 9.99e-6
+	
 	
 	def __chisq_ratio_veto(self, candidate):
 		chisq_ratio = candidate.chisq_H/candidate.chisq_L
