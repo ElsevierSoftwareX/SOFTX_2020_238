@@ -56,10 +56,10 @@ def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = fl
 		Q.append(m1/m2)
 		M.append(m1+m2)
 		M1.append(m1)
-	minq_condition = all([q < 0.95 for q in Q])
-	minm1_condition = all([m1 < min_m1 for m1 in M1])
-	maxq_condition = all([q > mass_ratio for q in Q])
-	mtotal_condition = all([m > total_mass for m in M])
+	minq_condition = all([q < 0.90 for q in Q])
+	minm1_condition = all([m1 < 0.90 * min_m1 for m1 in M1])
+	maxq_condition = all([q > 1.11 * mass_ratio for q in Q])
+	mtotal_condition = all([m > 1.11 * total_mass for m in M])
 	if minq_condition or minm1_condition or maxq_condition or mtotal_condition:
 		return False
 	return True
@@ -88,7 +88,7 @@ def packing_density(n):
 
 def mc_m2_singularity(c):
 	center = c.copy()
-	return center
+	#return center
 	F = 1. / 2**.2
 	if F*.85 < center[0] / center[1] <= F * 1.176:
 		center[1] = 0.85 * center[0]
@@ -128,7 +128,7 @@ class HyperCube(object):
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = DELTA * numpy.ones(len(self.center))
 		#deltas = 5e-7 * numpy.ones(len(self.center))
-		deltas[0:2] *= self.center[0:2]
+		#deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
 		#deltas[2:] = 1.0e-5
 		self.singularity = singularity
@@ -292,9 +292,8 @@ class Node(object):
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
-		metric_tol = 0.001
+		metric_tol = 0.003
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
-			self.template_count[0] = self.template_count[0] + 1
 			bifurcation += 1
 			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
@@ -308,6 +307,7 @@ class Node(object):
 			self.left.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 		else:
+			self.template_count[0] = self.template_count[0] + 1
 			if verbose:
 				print "%d tmps : level %03d @ %s : deltas %s : vol frac. %.2f : aspect ratio %.2f : coord vol %.2f" % (self.template_count[0], bifurcation, self.cube.center, self.cube.deltas, numtmps, aspect_ratio, self.cube.coord_volume())
 
