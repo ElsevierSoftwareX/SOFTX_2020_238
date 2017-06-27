@@ -162,6 +162,7 @@ def parse_command_line():
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
 	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
+	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 
 	#
 	# parse the arguments and sanity check
@@ -274,7 +275,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				if idq_aggregator.in_new_epoch(buftime, self.init_gps_time, aggregator.MIN_TIME_QUANTA):
 					self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
 			# create path if it doesn't already exist
-			if options.triggers_from_dataframe:
+			if options.triggers_from_dataframe and options.save_hdf:
 				if not os.path.exists(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime, channel = channel, rate = rate)):
 					aggregator.makedir(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime, channel = channel, rate = rate))
 			
@@ -282,21 +283,25 @@ class MultiChannelHandler(simplehandler.Handler):
 			# iDQ file saving
 			if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence):
 				if options.triggers_from_dataframe:
-					self.to_trigger_file(self.to_dataframe_string(buftime))
-				else:
-					self.to_trigger_file()
+					self.to_dataframe_string(buftime)
+				self.to_trigger_file()
 				self.fdata = ""
 				self.last_save_time = buftime
 
 			# save current triggers in dataframe before dataframe is reindexed
 			if options.triggers_from_dataframe and idq_aggregator.in_new_epoch(buftime, self.last_save_time, aggregator.MIN_TIME_QUANTA):
-				self.to_trigger_file(self.to_dataframe_string(buftime))
+				self.to_dataframe_string(buftime)
+				self.to_trigger_file()
 				self.last_save_time = buftime
 
 			# hdf file saving
 			if options.triggers_from_dataframe:
 				if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], self.hdf_cadence):
-					self.to_hdf5(channel, rate, buftime)
+					if options.save_hdf:
+						self.to_hdf5(channel, rate, buftime)
+					if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], aggregator.MIN_TIME_QUANTA):
+						# reindex to clean out dataframe and save new triggers
+						self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
 					self.last_hdf_save_time[(channel, rate)] = buftime
 
 			# read buffer contents
@@ -369,8 +374,6 @@ class MultiChannelHandler(simplehandler.Handler):
 			except (KeyError, AttributeError):
 				print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 				traceback.print_exc()
-			# reindex to clean out dataframe and save new triggers
-			self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
 		else:
 			# case 2: save current triggers
 			current_save_index = idq_aggregator.floor_div(buftime, self.hdf_cadence)
@@ -403,12 +406,14 @@ class MultiChannelHandler(simplehandler.Handler):
 		col1_format = lambda x: '%10.3f' % x
 		col2_format = lambda x: '%8.3f' % x
 		trigger_format = {'start_time': time_format, 'stop_time': time_format, 'trigger_time': time_format, 'frequency': col1_format, 'phase': col2_format, 'sigmasq': col2_format, 'chisq': col2_format, 'snr': col1_format}
-		for (channel, rate) in self.keys:
-			channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
-			if not self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].dropna().empty:
-				self.fdata += self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].assign(channel_tag = channel_tag).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n"
+		#for (channel, rate) in self.keys:
+		#	channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
+		#	if not self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].dropna().empty:
+		#		self.fdata += self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].assign(channel_tag = channel_tag).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n"
+		# fast concatenation to do the above:
+		self.fdata = self.fdata.join([(self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].assign(channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n") for (channel, rate) in self.keys if not self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].dropna().empty]) 
 
-	def to_trigger_file(self, framedata = None):
+	def to_trigger_file(self):
 		# NOTE
 		# This method should only be called by an instance that is locked.
 		# Use T050017 filenaming convention.
@@ -421,12 +426,10 @@ class MultiChannelHandler(simplehandler.Handler):
 			os.makedirs(path)
 		except OSError:
 			pass
-		if framedata is not None:
-			data = self.header + framedata
-		else:
-			data = self.header + self.fdata
+		#data = self.header + self.fdata
 		with open(tmpfile, 'w') as f:
- 			f.write(data)
+ 			#f.write(data)
+ 			f.write(self.fdata)
 		shutil.move(tmpfile, fpath)
 
 	def gen_psd_xmldoc(self):
