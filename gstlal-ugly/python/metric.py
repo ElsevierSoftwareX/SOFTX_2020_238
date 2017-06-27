@@ -28,7 +28,8 @@ import sys
 import math
 
 DELTA = 1e-6
-EIGEN_DELTA = 1.00e-4
+EIGEN_DELTA_DET = 1e-5
+EIGEN_DELTA_METRIC = 2e-5
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
@@ -346,7 +347,7 @@ class Metric(object):
 		minus_match = self.match(w1, self.waveform(center-x), t_factor = self.neg_t_factor[ix])
 		return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
 
-	def __call__(self, center, deltas = None, thresh = EIGEN_DELTA):
+	def __call__(self, center, deltas = None):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
@@ -380,14 +381,16 @@ class Metric(object):
 		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
 		mxw = numpy.max(w)
-		eff_dimension = len(w[w >= thresh * mxw])
-		if numpy.any(w < thresh * mxw):
-			w[w<thresh * mxw] = thresh * mxw
-			g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
-			self.metric_is_valid = False
+		w[w<EIGEN_DELTA_DET * mxw] = EIGEN_DELTA_DET * mxw
+		det = numpy.product(w)
+
+		eff_dimension = len(w[w >= EIGEN_DELTA_DET * mxw])
+		w[w<EIGEN_DELTA_METRIC * mxw] = EIGEN_DELTA_METRIC * mxw
+		g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
+		#self.metric_is_valid = False
 
 		#return g, eff_dimension, numpy.product(S[S>0])
-		return g, eff_dimension, numpy.product(w)
+		return g, eff_dimension, det
 
 
 	def distance(self, metric_tensor, x, y):
