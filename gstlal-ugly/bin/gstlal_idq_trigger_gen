@@ -161,6 +161,7 @@ def parse_command_line():
 	parser.add_option("--triggers-from-dataframe", action = "store_true", default = False, help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
+	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
 
 	#
 	# parse the arguments and sanity check
@@ -202,8 +203,10 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.header = "# %18s\t%17s\t%14s\t%9s\t%-2s\t%s\t%2s\t%7s\t%20s\n" % ("start_time", "stop_time", "trigger_time", "freq", "phase", "sigmasq", "chisq", "snr", "channel")
 		# header for standard output straight to string
 		else:
-			#self.header = "# %18s\t%20s\t%20s\t%6s\t%8s\t%8s\t%8s\t%10s\t%10s\t%9s\t%8s\t%s\n" % ("start_time", "stop_time", "trigger_time", "phase", "snr", "chisq", "sigmasq", "frequency", "Q", "latency", "rate", "channel")
-			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
+			if options.latency:
+				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel", "latency")
+			else:
+				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
 		self.fdata = ""
 
 		# dataframe/hdf saving properties
@@ -323,8 +326,10 @@ class MultiChannelHandler(simplehandler.Handler):
 						stop_time = trigger_time
 						# save iDQ compatible data
 						if not options.triggers_from_dataframe:
-							#self.fdata += "%20.9f\t%20.9f\t%20.9f\t%6.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%10.3f\t%9d\t%8.1f\t%s\n" % (start_time, stop_time, trigger_time, phase, snr, chisq, sigmasq, freq, q, latency, int(rate), channel)
-							self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag)
+							if options.latency:
+								self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag, latency)
+							else:
+								self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag)
 						# save dataframe compatible data
 						buftime_index = idq_aggregator.floor_div(buftime, self.hdf_cadence)
 						if options.triggers_from_dataframe:
