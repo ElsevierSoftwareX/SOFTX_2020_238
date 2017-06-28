@@ -56,10 +56,10 @@ def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = fl
 		Q.append(m1/m2)
 		M.append(m1+m2)
 		M1.append(m1)
-	minq_condition = all([q < 0.90 for q in Q])
-	minm1_condition = all([m1 < 0.90 * min_m1 for m1 in M1])
-	maxq_condition = all([q > 1.11 * mass_ratio for q in Q])
-	mtotal_condition = all([m > 1.11 * total_mass for m in M])
+	minq_condition = all([q < 0.98 for q in Q])
+	minm1_condition = all([m1 < 0.98 * min_m1 for m1 in M1])
+	maxq_condition = all([q > 1.02 * mass_ratio for q in Q])
+	mtotal_condition = all([m > 1.02 * total_mass for m in M])
 	if minq_condition or minm1_condition or maxq_condition or mtotal_condition:
 		return False
 	return True
@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 0.9
+	prefactor = 0.6
 	if n==1:
 		return prefactor
 	if n==2:
@@ -90,8 +90,8 @@ def mc_m2_singularity(c):
 	center = c.copy()
 	#return center
 	F = 1. / 2**.2
-	if F*.90 < center[0] / center[1] <= F * 1.11:
-		center[1] = 0.90 * center[0]
+	if F*.95 < center[0] / center[1] <= F * 1.05:
+		center[1] = 0.95 * center[0]
 	return center
 	
 def m1_m2_singularity(c):
