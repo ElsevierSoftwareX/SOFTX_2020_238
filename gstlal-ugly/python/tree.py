@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 0.8
+	prefactor = 0.9
 	if n==1:
 		return prefactor
 	if n==2:
@@ -90,8 +90,8 @@ def mc_m2_singularity(c):
 	center = c.copy()
 	#return center
 	F = 1. / 2**.2
-	if F*.95 < center[0] / center[1] <= F * 1.05:
-		center[1] = 0.95 * center[0]
+	if F*.90 < center[0] / center[1] <= F * 1.11:
+		center[1] = 0.90 * center[0]
 	return center
 	
 def m1_m2_singularity(c):
