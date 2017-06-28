@@ -27,9 +27,9 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 1e-6
-EIGEN_DELTA_DET = 1e-6
-EIGEN_DELTA_METRIC = 2e-5
+DELTA = 2e-7
+EIGEN_DELTA_DET = 2e-7
+EIGEN_DELTA_METRIC = 1e-3
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
