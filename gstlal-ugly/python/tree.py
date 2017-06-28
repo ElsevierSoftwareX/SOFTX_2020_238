@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 0.6
+	prefactor = 1.0 #0.6
 	if n==1:
 		return prefactor
 	if n==2:
@@ -90,8 +90,8 @@ def mc_m2_singularity(c):
 	center = c.copy()
 	#return center
 	F = 1. / 2**.2
-	if F*.95 < center[0] / center[1] <= F * 1.05:
-		center[1] = 0.95 * center[0]
+	if F*.98 < center[0] / center[1] <= F * 1.02:
+		center[1] = 0.98 * center[0]
 	return center
 	
 def m1_m2_singularity(c):
@@ -284,16 +284,19 @@ class Node(object):
 			# get our number of templates
 			numtmps = self.cube.num_templates(mismatch)
 
-			metric_diff = max(abs((numtmps - sib_numtmps) / (numtmps + sib_numtmps) / 2), abs((numtmps - par_numtmps) / (numtmps + par_numtmps) / 2))
-			#metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
-			#metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
+			#metric_diff = max(abs((numtmps - sib_numtmps) / (numtmps + sib_numtmps) / 2), abs((numtmps - par_numtmps) / (numtmps + par_numtmps) / 2))
+			metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
+			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
+			metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
+			metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
+			metric_diff = max(metric_diff, metric_diff2)
 
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
-		metric_tol = 0.001
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
+		metric_tol = 0.015
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2. and metric_diff > metric_tol)):
 			bifurcation += 1
 			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
