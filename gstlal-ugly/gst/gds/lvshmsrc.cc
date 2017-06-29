@@ -256,7 +256,11 @@ static gboolean start(GstBaseSrc *object)
 	element->next_timestamp = 0;
 
 done:
-	gst_base_src_start_complete(object, success ? GST_FLOW_OK : GST_FLOW_ERROR);
+	/* FIXME:  documentation says this needs to be called when start()
+	 * is overridden but doing so causes frequent lock-ups in our
+	 * applications and I can't find any examples in gstreamer's own
+	 * code where an element calls this so ... !?  it's commented out */
+	/*gst_base_src_start_complete(object, success ? GST_FLOW_OK : GST_FLOW_ERROR);*/
 	return success;
 }
 
