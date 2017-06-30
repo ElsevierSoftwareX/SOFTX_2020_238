@@ -565,6 +565,7 @@ else:
 
 offsetvectors = lsctables.TimeSlideTable.get_table(ligolw_utils.load_filename(options.time_slide_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)).as_dict().values()
 all_instruments = reduce(lambda a, b: a | set(b), offsetvectors, set())
+all_instruments -= set(("V1",))        # hide Virgo. FIXME:  remove after O2
 if len(all_instruments) < options.min_instruments:
 	raise ValueError("--time-slide-file \"%s\" names %s but we need at least %d instruments" % (options.time_slide_file, ", ".join(sorted(all_instruments)), options.min_instruments))
 
@@ -722,7 +723,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 	if options.data_source in ("lvshm", "framexmit"):
 		filename = likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1]
 		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(filename, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-		if set(seglists) != set(detectors.channel_dict):
+		if (set(seglists) - set(["V1"])) != (set(detectors.channel_dict) - set(["V1"])):
 			raise ValueError("segment lists in \"%s\" are for instruments %s but we need %s" % (filename, ", ".join(sorted(seglists)), ", ".join(sorted(detectors.channel_dict))))
 		if coinc_params_distributions is None:
 			raise ValueError("\"%s\" does not contain parameter distribution data" % filename)
@@ -734,6 +735,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 			raise ValueError("\"%s\" is for %s but we need %s" % (filename, ", ".join(sorted(coinc_params_distributions.instruments)), ", ".join(sorted(all_instruments))))
 	else:
 		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
+	if "V1" in seglists: del seglists["V1"] # drop Virgo FIXME:  remove after O2
 
 	if zero_lag_ranking_stats_file is None:
 		zero_lag_ranking_stats = None
@@ -773,7 +775,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		gracedb_search = options.gracedb_search,
 		gracedb_pipeline = options.gracedb_pipeline,
 		gracedb_service_url = options.gracedb_service_url,
-		upload_auxiliary_data_to_gracedb = (options.gracedb_service_url == "https://gracedb.ligo.org/api/"),
+		upload_auxiliary_data_to_gracedb = (options.gracedb_service_url == "https://gracedb.ligo.org/api/" or options.gracedb_service_url == "https://gracedb-test.ligo.org/api/"),
 		verbose = options.verbose
 	)
 	if options.verbose:

@@ -509,9 +509,8 @@ class Data(object):
 		bottle.route("/latency_histogram.txt")(self.web_get_latency_histogram)
 		bottle.route("/latency_history.txt")(self.web_get_latency_history)
 		bottle.route("/snr_history.txt")(self.web_get_snr_history)
-		# FIXME don't hardcode the ifos
-		bottle.route("/H1_snr_history.txt")(self.web_get_H1_snr_history)
-		bottle.route("/L1_snr_history.txt")(self.web_get_L1_snr_history)
+		for instrument in coinc_params_distributions.instruments:
+			bottle.route("/%s_snr_history.txt" % instrument)(lambda: self.web_get_sngl_snr_history(instrument = instrument))
 		bottle.route("/likelihood_history.txt")(self.web_get_likelihood_history)
 		bottle.route("/far_history.txt")(self.web_get_far_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
@@ -585,7 +584,7 @@ class Data(object):
 		self.far_history = deque(maxlen = 1000)
 		self.ram_history = deque(maxlen = 2)
 		# FIXME don't hardcode
-		self.ifo_snr_history = {"H1": deque(maxlen = 10000), "L1": deque(maxlen = 10000)}
+		self.ifo_snr_history = {"H1": deque(maxlen = 10000), "L1": deque(maxlen = 10000), "V1": deque(maxlen = 10000)}
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -620,8 +619,9 @@ class Data(object):
 			# livetime
 			buf_timestamp = LIGOTimeGPS(0, buf.pts)
 			buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
-			self.coincs_document.add_to_search_summary_outseg(buf_seg)
-			self.seglistdicts["triggersegments"][instrument] |= segments.segmentlist((buf_seg,))
+			if instrument != "V1":	# ignore V1 segments.  FIXME:  remove after O2 (and outdent contents of conditional)
+				self.coincs_document.add_to_search_summary_outseg(buf_seg)
+				self.seglistdicts["triggersegments"][instrument] |= segments.segmentlist((buf_seg,))
 
 			# safety check end times.  OK for end times to be
 			# past end of buffer, but we cannot allow triggr
@@ -717,6 +717,7 @@ class Data(object):
 			# count is not sensitive to their presence
 			singles = self.coinc_params_distributions.background_rates["singles"]
 			for event in events:
+				if event.ifo == "V1": continue	# skip V1.  FIXME:  remove after O2
 				singles[event.ifo,] += 1
 
 			# run stream thinca.  update the parameter
@@ -736,6 +737,7 @@ class Data(object):
 			# necessary for this test to be super precisely
 			# defined.
 			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
+				if event.ifo == "V1": continue  # skip Virgo.   FIXME:  remove after O2
 				if len(self.seglistdicts["whitehtsegments"].keys_at(event.end)) > 1:
 					self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
 			self.coincs_document.commit()
@@ -745,7 +747,10 @@ class Data(object):
 			if self.stream_thinca.last_coincs:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					if coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
-						self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)))
+						instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
+						instruments -= frozenset(("V1",)) # never claim Virgo participated or was on.   FIXME:  remove after O2
+						self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
+						#self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)))
 
 			# Cluster last coincs before recording number of zero
 			# lag events or sending alerts to gracedb
@@ -764,7 +769,9 @@ class Data(object):
 			if self.stream_thinca.last_coincs and self.zero_lag_ranking_stats is not None:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					if coinc_event.likelihood is not None and coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
-						self.zero_lag_ranking_stats.zero_lag_likelihood_rates[frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)][coinc_event.likelihood,] += 1
+						instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
+						instruments -= frozenset(("V1",)) # never claim Virgo participated or was on.   FIXME:  remove after O2
+						self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
 
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
@@ -829,6 +836,7 @@ class Data(object):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
+			if event.ifo == "V1": continue  # skip Virgo.   FIXME:  remove after O2
 			self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
 		self.coincs_document.commit()
 
@@ -854,9 +862,9 @@ class Data(object):
 		# FIXME proper clustering is really needed (see above)
 		if self.stream_thinca.last_coincs and self.zero_lag_ranking_stats is not None:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
-				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-				instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
-				if coinc_event.likelihood is not None and not any(offset_vector.values()):
+				if coinc_event.likelihood is not None and coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
+					instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
+					instruments -= frozenset(("V1",)) # never claim Virgo participated or was on.   FIXME:  remove after O2
 					self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
 
 		# do GraceDB alerts
@@ -1083,17 +1091,10 @@ class Data(object):
 			for time, snr in self.snr_history:
 				yield "%f %e\n" % (time, snr)
 
-	# FIXME, don't hardcode these routes
-	def web_get_H1_snr_history(self):
+	def web_get_sngl_snr_history(self, instrument = None):
 		with self.lock:
 			# first one in the list is sacrificed for a time stamp
-			for time, snr in self.ifo_snr_history["H1"]:
-				yield "%f %e\n" % (time, snr)
-
-	def web_get_L1_snr_history(self):
-		with self.lock:
-			# first one in the list is sacrificed for a time stamp
-			for time, snr in self.ifo_snr_history["L1"]:
+			for time, snr in self.ifo_snr_history[instrument]:
 				yield "%f %e\n" % (time, snr)
 
 	def web_get_likelihood_history(self):

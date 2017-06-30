@@ -336,6 +336,7 @@ class StreamThinca(object):
 			# False/0 = keep, True/non-0 = discard
 			if len(events) == 1 and events[0].snr < 5:
 				return True
+			if len(events) == 1 and events[0].ifo == "V1": return True      # exclude single-detector Virgo-only coincs.  FIXME:  remove after O2
 			return min(event.end for event in events) not in seg
 
 		# find coincs.  NOTE:  do not pass veto segments to this

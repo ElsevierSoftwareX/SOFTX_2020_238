@@ -127,6 +127,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# check input
 		#
 
+		assert "V1" not in instruments  # disallow Virgo from initialization FIXME:  remove after O2
 		if min_instruments < 1:
 			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
 		if min_instruments > len(instruments):
@@ -203,6 +204,16 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		return self
 
 	def coinc_params(self, events, offsetvector, mode = "ranking"):
+		#
+		# strip Virgo triggers.  FIXME:  remove after O2
+		#
+
+		assert len(events) != 0, "no triggers in candidate"
+		events = tuple(event for event in events if event.ifo != "V1")
+		assert len(events) != 0, "no triggers from allowed instruments in candidate"
+
+		#
+
 		#
 		# 2D (snr, \chi^2) values.
 		#
@@ -517,6 +528,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		if verbose:
 			print >>sys.stderr, "synthesizing background-like instrument combination probabilities ..."
+		assert "V1" not in segs # disallow Virgo.  FIXME:  remove after O2
 		self.background_rates["instruments"].array[:] = 0.
 		singles_counts = dict(zip(self.background_rates["singles"].bins[0].centres(), self.background_rates["singles"].array))
 		num_templates = int(round(sum(singles_counts[instrument] / (float(livetime) / 1.0) for instrument, livetime in abs(segs).items()) / len(segs)))

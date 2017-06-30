@@ -537,6 +537,7 @@ dag.write_cache()
 # FIXME don't hardcode this stuff
 #
 
+sys.exit()
 
 shutil.copy2(dagparts.which('gstlalcbcsummary'), os.path.expanduser("~/public_html/cgi-bin"))
 shutil.copy2(dagparts.which('gstlalcbcnode'), os.path.expanduser("~/public_html/cgi-bin"))
