@@ -24,6 +24,7 @@
 #
 
 
+import itertools
 import numpy
 import sys
 from gstlal import pipeparts
@@ -46,13 +47,13 @@ import test_common
 #
 
 
-def firbank_test_01(pipeline, name, width, time_domain):
+def firbank_test_01(pipeline, name, width, time_domain, gap_frequency):
 	#
 	# try changing these.  test should still work!
 	#
 
 	rate = 2048	# Hz
-	gap_frequency = 13.0	# Hz
+	gap_frequency = gap_frequency	# Hz
 	gap_threshold = 0.8	# of 1
 	buffer_length = 1.0	# seconds
 	test_duration = 10.0	# seconds
@@ -110,17 +111,19 @@ def firbank_test_02(pipeline, name, width, time_domain):
 #
 
 
-test_common.build_and_run(firbank_test_01, "firbank_test_01a", width = 64, time_domain = True)
-test_common.build_and_run(firbank_test_01, "firbank_test_01b", width = 64, time_domain = False)
-test_common.build_and_run(firbank_test_01, "firbank_test_01c", width = 32, time_domain = True)
-test_common.build_and_run(firbank_test_01, "firbank_test_01d", width = 32, time_domain = False)
-
 flags = cmp_nxydumps.COMPARE_FLAGS_EXACT_GAPS | cmp_nxydumps.COMPARE_FLAGS_ZERO_IS_GAP | cmp_nxydumps.COMPARE_FLAGS_ALLOW_STARTSTOP_MISALIGN
 
-cmp_nxydumps.compare("firbank_test_01a_in.dump", "firbank_test_01a_out.dump", flags = flags)
-cmp_nxydumps.compare("firbank_test_01b_in.dump", "firbank_test_01b_out.dump", flags = flags)
-cmp_nxydumps.compare("firbank_test_01c_in.dump", "firbank_test_01c_out.dump", flags = flags, sample_fuzz = 1e-6)
-cmp_nxydumps.compare("firbank_test_01d_in.dump", "firbank_test_01d_out.dump", flags = flags, sample_fuzz = 1e-6)
+for gap_frequency, width, time_domain in itertools.product(
+		(153.0, 13.0, 0.13),
+		(32, 64),
+		(True, False)
+	):
+	name = "firbank_test_01_%d%s_%.2f" % (width, ("TD" if time_domain else "FD"), gap_frequency)
+	test_common.build_and_run(firbank_test_01, name, width = width, time_domain = time_domain, gap_frequency = gap_frequency)
+	if width == 64:
+		cmp_nxydumps.compare("%s_in.dump" % name, "%s_out.dump" % name, flags = flags)
+	else:
+		cmp_nxydumps.compare("%s_in.dump" % name, "%s_out.dump" % name, flags = flags, sample_fuzz = 1e-6)
 
 
 test_common.build_and_run(firbank_test_02, "firbank_test_02a", width = 64, time_domain = True)
