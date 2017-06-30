@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 1.0
+	prefactor = 0.5
 	if n==1:
 		return prefactor
 	if n==2:
@@ -128,7 +128,7 @@ class HyperCube(object):
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = DELTA * numpy.ones(len(self.center))
 		#deltas = 5e-7 * numpy.ones(len(self.center))
-		#deltas[0:2] *= self.center[0:2]**2
+		deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
 		#deltas[2:] = 1.0e-5
 		self.singularity = singularity
@@ -295,10 +295,11 @@ class Node(object):
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
-		metric_tol = 0.02
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.5 and metric_diff > metric_tol)):
+		metric_tol = 0.01
+		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.5 and metric_diff > metric_tol)):
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			bifurcation += 1
-			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
+			if False:#metric_diff <= metric_tol:# and aspect_factor <= 1.0:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
