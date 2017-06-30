@@ -126,13 +126,16 @@ def sim_tag_from_inj_file(injections):
 def get_bank_params(bank_cache, options, verbose = False):
 	max_time = 0
 	template_mchirp_dict = {}
-	cache = Cache.fromfilenames([bank_cache.values()[0]])
-	for f in cache.pfnlist():
-		xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
-		snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
-		max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-		template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap/2:-options.overlap/2])]
-		xmldoc.unlink()
+	for n, cache in enumerate(bank_cache.values()[0]):
+		cache = Cache.fromfilenames([cache])
+		for c in cache.pfnlist():
+			svd_cache = Cache.fromfilenames([c])
+			for f in svd_cache.pfnlist():
+				xmldoc = ligolw_utils.load_filename(f, verbose = verbose, contenthandler = LIGOLWContentHandler)
+				snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
+				max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
+				template_mchirp_dict[f] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap[n]/2:-options.overlap[n]/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap[n]/2:-options.overlap[n]/2])]
+				xmldoc.unlink()
 
 	return max_time, template_mchirp_dict
 
@@ -211,53 +214,59 @@ def inj_psd_node_gen(segsdict, options):
 	ref_psd_parent_nodes = []
 	return psd_nodes, ref_psd_parent_nodes
 
-def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_groups, options, seg, template_mchirp_dict):
+def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, template_mchirp_dict):
 	svd_nodes = {}
 	new_template_mchirp_dict = {}
-	for i, bank_group in enumerate(bank_groups):
-		for ifo, files in bank_group.items():
-			# First sort out the clipleft, clipright options
-			clipleft = []
-			clipright = []
-			ids = []
-			mchirp_interval = (float("inf"), 0)
-			for n, f in enumerate(files):
-				# handle template bank clipping
-				clipleft.append(options.overlap / 2)
-				clipright.append(options.overlap / 2)
-				ids.append("%d_%d" % (i, n))
-				if f in template_mchirp_dict:
-					mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
+	for ifo, list_of_svd_caches in bank_cache.items():
+		bin_offset = 0
+		for j, svd_caches in enumerate(list_of_svd_caches):
+			svd_caches = Cache.fromfilenames([svd_caches])
+			for i, individual_svd_cache in enumerate(svd_caches.pfnlist()):
+				# First sort out the clipleft, clipright options
+				clipleft = []
+				clipright = []
+				ids = []
+				mchirp_interval = (float("inf"), 0)
+				individual_svd_cache = Cache.fromfilenames([individual_svd_cache])
+				for n, f in enumerate(individual_svd_cache.pfnlist()):
+					# handle template bank clipping
+					clipleft.append(options.overlap[j] / 2)
+					clipright.append(options.overlap[j] / 2)
+					ids.append("%d_%d" % (i, n))
+					if f in template_mchirp_dict:
+						mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
 
-			svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%04d_SVD' % (i,), int(seg[0]), int(seg[1]), '.xml.gz', path = svdJob.output_path)
-			if '%04d' %i not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
-				new_template_mchirp_dict['%04d' % i] = mchirp_interval
+				svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%04d_SVD' % (i+bin_offset,), int(seg[0]), int(seg[1]), '.xml.gz', path = svdJob.output_path)
+				if '%04d' % (i+bin_offset,) not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
+					new_template_mchirp_dict['%04d' % (i+bin_offset,)] = mchirp_interval
 
-			svd_nodes.setdefault(ifo, []).append(
-				inspiral_pipe.generic_node(svdJob, dag,
-				parent_nodes = parent_nodes, 
-				opts = {"svd-tolerance":options.tolerance,
-					"flow":options.flow,
-					"clipleft":clipleft,
-					"clipright":clipright,
-					"samples-min":options.samples_min,
-					"samples-max-256":options.samples_max_256,
-					"samples-max-64":options.samples_max_64,
-					"samples-max":options.samples_max,
-					"autocorrelation-length":options.autocorrelation_length,
-					"bank-id":ids,
-					"identity-transform":options.identity_transform,
-					"ortho-gate-fap":0.5},
-				input_files = {"reference-psd":psd},
-				input_cache_files = {"template-bank-cache":files},
-				output_files = {"write-svd":svd_bank_name}
+				svd_nodes.setdefault(ifo, []).append(
+					inspiral_pipe.generic_node(svdJob, dag,
+					parent_nodes = parent_nodes,
+					opts = {"svd-tolerance":options.tolerance,
+						"flow":options.flow,
+						"clipleft":clipleft,
+						"clipright":clipright,
+						"samples-min":options.samples_min[j],
+						"samples-max-256":options.samples_max_256,
+						"samples-max-64":options.samples_max_64,
+						"samples-max":options.samples_max,
+						"autocorrelation-length":options.autocorrelation_length,
+						"bank-id":ids,
+						"identity-transform":options.identity_transform,
+						"ortho-gate-fap":0.5},
+					input_files = {"reference-psd":psd},
+					input_cache_files = {"template-bank-cache":individual_svd_cache.pfnlist()},
+					input_cache_file_name = os.path.basename(svd_bank_name).replace(".xml.gz", ".cache"),
+					output_files = {"write-svd":svd_bank_name}
+					)
 				)
-			)
+			bin_offset += i+1
 	#
 	# Plot template/svd bank jobs
 	#
 
-	primary_ifo = bank_group.items()[0][0]
+	primary_ifo = bank_cache.keys()[0]
 	inspiral_pipe.generic_node(plotBanksJob, dag,
 				parent_nodes = sum(svd_nodes.values(),[]),
 				opts = { "plot-svd-bank":"",
@@ -315,13 +324,12 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 			ignore[injections] = []
 			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda (k,v): int(k)):
 				if max_chirp_mass <= bounds[0]:
-					ignore[injections].extend(range(int(bgbin_index),len(template_mchirp_dict.values())))
+					ignore[injections].append(int(bgbin_index))
 					# NOTE putting a break here assumes that the min chirp mass
 					# in a subbank increases with bin number, i.e. XXXX+1 has a
 					# greater minimum chirpmass than XXXX, for all XXXX. Note
 					# that the reverse is not true, bin XXXX+1 may have a lower
 					# max chirpmass than bin XXXX.
-					break
 				elif min_chirp_mass > bounds[1]:
 					ignore[injections].append(int(bgbin_index))
 
@@ -1038,13 +1046,13 @@ def parse_command_line():
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the template bank xml file.")
 
 	# SVD bank construction options
-	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
+	parser.add_option("--overlap", metavar = "num", type = "int", action = "append", help = "set the factor that describes the overlap of the sub banks, must be even!")
 	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
-	parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
+	parser.add_option("--samples-min", type = "int", action = "append", help = "The minimum number of samples to use for time slices default 1024 (can be given multiple times, one for each time --bank-cache is invoked)")
 	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
 	parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
-	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+	parser.add_option("--bank-cache", metavar = "filenames", action = "append", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc.. (can be given multiple times)")
 	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9999, help = "set the SVD tolerance, default 0.9999")
 	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
 	parser.add_option("--identity-transform", action = "store_true", help = "Use identity transform, i.e. no SVD")
@@ -1101,9 +1109,18 @@ def parse_command_line():
 	options, filenames = parser.parse_args()
 	if options.num_banks:
 		options.num_banks = [int(v) for v in options.num_banks.split(",")]
+
+	if not options.samples_min:
+		options.samples_min = [1024]*len(options.bank_cache)
+
+	if not options.overlap:
+		options.overlap = [0]*len(options.bank_cache)
 	
-	if options.overlap % 2:
+	if any(overlap % 2 for overlap in options.overlap):
 		raise ValueError("overlap must be even")
+
+	if not (len(options.samples_min) == len(options.bank_cache) == len(options.overlap)):
+		raise ValueError("must provide same number of inputs for --samples-min, --bank-cache, --overlap")
 
 	missing_injection_options = []
 	for option in ("dist_stats_cache", "svd_bank_cache", "psd_cache", "non_injection_db", "marginalized_likelihood_file", "marginalized_likelihood_with_zerolag_file"):
@@ -1160,7 +1177,14 @@ def parse_command_line():
 options, filenames = parse_command_line()
 
 if options.bank_cache or options.svd_bank_cache:
-	bank_cache = inspiral_pipe.parse_cache_str(options.bank_cache)
+	# FIXME Add feature for multiple bank caches to online pipeline so that
+	# this functionality can return to inspiral_pipe
+	bank_cache = {}
+	for bank_cache_str in options.bank_cache:
+		for c in bank_cache_str.split(','):
+			ifo = c.split("=")[0]
+			cache = c.replace(ifo+"=","")
+			bank_cache.setdefault(ifo, []).append(cache)
 	detectors = datasource.GWDataSourceInfo(options)
 	channel_dict = detectors.channel_dict
 	if bank_cache:
@@ -1350,7 +1374,8 @@ if options.bank_cache:
 	#
 	# Compute SVD banks
 	#
-	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
+	#svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
+	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
 
 
 if not options.lloid_cache:
