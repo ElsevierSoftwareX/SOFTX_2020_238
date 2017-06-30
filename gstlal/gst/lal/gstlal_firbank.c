@@ -1573,7 +1573,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * data how much output data would we produce?  if the answer is
 	 * "less than we're going to produce" then we will make two output
 	 * buffers */
-	nonzero_output_length = get_output_length(element, minimum_input_length(element, gst_audioadapter_head_nongap_length(element->adapter)));
+	nonzero_output_length = get_output_length(element, minimum_input_length(element, get_available_samples(element) - gst_audioadapter_tail_gap_length(element->adapter)));
 
 	GST_INFO_OBJECT(element, "state: history is %s, input is %s, zeros in adapter = %u", history_is_gap ? "gap" : "not gap", input_is_gap ? "gap" : "not gap", gst_audioadapter_tail_gap_length(element->adapter));
 	if(!input_is_gap) {
