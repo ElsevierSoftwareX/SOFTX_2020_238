@@ -28,7 +28,7 @@ import sys
 import math
 
 DELTA = 2e-7
-EIGEN_DELTA_DET = 2e-7
+EIGEN_DELTA_DET = 1e-5
 EIGEN_DELTA_METRIC = 1e-5
 
 # Round a number up to the nearest power of 2
