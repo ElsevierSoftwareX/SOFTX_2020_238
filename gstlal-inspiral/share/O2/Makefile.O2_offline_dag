@@ -13,12 +13,14 @@ LOW_FREQUENCY_CUTOFF = 15.0
 # Highest frequency at which to compute the metric
 HIGH_FREQUENCY_CUTOFF = 1024.0
 # Controls the number of templates in each SVD sub bank
-NUM_SPLIT_TEMPLATES = 500
+NUM_SPLIT_TEMPLATES = 200
 # Number of bins of chi to uniformly bin templates into
-NUM_CHI_BINS = 20
+NUM_CHI_BINS_0 = 20
+NUM_CHI_BINS_1 = 1
 # Controls the overlap from sub bank to sub bank - helps mitigate edge effects
 # in the SVD.  Redundant templates will be removed
-OVERLAP = 50
+OVERLAP_0 = 30
+OVERLAP_1 = 30
 # The approximant that you wish to filter with for BANK_MCHIRP1 and BANK_MCHIRP2, respectively.
 MCHIRP_SPLIT = 1.73
 APPROXIMANT1 = 0.00:$(MCHIRP_SPLIT):TaylorF2
@@ -45,15 +47,17 @@ RUN = run_1
 WEBDIR = ~/public_html/observing/$(TAG)/$(START)-$(STOP)-$(RUN)
 # Atlas
 #WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
-# The number of sub banks in each SVD bank file
-NUMBANKS = 2
+# The number of sub banks in each SVD bank file (note the values here are example values, not necessarily the values used for production runs)
+NUMBANKS_0 = 5
+NUMBANKS_1 = 5,5,5,5,5,5,5,5,5,5,5,5,4,3,3,2,1,1,1,1
 # The control peak time for the composite detection statistic.  If set to 0 the
 # statistic is disabled
 PEAK = 0
 # The length of autocorrelation chi-squared in sample points
 AC_LENGTH = 351
 # The minimum number of samples to include in a given time slice
-SAMPLES_MIN = 2048
+SAMPLES_MIN_0 = 2048
+SAMPLES_MIN_1 = 512
 # The maximum number of samples to include in the 256 Hz or above time slices
 SAMPLES_MAX_256 = 2048
 
@@ -62,7 +66,7 @@ SAMPLES_MAX_256 = 2048
 #############################
 
 #ADDITIONAL_DAG_OPTIONS = "--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) --blind-injections BNS-MDC1-WIDE.xml"
-ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256)
+ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN_0) --samples-min $(SAMPLES_MIN_1) --samples-max-256 $(SAMPLES_MAX_256)
 
 ##############
 # Injections #
@@ -77,7 +81,7 @@ MCHIRP_INJECTIONS := Mc_min_1:Mc_max_1:injections_0000.xml Mc_min_2:Mc_max_2:inj
 
 # Vetoes file names
 # Obtain veto definer from here: https://code.pycbc.phy.syr.edu/detchar/veto-definitions/blob/master/cbc/O2/
-# commit: e698d6f9f488120334a8f820d8f316c1c5c45913
+# commit: 92aa307af6eff54d3b26393c971fbfcc108e3629
 VETODEF = H1L1-HOFT_C00_O2_CBC.xml
 
 vetoes_suffix := _vetoes.xml
@@ -147,14 +151,25 @@ L1PRIORRANGE=80
 # Set to correct location
 include /PATH/TO/gstlal/gstlal-inspiral/share/Makefile.offline_analysis_rules
 
+# BANK_CACHE_STRING is passed to gstlal_inspiral_pipe as --bank-cache
+# $(BANK_CACHE_STRING), thus you only need to add --bank-cache if you're
+# passing multiple caches for each IFO (as in the case of the hybrid binning)
+# FIXME Is there a way to put this back in offline analysis rules? For now,
+# this overwrites what the offline analysis rules file does. These lines can be
+# commented out if youre only doing one type of splitting (e.g. splitting the
+# entire bank by chirpmass/chi, as was done in O1)
+BANK_CACHE_STRING:=H1=H1_split_bank_0.cache,L1=L1_split_bank_0.cache --bank-cache H1=H1_split_bank_1.cache,L1=L1_split_bank_1.cache
+BANK_CACHE_FILES:=H1_split_bank_0.cache L1_split_bank_0.cache H1_split_bank_1.cache L1_split_bank_1.cache
+
+
 ############
 # Workflow #
 ############
 
 all : dag SNR_sed
-	echo "Submit with: condor_submit_dag -maxjob 3000 trigger_pipe.dag"
+	echo "Submit with: condor_submit_dag -maxjobs 3000 trigger_pipe.dag"
 
-SNR_sed : gstlal_inspiral_injection_snr.sub
+SNR_sed : dag
 	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=${MKLROOT}/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
 
 # Run inspiral pipe to produce dag
@@ -168,7 +183,9 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		--vetoes vetoes.xml.gz \
 		--frame-segments-name datasegments  \
 		--control-peak-time $(PEAK) \
-		--num-banks $(NUMBANKS) \
+		--template-bank gstlal_bank.xml.gz \
+		--num-banks $(NUMBANKS_0) \
+		--num-banks $(NUMBANKS_1) \
 		--fir-stride 1 \
 		--web-dir $(WEBDIR) \
 		--time-slide-file tisi.xml \
@@ -176,12 +193,16 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		$(INJECTION_LIST) \
 		--bank-cache $(BANK_CACHE_STRING) \
 		--tolerance 0.9999 \
-		--overlap $(OVERLAP) \
+		--overlap $(OVERLAP_0) \
+		--overlap $(OVERLAP_1) \
 		--flow $(LOW_FREQUENCY_CUTOFF) \
 		$(CHANNEL_NAMES) \
 		--autocorrelation-length $(AC_LENGTH) \
 		$(ADDITIONAL_DAG_OPTIONS) \
 		$(CONDOR_COMMANDS) \
+		--ht-gate-threshold-linear 0.8:15.0-45.0:100.0 \
+		--min-log-L 3.5 \
+		--disable-calc-inj-snr \
 		--singles-threshold 100.0 \
 		--request-cpu 2 \
 		--request-memory 5GB \
@@ -191,41 +212,54 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 
 # Produce refrence likelihood file
 reference_likelihood_file.xml.gz :
-	gstlal_ll_inspiral_create_prior_diststats \
+	gstlal_inspiral_fake_diststats \
 		--segment-and-horizon=H1:$(H1PRIORSTART):$(H1PRIORSTOP):$(H1PRIORRANGE) \
 		--segment-and-horizon=L1:$(L1PRIORSTART):$(L1PRIORSTOP):$(L1PRIORRANGE) \
-		--write-likelihood-basename $@ \
-		--num-templates 1000 \
+		--output $@ \
 		--min-instruments $(MIN_IFOS) \
 		--verbose
 
-# Produce split banks
-%_split_bank.cache : gstlal_bank.xml.gz
-	mkdir -p $*_split_bank
-	gstlal_bank_splitter \
+# Produce split banks #FIXME REPLACE BANK FILES
+%_split_bank_0.cache : bank_fixduration_00.xml.gz
+	mkdir -p $*_split_bank_0
+	./gstlal_bank_splitter \
 		--f-low $(LOW_FREQUENCY_CUTOFF) \
-		--group-by-chi $(NUM_CHI_BINS) \
-		--output-path $*_split_bank \
+		--group-by-chi $(NUM_CHI_BINS_0) \
+		--output-path $*_split_bank_0 \
 		--approximant $(APPROXIMANT1) \
 		--approximant $(APPROXIMANT2) \
 		--output-cache $@ \
-		--overlap $(OVERLAP) \
+		--overlap $(OVERLAP_0) \
 		--instrument $* \
 		--n $(NUM_SPLIT_TEMPLATES) \
 		--sort-by mchirp \
 		--max-f-final $(HIGH_FREQUENCY_CUTOFF) \
+		--write-svd-caches \
+		--num-banks $(NUMBANKS_0) \
+		$<
+
+%_split_bank_1.cache : bank_fixduration_01.xml.gz
+	mkdir -p $*_split_bank_1
+	./gstlal_bank_splitter \
+		--f-low $(LOW_FREQUENCY_CUTOFF) \
+		--group-by-chi $(NUM_CHI_BINS_1) \
+		--output-path $*_split_bank_1 \
+		--approximant $(APPROXIMANT1) \
+		--approximant $(APPROXIMANT2) \
+		--output-cache $@ \
+		--overlap $(OVERLAP_1) \
+		--instrument $* \
+		--n $(NUM_SPLIT_TEMPLATES) \
+		--sort-by template_duration \
+		--max-f-final $(HIGH_FREQUENCY_CUTOFF) \
+		--write-svd-caches \
+		--num-banks $(NUMBANKS_1) \
 		$<
 
 # Copy acrross and produce template bank file
-gstlal_bank.xml.gz : SBANK_COMBINED-SBANK_O2_V4.xml.gz SBANK_COMBINED-SBANK_O2_F2.xml.gz
-	# Useing original online bank from cit:/home/gstlalcbc/observing/2/online/Makefile.bank
-	ligolw_add --output gstlal_bank.xml.gz SBANK_COMBINED-SBANK_O2_V4.xml.gz SBANK_COMBINED-SBANK_O2_F2.xml.gz
+gstlal_bank.xml.gz : bank_fixduration_00.xml.gz bank_fixduration_01.xml.gz
+	ligolw_add --output gstlal_bank.xml.gz bank_fixduration_00.xml.gz bank_fixduration_01.xml.gz
 
-SBANK_COMBINED-SBANK_O2_V4.xml.gz :
-	gsiscp atlas4.atlas.aei.uni-hannover.de:/home/sprivite/O2/banks/O2-projected-PSD/15Hz/v4rom-4M-400M-0p97-0p2s-mindur-nhood15s-layered-pipe/reconverge/resim/SBANK_COMBINED-SBANK_O2_V4.xml.gz $@
-
-SBANK_COMBINED-SBANK_O2_F2.xml.gz :
-	gsiscp atlas4.atlas.aei.uni-hannover.de:/home/sprivite/O2/banks/O2-projected-PSD/15Hz/f2-2M-4M-0p97-0p2s-mindur-nhood15s-nbanks25-layered-pipe/SBANK_COMBINED-SBANK_O2_F2.xml.gz $@
 
 # Produce time slides file
 tisi.xml : inj_tisi.xml
@@ -243,7 +277,6 @@ vetoes.xml.gz : $(VETOES_FILES)
 	gzip $@
 
 %_vetoes.xml : $(VETODEF)
-	ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
 	gstlal_segments_operations --union --segment-name VETO_CAT3_CUMULATIVE --output-file $@ --output-segment-name vetoes $*-VETOTIME_CAT3-*.xml $*-VETOTIME_CAT3-*.xml
 
 # Produce segments file
