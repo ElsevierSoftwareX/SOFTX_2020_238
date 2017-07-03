@@ -48,7 +48,7 @@ GObject.threads_init()
 Gst.init(None)
 
 
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 import lal
 import lal.series
 from lal import LIGOTimeGPS
@@ -208,7 +208,7 @@ def write_psd_fileobj(fileobj, psddict, gz = False):
 	Wrapper around make_psd_xmldoc() to write the XML document directly
 	to a Python file object.
 	"""
-	utils.write_fileobj(lal.series.make_psd_xmldoc(psddict), fileobj, gz = gz)
+	ligolw_utils.write_fileobj(lal.series.make_psd_xmldoc(psddict), fileobj, gz = gz)
 
 
 def write_psd(filename, psddict, verbose = False, trap_signals = None):
@@ -216,7 +216,7 @@ def write_psd(filename, psddict, verbose = False, trap_signals = None):
 	Wrapper around make_psd_xmldoc() to write the XML document directly
 	to a named file.
 	"""
-	utils.write_filename(lal.series.make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
+	ligolw_utils.write_filename(lal.series.make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
 
 
 #
