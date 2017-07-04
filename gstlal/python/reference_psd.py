@@ -52,6 +52,7 @@ from glue.ligolw import utils as ligolw_utils
 import lal
 import lal.series
 from lal import LIGOTimeGPS
+import lalsimulation
 
 
 from gstlal import datasource
@@ -228,93 +229,205 @@ def write_psd(filename, psddict, verbose = False, trap_signals = None):
 #
 
 
-def horizon_distance(psd, m1, m2, snr, f_min, f_max = None, inspiral_spectrum = None):
-	"""
-	Compute horizon distance, the distance at which an optimally
-	oriented inspiral would be seen to have the given SNR.  m1 and m2
-	are in solar mass units.  f_min and f_max are in Hz.  psd is a
-	REAL8FrequencySeries object containing the strain spectral density
-	function in the LAL normalization convention.  The return value is
-	in Mpc.
+class HorizonDistance(object):
+	def __init__(self, f_min, f_max, delta_f, m1, m2, spin1 = (0., 0., 0.), spin2 = (0., 0., 0.), eccentricity = 0., inclination = 0.):
+		"""
+		Configures the horizon distance calculation for a specific
+		waveform model.  The waveform is pre-computed and stored,
+		so this initialization step can be time-consuming but
+		computing horizon distances from measured PSDs will be
+		fast.
 
-	The horizon distance is determined using an integral whose upper
-	bound is the smaller of f_max (if supplied), the highest frequency
-	in the PSD, or the ISCO frequency.
+		The waveform model's spectrum parameters, for example its
+		Nyquist and frequency resolution, need not match the
+		parameters for the PSDs that will ultimately be supplied
+		but there are some advantages to be had in getting them to
+		match.  For example, computing the waveform with a smaller
+		delta_f than will be needed will require additional storage
+		and consume additional CPU time for the initialization,
+		while computing it with too low an f_max or too large a
+		delta_f might lead to inaccurate horizon distance
+		estimates.
 
-	If inspiral_spectrum is not None, it should be a two-element list.
-	The first element will be replaced with an array of frequency
-	values, and the second element will be replaced with an array of
-	spectrum values giving the amplitude of an inspiral spectrum with
-	the given SNR.  The spectrum is normalized so that the SNR is
+		f_min (Hz) sets the frequency at which the waveform model
+		is to begin.
 
-	SNR^2 = \int (inspiral_spectrum / psd) df
+		f_max (Hz) sets the frequency upto which the waveform's
+		model is desired.
 
-	That is, the ratio of the inspiral spectrum to the PSD gives the
-	density of SNR^2.
-	"""
-	#
-	# obtain PSD data, set default f_max if not supplied
-	#
+		delta_f (Hz) sets the frequency resolution of the desired
+		waveform model.
 
-	Sn = psd.data.data
-	assert len(Sn) > 0
+		m1, m2 (solar masses) set the component masses of the
+		system to model.
 
-	if f_max is None:
-		f_max = psd.f0 + (len(Sn) - 1) * psd.deltaF
-	elif f_max > psd.f0 + (len(Sn) - 1) * psd.deltaF:
-		warnings.warn("f_max clipped to Nyquist frequency", UserWarning)
-		f_max = psd.f0 + (len(Sn) - 1) * psd.deltaF
+		spin1, spin2 (3-component vectors, geometric units) set the
+		spins of the component masses.
 
-	#
-	# clip to ISCO.  see (4) in arXiv:1003.2481
-	#
+		eccentricity [0, 1) sets the eccentricity of the system.
 
-	f_isco = lal.C_SI**3 / (6**(3. / 2.) * math.pi * lal.G_SI * (m1 + m2) * lal.MSUN_SI)
-	f_max = min(f_max, f_isco)
-	assert psd.f0 <= f_isco
-	assert psd.f0 <= f_min <= f_isco
-	assert f_min <= f_max
+		inclination (rad) sets the orbital inclination of the
+		system.
 
-	#
-	# convert f_min and f_max to indexes and extract data vectors for
-	# SNR integral
-	#
+		Example:
 
-	k_min = int(round((f_min - psd.f0) / psd.deltaF))
-	k_max = int(round((f_max - psd.f0) / psd.deltaF))
+		>>> # configure for non-spinning, circular, 1.4+1.4 BNS
+		>>> horizon_distance = HorizonDistance(10., 1024., 1./32., 1.4, 1.4)
+		>>> # populate a PSD for testing
+		>>> import lal, lalsimulation
+		>>> psd = lal.CreateREAL8FrequencySeries("psd", lal.LIGOTimeGPS(0), 0., 1./32., lal.Unit("strain^2 s"), horizon_distance.model.data.length)
+		>>> lalsimulation.SimNoisePSDaLIGODesignSensitivityP1200087(psd, 0.)
+		0
+		>>> # compute horizon distance
+		>>> D, (f, model) = horizon_distance(psd)
+		>>> print "%.4g Mpc" % D
+		434.5 Mpc
+		>>> # compute distance and spectrum for SNR = 25
+		>>> D, (f, model) = horizon_distance(psd, 25.)
+		>>> "%.4g Mpc" % D
+		'139 Mpc'
+		>>> f
+		array([   10.     ,    10.03125,    10.0625 , ...,  1023.9375 ,
+		        1023.96875,  1024.     ])
+		>>> model
+		array([  8.00942750e-45,   7.95221458e-45,   7.89520620e-45, ...,
+		         1.11473675e-49,   1.11465176e-49,   1.11456678e-49])
 
-	f = psd.f0 + numpy.arange(k_min, k_max + 1) * psd.deltaF
-	Sn = Sn[k_min : k_max + 1]
+		NOTE:
 
-	#
-	# |h(f)|^2 for source at D = 1 m.  see (5) in arXiv:1003.2481
-	#
+		- Currently the SEOBNRv4_ROM waveform model is used, so its
+		  limitations with respect to masses, spins, etc., apply.
+		  The choice of waveform model is subject to change.
+		"""
+		self.f_min = f_min
+		self.f_max = f_max
+		self.m1 = m1
+		self.m2 = m2
+		self.spin1 = numpy.array(spin1)
+		self.spin2 = numpy.array(spin2)
+		self.inclination = inclination
+		self.eccentricity = eccentricity
+		# NOTE:  the waveform models are computed up-to but not
+		# including the supplied f_max parameter so we need to pass
+		# (f_max + delta_f) if we want the waveform model defined
+		# in the f_max bin
+		hp, hc = lalsimulation.SimInspiralFD(
+			m1 * lal.MSUN_SI, m2 * lal.MSUN_SI,
+			spin1[0], spin1[1], spin1[2],
+			spin2[0], spin2[1], spin2[2],
+			1.0,	# distance (m)
+			inclination,
+			0.0,	# reference orbital phase (rad)
+			0.0,	# longitude of ascending nodes (rad)
+			eccentricity,
+			0.0,	# mean anomaly of periastron
+			delta_f,
+			f_min,
+			f_max + delta_f,
+			100.,	# reference frequency (Hz)
+			None,	# LAL dictionary containing accessory parameters
+			lalsimulation.GetApproximantFromString("SEOBNRv4_ROM")
+		)
+		assert hp.data.length > 0, "huh!?  h+ has zero length!"
 
-	mu = (m1 * m2) / (m1 + m2)
-	mchirp = mu**(3. / 5.) * (m1 + m2)**(2. / 5.)
+		#
+		# store |h(f)|^2 for source at D = 1 m.  see (5) in
+		# arXiv:1003.2481
+		#
 
-	inspiral = (5 * math.pi / (24 * lal.C_SI**3)) * (lal.G_SI * mchirp * lal.MSUN_SI)**(5. / 3.) * (math.pi * f)**(-7. / 3.)
+		self.model = lal.CreateREAL8FrequencySeries(
+			name = "signal spectrum",
+			epoch = LIGOTimeGPS(0),
+			f0 = hp.f0,
+			deltaF = hp.deltaF,
+			sampleUnits = hp.sampleUnits * hp.sampleUnits,
+			length = hp.data.length
+		)
+		self.model.data.data[:] = numpy.abs(hp.data.data)**2.
 
-	#
-	# SNR for source at D = 1 m <--> D in m for source w/ SNR = 1.  see
-	# (3) in arXiv:1003.2481
-	#
 
-	D_at_snr_1 = math.sqrt(4 * (inspiral / Sn).sum() * psd.deltaF)
+	def __call__(self, psd, snr = 8.):
+		"""
+		Compute the horizon distance for the configured waveform
+		model given the PSD and the SNR at which the horizon is
+		defined (default = 8).  Equivalently, from a PSD and an
+		observed SNR compute and return the amplitude of the
+		configured waveform's spectrum required to achieve that
+		SNR.
 
-	#
-	# scale inspiral spectrum by distance to achieve desired SNR
-	#
+		The return value is a two-element tuple.  The first element
+		is the horizon distance in Mpc.  The second element is,
+		itself, a two-element tuple containing two vectors giving
+		the frequencies and amplitudes of the waveform model's
+		spectrum scaled so as to have the given SNR.  The vectors
+		are clipped to the range of frequencies that were used for
+		the SNR integral.
 
-	if inspiral_spectrum is not None:
-		inspiral_spectrum[0] = f
-		inspiral_spectrum[1] = 4 * inspiral / (D_at_snr_1 / snr)**2
+		The parameters of the PSD, for example its Nyquist and
+		frequency resolution, need not match the parameters of the
+		configured waveform model.  In the event of a mismatch, the
+		waveform model is resampled to the frequencies at which the
+		PSD has been measured.
 
-	#
-	# D in Mpc for source with desired SNR
-	#
+		The inspiral spectrum returned has the same units as the
+		PSD and is normalized so that the SNR is
 
-	return D_at_snr_1 / snr / (1e6 * lal.PC_SI)
+		SNR^2 = \int (inspiral_spectrum / psd) df
+
+		That is, the ratio of the inspiral spectrum to the PSD
+		gives the spectral density of SNR^2.
+		"""
+		#
+		# frequencies at which PSD has been measured
+		#
+
+		f = psd.f0 + numpy.arange(psd.data.length) * psd.deltaF
+
+		#
+		# nearest-neighbour interpolation of waveform model
+		# evaluated at PSD's frequency bins
+		#
+
+		indexes = ((f - self.model.f0) / self.model.deltaF).round().astype("int").clip(0, self.model.data.length - 1)
+		model = self.model.data.data[indexes]
+
+		#
+		# range of indexes for integration
+		#
+
+		kmin = (max(psd.f0, self.model.f0, self.f_min) - psd.f0) / psd.deltaF
+		kmin = int(round(kmin))
+		kmax = (min(psd.f0 + psd.data.length * psd.deltaF, self.model.f0 + self.model.data.length * self.model.deltaF, self.f_max) - psd.f0) / psd.deltaF
+		kmax = int(round(kmax)) + 1
+		assert kmin < kmax, "PSD and waveform model do not intersect"
+
+		#
+		# SNR for source at D = 1 m <--> D in m for source w/ SNR =
+		# 1.  see (3) in arXiv:1003.2481
+		#
+
+		f = f[kmin:kmax]
+		model = model[kmin:kmax]
+		D = math.sqrt(4. * (model / psd.data.data[kmin:kmax]).sum() * psd.deltaF)
+
+		#
+		# distance at desired SNR
+		#
+
+		D /= snr
+
+		#
+		# scale inspiral spectrum by distance to achieve desired SNR
+		#
+
+		model *= 4. / D**2.
+
+		#
+		# D in Mpc for source with specified SNR, and waveform
+		# model
+		#
+
+		return D / (1e6 * lal.PC_SI), (f, model)
 
 
 def effective_distance_factor(inclination, fp, fc):

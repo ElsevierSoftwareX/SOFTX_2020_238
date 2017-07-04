@@ -208,7 +208,7 @@ for n, filename in enumerate(filenames, 1):
 	logging.info("loading PSD %d/%d:" % (n, len(filenames)))
 	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(filename, contenthandler = lal.series.PSDContentHandler, verbose = options.verbose))
 	for m1, m2 in options.horizon_distance_masses:
-		horizon_distances = dict((instrument, (0. if instrument not in psd else reference_psd.horizon_distance(psd[instrument], m1, m2, 8., options.horizon_distance_flow))) for instrument in options.instruments)
+		horizon_distances = dict((instrument, (0. if instrument not in psd else reference_psd.HorizonDistance(options.horizon_distance_flow, psd[instrument].f0 + psd[instrument].data.length * psd[instrument].deltaF, psd[instrument].deltaF, m1, m2)(psd[instrument], 8.)[0])) for instrument in options.instruments)
 		logging.info("\t%s" % ", ".join("%s = %.4g Mpc" % x for x in sorted(horizon_distances.items())))
 		options.horizon_distances.append(horizon_distances)
 

@@ -40,6 +40,7 @@ class PSDHandler(simplehandler.Handler):
 		del kwargs["out_path"]
 		del kwargs["instrument"]
 		simplehandler.Handler.__init__(self, *args, **kwargs)
+		self.horizon_distance_func = reference_psd.HorizonDistance(20., 2048., 1./16., 1.4, 1.4)
 		self.horizon_history = deque(maxlen = 10000)
 		self.horizon_history_time = deque(maxlen = 10000)
 		self.noisedeq = deque(maxlen = 10000)
@@ -69,7 +70,7 @@ class PSDHandler(simplehandler.Handler):
 			self.noisedeq.append(data[ix,1])
 
 			# Then range
-			self.horizon_history.append(reference_psd.horizon_distance(self.psd, 1.4, 1.4, 8, 20))
+			self.horizon_history.append(self.horizon_distance_func(self.psd, 8)[0])
 
 			# The PSD
 			psd_freq = numpy.arange(self.psd.data.length / 4) * self.psd.deltaF * 4

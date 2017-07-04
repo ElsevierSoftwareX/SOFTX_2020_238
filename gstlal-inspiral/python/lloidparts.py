@@ -313,7 +313,7 @@ class Handler(simplehandler.Handler):
 				# update horizon distance history
 				#
 				# FIXME:  get canonical masses from the template bank bin that we're analyzing
-				horizon_distance = reference_psd.horizon_distance(psd, m1 = 1.4, m2 = 1.4, snr = 8.0, f_min = 10.0, f_max = 0.85 * (psd.f0 + (len(psd.data.data) - 1) * psd.deltaF))
+				horizon_distance = reference_psd.HorizonDistance(10.0, 0.85 * (psd.f0 + (len(psd.data.data) - 1) * psd.deltaF), psd.deltaF, 1.4, 1.4)(psd, 8.0)[0]
 				assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
 				self.record_horizon_distance(instrument, float(timestamp), horizon_distance)
 				return True

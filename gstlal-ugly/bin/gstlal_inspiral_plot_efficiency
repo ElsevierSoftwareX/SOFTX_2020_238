@@ -54,7 +54,7 @@ def compute_horizon_interpolator(psd_files, verbose = False):
 		for ifo, psd in psds.items():
 			if psd is not None:
 				times[ifo].append(int(psd.epoch))
-				horizons[ifo].append(reference_psd.horizon_distance(psd, 1.4, 1.4, 8, 10, 2048))
+				horizons[ifo].append(reference_psd.HorizonDistance(10., 2048., psd.deltaF, 1.4, 1.4)(psd, 8.,)[0])
 	interps = {}
 	for ifo in times:
 		if len(times[ifo]) < 1:

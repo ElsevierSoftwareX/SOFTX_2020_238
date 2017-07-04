@@ -63,10 +63,9 @@ import lalsimulation as lalsim
 from gstlal import spawaveform
 
 
+from gstlal import chirptime
 from gstlal import reference_psd
 from gstlal import templates
-from gstlal import chirptime
-from gstlal.reference_psd import interpolate_psd, horizon_distance
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -198,13 +197,14 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	# store the psd horizon before conditioning
 	#
 
-	horizon_before = horizon_distance(psd, 1.4, 1.4, 8.0, minfs[1], maxfs[0])
-	
+	horizon_distance = reference_psd.HorizonDistance(minfs[1], maxfs[0], psd.deltaF, 1.4, 1.4)
+	horizon_before = horizon_distance(psd, 8.0)[0]
+
 	#
 	# interpolate to new \Delta f
 	#
 
-	psd = interpolate_psd(psd, newdeltaF)
+	psd = reference_psd.interpolate_psd(psd, newdeltaF)
 
 	#
 	# Smooth the psd
@@ -235,7 +235,7 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	# compute the psd horizon after conditioning and renormalize
 	#
 
-	horizon_after = horizon_distance(psd, 1.4, 1.4, 8.0, minfs[1], maxfs[0])
+	horizon_after = horizon_distance(psd, 8.0)[0]
 
 	psddata = psd.data.data
 	psd.data.data =  psddata * (horizon_after / horizon_before)**2
@@ -283,7 +283,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	if not FIR_WHITENER and psd is not None:
 		psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max / 2.0))
 	else:
-		psd = interpolate_psd(psd, 1.0 / working_duration)
+		psd = reference_psd.interpolate_psd(psd, 1.0 / working_duration)
 	revplan = lal.CreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	fwdplan = lal.CreateForwardREAL8FFTPlan(working_length, 1)
 	tseries = lal.CreateCOMPLEX16TimeSeries(
