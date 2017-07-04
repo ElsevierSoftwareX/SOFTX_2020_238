@@ -27,7 +27,7 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 2e-7
+DELTA = 1e-6
 EIGEN_DELTA_DET = DELTA
 EIGEN_DELTA_METRIC = DELTA
 
@@ -160,22 +160,9 @@ class Metric(object):
 		self.metric_tensor = None
 		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
-		# FIXME NOTE this code is written to allow different spacing
-		# depending on mass if that is a good idea, but right now it
-		# just does the same spacing
-		self.delta_t = {}
-		self.t_factor = {}
-		self.neg_t_factor = {}
-		delta_t = DELTA
-		t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * delta_t)
-		neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-delta_t))
-		for t in numpy.array([1.,2.,4.,8.,16.,32.,64.,128.,256.,512.,1024]):
-			#self.delta_t[t] = 3e-6 * t # 1 M time spacing
-			#self.t_factor[t] = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t[t])
-			#self.neg_t_factor[t] = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-self.delta_t[t]))
-			self.delta_t[t] = delta_t
-			self.t_factor[t] = t_factor
-			self.neg_t_factor[t] = neg_t_factor
+		self.delta_t = DELTA
+		self.t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t)
+		self.neg_t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * (-self.delta_t))
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "workspace",
 			epoch = 0,
@@ -198,13 +185,6 @@ class Metric(object):
 		# Generalize to different waveform coords
 		p = self.coord_func(coords)
 
-		def fmin(m1, m2):
-			mc = (m1*m2)**.6 / (m1+m2)**.2 * 5e-6
-			return  1./numpy.pi / mc * (5./256. * mc / 1.)**(3./8.)
-
-		flow = self.flow
-		#flow = max(min(fmin(p[0], p[1]), self.flow), 10)
-
 		try:
 			parameters = {}
 			parameters['m1'] = lal.MSUN_SI * p[0]
@@ -222,7 +202,7 @@ class Metric(object):
 			parameters['eccentricity'] = 0.
 			parameters['meanPerAno'] = 0.
 			parameters['deltaF'] = self.df
-			parameters['f_min'] = flow
+			parameters['f_min'] = self.flow
 			parameters['f_max'] = self.fhigh
 			parameters['f_ref'] = 0.
 			parameters['LALparams'] = None
@@ -259,138 +239,90 @@ class Metric(object):
 			return None
 
 
-	#def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1, min_d2 = numpy.finfo(numpy.float32).eps * 5, max_d2 = numpy.finfo(numpy.float32).eps * 100):
-	def __set_diagonal_metric_tensor_component(self, i, center, deltas, g, w1):
-
-		# make the vector to solve for the metric by choosing
-		# either a principle axis or a bisector depending on if
-		# this is a diagonal component or not
-		x = numpy.zeros(len(deltas))
-		x[i] = deltas[i]
-
-		# get the positive side of the central difference
-		plus_match = self.match(w1, self.waveform(center+x))
-		if plus_match is None:
-			# random new nearby point
-			return self.__set_diagonal_metric_tensor_component(i, center + numpy.abs(numpy.random.randn()) * x, deltas, g, w1)
-
-		# get the negative side of the central difference
-		minus_match = self.match(w1, self.waveform(center-x))
-		if minus_match is None:
-			# random new nearby point
-			return self.__set_diagonal_metric_tensor_component(i, center + numpy.abs(numpy.random.randn()) * x, deltas, g, w1)
-
-		# second order
-		d2mbydx2 = (plus_match + minus_match - 2.) / x[i]**2
-		# fourth order
-		#minus_match2 = self.match(w1, self.waveform(center-2*x))
-		#plus_match2 = self.match(w1, self.waveform(center+2*x))
-		#d2mbydx2 = (4./3. * (plus_match + minus_match) - 1./12. * (plus_match2 + minus_match2) - 5./2.) / x[i]**2
-
+	def __set_diagonal_metric_tensor_component(self, i, wp, wm, deltas, g, w1):
+		plus_match = self.match(w1, wp[i,i])
+		minus_match = self.match(w1, wp[i,i])
+		d2mbydx2 = (plus_match + minus_match - 2.) / deltas[i]**2
 		# - 1/2 the second partial derivative
 		g[i,i] = -0.5 * d2mbydx2
-		return x[i] 
 
 	def __set_tt_metric_tensor_component(self, center, w1):
 
-		# FIXME FIXME assumes m1 and m2 are first coords
-		M = center[0] + center[1]
-		ix = ceil_pow_2(M)
-		minus_match = self.match(w1, w1, t_factor = self.neg_t_factor[ix])
-		plus_match = self.match(w1, w1, t_factor = self.t_factor[ix])
-		d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t[ix]**2
-		return -0.5 * d2mbydx2, self.delta_t[ix]
+		minus_match = self.match(w1, w1, t_factor = self.neg_t_factor)
+		plus_match = self.match(w1, w1, t_factor = self.t_factor)
+		d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t**2
+		return -0.5 * d2mbydx2
 
-	def __set_offdiagonal_metric_tensor_component(self, (i,j), center, deltas, g, w1):
+	def __set_offdiagonal_metric_tensor_component(self, (i,j), wp, wm, deltas, g, w1):
 		# evaluate symmetrically
 		if j <= i:
 			return None
-		# Second order
-		xmm = numpy.zeros(len(deltas))
-		xmp = numpy.zeros(len(deltas))
-		xpm = numpy.zeros(len(deltas))
-		xpp = numpy.zeros(len(deltas))
-
-		xmm[i] = -deltas[i]
-		xmm[j] = -deltas[j]
-		xmp[i] = -deltas[i]
-		xmp[j] = +deltas[j]
-		xpm[i] = +deltas[i]
-		xpm[j] = -deltas[j]
-		xpp[i] = +deltas[i]
-		xpp[j] = +deltas[j]
-
 		fii = -2 * g[i,i] * deltas[i]**2 + 2
 		fjj = -2 * g[j,j] * deltas[j]**2 + 2
-
-		d2mbydxdy = (self.match(w1, self.waveform(center+xpp)) + self.match(w1, self.waveform(center+xmm)) - fii - fjj + 2.) / 2. / xpp[i] / xpp[j]
-
-		#d2mbydxdy = (self.match(w1, self.waveform(center+xmm)) + self.match(w1, self.waveform(center+xpp)) - self.match(w1, self.waveform(center+xmp)) - self.match(w1, self.waveform(center+xpm))) / 4. / xpp[i] / xpp[j]
-
+		d2mbydxdy = (self.match(w1, wp[i,j]) + self.match(w1, wm[i,j]) - fii - fjj + 2.) / 2. / deltas[i] / deltas[j]
 		g[i,j] = g[j,i] = -0.5 * d2mbydxdy
 		return None
 
-	def __set_offdiagonal_time_metric_tensor_component(self, j, center, deltas, g, g_tt, delta_t, w1):
-		# FIXME FIXME assumes m1 and m2 are first coords
-		M = center[0] + center[1]
-		ix = ceil_pow_2(M)
-		# make the vector to solve for the metric by choosing
-		# either a principle axis or a bisector depending on if
-		# this is a diagonal component or not
-		x = numpy.zeros(len(deltas))
-		x[j] = deltas[j]
+	def __set_offdiagonal_time_metric_tensor_component(self, j, wp, wm, deltas, g, g_tt, delta_t, w1):
 		fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
 		ftt = -2 * g_tt * delta_t**2 + 2.0
-
 		# Second order
-		plus_match = self.match(w1, self.waveform(center+x), t_factor = self.t_factor[ix])
-		minus_match = self.match(w1, self.waveform(center-x), t_factor = self.neg_t_factor[ix])
+		plus_match = self.match(w1, wp[j,j], t_factor = self.t_factor)
+		minus_match = self.match(w1, wm[j,j], t_factor = self.neg_t_factor)
 		return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
 
 	def __call__(self, center, deltas = None):
 
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
-		g_tt, delta_t = self.__set_tt_metric_tensor_component(center, w1)
+		wp = {}
+		wm = {}
+		for i, x in enumerate(deltas):
+			for j, y in enumerate(deltas):
+				dx = numpy.zeros(len(deltas))
+				dx[i] = x
+				dx[j] = y
+				if j < i:
+					continue
+				elif j == i:
+					wp[i,i] = self.waveform(center + dx)
+					wm[i,i] = self.waveform(center - dx) 
+				else:
+					wp[i,j] = wp[j,i] = self.waveform(center + dx) 
+					wm[i,j] = wm[j,i] = self.waveform(center - dx) 
+			
+		g_tt = self.__set_tt_metric_tensor_component(center, w1)
 
 		# First get the diagonal components
-		deltas = numpy.array([self.__set_diagonal_metric_tensor_component(i, center, deltas, g, w1) for i in range(len(center))])
+		[self.__set_diagonal_metric_tensor_component(i, wp, wm, deltas, g, w1) for i in range(len(center))]
 
 		# Then the rest
-		[self.__set_offdiagonal_metric_tensor_component(ij, center, deltas, g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
-		g_tj = [self.__set_offdiagonal_time_metric_tensor_component(j, center, deltas, g, g_tt, delta_t, w1) for j in range(len(deltas))]
+		[self.__set_offdiagonal_metric_tensor_component(ij, wp, wm, deltas, g, w1) for ij in itertools.product(range(len(center)), repeat = 2)]
 
+		g_tj = [self.__set_offdiagonal_time_metric_tensor_component(j, wp, wm, deltas, g, g_tt, self.delta_t, w1) for j in range(len(deltas))]
+
+		print g_tt, g_tj
 		# project out the time component Owen 2.28
 		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
-		#w, v = numpy.linalg.eigh(g)
-		#if numpy.any(w < 0.):
-		#	print center, deltas
-		#	raise ValueError("negative eigenvalues")
-		#return g, len(w), numpy.linalg.det(g)
-
-		# FIXME delete this
-		# find effective dimension
-		#U, S, V = numpy.linalg.svd(g)
-		#condition = S < max(S) * thresh
-		#eff_dimension = len(S) - len(S[condition])
-		#S[condition] = 0.0
-		#g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
-
 		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
+		print w
 		mxw = numpy.max(w)
+		if numpy.any(w < 0):
+			self.metric_is_valid = False
+		else:
+			self.metric_is_valid = True
 		w[w<EIGEN_DELTA_DET * mxw] = EIGEN_DELTA_DET * mxw
 		det = numpy.product(w)
 
 		eff_dimension = len(w[w >= EIGEN_DELTA_DET * mxw])
 		w[w<EIGEN_DELTA_METRIC * mxw] = EIGEN_DELTA_METRIC * mxw
 		g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
-		#self.metric_is_valid = False
 
 		#return g, eff_dimension, numpy.product(S[S>0])
-		return g, eff_dimension, det
+		return g, eff_dimension, det, self.metric_is_valid
 
 
 	def distance(self, metric_tensor, x, y):
