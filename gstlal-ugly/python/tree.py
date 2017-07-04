@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 1.25
+	prefactor = 1.00
 	if n==1:
 		return prefactor
 	if n==2:
@@ -90,21 +90,21 @@ def mc_m2_singularity(c):
 	center = c.copy()
 	#return center
 	F = 1. / 2**.2
-	if F*.95 < center[0] / center[1] <= F * 1.05:
-		center[1] = 0.95 * center[0]
+	if F*.9999 < center[0] / center[1] <= F * 1.0001:
+		center[1] = 0.9999 * center[0]
 	return center
 	
 def m1_m2_singularity(c):
 	center = c.copy()
 	return center
 	F = 1.
-	if F*.85 < center[0] / center[1] <= F * 1.176:
-		center[1] = 0.85 * center[0]
+	if F*.95 < center[0] / center[1] <= F * 1.05:
+		center[1] = 0.95 * center[0]
 	return center
 	
 class HyperCube(object):
 
-	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, effective_dimension = None, det = None, singularity = None):
+	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, effective_dimension = None, det = None, singularity = None, metric_is_valid = False):
 		"""
 		Define a hypercube with boundaries given by boundaries, e.g.,
 
@@ -128,7 +128,7 @@ class HyperCube(object):
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = DELTA * numpy.ones(len(self.center))
 		#deltas = 5e-7 * numpy.ones(len(self.center))
-		deltas[0:2] *= self.center[0:2]
+		#deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
 		#deltas[2:] = 1.0e-5
 		self.singularity = singularity
@@ -140,16 +140,17 @@ class HyperCube(object):
 			else:
 				center = self.center
 			try:
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(center, deltas)
+				self.metric_tensor, self.effective_dimension, self.det, self.metric_is_valid = self.metric(center, deltas)
 			except ValueError:
 				center *= 0.99
-				self.metric_tensor, self.effective_dimension, self.det = self.metric(center, deltas)
+				self.metric_tensor, self.effective_dimension, self.det, self.metric_is_valid = self.metric(center, deltas)
 			#	print "metric @", self.center, " failed, trying, ", self.center - self.deltas / 2.
 			#	self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., deltas)
 		else:
 			self.metric_tensor = metric_tensor
 			self.effective_dimension = effective_dimension
 			self.det = det
+			self.metric_is_valid = metric_is_valid
 		self.size = self._size()
 		self.tiles = []
 		self.constraint_func = constraint_func
@@ -197,7 +198,7 @@ class HyperCube(object):
 		leftbound[dim,1] = self.center[dim]
 		rightbound[dim,0] = self.center[dim]
 		if reuse_metric:
-			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity)
+			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity, metric_is_valid = self.metric_is_valid)
 		else:
 			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, singularity = self.singularity), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, singularity = self.singularity)
 
@@ -268,15 +269,18 @@ class Node(object):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
 
+		metric_tol = 0.03 #1. - (1. - mismatch)**(1./len(size))
+
 		if not self.parent:
 			numtmps = float("inf")
 			sib_aspect_factor = 1.0
 			parent_aspect_factor = 1.0
 			volume_split_condition = False
 			metric_diff = 1.0
+			metric_cond = True
 		else:
 			# Get the number of parent templates
-			par_numtmps = self.parent.cube.num_templates(mismatch) / 2.0
+			par_numtmps = self.parent.cube.num_templates(mismatch)
 
 			# get the number of sibling templates
 			sib_numtmps = self.sibling.cube.num_templates(mismatch)
@@ -284,22 +288,24 @@ class Node(object):
 			# get our number of templates
 			numtmps = self.cube.num_templates(mismatch)
 
-			#metric_diff = max(abs((numtmps - sib_numtmps) / (numtmps + sib_numtmps) / 2), abs((numtmps - par_numtmps) / (numtmps + par_numtmps) / 2))
+
 			metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
 			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
 			metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
 			metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
 			metric_diff = max(metric_diff, metric_diff2)
 
+			metric_cond = (metric_diff > metric_tol) or (sib_numtmps + numtmps > (1.0 + metric_tol) * par_numtmps) or (numtmps > (1.0 + metric_tol) * sib_numtmps)
+
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
-		metric_tol = min(0.05, 0.01 / self.cube.det**.5)
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_diff > metric_tol)):
-		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
+		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			bifurcation += 1
-			if metric_diff <= metric_tol:# and aspect_factor <= 1.0:
+			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
+			if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
