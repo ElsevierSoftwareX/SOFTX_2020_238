@@ -723,7 +723,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 	if options.data_source in ("lvshm", "framexmit"):
 		filename = likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1]
 		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(filename, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-		if (set(seglists) - set(["V1"])) != (set(detectors.channel_dict) - set(["V1"])):
+		if (set(seglists) - set(["V1"])) != (set(detectors.channel_dict) - set(["V1"])):#  FIXME:  remove after O2
 			raise ValueError("segment lists in \"%s\" are for instruments %s but we need %s" % (filename, ", ".join(sorted(seglists)), ", ".join(sorted(detectors.channel_dict))))
 		if coinc_params_distributions is None:
 			raise ValueError("\"%s\" does not contain parameter distribution data" % filename)
