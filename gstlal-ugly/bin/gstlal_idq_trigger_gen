@@ -213,6 +213,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		# dataframe/hdf saving properties
 		self.tag = '%s-%s' % (self.instrument[:1], "IDQ_TRIGGERS_BY_CHANNEL")
 		self.last_hdf_save_time = dict.fromkeys(self.keys, None)
+		self.reduce_count = dict.fromkeys(self.keys, 0)
 		self.hdf_cadence = 10
 		self.reduce_cadence = 100
 
@@ -336,10 +337,10 @@ class MultiChannelHandler(simplehandler.Handler):
 							else:
 								self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag)
 						# save dataframe compatible data
-						buftime_index = idq_aggregator.floor_div(buftime, self.hdf_cadence)
 						if options.triggers_from_dataframe:
 							try:
-								self.dataframes[(channel, rate)].loc[buftime_index, buftime] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
+								save_idx = idq_aggregator.gps_to_index(buftime)
+								self.dataframes[(channel, rate)].loc[save_idx] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
 							except ValueError:
 								print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 								traceback.print_exc()
@@ -362,15 +363,16 @@ class MultiChannelHandler(simplehandler.Handler):
 			for save_index in range(last_save_index, current_save_index, self.hdf_cadence):
 				save_path = idq_aggregator.to_agg_path(self.out_path, self.tag, save_index, channel, rate)
 				try:
-					idq_aggregator.create_new_dataset(save_path, str(save_index), self.dataframes[(channel, rate)].loc[save_index])
+					idq_aggregator.create_new_dataset(save_path, str(save_index), idq_aggregator.get_dataframe_subset(save_index, save_index + self.hdf_cadence, self.dataframes[(channel, rate)]))
 				except KeyError:
 					print >>sys.stderr, "Error saving dataframe to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 					traceback.print_exc()
 			# find gps times of max snr triggers per cadence and save to file
+			self.reduce_count[(channel, rate)] += 1
 			last_reduce_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)
 			reduce_path = idq_aggregator.to_agg_path(self.out_path, self.tag, last_reduce_index, channel, rate)
 			try:
-				idq_aggregator.reduce_data(self.dataframes[(channel, rate)], last_reduce_index, current_save_index, reduce_path, reduce_count = 1)
+				idq_aggregator.reduce_data(self.dataframes[(channel, rate)], last_reduce_index, current_save_index, reduce_path, reduce_count = self.reduce_count[(channel, rate)])
 			except (KeyError, AttributeError):
 				print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 				traceback.print_exc()
@@ -380,17 +382,18 @@ class MultiChannelHandler(simplehandler.Handler):
 			for save_index in range(last_save_index, current_save_index, self.hdf_cadence):
 				save_path = idq_aggregator.to_agg_path(self.out_path, self.tag, save_index, channel, rate)
 				try:
-					idq_aggregator.create_new_dataset(save_path, str(save_index), self.dataframes[(channel, rate)].loc[save_index])
+					idq_aggregator.create_new_dataset(save_path, str(save_index), idq_aggregator.get_dataframe_subset(save_index, save_index + self.hdf_cadence, self.dataframes[(channel, rate)]))
 				except KeyError:
 					print >>sys.stderr, "Error saving dataframe to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 					traceback.print_exc()
 			# case 3: save current triggers from current directory and aggregate
 			if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], self.reduce_cadence):
 				# find gps times of max snr triggers per cadence and save to file
+				self.reduce_count[(channel, rate)] += 1
 				last_reduce_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)
 				reduce_path = idq_aggregator.to_agg_path(self.out_path, self.tag, last_reduce_index, channel, rate)
 				try:
-					idq_aggregator.reduce_data(self.dataframes[(channel, rate)], last_reduce_index, current_save_index, reduce_path, reduce_count = 1)
+					idq_aggregator.reduce_data(self.dataframes[(channel, rate)], last_reduce_index, current_save_index, reduce_path, reduce_count = self.reduce_count[(channel, rate)])
 				except (KeyError, AttributeError):
 					print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 					traceback.print_exc()
@@ -408,10 +411,10 @@ class MultiChannelHandler(simplehandler.Handler):
 		trigger_format = {'start_time': time_format, 'stop_time': time_format, 'trigger_time': time_format, 'frequency': col1_format, 'phase': col2_format, 'sigmasq': col2_format, 'chisq': col2_format, 'snr': col1_format}
 		#for (channel, rate) in self.keys:
 		#	channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
-		#	if not self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].dropna().empty:
-		#		self.fdata += self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].assign(channel_tag = channel_tag).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n"
+		#	if not idq_aggregator.get_dataframe_subset(self.last_save_time, gps_time, self.dataframes[(channel, rate)]).dropna().empty:
+		#		self.fdata += idq_aggregator.get_dataframe_subset(self.last_save_time, gps_time, self.dataframes[(channel, rate)]).assign(channel_tag = channel_tag).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n"
 		# fast concatenation to do the above:
-		self.fdata = self.fdata.join([(self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].assign(channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n") for (channel, rate) in self.keys if not self.dataframes[(channel, rate)].loc[idx[:, self.last_save_time:gps_time], :].dropna().empty]) 
+		self.fdata = self.fdata.join([(idq_aggregator.get_dataframe_subset(self.last_save_time, gps_time, self.dataframes[(channel, rate)]).assign(channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n") for (channel, rate) in self.keys if not idq_aggregator.get_dataframe_subset(self.last_save_time, gps_time, self.dataframes[(channel, rate)]).dropna().empty]) 
 
 	def to_trigger_file(self):
 		# NOTE
