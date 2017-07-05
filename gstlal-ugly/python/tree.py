@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 1.00
+	prefactor = 0.7
 	if n==1:
 		return prefactor
 	if n==2:
@@ -90,8 +90,8 @@ def mc_m2_singularity(c):
 	center = c.copy()
 	#return center
 	F = 1. / 2**.2
-	if F*.9999 < center[0] / center[1] <= F * 1.0001:
-		center[1] = 0.9999 * center[0]
+	if F*.93 < center[0] / center[1] <= F * 1.07:
+		center[1] = 0.93 * center[0]
 	return center
 	
 def m1_m2_singularity(c):
@@ -165,7 +165,7 @@ class HyperCube(object):
 	def template_volume(self, mismatch):
 		#n = self.N()
 		n = self.effective_dimension
-		return (numpy.pi * self.__mismatch)**(n/2.) / gamma(n/2. +1)
+		return (numpy.pi * mismatch)**(n/2.) / gamma(n/2. +1)
 		# NOTE code below assumes templates are cubes
 		#a = 2 * mismatch**.5 / n**.5
 		#return a**n
@@ -269,10 +269,11 @@ class Node(object):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
 
-		metric_tol = 0.03 #1. - (1. - mismatch)**(1./len(size))
+		#metric_tol = 0.025 #1. - (1. - mismatch)**(1./len(size))
 
 		if not self.parent:
 			numtmps = float("inf")
+			par_numtmps = float("inf")
 			sib_aspect_factor = 1.0
 			parent_aspect_factor = 1.0
 			volume_split_condition = False
@@ -289,23 +290,25 @@ class Node(object):
 			numtmps = self.cube.num_templates(mismatch)
 
 
-			metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
-			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
-			metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
-			metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
-			metric_diff = max(metric_diff, metric_diff2)
+			#metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
+			#metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
+			#metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
+			#metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
+			#metric_diff = max(metric_diff, metric_diff2)
 
-			metric_cond = (metric_diff > metric_tol) or (sib_numtmps + numtmps > (1.0 + metric_tol) * par_numtmps) or (numtmps > (1.0 + metric_tol) * sib_numtmps)
+			#metric_cond = (not self.cube.metric_is_valid) or (metric_diff > metric_tol) or (sib_numtmps + numtmps > (1.0 + metric_tol) * par_numtmps) or (numtmps > (1.0 + metric_tol) * sib_numtmps)
 
 			# take the bigger of self, sibling and parent
-			numtmps = max(max(numtmps, par_numtmps), sib_numtmps) * aspect_factor
+			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps) * aspect_factor
 		q = self.cube.center[1] / self.cube.center[0]
 
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			bifurcation += 1
+			if self.cube.metric_is_valid and (self.cube.num_templates(0.01) < (len(size) * (len(size) + 1) * split_num_templates) or numtmps > par_numtmps / 2.0):
 			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
-			if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
+			#if not metric_cond:
+			#if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
