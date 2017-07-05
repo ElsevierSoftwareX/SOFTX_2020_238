@@ -301,14 +301,12 @@ class Metric(object):
 
 		g_tj = [self.__set_offdiagonal_time_metric_tensor_component(j, wp, wm, deltas, g, g_tt, self.delta_t, w1) for j in range(len(deltas))]
 
-		print g_tt, g_tj
 		# project out the time component Owen 2.28
 		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
 		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
-		print w
 		mxw = numpy.max(w)
 		if numpy.any(w < 0):
 			self.metric_is_valid = False
