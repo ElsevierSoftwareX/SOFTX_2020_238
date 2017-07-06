@@ -211,7 +211,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.fdata = ""
 
 		# dataframe/hdf saving properties
-		self.tag = '%s-%s' % (self.instrument[:1], "IDQ_TRIGGERS_BY_CHANNEL")
+		self.tag = '%s-%s' % (self.instrument[:1], self.description)
 		self.last_hdf_save_time = dict.fromkeys(self.keys, None)
 		self.reduce_count = dict.fromkeys(self.keys, 0)
 		self.hdf_cadence = 10
@@ -262,6 +262,10 @@ class MultiChannelHandler(simplehandler.Handler):
 		return False
 
 	def bufhandler(self, elem, sink_dict):
+		"""
+		Processes rows from a Gstreamer buffer and
+		handles conditions for file saving.
+		"""
 		with self.lock:
 			buf = elem.emit("pull-sample").get_buffer()
 			buftime = int(buf.pts / 1e9)
@@ -277,23 +281,24 @@ class MultiChannelHandler(simplehandler.Handler):
 					self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
 			# create path if it doesn't already exist
 			if options.triggers_from_dataframe and options.save_hdf:
-				if not os.path.exists(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime, channel = channel, rate = rate)):
-					aggregator.makedir(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime, channel = channel, rate = rate))
+				if not os.path.exists(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime)):
+					aggregator.makedir(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime))
 			
 			# Save triggers once every cadence
-			# iDQ file saving
-			if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence):
-				if options.triggers_from_dataframe:
-					self.to_dataframe_string(buftime)
-				self.to_trigger_file()
-				self.fdata = ""
-				self.last_save_time = buftime
+			# ascii file saving
+			if not options.save_hdf:
+				if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence):
+					if options.triggers_from_dataframe:
+						self.to_dataframe_string(buftime)
+					self.to_trigger_file()
+					self.fdata = ""
+					self.last_save_time = buftime
 
-			# save current triggers in dataframe before dataframe is reindexed
-			if options.triggers_from_dataframe and idq_aggregator.in_new_epoch(buftime, self.last_save_time, aggregator.MIN_TIME_QUANTA):
-				self.to_dataframe_string(buftime)
-				self.to_trigger_file()
-				self.last_save_time = buftime
+				# save current triggers in dataframe before dataframe is reindexed
+				if options.triggers_from_dataframe and idq_aggregator.in_new_epoch(buftime, self.last_save_time, aggregator.MIN_TIME_QUANTA):
+					self.to_dataframe_string(buftime)
+					self.to_trigger_file()
+					self.last_save_time = buftime
 
 			# hdf file saving
 			if options.triggers_from_dataframe:
@@ -322,33 +327,39 @@ class MultiChannelHandler(simplehandler.Handler):
 				# will happen
 				if mapinfo.data:
 					for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
-						trigger_time = row.end_time + row.end_time_ns * 1e-9
-						latency = numpy.round(int(aggregator.now()) - buftime)
-						freq, q, duration = self.basis_params[(channel, rate)][row.channel_index]
-						start_time = trigger_time - duration
-						channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
-						# NOTE
-						# Setting stop time to trigger time for use with half sine gaussians
-						stop_time = trigger_time
-						# save iDQ compatible data
-						if not options.triggers_from_dataframe:
-							if options.latency:
-								self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag, latency)
-							else:
-								self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag)
-						# save dataframe compatible data
-						if options.triggers_from_dataframe:
-							try:
-								save_idx = idq_aggregator.gps_to_index(buftime)
-								self.dataframes[(channel, rate)].loc[save_idx] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
-							except ValueError:
-								print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
-								traceback.print_exc()
-
+						self.process_row(channel, rate, buftime, row)
 				memory.unmap(mapinfo)
 
 			del buf
 			return Gst.FlowReturn.OK
+
+	def process_row(self, channel, rate, buftime, row):
+		"""
+		Given a channel, rate, and the current buffer
+		time, will process a row from a gstreamer buffer.
+		"""
+		trigger_time = row.end_time + row.end_time_ns * 1e-9
+		latency = numpy.round(int(aggregator.now()) - buftime)
+		freq, q, duration = self.basis_params[(channel, rate)][row.channel_index]
+		start_time = trigger_time - duration
+		channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
+		# NOTE
+		# Setting stop time to trigger time for use with half sine gaussians
+		stop_time = trigger_time
+		# save iDQ compatible data
+		if not options.triggers_from_dataframe:
+			if options.latency:
+				self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag, latency)
+			else:
+				self.fdata += "%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag)
+		# save dataframe compatible data
+		else:
+			try:
+				save_idx = idq_aggregator.gps_to_index(buftime)
+				self.dataframes[(channel, rate)].loc[save_idx] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
+			except ValueError:
+				print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
+				traceback.print_exc()
 
 	def to_hdf5(self, channel, rate, buftime):
 		"""
@@ -356,47 +367,54 @@ class MultiChannelHandler(simplehandler.Handler):
 		to hdf5 files. Also handles conditions to deal with
 		reindexing and aggregation at specified intervals.
 		"""
-		last_save_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.hdf_cadence)
 		# case 1: save current triggers from prev leaf directory, aggregate, reindex and clean out dataframe, move to new leaf directory
 		if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], aggregator.MIN_TIME_QUANTA):
 			current_save_index = idq_aggregator.floor_div(buftime, aggregator.MIN_TIME_QUANTA)
-			for save_index in range(last_save_index, current_save_index, self.hdf_cadence):
-				save_path = idq_aggregator.to_agg_path(self.out_path, self.tag, save_index, channel, rate)
-				try:
-					idq_aggregator.create_new_dataset(save_path, str(save_index), idq_aggregator.get_dataframe_subset(save_index, save_index + self.hdf_cadence, self.dataframes[(channel, rate)]))
-				except KeyError:
-					print >>sys.stderr, "Error saving dataframe to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
-					traceback.print_exc()
+			self.save_triggers(channel, rate, current_save_index)
 			# find gps times of max snr triggers per cadence and save to file
-			self.reduce_count[(channel, rate)] += 1
-			last_reduce_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)
-			reduce_path = idq_aggregator.to_agg_path(self.out_path, self.tag, last_reduce_index, channel, rate)
-			try:
-				idq_aggregator.reduce_data(self.dataframes[(channel, rate)], last_reduce_index, current_save_index, reduce_path, reduce_count = self.reduce_count[(channel, rate)])
-			except (KeyError, AttributeError):
-				print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
-				traceback.print_exc()
+			self.aggregate_triggers(channel, rate, current_save_index)
 		else:
 			# case 2: save current triggers
 			current_save_index = idq_aggregator.floor_div(buftime, self.hdf_cadence)
-			for save_index in range(last_save_index, current_save_index, self.hdf_cadence):
-				save_path = idq_aggregator.to_agg_path(self.out_path, self.tag, save_index, channel, rate)
-				try:
-					idq_aggregator.create_new_dataset(save_path, str(save_index), idq_aggregator.get_dataframe_subset(save_index, save_index + self.hdf_cadence, self.dataframes[(channel, rate)]))
-				except KeyError:
-					print >>sys.stderr, "Error saving dataframe to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
-					traceback.print_exc()
+			self.save_triggers(channel, rate, current_save_index)
 			# case 3: save current triggers from current directory and aggregate
 			if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], self.reduce_cadence):
 				# find gps times of max snr triggers per cadence and save to file
-				self.reduce_count[(channel, rate)] += 1
-				last_reduce_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)
-				reduce_path = idq_aggregator.to_agg_path(self.out_path, self.tag, last_reduce_index, channel, rate)
-				try:
-					idq_aggregator.reduce_data(self.dataframes[(channel, rate)], last_reduce_index, current_save_index, reduce_path, reduce_count = self.reduce_count[(channel, rate)])
-				except (KeyError, AttributeError):
-					print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
-					traceback.print_exc()
+				self.aggregate_triggers(channel, rate, current_save_index)
+
+	def save_triggers(self, channel, rate, current_save_index):
+		"""
+		Given a channel, rate, and the index of the last set
+		of triggers, will save triggers to a dataset in
+		hdf5 format.
+		dataset: channel/rate/'data'
+		file: save_path/tag/save_time.h5
+		"""
+		last_save_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.hdf_cadence)
+		for save_index in range(last_save_index, current_save_index, self.hdf_cadence):
+			save_path = idq_aggregator.to_agg_path(self.out_path, self.tag, save_index)
+			try:
+				idq_aggregator.create_new_dataset(save_path, str(save_index), idq_aggregator.get_dataframe_subset(save_index, save_index + self.hdf_cadence, self.dataframes[(channel, rate)]), channel, rate)
+			except KeyError:
+				print >>sys.stderr, "Error saving dataframe to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
+				traceback.print_exc()
+
+	def aggregate_triggers(self, channel, rate, current_save_index):
+		"""
+		Given a channel, rate, and the index of the last set
+		of triggers, will save aggregates to a dataset in
+		hdf5 format.
+		dataset: channel/rate/aggregate
+		file: save_path/tag/aggregates.h5
+		"""
+		self.reduce_count[(channel, rate)] += 1
+		last_reduce_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)
+		reduce_path = idq_aggregator.to_agg_path(self.out_path, self.tag, last_reduce_index)
+		try:
+			idq_aggregator.reduce_data(self.dataframes[(channel, rate)], current_save_index, reduce_path, self.reduce_count[(channel, rate)], channel, rate)
+		except (KeyError, AttributeError):
+			print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
+			traceback.print_exc()
 
 	def to_dataframe_string(self, gps_time):
 		"""
@@ -420,9 +438,8 @@ class MultiChannelHandler(simplehandler.Handler):
 		# NOTE
 		# This method should only be called by an instance that is locked.
 		# Use T050017 filenaming convention.
-		tag = '%s-%s' % (self.instrument[:1], self.description)
-		fname = '%s-%d-%d.%s' % (tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
-		path = os.path.join(self.out_path, tag, tag+"-"+str(fname.split("-")[2])[:5])
+		fname = '%s-%d-%d.%s' % (self.tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
+		path = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
 		fpath = os.path.join(path, fname)
 		tmpfile = fpath+"~"
 		try:
