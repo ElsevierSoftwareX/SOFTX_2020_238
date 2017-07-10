@@ -1,4 +1,4 @@
-#SHELL := /bin/bash
+SHELL := /bin/bash # Use bash syntax
 #
 # Before running, replace albert.einstein with your ligo.org credentials and
 # run: make env.sh, then source the resulting environment file and run: make
@@ -103,7 +103,7 @@ GSL_2_TARGET=$(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
 GSL_1_TARGET=$(INSTALL_DIR)/lib/libgsl.so
 ORC_TARGET=$(INSTALL_DIR)/lib/liborc-0.4.so
 FFTW_TARGET=$(INSTALL_DIR)/lib/libfftw3.so
-PYFFTW_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/pyfftw/pyfftw.so
+PYFFTW_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/pyfftw/pyfftw.so
 # tarballs
 GSTLALINSPIRAL_TAR_TARGET=$(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz
 GSTLALCALIB_TAR_TARGET=$(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz
@@ -162,7 +162,7 @@ CLUSTER:=$(shell hostname -d)
 ICC_CIT:=/ldcg/intel/2017u2/bin/compilervars.sh
 ICC_LHO:=/ldcg/intel/2017u2/bin/compilervars.sh
 ICC_LLO:=/ldcg/intel/2017u2/bin/compilervars.sh
-ICC_UWM:=/opt/intel/bin/compilervars.sh
+ICC_UWM:=/opt/intel/2017u4/bin/compilervars.sh
 ICC_ATLAS:=/opt/intel/2015/intel.sh
 
 all : $(GSTINSPIRAL_TARGET) $(LOGS_DIR)/gstlal.txt
@@ -187,7 +187,7 @@ env.sh :
 		echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
 	elif [[ ${CLUSTER} == *"nemo.uwm.edu" ]] ; then \
 		echo "source ${ICC_UWM} intel64" >> $@ ; \
-		echo 'LDFLAGS_INTEL="-L/opt/intel/composer_xe_2015.5.223/mkl/lib/intel64"' >> $@ ; \
+		echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
 	elif [[ ${CLUSTER} == *"atlas.local" ]] ; then \
 		echo "source ${ICC_ATLAS} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L/opt/intel/2015/lib/intel64 -L/opt/intel/2015/mkl/lib/intel64"' >> $@ ; \
@@ -234,7 +234,7 @@ $(GSTINSPIRAL_TARGET) : $(GSTLALCALIB_TARGET)
 		cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-inspiral && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
-		tar -xzf $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR) ; \
+		tar -xzfk $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -247,7 +247,7 @@ $(GSTLALCALIB_TARGET) : $(GSTLALUGLY_TARGET)
 		cd $(GSTLAL_REPO)/gstlal-calibration && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-calibration && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
-		tar -xzf $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz -C $(SRC_DIR) ; \
+		tar -xzfk $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALCALIBRATION) && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALCALIBRATION) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -260,7 +260,7 @@ $(GSTLALUGLY_TARGET) : $(GSTLAL_TARGET)
 		cd $(GSTLAL_REPO)/gstlal-ugly && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-ugly && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
-		tar -xzf $(TAR_DIR)/$(GSTLALUGLY).tar.gz -C $(SRC_DIR) ; \
+		tar -xzfk $(TAR_DIR)/$(GSTLALUGLY).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALUGLY) && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALUGLY) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -273,7 +273,7 @@ $(GSTLAL_TARGET) : $(DOXYGEN_TARGET)
 		cd $(GSTLAL_REPO)/gstlal && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
-		tar -xzf $(TAR_DIR)/$(GSTLAL).tar.gz -C $(SRC_DIR) ; \
+		tar -xzfk $(TAR_DIR)/$(GSTLAL).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLAL) && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
