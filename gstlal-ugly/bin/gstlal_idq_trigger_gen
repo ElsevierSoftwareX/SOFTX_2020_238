@@ -448,7 +448,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		except OSError:
 			pass
 		with open(tmpfile, 'w') as f:
- 			f.write(self.header.join(self.fdata))
+ 			f.write(''.join(self.fdata))
 		shutil.move(tmpfile, fpath)
 		latency = numpy.round(int(aggregator.now()) - buftime)
 		print >>sys.stderr, "buftime = %d, latency at write stage = %d" % (buftime, latency)
