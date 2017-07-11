@@ -234,7 +234,7 @@ $(GSTINSPIRAL_TARGET) : $(GSTLALCALIB_TARGET)
 		cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-inspiral && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
-		tar -xzfk $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR) ; \
+		tar -xzkf $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -247,7 +247,7 @@ $(GSTLALCALIB_TARGET) : $(GSTLALUGLY_TARGET)
 		cd $(GSTLAL_REPO)/gstlal-calibration && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-calibration && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
-		tar -xzfk $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz -C $(SRC_DIR) ; \
+		tar -xzkf $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALCALIBRATION) && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALCALIBRATION) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -260,7 +260,7 @@ $(GSTLALUGLY_TARGET) : $(GSTLAL_TARGET)
 		cd $(GSTLAL_REPO)/gstlal-ugly && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-ugly && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
-		tar -xzfk $(TAR_DIR)/$(GSTLALUGLY).tar.gz -C $(SRC_DIR) ; \
+		tar -xzkf $(TAR_DIR)/$(GSTLALUGLY).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALUGLY) && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALUGLY) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
@@ -273,7 +273,7 @@ $(GSTLAL_TARGET) : $(DOXYGEN_TARGET)
 		cd $(GSTLAL_REPO)/gstlal && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
-		tar -xzfk $(TAR_DIR)/$(GSTLAL).tar.gz -C $(SRC_DIR) ; \
+		tar -xzkf $(TAR_DIR)/$(GSTLAL).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLAL) && ./configure --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
