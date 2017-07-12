@@ -167,7 +167,7 @@ else:
 g_ij = metric_module.Metric(
 	args.psd_file,
 	coord_func = coord_func,
-	duration = 1, # FIXME!!!!!
+	duration = 0.25, # FIXME!!!!!
 	flow = args.flow,
 	fhigh = args.fhigh,
 	approximant = args.approximant)
