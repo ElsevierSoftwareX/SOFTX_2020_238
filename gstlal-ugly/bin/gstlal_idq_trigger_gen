@@ -451,7 +451,7 @@ class MultiChannelHandler(simplehandler.Handler):
  			f.write(''.join(self.fdata))
 		shutil.move(tmpfile, fpath)
 		latency = numpy.round(int(aggregator.now()) - buftime)
-		print >>sys.stderr, "buftime = %d, latency at write stage = %d" % (buftime, latency)
+		print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
 
 	def gen_psd_xmldoc(self):
 		xmldoc = lal.series.make_psd_xmldoc(self.psds)
