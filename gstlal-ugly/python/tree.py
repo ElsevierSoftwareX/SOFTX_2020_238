@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 0.7
+	prefactor = 0.8
 	if n==1:
 		return prefactor
 	if n==2:
@@ -90,8 +90,8 @@ def mc_m2_singularity(c):
 	center = c.copy()
 	#return center
 	F = 1. / 2**.2
-	if F*.93 < center[0] / center[1] <= F * 1.07:
-		center[1] = 0.93 * center[0]
+	if F*.90 < center[0] / center[1] <= F * 1.11:
+		center[1] = 0.90 * center[0]
 	return center
 	
 def m1_m2_singularity(c):
@@ -305,7 +305,7 @@ class Node(object):
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			bifurcation += 1
-			if self.cube.metric_is_valid and (self.cube.num_templates(0.01) < (len(size) * (len(size) + 1) * split_num_templates) or numtmps > par_numtmps / 2.0):
+			if False:#self.cube.metric_is_valid and (self.cube.num_templates(0.01) < (len(size) * (len(size) + 1) * split_num_templates)):
 			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 			#if not metric_cond:
 			#if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
