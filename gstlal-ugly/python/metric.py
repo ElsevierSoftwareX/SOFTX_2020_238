@@ -27,9 +27,9 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 1e-6
-EIGEN_DELTA_DET = DELTA
-EIGEN_DELTA_METRIC = DELTA
+DELTA = 2e-7
+EIGEN_DELTA_DET = 1e-15 #DELTA
+EIGEN_DELTA_METRIC = 1e-15 #DELTA
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
@@ -305,13 +305,11 @@ class Metric(object):
 		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
-		# FIXME this is a hack to get rid of negative eigenvalues
 		w, v = numpy.linalg.eigh(g)
 		mxw = numpy.max(w)
 		if numpy.any(w < 0):
-			self.metric_is_valid = False
-		else:
-			self.metric_is_valid = True
+			return self.__call__(center - deltas, deltas)
+		self.metric_is_valid = True
 		w[w<EIGEN_DELTA_DET * mxw] = EIGEN_DELTA_DET * mxw
 		det = numpy.product(w)
 
