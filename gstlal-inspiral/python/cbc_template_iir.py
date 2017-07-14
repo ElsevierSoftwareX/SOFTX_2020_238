@@ -762,15 +762,15 @@ class Bank(object):
 
 				n_filters = len(delay)
 
-			if(spiir_match < req_min_match):
-				opIIR = OptimizerIIR(length, a1, b0, delay)
-				opIIR.setTemplate(opIIR.cnormalize(h_pad))
-				opIIR.normalizeCoef()
-				opIIR.runHierarchyLagOp(300)
-				a1 = opIIR.a1
-				b0 = opIIR.b0
-				delay = opIIR.delay
-				spiir_match = opIIR.innerProd(opIIR.template, opIIR._iir_sum_res)
+#			if(spiir_match < req_min_match):
+#				opIIR = OptimizerIIR(length, a1, b0, delay)
+#				opIIR.setTemplate(opIIR.cnormalize(h_pad))
+#				opIIR.normalizeCoef()
+#				opIIR.runHierarchyLagOp(300)
+#				a1 = opIIR.a1
+#				b0 = opIIR.b0
+#				delay = opIIR.delay
+#				spiir_match = opIIR.innerProd(opIIR.template, opIIR._iir_sum_res)
 		#
 		# sigmasq = 2 \sum_{k=0}^{N-1} |\tilde{h}_{k}|^2 / S_{k} \Delta f
 		#
