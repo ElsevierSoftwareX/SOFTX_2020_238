@@ -27,9 +27,10 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 2e-7
-EIGEN_DELTA_DET = 1e-15 #DELTA
-EIGEN_DELTA_METRIC = 1e-15 #DELTA
+DELTA = 1.5e-7
+#DELTA = 1e-6
+EIGEN_DELTA_DET = DELTA #1e-5
+EIGEN_DELTA_METRIC = DELTA #1e-4
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
@@ -318,7 +319,7 @@ class Metric(object):
 		g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
 
 		#return g, eff_dimension, numpy.product(S[S>0])
-		return g, eff_dimension, det, self.metric_is_valid
+		return g, eff_dimension, det, self.metric_is_valid, w
 
 
 	def distance(self, metric_tensor, x, y):
