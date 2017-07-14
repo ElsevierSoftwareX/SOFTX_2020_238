@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 0.8
+	prefactor = 0.50
 	if n==1:
 		return prefactor
 	if n==2:
@@ -88,10 +88,10 @@ def packing_density(n):
 
 def mc_m2_singularity(c):
 	center = c.copy()
-	#return center
+	return center
 	F = 1. / 2**.2
-	if F*.90 < center[0] / center[1] <= F * 1.11:
-		center[1] = 0.90 * center[0]
+	if F*.97 < center[0] / center[1] <= F * 1.03:
+		center[1] = 0.97 * center[0]
 	return center
 	
 def m1_m2_singularity(c):
@@ -104,7 +104,7 @@ def m1_m2_singularity(c):
 	
 class HyperCube(object):
 
-	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, effective_dimension = None, det = None, singularity = None, metric_is_valid = False):
+	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, effective_dimension = None, det = None, singularity = None, metric_is_valid = False, eigv = None):
 		"""
 		Define a hypercube with boundaries given by boundaries, e.g.,
 
@@ -128,7 +128,7 @@ class HyperCube(object):
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = DELTA * numpy.ones(len(self.center))
 		#deltas = 5e-7 * numpy.ones(len(self.center))
-		#deltas[0:2] *= self.center[0:2]
+		deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
 		#deltas[2:] = 1.0e-5
 		self.singularity = singularity
@@ -140,10 +140,10 @@ class HyperCube(object):
 			else:
 				center = self.center
 			try:
-				self.metric_tensor, self.effective_dimension, self.det, self.metric_is_valid = self.metric(center, deltas)
+				self.metric_tensor, self.effective_dimension, self.det, self.metric_is_valid, self.eigv = self.metric(center, deltas)
 			except ValueError:
 				center *= 0.99
-				self.metric_tensor, self.effective_dimension, self.det, self.metric_is_valid = self.metric(center, deltas)
+				self.metric_tensor, self.effective_dimension, self.det, self.metric_is_valid, self.eigv = self.metric(center, deltas)
 			#	print "metric @", self.center, " failed, trying, ", self.center - self.deltas / 2.
 			#	self.metric_tensor, self.effective_dimension, self.det = self.metric(self.center - self.deltas / 2., deltas)
 		else:
@@ -151,6 +151,7 @@ class HyperCube(object):
 			self.effective_dimension = effective_dimension
 			self.det = det
 			self.metric_is_valid = metric_is_valid
+			self.eigv = eigv
 		self.size = self._size()
 		self.tiles = []
 		self.constraint_func = constraint_func
@@ -198,7 +199,7 @@ class HyperCube(object):
 		leftbound[dim,1] = self.center[dim]
 		rightbound[dim,0] = self.center[dim]
 		if reuse_metric:
-			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity, metric_is_valid = self.metric_is_valid)
+			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity, metric_is_valid = self.metric_is_valid, eigv = self.eigv), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, singularity = self.singularity, metric_is_valid = self.metric_is_valid, eigv = self.eigv)
 		else:
 			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, singularity = self.singularity), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, singularity = self.singularity)
 
@@ -262,9 +263,12 @@ class Node(object):
 
 	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.01, max_coord_vol = float(100)):
 		size = self.cube.num_tmps_per_side(mismatch)
+		F = 1. / 2**.2
 		splitdim = numpy.argmax(size)
+		if splitdim == 0 and (F*.99 < self.cube.center[0] / self.cube.center[1] <= F * 1.01):
+			splitdim = 1
 		aspect_ratios = size / min(size)
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
+		aspect_factor = 1#max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
 		if numpy.isnan(aspect_factor):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
@@ -298,17 +302,18 @@ class Node(object):
 
 			#metric_cond = (not self.cube.metric_is_valid) or (metric_diff > metric_tol) or (sib_numtmps + numtmps > (1.0 + metric_tol) * par_numtmps) or (numtmps > (1.0 + metric_tol) * sib_numtmps)
 
+			metric_diff = max(abs(self.sibling.cube.eigv - self.cube.eigv) / (self.sibling.cube.eigv + self.cube.eigv) / 2.)
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps) * aspect_factor
-		q = self.cube.center[1] / self.cube.center[0]
 
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			bifurcation += 1
-			if False:#self.cube.metric_is_valid and (self.cube.num_templates(0.01) < (len(size) * (len(size) + 1) * split_num_templates)):
+			if (self.cube.num_templates(0.02) < len(size)**2/2. or numtmps < 2 * split_num_templates) and metric_diff < 0.1:
 			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 			#if not metric_cond:
 			#if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
+				print "REUSE"
 				left, right = self.cube.split(splitdim, reuse_metric = True)
 			else:
 				left, right = self.cube.split(splitdim)
