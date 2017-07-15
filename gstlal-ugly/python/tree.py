@@ -56,10 +56,10 @@ def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = fl
 		Q.append(m1/m2)
 		M.append(m1+m2)
 		M1.append(m1)
-	minq_condition = all([q < 0.98 for q in Q])
-	minm1_condition = all([m1 < 0.98 * min_m1 for m1 in M1])
-	maxq_condition = all([q > 1.02 * mass_ratio for q in Q])
-	mtotal_condition = all([m > 1.02 * total_mass for m in M])
+	minq_condition = all([q < 0.90 for q in Q])
+	minm1_condition = all([m1 < 0.90 * min_m1 for m1 in M1])
+	maxq_condition = all([q > 1.1 * mass_ratio for q in Q])
+	mtotal_condition = all([m > 1.1 * total_mass for m in M])
 	if minq_condition or minm1_condition or maxq_condition or mtotal_condition:
 		return False
 	return True
@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 0.50
+	prefactor = 0.67
 	if n==1:
 		return prefactor
 	if n==2:
@@ -127,7 +127,6 @@ class HyperCube(object):
 		self.metric = metric
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = DELTA * numpy.ones(len(self.center))
-		#deltas = 5e-7 * numpy.ones(len(self.center))
 		deltas[0:2] *= self.center[0:2]
 		#deltas[2:] = 1.3e-4
 		#deltas[2:] = 1.0e-5
@@ -265,10 +264,12 @@ class Node(object):
 		size = self.cube.num_tmps_per_side(mismatch)
 		F = 1. / 2**.2
 		splitdim = numpy.argmax(size)
-		if splitdim == 0 and (F*.99 < self.cube.center[0] / self.cube.center[1] <= F * 1.01):
-			splitdim = 1
 		aspect_ratios = size / min(size)
-		aspect_factor = 1#max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
+		if splitdim == 0 and (F*.98 < self.cube.center[0] / self.cube.center[1] <= F * 1.02):
+			splitdim = 1
+			aspect_factor = 2
+		else:
+			aspect_factor = 1#max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
 		if numpy.isnan(aspect_factor):
 			aspect_factor = 1.0
 		aspect_ratio = max(aspect_ratios)
@@ -309,12 +310,13 @@ class Node(object):
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			bifurcation += 1
-			if (self.cube.num_templates(0.02) < len(size)**2/2. or numtmps < 2 * split_num_templates) and metric_diff < 0.1:
+			if (self.cube.num_templates(0.01) < len(size)**2/2. or numtmps < 2 * split_num_templates) and metric_diff < 0.05:
+			#if (numtmps < 2**len(size) * split_num_templates) and metric_diff < 0.05:
 			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 			#if not metric_cond:
 			#if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
-				print "REUSE"
 				left, right = self.cube.split(splitdim, reuse_metric = True)
+				print "REUSE"
 			else:
 				left, right = self.cube.split(splitdim)
 
