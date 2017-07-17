@@ -631,12 +631,12 @@ horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_command
 
 # filtering and coherent search
 # non-injection run
-# FIXME: hard-code the request cpus = 16, so each node can only process 2 jobs
-inspiralPostcohspiirJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_cpus":"16", "Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
+# FIXME: hard-code the request cpus = 32 and memory = 100GB, so each node can only process 1 job
+inspiralPostcohspiirJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_cpus":"16", "request_memory":"100GB", "Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
 
 #injection run, 
-# FIXME: hard-code the request cpus = 16, so each node can only process 2 jobs
-inspiralPostcohspiirInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_postcohspiir_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_cpus":"16", "Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
+# FIXME: hard-code the request cpus = 32 and memory = 100GB, so each node can only process 1 job
+inspiralPostcohspiirInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_postcohspiir_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_cpus":"16", "request_memory":"100GB", "Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
 
 #
 # Get the analysis segments
