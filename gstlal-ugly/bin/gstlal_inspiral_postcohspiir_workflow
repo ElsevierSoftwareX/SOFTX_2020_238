@@ -252,14 +252,14 @@ def gen_inspiralJob_options(job_tag, output_prefix, stats_prefixs, spiir_bank_st
 
 	output_stats_string = ""
 	for one_string in stats_prefixs:
-		output_stats_string += "%s --cuda-accumbackground-output-prefix " % one_string
-	output_stats_string = output_stats_string.rstrip(" --cuda-accumbackground-output-prefix ")
+		output_stats_string += "%s --cohfar-accumbackground-output-prefix " % one_string
+	output_stats_string = output_stats_string.rstrip(" --cohfar-accumbackground-output-prefix ")
 
 	opts = {
 		"job-tag": job_tag,
 		"iir-bank": input_spiir_bank_string,
 		"finalsink-output-prefix": output_prefix,
-		"cuda-accumbackground-output-prefix": output_stats_string,
+		"cohfar-accumbackground-output-prefix": output_stats_string,
 		"psd-fft-length":daggen_options.psd_fft_length,
 		"ht-gate-threshold":daggen_options.ht_gate_threshold,
 		"frame-segments-name":daggen_options.frame_segments_name,
@@ -631,10 +631,12 @@ horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_command
 
 # filtering and coherent search
 # non-injection run
-inspiralPostcohspiirJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
+# FIXME: hard-code the request cpus = 16, so each node can only process 2 jobs
+inspiralPostcohspiirJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_cpus":"16", "Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
 
 #injection run, 
-inspiralPostcohspiirInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_postcohspiir_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
+# FIXME: hard-code the request cpus = 16, so each node can only process 2 jobs
+inspiralPostcohspiirInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_postcohspiir_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_cpus":"16", "Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
 
 #
 # Get the analysis segments
