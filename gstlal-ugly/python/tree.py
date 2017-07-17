@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 0.67
+	prefactor = 1.0
 	if n==1:
 		return prefactor
 	if n==2:
@@ -310,7 +310,7 @@ class Node(object):
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
 			bifurcation += 1
-			if (self.cube.num_templates(0.01) < len(size)**2/2. or numtmps < 2 * split_num_templates) and metric_diff < 0.05:
+			if (self.cube.num_templates(0.02) < len(size)**2/2. or numtmps < 2 * split_num_templates) and metric_diff < 0.1:
 			#if (numtmps < 2**len(size) * split_num_templates) and metric_diff < 0.05:
 			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 			#if not metric_cond:
