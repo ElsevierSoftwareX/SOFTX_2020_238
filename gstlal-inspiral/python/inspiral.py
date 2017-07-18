@@ -999,6 +999,20 @@ class Data(object):
 					length = len(data)
 				)
 				psddict[instrument].data.data = data
+			try:# FIXME:  remove after O2 (and remove whole try/except block)
+				elem = self.pipeline.get_by_name("lal_whiten_V1")
+				data = numpy.array(elem.get_property("mean-psd"))
+				psddict["V1"] = lal.CreateREAL8FrequencySeries(
+					name = "PSD",
+					epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
+					f0 = 0.0,
+					deltaF = elem.get_property("delta-f"),
+					sampleUnits = lal.Unit("s strain^2"),	# FIXME:  don't hard-code this
+					length = len(data)
+				)
+				psddict["V1"].data.data = data
+			except ValueError:
+				pass
 			fobj = StringIO.StringIO()
 			reference_psd.write_psd_fileobj(fobj, psddict, gz = True)
 			message, filename, tag, contents = ("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue())
