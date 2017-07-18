@@ -403,6 +403,14 @@ class NearestLeafTree(object):
 
 
 class HorizonHistories(dict):
+	def copy(self):
+		"""
+		Override of dict's .copy() that (a) returns the correct
+		type and (b) makes copies of the HorizonHistories'
+		contents.
+		"""
+		return type(self)((key, copy.deepcopy(value)) for key, value in self.items())
+
 	def __iadd__(self, other):
 		for key, history in other.items():
 			try:
