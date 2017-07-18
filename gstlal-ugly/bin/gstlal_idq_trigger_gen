@@ -209,6 +209,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			else:
 				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
 		self.fdata = deque(maxlen = 25000)
+		self.fdata.append(self.header)
 
 		# dataframe/hdf saving properties
 		self.tag = '%s-%s' % (self.instrument[:1], self.description)
@@ -292,6 +293,7 @@ class MultiChannelHandler(simplehandler.Handler):
 						self.to_dataframe_string(buftime)
 					self.to_trigger_file(buftime)
 					self.fdata.clear()
+					self.fdata.append(self.header)
 					self.last_save_time = buftime
 
 				# save current triggers in dataframe before dataframe is reindexed
