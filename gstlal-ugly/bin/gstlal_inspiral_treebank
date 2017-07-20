@@ -38,7 +38,7 @@ def parse_command_line():
 	parser = argparse.ArgumentParser(description="Template generator via a binary tree decomposition.")
 	parser.add_argument("-v", "--verbose", action="store_true", default=False,\
 					help="Be verbose.")
-	parser.add_argument("--Mq", action="store_true", default=False,\
+	parser.add_argument("--mcm2", action="store_true", default=False,\
 					help="Use total mass and mass ratio coordinates.")
 	parser.add_argument("-d", "--debug", action="store_true", default=False,\
 					help="Extra explicit information for debugging and sanity checks.")
@@ -158,7 +158,7 @@ def coord_func(coords, positions = positions):
 		out[pi] = coords[i]
 	return out
 
-if args.Mq:
+if args.mcm2:
 	coord_func = metric_module.M_q_func
 else:
 	coord_func = coord_func
@@ -179,7 +179,7 @@ def trans_M_q(coord_limits):
 	Mlimits = [metric_module.mc_from_m1_m2(coord_limits[0][0], coord_limits[1][0]), metric_module.mc_from_m1_m2(coord_limits[0][1], coord_limits[1][1])]
 	return [Mlimits] +  coord_limits[1:]
 
-if args.Mq:
+if args.mcm2:
 	coord_limits_2 = trans_M_q(coord_limits)
 	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint_mc(x, args.max_q, args.max_mtotal, coord_limits[0][0]), metric = g_ij, singularity = tree.mc_m2_singularity))
 else:
