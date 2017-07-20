@@ -54,6 +54,10 @@ def parse_command_line():
 					default=3.0, help="Minimum mass2 to generate bank.")
 	parser.add_argument("--max-mass2", action="store", type=float,\
 					default=10.0, help="Maximum mass2 to generate bank.")
+	parser.add_argument("--min-mc", action="store", type=float,\
+					default=3.0, help="Minimum chirp mass to generate bank. Must have --mcm2.")
+	parser.add_argument("--max-mc", action="store", type=float,\
+					default=10.0, help="Maximum chirp mass to generate bank.  Must have --mcm2.")
 
 	# aligned spin limits
 	parser.add_argument("--min-spin1z", action="store", type=float,\
@@ -114,6 +118,9 @@ def parse_command_line():
 
 	if args.noise_model and args.psd_file:
 		raise ValueError("Cannot specify both --psd-file and --noise-model")
+
+	if (args.min_mc or args.max_mc) and not args.mcm2:
+		raise ValueError("Must specify --mcm2 with --min-mc or --max-mc")
 
 	if not (args.noise_model or args.psd_file):
 		raise ValueError("Must specify a PSD.")
@@ -181,6 +188,11 @@ def trans_M_q(coord_limits):
 
 if args.mcm2:
 	coord_limits_2 = trans_M_q(coord_limits)
+	if args.min_mc:
+		coord_limits_2[0][0] = max(coord_limits_2[0][0], args.min_mc)
+	if args.max_mc:
+		coord_limits_2[0][1] = min(coord_limits_2[0][1], args.max_mc)
+	print coord_limits_2
 	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint_mc(x, args.max_q, args.max_mtotal, coord_limits[0][0]), metric = g_ij, singularity = tree.mc_m2_singularity))
 else:
 	coord_limits_2 = coord_limits
