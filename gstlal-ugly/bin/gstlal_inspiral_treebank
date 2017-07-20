@@ -55,9 +55,9 @@ def parse_command_line():
 	parser.add_argument("--max-mass2", action="store", type=float,\
 					default=10.0, help="Maximum mass2 to generate bank.")
 	parser.add_argument("--min-mc", action="store", type=float,\
-					default=3.0, help="Minimum chirp mass to generate bank. Must have --mcm2.")
+					help="Minimum chirp mass to generate bank. Must have --mcm2.")
 	parser.add_argument("--max-mc", action="store", type=float,\
-					default=10.0, help="Maximum chirp mass to generate bank.  Must have --mcm2.")
+					help="Maximum chirp mass to generate bank.  Must have --mcm2.")
 
 	# aligned spin limits
 	parser.add_argument("--min-spin1z", action="store", type=float,\
