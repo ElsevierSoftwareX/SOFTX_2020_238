@@ -99,6 +99,27 @@ ligolw_param.use_in(LIGOLWContentHandler)
 #
 
 
+# adapted from inspiral_pipe.py same function
+def T050017_filename(instruments, description, start = None, end = None, extension = None, path = None):
+	"""!
+	A function to generate a T050017 filename.
+	"""
+	if type(instruments) != type(str()):
+		instruments = "".join(sorted(instruments))
+	if start is not None:
+	  duration = end - start
+	  extension = extension.strip('.')
+	  if path is not None:
+	    return '%s/%s-%s-%d-%d.%s' % (path, instruments, description, start, duration, extension)
+	  else:
+	    return '%s-%s-%d-%d.%s' % (instruments, description, start, duration, extension)
+	else:
+	  if path is not None:
+		return '%s/%s-%s' % (path, instruments, description)
+	  else:
+		return '%s-%s' % (instruments, description)
+
+
 def sim_tag_from_inj_file(injections):
 	if injections is None:
 		return None
@@ -319,7 +340,7 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 		for injections in options.injections:
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
 		
-		numchunks = max(options.num_banks)
+		numbanks = max(options.num_banks)
 		ifos_string = "" 
 		for ifo in ifos:
 			ifos_string += "%s" % ifo
@@ -333,11 +354,12 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 			# get the svd bank strings
 			spiir_bank_strings_full = gen_spiir_bank_strings_from_banknode(bank_nodes, instruments = this_channel_dict.keys())
 
-			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numchunks)):
-				job_tag = "%s" % inspiralPostcohspiirJob.tag_base
+			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numbanks)):
+				# results for one bank chunk will be stored in the same place
+				job_tag = "%s/%04d" % (inspiralPostcohspiirJob.tag_base, chunk_counter)
 				# setup output names
-				output_prefix = '%s/%s_SPIIR_zerolag_seg%d_job%d' % (job_tag, ifos_string, seg_counter, chunk_counter, )
-				stats_prefixs = ['%s/%s_SPIIR_stats_seg%d_bank%d' % (job_tag, ifos_string, seg_counter, i + numchunks * chunk_counter, ) for i,s in enumerate(spiir_bank_strings)]
+				output_prefix = T050017_filename(ifos, "SPIIR_zerolag", path = job_tag)
+				stats_prefixs = [T050017_filename(ifos, "SPIIR_stats_%d" % (i + numbanks * chunk_counter, ), path = job_tag) for i,s in enumerate(spiir_bank_strings)]
 				# non injection node
 				noninjnode = inspiral_pipe.generic_node(
 						inspiralPostcohspiirJob, 
@@ -362,11 +384,12 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
 			# for time-shifted jobs:
-			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numchunks)):
-				job_tag = "%s" % inspiralPostcohspiirShiftJob.tag_base
+			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numbanks)):
+				# results for one bank chunk will be stored in the same place
+				job_tag = "%s/%04d" % (inspiralPostcohspiirShiftJob.tag_base, chunk_counter)
 				# setup output names
-				output_prefix = '%s/%s_SPIIR_zerolag_seg%d_job%d' % (job_tag, ifos_string, seg_counter, chunk_counter, )
-				stats_prefixs = ['%s/%s_SPIIR_stats_seg%d_bank%d' % (job_tag, ifos_string, seg_counter, i + numchunks * chunk_counter, ) for i,s in enumerate(spiir_bank_strings)]
+				output_prefix = T050017_filename(ifos, "SPIIR_zerolag", path = job_tag)
+				stats_prefixs = [T050017_filename(ifos, "SPIIR_stats_%d" % (i + numbanks * chunk_counter, ), path = job_tag) for i,s in enumerate(spiir_bank_strings)]
 				# non injection node
 				shiftnode = inspiral_pipe.generic_node(
 						inspiralPostcohspiirShiftJob, 
@@ -393,15 +416,17 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(shiftnode)
 
 
-			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numchunks)):
+			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numbanks)):
 				# process injections
 				inj_counter = 0
 				for injections in options.injections:
-					job_tag = "%s_inj%d" % (inspiralPostcohspiirJob.tag_base, inj_counter)
-					# setup output names	
+					# results for one bank chunk will be stored in the same place
+					job_tag = "%s_inj%d/%04d" % (inspiralPostcohspiirJob.tag_base, inj_counter, chunk_counter)
+					# setup output names
+					output_prefix = T050017_filename(ifos, "SPIIR_zerolag", path = job_tag)
+					stats_prefixs = [T050017_filename(ifos, "SPIIR_stats_%d" % (i + numbanks * chunk_counter, ), path = job_tag) for i,s in enumerate(spiir_bank_strings)]
+	
 					sim_name = sim_tag_from_inj_file(injections)
-					output_prefix = '%s/%s_SPIIR_zerolag_seg%d_job%d' % (job_tag, ifos_string, seg_counter, chunk_counter, )
-					stats_prefixs = ['%s/%s_SPIIR_stats_seg%d_bank%d' % (job_tag, ifos_string, seg_counter, i + numchunks * chunk_counter, ) for i,s in enumerate(spiir_bank_strings)]
 	
 					# setup injection node
 					injnode = inspiral_pipe.generic_node(

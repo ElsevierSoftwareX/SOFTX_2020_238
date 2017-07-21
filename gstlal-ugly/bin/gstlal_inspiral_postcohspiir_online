@@ -391,7 +391,7 @@ else:
 # 3) --track-psd with --reference-psd - a psd will be measured on the fly, but the first "guess will come from the users provided psd
 #
 
-
+# FIXME: need to be updated to lal.series.read_psd_xmldoc in order to have sampleUnits for psd
 if options.reference_psd is not None:
   psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
 else:
