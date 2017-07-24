@@ -27,8 +27,8 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 1.5e-7
-#DELTA = 1e-6
+DELTA = 2e-7
+#DELTA = 5e-6
 EIGEN_DELTA_DET = DELTA #1e-5
 EIGEN_DELTA_METRIC = DELTA #1e-4
 
@@ -222,55 +222,82 @@ class Metric(object):
 			return None
 		return fseries
 
-	def match(self, w1, w2, t_factor = None):
+	def match_minus_1(self, w1, w2, t_factor = 1.0):
 		def norm(w):
-			n = numpy.real((numpy.conj(w) * w).sum())**.5
+			n = numpy.abs((numpy.conj(w) * w).sum())**.5
 			return n
+		def ip(w1, w2):
+			return numpy.abs((numpy.conj(w1) * w2).sum())
 
 		try:
-			if t_factor is None:
-				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data
-			else:
-				self.w1w2.data.data[:] = numpy.conj(w1.data.data) * w2.data.data * t_factor
-			m = numpy.real(numpy.abs(self.w1w2.data.data[:].sum())) / norm(w1.data.data) / norm(w2.data.data)
-			if m > 1.0000001:
-				raise ValueError("Match is greater than 1 : %f" % m)
-			return m
+			x = numpy.copy(w1.data.data)
+			y = numpy.copy(w2.data.data)
+			y /= norm(y)
+			x /= norm(x)
+			y *= t_factor
+			m = ip(x,y)
+			if m < 1. -  1e-15:
+				return m - 1.0
+			d1 = x - y
+			#m = ip(x,y)
+			mm2 = ip(d1, d1)
+			return -0.5 * mm2
+			#return min(-0.5 * mm2, -0.5 * 4e-16)
+
 		except AttributeError:
 			return None
 
 
 	def __set_diagonal_metric_tensor_component(self, i, wp, wm, deltas, g, w1):
-		plus_match = self.match(w1, wp[i,i])
-		minus_match = self.match(w1, wp[i,i])
-		d2mbydx2 = (plus_match + minus_match - 2.) / deltas[i]**2
+		#print "diag ", i
+		#plus_match = self.match(w1, wp[i,i])
+		#minus_match = self.match(w1, wp[i,i])
+		#d2mbydx2 = (plus_match + minus_match - 2.) / deltas[i]**2
+		plus_match_minus_1 = self.match_minus_1(w1, wp[i,i])
+		minus_match_minus_1 = self.match_minus_1(w1, wp[i,i])
+		d2mbydx2 = (plus_match_minus_1 + minus_match_minus_1) / deltas[i]**2
 		# - 1/2 the second partial derivative
 		g[i,i] = -0.5 * d2mbydx2
 
 	def __set_tt_metric_tensor_component(self, center, w1):
 
-		minus_match = self.match(w1, w1, t_factor = self.neg_t_factor)
-		plus_match = self.match(w1, w1, t_factor = self.t_factor)
-		d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t**2
+		#print "tt "
+		#minus_match = self.match(w1, w1, t_factor = self.neg_t_factor)
+		#plus_match = self.match(w1, w1, t_factor = self.t_factor)
+		#d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t**2
+		minus_match_minus_1 = self.match_minus_1(w1, w1, t_factor = self.neg_t_factor)
+		plus_match_minus_1 = self.match_minus_1(w1, w1, t_factor = self.t_factor)
+		d2mbydx2 = (plus_match_minus_1 + minus_match_minus_1) / self.delta_t**2
 		return -0.5 * d2mbydx2
 
 	def __set_offdiagonal_metric_tensor_component(self, (i,j), wp, wm, deltas, g, w1):
 		# evaluate symmetrically
+		#print "off diag ", i, j
 		if j <= i:
 			return None
-		fii = -2 * g[i,i] * deltas[i]**2 + 2
-		fjj = -2 * g[j,j] * deltas[j]**2 + 2
-		d2mbydxdy = (self.match(w1, wp[i,j]) + self.match(w1, wm[i,j]) - fii - fjj + 2.) / 2. / deltas[i] / deltas[j]
+		#fii = -2 * g[i,i] * deltas[i]**2 + 2
+		#fjj = -2 * g[j,j] * deltas[j]**2 + 2
+		#d2mbydxdy = (self.match(w1, wp[i,j]) + self.match(w1, wm[i,j]) - fii - fjj + 2.) / 2. / deltas[i] / deltas[j]
+		fii = -2 * g[i,i] * deltas[i]**2
+		fjj = -2 * g[j,j] * deltas[j]**2
+		d2mbydxdy = (self.match_minus_1(w1, wp[i,j]) + self.match_minus_1(w1, wm[i,j]) - fii - fjj) / 2. / deltas[i] / deltas[j]
 		g[i,j] = g[j,i] = -0.5 * d2mbydxdy
 		return None
 
 	def __set_offdiagonal_time_metric_tensor_component(self, j, wp, wm, deltas, g, g_tt, delta_t, w1):
-		fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
-		ftt = -2 * g_tt * delta_t**2 + 2.0
+		#print "t i ", j
+		#fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
+		#ftt = -2 * g_tt * delta_t**2 + 2.0
 		# Second order
-		plus_match = self.match(w1, wp[j,j], t_factor = self.t_factor)
-		minus_match = self.match(w1, wm[j,j], t_factor = self.neg_t_factor)
-		return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
+		#plus_match = self.match(w1, wp[j,j], t_factor = self.t_factor)
+		#minus_match = self.match(w1, wm[j,j], t_factor = self.neg_t_factor)
+		#return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
+		fjj = -2 * g[j,j] * deltas[j]**2
+		ftt = -2 * g_tt * delta_t**2
+		# Second order
+		plus_match_minus_1 = self.match_minus_1(w1, wp[j,j], t_factor = self.t_factor)
+		minus_match_minus_1 = self.match_minus_1(w1, wm[j,j], t_factor = self.neg_t_factor)
+		return -0.5 * (plus_match_minus_1 + minus_match_minus_1 - ftt - fjj) / 2 / delta_t / deltas[j]
 
 	def __call__(self, center, deltas = None):
 
@@ -306,19 +333,37 @@ class Metric(object):
 		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
-		w, v = numpy.linalg.eigh(g)
-		mxw = numpy.max(w)
-		if numpy.any(w < 0):
-			return self.__call__(center - deltas, deltas)
+		#print "before ", g
+		#g = numpy.array(nearPD(g, nit=3))
+		U, S, V = numpy.linalg.svd(g)
+		condition = S < max(S) * EIGEN_DELTA_DET
+		S[condition] = 0.0
+		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
+		det = numpy.product(S[S>0])
+		eff_dimension = len(S[S>0])
+		w = S
+		#try:
+		#	w, v = numpy.linalg.eigh(g)
+		#except numpy.linalg.linalg.LinAlgError:
+		#	newc = center.copy()
+		#	newc[0:2] -= deltas[0:2]
+		#	return self.__call__(newc, deltas)
+		#mxw = numpy.max(w)
+		#assert numpy.all(w > 0)
+		#if numpy.any(w < 0):
+		#	print w
+		#	return self.__call__(center - deltas, deltas)
 		self.metric_is_valid = True
-		w[w<EIGEN_DELTA_DET * mxw] = EIGEN_DELTA_DET * mxw
-		det = numpy.product(w)
+		#w[w<EIGEN_DELTA_DET * mxw] = EIGEN_DELTA_DET * mxw
+		#det = numpy.product(w)
 
-		eff_dimension = len(w[w >= EIGEN_DELTA_DET * mxw])
-		w[w<EIGEN_DELTA_METRIC * mxw] = EIGEN_DELTA_METRIC * mxw
-		g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
+		#eff_dimension = len(w[w >= EIGEN_DELTA_DET * mxw])
+		#w[w<EIGEN_DELTA_METRIC * mxw] = EIGEN_DELTA_METRIC * mxw
+		#g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
 
 		#return g, eff_dimension, numpy.product(S[S>0])
+		#print "after ", g
+
 		return g, eff_dimension, det, self.metric_is_valid, w
 
 
