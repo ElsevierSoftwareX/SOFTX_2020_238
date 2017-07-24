@@ -68,7 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	prefactor = 1.0
+	prefactor = 0.5
 	if n==1:
 		return prefactor
 	if n==2:
@@ -128,8 +128,6 @@ class HyperCube(object):
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = DELTA * numpy.ones(len(self.center))
 		deltas[0:2] *= self.center[0:2]
-		#deltas[2:] = 1.3e-4
-		#deltas[2:] = 1.0e-5
 		self.singularity = singularity
 
 		if self.metric is not None and metric_tensor is None:
@@ -308,10 +306,10 @@ class Node(object):
 			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps) * aspect_factor
 
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)):
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates)) or bifurcation < 8:
 			bifurcation += 1
-			if (self.cube.num_templates(0.02) < len(size)**2/2. or numtmps < 2 * split_num_templates) and metric_diff < 0.1:
-			#if (numtmps < 2**len(size) * split_num_templates) and metric_diff < 0.05:
+			#if False:# (self.cube.num_templates(0.02) < len(size)**2/2. or numtmps < 2 * split_num_templates) and metric_diff < 0.1:
+			if (numtmps < 2**len(size) * self.cube.num_templates(0.001)) and metric_diff < 0.01:
 			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 			#if not metric_cond:
 			#if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
