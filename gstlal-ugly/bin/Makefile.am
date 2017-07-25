@@ -35,4 +35,5 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_postcohspiir_extract_zerolag \
 	gstlal_iir_inspiral \
 	gstlal_cohfar_plot_stats \
-	gstlal_cohfar_plot_ifar
+	gstlal_cohfar_plot_ifar \
+	gstlal_cohfar_assign_far

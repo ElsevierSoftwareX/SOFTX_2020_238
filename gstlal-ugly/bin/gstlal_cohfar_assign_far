@@ -1,0 +1,105 @@
+#! /usr/bin/env python
+#
+# Copyright (C) 2016 Qi Chu
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+import os
+import numpy as np
+import scipy
+import math
+import logging
+from optparse import OptionParser
+
+try:
+	import sqlite3
+except ImportError:
+	# pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
+sqlite3.enable_callback_tracebacks(True)
+from glue.ligolw.utils import process as ligolw_process
+
+from glue.ligolw import dbtables
+from gstlal import cohfar
+import pdb
+
+
+logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
+	
+def append_missing_options(missing_options, options, option):
+	if getattr(options, option) is None:
+		missing_options.append("--%s" % option.replace("_", "-"))
+
+
+def parse_command_line():
+	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog to plot pdf and cdf")
+	parser.add_option("--input-stats-filename", default = "", metavar = "name", help = "Set the input stats file name")
+	parser.add_option("--zerolag-sql", default = "", metavar = "name", help = "Set the input sql file name")
+	parser.add_option("--live-time", type = "float", help ="input coinc time")
+	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
+	
+	options, tmp = parser.parse_args()
+
+	missing_options = []
+	append_missing_options(missing_options, options, "zerolag_sql")
+	append_missing_options(missing_options, options, "input_stats_filename")
+
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+	return options
+
+options = parse_command_line()
+
+if options.verbose:
+  logging.info("reading stats file")
+ranking_stats = cohfar.RankingData(options.input_stats_filename, hist_trials = 100, livetime = int(options.live_time))
+myfar = cohfar.FAR()
+myfar.set_ranking_stats(ranking_stats)
+
+if options.verbose:
+  logging.info("assign fars to zerolags")
+#pdb.set_trace()
+zerolag_sql_list = options.zerolag_sql.split(",")
+for filename in zerolag_sql_list:
+  working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
+  connection = sqlite3.connect(working_filename)
+  #
+  # record our passage
+  #
+
+#  xmldoc = dbtables.get_xml(connection)
+#  process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_cohfar_assign_far", {})
+#
+  #
+  # assign FAPs and FARs
+  #
+
+  myfar.assign_fars_sql(connection)
+  #
+  # done, restore file to original location
+  #
+
+#  ligolw_process.set_process_end_time(process)
+#  connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (process.end_time, process.process_id))
+
+  connection.commit()
+  connection.close()
+  dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
+
+
+
+

@@ -13,4 +13,5 @@ pkgpython_PYTHON = \
 	spiirparts.py \
 	uni_datasource.py \
 	postcoh_table_def.py \
-	postcoh_finalsink.py
+	postcoh_finalsink.py \
+	cohfar.py
