@@ -23,6 +23,7 @@
 # need to update the name when the background_utils.h update
 import numpy as np
 import logging
+from glue import iterutils
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.postcoh_table_def import PostcohInspiralTable
 
@@ -97,8 +98,6 @@ class RankingData(object):
     
     self.livetime = livetime
     self.hist_trials = hist_trials
-    nstep = 30
-    nslide = 100
     #tick_lgcdf = np.linspace(min_lgcdf, max_lgcdf, num=nstep)
     
     #back_lgfap_rates = np.zeros(len(tick_lgcdf))
@@ -128,6 +127,18 @@ class FAR(object):
     return self.ranking_stats.far_kde[chisq_idx, snr_idx]
 	
 
+
+  def far_from_snr_chisq(self, snr, chisq):
+    lgsnr = np.log10(snr)
+    lgchisq = np.log10(chisq)
+    snr_idx = max(min((lgsnr - self.ranking_stats.snr_bins[0])/ self.ranking_stats.snr_bins[1], self.ranking_stats.snr_bins[2]), 0)
+    chisq_idx = max(min((lgchisq - self.ranking_stats.chisq_bins[0] )/ self.ranking_stats.chisq_bins[1], self.ranking_stats.chisq_bins[2]), 0)
+    return self.ranking_stats.far_kde[chisq_idx, snr_idx]
+	
+
+    return self.ranking_stats.far_kde[chisq_idx, snr_idx]
+	
+
   def assign_fars_sql(self, connection):
     # assign false-alarm rates
     # FIXME:  choose a function name more likely to be unique?
@@ -139,11 +150,52 @@ SET
 	far =	far_from_snr_chisq(cohsnr, cmbchisq)
 """)
 
+  # FIXME: see Kipp's code to adjust fap for clustered zerolag
+  def far_from_snr_chisq_kipp(self, snr, chisq):
+    lgsnr = np.log10(snr)
+    lgchisq = np.log10(chisq)
+    snr_idx = max(min((lgsnr - self.ranking_stats.snr_bins[0])/ self.ranking_stats.snr_bins[1], self.ranking_stats.snr_bins[2]), 0)
+    chisq_idx = max(min((lgchisq - self.ranking_stats.chisq_bins[0] )/ self.ranking_stats.chisq_bins[1], self.ranking_stats.chisq_bins[2]), 0)
+    # implements equation (B4) of Phys. Rev. D 88, 024025.
+    # arXiv:1209.0718.  the return value is divided by T to
+    # convert events/experiment to events/second.
+    #assert self.livetime is not None, "cannot compute FAR without livetime"
+    #rank = max(self.minrank, min(self.maxrank, rank))
+    # true-dismissal probability = 1 - single-event false-alarm
+    # probability, the integral in equation (B4)
+    #tdp = float(self.cdf_interpolator(rank))
+	
+    tdp = self.ranking_stats.fap_kde[chisq_idx, snr_idx]
+    try:
+      log_tdp = math.log(tdp)
+    except ValueError:
+      # TDP = 0 --> FAR = +inf
+      return PosInf
+    if log_tdp >= -1e-9:
+      # rare event:  avoid underflow by using log1p(-FAP)
+      log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
+    #return self.zero_lag_total_count * -log_tdp / self.livetime
+
+
+
+  def assign_fars_sql_kipp(self, connection):
+    # assign false-alarm rates
+    # FIXME:  choose a function name more likely to be unique?
+    connection.create_function("far_from_snr_chisq", 2, self.far_from_snr_chisq)
+    connection.cursor().execute("""
+UPDATE
+	postcoh
+SET
+	far =	far_from_snr_chisq_kipp(cohsnr, cmbchisq)
+""")
+
   def count_above_ifar_xml(self, zerolag_fname_str, tick_lgifar):
   
     zerolag_fname_list = zerolag_fname_str.split(',')
+    all_table = lsctables.New(PostcohInspiralTable)
+
     for ifname in zerolag_fname_list:
-      table = postcoh_table_from_xml(zf)
+      table = postcoh_table_from_xml(ifname)
       all_table.extend(table)
       iterutils.inplace_filter(lambda row:row.is_background == 0, all_table)
 
