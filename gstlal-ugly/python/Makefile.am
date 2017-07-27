@@ -14,4 +14,5 @@ pkgpython_PYTHON = \
 	uni_datasource.py \
 	postcoh_table_def.py \
 	postcoh_finalsink.py \
-	cohfar.py
+	cohfar.py \
+	ligolw_inspinjfind_postcoh.py

@@ -36,4 +36,5 @@ dist_bin_SCRIPTS = \
 	gstlal_iir_inspiral \
 	gstlal_cohfar_plot_stats \
 	gstlal_cohfar_plot_ifar \
-	gstlal_cohfar_assign_far
+	gstlal_cohfar_assign_far \
+	ligolw_inspinjfind_postcoh
