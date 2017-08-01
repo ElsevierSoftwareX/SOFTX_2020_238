@@ -32,7 +32,6 @@
 #include <gsl/gsl_matrix.h>
 
 #define IFO_LEN 2
-#define MAX_COMBOS 4
 
 #define LOGSNR_CMIN	0.54 // center of the first bin
 #define LOGSNR_CMAX	3.0 // center of the last bin

@@ -38,6 +38,7 @@
 #include <cohfar/knn_kde.h>
 
 char *IFO_COMBO_MAP[] = {"L1", "H1", "V1", "H1L1", "H1V1", "L1V1", "H1L1V1"};
+int MAX_COMBOS = sizeof(IFO_COMBO_MAP)/sizeof(*IFO_COMBO_MAP);
 
 int get_icombo(char *ifos) {
 	int icombo = 0; 
@@ -55,14 +56,13 @@ int get_icombo(char *ifos) {
 		if (nifo_in == nifo_map)
 			return icombo;
 	}
-
+	fprintf(stderr,"get_icombo: failed to get index for %s\n",ifos);
 	return -1;
 }
 
 int get_ncombo(int nifo) {
-	// FIXME: hard-coded
-	return 7;
-  
+	g_assert(pow(2,nifo)-1 <= MAX_COMBOS);
+	return MAX_COMBOS;
 }
 
 Bins1D *
