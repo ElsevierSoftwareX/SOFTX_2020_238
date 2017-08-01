@@ -541,6 +541,9 @@ class FinalSink(object):
 		gracedb_upload_itrial = 1
 		# write a log to explain far
 		#for gracedb_id in gracedb_ids:
+                if not gracedb_ids:
+                        print "gracedb upload of %s failed completely" % filename
+                        return
 		gracedb_id = gracedb_ids[0]
 		log_message = "Optimal ra and dec from this coherent pipeline: (%f, %f) in degrees" % (trigger.ra, trigger.dec)
 		while gracedb_upload_itrial < 10:
