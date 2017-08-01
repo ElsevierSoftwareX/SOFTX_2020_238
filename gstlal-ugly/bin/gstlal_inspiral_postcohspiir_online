@@ -220,6 +220,7 @@ def parse_command_line():
   parser.add_option("--finalsink-gracedb-group", default = "Test", help = "gracedb group, default is Test")
   parser.add_option("--finalsink-gracedb-search", default = "LowMass", help = "gracedb type, default is LowMass")
   parser.add_option("--finalsink-gracedb-pipeline", default = "gstlal-spiir", help = "gracedb pipeline, default is gstlal-spiir")
+  parser.add_option("--finalsink-gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "gracedb service url")
   parser.add_option("--finalsink-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
   parser.add_option("--finalsink-background-update-interval", type = "float", metavar = "seconds", default = None, help = "How often to update the fap stats files.")
   parser.add_option("--finalsink-output-prefix", metavar = "filename", default = None, help = "Set the filename prefix in which to save the triggers (required)")
@@ -509,6 +510,7 @@ if 1==1:
 		  gracedb_group = options.finalsink_gracedb_group,
 		  gracedb_search = options.finalsink_gracedb_search,
 		  gracedb_pipeline = options.finalsink_gracedb_pipeline,
+		  gracedb_service_url = options.finalsink_gracedb_service_url,
 		  output_skymap = options.cuda_postcoh_output_skymap,
 		  verbose = options.verbose)
 
