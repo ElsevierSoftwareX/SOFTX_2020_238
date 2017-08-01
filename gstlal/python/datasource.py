@@ -405,13 +405,14 @@ class GWDataSourceInfo(object):
 
 		## DQ and state vector channel dictionary, e.g., { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
 		self.state_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
-		self.dq_channel_dict = { "H1": "DMT-DQ_VECTOR", "H2": "DMT-DQ_VECTOR","L1": "DMT-DQ_VECTOR", "V1": "DMT-DQ_VECTOR" }
+		self.dq_channel_dict = { "H1": "DMT-DQ_VECTOR", "H2": "DMT-DQ_VECTOR","L1": "DMT-DQ_VECTOR", "V1": None }
 
 		if options.state_channel_name is not None:
 			state_channel_dict_from_options = channel_dict_from_channel_list( options.state_channel_name )
 			instrument = state_channel_dict_from_options.keys()[0]
 			self.state_channel_dict.update( state_channel_dict_from_options )
-			if "ODC_" in self.state_channel_dict[instrument].split("-")[1]:
+			split_channel_string = self.state_channel_dict[instrument].split("-")
+			if len(split_channel_string)>1 and "ODC_" in split_channel_string[1]:
 				self.state_channel_type = "ODC"
 
 		if options.dq_channel_name is not None:
@@ -420,8 +421,14 @@ class GWDataSourceInfo(object):
 			self.dq_channel_dict.update( dq_channel_dict_from_options )
 	
 		## Dictionary of state vector on, off bits like {"H1" : [0x7, 0x160], "H2" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}
-		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
-		self.dq_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits)
+		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits, state_vector_on_off_dict)
+		self.dq_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits, dq_vector_on_off_dict)
+
+		# FIXME Virgo hack
+		if "V1" in self.dq_channel_dict:
+			self.dq_channel_dict["V1"] = None
+		if "V1" in self.dq_vector_on_off_bits:
+			self.dq_vector_on_off_bits["V1"] = (None, None)
 		
 		## frame cache file
 		self.frame_cache = options.frame_cache
@@ -749,14 +756,17 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# State vector and DQ vector
 		# FIXME:  don't hard-code channel name
 		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
-		dqvector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+                        dqvector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+                        pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
 		if gw_data_source_info.state_channel_type == "ODC" or gw_data_source_info.state_channel_dict[instrument] == "Hrec_Flag_Quality":
 			# FIXME: This goes away when the ODC channel format is fixed.
 			statevector = pipeparts.mkgeneric(pipeline, statevector, "lal_fixodc")
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
-		dqvector = pipeparts.mkstatevector(pipeline, dqvector, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits)
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+                        dqvector = pipeparts.mkstatevector(pipeline, dqvector, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			t = float(lal.UTCToGPS(time.gmtime()))
@@ -774,12 +784,14 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d %d" % (t, on, off, gap)
 
 		statevector = pipeparts.mktee(pipeline, statevector)
-		dqvector = pipeparts.mktee(pipeline, dqvector)
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+                        dqvector = pipeparts.mktee(pipeline, dqvector)
 		# use state vector to gate strain
 		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector), default_state = False, name = "%s_state_vector_gate" % instrument)
 
-		# use dq vector to gate strain
-		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector), default_state = False, name = "%s_dq_vector_gate" % instrument)
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+                        # use dq vector to gate strain
+                        src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector), default_state = False, name = "%s_dq_vector_gate" % instrument)
 
 		# fill in holes, skip duplicate data
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
@@ -792,10 +804,12 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
 
 		# 10 minutes of buffering
-		dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+                        dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, silent = False)
 		statevector = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 12)
-		dqvector = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 12)
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+                        dqvector = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 12)
 		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10)
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
@@ -838,8 +852,10 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	#
 	# done
 	#
-
-	return src, statevector, dqvector
+	if gw_data_source_info.dq_channel_dict[instrument] is not None:
+                return src, statevector, dqvector
+        else:
+                return src, statevector, None
 
 
 ## 
