@@ -731,6 +731,12 @@ class CoincsDocFromPostcoh(object):
 		row.coinc_event_id = "coinc_event:coinc_event_id:1"
 		coinc_map_table.append(row)
 
+		row = coinc_map_table.RowType()
+		row.event_id = "sngl_inspiral:event_id:3"
+		row.table_name = "sngl_inspiral"
+		row.coinc_event_id = "coinc_event:coinc_event_id:1"
+		coinc_map_table.append(row)
+
 		row = time_slide_table.RowType()
 		row.instrument = "H1"
 		row.time_slide_id = "time_slide:time_slide_id:6"
@@ -740,6 +746,13 @@ class CoincsDocFromPostcoh(object):
 
 		row = time_slide_table.RowType()
 		row.instrument = "L1"
+		row.time_slide_id = "time_slide:time_slide_id:6"
+		row.process_id = "process:process_id:1"
+		row.offset = 0
+		time_slide_table.append(row)
+
+		row = time_slide_table.RowType()
+		row.instrument = "V1"
 		row.time_slide_id = "time_slide:time_slide_id:6"
 		row.process_id = "process:process_id:1"
 		row.offset = 0
@@ -895,5 +908,75 @@ class CoincsDocFromPostcoh(object):
 		row.spin2y = trigger.spin2y 
 		row.spin2z = trigger.spin2z
 		row.event_id = "sngl_inspiral:event_id:2"
+		sngl_inspiral_table.append(row)
+
+		row = sngl_inspiral_table.RowType()
+		# Setting the the other row
+		row.process_id = "process:process_id:1"
+		row.ifo = "V1"
+		row.search = self.url
+		row.channel = "Hrec_hoft_16384Hz" 
+		row.end_time = trigger.end_time_V
+		row.end_time_ns = trigger.end_time_ns_V
+		row.end_time_gmst = 0 
+		row.impulse_time = 0
+		row.impulse_time_ns = 0
+		row.template_duration = trigger.template_duration
+		row.event_duration = 0
+		row.amplitude = 0
+		# FIXME: switch to the following deff when the sigmasq array is regenerated
+		# row.eff_distance = trigger.deff_V
+		row.eff_distance = 0
+		row.coa_phase = trigger.coaphase_V
+		row.mass1 = trigger.mass1 
+		row.mass2 = trigger.mass2 
+		row.mchirp = trigger.mchirp 
+		row.mtotal = trigger.mtotal 
+		row.eta = trigger.eta
+		row.kappa = 0 
+		row.chi = 1 
+		row.tau0 = 0 
+		row.tau2 = 0 
+		row.tau3 = 0 
+		row.tau4 = 0
+		row.tau5 = 0 
+		row.ttotal = 0 
+		row.psi0 = 0 
+		row.psi3 = 0 
+		row.alpha = 0
+		row.alpha1 = 0
+		row.alpha2 = 0
+		row.alpha3 = 0
+		row.alpha4 = 0
+		row.alpha5 = 0
+		row.alpha6 = 0
+		row.beta = 0
+		row.f_final = 2048
+		row.snr = trigger.snglsnr_V
+		row.chisq = trigger.chisq_V
+		row.chisq_dof = 4
+		row.bank_chisq = 0
+		row.bank_chisq_dof = 0
+		row.cont_chisq = 0
+		row.cont_chisq_dof = 0
+		row.sigmasq = 0
+		row.rsqveto_duration = 0
+		row.Gamma0 = 0 
+		row.Gamma1 = 0
+		row.Gamma2 = 0
+		row.Gamma3 = 0
+		row.Gamma4 = 0
+		row.Gamma5 = 0
+		row.Gamma6 = 0
+		row.Gamma7 = 0
+		row.Gamma8 = 0
+		row.Gamma9 = 0
+		row.spin1x = trigger.spin1x 
+		row.spin1y = trigger.spin1y 
+		row.spin1z = trigger.spin1z 
+		row.spin2x = trigger.spin2x 
+		row.spin2y = trigger.spin2y 
+		row.spin2z = trigger.spin2z
+		row.event_id = "sngl_inspiral:event_id:3"
 		sngl_inspiral_table.append(row)
 
