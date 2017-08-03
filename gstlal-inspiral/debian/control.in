@@ -51,7 +51,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-h5py,
  python-ligo-gracedb (>= 1.11),
  python-numpy,
- python-pylal (>= @MIN_PYLAL_VERSION@),
  python-scipy
 Recommends:
  ligo-gracedb
