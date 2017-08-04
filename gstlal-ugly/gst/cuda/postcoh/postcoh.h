@@ -281,6 +281,9 @@ struct _CudaPostcoh {
 
   gint stream_id;
   gint device_id;
+  /* book-keeping */
+  long process_id;
+  long cur_event_id;
   cudaStream_t stream;
 };
 

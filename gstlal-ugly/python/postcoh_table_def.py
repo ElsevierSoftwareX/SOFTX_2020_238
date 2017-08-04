@@ -1,10 +1,14 @@
 
 from glue.ligolw import table
+from glue.ligolw import ilwd
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
+PostcohInspiralID = ilwd.get_ilwdchar_class(u"postcoh", u"event_id")
 # defined in postcohinspiral_table.h
 class PostcohInspiralTable(table.Table):
 	tableName = "postcoh:table"
 	validcolumns = {
+			"event_id":	"ilwd:char",
 			"end_time":	"int_4s",
 			"end_time_ns":	"int_4s",
 			"end_time_L":	"int_4s",
@@ -68,5 +72,64 @@ class PostcohInspiralTable(table.Table):
 			"deff_H":	"real_8",
 			"deff_V":	"real_8"
 	}
+	constraints = "PRIMARY KEY (event_id)"
+	next_id = PostcohInspiralID(1)
 
+class PostcohInspiral(table.TableRow):
+	__slots__ = PostcohInspiralTable.validcolumns.keys()
+
+	#
+	# Properties
+	#
+
+	@property
+	def end(self):
+		if self.end_time is None and self.end_time_ns is None:
+			return None
+		return LIGOTimeGPS(self.end_time, self.end_time_ns)
+
+	@end.setter
+	def end(self, gps):
+		if gps is None:
+			self.end_time = self.end_time_ns = None
+		else:
+			self.end_time, self.end_time_ns = gps.gpsSeconds, gps.gpsNanoSeconds
+
+
+PostcohInspiralTable.RowType = PostcohInspiral
+
+# ref: glue.ligolw.lsctables
+# Override portions of a lsctables.LIGOLWContentHandler class
+#
+
+TableByName = {
+		table.StripTableName(PostcohInspiralTable.tableName): PostcohInspiralTable
+		}
+
+
+def use_in(ContentHandler):
+	"""
+	Modify ContentHandler, a sub-class of
+	glue.ligolw.LIGOLWContentHandler, to cause it to use the Table
+	classes defined in this module when parsing XML documents.
+
+	Example:
+
+	>>> from glue.ligolw import ligolw
+	>>> class MyContentHandler(ligolw.LIGOLWContentHandler):
+	...	pass
+	...
+	>>> use_in(MyContentHandler)
+	<class 'glue.ligolw.lsctables.MyContentHandler'>
+	"""
+	#ContentHandler = table.use_in(ContentHandler)
+
+	def startTable(self, parent, attrs, __orig_startTable = ContentHandler.startTable):
+		name = table.StripTableName(attrs[u"Name"])
+		if name in TableByName:
+			return TableByName[name](attrs)
+		return __orig_startTable(self, parent, attrs)
+
+	ContentHandler.startTable = startTable
+	return ContentHandler
 

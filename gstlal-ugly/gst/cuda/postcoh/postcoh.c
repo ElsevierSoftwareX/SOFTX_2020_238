@@ -1064,6 +1064,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	
 			output->ra = phi*RAD2DEG;
 			output->dec = (M_PI_2 - theta)*RAD2DEG;
+			output->event_id = postcoh->cur_event_id++;
 			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
@@ -1729,6 +1730,8 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	postcoh->prop_avail = g_cond_new();
 	postcoh->stream_id = NOT_INIT;
 	postcoh->device_id = NOT_INIT;
+	postcoh->process_id = 0;
+	postcoh->cur_event_id = 0;
 }
 
 
