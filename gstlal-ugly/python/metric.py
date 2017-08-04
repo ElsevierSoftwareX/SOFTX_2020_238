@@ -28,9 +28,7 @@ import sys
 import math
 
 DELTA = 2e-7
-#DELTA = 5e-6
-EIGEN_DELTA_DET = DELTA #1e-5
-EIGEN_DELTA_METRIC = DELTA #1e-4
+EIGEN_DELTA_DET = DELTA
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
@@ -335,7 +333,12 @@ class Metric(object):
 
 		#print "before ", g
 		#g = numpy.array(nearPD(g, nit=3))
-		U, S, V = numpy.linalg.svd(g)
+		try:
+			U, S, V = numpy.linalg.svd(g)
+		except numpy.linalg.linalg.LinAlgError:
+			newc = center.copy()
+			newc[0:2] *=0.99
+			return self.__call__(newc, deltas)
 		condition = S < max(S) * EIGEN_DELTA_DET
 		S[condition] = 0.0
 		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
