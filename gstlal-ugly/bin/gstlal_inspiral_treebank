@@ -183,8 +183,9 @@ mismatch = 1.0 - args.min_match
 
 # Initialize the tree root and then split with a given splitsize
 def trans_M_q(coord_limits):
-	Mlimits = [metric_module.mc_from_m1_m2(coord_limits[0][0], coord_limits[1][0]), metric_module.mc_from_m1_m2(coord_limits[0][1], coord_limits[1][1])]
-	return [Mlimits] +  coord_limits[1:]
+	Mlimits = [0.9 * metric_module.mc_from_m1_m2(coord_limits[0][0], coord_limits[1][0]), metric_module.mc_from_m1_m2(coord_limits[0][1], coord_limits[1][1]) * 1.11]
+	m2limis = [coord_limits[1][0] * 0.9, coord_limits[1][1] * 1.11]
+	return [Mlimits] +  [m2limis] + coord_limits[2:]
 
 if args.mcm2:
 	coord_limits_2 = trans_M_q(coord_limits)
@@ -244,7 +245,8 @@ for n, c in enumerate(nodes):
 			row.mass1 = row.mass2
 			row.mass2 = mass1
 		row.process_id = process.process_id
-		if coord_limits[0][0] <= row.mass1 <= coord_limits[0][1] and coord_limits[1][0] <= row.mass2 <= coord_limits[1][1] and (row.mass1+row.mass2 < args.max_mtotal) and (row.mass1 / row.mass2 < args.max_q):
+		if coord_limits[0][0] * 0.98 <= row.mass1 <= coord_limits[0][1] * 1.1 and coord_limits[1][0] * 0.98 <= row.mass2 <= coord_limits[1][1] * 1.1 and (row.mass1+row.mass2 < args.max_mtotal) and (row.mass1 / row.mass2 < args.max_q):
+		#if (row.mass1+row.mass2 < args.max_mtotal) and (row.mass1 / row.mass2 < args.max_q):
 			tbl.append(row)
 			previous_tiles.append(t)
 
