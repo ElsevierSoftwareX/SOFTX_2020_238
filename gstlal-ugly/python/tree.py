@@ -324,7 +324,7 @@ class Node(object):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (False > mismatch and numtmps > split_num_templates/2.0)) or bifurcation < 2:
 			bifurcation += 1
 			#if False:# (self.cube.num_templates(0.02) < len(size)**2/2. or numtmps < 2 * split_num_templates) and metric_diff < 0.1:
-			if False:#(numtmps < 2**len(size) * self.cube.num_templates(0.003)) and metric_diff < 0.003:
+			if (numtmps < 2**len(size) * self.cube.num_templates(0.003)) and metric_diff < 0.003:
 			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 			#if not metric_cond:
 			#if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
