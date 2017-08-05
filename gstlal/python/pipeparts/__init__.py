@@ -468,8 +468,8 @@ def mkaudiochebband(pipeline, src, lower_frequency, upper_frequency, poles = 8):
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audiocheblimit.html">audiocheblimit</a> element to a pipeline with useful default properties
-def mkaudiocheblimit(pipeline, src, cutoff, mode = 0, poles = 8):
-	return mkgeneric(pipeline, src, "audiocheblimit", cutoff = cutoff, mode = mode, poles = poles)
+def mkaudiocheblimit(pipeline, src, cutoff, mode = 0, poles = 8, type = 1, ripple = 0.25):
+	return mkgeneric(pipeline, src, "audiocheblimit", cutoff = cutoff, mode = mode, poles = poles, type = type, ripple = ripple)
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audioamplify.html">audioamplify</a> element to a pipeline with useful default properties

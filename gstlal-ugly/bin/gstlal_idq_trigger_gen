@@ -651,7 +651,7 @@ for channel in channels:
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
 	if data_source_info.latency_output:
 		head[channel] = pipeparts.mklatency(pipeline, head[channel], name = 'stage2_beforeWhitening_%s' % channel)
-	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], int(samp_rate), instrument, channel_name = channel, width=32, quality=1, cutoff=None).items():
+	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], int(samp_rate), instrument, channel_name = channel, width=32).items():
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage3_afterWhitening_%s_%s' % (str(rate).zfill(5), channel))
 		if data_source_info.extension == 'ini':
@@ -683,6 +683,7 @@ for channel in channels:
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
 		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
+		#thishead = pipeparts.mktrigger(pipeline, thishead, rate, snr_thresh = 4)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage5_afterTrigger_%s_%s' % (str(rate).zfill(5), channel))
 		src[(channel, rate)] = thishead	
