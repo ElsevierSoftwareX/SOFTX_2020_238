@@ -99,7 +99,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 		if instrument in on_instruments:
 			alpha = 0.8
 			linestyle = "-"
-			label = "%s (%.4g Mpc Horizon)" % (instrument, reference_psd.horizon_distance(psd, 8.)[0])
+			label = "%s (%.4g Mpc Horizon)" % (instrument, horizon_distance(psd, 8.)[0])
 		else:
 			alpha = 0.6
 			linestyle = ":"
