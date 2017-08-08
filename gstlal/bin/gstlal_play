@@ -212,7 +212,7 @@ handler = simplehandler.Handler(mainloop, pipeline)
 # the pipeline
 #
 # A basic src
-head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
+head, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
 
 # if whitening, leverage mkwhitened_multirate_src() otherwise just resample
 if options.whiten:
