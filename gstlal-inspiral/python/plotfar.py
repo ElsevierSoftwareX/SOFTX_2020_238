@@ -220,6 +220,12 @@ def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, min_instruments, 
 	if len(instruments) < 1:
 		raise ValueError("len(instruments) must be >= 1")
 
+	# FIXME:  don't try to plot Virgo stuff.  remove after O2
+	instruments = set(instruments) - set(["V1"])
+	if sngls is not None:
+		for d in sngls:
+			d.pop("V1", None)
+
 	# retrieve the PDF in binned array form (not the interpolator)
 	binnedarray = snrpdf.get_snr_joint_pdf_binnedarray(instruments, horizon_distances, min_instruments)
 
