@@ -108,6 +108,8 @@ def get_files(gracedb_client, graceid, ranking_data_filename = "ranking_data.xml
 	# NOTE:  do not invoke .finish() on coinc_param_distributions!  the
 	# PDFs are uploaded to gracedb in the desired state.
 	coinc_param_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ranking_data_xmldoc)
+	if coinc_param_distributions is None:
+		raise ValueError("failed to extract CoincParams object from '%s'" % ranking_data_filename)
 	ranking_data.finish()
 
 	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists, min_instruments = coinc_param_distributions.min_instruments))
