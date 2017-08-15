@@ -245,7 +245,7 @@ for n, c in enumerate(nodes):
 			row.mass1 = row.mass2
 			row.mass2 = mass1
 		row.process_id = process.process_id
-		if coord_limits[0][0] * 0.98 <= row.mass1 <= coord_limits[0][1] * 1.1 and coord_limits[1][0] * 0.98 <= row.mass2 <= coord_limits[1][1] * 1.1 and (row.mass1+row.mass2 < args.max_mtotal) and (row.mass1 / row.mass2 < args.max_q):
+		if coord_limits[0][0] * 0.97 <= row.mass1 <= coord_limits[0][1] * 1.1 and coord_limits[1][0] * 0.97 <= row.mass2 <= coord_limits[1][1] * 1.1 and (row.mass1+row.mass2 < args.max_mtotal) and (row.mass1 / row.mass2 < args.max_q):
 		#if (row.mass1+row.mass2 < args.max_mtotal) and (row.mass1 / row.mass2 < args.max_q):
 			tbl.append(row)
 			previous_tiles.append(t)
