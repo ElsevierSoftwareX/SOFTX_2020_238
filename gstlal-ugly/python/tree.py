@@ -277,11 +277,11 @@ class Node(object):
 		#	self.cube.deltas *= 1.15
 		if self.splitdim == 0 and (F*.98 < self.cube.center[0] / self.cube.center[1] <= F * 1.02):
 			self.splitdim = 1
-		#	aspect_factor = 2
-		#else:
+			aspect_factor = 2
+		else:
 		#	aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>1.67]) / 1.67**len(aspect_ratios[aspect_ratios>1.67]))
-		aspect_factor = 1# max(1., numpy.product(aspect_ratios[aspect_ratios>1.5]) / 1.5**len(aspect_ratios[aspect_ratios>1.5]))
-		#aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
+		#aspect_factor = 1# max(1., numpy.product(aspect_ratios[aspect_ratios>1.5]) / 1.5**len(aspect_ratios[aspect_ratios>1.5]))
+			aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.0**len(aspect_ratios[aspect_ratios>2.0]))
 		#if numpy.isnan(aspect_factor):
 		#	aspect_factor = 1.0
 		#aspect_factor = 1.0
@@ -318,7 +318,7 @@ class Node(object):
 
 			#metric_diff = max(abs(self.sibling.cube.eigv - self.cube.eigv) / (self.sibling.cube.eigv + self.cube.eigv) / 2.)
 			# take the bigger of self, sibling and parent
-			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps)# * aspect_factor
+			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps) * aspect_factor
 
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.05 and numtmps > split_num_templates/2.0**.5)) or bifurcation < 2:
