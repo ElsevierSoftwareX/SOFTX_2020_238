@@ -320,6 +320,9 @@ class Node(object):
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps) * aspect_factor
 
+			mts = [(numtmps, self.cube), (sib_numtmps, self.sibling.cube), (par_numtmps / 2., self.parent.cube)]
+			reuse_metric = max(mts)[1]
+
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.05 and numtmps > split_num_templates/2.0**.5)) or bifurcation < 2:
 			bifurcation += 1
@@ -328,6 +331,11 @@ class Node(object):
 			#if self.cube.metric_is_valid:# and aspect_factor <= 1.0:
 			#if not metric_cond:
 			#if metric_diff <= metric_tol and self.cube.metric_is_valid:# and aspect_factor <= 1.0:
+				self.cube.metric_tensor = reuse_metric.metric_tensor
+				self.cube.effective_dimension = reuse_metric.effective_dimension
+				self.cube.det = reuse_metric.det
+				self.cube.metric_is_valid = reuse_metric.metric_is_valid
+				self.cube.eigv = reuse_metric.eigv
 				left, right = self.cube.split(self.splitdim, reuse_metric = True)
 				print "REUSE"
 			else:
