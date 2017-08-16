@@ -37,4 +37,9 @@ dist_bin_SCRIPTS = \
 	gstlal_cohfar_plot_stats \
 	gstlal_cohfar_plot_ifar \
 	gstlal_cohfar_assign_far \
-	ligolw_inspinjfind_postcoh
+	ligolw_inspinjfind_postcoh \
+	ligolw_sqlite_postcoh \
+	gstlal_inspiral_postcohspiir_plotsummary \
+	gstlal_spiir_plot_waveform \
+	gstlal_make_whitened_strain
+
