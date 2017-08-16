@@ -184,7 +184,7 @@ mismatch = 1.0 - args.min_match
 # Initialize the tree root and then split with a given splitsize
 def trans_M_q(coord_limits):
 	Mlimits = [0.9 * metric_module.mc_from_m1_m2(coord_limits[0][0], coord_limits[1][0]), metric_module.mc_from_m1_m2(coord_limits[0][1], coord_limits[1][1]) * 1.11]
-	m2limis = [coord_limits[1][0] * 0.9, coord_limits[1][1] * 1.11]
+	m2limis = [coord_limits[1][0] * 0.9, coord_limits[1][1] * 1.256789]
 	return [Mlimits] +  [m2limis] + coord_limits[2:]
 
 if args.mcm2:
