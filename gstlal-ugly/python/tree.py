@@ -317,7 +317,7 @@ class Node(object):
 			reuse_metric = self.cube #max(mts)[1]
 
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.25 and aspect_factor_2 > 1 and numtmps > split_num_templates / 1.25)) or bifurcation < 2:
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.25 and aspect_factor_2 > 1 and numtmps > split_num_templates / 2**.5)) or bifurcation < 2:
 			bifurcation += 1
 			if metric_diff <= 0.25 and (numtmps < 3**(len(size))) and self.cube.coord_volume() < 2:# and aspect_factor_2 == 1.0:
 				self.cube.metric_tensor = reuse_metric.metric_tensor
