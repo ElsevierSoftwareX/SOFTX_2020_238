@@ -89,10 +89,13 @@ def packing_density(n):
 def mc_m2_singularity(c):
 	center = c.copy()
 	m1, m2 = metric_module.m1_from_mc_m2(center[0], center[1]), center[1]
-	if .85 < m1 / m2 <= 1.0:
-		center[0] *= 0.85
-	if 1.0 < m1 / m2 <= 1.15:
-		center[1] *= 0.85
+	if .80 < m1 / m2 <= 1.0:
+		m1 = 0.80 * m2
+	elif 1.0 < m1 / m2 <= 1.25:
+		m2 = 0.80 * m1
+	mc = metric_module.mc_from_m1_m2(m1, m2)
+	center[0] = mc
+	center[1] = m2
 	return center
 	
 def m1_m2_singularity(c):
@@ -277,7 +280,8 @@ class Node(object):
 		#if (F*.99 < self.cube.center[0] / self.cube.center[1] <= F * 1.10):
 		#	self.splitdim = 1
 		#	aspect_factor = 2.00
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>3.0]) / 3.**len(aspect_ratios[aspect_ratios>3]))
+		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.**len(aspect_ratios[aspect_ratios>2]))
+		aspect_factor_2 = max(1., numpy.product(aspect_ratios[aspect_ratios>4.0]) / 4.**len(aspect_ratios[aspect_ratios>4]))
 		aspect_ratio = max(aspect_ratios)
 
 		if not self.parent:
@@ -306,7 +310,6 @@ class Node(object):
 			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
 			metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
 			metric_diff = max(metric_diff, metric_diff2)
-
 			# take the bigger of self, sibling and parent
 			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps) * aspect_factor
 
@@ -314,16 +317,16 @@ class Node(object):
 			reuse_metric = self.cube #max(mts)[1]
 
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.3 and aspect_factor > 1 and numtmps > split_num_templates/2.0)) or bifurcation < 2:
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.25 and aspect_factor_2 > 1 and numtmps > split_num_templates / 1.25)) or bifurcation < 2:
 			bifurcation += 1
-			if metric_diff <= 0.30 and (self.cube.num_templates(0.1) < len(size)**2/2.) and aspect_factor == 1.0:
+			if metric_diff <= 0.25 and (numtmps < 3**(len(size))) and self.cube.coord_volume() < 2:# and aspect_factor_2 == 1.0:
 				self.cube.metric_tensor = reuse_metric.metric_tensor
 				self.cube.effective_dimension = reuse_metric.effective_dimension
 				self.cube.det = reuse_metric.det
 				self.cube.metric_is_valid = reuse_metric.metric_is_valid
 				self.cube.eigv = reuse_metric.eigv
 				left, right = self.cube.split(self.splitdim, reuse_metric = True)
-				print "REUSE"
+				#print "REUSE"
 			else:
 				left, right = self.cube.split(self.splitdim)
 
