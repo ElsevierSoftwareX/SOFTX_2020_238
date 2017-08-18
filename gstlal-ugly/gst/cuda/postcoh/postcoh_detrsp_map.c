@@ -87,10 +87,15 @@ create_detresponse_skymap(
 {
 	DetSkymap * det_map = (DetSkymap *)malloc(sizeof(DetSkymap));
 	// from 0h UTC 6 Jan 1980
-	LIGOTimeGPS gps_start = {0, 0}; 
-	LIGOTimeGPS gps_end = {24*3600, 0};
-	LIGOTimeGPS gps_step = {ingps_step, 0}; 
 	LIGOTimeGPS gps_cur = {0, 0}; 
+	// current time
+	LIGOTimeGPS *out_cur = XLALGPSTimeNow(&gps_cur);
+	if (out_cur == NULL)
+		printf("can not find current gps time");
+	printf("current gps time %d, %d for detector response\n", gps_cur.gpsSeconds, gps_cur.gpsNanoSeconds);
+	LIGOTimeGPS gps_start = {gps_cur.gpsSeconds, 0}; 
+	LIGOTimeGPS gps_end = {gps_cur.gpsSeconds + 24*3600, 0};
+	LIGOTimeGPS gps_step = {ingps_step, 0}; 
 
 	int ngps;
 	ngps = (int)(gps_end.gpsSeconds - gps_start.gpsSeconds) / gps_step.gpsSeconds;
