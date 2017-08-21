@@ -153,6 +153,7 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		token = strtok_r(NULL, ",", &end_ifo);
 		ntoken++;
 	}
+	printf("read in sigmasq from xml %s\n", fname);
 
 	int nifo = ntoken;
 	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct));
@@ -170,12 +171,15 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_sigmasq[0]);
 
+	/* used for sanity check the lenghts of sigmasq arrays should be equal */
+	int last_dimension = -1;
 	/* start parsing again */
 	while (token != NULL) {
 		char *end_token;
 		char *token_bankname = strtok_r(token, ":", &end_token);
 		token_bankname = strtok_r(NULL, ":", &end_token);
 
+		printf("read in sigmasq now from xml %s\n", token_bankname);
 		parseFile(token_bankname, xns, 1);
 
 		for (int i=0; i<nifo; i++) {
@@ -187,8 +191,17 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		}
 
 		ntmplt = array_sigmasq[0].dim[0];
+		/* check if the lengths of sigmasq arrays are equal for all detectors */
+		if (last_dimension == -1)
+			last_dimension = ntmplt;
+		else
+			if (last_dimension != ntmplt) {
+				fprintf(stderr, "reading different lengths of sigmasq arrays from different detectors, exiting");
+				exit(0);
+			}
 
-		//printf("sigmasq, parse match ifo %d, %s, ntmplt %d\n", match_ifo, token_bankname, ntmplt);
+
+		printf("sigmasq, parse match ifo %d, %s, ntmplt %d\n", match_ifo, token_bankname, ntmplt);
 		mem_alloc_size = sizeof(double) * ntmplt;
 
 		if (sigmasq[0] == NULL) {
@@ -200,7 +213,7 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		}
 
 		for (int j=0; j<ntmplt; j++) {
-			sigmasq[match_ifo][j] = (double)((double *)(array_sigmasq[0].data))[j];
+			//sigmasq[match_ifo][j] = (double)((double *)(array_sigmasq[0].data))[j];
 			//printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
 		}
 
@@ -215,7 +228,7 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		 */
 		xmlMemoryDump();
 
-//		printf("next token %s \n", token);
+		printf("next token %s \n", token);
 
 	}
 
@@ -238,6 +251,7 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	sprintf((char *)xns[1].tag, "chealpix_order:param");
 	xns[1].processPtr = readParam;
 	xns[1].data = &param_order;
+	printf("read in detrsp map from xml %s\n", fname);
 
 	parseFile(fname, xns, 2);
 	/*
@@ -319,7 +333,7 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 void
 cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
-	//printf("read autocorr from xml\n");
+	printf("read in autocorr from xml %s\n", fname);
 
 	int ntoken = 0;
 
@@ -455,7 +469,8 @@ cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 	strncpy((char *) xns->tag, "sngl_inspiral:table", XMLSTRMAXLEN);
 	xns->processPtr = readTable;
 	xns->data = xtable;
-
+	
+	printf("read in sngl_tmplt from xml %s\n", fname);
 	parseFile(fname, xns, 1);
 
     /*
