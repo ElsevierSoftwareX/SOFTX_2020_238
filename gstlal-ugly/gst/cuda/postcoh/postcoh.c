@@ -181,8 +181,8 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
+		/* read in detector response map */
 		case PROP_DETRSP_FNAME:
-
        			/* must make sure stream_id has already loaded */
 			g_assert(element->stream_id != NOT_INIT);
 			g_mutex_lock(element->prop_lock);
@@ -190,27 +190,43 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			cuda_postcoh_device_set_init(element);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
 			cuda_postcoh_map_from_xml(element->detrsp_fname, element->state, element->stream);
+			GST_DEBUG("detrsp map has been read in, broad cast the lock avail");
 			g_cond_broadcast(element->prop_avail);
 			g_mutex_unlock(element->prop_lock);
+			GST_DEBUG("detrsp map lock broad cast done");
 			break;
 
+		/* read in autocorrelation and sigmasq */
 		case PROP_SPIIR_BANK_FNAME: 
-
        			/* must make sure stream_id has already loaded */
 			g_assert(element->stream_id != NOT_INIT);
+			GST_DEBUG("autocorrelation and sigma acquiring the lock");
 			g_mutex_lock(element->prop_lock);
+			GST_DEBUG("autocorrelation and sigma have acquired the lock");
 			cuda_postcoh_device_set_init(element);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
 			element->spiir_bank_fname = g_value_dup_string(value);
 			cuda_postcoh_autocorr_from_xml(element->spiir_bank_fname, element->state, element->stream);
 			cuda_postcoh_sigmasq_from_xml(element->spiir_bank_fname, element->state);
+			GST_DEBUG("autocorrelation and sigma have been read in, broad cast the lock avail");
 			g_cond_broadcast(element->prop_avail);
 			g_mutex_unlock(element->prop_lock);
+			GST_DEBUG("autocorrelation and sigma lock broad cast done");
 			break;
 
+		/* read in source information masses and spins */
 		case PROP_SNGL_TMPLT_FNAME: 
+       			/* must make sure stream_id has already loaded */
+			g_assert(element->stream_id != NOT_INIT);
+			GST_DEBUG("sngl table acquiring the lock");
+			g_mutex_lock(element->prop_lock);
+			GST_DEBUG("sngl table has acquired the lock");
 			element->sngl_tmplt_fname = g_value_dup_string(value);
 			cuda_postcoh_sngl_tmplt_from_xml(element->sngl_tmplt_fname, &(element->sngl_table));
+			GST_DEBUG("sngl tables has been read in, broad cast the lock avail");
+			g_cond_broadcast(element->prop_avail);
+			g_mutex_unlock(element->prop_lock);
+			GST_DEBUG("sngl tables lock broad cast done");
 			break;
 
 
@@ -1064,7 +1080,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	
 			output->ra = phi*RAD2DEG;
 			output->dec = (M_PI_2 - theta)*RAD2DEG;
-			output->event_id = postcoh->cur_event_id++;
+			//output->event_id = postcoh->cur_event_id++;
 			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
@@ -1210,15 +1226,21 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	return outbuf;
 }
 
-int timestamp_to_gps_idx(int gps_step, GstClockTime t)
+int timestamp_to_gps_idx(long gps_start, int gps_step, GstClockTime t)
 {
 	int seconds_in_one_day = 24 * 3600;
-	unsigned long days_from_utc0 = (t / GST_SECOND) / seconds_in_one_day;
 	int gps_len = seconds_in_one_day / gps_step;
-	double time_in_one_day = (double) (t/GST_SECOND) - days_from_utc0 * seconds_in_one_day;
+
+	/* DEPRECATED: not using utc0 as the gps_start time any more */
+	//unsigned long days_from_gps_start = (t / GST_SECOND) / seconds_in_one_day;
+	//double time_in_one_day = (double) (t/GST_SECOND) - days_from_gps_start * seconds_in_one_day;
+	//int gps_idx = (int) (round( time_in_one_day / gps_step)) % gps_len;
+
+	int days_from_gps_start = floor((t / GST_SECOND - (double)gps_start) / seconds_in_one_day);
+	double time_in_one_day = (double) (t/GST_SECOND) -  ((double)gps_start + days_from_gps_start * seconds_in_one_day);
 	int gps_idx = (int) (round( time_in_one_day / gps_step)) % gps_len;
 
-	GST_LOG("current days from utc0 %lu, current time in one day %f, length of gps array %d, gps_idx %d,\n", days_from_utc0, time_in_one_day, gps_len, gps_idx);
+	GST_DEBUG("current days from gps_start %d, current time in one day %f, length of gps array %d, gps_idx %d,\n", days_from_gps_start, time_in_one_day, gps_len, gps_idx);
 	return gps_idx;
 }
 
@@ -1331,7 +1353,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 	LIGOTimeGPS ligo_time;
 	XLALINT8NSToGPS(&ligo_time, ts);
 	while (common_size >= one_take_size) {
-		int gps_idx = timestamp_to_gps_idx(state->gps_step, postcoh->next_exe_t);
+		int gps_idx = timestamp_to_gps_idx(state->gps_start, state->gps_step, postcoh->next_exe_t);
 		/* copy the snr data to the right location for all detectors */ 
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;

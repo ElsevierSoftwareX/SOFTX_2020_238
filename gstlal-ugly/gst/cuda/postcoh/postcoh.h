@@ -212,6 +212,8 @@ typedef struct _PostcohState {
    * pointing to the coherent time arrival diff map of a certain time in GPU device*/
   float **d_diff_map;
   int gps_step;
+  /* be careful that long has different length in different machines */
+  long gps_start;
   unsigned long nside;
   int npix;
   PeakList **peak_list;

@@ -48,6 +48,7 @@ typedef struct _DetSkymap {
 	char **ifos;
 	int nifo;
 	int gps_step;
+	long gps_start;
 	unsigned order;
 	float *U_map;
 	float *diff_map;
@@ -100,6 +101,7 @@ create_detresponse_skymap(
 	int ngps;
 	ngps = (int)(gps_end.gpsSeconds - gps_start.gpsSeconds) / gps_step.gpsSeconds;
 
+	det_map->gps_start = gps_cur.gpsSeconds;
 	det_map->gps_step = ingps_step;
 	det_map->matrix_size[0] = ngps;
 
@@ -246,7 +248,16 @@ static int to_xml(DetSkymap *det_map, const char *detrsp_fname, const char *detr
         return;
     }
 
+    /* gps time is half way through int_4 limit, use int_8 for this */
     XmlParam tmp_param;
+    tmp_param.data = malloc(sizeof(long));
+    *((long *)tmp_param.data) = det_map->gps_start;
+    ligoxml_write_Param(writer, &tmp_param, BAD_CAST "int_8s", BAD_CAST "gps_start:param");
+
+    free(tmp_param.data);
+    tmp_param.data = NULL;
+
+
     tmp_param.data = malloc(sizeof(int));
     *((int *)tmp_param.data) = det_map->gps_step;
     ligoxml_write_Param(writer, &tmp_param, BAD_CAST "int_4s", BAD_CAST "gps_step:param");

@@ -196,8 +196,8 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 			last_dimension = ntmplt;
 		else
 			if (last_dimension != ntmplt) {
-				fprintf(stderr, "reading different lengths of sigmasq arrays from different detectors, exiting");
-				exit(0);
+				fprintf(stderr, "reading different lengths of sigmasq arrays from different detectors, should exit\n");
+				//exit(0);
 			}
 
 
@@ -240,20 +240,25 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	// each sky pixel is consistent with number of detectors
 	//printf("read map from xml\n");
 	/* first get the params */
-	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2);
-	XmlParam param_gps = {0, NULL};
+	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 3);
+	XmlParam param_gps_step = {0, NULL};
+	XmlParam param_gps_start = {0, NULL};
 	XmlParam param_order = {0, NULL};
 
 	sprintf((char *)xns[0].tag, "gps_step:param");
 	xns[0].processPtr = readParam;
-	xns[0].data = &param_gps;
+	xns[0].data = &param_gps_step;
 
-	sprintf((char *)xns[1].tag, "chealpix_order:param");
+	sprintf((char *)xns[1].tag, "gps_start:param");
 	xns[1].processPtr = readParam;
-	xns[1].data = &param_order;
+	xns[1].data = &param_gps_start;
+
+	sprintf((char *)xns[2].tag, "chealpix_order:param");
+	xns[2].processPtr = readParam;
+	xns[2].data = &param_order;
 	printf("read in detrsp map from xml %s\n", fname);
 
-	parseFile(fname, xns, 2);
+	parseFile(fname, xns, 3);
 	/*
 	 * Cleanup function for the XML library.
 	 */
@@ -265,23 +270,26 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 
 
 	//printf("test\n");
-	printf("%s \n", xns[0].tag);
+	printf("reading detrsp map %s %s %s\n", xns[0].tag, xns[1].tag, xns[2].tag);
 
-	printf("%p\n", param_gps.data);
-	state->gps_step = *((int *)param_gps.data);
+	state->gps_step = *((int *)param_gps_step.data);
+	state->gps_start = *((long *)param_gps_start.data);
 	printf("gps_step %d\n", state->gps_step);
+	printf("gps_start %d\n", state->gps_start);
 	unsigned long nside = (unsigned long) 1 << *((int *)param_order.data);
 	state->nside = nside;
 	state->npix = nside2npix(nside);
-	free(param_gps.data);
-	param_gps.data = NULL;
+	free(param_gps_step.data);
+	free(param_gps_start.data);
+	param_gps_step.data = NULL;
+	param_gps_start.data = NULL;
 	//printf("test\n");
 	free(param_order.data);
 	param_order.data = NULL;
 	free(xns);
 
 
-	int gps = 0, gps_start = 0, gps_end = 24*3600;
+	int gps = 0, gps_end = 24*3600;
 	int ngps = gps_end/(state->gps_step);
 
 	xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2* ngps);
