@@ -328,8 +328,13 @@ class FinalSink(object):
 					self.nevent_clustered += 1
 					self.__set_far(self.candidate)
 					self.postcoh_table.append(self.candidate)	
-					# FIXME: Currently hard-coded for single detector far H and L
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and self.candidate.far_h < 1E-2 and self.candidate.far_l < 1E-2 and self.__chisq_ratio_veto(self.candidate) is False:
+                                        # FIXME: hard-coded detector list and snglsnr_X fields...
+                                        ifo_active=[self.candidate.snglsnr_H!=0,self.candidate.snglsnr_L!=0,self.candidate.snglsnr_V!=0]
+                                        ifo_names=['H1','L1','V1']
+                                        ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
+                                        ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
+                                        self.candidate.ifos = ''.join([i for (i,v) in zip(ifo_names,ifo_active) if v])
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and all([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v]) and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v])):
 						# self.__lookback_far(self.candidate)
 						self.__do_gracedb_alert(self.candidate)
 					if self.need_online_perform:
@@ -430,13 +435,6 @@ class FinalSink(object):
 			# 	candidate.far = 9.99e-6
 	
 	
-	def __chisq_ratio_veto(self, candidate):
-		chisq_ratio = candidate.chisq_H/candidate.chisq_L
-		if chisq_ratio > self.chisq_ratio_thresh or chisq_ratio < 1.0/self.chisq_ratio_thresh:
-			return True
-		else:
-			return False
-
 	def __need_trigger_control(self, trigger):
 		# do trigger control
 		# FIXME: implement a sql solution for node communication ?
