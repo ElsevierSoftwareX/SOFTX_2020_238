@@ -293,25 +293,37 @@ class NearestLeafTree(object):
 	def __repr__(self):
 		return "NearestLeaftree([%s])" % ", ".join("(%g, %g)" % item for item in self.tree)
 
-	def weighted_mean(self, (lo, hi), weight = lambda y: 1.):
+	def functional_integral(self, (lo, hi), w = lambda f: f):
 		"""
 		Given the function f(x) = self[x], compute
 
-		\int_{lo}^{hi} w(f(x)) f(x) dx
-		------------------------------
-		   \int_{lo}^{hi} w(f(x)) dx
+		\int_{lo}^{hi} w(f(x)) dx
 
-		where w(y) is a weighting function.  The default weight
-		function is w(y) = 1.
+		The arguments are the lo and hi bounds and the functional
+		w(f).  The default functional is w(f) = f.
+
+		Example:
+
+		>>> x = NearestLeafTree([(100., 0.), (150., 2.), (200., 0.)])
+		>>> x.functional_integral((130., 170.))
+		80.0
+		>>> x.functional_integral((100., 150.))
+		50.0
+		>>> x.functional_integral((300., 500.))
+		0.0
+		>>> x.functional_integral((100., 150.), lambda f: f**3)
+		200.0
 		"""
 		if not self.tree:
 			raise ValueError("empty tree")
-		if lo > hi:
-			# remove a common factor of -1 from the numerator
-			# and denominator
-			lo, hi = hi, lo
+		if lo < hi:
+			swapped = False
 		elif lo == hi:
-			return self[lo]
+			return NaN if math.isinf(w(self[lo])) else 0.
+		else:
+			# lo > hi. remove a factor of -1 from the integral
+			lo, hi = hi, lo
+			swapped = True
 		# now we are certain that lo < hi and that there is at
 		# least one entry in the tree
 
@@ -335,9 +347,52 @@ class NearestLeafTree(object):
 			samples.append((hi, self[hi]))
 		else:
 			samples[-1] = hi, self[hi]
+		# return the integral
+		result = sum((b_key - a_key) * w(a_val) for (a_key, a_val), (b_key, b_val) in zip(samples[:-1], samples[1:]))
+		return -result if swapped else result
+
+	def weighted_mean(self, (lo, hi), weight = lambda y: 1.):
+		"""
+		Given the function f(x) = self[x], compute
+
+		\int_{lo}^{hi} w(f(x)) f(x) dx
+		------------------------------
+		   \int_{lo}^{hi} w(f(x)) dx
+
+		where w(y) is a weighting function.  The default weight
+		function is w(y) = 1.
+
+		If the numerator is identically 0 and the denominator is
+		also 0 then a value of 0 is returned rather than raising a
+		divide-by-0 error.
+
+		Example:
+
+		>>> x = NearestLeafTree([(100., 0.), (150., 2.), (200., 0.)])
+		>>> x.weighted_mean((130., 170.))
+		2.0
+		>>> x.weighted_mean((100., 150.))
+		1.0
+		>>> x.weighted_mean((300., 500.))
+		0.0
+		>>> x.weighted_mean((100., 150.), lambda x: x**3)
+		2.0
+		"""
+		if not self.tree:
+			raise ValueError("empty tree")
+		if lo > hi:
+			# remove a common factor of -1 from the numerator
+			# and denominator
+			lo, hi = hi, lo
+		elif lo == hi:
+			return self[lo]
+		# now we are certain that lo < hi and that there is at
+		# least one entry in the tree
+
 		# return the ratio of the two integrals
-		samples = [((b_key - a_key) * weight(a_val), a_val) for (a_key, a_val), (b_key, b_val) in zip(samples[:-1], samples[1:])]
-		return sum(w * val for w, val in samples) / sum(w for w, val in samples)
+		num = self.functional_integral((lo, hi), lambda f: weight(f) * f)
+		den = self.functional_integral((lo, hi), weight)
+		return num / den if num or den else 0.0
 
 	@classmethod
 	def from_xml(cls, xml, name):
@@ -348,8 +403,16 @@ class NearestLeafTree(object):
 
 
 class HorizonHistories(dict):
+	def copy(self):
+		"""
+		Override of dict's .copy() that (a) returns the correct
+		type and (b) makes copies of the HorizonHistories'
+		contents.
+		"""
+		return type(self)((key, copy.deepcopy(value)) for key, value in self.items())
+
 	def __iadd__(self, other):
-		for key, history in other.iteritems():
+		for key, history in other.items():
 			try:
 				self[key] += history
 			except KeyError:
@@ -375,7 +438,7 @@ class HorizonHistories(dict):
 		return max(maxkeys)
 
 	def getdict(self, x):
-		return dict((key, value[x]) for key, value in self.iteritems())
+		return dict((key, value[x]) for key, value in self.items())
 
 	def randhorizons(self):
 		"""
@@ -409,6 +472,16 @@ class HorizonHistories(dict):
 		# dictionaries
 		return map(dict, result)
 
+	def functional_integral(self, *args, **kwargs):
+		"""
+		Return a dictionary of the result of invoking
+		.functional_integral() on each of the histories.  args and
+		kwargs are passed to the .functional_integral() method of
+		the histories objects, see their documentation for more
+		information.
+		"""
+		return dict((key, value.functional_integral(*args, **kwargs)) for key, value in self.items())
+
 	def weighted_mean(self, *args, **kwargs):
 		"""
 		Return a dictionary of the result of invoking
@@ -416,7 +489,7 @@ class HorizonHistories(dict):
 		are passed to the .weighted_mean() method of the histories
 		objects, see their documentation for more information.
 		"""
-		return dict((key, value.weighted_mean(*args, **kwargs)) for key, value in self.iteritems())
+		return dict((key, value.weighted_mean(*args, **kwargs)) for key, value in self.items())
 
 	@classmethod
 	def from_xml(cls, xml, name):

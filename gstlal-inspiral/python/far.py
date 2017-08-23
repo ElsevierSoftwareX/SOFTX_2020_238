@@ -253,7 +253,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# FIXME:  this should use .weighted_mean() to get an
 		# average over a interval
 
-		params.horizons = self.horizon_history.getdict(float(events[0].end))
+		#params.horizons = self.horizon_history.getdict(float(events[0].end))
+		t, dt = float(events[0].end), 300.
+		params.horizons = self.horizon_history.functional_integral((t - dt, t), w = lambda f: f**3.)
+		params.horizons = dict((key, (value / dt)**(1./3.)) for key, value in params.horizons.items())
 		# for instruments that provided triggers,
 		# use the trigger effective distance and
 		# SNR to provide the horizon distance.
