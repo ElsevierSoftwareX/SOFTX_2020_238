@@ -673,7 +673,10 @@ FROM
 				fig, axes = create_plot(ax1, ax2, aspect = aspect)
 				axes.set_title(r"$\textrm{Injection Parameter Distribution (%s Injections)}$" % waveform)
 				mrkr, markersize = self.marker_and_size(len(col1))
-				axes.plot(col1,col2, mrkr, markersize = markersize)
+				if markersize is not None:
+					axes.plot(col1,col2, mrkr, markersize = markersize)
+				else:
+					axes.plot(col1,col2, mrkr)
 				minx, maxx = axes.get_xlim()
 				miny, maxy = axes.get_ylim()
 				if aspect == 1:
