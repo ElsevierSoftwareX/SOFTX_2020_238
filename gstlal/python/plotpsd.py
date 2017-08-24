@@ -42,17 +42,17 @@ from glue.ligolw import lsctables
 from gstlal import reference_psd
 
 
-def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
+def axes_plot_psds(axes, psds, coinc_xmldoc = None):
 	"""!
-	Produces a matplotlib figure of PSDs. 
+	Places a PSD plot into a matplotlib Axes object.
+
+	@param axes An Axes object into which the plot will be placed.
 
 	@param psds A dictionary of PSDs as REAL8FrequencySeries keyed by
 	instrument
 
 	@param coinc_xmldoc An XML document containing a single event with all
 	of the metadata as would be uploaded to gracedb.  This is optional.
-
-	@param plot_width How wide to make the plot in pixels
 	"""
 
 	if coinc_xmldoc is not None:
@@ -76,10 +76,6 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 		mass1, mass2, end_time = 1.4, 1.4, None
 		on_instruments = set(psds)
 
-	fig = figure.Figure()
-	FigureCanvas(fig)
-	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / plotutil.golden_ratio)) / float(fig.get_dpi()))
-	axes = fig.gca()
 	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
 	axes.minorticks_on()
 
@@ -134,6 +130,24 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 	axes.set_xlabel(r"Frequency (Hz)")
 	axes.set_ylabel(r"Spectral Density ($\mathrm{strain}^2 / \mathrm{Hz}$)")
 	axes.legend(loc = "upper right")
-	fig.tight_layout(pad = .8)
 
+
+def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
+	"""!
+	Produces a matplotlib figure of PSDs.
+
+	@param psds A dictionary of PSDs as REAL8FrequencySeries keyed by
+	instrument
+
+	@param coinc_xmldoc An XML document containing a single event with all
+	of the metadata as would be uploaded to gracedb.  This is optional.
+
+	@param plot_width How wide to make the figure object in pixels
+	(ignored if axes is provided).
+	"""
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / plotutil.golden_ratio)) / float(fig.get_dpi()))
+	axes_plot_psds(fig.gca(), psds, coinc_xmldoc = coinc_xmldoc)
+	fig.tight_layout(pad = .8)
 	return fig
