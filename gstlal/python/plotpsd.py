@@ -61,6 +61,52 @@ def summarize_coinc_xmldoc(coinc_xmldoc):
 	return sngl_inspirals, mass1, mass2, end_time, on_instruments
 
 
+def axes_plot_cummulative_snr(axes, psds, coinc_xmldoc):
+	sngl_inspirals, mass1, mass2, end_time, on_instruments = summarize_coinc_xmldoc(coinc_xmldoc)
+
+	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
+	axes.minorticks_on()
+
+	for instrument, sngl_inspiral in sngl_inspirals.items():
+		logging.info("found %s event with SNR %g" % (instrument, sngl_inspirals[instrument].snr))
+
+		if instrument not in psds:
+			logging.info("no PSD for %s" % instrument)
+			continue
+		psd = psds[instrument]
+		if psd is None:
+			logging.info("no PSD for %s" % instrument)
+			continue
+		psd_data = psd.data.data
+		f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
+		logging.info("found PSD for %s spanning [%g Hz, %g Hz]" % (instrument, f[0], f[-1]))
+
+		# FIXME: horizon distance stopped at 0.9 max frequency due
+		# to low pass filter messing up the end of the PSD.  if we
+		# could figure out the frequency bounds and delta F we
+		# could move this out of the loop for some speed
+		horizon_distance = reference_psd.HorizonDistance(10., 0.9 * f[-1], psd.deltaF, mass1, mass2)
+
+		# generate inspiral spectrum and clip PSD to its frequency
+		# range
+		inspiral_spectrum_x, inspiral_spectrum_y = horizon_distance(psd, sngl_inspiral.snr)[1]
+		lo = int(round((inspiral_spectrum_x[0] - psd.f0) / psd.deltaF))
+		hi = int(round((inspiral_spectrum_x[-1] - psd.f0) / psd.deltaF)) + 1
+		f = f[lo:hi]
+		psd_data = psd_data[lo:hi]
+
+		# plot
+		snr2 = (inspiral_spectrum_y / psd_data).cumsum() * psd.deltaF
+		axes.semilogx(f, snr2**.5, color = plotutil.colour_from_instruments([instrument]), alpha = 0.8, linestyle = "-", label = "%s SNR = %.3g" % (instrument, sngl_inspiral.snr))
+
+	axes.set_ylim([0., axes.get_ylim()[1]])
+
+	axes.set_title(r"Cumulative SNRs for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ Merger Candidate at %.2f GPS" % (mass1, mass2, float(end_time)))
+	axes.set_xlabel(r"Frequency (Hz)")
+	axes.set_ylabel(r"Cumulative SNR")
+	axes.legend(loc = "upper left")
+
+
 def axes_plot_psds(axes, psds, coinc_xmldoc = None):
 	"""!
 	Places a PSD plot into a matplotlib Axes object.
@@ -156,5 +202,26 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 	FigureCanvas(fig)
 	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / plotutil.golden_ratio)) / float(fig.get_dpi()))
 	axes_plot_psds(fig.gca(), psds, coinc_xmldoc = coinc_xmldoc)
+	fig.tight_layout(pad = .8)
+	return fig
+
+
+def plot_cumulative_snrs(psds, coinc_xmldoc, plot_width = 640):
+	"""!
+	Produces a matplotlib figure of cumulative SNRs.
+
+	@param psds A dictionary of PSDs as REAL8FrequencySeries keyed by
+	instrument
+
+	@param coinc_xmldoc An XML document containing a single event with all
+	of the metadata as would be uploaded to gracedb.
+
+	@param plot_width How wide to make the figure object in pixels
+	(ignored if axes is provided).
+	"""
+	fig = figure.Figure()
+	FigureCanvas(fig)
+	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / plotutil.golden_ratio)) / float(fig.get_dpi()))
+	axes_plot_cummulative_snr(fig.gca(), psds, coinc_xmldoc)
 	fig.tight_layout(pad = .8)
 	return fig
