@@ -157,6 +157,9 @@ class BackgroundStatsUpdater(object):
 			for proc in self.procs:
 				if proc.poll() is None:
 					proc.wait()
+		
+		# delete all update processes when they are finished
+		del self.procs[:]
 
 
 	def update_fap_stats(self, cur_buftime):
@@ -617,6 +620,8 @@ class FinalSink(object):
 		del self.postcoh_document_cpy
 		self.postcoh_document_cpy = self.postcoh_document
 		self.postcoh_document_cpy.set_filename(filename)
+		# free thread context
+		del self.thread_snapshot
 		self.thread_snapshot = threading.Thread(target = self.postcoh_document_cpy.write_output_file, args =(self.postcoh_document_cpy, ))
 		self.thread_snapshot.start()
 
