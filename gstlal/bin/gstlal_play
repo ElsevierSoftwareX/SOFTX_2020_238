@@ -149,6 +149,7 @@ def parse_command_line():
 	datasource.append_options(parser)
 
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the output.  If not given, output is sent to the default audio device.  The filename's extension determines the format, the following are recognized:  .wav, .flac, .ogg, .txt, /dev/stdout, /dev/stderr")
+	parser.add_option("--sample-format", metavar = "name", help = "Force a specific sample format for the output.  If not specified, the format is chosen by auto-negotiation with the encoder.  Allowed values are any GStreamer-recognized format that is compatible with the requested encoder.  Examples include \"F32LE\", \"F64LE\".")
 	parser.add_option("--rate", metavar = "Hz", type = "int", default = 4096, help = "Downsample input to this sample rate. Default = 4096 Hz.  Must be <= input sample rate or else you will get a caps negotiation error.")
 	parser.add_option("--whiten", action = "store_true", help = "Whiten the time series (default = do not whiten).")
 	parser.add_option("--reference-psd", metavar = "filename", help = "When whitening, normalize the time series to the spectrum described in this XML file.  If this option is not given, the spectrum is measured from the data.") 
@@ -217,6 +218,8 @@ else:
 
 # necessary audio convert and amplify 
 head = pipeparts.mkaudioconvert(pipeline, pipeparts.mkaudioamplify(pipeline, head, options.amplification))
+if options.sample_format is not None:
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=%s" % options.sample_format)
 
 if options.output is None:
 	pipeparts.mkautoaudiosink(pipeline, head)
