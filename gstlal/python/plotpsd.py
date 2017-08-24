@@ -35,6 +35,7 @@ import math
 import matplotlib
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib import ticker
 import numpy
 from gstlal import plotutil
 from glue.ligolw import lsctables
@@ -80,6 +81,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 	fig.set_size_inches(plot_width / float(fig.get_dpi()), int(round(plot_width / plotutil.golden_ratio)) / float(fig.get_dpi()))
 	axes = fig.gca()
 	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
+	axes.minorticks_on()
 
 	min_psds, max_psds = [], []
 	min_fs, max_fs = [], []
@@ -109,17 +111,22 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 			logging.info("found %s event with SNR %g" % (instrument, sngl_inspirals[instrument].snr))
 			inspiral_spectrum = horizon_distance(psd, sngl_inspirals[instrument].snr)[1]
 			axes.loglog(inspiral_spectrum[0], inspiral_spectrum[1], color = plotutil.colour_from_instruments([instrument]), dashes = (5, 2), alpha = 0.8, label = "SNR = %.3g" % sngl_inspirals[instrument].snr)
-		# record the minimum from within the rage 10 Hz -- 1 kHz
-		min_psds.append(psd_data[int((10.0 - psd.f0) / psd.deltaF) : int((1000 - psd.f0) / psd.deltaF)].min())
-		# record the maximum from within the rage 1 Hz -- 1 kHz
-		max_psds.append(psd_data[int((1.0 - psd.f0) / psd.deltaF) : int((1000 - psd.f0) / psd.deltaF)].max())
+		# record the minimum from within the rage 10 Hz -- 900 Hz
+		min_psds.append(psd_data[int((10.0 - psd.f0) / psd.deltaF) : int((900 - psd.f0) / psd.deltaF)].min())
+		# record the maximum from within the rage 1 Hz -- 900 Hz
+		max_psds.append(psd_data[int((1.0 - psd.f0) / psd.deltaF) : int((900 - psd.f0) / psd.deltaF)].max())
 
 	if min_fs:
 		axes.set_xlim((6.0, max(max_fs)))
 	else:
 		axes.set_xlim((6.0, 3000.0))
 	if min_psds:
-		axes.set_ylim((10**math.floor(math.log10(min(min_psds))), 10**math.ceil(math.log10(max(max_psds)))))
+		axes.set_ylim((10.**math.floor(math.log10(min(min_psds) / 3.)), 10.**math.ceil(math.log10(max(max_psds)))))
+
+	# FIXME:  I don't understand how these work
+	axes.yaxis.set_major_locator(ticker.LogLocator(10., subs = (1.0,)))
+	axes.yaxis.set_minor_locator(ticker.LogLocator(10., subs = (0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9)))
+
 	title = r"Strain Noise Spectral Density for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ Merger Candidate" % (mass1, mass2)
 	if end_time is not None:
 		title += r" at %.2f GPS" % float(end_time)
