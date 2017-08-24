@@ -61,6 +61,7 @@ plotpsd.matplotlib.rcParams.update({
 	"xtick.labelsize": 8.0,
 	"ytick.labelsize": 8.0,
 	"legend.fontsize": 8.0,
+	"lines.linewidth": 0.75,
 	"figure.dpi": 300,
 	"savefig.dpi": 300,
 	"text.usetex": True,
@@ -147,7 +148,13 @@ for graceid in graceids:
 	if psds is None:
 		continue
 
-	fig = plotpsd.plot_psds(psds, lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid), plot_width = 2400)
+	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
+
+	#
+	# PSD plot
+	#
+
+	fig = plotpsd.plot_psds(psds, coinc_xmldoc, plot_width = 2400)
 	fig.tight_layout()
 
 	filename = "%s_psd.png" % graceid
@@ -155,5 +162,20 @@ for graceid in graceids:
 		logging.info("writing %s ..." % filename)
 		fig.savefig(filename)
 	else:
-		lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename, log_message = "strain spectral density plot")
+		lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename, log_message = "strain spectral density plot", tagname = "psd")
+
+	#
+	# Cumulative SNRs plot
+	#
+
+	fig = plotpsd.plot_cumulative_snrs(psds, coinc_xmldoc, plot_width = 2400)
+	fig.tight_layout()
+
+	filename = "%s_cumulative_snrs.png" % graceid
+	if options.no_upload:
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
+	else:
+		lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename, log_message = "cumulative SNRs plot", tagname = "psd")
+
 	logging.info("finished processing %s" % graceid)
