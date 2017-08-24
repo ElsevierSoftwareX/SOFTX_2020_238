@@ -42,6 +42,25 @@ from glue.ligolw import lsctables
 from gstlal import reference_psd
 
 
+def summarize_coinc_xmldoc(coinc_xmldoc):
+	coinc_event, = lsctables.CoincTable.get_table(coinc_xmldoc)
+	coinc_inspiral, = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
+	offset_vector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id] if coinc_event.time_slide_id is not None else None
+	# FIXME:  MBTA uploads are missing process table
+	#process, = lsctables.ProcessTable.get_table(coinc_xmldoc)
+	sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+
+	mass1 = sngl_inspirals.values()[0].mass1
+	mass2 = sngl_inspirals.values()[0].mass2
+	if mass1 < mass2:
+		mass1, mass2 = mass2, mass1
+	end_time = coinc_inspiral.end
+	on_instruments = coinc_inspiral.ifos
+	logging.info("%g Msun -- %g Msun event in %s at %.2f GPS" % (mass1, mass2, ", ".join(sorted(sngl_inspirals)), float(end_time)))
+
+	return sngl_inspirals, mass1, mass2, end_time, on_instruments
+
+
 def axes_plot_psds(axes, psds, coinc_xmldoc = None):
 	"""!
 	Places a PSD plot into a matplotlib Axes object.
@@ -56,22 +75,10 @@ def axes_plot_psds(axes, psds, coinc_xmldoc = None):
 	"""
 
 	if coinc_xmldoc is not None:
-		coinc_event, = lsctables.CoincTable.get_table(coinc_xmldoc)
-		coinc_inspiral, = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
-		offset_vector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id] if coinc_event.time_slide_id is not None else None
-		# FIXME:  MBTA uploads are missing process table
-		#process, = lsctables.ProcessTable.get_table(coinc_xmldoc)
-		sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
-
-		mass1 = sngl_inspirals.values()[0].mass1
-		mass2 = sngl_inspirals.values()[0].mass2
-		if mass1 < mass2:
-			mass1, mass2 = mass2, mass1
-		end_time = coinc_inspiral.end
-		on_instruments = coinc_inspiral.ifos
-		logging.info("%g Msun -- %g Msun event in %s at %.2f GPS" % (mass1, mass2, ", ".join(sorted(sngl_inspirals)), float(end_time)))
+		sngl_inspirals, mass1, mass2, end_time, on_instruments = summarize_coinc_xmldoc(coinc_xmldoc)
 	else:
-		# Use the cannonical BNS binary for horizon distance if an event wasn't given
+		# Use the cannonical BNS binary for horizon distance if an
+		# event wasn't given
 		sngl_inspirals = {}
 		mass1, mass2, end_time = 1.4, 1.4, None
 		on_instruments = set(psds)
