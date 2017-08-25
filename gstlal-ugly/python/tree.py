@@ -131,7 +131,7 @@ class HyperCube(object):
 		self.metric = metric
 		# FIXME don't assume m1 m2 and the spin coords are the coordinates we have here.
 		deltas = DELTA * numpy.ones(len(self.center))
-		deltas[0:2] *= self.center[0:2]
+		#deltas[0:2] *= self.center[0:2]
 		self.singularity = singularity
 
 		if self.metric is not None and metric_tensor is None:
@@ -280,8 +280,8 @@ class Node(object):
 		#if (F*.99 < self.cube.center[0] / self.cube.center[1] <= F * 1.10):
 		#	self.splitdim = 1
 		#	aspect_factor = 2.00
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>2.0]) / 2.**len(aspect_ratios[aspect_ratios>2]))
-		aspect_factor_2 = max(1., numpy.product(aspect_ratios[aspect_ratios>4.0]) / 4.**len(aspect_ratios[aspect_ratios>4]))
+		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>1.5]) /1.5**len(aspect_ratios[aspect_ratios>1.5]))
+		aspect_factor_2 = max(1., numpy.product(aspect_ratios[aspect_ratios>8.0]) / 8.**len(aspect_ratios[aspect_ratios>8.]))
 		aspect_ratio = max(aspect_ratios)
 
 		if not self.parent:
@@ -317,9 +317,9 @@ class Node(object):
 			reuse_metric = self.cube #max(mts)[1]
 
 		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.25 and aspect_factor_2 > 1 and numtmps > split_num_templates / 2**.5)) or bifurcation < 2:
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.30 and numtmps > split_num_templates / 2**.5)) or bifurcation < 2:
 			bifurcation += 1
-			if metric_diff <= 0.25 and (numtmps < 3**(len(size))) and self.cube.coord_volume() < 2:# and aspect_factor_2 == 1.0:
+			if metric_diff <= 0.3 and (numtmps < 3**(len(size))) and self.cube.coord_volume() < 4 and aspect_factor_2 == 1.0:
 				self.cube.metric_tensor = reuse_metric.metric_tensor
 				self.cube.effective_dimension = reuse_metric.effective_dimension
 				self.cube.det = reuse_metric.det
