@@ -27,7 +27,7 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 1e-6#2.0e-7
+DELTA = 2.5e-7#2.0e-7
 EIGEN_DELTA_DET = DELTA
 
 # Round a number up to the nearest power of 2
