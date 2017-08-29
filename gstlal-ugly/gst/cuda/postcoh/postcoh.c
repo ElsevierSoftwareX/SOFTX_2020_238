@@ -1248,7 +1248,6 @@ int timestamp_to_gps_idx(long gps_start, int gps_step, GstClockTime t)
 
 static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_ifo, cudaStream_t stream)
 {
-        state->snglsnr_max = 0;
 	int exe_len = state->exe_len, ntmplt = state->ntmplt, itmplt, ilen, jlen, npeak = 0;
 	COMPLEX_F *isnr = snglsnr;
 	float tmp_abssnr, tmp_tmplt, snglsnr_thresh = state->snglsnr_thresh;
@@ -1355,6 +1354,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 	LIGOTimeGPS ligo_time;
 	XLALINT8NSToGPS(&ligo_time, ts);
 	while (common_size >= one_take_size) {
+		state->snglsnr_max = 0;
 		int gps_idx = timestamp_to_gps_idx(state->gps_start, state->gps_step, postcoh->next_exe_t);
 		/* copy the snr data to the right location for all detectors */ 
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
