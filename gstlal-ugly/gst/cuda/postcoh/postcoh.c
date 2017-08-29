@@ -860,6 +860,7 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 			buf_aligned_offset0 = (gint) (postcoh->offset0 - offset_cur);
 			GST_DEBUG_OBJECT(data, "buffer aligned offset0 %u", buf_aligned_offset0);
 			subbuf = gst_buffer_create_sub(buf, buf_aligned_offset0, (offset_end_cur - offset_cur - buf_aligned_offset0) * data->channels * sizeof(float));
+			g_assert(subbuf);
 			GST_LOG_OBJECT (pads,
 				"Created sub buffer of (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
 				GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
