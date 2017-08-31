@@ -143,11 +143,11 @@ class NearestLeafTree(object):
 		>>> x[100.:200.] = 0.
 		>>> x[150.] = 1.
 		>>> x
-		NearestLeaftree([(100, 0), (150, 1), (200, 0)])
+		NearestLeafTree([(100, 0), (150, 1), (200, 0)])
 		>>> x[210:] = 5.
 		>>> x[:90] = 5.
 		>>> x
-		NearestLeaftree([(90, 5), (100, 0), (150, 1), (200, 0), (210, 5)])
+		NearestLeafTree([(90, 5), (100, 0), (150, 1), (200, 0), (210, 5)])
 		"""
 		if isinstance(x, slice):
 			# replace all entries in the requested range of
@@ -291,7 +291,7 @@ class NearestLeafTree(object):
 		return len(self.tree)
 
 	def __repr__(self):
-		return "NearestLeaftree([%s])" % ", ".join("(%g, %g)" % item for item in self.tree)
+		return "NearestLeafTree([%s])" % ", ".join("(%g, %g)" % item for item in self.tree)
 
 	def functional_integral(self, (lo, hi), w = lambda f: f):
 		"""
