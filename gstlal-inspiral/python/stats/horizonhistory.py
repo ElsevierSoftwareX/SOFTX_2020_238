@@ -110,7 +110,8 @@ class NearestLeafTree(object):
 	True
 	>>> 103 in x
 	False
-	>>> x.to_xml(u"H1").write()
+	>>> import sys
+	>>> x.to_xml(u"H1").write(sys.stdout)	# doctest: +NORMALIZE_WHITESPACE
 	<Array Type="real_8" Name="H1:nearestleaftree:array">
 		<Dim>2</Dim>
 		<Dim>2</Dim>
@@ -201,8 +202,9 @@ class NearestLeafTree(object):
 		>>> x = NearestLeafTree([(100., 0.), (150., 1.), (200., 0.)])
 		>>> del x[150.]
 		>>> x
-		NearestLeafTree([(100., 0.), (200., 0.)])
+		NearestLeafTree([(100, 0), (200, 0)])
 		>>> del x[:]
+		>>> x
 		NearestLeafTree([])
 		"""
 		if isinstance(x, slice):
