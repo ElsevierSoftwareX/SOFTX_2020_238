@@ -290,6 +290,42 @@ def normalized_convolv(a, b, autocorrelation_length = 201):
     auto_bank = numpy.concatenate(auto, corr[max(max_idx, 0):max_idx + (autocorrelation_length // 2 + 1)])
     return auto_bank
 
+
+def matched_filt(template, data, sampleRate = 4096.0):
+
+    '''
+    matched filtering using numpy fft
+    template: complex
+    data: real
+    the template is produced from using the gen_whitened_fir_template or gen_whitened_spiir_template_and_reconstructed_waveform.
+    The unit of template is s^-1/2. the data is generated from gstlal_whiten where the unit is dimensionless,
+    It needs to be normalized so the unit is s^-1/2, consistent with the template in order to perform fft
+    '''
+    # the data is generated from gstlal_whiten where the unit is dimensionless.
+    # needs to be normalized so the unit is s^-1/2, consistent with the template
+    data /= numpy.sqrt(2.0/sampleRate)
+    working_length = max(len(template), len(data))
+    fs = float(sampleRate)
+    df = 1.0/ (working_length/ fs)
+    template_pad = numpy.zeros(working_length, dtype = "cdouble")
+    template_pad[-len(template):] = template
+    data_pad = numpy.zeros(working_length, dtype = "double")
+    data_pad[-len(data):] = data
+
+    #data_pad *= tukeywindow(data_pad, samps = 32.)
+
+    data_fft = numpy.fft.fft(data_pad)/ fs # times dt
+    template_fft = numpy.fft.fft(template_pad)/ fs
+
+    snr_fft = data_fft * template_fft.conjugate()
+    snr_time = 2 * numpy.fft.ifft(snr_fft) * fs # times df, default ifft has the output scaled by 1/N 
+    sigmasq = (template_fft * template_fft.conjugate()).sum() * df
+    sigma = numpy.sqrt(abs(sigmasq))
+    # normalize snr
+    snr_time /= sigma
+    return snr_time, sigma
+
+# working length, length_max deprecated
 def M_chi2_readline(flower=30., sampleRate=2048.):
     fh = open('m1_m2_mc_1xyz_2xyz.dat')
     line = fh.readline()
@@ -315,6 +351,34 @@ def M_chi2_readline(flower=30., sampleRate=2048.):
     plt.figure()
     plt.plot(range(len(amp)), amp*numpy.cos(phase),'b')
     plt.show()
+
+
+def gen_template_working_length(template_table, f_low = 30., sampleRate = 2048.):
+
+    duration = max(time_slices['end'])
+    length_max = int(round(duration * sample_rate_max))
+
+    # Some input checking to avoid incomprehensible error messages
+    if not template_table:
+        raise ValueError("template list is empty")
+    if f_low < 0.:
+        raise ValueError("f_low must be >= 0.: %s" % repr(f_low))
+
+    # working f_low to actually use for generating the waveform.  pick
+    # template with lowest chirp mass, compute its duration starting
+    # from f_low;  the extra time is 10% of this plus 3 cycles (3 /
+    # f_low);  invert to obtain f_low corresponding to desired padding.
+    # NOTE:  because SimInspiralChirpStartFrequencyBound() does not
+    # account for spin, we set the spins to 0 in the call to
+    # SimInspiralChirpTimeBound() regardless of the component's spins.
+    template = min(template_table, key = lambda row: row.mchirp)
+    tchirp = lalsimulation.SimInspiralChirpTimeBound(f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, 0., 0.)
+    working_f_low = lalsimulation.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
+
+    # Add duration of PSD to template length for PSD ringing, round up to power of 2 count of samples
+    working_length = templates.ceil_pow_2(length_max + round(1./psd.deltaF * sample_rate_max))
+    working_duration = float(working_length) / sample_rate_max
+    return length_max, working_length, working_duration
 
 
 def M_chi2(flower=30., sampleRate=2048.):
@@ -454,35 +518,24 @@ def lalwhiten(psd, hplus, working_length, working_duration, sampleRate, length_m
     data = tseries.data.data
 
     data *= tukeywindow(data, samps = 32)
-    filter_len = min(length_max, 1.0 * len(hplus.data.data))
+    filter_len = min(length_max, 1.2 * len(hplus.data.data))
     # the time domain whitened data is chosen to be the same length as the original
     # template. The length_max from tchirp and the working_length are too
     # long, may cause too many spiir filters. 
     # FIXME: should we allow a little more time for low-frequency boundary?
     data = tseries.data[-filter_len:]
 
-
     #pdb.set_trace()    
-    #
-    # normalize so that inner product of template with itself
-    # is 2
-    # the norm is very close to the inner product of the original tseries.data (1.0018)
-    #
-
-    norm = abs(numpy.dot(data, numpy.conj(data)))
-    data *= cmath.sqrt(2 / norm)
-
-    amp, phase = calc_amp_phase(numpy.imag(data), numpy.real(data))
-    return amp, phase, norm
+    return data
 
 # a modification from the cbc_template_fir.generate_templates
-def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, time_slices, autocorrelation_length = 201, verbose = False):
+def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, time_slices, autocorrelation_length = 201, sampleRate = 4096., verbose = False):
 
     """!
     Generate a bank of templates, which are
      (3) whitened with the given psd.
     """
-    sample_rate_max = max(time_slices['rate'])
+    sample_rate_max = sampleRate
     duration = max(time_slices['end'])
     length_max = int(round(duration * sample_rate_max))
 
@@ -544,7 +597,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     max_ringtime = max([chirptime.ringtime(row.mass1*lal.MSUN_SI + row.mass2*lal.MSUN_SI, chirptime.overestimate_j_from_chi(max(row.spin1z, row.spin2z))) for row in template_table])
     row = template_table[irow]
     if verbose:
-        print "generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g" % (irow + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
+        print "generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g, sample rate %d, working_duration %f" % (irow + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z, sample_rate_max, working_duration)
 
     #
     # generate "cosine" component of frequency-domain template.
@@ -595,17 +648,19 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
         data *= tukeywindow(data, samps = 32)
 
     data = data[-length_max:]
-    #
-    # normalize so that inner product of template with itself
-    # is 2
-    #
 
-    norm = abs(numpy.dot(data, numpy.conj(data)))
-    data *= cmath.sqrt(2 / norm)
+    # NOTE: because
+    # XLALWhitenCOMPLEX16FrequencySeries() computed
+    #
+    # \tilde{h}'_{k} = \sqrt{2 \Delta f} \tilde{h}_{k} / \sqrt{S_{k}}
+    # need to devide the time domain whitened waveform by \sqrt{2 \Delta f}
+ 
+    data /= numpy.sqrt(2./working_duration)
+
     return data, autocorrelation_bank
 
 
-def gen_whitened_spiir_template(template_bank_filename, irow, psd, sampleRate = 4096, epsilon = 0.02, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, verbose = False):
+def gen_whitened_spiir_template_and_reconstructed_waveform(template_bank_filename, irow, psd, sampleRate = 4096, epsilon = 0.02, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, verbose = False):
     tmpltbank_xmldoc = utils.load_filename(template_bank_filename, contenthandler = DefaultContentHandler, verbose = verbose)
     sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
     
@@ -652,17 +707,29 @@ def gen_whitened_spiir_template(template_bank_filename, irow, psd, sampleRate = 
     fFinal = row.f_final
 
     if verbose:
-        logging.info("chirp time %f, final frequency %f" % (this_tchirp, fFinal))
+        logging.info("working_duration %f, chirp time %f, final frequency %f" % (working_duration, this_tchirp, fFinal))
 
+    hp, hc = gen_lalsim_waveform(row, flower, sampleRate)
 
-    amp, phase, norm_h = gen_whitened_amp_phase(psd, sampleRate, flower, True, working_length, working_duration, length_max, row)
+    data_whitened = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
+    # NOTE: because
+    # XLALWhitenCOMPLEX16FrequencySeries() computed
+    #
+    # \tilde{h}'_{k} = \sqrt{2 \Delta f} \tilde{h}_{k} / \sqrt{S_{k}}
+    # need to devide the time domain whitened waveform by \sqrt{2 \Delta f}
+ 
+    data_whitened /= numpy.sqrt(2./working_duration)
+
+ 
+    # do not normalize the amp, phase so its inner product is 2 here
+    amp, phase = calc_amp_phase(numpy.imag(data_whitened), numpy.real(data_whitened))
             
     iir_type_flag = 1
     spiir_match = -1
     n_filters = 0
 
     while(spiir_match < req_min_match and epsilon > 0 and n_filters < 2000):
-        a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, epsilon = epsilon)
+        a1, b0, delay, u_rev_pad, h_pad = gen_spiir_coeffs(amp, phase, epsilon = epsilon)
             
         # compute the SNR
         # deprecated: spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad_real)))
@@ -763,8 +830,23 @@ def gen_whitened_amp_phase(psd, sampleRate, flower, is_freq_whiten, working_leng
 
     if is_freq_whiten:
         # hp.data.data *= lefttukeywindow(hp.data.data, samps = int(4 * sampleRate / flower))
-        lalwhiten_amp, lalwhiten_phase, lalwhiten_norm = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
-        return lalwhiten_amp, lalwhiten_phase, lalwhiten_norm
+        data_whitened = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
+        #
+        # normalize so that inner product of template with itself
+        # is 2
+        # the norm is very close to the inner product of the original tseries.data (1.0018)
+        #
+    
+        norm = abs(numpy.dot(data_whitened, numpy.conj(data_whitened)))
+        data_whitened *= cmath.sqrt(2 / norm)
+    
+        amp_lalwhiten, phase_lalwhiten = calc_amp_phase(numpy.imag(data_whitened), numpy.real(data_whitened))
+
+        #if verbose:
+    	#    print "norm of the whitened spiir waveform: %f" % norm
+
+        return amp_lalwhiten, phase_lalwhiten, norm 
+
     else:
         # FIXME: the hp, hc are now in frequency domain. 
         # Need to transform them first into time domain to perform following whitening
@@ -796,6 +878,31 @@ def gen_whitened_amp_phase(psd, sampleRate, flower, is_freq_whiten, working_leng
             amp[0:len(f)] /= newpsd ** 0.5
 
         return amp, phase
+
+def gen_spiir_coeffs(amp, phase, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
+        # make the iir filter coeffs
+        a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
+    
+        # get the chirptime (nearest power of two)
+        length = templates.ceil_pow_2(amp.shape[0]+autocorrelation_length)
+
+        # get the IIR response
+        u = spawaveform.iirresponse(length, a1, b0, delay)
+
+        u_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+        u_pad[-len(u):] = u
+
+        u_rev = u[::-1]
+        u_rev_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+        u_rev_pad[-len(u_rev):] = u_rev
+
+        # get the original waveform
+        h = amp * numpy.exp(1j * phase)
+        h_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+        h_pad[-len(h):] = h
+
+        return a1, b0, delay, u_rev_pad, h_pad
+            
 
 def gen_norm_spiir_coeffs(amp, phase, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
         # make the iir filter coeffs
