@@ -135,8 +135,15 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->d_snglsnr_buffer = NULL;
 		pklist->len_snglsnr_buffer = 0;
 
-		pklist->d_cohsnr_skymap = NULL;
-		pklist->cohsnr_skymap = NULL;
+		int mem_alloc_size = sizeof(float) * max_npeak * state->npix * 2;
+		printf("alloc cohsnr_skymap size %d B\n", (int) mem_alloc_size);
+
+		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_cohsnr_skymap), mem_alloc_size));
+		pklist->d_nullsnr_skymap = pklist->d_cohsnr_skymap + max_npeak * state->npix;
+
+		CUDA_CHECK(cudaMallocHost((void **) &(pklist->cohsnr_skymap), mem_alloc_size));
+		pklist->nullsnr_skymap = pklist->cohsnr_skymap + max_npeak * state->npix;
+
 		return pklist;
 }
 
@@ -591,9 +598,11 @@ peak_list_destroy(PeakList *pklist)
 	CUDA_CHECK(cudaFree(pklist->d_npeak));
 	CUDA_CHECK(cudaFree(pklist->d_snglsnr_L));
 	CUDA_CHECK(cudaFree(pklist->d_peak_tmplt));
+	CUDA_CHECK(cudaFree(pklist->d_cohsnr_skymap));
 
 	CUDA_CHECK(cudaFreeHost(pklist->npeak));
 	CUDA_CHECK(cudaFreeHost(pklist->snglsnr_L));
+	CUDA_CHECK(cudaFreeHost(pklist->cohsnr_skymap));
 }
 
 void

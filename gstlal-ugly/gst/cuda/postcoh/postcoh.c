@@ -1083,16 +1083,16 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->ra = phi*RAD2DEG;
 			output->dec = (M_PI_2 - theta)*RAD2DEG;
 			output->event_id = postcoh->cur_event_id++;
-			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
+			if (postcoh->output_skymap && output->cohsnr > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
 				filename = g_string_new(output->ifos);
 				g_string_append_printf(filename, "_skymap/%s_%d_%d", output->pivotal_ifo, output->end_time_L.gpsSeconds, output->end_time_L.gpsNanoSeconds);
 				g_string_append_printf(filename, "_%d", output->tmplt_idx);
 				strcpy(output->skymap_fname, filename->str);
-				printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
+				printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[peak_cur * state->npix]));
 				file = fopen(output->skymap_fname, "w");
-				fwrite(&(pklist->cohsnr_skymap[ipeak * state->npix]), sizeof(float), state->npix, file);
+				fwrite(&(pklist->cohsnr_skymap[peak_cur * state->npix]), sizeof(float), state->npix, file);
 				fclose(file);
 				file = NULL;
 				g_string_free(filename, TRUE);
@@ -1112,16 +1112,6 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			      );
 			output++;
 			write_entries++;
-		}
-
-		if (pklist->d_cohsnr_skymap) {
-			cudaFree(pklist->d_cohsnr_skymap);
-			pklist->d_cohsnr_skymap = NULL;
-		}
-
-		if (pklist->cohsnr_skymap) {
-			cudaFreeHost(pklist->cohsnr_skymap);
-			pklist->cohsnr_skymap = NULL;
 		}
 
 		if (state->cur_nifo == state->nifo) {

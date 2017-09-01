@@ -52,7 +52,7 @@ G_BEGIN_DECLS
 #endif
 
 #ifndef MIN_OUTPUT_SKYMAP_SNR
-#define MIN_OUTPUT_SKYMAP_SNR 8
+#define MIN_OUTPUT_SKYMAP_SNR 11
 #endif
 
 typedef struct _CudaPostcoh CudaPostcoh;

@@ -344,6 +344,8 @@ __global__ void ker_coh_max_and_chisq
     int     *peak_pos,  /* INPUT, place the location of the trigger */
     float       *snglsnr_L,     /* INPUT, maximum single snr    */
     float       *snglsnr_bg_L,      /* INPUT, maximum single snr    */
+    float       *cohsnr_skymap,
+    float       *nullsnr_skymap,
     int     npeak,      /* INPUT, number of triggers */
     float       *u_map,             /* INPUT, u matrix map */
     float       *toa_diff_map,      /* INPUT, time of arrival difference map */
@@ -446,7 +448,8 @@ __global__ void ker_coh_max_and_chisq
                         dk[1].re, dk[1].im, dk[2].re, dk[2].im, snr_tmp);
             }
 #endif
-    
+            cohsnr_skymap[peak_cur * num_sky_directions + ipix] = snr_tmp;
+            nullsnr_skymap[peak_cur * num_sky_directions + ipix] = al_all;
             if (snr_tmp > snr_max)
             {
                 snr_max = snr_tmp;
@@ -851,48 +854,6 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	PeakList *pklist = state->peak_list[iifo];
 	int npeak = pklist->npeak[0];
 
-	if (output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
-	int mem_alloc_size = sizeof(float) * npeak * state->npix * 2;
-//	printf("alloc cohsnr_skymap size %d\n", mem_alloc_size);
-	
-	cudaMemGetInfo(&freemem, &totalmem);
-	printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
-	printf("alloc cohsnr_skymap size %d B\n", (int) mem_alloc_size);
-
-	CUDA_CHECK(cudaMalloc((void **)&(pklist->d_cohsnr_skymap), mem_alloc_size));
-//	CUDA_CHECK(cudaMemset(pklist->d_cohsnr_skymap, 0, mem_alloc_size));
-
-	pklist->d_nullsnr_skymap = pklist->d_cohsnr_skymap + npeak * state->npix;
-	//pklist->cohsnr_skymap = (float *)malloc(mem_alloc_size);
-	CUDA_CHECK(cudaMallocHost((void **) &(pklist->cohsnr_skymap), mem_alloc_size));
-	pklist->nullsnr_skymap = pklist->cohsnr_skymap + npeak * state->npix;
-
-	ker_coh_skymap<<<npeak, threads, sharedmem, stream>>>(			pklist->d_cohsnr_skymap,
-									pklist->d_nullsnr_skymap,
-									state->dd_snglsnr,
-									iifo,	
-									state->nifo,
-									pklist->d_peak_pos,
-									pklist->npeak[0],
-									state->d_U_map[gps_idx],
-									state->d_diff_map[gps_idx],
-									state->npix,
-									state->max_npeak,
-									state->snglsnr_len,
-									state->snglsnr_start_exe,
-									state->dt,
-									state->ntmplt);
-    cudaStreamSynchronize(stream);
-						
-	CUDA_CHECK(cudaPeekAtLastError());
-	CUDA_CHECK(cudaMemcpyAsync(	pklist->cohsnr_skymap, 
-			pklist->d_cohsnr_skymap, 
-			mem_alloc_size,
-			cudaMemcpyDeviceToHost,
-			stream));
-
-	}
-
 	ker_coh_max_and_chisq<<<npeak, threads, sharedmem, stream>>>(
 									state->dd_snglsnr,
 									iifo,	
@@ -900,6 +861,8 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									pklist->d_peak_pos,
 									pklist->d_snglsnr_L,
 									pklist->d_snglsnr_bg_L,
+									pklist->d_cohsnr_skymap,
+									pklist->d_nullsnr_skymap,
 									pklist->npeak[0],
 									state->d_U_map[gps_idx],
 									state->d_diff_map[gps_idx],
@@ -930,6 +893,11 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 			cudaMemcpyDeviceToHost,
 			stream));
 
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->cohsnr_skymap,
+			pklist->d_cohsnr_skymap,
+			sizeof(float) * state->max_npeak * state->npix * 2,
+			cudaMemcpyDeviceToHost,
+			stream));
 
 	cudaStreamSynchronize(stream);
 }
