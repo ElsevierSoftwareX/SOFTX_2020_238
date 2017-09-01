@@ -182,7 +182,7 @@ typedef struct _PeakList {
 	float *d_maxsnglsnr; // for cuda peakfinder, not used now
 
 	float *d_snglsnr_buffer;  // we need to copy data from CPU memory to this buffer; then do transpose for new postcoh kernel optimized by Xiaoyang Guo
-	int *len_snglsnr_buffer;
+	int len_snglsnr_buffer;
 } PeakList;
 
 typedef struct _PostcohState {
