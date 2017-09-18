@@ -39,6 +39,7 @@ again using the standard coincidence infrastructure.
 
 import bisect
 import sys
+import pdb
 
 
 from glue import iterutils
@@ -47,7 +48,9 @@ from glue.ligolw import lsctables
 from glue.text_progress_bar import ProgressBar
 from pylal import git_version
 
-from gstlal.postcoh_table_def import PostcohInspiralTable
+from gstlal import postcoh_table_def 
+from glue.ligolw import ilwd
+
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
 __version__ = "git id %s" % git_version.id
 __date__ = git_version.date
@@ -62,7 +65,7 @@ __date__ = git_version.date
 #
 
 
-class PostcohInspiralTable_cmp(PostcohInspiralTable):
+class PostcohInspiral(postcoh_table_def.PostcohInspiral):
 	"""
 	Version of lsctables.SnglInspiral who's .__cmp__() method compares
 	this object's .end value directly to the value of other.  Allows a
@@ -74,6 +77,7 @@ class PostcohInspiralTable_cmp(PostcohInspiralTable):
 		return cmp(self.end, other)
 
 
+@postcoh_table_def.use_in
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -92,7 +96,7 @@ class DocContents(object):
 	"""
 	A wrapper interface to the XML document.
 	"""
-	def __init__(self, xmldoc, bbdef, sbdef, scedef, scndef, process, end_time_bisect_window):
+	def __init__(self, xmldoc, process, end_time_bisect_window):
 		#
 		# store the process row
 		#
@@ -103,7 +107,7 @@ class DocContents(object):
 		# locate the sngl_inspiral and sim_inspiral tables
 		#
 
-		self.postcohinspiraltable = PostcohInspiralTable.get_table(xmldoc)
+		self.postcohinspiraltable = postcoh_table_def.PostcohInspiralTable.get_table(xmldoc)
 		self.siminspiraltable = lsctables.SimInspiralTable.get_table(xmldoc)
 
 		#
@@ -172,16 +176,17 @@ class DocContents(object):
 #
 
 
-def add_sim_postcoh_coinc(contents, sim, postcohs):
+def add_sim_postcoh_coinc(contents, sim, event_ids):
 	"""
 	Create a coinc_event in the coinc table, and add arcs in the
 	coinc_event_map table linking the sim_inspiral row and the list of
 	postcoh rows to the new coinc_event row.
 	"""
 
-	for event in postcohs:
+	ilwd_postcoh_id = ilwd.get_ilwdchar_class("postcoh", "postcoh_id")
+	for one_event_id in event_ids:
 		coincmap = lsctables.CoincMap()
-		coincmap.coinc_event_id = event.postcoh_id
+		coincmap.coinc_event_id = ilwd_postcoh_id(one_event_id)
 		coincmap.table_name = sim.simulation_id.table_name
 		coincmap.event_id = sim.simulation_id
 		contents.coincmaptable.append(coincmap)
@@ -207,14 +212,15 @@ def find_exact_postcoh_matches(contents, t):
 	# any(...) --> at least one inspiral does not match sim
 	# not any(...) --> all inspirals match sim
 	#
-	postcohs = contents.postcoh_inspirals_near_endtime(t):
+	#pdb.set_trace()
+	postcohs = contents.postcoh_inspirals_near_endtime(t)
 
-	return set(one_postcoh.postcoh_id for one_postcoh in postcohs))
+	return set(one_postcoh.postcoh_id for one_postcoh in postcohs)
 
 
 
 
-def ligolw_inspinjfind(xmldoc, process, search, snglcomparefunc, nearcoinccomparefunc, end_time_bisect_window = 1.0, verbose = False):
+def injfind(xmldoc, process, search, end_time_bisect_window = 1.0, verbose = False):
 	#
 	# Analyze the document's contents.
 	#
@@ -222,19 +228,20 @@ def ligolw_inspinjfind(xmldoc, process, search, snglcomparefunc, nearcoinccompar
 	if verbose:
 		print >>sys.stderr, "indexing ..."
 
-	contents = DocContents(xmldoc = xmldoc, scndef = scndef, process = process, end_time_bisect_window = end_time_bisect_window)
+	contents = DocContents(xmldoc = xmldoc, process = process, end_time_bisect_window = end_time_bisect_window)
 	#
 	# Find sim_inspiral <--> coinc_event coincidences.
 	#
 
-	progressbar = ProgressBar(max = len(contents.siminspiraltable), textwidth = 35, text = scndef.description) if verbose else None
+	progressbar = ProgressBar(max = len(contents.siminspiraltable), textwidth = 35, text = "injfind") if verbose else None
+
 	for sim in contents.siminspiraltable:
 		if progressbar is not None:
 			progressbar.increment()
-		exact_postcoh_event_ids = find_exact_postcoh_matches(contents, contents.end_time_bisect_windown)
+		exact_postcoh_event_ids = find_exact_postcoh_matches(contents, sim.time_geocent)
 		if exact_postcoh_event_ids:
-			add_sim_postcoh_coinc(contents, sim, exact_postcoh_event_ids, contents.sce_coinc_def_id)
-		del progressbar
+			add_sim_postcoh_coinc(contents, sim, exact_postcoh_event_ids)
+	del progressbar
 
 	#
 	# Restore the original event order.

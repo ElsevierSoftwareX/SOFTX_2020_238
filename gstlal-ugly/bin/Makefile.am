@@ -41,5 +41,7 @@ dist_bin_SCRIPTS = \
 	ligolw_sqlite_postcoh \
 	gstlal_inspiral_postcohspiir_plotsummary \
 	gstlal_spiir_plot_waveform \
-	gstlal_make_whitened_strain
+	gstlal_make_whitened_strain \
+	gstlal_matched_filter \
+	gstlal_bank_extract
 

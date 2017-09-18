@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2011-2012  Shaun Hooper
 # Copyright (C) 2013-2015  Qi Chu
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -25,6 +24,7 @@
 #	+ `--flow` [Hz] (float): Set the template low-frequency cut-off (default = 40.0).
 #	+ `--sampleRate` [Hz] (float): Set the sample rate of the IIR template bank (optional).
 #	+ `--epsilon` [pad] (float): Second order correction factor (default = 0.02).
+#	+ `--epsilon-min` [pad] (float): Second order correction factor (default = 0.01).
 #	+ `--req-min-match` [pad] (float): Set the SPIIR approximation minimal match (default = 0.0).
 #	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
 #	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
@@ -74,6 +74,7 @@ parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help
 parser.add_option("--sampleRate", metavar = "Hz", type = "float", default = 4096.0, help = "Set the sample rate of the IIR template bank (optional).")
 parser.add_option("--autocorrelation-length", metavar = "len", type = "float", default = 201, help = "Autocorrelation length for chisq.")
 parser.add_option("--epsilon", metavar = "pad", type = "float", default = 0.02, help = "Second order correction factor.")
+parser.add_option("--epsilon-min", metavar = "pad", type = "float", default = 0.01, help = "Second order correction factor.")
 parser.add_option("--req-min-match", metavar = "match", type = "float", default = 0.99, help = "Set the SPIIR approximation minimal match (default = 0.99).")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.3, help = "Fractional amount to pad time slices.")
 parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
@@ -87,6 +88,8 @@ parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The
 parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048")
 parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
 parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
+parser.add_option("--dump-txt", metavar = "filename", default = None, help = "Set the filename in which to save the template in txt format (optional).")
+parser.add_option("--waveform-domain", default = "TD", help = "Set the domain chosen method, TD or FD (optional).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parser.parse_args()
@@ -104,8 +107,8 @@ else:
 	ALLpsd = None
 
 
-psd = ALLpsd[options.instrument]
 
+psd = ALLpsd[options.instrument]
 bank_xmldoc = ligolw_utils.load_filename(options.template_bank, contenthandler = DefaultContentHandler, verbose = options.verbose)
 
 # Get sngl inspiral table
@@ -132,42 +135,85 @@ fir_template, fir_autocorrelation = cbc_template_iir.gen_whitened_fir_template(
 		psd,
 		options.flow,
 		time_freq_bounds,
+		sampleRate = options.sampleRate, 
 		autocorrelation_length = options.autocorrelation_length,
 		verbose = options.verbose)
 
-# generate the normalized spiir-reconstructed waveform and original whitened waveform
-u_rev_pad, h_pad = cbc_template_iir.gen_whitened_spiir_template(
+psd = ALLpsd[options.instrument]
+# generate the normalized spiir-reconstructed waveform and original whitened waveform for spiir reconstruction
+u_rev_pad, h_pad  = cbc_template_iir.gen_whitened_spiir_template_and_reconstructed_waveform(
 		options.template_bank, 
 		int(options.template_id),
 		psd, 
 		sampleRate = options.sampleRate, 
 		flower=options.flow, 
+		waveform_domain = options.waveform_domain, 
 		epsilon = options.epsilon, 
+		epsilon_min = options.epsilon_min, 
 		autocorrelation_length = options.autocorrelation_length, 
 		req_min_match = options.req_min_match,
 		verbose = options.verbose)
-template_len = len(fir_template)
-u_rev_pad2 = numpy.zeros(template_len, dtype = "cdouble")
-u_rev_pad2[-len(u_rev_pad):] = u_rev_pad
 
-h_pad2 = numpy.zeros(template_len, dtype = "cdouble")
-h_pad2[-len(h_pad):] = h_pad
+template_len = len(fir_template)
+u_len = len(u_rev_pad)
 
 pyplot.figure()
 p1, = pyplot.plot(hp.data.data, label = 'waveform hp')
 pyplot.xlabel('samples')	
 pyplot.ylabel('hp')	
 pyplot.legend()
-pyplot.savefig("waveform.svg", format = "svg", dpi = 1200)
+pyplot.savefig("%s_waveform.svg" % options.instrument, format = "svg", dpi = 1200)
 
 
+align_len = max(template_len, u_len)
+# pad fir_template to be the same length as align_len
+fir_pad = numpy.zeros(align_len, dtype = "cdouble")
+fir_pad[-len(fir_template):] = fir_template
+
+# pad u_rev_pad, h_pad to be the same length as align_len
+u_rev_pad2 = numpy.zeros(align_len, dtype = "cdouble")
+u_rev_pad2[-len(u_rev_pad):] = u_rev_pad
+
+h_pad2 = numpy.zeros(align_len, dtype = "cdouble")
+h_pad2[-len(h_pad):] = h_pad
+
+
+# plot all the whitened templates in one figure
 pyplot.figure()
 p1, = pyplot.plot(u_rev_pad2.real, label = 'spiir reconstructed')
-p2, = pyplot.plot(h_pad2.real, label = 'original template')
-p3, = pyplot.plot(fir_template.real, label = 'fir template')
+p2, = pyplot.plot(h_pad2.real, label = 'spiir template')
+p3, = pyplot.plot(fir_pad.real, label = 'fir template')
 pyplot.xlabel('samples')	
 pyplot.ylabel('u, h')	
 pyplot.legend()
 pyplot.savefig(options.output, format = "svg", dpi = 1200)
 
+# plot whitened templates individually
+pyplot.figure()
+p1, = pyplot.plot(fir_template.real, label = 'fir template')
+pyplot.xlabel('samples')	
+pyplot.ylabel('fir template')	
+pyplot.legend()
+pyplot.savefig("%s_whitened_fir_template.svg" % options.instrument, format = "svg", dpi = 1200)
+
+pyplot.figure()
+p1, = pyplot.plot(h_pad.real, label = 'spiir template')
+pyplot.xlabel('samples')	
+pyplot.ylabel('spiir')	
+pyplot.legend()
+pyplot.savefig("%s_whitened_spiir_template.svg" % options.instrument, format = "svg", dpi = 1200)
+
+
+pyplot.figure()
+p1, = pyplot.plot(u_rev_pad.real, label = 'spiir reconstructed')
+pyplot.xlabel('samples')	
+pyplot.ylabel('spiir')	
+pyplot.legend()
+pyplot.savefig("%s_whitened_spiir_reconstructed.svg" % options.instrument, format = "svg", dpi = 1200)
+
+	
+if options.dump_txt is not None:
+	numpy.savetxt("%s_spiir_reconstructed.txt" % options.instrument, u_rev_pad.view(float))
+	numpy.savetxt("%s_spiir_template.txt" % options.instrument, h_pad.view(float))
+	numpy.savetxt("%s_fir_template.txt" % options.instrument, fir_template.view(float))
 
