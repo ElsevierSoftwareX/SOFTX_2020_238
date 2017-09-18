@@ -56,12 +56,13 @@ parser.add_option("--sampleRate", metavar = "Hz", type = "float", default = 4096
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.3, help = "Fractional amount to pad time slices.")
 parser.add_option("--autocorrelation-length", metavar = "len", type = "float", default = 201, help = "Autocorrelation length for chisq.")
 parser.add_option("--epsilon", metavar = "pad", type = "float", default = 0.02, help = "Second order correction factor.")
+parser.add_option("--epsilon-min", type = "float", default = 0.0, help = "Second order correction factor.")
 parser.add_option("--req-min-match", metavar = "match", type = "float", default = 0.99, help = "Set the SPIIR approximation minimal match (default = 0.99).")
 parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
 parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
 #FIXME figure out how to encode instrument info
 parser.add_option("--instrument", metavar = "ifo", help = "Set the instrument")
-
+parser.add_option("--waveform-domain", default = "TD", help = "Set the domain chosen method, TD or FD (optional).")
 parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("--downsample", action = "store_true", help = "Choose if you want to downsample IIR bank (recommended)")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
@@ -92,7 +93,9 @@ bank.build_from_tmpltbank(
 		padding=options.padding, 
 		flower=options.flow, 
 		downsample = options.downsample, 
+		waveform_domain = options.waveform_domain, 
 		epsilon = options.epsilon, 
+		epsilon_min = options.epsilon_min, 
 		autocorrelation_length = options.autocorrelation_length, 
 		req_min_match = options.req_min_match)
 
