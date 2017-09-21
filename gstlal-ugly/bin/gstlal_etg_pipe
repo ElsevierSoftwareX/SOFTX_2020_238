@@ -1,0 +1,178 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011-2017 Chad Hanna, Duncan Meacher
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+"""
+This program makes a dag to run gstlal_inspiral offline
+"""
+
+__author__ = 'Duncan Meacher <duncan.meacher@ligo.org>'
+
+##############################################################################
+# import standard modules and append the lalapps prefix to the python path
+import sys, os, stat
+import itertools
+import numpy
+import math
+from optparse import OptionParser
+
+##############################################################################
+# import the modules we need to build the pipeline
+import lal
+import lal.series
+from lal.utils import CacheEntry
+from glue import pipeline
+from glue.lal import Cache
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+import glue.ligolw.utils as ligolw_utils
+import glue.ligolw.utils.segments as ligolw_segments
+from gstlal import inspiral, inspiral_pipe
+from gstlal import dagparts as gstlaldagparts
+from gstlal import datasource
+from gstlal import multichannel_datasource
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+#
+# get a dictionary of all the channels per gstlal_etg job
+#
+
+def etg_node_gen(gstlalETGJob, dag, parent_nodes, options, channels, data_source_info):
+	etg_nodes = {}
+	cumsum_rates = 0
+	outstr = ""
+	out_index = 0
+
+	for ii, channel in enumerate(channels,1):
+		samp_rate = data_source_info.channel_dict[channel]['fsamp']
+		max_samp_rate = min(2048, int(samp_rate))
+		min_samp_rate = min(32, max_samp_rate)
+		n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
+		cumsum_rates += n_rates
+		outstr = outstr + channel + ":" + str(int(samp_rate))
+
+		if cumsum_rates < options.streams:
+			outstr = outstr + " --channel-name="
+
+		if cumsum_rates >= options.streams or ii == len(data_source_info.channel_dict.keys()):
+			out_index += 1
+			outpath = options.out_path + "/gstlal_etg/gstlal_etg_%04d" % out_index
+			etg_nodes[channel] = \
+				inspiral_pipe.generic_node(gstlalETGJob, dag, parent_nodes = parent_nodes,
+					opts = {"gps-start-time":options.gps_start_time,
+						"gps-end-time":options.gps_end_time,
+						"data-source":"frames",
+						"channel-name":outstr,
+						"mismatch":options.mismatch,
+						"qhigh":options.qhigh,
+						"cadence":options.cadence,
+						#"triggers-from-dataframe":"",
+						"disable-web-service":""
+					},
+					input_files = {"frame-cache":options.frame_cache},
+					output_files = {"out-path":outpath}
+				)
+			cumsum_rates = 0
+			outstr = ""
+
+	return etg_nodes
+
+#
+# Main
+#
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	# generic data source options
+	#datasource.append_options(parser)
+	multichannel_datasource.append_options(parser)
+
+	# trigger generation options
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--triggers-from-dataframe", action = "store_true", default = False,
+						help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
+	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
+	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
+	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
+	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
+	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
+	parser.add_option("-s", "--streams", type = "float", default = 100, help = "Number of streams to process per node. Default = 100.")
+	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
+	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
+	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
+
+	# Condor commands
+	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the inspiral CPU count, default = 2")
+	parser.add_option("--request-memory", default = "7GB", metavar = "integer", help = "set the inspiral memory, default = 7GB")
+	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+
+#
+# Useful variables
+#
+
+options, filenames = parse_command_line()
+
+output_dir = "plots"
+
+#
+#
+#
+
+data_source_info = multichannel_datasource.DataSourceInfo(options)
+instrument = data_source_info.instrument
+channels = data_source_info.channel_dict.keys()
+
+#
+# Setup the dag
+#
+
+try:
+	os.mkdir("logs")
+except:
+	pass
+dag = inspiral_pipe.DAG("etg_pipe")
+
+#
+# setup the job classes
+#
+
+gstlalETGJob = inspiral_pipe.generic_job("gstlal_etg", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
+
+#
+# Inspiral jobs by segment
+#
+
+etg_nodes = etg_node_gen(gstlalETGJob, dag, [], options, channels, data_source_info)
+
+#
+# all done
+#
+
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+dag.write_cache()

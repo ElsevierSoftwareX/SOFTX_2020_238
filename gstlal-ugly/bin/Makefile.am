@@ -33,4 +33,5 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_dq \
 	gstlal_ll_inspiral_state \
 	gstlal_condor_top \
-	gstlal_etg
+	gstlal_etg \
+	gstlal_etg_pipe

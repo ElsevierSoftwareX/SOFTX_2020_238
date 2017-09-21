@@ -66,6 +66,31 @@ framexmit_ports = {
 # misc useful functions
 #
 
+def channel_dict_from_channel_list(channel_list):
+	"""!
+	Given a list of channels, produce a dictionary keyed by channel names:
+
+	The list here typically comes from an option parser with options that
+	specify the "append" action.
+
+	Examples:
+
+		>>> multichannel_datasource.channel_dict_from_channel_list(["H1:AUX-CHANNEL-NAME_1:2048", "H1:AUX-CHANNEL-NAME-2:512"])
+		{'H1:AUX-CHANNEL-NAME_1': {'qhigh': None, 'ifo': 'H1', 'flow': None, 'fsamp': 2048.0, 'fhigh': None, 'frametype': None}, 'H1:AUX-CHANNEL-NAME-2': {'qhigh': None, 'ifo': 'H1', 'flow': None, 'fsamp': 512.0, 'fhigh': None, 'frametype': None}}
+	"""
+
+	channel_dict = {}
+	for channel in channel_list:
+		ifo, channel_info, fsamp = channel.split(':')
+		channel_name = ifo + ":" + channel_info
+		channel_dict[channel_name] = {'fsamp': float(fsamp),
+					      'ifo': ifo,
+					      'flow': None,
+					      'fhigh': None,
+					      'qhigh' : None,
+					      'frametype' : None}
+	return channel_dict
+
 def channel_dict_from_channel_file(channel_file):
 	"""!
 	Given a file of channel names with sampling rates, produce a dictionary keyed by ifo:
@@ -193,8 +218,10 @@ class DataSourceInfo(object):
 			raise ValueError("can only give --frame-segments-file if --data-source=frames")
 		if options.frame_segments_name is not None and options.frame_segments_file is None:
 			raise ValueError("can only specify --frame-segments-name if --frame-segments-file is given")	
-		if not options.channel_list:
-			raise ValueError("must specify a channel list in the form --channel-list=/path/to/file")
+		if not (options.channel_list or options.channel_name):
+			raise ValueError("must specify a channel list in the form --channel-list=/path/to/file or --channel-name=H1:AUX-CHANNEL-NAME:RATE --channel-name=H1:SOMETHING-ELSE:RATE")
+		if (options.channel_list and options.channel_name):
+			raise ValueError("must specify a channel list in the form --channel-list=/path/to/file or --channel-name=H1:AUX-CHANNEL-NAME:RATE --channel-name=H1:SOMETHING-ELSE:RATE")
 
 		## Generate a dictionary of requested channels from channel INI file
 		
@@ -212,12 +239,16 @@ class DataSourceInfo(object):
 			assert fidelity in self.known_fidelity, '--fidelity-exclude=%s is not understood. Must be one of %s'%(fidelity, ", ".join(self.known_fidelity))
 
 		# dictionary of the requested channels, e.g., {"H1": {"LDAS-STRAIN": 16384}, "L1": {"LDAS-STRAIN": 16384}}
-		name, self.extension = options.channel_list.rsplit('.', 1)
-		if self.extension == 'ini':
-			self.channel_dict = channel_dict_from_channel_ini(options)
-		else:
-			self.channel_dict = channel_dict_from_channel_file(options.channel_list)	
-			
+		if options.channel_list:
+			name, self.extension = options.channel_list.rsplit('.', 1)
+			if self.extension == 'ini':
+				self.channel_dict = channel_dict_from_channel_ini(options)
+			else:
+				self.channel_dict = channel_dict_from_channel_file(options.channel_list)
+		elif options.channel_name:
+			self.extension = 'none'
+			self.channel_dict = channel_dict_from_channel_list(options.channel_name)
+
 		# set instrument; it is assumed all channels from a given channel list are from the same instrument		
 		self.instrument = self.channel_dict[next(iter(self.channel_dict))]['ifo']
 
@@ -306,6 +337,10 @@ def append_options(parser):
 		File needs to be in format channel-name[spaces]sampling_rate with a new channel in each line.
 		Command given as --channel-list=location/to/file.
 
+-	--channel-name [string]
+		Set the name of the channels to process.
+		Can be given multiple times as --channel-name=IFO:AUX-CHANNEL-NAME:RATE
+
 -	--framexmit-addr [string]
 		Set the address of the framexmit service.  Can be given
 		multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port
@@ -345,6 +380,10 @@ def append_options(parser):
 
 	#### Typical usage case examples
 
+	-# Reading data from frames
+
+		--data-source=frames --gps-start-time=999999000 --gps-end-time=999999999 --channel-name=H1:AUX-CHANNEL-NAME:RATE
+
 	-# Reading online data via framexmit
 
 		--data-source=framexmit --channel-list=H1=location/to/file
@@ -358,6 +397,7 @@ def append_options(parser):
 	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
 	group.add_option("--channel-list", type="string", metavar = "name", help = "Set the list of the channels to process. Command given as --channel-list=location/to/file")
+	group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO:AUX-CHANNEL-NAME:RATE")
 	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
 	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
 	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")

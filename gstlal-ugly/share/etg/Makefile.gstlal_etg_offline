@@ -1,0 +1,91 @@
+SHELL := /bin/bash
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=ligo.dev.o3.detchar.onlinedq.idq
+GROUP_USER=duncan.meacher
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+
+#########################
+# Triggering parameters #
+#########################
+
+# The GPS start time for analysis
+START = 1176638000
+# The GPS end time for analysis
+STOP = 1176639000
+
+OUTPATH = $(PWD)
+# Number of streams (N_channels x N_rates_per_channel) that each processor will analise
+N_STREAMS = 100
+MISMATCH = 0.2
+QHIGH = 40
+
+# Detector
+CLUSTER:=$(shell hostname -d)
+
+FRAME_TYPE=R
+
+#################
+# Web directory #
+#################
+
+# A user tag for the run
+TAG = O2_C00
+# Run number
+RUN = run_1
+# A web directory for output (note difference between cit+uwm and Atlas)
+# cit & uwm
+WEBDIR = ~/public_html/observing/$(TAG)/$(START)-$(STOP)-$(RUN)
+# Atlas
+#WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
+
+############
+# Workflow #
+############
+
+all : dag
+	sed -i '/gstlal_etg / s/$$/ |& grep -v '\''XLAL\|GSL\|Generic'\''/' etg_pipe.sh
+	@echo "Submit with: condor_submit_dag etg_pipe.dag"
+
+# Run etg pipe to produce dag
+dag : frame.cache plots channel_list.txt
+	gstlal_etg_pipe \
+		--data-source frames \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--frame-cache frame.cache \
+		--channel-list channel_list.txt \
+		--out-path $(OUTPATH) \
+		--streams $(N_STREAMS)\
+		--mismatch $(MISMATCH) \
+		--qhigh $(QHIGH) \
+		$(CONDOR_COMMANDS) \
+		--request-cpu 2 \
+		--request-memory 5GB \
+		--disable-web-service
+
+#		--web-dir $(WEBDIR) \
+
+full_channel_list.txt : frame.cache
+	FrChannels $$(head -n 1 $^ | awk '{ print $$5}' | sed -e "s@file://localhost@@g") > $@
+
+frame.cache :
+	# FIXME force the observatory column to actually be instrument
+	if [[ ${CLUSTER} == *"ligo-wa.caltech.edu" ]] ; then \
+		gw_data_find -o H -t H1_$(FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file -O $@ ; \
+	elif [[ ${CLUSTER} == *"ligo-la.caltech.edu" ]] ; then \
+		gw_data_find -o L -t L1_$(FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file -O $@ ; \
+	fi
+
+# Make webpage directory and copy files across
+#$(WEBDIR) : $(MAKEFILE_LIST)
+#	mkdir -p $(WEBDIR)/OPEN-BOX
+#	cp $(MAKEFILE_LIST) $@
+
+# Makes local plots directory
+plots :
+	mkdir plots
+
+clean :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+
