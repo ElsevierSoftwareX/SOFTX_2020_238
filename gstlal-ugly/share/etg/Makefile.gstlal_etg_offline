@@ -16,7 +16,7 @@ STOP = 1176639000
 
 OUTPATH = $(PWD)
 # Number of streams (N_channels x N_rates_per_channel) that each processor will analise
-N_STREAMS = 100
+N_STREAMS = 500
 MISMATCH = 0.2
 QHIGH = 40
 
@@ -49,7 +49,7 @@ all : dag
 
 # Run etg pipe to produce dag
 dag : frame.cache plots channel_list.txt
-	gstlal_etg_pipe \
+	./gstlal_etg_pipe \
 		--data-source frames \
 		--gps-start-time $(START) \
 		--gps-end-time $(STOP) \
@@ -62,6 +62,7 @@ dag : frame.cache plots channel_list.txt
 		$(CONDOR_COMMANDS) \
 		--request-cpu 2 \
 		--request-memory 5GB \
+		--verbose \
 		--disable-web-service
 
 #		--web-dir $(WEBDIR) \
