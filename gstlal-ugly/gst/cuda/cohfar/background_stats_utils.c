@@ -66,7 +66,7 @@ int get_ncombo(int nifo) {
 }
 
 Bins1D *
-bins1D_create_long(double cmin, double cmax, int nbin) 
+bins1D_long_create(double cmin, double cmax, int nbin) 
 {
   Bins1D * bins = (Bins1D *) malloc(sizeof(Bins1D));
   bins->cmin = cmin;
@@ -78,6 +78,14 @@ bins1D_create_long(double cmin, double cmax, int nbin)
   gsl_vector_long_set_zero(bins->data);
   return bins;
 }
+
+void
+bins1D_long_destroy(Bins1D* bins) 
+{
+  gsl_vector_long_free(bins->data);
+  free(bins);
+}
+
 
 Bins2D *
 bins2D_create(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cmax_y, int nbin_y) 
@@ -97,9 +105,16 @@ bins2D_create(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cm
   gsl_matrix_set_zero(bins->data);
   return bins;
 }
+void
+bins2D_destroy(Bins2D* bins) 
+{
+  gsl_matrix_free(bins->data);
+  free(bins);
+}
+
 
 Bins2D *
-bins2D_create_long(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cmax_y, int nbin_y) 
+bins2D_long_create(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cmax_y, int nbin_y) 
 {
   Bins2D * bins = (Bins2D *) malloc(sizeof(Bins2D));
   bins->cmin_x = cmin_x;
@@ -114,6 +129,14 @@ bins2D_create_long(double cmin_x, double cmax_x, int nbin_x, double cmin_y, doub
   gsl_matrix_long_set_zero(bins->data);
   return bins;
 }
+void
+bins2D_long_destroy(Bins2D* bins) 
+{
+  gsl_matrix_long_free(bins->data);
+  free(bins);
+}
+
+
 void
 background_stats_reset(BackgroundStats **stats, int ncombo)
 {
@@ -148,9 +171,9 @@ background_stats_create(char *ifos)
     strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     cur_stats->rates = (BackgroundRates *) malloc(sizeof(BackgroundRates));
     BackgroundRates *rates = cur_stats->rates;
-    rates->lgsnr_bins = bins1D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN);
-    rates->lgchisq_bins = bins1D_create_long(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
-    rates->hist = bins2D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+    rates->lgsnr_bins = bins1D_long_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN);
+    rates->lgchisq_bins = bins1D_long_create(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+    rates->hist = bins2D_long_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
     cur_stats->pdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
     cur_stats->fap = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
     cur_stats->nevent = 0;
@@ -158,6 +181,29 @@ background_stats_create(char *ifos)
   }
   return stats;
 }
+void
+background_stats_destroy(BackgroundStats **stats, int ncombo)
+{
+  int icombo = 0;
+
+  for (icombo=0; icombo<ncombo; icombo++) {
+    BackgroundStats *cur_stats = stats[icombo];
+    bins1D_long_destroy(cur_stats->rates->lgsnr_bins);
+    cur_stats->rates->lgsnr_bins = NULL;
+    bins1D_long_destroy(cur_stats->rates->lgchisq_bins);
+    cur_stats->rates->lgchisq_bins = NULL;
+    bins2D_long_destroy(cur_stats->rates->hist);
+    cur_stats->rates->hist = NULL;
+    free(cur_stats->rates);
+    cur_stats->rates = NULL;
+    bins2D_destroy(cur_stats->pdf);
+    bins2D_destroy(cur_stats->fap);
+    free(cur_stats);
+    cur_stats = NULL;
+  }
+  return stats;
+}
+
 
 BackgroundStatsPointerList *
 background_stats_list_create(char *ifos)
@@ -184,9 +230,9 @@ background_stats_list_create(char *ifos)
       strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
       cur_stats->rates = (BackgroundRates *) malloc(sizeof(BackgroundRates));
       BackgroundRates *rates = cur_stats->rates;
-      rates->lgsnr_bins = bins1D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN);
-      rates->lgchisq_bins = bins1D_create_long(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
-      rates->hist = bins2D_create_long(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+      rates->lgsnr_bins = bins1D_long_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN);
+      rates->lgchisq_bins = bins1D_long_create(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
+      rates->hist = bins2D_long_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
       cur_stats->pdf = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
       cur_stats->fap = bins2D_create(LOGSNR_CMIN, LOGSNR_CMAX, LOGSNR_NBIN, LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN);
       cur_stats->nevent = 0;
@@ -283,7 +329,7 @@ background_stats_rates_to_pdf_hist(BackgroundRates *rates, Bins2D *pdf)
 
 
 /*
- * background fap utils, consistent with the matlab pdf code
+ * background fap utils, consistent with the matlab pdf code, knn
  */
 
 void
