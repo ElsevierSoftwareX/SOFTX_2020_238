@@ -563,6 +563,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		data = gst_pad_get_element_private(pad);
 		set_offset_per_nanosecond(data, postcoh->offset_per_nanosecond);
 		set_channels(data, postcoh->channels);
+		// FIXME: need to consider non-standard ifo indexing, like HV
 		for (j=0; j<state->nifo; j++) {
 			if (strncmp(data->ifo_name, IFO_MAP[j], 2) == 0 ) {
 				state->ifo_mapping[i] = j;
@@ -908,7 +909,7 @@ static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
 
 }
 
-static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist,int iifo, int hist_trials, int max_npeak, float cohsnr_thresh)
+static int cuda_postcoh_select_background(PeakList *pklist,int iifo, int hist_trials, int max_npeak, float cohsnr_thresh)
 {
 	int ipeak, npeak, peak_cur, itrial, background_cur, left_backgrounds = 0;
 	npeak = pklist->npeak[0];
@@ -928,7 +929,7 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist,int iifo
 	return left_backgrounds;
 }
 
-static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh)
+static int cuda_postcoh_select_foreground(PostcohState *state, float cohsnr_thresh)
 {
 	int iifo, ipeak, npeak, nifo = state->nifo,  cluster_peak_pos[state->max_npeak], bubbled_peak_pos[state->max_npeak], peak_cur;
 	int final_peaks = 0, bubbled_peaks = 0;
@@ -947,7 +948,7 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 		 * select background that satisfy the criteria: cohsnr > triggersnr + coh_thresh
 		 */
 		if (npeak > 0 && state->cur_nifo == state->nifo)
-			left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, iifo, state->hist_trials, state->max_npeak, cohsnr_thresh);
+			left_entries += cuda_postcoh_select_background(pklist, iifo, state->hist_trials, state->max_npeak, cohsnr_thresh);
 	
 		/*
 		 * mark the rest of peak positions to be -1 to identify invalid background
@@ -1080,7 +1081,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	
 			output->ra = phi*RAD2DEG;
 			output->dec = (M_PI_2 - theta)*RAD2DEG;
-			//output->event_id = postcoh->cur_event_id++;
+			output->event_id = postcoh->cur_event_id++;
 			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
@@ -1190,7 +1191,7 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	PostcohState *state = postcoh->state;
 	int left_entries = 0;
 
-	left_entries = cuda_postcoh_rm_invalid_peak(state, postcoh->cohsnr_thresh);
+	left_entries = cuda_postcoh_select_foreground(state, postcoh->cohsnr_thresh);
 	int out_size = sizeof(PostcohInspiralTable) * left_entries ;
 
 	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
