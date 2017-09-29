@@ -68,7 +68,8 @@ typedef struct {
 	int snapshot_interval;
 	int hist_trials;
 	gchar *history_fname;
-	gchar *output_fname_prefix;
+	gchar *output_prefix;
+	gchar *output_fname;
 
 	/*
 	 * timestamp book-keeping

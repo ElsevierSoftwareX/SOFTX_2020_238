@@ -89,7 +89,8 @@ enum property {
 	PROP_HIST_TRIALS,
 	PROP_SNAPSHOT_INTERVAL,
 	PROP_HISTORY_FNAME,
-	PROP_OUTPUT_FNAME_PREFIX
+	PROP_OUTPUT_PREFIX,
+	PROP_OUTPUT_FNAME
 };
 
 static void cohfar_accumbackground_set_property (GObject * object,
@@ -195,15 +196,15 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 			//printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1)
-				background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats_snapshot[icombo]->rates, stats_snapshot[icombo]);
+				background_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats_snapshot[icombo]->feature, stats_snapshot[icombo]);
 
 			nifo = strlen(intable->ifos)/IFO_LEN;
 			/* add single detector stats */
 			for (isingle=0; isingle< nifo; isingle++)
-				background_stats_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats_snapshot[isingle]->rates, stats_snapshot[isingle]);
+				background_stats_feature_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats_snapshot[isingle]->feature, stats_snapshot[isingle]);
 			/* add stats to stats_list for prompt FAP estimation */
 			// if (icombo > -1)
-			// 	background_stats_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, cur_stats_in_list[icombo]->rates, cur_stats_in_list[icombo]);
+			// 	background_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, cur_stats_in_list[icombo]->rates, cur_stats_in_list[icombo]);
 
 		} else { /* coherent trigger entry */
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
@@ -247,7 +248,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	if (element->snapshot_interval > 0 && duration >= element->snapshot_interval) {
 		gint gps_time = (int) (element->t_roll_start / GST_SECOND);
-		GString *tmp_fname = g_string_new(element->output_fname_prefix);
+		GString *tmp_fname = g_string_new(element->output_prefix);
 		g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
 		background_stats_to_xml(stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
 		g_string_free(tmp_fname, TRUE);
@@ -303,11 +304,16 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
     if (element->snapshot_interval >= 0) {
 	gint gps_time = (int) (element->t_roll_start / GST_SECOND);
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
-	GString *tmp_fname = g_string_new(element->output_fname_prefix);
+	GString *tmp_fname = g_string_new(element->output_prefix);
 	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
 	background_stats_to_xml(element->stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
 	g_string_free(tmp_fname, TRUE);
+    } else {
+	GString *tmp_fname = g_string_new(element->output_fname);
+	background_stats_to_xml(element->stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
+	g_string_free(tmp_fname, TRUE);
     }
+
       break;
     default:
       break;
@@ -346,8 +352,12 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			background_stats_from_xml(element->stats_snapshot, element->ncombo, &(element->hist_trials), element->history_fname);
 			break;
 
-		case PROP_OUTPUT_FNAME_PREFIX:
-			element->output_fname_prefix = g_value_dup_string(value);
+		case PROP_OUTPUT_FNAME:
+			element->output_fname = g_value_dup_string(value);
+			break;
+
+		case PROP_OUTPUT_PREFIX:
+			element->output_prefix = g_value_dup_string(value);
 			break;
 
 		case PROP_HIST_TRIALS:
@@ -388,8 +398,12 @@ static void cohfar_accumbackground_get_property(GObject *object, enum property p
 			g_value_set_string(value, element->history_fname);
 			break;
 
-		case PROP_OUTPUT_FNAME_PREFIX:
-			g_value_set_string(value, element->output_fname_prefix);
+		case PROP_OUTPUT_FNAME:
+			g_value_set_string(value, element->output_fname);
+			break;
+
+		case PROP_OUTPUT_PREFIX:
+			g_value_set_string(value, element->output_prefix);
 			break;
 
 		case PROP_HIST_TRIALS:
@@ -510,9 +524,22 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_OUTPUT_FNAME_PREFIX,
+		PROP_OUTPUT_FNAME,
 		g_param_spec_string(
-			"output-fname-prefix",
+			"output-fname",
+			"Output filename",
+			"Output background statistics filename",
+			DEFAULT_STATS_FNAME,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+
+	g_object_class_install_property(
+		gobject_class,
+		PROP_OUTPUT_PREFIX,
+		g_param_spec_string(
+			"output-prefix",
 			"Output filename prefix",
 			"Output background statistics filename",
 			DEFAULT_STATS_FNAME,

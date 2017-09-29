@@ -41,15 +41,22 @@
 #define LOGCHISQ_CMAX	4.0
 #define LOGCHISQ_NBIN	300
 
-#define	BACKGROUND_XML_RATES_NAME "background_rates"
-#define	BACKGROUND_XML_SNR_SUFFIX "_lgsnr"
-#define	BACKGROUND_XML_CHISQ_SUFFIX "_lgchisq"
-#define	BACKGROUND_XML_HIST_SUFFIX "_histogram"	
-#define	BACKGROUND_XML_PDF_NAME	"background_pdf"	
-#define	BACKGROUND_XML_FAP_NAME	"background_fap"	
-#define BACKGROUND_XML_SNR_CHISQ_SUFFIX "_lgsnr_lgchisq"
+#define LOGRANK_CMIN	-30 // 10^-30, minimum cdf, extrapolating if less than this min
+#define LOGRANK_CMAX	0 //
+#define	LOGRANK_NBIN	300 // FIXME: enough for accuracy
 
-#define NSTATS_TO_PROMPT 50
+#define	BACKGROUND_XML_FEATURE_NAME		"background_feature"
+#define	SNR_RATES_SUFFIX			"_lgsnr_rates"
+#define	CHISQ_RATES_SUFFIX			"_lgchisq_rates"
+#define	SNR_CHISQ_RATES_SUFFIX			"_lgsnr_lgchisq_rates"	
+#define	SNR_CHISQ_PDF_SUFFIX			"_lgsnr_lgchisq_pdf"	
+#define	BACKGROUND_XML_RANK_NAME		"background_rank"	
+#define	RANK_MAP_SUFFIX				"_rank_map"	
+#define	RANK_RATES_SUFFIX			"_rank_rates"	
+#define	RANK_PDF_SUFFIX				"_rank_pdf"	
+#define	RANK_FAP_SUFFIX				"_rank_fap"	
+
+#define NSTATS_TO_PROMPT 50 //deprecated. supposed to be used to collect last 50 seconds of background stats.
 typedef struct {
 	double	cmin;
 	double	cmax;
@@ -74,14 +81,24 @@ typedef struct {
 } Bins2D;
 
 /*
- * background (SNR, chisq) rates
+ * Ranking statistics and its distribution from background counts
  */
 
 typedef struct {
-	Bins1D	*lgsnr_bins;
-	Bins1D	*lgchisq_bins;
-	Bins2D	*hist;
-} BackgroundRates;
+	Bins1D	*rank_pdf;
+	Bins1D	*rank_fap;
+	Bins1D	*rank_rates;
+	Bins2D	*rank_map; // map of the lgsnr-lgchisq value to rank value
+} RankingStats;
+
+
+// FIXME: extend to 3D to include null-snr
+typedef struct {
+	Bins1D	*lgsnr_rates; // dimension 1 rates, lgsnr
+	Bins1D	*lgchisq_rates; // dimension 2 rates, lgchisq
+	Bins2D	*lgsnr_lgchisq_rates; // histogram of the (lgsnr,lgchisq) from background
+	Bins2D  *lgsnr_lgchisq_pdf;
+} FeatureStats;
 
 
 /*
@@ -90,9 +107,8 @@ typedef struct {
 
 typedef struct {
 	char	*ifos;
-	BackgroundRates *rates;
-	Bins2D	*pdf;
-	Bins2D	*fap;
+	RankingStats *rank;
+	FeatureStats *feature;
 	int hist_trials;
 	long nevent;
 	long duration;

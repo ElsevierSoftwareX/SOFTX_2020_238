@@ -132,7 +132,7 @@ void cohfar_get_stats_from_file(gchar **in_fnames, BackgroundStats **stats_in, B
 		background_stats_from_xml(stats_in, ncombo, hist_trials, *ifname);
 		printf("%s done read\n", *ifname);
 		for (icombo=0; icombo<ncombo; icombo++)
-			background_stats_rates_add(stats_out[icombo]->rates, stats_in[icombo]->rates, stats_out[icombo]);
+			background_stats_feature_rates_add(stats_out[icombo]->feature, stats_in[icombo]->feature, stats_out[icombo]);
 	}
 }
 
@@ -157,15 +157,15 @@ int main(int argc, char *argv[])
 	if (g_strcmp0(*pfmt, "data") == 0) {
 		cohfar_get_data_from_file(in_fnames, &data_dim1, &data_dim2);
 		// FIXME: hardcoded to only update the last stats
-		background_stats_rates_update_all(data_dim1, data_dim2, stats_out[ncombo-1]->rates, stats_out[ncombo-1]);
-		background_stats_rates_to_pdf(stats_out[ncombo-1]->rates, stats_out[ncombo-1]->pdf);
-		background_stats_pdf_to_fap(stats_out[ncombo-1]->pdf, stats_out[ncombo-1]->fap);
+		background_stats_feature_rates_update_all(data_dim1, data_dim2, stats_out[ncombo-1]->feature, stats_out[ncombo-1]);
+		background_stats_feature_rates_to_pdf(stats_out[ncombo-1]->feature);
+		background_stats_feature_to_rank(stats_out[ncombo-1]->feature, stats_out[ncombo-1]->rank);
 		// background_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
 	} else if(g_strcmp0(*pfmt, "stats") == 0) {
 		cohfar_get_stats_from_file(in_fnames, stats_in, stats_out, &hist_trials, ncombo);
 		for (icombo=0; icombo<ncombo; icombo++) {
-			background_stats_rates_to_pdf(stats_out[icombo]->rates, stats_out[icombo]->pdf);
-			background_stats_pdf_to_fap(stats_out[icombo]->pdf, stats_out[icombo]->fap);
+			background_stats_feature_rates_to_pdf(stats_out[icombo]->feature);
+			background_stats_feature_to_rank(stats_out[icombo]->feature, stats_out[icombo]->rank);
 			stats_out[icombo]->duration = atol(*pduration);
 			//printf("stats_out duration %d\n", stats_out[icombo]->duration );
 		}

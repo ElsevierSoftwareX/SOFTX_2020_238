@@ -48,23 +48,21 @@ BackgroundStats **
 background_stats_create(char *ifos);
 
 int
-get_idx_bins1D(double val, Bins1D *bins);
+bins1D_get_idx(double val, Bins1D *bins);
 
 void
-background_stats_rates_update(double snr, double chisq, BackgroundRates *rates, BackgroundStats *cur_stats);
+background_stats_feature_rates_update(double snr, double chisq, FeatureStats *feature, BackgroundStats *cur_stats);
+ 
+void
+background_stats_feature_rates_add(FeatureStats *feature1, FeatureStats *feature2, BackgroundStats *cur_stats);
+ 
 
 void
-background_stats_rates_add(BackgroundRates *rates1, BackgroundRates *rates2, BackgroundStats *cur_stats);
-
-void
-background_stats_rates_to_pdf(BackgroundRates *rates, Bins2D *pdf);
-
-void
-background_stats_pdf_to_cdf(Bins2D *pdf, Bins2D *cdf);
+background_stats_feature_rates_to_pdf(FeatureStats *feature);
 
 
 double
-background_stats_bins2D_get_val(double snr, double chisq, Bins2D *bins);
+bins2D_get_val(double snr, double chisq, Bins2D *bins);
 
 gboolean
 background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_trials, const char *filename);
