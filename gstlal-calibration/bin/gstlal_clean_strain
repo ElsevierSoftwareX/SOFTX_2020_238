@@ -440,8 +440,9 @@ if options.remove_callines:
 	headkeys.append("tstexc")
 
 	# read in kappa_tst
-	hoft_channel_list.append((instrument, options.kappa_tst_channel_name))
-	hoft_headkeys.append("kappa_tst")
+	if options.kappatst_applied:
+		hoft_channel_list.append((instrument, options.kappa_tst_channel_name))
+		hoft_headkeys.append("kappa_tst")
 
 # If we are removing additional noise from the spectrum (beam jitter, angular control, 60 Hz lines, etc.), we need more channels
 if options.remove_powerlines:
@@ -526,10 +527,11 @@ if options.data_source == "frames" and hoft_frame_segments is not None:
 #
 
 if options.remove_callines:
-	EP10_real = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_real"], ref_factors_caps, "EP10_real")
-	EP10_real = calibration_parts.mkresample(pipeline, EP10_real, 0, False, tstexccaps)
-	EP10_imag = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_imag"], ref_factors_caps, "EP10_imag")
-	EP10_imag = calibration_parts.mkresample(pipeline, EP10_imag, 0, False, tstexccaps)
+	if not options.factors_from_filters_file:
+		EP10_real = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_real"], ref_factors_caps, "EP10_real")
+		EP10_real = calibration_parts.mkresample(pipeline, EP10_real, 0, False, tstexccaps)
+		EP10_imag = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_imag"], ref_factors_caps, "EP10_imag")
+		EP10_imag = calibration_parts.mkresample(pipeline, EP10_imag, 0, False, tstexccaps)
 
 	tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
 

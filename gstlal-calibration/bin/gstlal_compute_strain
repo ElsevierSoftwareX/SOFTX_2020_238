@@ -102,6 +102,14 @@ def now():
 	return lal.LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
 	
 
+#
+# Function to update FIR matrix property
+#
+
+def fir_matrix_update(elem, arg, filtered):
+	filtered.set_property("kernel", elem.get_property("fir_matrix")[0][::-1])
+	print("fir matrix updated")
+
 ###################################################################################################
 ############################## Program Command Line Options #######################################
 ###################################################################################################
@@ -183,7 +191,7 @@ parser.add_option("--expected-kappatst-real", metavar = "float", type = float, d
 parser.add_option("--expected-kappapu-imag", metavar = "float", type = float, default = 0.0, help = "Expected value for the imaginary part of \kappa_pu. (Default = 0.0)")
 parser.add_option("--expected-kappatst-imag", metavar = "float", type = float, default = 0.0, help = "Expected value for the imaginary part of \kappa_tst. (Default = 0.0)")
 parser.add_option("--expected-kappac", metavar = "float", type = float, default = 1.0, help = "Expected value for \kappa_c. (Default = 1.0)")
-parser.add_option("--expected-fcc", metavar = "Hz", type = float, default = 330.0, help = "Expected value for the coupled cavity pole. (Default = 330.0 Hz)")
+parser.add_option("--expected-fcc", metavar = "Hz", type = float, default = 360.0, help = "Expected value for the coupled cavity pole. (Default = 360.0 Hz)")
 parser.add_option("--expected-fs", metavar = "Hz", type = float, default = 8.0, help = "Expected value for the SRC optical spring frequency. (Default = 8.0 Hz)")
 parser.add_option("--expected-srcQ", metavar = "float", type = float, default = 28.0, help = "Expected value for the SRC Q. (Default = 28.0)")
 parser.add_option("--kappapu-real-ok-var", metavar = "float", type = float, default = 0.2, help = "Values of the real part of \kappa_pu +/- this number will be considered OK. (Default = 0.2)")
@@ -199,6 +207,10 @@ parser.add_option("--tst-exc-channel-name", metavar = "name", default = "SUS-ETM
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used for calculating the calibration factors. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
 parser.add_option("--dewhitening", action = "store_true", help = "Dewhitening should be used on the relevant channels, since the incoming channels are whitened and single precision.")
 parser.add_option("--low-latency", action = "store_true", help = "Run the pipeline in low-latency mode. This uses minimal queueing. Otherwise, maximal queueing is used to prevent the pipeline from locking up.")
+parser.add_option("--update-fcc", action = "store_true", help = "Update the cavity pole filter with time.")
+parser.add_option("--fcc-filter-duration", metavar = "seconds", default = 0.01, help = "Duration of the cavity pole FIR filter. (Default = 0.01 seconds)")
+parser.add_option("--fcc-averaging-time", metavar = "seconds", type = float, default = 60, help = "Length of time (in seconds) between when cavity pole FIR filter is updated.  The computed cavity pole values are averaged between the update intervals in order to obtain the cavity pole value used to compute the new FIR filter. (Default = 60 seconds)")
+parser.add_option("--fcc-filter-taper-length", metavar = "samples", type = int, default = 16384, help = "Number of samples to be used when tapering old filter and ramping in new filter. (Default = 16384)")
 
 # These are all options related to the reference channels used in the calibration factors computation
 parser.add_option("--ref-channels-sr", metavar = "Hz", default = 16, help = "Set the sample rate for the reference model channels used in the calibration factors calculation. (Default = 16 Hz)")
@@ -896,6 +908,12 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 				
 			smooth_fcctee = pipeparts.mktee(pipeline, smooth_fcc)
 
+			if options.update_fcc:
+				update_fcc = pipeparts.mkgeneric(pipeline, smooth_fcctee, "lal_fcc_update", data_rate = hoftsr, fcc_rate = options.compute_factors_sr, fcc_model = fcc_default, averaging_time = options.fcc_averaging_time, filter_duration = options.fcc_filter_duration)
+				default_fir_matrix = numpy.zeros(hoftsr*options.fcc_filter_duration)
+				default_fir_matrix[0] = 1.0
+				pipeparts.mknxydumpsink(pipeline, update_fcc, "afterupdate.txt") 
+
 	# compute f_s and Q
 	if not options.no_fs or not options.no_srcQ:
 		# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
@@ -1111,6 +1129,10 @@ if options.dewhitening:
 	res = pipeparts.mkfirbank(pipeline, res, latency = int(resdewhitendelay), fir_matrix = [resdewhiten[::-1]], time_domain = td)
 	res_filter_settle_time += float(len(resdewhiten)-resdewhitendelay)/hoftsr
 	res_filter_latency += float(resdewhitendelay)/hoftsr
+
+if options.update_fcc:
+	res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = default_fir_matrix[::-1], latency = int(len(default_fir_matrix)/2+1), taper_length = options.fcc_filter_taper_length)
+	update_fcc.connect("notify::fir-matrix", fir_matrix_update, res)
 
 # Apply factors to actuation and sensing chains, if applicable
 if options.apply_kappac:
