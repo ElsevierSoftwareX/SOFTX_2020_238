@@ -2,7 +2,7 @@ SHELL := /bin/bash
 # condor commands
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
 ACCOUNTING_TAG=ligo.dev.o3.detchar.onlinedq.idq
-GROUP_USER=duncan.meacher
+GROUP_USER=albert.einstein
 CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
 
 #########################

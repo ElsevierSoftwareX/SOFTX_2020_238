@@ -17,7 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 """
-This program makes a dag to run gstlal_inspiral offline
+This program makes a dag to run gstlal_etg offline
 """
 
 __author__ = 'Duncan Meacher <duncan.meacher@ligo.org>'
@@ -62,8 +62,9 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, options, channels, data_source
 	outstr = ""
 	out_index = 0
 	n_channels = 0
-
 	n_cpu = 0
+
+	# Loop over all channels to determine number of streams and minimum number of processes needed
 	for ii, channel in enumerate(channels,1):
 		samp_rate = data_source_info.channel_dict[channel]['fsamp']
 		max_samp_rate = min(2048, int(samp_rate))
@@ -74,6 +75,7 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, options, channels, data_source
 		if cumsum_rates >= options.streams or ii == len(data_source_info.channel_dict.keys()):
 			n_cpu += 1
 			cumsum_rates = 0
+	# Create more even distribution of channels across minimum number of processes
 	n_streams = math.ceil(total_rates / n_cpu)
 	if options.verbose:
 		print "Total streams =", total_rates
@@ -91,11 +93,11 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, options, channels, data_source
 		cumsum_rates += n_rates
 		outstr = outstr + channel + ":" + str(int(samp_rate))
 
-		#if cumsum_rates < options.streams:
+		# Adds channel to current process
 		if cumsum_rates < n_streams:
 			outstr = outstr + " --channel-name="
 
-		#if cumsum_rates >= options.streams or ii == len(data_source_info.channel_dict.keys()):
+		# Finalise each process once number of streams passes threshold
 		if cumsum_rates >= n_streams or ii == len(data_source_info.channel_dict.keys()):
 			out_index += 1
 			outpath = options.out_path + "/gstlal_etg/gstlal_etg_%04d" % out_index
@@ -190,7 +192,7 @@ dag = inspiral_pipe.DAG("etg_pipe")
 gstlalETGJob = inspiral_pipe.generic_job("gstlal_etg", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
 
 #
-# Inspiral jobs by segment
+# ETG jobs
 #
 
 etg_nodes = etg_node_gen(gstlalETGJob, dag, [], options, channels, data_source_info)
