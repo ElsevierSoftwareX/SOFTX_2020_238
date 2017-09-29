@@ -243,7 +243,7 @@ demodulatesr = options.demodulation_sample_rate
 hoft_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr
 kappa_caps = "audio/x-raw, format=F32LE, rate=%d, channel-mask=(bitmask)0x0" % kappasr
 ref_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % options.ref_channels_sr
-tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % options.tst_exc_sample_rate
+tstexccaps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % options.tst_exc_sample_rate
 complex_caps = "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % demodulatesr
 integration_samples = int(options.demodulation_filter_time) * demodulatesr
 
@@ -426,7 +426,7 @@ if not options.no_dq_vector:
 """
 
 if options.remove_callines:
-	if  remove_esd_act_line and not options.factors_from_filters_file:
+	if remove_esd_act_line and not options.factors_from_filters_file:
 		# EP10 is needed to remove the ESD line
 		channel_list.extend(((instrument, options.EP10_real), (instrument, options.EP10_imag)))
 		headkeys.extend(("EP10_real", "EP10_imag"))
@@ -529,9 +529,9 @@ if options.data_source == "frames" and hoft_frame_segments is not None:
 if options.remove_callines:
 	if not options.factors_from_filters_file:
 		EP10_real = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_real"], ref_factors_caps, "EP10_real")
-		EP10_real = calibration_parts.mkresample(pipeline, EP10_real, 0, False, tstexccaps)
+		EP10_real = calibration_parts.mkresample(pipeline, EP10_real, 0, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % demodulatesr)
 		EP10_imag = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_imag"], ref_factors_caps, "EP10_imag")
-		EP10_imag = calibration_parts.mkresample(pipeline, EP10_imag, 0, False, tstexccaps)
+		EP10_imag = calibration_parts.mkresample(pipeline, EP10_imag, 0, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % demodulatesr)
 
 	tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
 
@@ -725,7 +725,7 @@ strain = calibration_parts.caps_and_progress(pipeline, hoft_head_dict["hoft"], h
 remove_from_strain = pipeparts.mkaudioamplify(pipeline, remove_from_strain, -1.0)
 cleaned_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [strain, short_queue], [remove_from_strain, long_queue]))
 
-cleaned_strain = pipeparts.mkprogressreport(pipeline, cleaned_strain, "progress_hoft_cleand_%s" % instrument)
+cleaned_strain = pipeparts.mkprogressreport(pipeline, cleaned_strain, "progress_hoft_cleaned_%s" % instrument)
 
 # Put the units back to strain before writing to frames
 cleaned_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
