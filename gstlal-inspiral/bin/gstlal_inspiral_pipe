@@ -1110,16 +1110,16 @@ def parse_command_line():
 	if options.num_banks:
 		options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
-	if not options.samples_min:
+	if not options.samples_min and not options.svd_bank_cache:
 		options.samples_min = [1024]*len(options.bank_cache)
 
-	if not options.overlap:
+	if not options.overlap and not options.svd_bank_cache:
 		options.overlap = [0]*len(options.bank_cache)
 	
-	if any(overlap % 2 for overlap in options.overlap):
+	if not options.svd_bank_cache and any(overlap % 2 for overlap in options.overlap):
 		raise ValueError("overlap must be even")
 
-	if not (len(options.samples_min) == len(options.bank_cache) == len(options.overlap)):
+	if not options.svd_bank_cache and not (len(options.samples_min) == len(options.bank_cache) == len(options.overlap)):
 		raise ValueError("must provide same number of inputs for --samples-min, --bank-cache, --overlap")
 
 	missing_injection_options = []
@@ -1176,7 +1176,7 @@ def parse_command_line():
 
 options, filenames = parse_command_line()
 
-if options.bank_cache or options.svd_bank_cache:
+if options.bank_cache:
 	# FIXME Add feature for multiple bank caches to online pipeline so that
 	# this functionality can return to inspiral_pipe
 	bank_cache = {}
@@ -1190,6 +1190,11 @@ if options.bank_cache or options.svd_bank_cache:
 	if bank_cache:
 		instruments = "".join(sorted(bank_cache.keys()))
 		instrument_set = bank_cache.keys()
+	boundary_seg = detectors.seg
+
+elif options.svd_bank_cache:
+	detectors = datasource.GWDataSourceInfo(options)
+	channel_dict = detectors.channel_dict
 	boundary_seg = detectors.seg
 
 else:
