@@ -1240,7 +1240,10 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
   switch (prop_id) {
 
     case PROP_IIRBANK_FNAME:
+
+      GST_DEBUG("spiir bank acquiring the lock");
       g_mutex_lock(element->iir_bank_lock);
+      GST_DEBUG("spiir bank have acquired the lock");
 
       GST_LOG_OBJECT (element, "obtaining bank, stream id is %d", element->stream);
       element->bank_fname = g_value_dup_string(value);
@@ -1251,7 +1254,7 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       int deviceCount;
       cudaGetDeviceCount(&deviceCount);
       element->deviceID = (element->stream_id) % deviceCount ;
-      printf("device for spiir %s %d\n", element->bank_fname, element->deviceID);
+      GST_LOG("device for spiir %s %d\n", element->bank_fname, element->deviceID);
       CUDA_CHECK(cudaSetDevice(element->deviceID));
       // cudaStreamCreateWithFlags(&element->stream, cudaStreamNonBlocking);
       cudaStreamCreate(&element->stream);
@@ -1282,8 +1285,11 @@ cuda_multirate_spiir_set_property (GObject * object, guint prop_id,
       element->outchannels = element->spstate[0]->num_templates * 2;
       element->width = 32; //FIXME: only can process float data
       GST_DEBUG_OBJECT (element, "spiir bank available, number of depths %d, outchannels %d", element->num_depths, element->outchannels);
+
+      GST_DEBUG("spiir bank done read, broadcasting the lock");
       g_cond_broadcast(element->iir_bank_available);
       g_mutex_unlock(element->iir_bank_lock);
+      GST_DEBUG("spiir bank done broadcasting");
 
       break;
 

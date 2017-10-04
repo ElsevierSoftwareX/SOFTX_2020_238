@@ -477,7 +477,7 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 
 
 	// free array memory 
-	int num_filters, num_templates;
+	int num_filters, num_templates, last_ntmplt;
 	COMPLEX_F *tmp_a1 = NULL, *tmp_b0 = NULL;
        	int *tmp_d = NULL, tmp_max = 0, cur_d = 0;
 	int a1_len = 0, b0_len = 0, d_len = 0;
@@ -502,6 +502,15 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		if ((gint)d_array[i].ndim > 0) {
 		num_filters		= (gint)d_array[i].dim[0];
 		num_templates	= (gint)d_array[i].dim[1];
+		/* sanity check last_ntmplt needs to be the same with current ntmplt */
+		if (i == 0)
+			last_ntmplt = num_templates;
+		else {
+			if (last_ntmplt != num_templates)
+				fprintf(stderr, "depth %d has ntmplt %d, but last depth has ntmplt %d\n", i, num_templates, last_ntmplt);
+		}
+
+
 		/* should not surpass GPU hard limit */
 		if (num_filters > NTHREAD_LIMIT) {
 		  fprintf(stderr, "%s has number of filters %d, over NTHREAD_LIMIT, will pick the first %d filters for filtering\n", filename, num_filters, NTHREAD_LIMIT);
@@ -509,6 +518,7 @@ spiir_state_load_bank( SpiirState **spstate, const char *filename, guint ndepth,
 		  //exit(0);
 		}
 
+		/* create more space if there are more filters in this sample rate */
 		eff_len = num_filters * num_templates;
 		spiir_state_workspace_realloc_complex (&tmp_a1, &a1_len, eff_len);
 		spiir_state_workspace_realloc_complex (&tmp_b0, &b0_len, eff_len);
