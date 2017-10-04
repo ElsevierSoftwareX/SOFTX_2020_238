@@ -88,6 +88,7 @@ struct _GstPostcohCollectData {
 	GstCollectDataDestroyNotify destroy_notify;
 };
 
+// FIXME: consider more flxible structure for PeakList
 typedef struct _PeakList {
 	int peak_intlen;
 	int peak_floatlen;
