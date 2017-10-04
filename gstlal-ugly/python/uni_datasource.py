@@ -347,6 +347,9 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 
 
 	head = pipeparts.mktee(pipeline, head)
+	if nxydump_segment is not None:
+		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whitened_data_%s_%d.dump" % (instrument, nxydump_segment[0]), segment = nxydump_segment)
+	
 	return head
 
 
