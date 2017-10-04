@@ -555,8 +555,8 @@ class FinalSink(object):
 				gracedb_upload_itrial += 1
 
 		# FIXME: upload skymap if output_skymap is turned on
-		if self.output_skymap == 1:
-			skymap_loc = "%s/%s_%d_%d_%d" % (skymap_url, trigger.pivotal_ifo, trigger.end_time, trigger.end_time_ns, trigger.tmplt_idx)
+#		if self.output_skymap == 1:
+			#skymap_loc = "%s/%s_%d_%d_%d" % (skymap_url, trigger.pivotal_ifo, trigger.end_time, trigger.end_time_ns, trigger.tmplt_idx)
 
 
 		if self.verbose:
