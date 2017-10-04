@@ -238,7 +238,7 @@ def gen_bank_node(bankJob, dag, parent_nodes, psd, bank_groups, options, seg):
 	return bank_nodes
 
 def gen_spiir_bank_strings_from_banknode(bank_nodes, instruments = None):
-	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
+	# FIXME assume that the number of spiir nodes is the same per ifo, a good assumption though
 	outstrings = []
 	for i in range(len(bank_nodes.values()[0])):
 		spiir_bank_string = ""
@@ -334,6 +334,7 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 
 		# setup dictionaries to hold the inspiral nodes
 		inspiral_nodes[(ifos, None)] = {}	
+		inspiral_nodes[(ifos, "shift")] = {}	
 		for injections in options.injections:
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
 		
@@ -350,15 +351,22 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 
 			# get the svd bank strings
 			spiir_bank_strings_full = gen_spiir_bank_strings_from_banknode(bank_nodes, instruments = this_channel_dict.keys())
-
+			""" 
+			output zerolags format example: 
+			gstlal_inspiral_postcohspiir_online/bankbin1/H1L1-bankbin1_SPIIR_zerolag-1180xx-14800.xml.gz
+			output stats format:
+			gstlal_inspiral_postcohspiir_online/bankbin1/H1L1-0001_SPIIR_stats-1180xx-14800.xml.gz
+			"""
 			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numbanks)):
+
 				# results for one bank chunk will be stored in the same place
-				job_tag = "%s/bankchunk%d" % (inspiralPostcohspiirJob.tag_base, chunk_counter)
+				job_tag = "%s/bankbin%d" % (inspiralPostcohspiirJob.tag_base, chunk_counter)
 				# setup output names
-				output_name = inspiral_pipe.T050017_filename(ifos, "bankchunk%d_SPIIR_zerolag" % chunk_counter, seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag)
+				output_name = inspiral_pipe.T050017_filename(ifos, "bankbin%d_SPIIR_zerolag" % chunk_counter, seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag)
 				# to be consistent with the bank name
 				stats_name_list = [T050017_filename(ifos, "%04d_SPIIR_stats" % (i + numbanks * chunk_counter, ), seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag) for i,s in enumerate(spiir_bank_strings)]
 				# non injection node
+				# FIXME: single detector postcoh ?
 				noninjnode = inspiral_pipe.generic_node(
 						inspiralPostcohspiirJob, 
 						dag, 
@@ -386,12 +394,19 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 				noninjnode.set_priority(chunk_counter)
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
 
+			""" 
+			output zerolags format example: 
+			gstlal_inspiral_postcohspiir_shift/bankbin1/H1L1-bankbin1_SPIIR_zerolag-1180xx-14800.xml.gz
+			output stats format:
+			gstlal_inspiral_postcohspiir_shift/bankbin1/H1L1-0001_SPIIR_stats-1180xx-14800.xml.gz
+			"""
 			# for time-shifted jobs:
 			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numbanks)):
+
 				# results for one bank chunk will be stored in the same place
-				job_tag = "%s/bankchunk%d" % (inspiralPostcohspiirShiftJob.tag_base, chunk_counter)
+				job_tag = "%s/bankbin%d" % (inspiralPostcohspiirShiftJob.tag_base, chunk_counter)
 				# setup output names
-				output_name = inspiral_pipe.T050017_filename(ifos, "bankchunk%d_SPIIR_zerolag" % chunk_counter, seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag)
+				output_name = inspiral_pipe.T050017_filename(ifos, "bankbin%d_SPIIR_zerolag" % chunk_counter, seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag)
 				stats_name_list = [T050017_filename(ifos, "%04d_SPIIR_stats" % (i + numbanks * chunk_counter, ), seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag) for i,s in enumerate(spiir_bank_strings)]
 	
 				# non injection node
@@ -423,17 +438,22 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 				#shiftnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
 				# impose a priority to help with depth first submission
 				shiftnode.set_priority(chunk_counter)
-				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(shiftnode)
+				inspiral_nodes[(ifos, "shift")].setdefault(seg, []).append(shiftnode)
 
-
+			""" 
+			output zerolags format example: 
+			gstlal_inspiral_postcohspiir_shift/bankbin1/H1L1-bankbin1_SPIIR_zerolag-1180xx-14800.xml.gz
+			output stats format:
+			gstlal_inspiral_postcohspiir_shift/bankbin1/H1L1-0001_SPIIR_stats-1180xx-14800.xml.gz
+			"""
 			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numbanks)):
 				# process injections
 				inj_counter = 0
 				for injections in options.injections:
 					# results for one bank chunk will be stored in the same place
-					job_tag = "%s_inj%d/bankchunk%d" % (inspiralPostcohspiirJob.tag_base, inj_counter, chunk_counter)
+					job_tag = "%s_inj%d/bankbin%d" % (inspiralPostcohspiirJob.tag_base, inj_counter, chunk_counter)
 					# setup output names
-					output_name = inspiral_pipe.T050017_filename(ifos, "bankchunk%d_SPIIR_zerolag" % chunk_counter, seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag)
+					output_name = inspiral_pipe.T050017_filename(ifos, "bankbin%d_SPIIR_zerolag" % chunk_counter, seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag)
 					stats_name_list = [T050017_filename(ifos, "%04d_SPIIR_stats" % (i + numbanks * chunk_counter, ), seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag) for i,s in enumerate(spiir_bank_strings)]
 	
 					sim_name = sim_tag_from_inj_file(injections)
@@ -471,25 +491,29 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 
 """ 
 output zerolags format example: 
-gstlal_inspiral_postcohspiir_online/0001/H1L1-SPIIR_zerolag-1180xx-14800.xml.gz
-gstlal_inspiral_postcohspiir_shift/0001/H1L1-SPIIR_zerolag-1180xx-14800.xml.gz
-gstlal_inspiral_postcohspiir_inj0/0001/H1L1-SPIIR_zerolag-1180xx-14800.xml.gz
+gstlal_inspiral_postcohspiir_online/bankbin1/H1L1-bankbin1_SPIIR_zerolag-1180xx-14800.xml.gz
 output stats format:
-gstlal_inspiral_postcohspiir_online/0001/H1L1-SPIIR_stats-1180xx-14800.xml.gz
+gstlal_inspiral_postcohspiir_online/bankbin1/H1L1-0001_SPIIR_stats-1180xx-14800.xml.gz
 """
+
 def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
+	"""
+	"""
 
 	# split the results to bank bins, usually set to 3. according to template length.
 	# first get the previous output in a usable form
 	spiir_output = {}
+	spiir_output[None] = {}
+	spiir_output["shift"] = {}
 	for inj in options.injections + [None]:
 		spiir_output[sim_tag_from_inj_file(inj)] = {}
+
 	spiir_diststats = {}
 	for ifos in segsdict:
 		for seg in segsdict[ifos]:
 			# iterate over the mass space chunks for each segment
 			for j, node in enumerate(inspiral_nodes[(ifos, None)][seg]):
-				for i,f in enumerate(node.output_files["output-cache"]):
+				for i,f in enumerate(node.output_files["finalsink-output-name"]):
 					# Store the output files and the node for use as a parent dependency
 					spiir_output[None].setdefault((j,i), []).append((f, [node]))
 				for i,f in enumerate(node.output_files["likelihood-file-cache"]):
@@ -506,47 +530,51 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 
 	return spiir_output, spiir_diststats
 
-def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, spiir_output, spiir_diststats, segsdict, options, boundary_seg, instrument_set, snrpdfnode):
+"""
+step 1: merge the stats of the same bankbin from whatever ifo combo files.
+The output name is gstlal_merge_stats/bankbin1_SPIIR_stats-boundarystart-boundaryend.xml.gz, ..
+with single_ifo to single_ifo stats, double_ifo to double_ifo stats, and tri_ifo to tri_ifo stats
+step 2: merge bankbin1_xx, bankbin2_xx, .. to gstlal_merge_stats/bankbox1_SPIIR_stats-boundarystart-boundaryend.xml.gz to assign fap for zerolags
+"""
 
-	likelihood_nodes = {}
+def merge_stats(dag, calcRankPDFsJob, assignFAPJob, assignFAPJobInj, lalappsRunSqliteJob, toSqliteJob, inspiral_nodes, spiir_output, spiir_diststats, segsdict, options, boundary_seg, instrument_set):
+
 	rankpdf_nodes = []
 	outnodes = {}
 	instruments = "".join(sorted(instrument_set))
-	priornodes = []
 	# first non-injections
 	for n, (outputs, diststats) in enumerate((spiir_output[None][key], spiir_diststats[key]) for key in sorted(spiir_output[None].keys())):
-		inputs = [o[0] for o in outputs]
 		parents = []
 		[parents.extend(o[1]) for o in outputs]
-		# FIXME we keep this here in case we someday want to have a
-		# mass bin dependent prior, but it really doesn't matter for
-		# the time being.   
-		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
-				parent_nodes = parents,
-				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1},
-				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = createPriorDistStatsJob.output_path)}
-			)
+	
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
-				parent_nodes = [priornode, snrpdfnode],
+				parent_nodes = [inspiral_nodes.values],
 				input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"], snrpdfnode.output_files["write-likelihood"]]}, #FIXME is this right, do I just add the output of the calc prior job?
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%d_CALC_RANK_PDFS' % (n,), boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
-		priornodes.append(priornode)
 		rankpdf_nodes.append(calcranknode)
 
-		
-		# Break up the likelihood jobs into chunks to process fewer files, e.g, 25
-		likelihood_nodes.setdefault(None,[]).append(
-			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
-				parent_nodes = [priornode, snrpdfnode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
-				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-				input_files = {"":chunked_inputs},
-				input_cache_files = {"likelihood-cache":diststats +
-					[priornode.output_files["write-likelihood"],
-					snrpdfnode.output_files["write-likelihood"]]
-					}
-				) for chunked_inputs in chunks(inputs, 25)]
-			)
+
+def cluster_zerolags():
+	"""
+	cluster zerolags in 4s window with zerolag SNRs
+	step 1: cluster zerolags over boundary start-end
+	output gstlal_cluster_zerolags_online/bankbin1_SPIIR_zerolag-boundarystart-boundaryend.xml.gz
+	step 2: cluster bankbins to bankboxs
+	output gstlal_cluster_zerolags_online/bankbox1_SPIIR_zerolag-boundarystart-boundaryend.xml.gz
+	"""
+	# Break up the likelihood jobs into chunks to process fewer files, e.g, 25
+	likelihood_nodes.setdefault(None,[]).append(
+		[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
+			parent_nodes = [priornode, snrpdfnode] + parents, # add parents here in case a gstlal inpsiral job's trigger file is corrupted - then we can just mark that job as not done and this job will rerun. 
+			opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"":chunked_inputs},
+			input_cache_files = {"likelihood-cache":diststats +
+			[priornode.output_files["write-likelihood"],
+				snrpdfnode.output_files["write-likelihood"]]
+				}
+			) for chunked_inputs in chunks(inputs, 25)]
+		)
 
 	# then injections
 	for inj in options.injections:
@@ -631,6 +659,10 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcLikelihood
 
 
 def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, innodes, options, instruments):
+	"""
+	assign FARs, use gstlal_merge_stats/bankbox1_SPIIR_stats-start-end.xml.gz for gstlal_cluster_zerolags_online/bankbox1_SPIIR_zerolag-start-end.xml.gz
+	apply injFind to gstlal_cluster_zerolags_inj/bankbox1_SPIIR_zerolags-start-end.xml.gz
+	"""
 
 	if options.vetoes is None:
 		vetoes = []
@@ -879,6 +911,39 @@ inspiralPostcohspiirShiftJob = inspiral_pipe.generic_job(options.inspiral_execut
 # FIXME: hard-code the request cpus and memory, so each node can only process 1 job
 inspiralPostcohspiirInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_postcohspiir_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_cpus":"TARGET.cpus", "request_memory":"TARGET.memory", "Requirements":"(TARGET.Online_CBC_IIR_GPU=?=True)", "+Online_CBC_IIR_GPU":"True", "environment":"CUDA_VISIBLE_DEVICES=1,2,3,4"}))
 
+# calculate the PDF of the rankings statistic
+#calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_postcoh_calc_fap", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "request_cpus":"1"}))
+
+# find the injections
+#ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# from xml to sqlite
+#toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# to xml
+#toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# execute sql script on a sql database
+#lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# plot summary
+#plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# plot individual injection summary
+#plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# plot sensitivity
+#plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# openpage
+#openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+#pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+# closed page
+#marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+# plot background
+#plotbackgroundJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_background", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+#
 #
 # Get the analysis segments
 #
@@ -939,14 +1004,26 @@ bank_nodes = gen_bank_node(bankJob, dag, ref_psd_parent_nodes, ref_psd, inspiral
 #
 
 """
-inspiral_nodes[(ifos, None)] = {"seg time", noninjnode1, noninjnode2,...}
-inspiral_nodes[(ifos, "shift")] = {"seg time", shifnode1, shiftnode2,...}
-inspiral_nodes[(ifos, "inj_name")] = {"seg time", injnode1, injnode2,...}
+inspiral_nodes[(ifos, None)] = {"seg0": [noninjnode1, noninjnode2,...]}
+inspiral_nodes[(ifos, "shift")] = {"seg0": [shifnode1, shiftnode2,...]}
+inspiral_nodes[(ifos, "inj_name")] = {"seg0": [injnode1, injnode2,...]}
 """
 inspiral_nodes = gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, inspiralPostcohspiirInjJob, dag, bank_nodes, segsdict, options, channel_dict)
 
 #
 # Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
+
+
+
+# make summary plots
+#plotnodes = []
+
+#plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[farnode],
+#	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "user-tag": "ALL_LLOID_COMBINED", "output-dir": output_dir},
+#	input_files = {"":[noninjdb] + injdbs}
+#))
+
+
 #
 #
 # all done
