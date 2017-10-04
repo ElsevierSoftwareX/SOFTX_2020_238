@@ -334,7 +334,7 @@ class FinalSink(object):
                                         ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
                                         ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
                                         self.candidate.ifos = ''.join([i for (i,v) in zip(ifo_names,ifo_active) if v])
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and all([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v]) and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v])):
+					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and sum([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v])>=2 and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v])):
 						# self.__lookback_far(self.candidate)
 						self.__do_gracedb_alert(self.candidate)
 					if self.need_online_perform:
