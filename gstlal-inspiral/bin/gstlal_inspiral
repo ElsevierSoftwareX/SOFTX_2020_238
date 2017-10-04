@@ -230,7 +230,7 @@ def setrlimit(res, lim):
 setrlimit(resource.RLIMIT_NPROC, None)
 setrlimit(resource.RLIMIT_AS, None)
 setrlimit(resource.RLIMIT_RSS, None)
-setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
+#setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def now():
