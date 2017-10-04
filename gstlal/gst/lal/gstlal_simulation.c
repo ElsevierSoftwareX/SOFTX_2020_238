@@ -312,7 +312,11 @@ static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_i
 	 * project waveform onto detector
 	 */
 
+
+
+
 	*strain = XLALSimDetectorStrainREAL8TimeSeries(hplus, hcross, sim_inspiral->longitude, sim_inspiral->latitude, sim_inspiral->polarization, &detector);
+
 	XLALDestroyREAL8TimeSeries(hplus);
 	XLALDestroyREAL8TimeSeries(hcross);
 	if(!(*strain))
@@ -454,6 +458,11 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 			XLALDestroyREAL8TimeSeries(inspiral_series);
 			XLAL_ERROR(XLAL_EFUNC);
 		}
+
+		// NOTE: this only works for fake frames 16khz, but txt 4k Hz
+		int len = ceil((double) inspiral_series->data->length/ 16384 * 4096 * 1.5);
+		GST_LOG("inspiral series epoch time (%d, %d), length %d\n", inspiral_series->epoch.gpsSeconds, inspiral_series->epoch.gpsNanoSeconds, len);
+		//printf("simulation series epoch time (%d, %d), length %u\n", element->simulation_series->epoch.gpsSeconds, element->simulation_series->epoch.gpsNanoSeconds, element->simulation_series->data->length);
 		XLALDestroyREAL8TimeSeries(inspiral_series);
 
 		/*
@@ -527,7 +536,8 @@ static int add_simulation_series(REAL8TimeSeries *h, const GSTLALSimulation *ele
 
 	if(!XLALAddREAL8TimeSeries(h, element->simulation_series))
 		XLAL_ERROR(XLAL_EFUNC);
-
+	// printf("add simulation series epoch time (%d, %d), length %u\n", element->simulation_series->epoch.gpsSeconds, element->simulation_series->epoch.gpsNanoSeconds, element->simulation_series->data->length);
+	
 	/*
 	 * shrink simulation_series removing anything before the end of h
 	 */
