@@ -39,7 +39,8 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		int peak_floatlen = (12 + hist_trials * 12 ) * max_npeak;
 		pklist->peak_intlen = peak_intlen;
 		pklist->peak_floatlen = peak_floatlen;
-		
+	
+		/* create device space for peak list for int-type variables */	
 		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_npeak), sizeof(int) * peak_intlen ));
 		CUDA_CHECK(cudaMemsetAsync(pklist->d_npeak, 0, sizeof(int) * peak_intlen, stream));
 		pklist->d_peak_pos = pklist->d_npeak + 1;
@@ -54,6 +55,7 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		//printf("d_npeak %p\n", pklist->d_npeak);
 		//CUDA_CHECK(cudaMemsetAsync(pklist->d_npeak, 0, sizeof(int), stream));
 
+		/* create device space for peak list for float-type variables */	
 		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_snglsnr_L), sizeof(float) * peak_floatlen));
 		CUDA_CHECK(cudaMemsetAsync(pklist->d_snglsnr_L, 0, sizeof(float) * peak_floatlen, stream));
 		pklist->d_snglsnr_H = pklist->d_snglsnr_L + max_npeak;
@@ -81,6 +83,7 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->d_nullsnr_bg = pklist->d_snglsnr_L + (12 + 10*hist_trials) * max_npeak;
 		pklist->d_cmbchisq_bg = pklist->d_snglsnr_L + (12 + 11 * hist_trials) * max_npeak;
 
+		/* create host space for peak list for int-type variables */	
 		//pklist->npeak = (int *)malloc(sizeof(int) * peak_intlen);
 		CUDA_CHECK(cudaMallocHost((void **) &(pklist->npeak), sizeof(int) * peak_intlen));
 		memset(pklist->npeak, 0, sizeof(int) * peak_intlen);
@@ -93,6 +96,7 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->ntoff_H = pklist->npeak + 1 + (5 + hist_trials) * max_npeak;
 		pklist->ntoff_V = pklist->npeak + 1 + (6 + hist_trials) * max_npeak;
 
+		/* create host space for peak list for float-type variables */	
 		//pklist->snglsnr_L = (float *)malloc(sizeof(float) * peak_floatlen);
 		CUDA_CHECK(cudaMallocHost((void **) &(pklist->snglsnr_L), sizeof(float) * peak_floatlen));
 		memset(pklist->snglsnr_L, 0, sizeof(float) * peak_floatlen);
@@ -144,7 +148,6 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 
 	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
 	strcpy(fname_cpy, fname);
-	//printf("fname_cpy %s\n", fname_cpy);
 	char *token = strtok_r(fname_cpy, ",", &end_ifo);
 	int mem_alloc_size = 0, ntmplt = 0, match_ifo = 0;
 
@@ -153,7 +156,6 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		token = strtok_r(NULL, ",", &end_ifo);
 		ntoken++;
 	}
-	printf("read in sigmasq from xml %s\n", fname);
 
 	int nifo = ntoken;
 	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct));
@@ -166,12 +168,11 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 	end_ifo = NULL;
 	strcpy(fname_cpy, fname);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
-	//printf("fname_cpy %s\n", fname_cpy);
 	sprintf((char *)xns[0].tag, "sigmasq:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_sigmasq[0]);
 
-	/* used for sanity check the lenghts of sigmasq arrays should be equal */
+	/* used for sanity check the lengths of sigmasq arrays should be equal */
 	int last_dimension = -1;
 	/* start parsing again */
 	while (token != NULL) {
@@ -179,9 +180,9 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		char *token_bankname = strtok_r(token, ":", &end_token);
 		token_bankname = strtok_r(NULL, ":", &end_token);
 
-		printf("read in sigmasq now from xml %s\n", token_bankname);
 		parseFile(token_bankname, xns, 1);
 
+		// FIXME: consider other combos like HV, how we store sigmasq
 		for (int i=0; i<nifo; i++) {
 			if (strncmp(token, IFO_MAP[i], 2) == 0) {
 				match_ifo = i;
@@ -201,7 +202,6 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 			}
 
 
-		printf("sigmasq, parse match ifo %d, %s, ntmplt %d\n", match_ifo, token_bankname, ntmplt);
 		mem_alloc_size = sizeof(double) * ntmplt;
 
 		if (sigmasq[0] == NULL) {
@@ -213,6 +213,7 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		}
 
 		for (int j=0; j<ntmplt; j++) {
+			// FIXME: 
 			//sigmasq[match_ifo][j] = (double)((double *)(array_sigmasq[0].data))[j];
 			//printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
 		}
@@ -228,7 +229,6 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		 */
 		xmlMemoryDump();
 
-		printf("next token %s \n", token);
 
 	}
 
