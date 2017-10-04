@@ -108,7 +108,7 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 	return elem
 
 
-def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snapshot_interval = 0, history_fname = None, output_fname_prefix = None):
+def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snapshot_interval = 0, history_fname = None, output_prefix = None, output_name = None):
 	properties = {
 		"ifos": ifos,
 		"snapshot_interval": snapshot_interval,
@@ -116,8 +116,10 @@ def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snaps
 	}
 	if history_fname is not None:
 		properties["history_fname"] = history_fname
-	if output_fname_prefix is not None:
-		properties["output_fname_prefix"] = output_fname_prefix
+	if output_prefix is not None:
+		properties["output_prefix"] = output_prefix
+	if output_name is not None:
+		properties["output_name"] = output_prefix
 
 	if "name" in properties:
 		elem = gst.element_factory_make("cohfar_accumbackground", properties.pop("name"))
@@ -398,6 +400,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 
 	assert any(triggersrcs.values())
 	return triggersrcs
+
 def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1, snapshot_interval = 0):
 	properties = dict((name, value) for name, value in zip(("location", "compression", "snapshot-interval", "sync", "async"), (location, compression, snapshot_interval, False, False)))
 	if "name" in properties:
@@ -543,6 +546,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		5.0, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials
 		= 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None,
 		cohfar_accumbackground_output_prefix = None,
+		cohfar_accumbackground_output_name = None,
 		cohfar_accumbackground_snapshot_interval = 0,
 		cohfar_assignfar_refresh_interval = 86400,
 		cohfar_assignfar_silent_time = 2147483647,
@@ -669,6 +673,12 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
 			if verbose:
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
+
+	#		snr = pipeparts.mktee(pipeline, snr)
+
+	#		if nxydump_segment is not None:
+	#			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_cpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
+	#
 			snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=10, max_size_bytes=100000000)
 
 			if postcoh is None:
@@ -683,7 +693,10 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
 
-		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_fname_prefix = cohfar_accumbackground_output_prefix[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
+		if cohfar_accumbackground_output_prefix is None:
+			postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_prefix = None, output_name = cohfar_accumbackground_output_name[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
+		else:
+			postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_prefix = cohfar_accumbackground_output_prefix[i_dict], output_name = None, snapshot_interval = cohfar_accumbackground_snapshot_interval)
 		postcoh = mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)
 		#head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(postcoh)

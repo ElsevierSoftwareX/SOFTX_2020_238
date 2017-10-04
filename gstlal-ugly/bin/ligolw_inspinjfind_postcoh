@@ -41,7 +41,10 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from pylal import git_version
 #from pylal import ligolw_inspinjfind
+from gstlal import postcoh_table_def
 from gstlal import ligolw_inspinjfind_postcoh
+
+import pdb
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -70,7 +73,7 @@ def parse_command_line():
 	parser.add_option("-f", "--force", action = "store_true", help = "Process even if file has already been processed.")
 	parser.add_option("--comment", metavar = "text", help = "Set the comment string to be written to the process table (default = None).")
 	parser.add_option("-c", "--match-algorithm", metavar = "[inspiral]", default = "inspiral", help = "Set the algorithm used to match event candidates with injections (default = \"inspiral\").")
-	#parser.add_option("-r", "--revert", action = "store_true", help = "Revert a previously-processed XML file to its pre-ligolw_inspinjfind state, allowing it to be re-processed.  This is achieved by removing ligolw_inspinjfind's entries from the process metadata tables, removing injection-related entries from the coinc_definer table, and removing all coincs created by ligolw_inspinjfind.  NOTE:  generally this is only possible if ligolw_inspinjfind was the last transformation applied to the file, otherwise data that has been added subsequently might be broken due to dangling cross-references to deleted data.  It is left as an exercise to the user to ensure that reverting the file is sensible.")
+	parser.add_option("-r", "--revert", action = "store_true", help = "Revert a previously-processed XML file to its pre-ligolw_inspinjfind state, allowing it to be re-processed.  This is achieved by removing ligolw_inspinjfind's entries from the process metadata tables, removing injection-related entries from the coinc_definer table, and removing all coincs created by ligolw_inspinjfind.  NOTE:  generally this is only possible if ligolw_inspinjfind was the last transformation applied to the file, otherwise data that has been added subsequently might be broken due to dangling cross-references to deleted data.  It is left as an exercise to the user to ensure that reverting the file is sensible.")
 	parser.add_option("-w", "--time-window", metavar = "seconds", type = 'float', default = 9., help = "Set the time window used by the \"inspiral\" match algorithm (default = 0.9).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -112,6 +115,15 @@ def parse_command_line():
 
 
 #
+# Must use injection finder's custom postcoh table row type.
+#
+
+
+postcoh_table_def.PostcohInspiralTable.RowType = postcoh_table_def.PostcohInspiral = ligolw_inspinjfind_postcoh.PostcohInspiral
+
+
+
+#
 # =============================================================================
 #
 #                                     Main
@@ -149,7 +161,8 @@ for n, filename in enumerate(filenames, start = 1):
 
 	if options.verbose:
 		print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
-	xmldoc = ligolw_utils.load_filename(filename, contenthandler = ligolw_inspinjfind.LIGOLWContentHandler, verbose = options.verbose)
+	pdb.set_trace()
+	xmldoc = ligolw_utils.load_filename(filename, contenthandler = ligolw_inspinjfind_postcoh.LIGOLWContentHandler, verbose = options.verbose)
 
 	#
 	# process
@@ -157,6 +170,7 @@ for n, filename in enumerate(filenames, start = 1):
 
 	if options.revert:
 		#ligolw_inspinjfind.revert(xmldoc, process_program_name, verbose = options.verbose)
+		pass
 	else:
 		#
 		# have we already processed it?

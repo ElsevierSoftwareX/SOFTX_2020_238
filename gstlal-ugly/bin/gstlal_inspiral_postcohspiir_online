@@ -222,7 +222,8 @@ def parse_command_line():
   parser.add_option("--finalsink-gracedb-pipeline", default = "gstlal-spiir", help = "gracedb pipeline, default is gstlal-spiir")
   parser.add_option("--finalsink-snapshot-interval", type = "float", metavar = "seconds", default = None, help = "How often to snapshot the trigger files.")
   parser.add_option("--finalsink-background-update-interval", type = "float", metavar = "seconds", default = None, help = "How often to update the fap stats files.")
-  parser.add_option("--finalsink-output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the triggers (required)")
+  parser.add_option("--finalsink-output-prefix", metavar = "filename", default = None, help = "Set the filename prefix in which to save the triggers (required)")
+  parser.add_option("--finalsink-output-name", metavar = "filename", default = None, help = "Set the filename in which to save the triggers (either output-name or output-prefix is required)")
   parser.add_option("--finalsink-cluster-window", type = "float", metavar = "seconds", default = 0, help = "Cluster window to cluster zerolags.")
   parser.add_option("--finalsink-need-online-perform", type = "int", default = 0, help = "need online performer ? 1: yes, 0: no")
 
@@ -247,6 +248,9 @@ def parse_command_line():
 
   if options.blind_injections and options.injections:
     raise ValueError("must use only one of --blind-injections or --injections")
+
+  if options.finalsink_output_prefix is None and options.finalsink_output_name is None:
+    raise ValueError("must provide at least finalsink-output-prefix or finalsink-output-name")
 
   required_options = ["job_tag"]
 	
@@ -310,6 +314,7 @@ def parse_command_line():
   #		raise ValueError("must provide --job-tag or --output for output file naming purpose")
 
   #pdb.set_trace()
+  # create skymap dump directory if not exists
   ifo_list = detectors.channel_dict.keys()
   if options.cuda_postcoh_output_skymap == 1:
     ifo_combos = get_ifo_combos(ifo_list)
@@ -492,6 +497,7 @@ if 1==1:
 		  ifos = lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""),
 		  path = options.job_tag,
 		  output_prefix = options.finalsink_output_prefix,
+		  output_name = options.finalsink_output_name,
 		  far_factor = options.finalsink_far_factor,
 		  cluster_window = options.finalsink_cluster_window,
 		  snapshot_interval = options.finalsink_snapshot_interval,
@@ -549,7 +555,7 @@ if 1==1:
   #
   # write output file
   #
-  finalsink.write_output_file(filename = finalsink.get_output_filename(options.finalsink_output_prefix, finalsink.t_snapshot_start, finalsink.snapshot_duration), verbose = options.verbose)
+  finalsink.write_output_file(filename = finalsink.get_output_filename(options.finalsink_output_prefix, options.finalsink_output_name, finalsink.t_snapshot_start, finalsink.snapshot_duration), verbose = options.verbose)
 
   # Shutdown the web interface servers
   bottle.default_app.pop()

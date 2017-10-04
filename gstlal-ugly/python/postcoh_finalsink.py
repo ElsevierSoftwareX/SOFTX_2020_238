@@ -161,7 +161,6 @@ class BackgroundStatsUpdater(object):
 		# delete all update processes when they are finished
 		del self.procs[:]
 
-
 	def update_fap_stats(self, cur_buftime):
 		self.wait_last_process_finish()
 		# list all the files in the path
@@ -215,7 +214,7 @@ class BackgroundStatsUpdater(object):
 
 
 class FinalSink(object):
-	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, far_factor, cluster_window = 0.5, snapshot_interval = None, background_update_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
+	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, background_update_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
 	#
 	# initialize
 	#
@@ -258,6 +257,7 @@ class FinalSink(object):
 		# snapshot parameters
 		self.path = path
 		self.output_prefix = output_prefix
+		self.output_name = output_name
 		self.snapshot_interval = snapshot_interval
 		self.thread_snapshot = None
 		self.t_snapshot_start = None
@@ -340,7 +340,7 @@ class FinalSink(object):
 			# dump zerolag candidates when interval is reached
 			self.snapshot_duration = buf_timestamp - self.t_snapshot_start
 			if self.snapshot_interval is not None and self.snapshot_duration >= self.snapshot_interval:
-				snapshot_filename = self.get_output_filename(self.output_prefix, self.t_snapshot_start, self.snapshot_duration)
+				snapshot_filename = self.get_output_filename(self.output_prefix, self.output_name, self.t_snapshot_start, self.snapshot_duration)
 				self.snapshot_output_file(snapshot_filename)
 				self.t_snapshot_start = buf_timestamp
 				# FIXME: make sure combine stats won't delete any files that are being read by update_fap_stats
@@ -607,9 +607,12 @@ class FinalSink(object):
 		del self.coincs_document
 		self.coincs_document = coincs_document
 	
-	def get_output_filename(self, output_prefix, t_snapshot_start, snapshot_duration):
-		fname = "%s_%d_%d.xml.gz" % (output_prefix, t_snapshot_start, snapshot_duration)
-		return fname
+	def get_output_filename(self, output_prefix, output_name, t_snapshot_start, snapshot_duration):
+		if output_prefix is not None:
+			fname = "%s_%d_%d.xml.gz" % (output_prefix, t_snapshot_start, snapshot_duration)
+			return fname
+		assert output_name is not None
+		return output_name
 
 	def snapshot_output_file(self, filename, verbose = False):
 		# make sure the last round of output dumping is finished 
