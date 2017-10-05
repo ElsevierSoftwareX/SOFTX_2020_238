@@ -759,6 +759,7 @@ static gboolean src_query_get_position(GstFrameCPPChannelMux *mux, GstClockTime 
 
 		default:
 			success = FALSE;
+			__attribute__ ((fallthrough));
 done:
 		case GST_ITERATOR_DONE:
 			gst_iterator_free(it);
