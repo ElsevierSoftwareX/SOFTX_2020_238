@@ -347,7 +347,7 @@ AS_IF([test "x$HAVE_FRAMECPP" != "xyes"], [AC_MSG_ERROR([framecpp not found])])
 #
 
 
-AC_SUBST([MIN_GDS_VERSION], [2.17.0])
+AC_SUBST([MIN_GDS_VERSION], [2.18.0])
 AC_ARG_WITH(
 	[gds],
 	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],

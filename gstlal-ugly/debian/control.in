@@ -9,9 +9,8 @@ Build-Depends:
  debhelper (>= 9),
  doxygen (>= @MIN_DOXYGEN_VERSION@),
  fakeroot,
- gds-crtools (>= @MIN_GDS_VERSION@),
  gds-dev (>= @MIN_GDS_VERSION@),
- gds-services (>= @MIN_GDS_VERSION@),
+ gds-lowlatency (>= @MIN_GDS_VERSION@),
  gobject-introspection (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
  graphviz,
  gstlal-dev (>= @MIN_GSTLAL_VERSION@),
@@ -34,9 +33,7 @@ Build-Depends:
 Package: gstlal-ugly
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
- gds-core (>= @MIN_GDS_VERSION@),
- gds-crtools (>= @MIN_GDS_VERSION@),
- gds-services (>= @MIN_GDS_VERSION@),
+ gds-lowlatency (>= @MIN_GDS_VERSION@),
  gir1.2-glib-2.0,
  gir1.2-gstreamer-1.0 (>= @MIN_GSTREAMER_VERSION@),
  gstlal (>= @MIN_GSTLAL_VERSION@),
