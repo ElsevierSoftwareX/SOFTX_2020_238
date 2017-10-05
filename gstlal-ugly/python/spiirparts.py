@@ -119,7 +119,7 @@ def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snaps
 	if output_prefix is not None:
 		properties["output_prefix"] = output_prefix
 	if output_name is not None:
-		properties["output_name"] = output_prefix
+		properties["output_name"] = output_name
 
 	if "name" in properties:
 		elem = gst.element_factory_make("cohfar_accumbackground", properties.pop("name"))
@@ -696,7 +696,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		if cohfar_accumbackground_output_prefix is None:
 			postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_prefix = None, output_name = cohfar_accumbackground_output_name[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
 		else:
-			postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_prefix = cohfar_accumbackground_output_prefix[i_dict], output_name = None, snapshot_interval = cohfar_accumbackground_snapshot_interval)
+			postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_name = cohfar_accumbackground_output_name[i_dict], output_prefix = None, snapshot_interval = cohfar_accumbackground_snapshot_interval)
 		postcoh = mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)
 		#head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(postcoh)

@@ -192,7 +192,8 @@ def parse_command_line():
   parser.add_option("--nxydump-segment", metavar = "start:stop", default = None, help = "Set the time interval to dump from nxydump elments (optional).  The default is None, i.e. no dump.")
   parser.add_option("--cohfar-accumbackground-snapshot-interval", type = "int", metavar = "seconds", default = 0, help = "How often to snapshot the stats files. (optional)")
   parser.add_option("--cohfar-accumbackground-history-fname", metavar = "filename", help = "Set the history filename to read stats from (optional)")
-  parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (required)")
+  parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (optional)")
+  parser.add_option("--cohfar-accumbackground-output-name", metavar = "filename", action = "append", help = "Set the filename name in which to save the stats (optional)")
   parser.add_option("--cohfar-assignfar-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
   parser.add_option("--cohfar-assignfar-silent-time", type = "int", metavar = "seconds", default = 2147483647, help = "Do not assign FAP during this silent time. (optional)")
   parser.add_option("--finalsink-background-collection-time", metavar = "seconds,seconds,seconds", default = "604800,86400,7200", help = "Update the marginalized stats files using the information of the collection time. (optional)")
@@ -252,6 +253,10 @@ def parse_command_line():
 
   if options.finalsink_output_prefix is None and options.finalsink_output_name is None:
     raise ValueError("must provide at least finalsink-output-prefix or finalsink-output-name")
+
+  if options.cohfar_accumbackground_output_prefix is None and options.cohfar_accumbackground_output_prefix is None:
+    raise ValueError("must provide at least cohfar-accumbackground-output-prefix or cohfar-accumbackground-output-name")
+
 
   required_options = ["job_tag"]
 	
@@ -484,6 +489,7 @@ if 1==1:
       cuda_postcoh_output_skymap = options.cuda_postcoh_output_skymap,
       cohfar_file_path = options.job_tag,
       cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
+      cohfar_accumbackground_output_name = options.cohfar_accumbackground_output_name,
       cohfar_accumbackground_snapshot_interval = options.cohfar_accumbackground_snapshot_interval,
       cohfar_assignfar_refresh_interval = options.cohfar_assignfar_refresh_interval,
       cohfar_assignfar_silent_time= options.cohfar_assignfar_silent_time,
@@ -504,6 +510,7 @@ if 1==1:
 		  snapshot_interval = options.finalsink_snapshot_interval,
 		  background_update_interval = options.finalsink_background_update_interval,
 		  cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
+		  cohfar_accumbackground_output_name = options.cohfar_accumbackground_output_name,
 		  cohfar_assignfar_input_fname = options.cohfar_assignfar_input_fname,
 		  background_collection_time_string = options.finalsink_background_collection_time,
 		  gracedb_far_threshold = options.finalsink_gracedb_far_threshold,
