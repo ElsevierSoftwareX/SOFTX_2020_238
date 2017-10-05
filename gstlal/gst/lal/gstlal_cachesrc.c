@@ -493,7 +493,7 @@ done:
 	 * applications and I can't find any examples in gstreamer's own
 	 * code where an element calls this so ... !?  it's commented out */
 	/*gst_base_src_start_complete(basesrc, result ? GST_FLOW_OK : GST_FLOW_ERROR);*/
-	return TRUE;
+	return result;
 }
 
 
