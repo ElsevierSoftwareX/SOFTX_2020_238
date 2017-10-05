@@ -889,6 +889,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 	case ARG_CLIP_TO_SEGMENTS:
 		g_value_set_boolean(value, collectpads->clip_to_segments);
+		break;
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
