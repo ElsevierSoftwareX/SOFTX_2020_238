@@ -202,10 +202,16 @@ class MultiChannelHandler(simplehandler.Handler):
 		for (channel, rate) in self.keys:
 			self.dataframes[(channel, rate)] = pandas.DataFrame(numpy.nan, index = idq_aggregator.create_dataframe_index(self.init_gps_time), columns = columns)
 		
-		# set up bottle routes for spectra by each whitener
+		# set up ETG bottle related properties
+		self.etg_event = deque(maxlen = 20000)
+		self.last_event_time = None
+
+		# set up bottle routes for PSDs and extracted ETG data
 		self.psds = {}
+		self.etg_data = deque(maxlen = 2000)
 		if not options.disable_web_service:
 			bottle.route("/psds.xml")(self.web_get_psd_xml)
+			bottle.route("/feature_vectors")(self.web_get_etg_data)
 
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
@@ -243,6 +249,14 @@ class MultiChannelHandler(simplehandler.Handler):
 			buf = elem.emit("pull-sample").get_buffer()
 			buftime = int(buf.pts / 1e9)
 			channel, rate  = sink_dict[elem]
+
+			# push new etg event to queue if done processing current timestamp
+			if self.last_event_time is None:
+				self.last_event_time = buftime
+			if self.last_event_time < buftime:
+				self.etg_data.append(list(self.etg_event))
+				self.etg_event.clear()
+				self.last_event_time = buftime
 
 			# set save times appropriately
 			if self.last_save_time is None:
@@ -335,6 +349,10 @@ class MultiChannelHandler(simplehandler.Handler):
 			except ValueError:
 				print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
 				traceback.print_exc()
+		# append row to feature vector for bottle requests
+		etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
+                           'frequency': freq, 'q': Q, 'phase': row.phase, 'sigma_sq': row.sigmasq, 'chi_sq': row.chisq, 'snr': snr}
+		self.etg_event.append(etg_row)
 
 	def to_hdf5(self, channel, rate, buftime):
 		"""
@@ -441,6 +459,16 @@ class MultiChannelHandler(simplehandler.Handler):
 			output.close()
 		return outstr
 
+	def web_get_etg_data(self):
+		# if queue is empty, send appropriate response
+		if not self.etg_data:
+			# FIXME: add actual HTML response
+			return "no data available"
+		# else, get etg data and send as JSON
+		else:
+			with self.lock:
+				response = json.dumps(self.etg_data.popleft())
+			return response
 
 class LinkedAppSync(pipeparts.AppSync):
 	def __init__(self, appsink_new_buffer, sink_dict = {}):
