@@ -90,7 +90,7 @@ enum property {
 	PROP_SNAPSHOT_INTERVAL,
 	PROP_HISTORY_FNAME,
 	PROP_OUTPUT_PREFIX,
-	PROP_OUTPUT_FNAME
+	PROP_OUTPUT_NAME
 };
 
 static void cohfar_accumbackground_set_property (GObject * object,
@@ -301,7 +301,7 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
 //        goto flush_failed;
 
     GST_LOG_OBJECT(element, "EVENT EOS. ");
-    if (element->snapshot_interval >= 0) {
+    if (element->snapshot_interval > 0) {
 	gint gps_time = (int) (element->t_roll_start / GST_SECOND);
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	GString *tmp_fname = g_string_new(element->output_prefix);
@@ -309,7 +309,7 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
 	background_stats_to_xml(element->stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
 	g_string_free(tmp_fname, TRUE);
     } else {
-	GString *tmp_fname = g_string_new(element->output_fname);
+	GString *tmp_fname = g_string_new(element->output_name);
 	background_stats_to_xml(element->stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
 	g_string_free(tmp_fname, TRUE);
     }
@@ -352,8 +352,8 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			background_stats_from_xml(element->stats_snapshot, element->ncombo, &(element->hist_trials), element->history_fname);
 			break;
 
-		case PROP_OUTPUT_FNAME:
-			element->output_fname = g_value_dup_string(value);
+		case PROP_OUTPUT_NAME:
+			element->output_name = g_value_dup_string(value);
 			break;
 
 		case PROP_OUTPUT_PREFIX:
@@ -398,8 +398,8 @@ static void cohfar_accumbackground_get_property(GObject *object, enum property p
 			g_value_set_string(value, element->history_fname);
 			break;
 
-		case PROP_OUTPUT_FNAME:
-			g_value_set_string(value, element->output_fname);
+		case PROP_OUTPUT_NAME:
+			g_value_set_string(value, element->output_name);
 			break;
 
 		case PROP_OUTPUT_PREFIX:
@@ -503,7 +503,7 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 		g_param_spec_string(
 			"ifos",
 			"ifo names",
-			"ifos that participate in the pipeline",
+			"ifos that participate in the run",
 			NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -524,9 +524,9 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_OUTPUT_FNAME,
+		PROP_OUTPUT_NAME,
 		g_param_spec_string(
-			"output-fname",
+			"output-name",
 			"Output filename",
 			"Output background statistics filename",
 			DEFAULT_STATS_FNAME,

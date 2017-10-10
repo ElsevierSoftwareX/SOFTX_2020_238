@@ -48,9 +48,12 @@ int get_icombo(char *ifos) {
 		nifo_map = 0;
 		if (len_in == strlen(IFO_COMBO_MAP[icombo])) {
 			for (iifo=0; iifo<nifo_in; iifo++) {
+				// this allows V1H1 found as with the IFO_COMBO_MAP's H1V1
 				for (jifo=0; jifo<nifo_in; jifo++)
-					if (strncmp(ifos+iifo*IFO_LEN, IFO_COMBO_MAP[icombo]+jifo*IFO_LEN, IFO_LEN) == 0)
-					nifo_map++;
+					if (strncmp(ifos+iifo*IFO_LEN, IFO_COMBO_MAP[icombo]+jifo*IFO_LEN, IFO_LEN) == 0) {
+						nifo_map++;
+						//printf("nifo %d, in_ifo %d, cmp ifo %d, map_ifo %d\n", nifo_in, iifo, jifo, nifo_map);
+					}
 			}
 		}
 		if (nifo_in == nifo_map)
@@ -240,6 +243,7 @@ background_stats_create(char *ifos)
   for (icombo=0; icombo<ncombo; icombo++) {
     stats[icombo] = (BackgroundStats *) malloc(sizeof(BackgroundStats));
     BackgroundStats *cur_stats = stats[icombo];
+    // FIXME: what if HV or LV combo
     //printf("len %s, %d\n", IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]));
     cur_stats->ifos = malloc(strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
     strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));

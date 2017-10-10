@@ -226,8 +226,10 @@ typedef struct _PostcohState {
   float snglsnr_thresh;
   gint hist_trials;
   gint trial_sample_inv;
-  char cur_ifos[MAX_ALLIFO_LEN];
+  gchar cur_ifos[MAX_ALLIFO_LEN];
   gint cur_nifo;
+  gchar *all_ifos;
+  gint ifo_combo_idx;
   gint is_member_init;
   float snglsnr_max;
   float *tmp_maxsnr;

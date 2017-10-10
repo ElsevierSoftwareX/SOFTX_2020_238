@@ -69,7 +69,7 @@ typedef struct {
 	int hist_trials;
 	gchar *history_fname;
 	gchar *output_prefix;
-	gchar *output_fname;
+	gchar *output_name;
 
 	/*
 	 * timestamp book-keeping
