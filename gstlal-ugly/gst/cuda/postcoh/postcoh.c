@@ -30,6 +30,7 @@
 #include <string.h>
 #include <math.h>
 #include "postcoh.h"
+#include <cohfar/background_stats_utils.h> // for get_icombo, IFO_COMBO_MAP
 #include "postcoh_utils.h"
 #include "postcohinspiral_table_utils.h"
 #include <cuda_debug.h>
@@ -526,6 +527,8 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 
 	state->nifo = GST_ELEMENT(postcoh)->numsinkpads;
 	state->ifo_mapping = (gint8 *)malloc(sizeof(gint8) * state->nifo);
+	state->ifo_combo_idx = 0;
+	state->all_ifos = (gchar *)malloc(sizeof(gchar) * state->nifo * IFO_LEN);
 	state->peak_list = (PeakList **)malloc(sizeof(PeakList*) * state->nifo);
 	state->dt = (float) 1/postcoh->rate;
 
@@ -554,24 +557,35 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	CUDA_CHECK(cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo));
 	state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
 
-	gint8 i = 0, j = 0, cur_ifo = 0;
+	gint8 i = 0, j = 0, cur_ifo = 0, nifo = state->nifo;
 	GST_OBJECT_LOCK(postcoh->collect);
-
-	/* initialize ifo_mapping, snglsnr matrix, and peak_list */
-	for (sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {
+	/* find the ifo_combo_mapping and ifo_mapping:
+	 * first find the ifo_combo index in the IFO_COMBO_MAP
+	 * then, map original sinkpad's ifo to the position in this ifo_combo */
+	for (i=0, sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {
 		GstPad *pad = GST_PAD(sinkpads->data);
 		data = gst_pad_get_element_private(pad);
 		set_offset_per_nanosecond(data, postcoh->offset_per_nanosecond);
 		set_channels(data, postcoh->channels);
-		// FIXME: need to consider non-standard ifo indexing, like HV
-		for (j=0; j<state->nifo; j++) {
-			if (strncmp(data->ifo_name, IFO_MAP[j], 2) == 0 ) {
+		// FIXME: need to consider non-standard ifo indexing, like HV, need testing
+		g_strlcpy(state->all_ifos + IFO_LEN*i, data->ifo_name, sizeof(data->ifo_name));
+	}
+
+	state->ifo_combo_idx = get_icombo(state->all_ifos);
+	/* overwrite all_ifos to be the same with the combo in the IFO_COMBO_MAP */
+	g_strlcpy(state->all_ifos, IFO_COMBO_MAP[state->ifo_combo_idx], sizeof(IFO_COMBO_MAP[state->ifo_combo_idx]));
+
+	/* initialize ifo_mapping, snglsnr matrix, and peak_list */
+	for (i=0, sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {
+		GstPad *pad = GST_PAD(sinkpads->data);
+		data = gst_pad_get_element_private(pad);
+		for (j = 0; j < nifo; j++ )
+			if (strncmp(data->ifo_name, state->all_ifos + IFO_LEN*j, IFO_LEN) == 0 ) {
 				state->ifo_mapping[i] = j;
 				cur_ifo = j;
 				break;
-			}
 		}
-		
+
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
 		//printf("device id %d, stream addr %p, alloc for snglsnr %d\n", postcoh->device_id, postcoh->stream, mem_alloc_size);
 		
@@ -629,8 +643,8 @@ static GstPad *cuda_postcoh_request_new_pad(GstElement *element, GstPadTemplate 
 		return NULL;
 	}
 
-	data->ifo_name = (gchar *)malloc(2*sizeof(gchar));
-	strncpy(data->ifo_name, name, 2*sizeof(gchar));
+	data->ifo_name = (gchar *)malloc(IFO_LEN*sizeof(gchar));
+	g_strlcpy(data->ifo_name, name, sizeof(data->ifo_name));
 	data->adapter = gst_adapter_new();
 	data->is_aligned = FALSE;
 	data->aligned_offset0 = 0;
@@ -815,7 +829,7 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 			} else {
 				min_size = min_size > size_cur ? size_cur : min_size;
 			}
-			strncpy(state->cur_ifos + 2*state->cur_nifo, data->ifo_name, 2*sizeof(char));
+			g_strlcpy(state->cur_ifos + IFO_LEN*state->cur_nifo, data->ifo_name, sizeof(data->ifo_name));
 			state->cur_nifo++;
 
 	}
@@ -902,8 +916,9 @@ static void cuda_postcoh_flush(GstCollectPads *pads, guint64 common_size)
 
 static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
 {
+	// FIXME: check if the cur_ifo has some useful SNRs
 	for (int i=0; i<state->cur_nifo; i++) {
-		if (strncmp(state->cur_ifos+2*i, IFO_MAP[cur_ifo], 2) == 0)
+		//if (strncmp(state->cur_ifos+IFO_LEN*i, state->all_ifos + cur_ifo, IFO_LEN) == 0)
 			return TRUE;
 	}
 	return FALSE;
@@ -918,6 +933,7 @@ static int cuda_postcoh_select_background(PeakList *pklist,int iifo, int hist_tr
 		peak_cur = pklist->peak_pos[ipeak];
 		for (itrial=1; itrial<=hist_trials; itrial++) {
 			background_cur = (itrial - 1)*max_npeak + peak_cur;
+			// FIXME: consider a different threshold for 3-detector 
 //			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*max_npeak + peak_cur])
 			if (sqrt(pklist->cohsnr_bg[background_cur]) > 1.414 + pklist->snglsnr_L[iifo*max_npeak + peak_cur]) {
 				left_backgrounds++;
@@ -968,6 +984,7 @@ static int cuda_postcoh_select_foreground(PostcohState *state, float cohsnr_thre
 			 * we abandon this peak
 			 * */
 			peak_cur = peak_pos[ipeak];
+			// FIXME: consider a different threshold for 3-detector 
 			if (sqrt(pklist->cohsnr[peak_cur]) > 1.414 + pklist->snglsnr_L[iifo*(state->max_npeak) + peak_cur]) {
 				cluster_peak_pos[final_peaks++] = peak_cur;
 			} else 
@@ -1000,7 +1017,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 
 	PostcohInspiralTable *output = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 	int iifo = 0, nifo = state->nifo;
-	int ifos_size = sizeof(char) * 2 * state->cur_nifo, one_ifo_size = sizeof(char) * 2 ;
+	int ifos_size = sizeof(char) * IFO_LEN * state->cur_nifo, one_ifo_size = sizeof(char) * IFO_LEN ;
 	int ipeak, npeak = 0, itrial = 0, exe_len = state->exe_len, max_npeak = state->max_npeak;
 	int hist_trials = postcoh->hist_trials;
 
@@ -1043,8 +1060,8 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->chisq_V = pklist->chisq_V[peak_cur];
 			cur_tmplt_idx = pklist->tmplt_idx[peak_cur];
 
-			output->deff_L = sqrt(state->sigmasq[L_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_L[peak_cur]; 
-			output->deff_H = sqrt(state->sigmasq[H_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_H[peak_cur]; 
+			//output->deff_L = sqrt(state->sigmasq[L_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_L[peak_cur]; 
+			//output->deff_H = sqrt(state->sigmasq[H_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_H[peak_cur]; 
 			if (pklist->snglsnr_V[peak_cur] > 0)
 				output->deff_V = sqrt(state->sigmasq[V_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_V[peak_cur]; 
 			output->is_background = 0;
