@@ -254,7 +254,7 @@ def parse_command_line():
   if options.finalsink_output_prefix is None and options.finalsink_output_name is None:
     raise ValueError("must provide at least finalsink-output-prefix or finalsink-output-name")
 
-  if options.cohfar_accumbackground_output_prefix is None and options.cohfar_accumbackground_output_prefix is None:
+  if options.cohfar_accumbackground_output_prefix is None and options.cohfar_accumbackground_output_name is None:
     raise ValueError("must provide at least cohfar-accumbackground-output-prefix or cohfar-accumbackground-output-name")
 
 
@@ -414,7 +414,7 @@ else:
 #
 #for iir_bank, output_filename, likelihood_file in zip(iir_banks, options.output, options.likelihood_file):
 
-if 1==1:
+if int(options.finalsink_need_online_perform) > 0:
   # create a new, empty, Bottle application
   bottle.default_app.push()
 
@@ -461,13 +461,13 @@ if 1==1:
   # Build pipeline
   #
 
-  if options.verbose:
-    print >>sys.stderr, "assembling pipeline ...",
+if options.verbose:
+  print >>sys.stderr, "assembling pipeline ...",
 
-  pipeline = gst.Pipeline("gstlal_inspiral_postcoh_online")
-  mainloop = gobject.MainLoop()
+pipeline = gst.Pipeline("gstlal_inspiral_postcoh_online")
+mainloop = gobject.MainLoop()
 
-  postcohsrcs = spiirparts.mkPostcohSPIIROnline(
+postcohsrcs = spiirparts.mkPostcohSPIIROnline(
       pipeline,
       detectors = detectors,
       banks = iir_banks,
@@ -497,7 +497,7 @@ if 1==1:
  # or "%s-%s_Postcoh-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
     )
 
-  finalsink = postcoh_finalsink.FinalSink(
+finalsink = postcoh_finalsink.FinalSink(
 		  process_params = process_params,
 		  pipeline = pipeline,
 		  need_online_perform = options.finalsink_need_online_perform,
@@ -522,58 +522,58 @@ if 1==1:
 		  verbose = options.verbose)
 
 
-  if options.verbose:
-    print >>sys.stderr, " output document initialized"
+if options.verbose:
+  print >>sys.stderr, " output document initialized"
 
 
-  handler = simplehandler.Handler(mainloop, pipeline)
+handler = simplehandler.Handler(mainloop, pipeline)
 
-  if options.verbose:
-    print >>sys.stderr, " attaching appsinks to pipeline ..."
+if options.verbose:
+  print >>sys.stderr, " attaching appsinks to pipeline ..."
 
-  appsync = pipeparts.AppSync(appsink_new_buffer = finalsink.appsink_new_buffer)
-  appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-postcoh"), name = "sink_%d" % n) for (n, src) in enumerate(postcohsrcs))
+appsync = pipeparts.AppSync(appsink_new_buffer = finalsink.appsink_new_buffer)
+appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-postcoh"), name = "sink_%d" % n) for (n, src) in enumerate(postcohsrcs))
  
-  if options.write_pipeline is not None:
-    pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
-    pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+if options.write_pipeline is not None:
+  pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
+  pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
-  if options.data_source in ("lvshm", "framexmit"):
+if options.data_source in ("lvshm", "framexmit"):
 
     # setup sigint handler to shutdown pipeline. This is
     # how the program stops gracefully.
     # Otherwise it runs forever.
-    signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
-    signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+  signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+  signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
  
    
-  if options.verbose:
-    print >>sys.stderr, "setting pipeline state to playing ..."
-  if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
-    msg = pipeline.get_bus().poll(gst.MESSAGE_ERROR,0)
-    if msg is not None:
-      print msg.parse_error()
-    raise RuntimeError, "pipeline did not enter playing state"
+if options.verbose:
+  print >>sys.stderr, "setting pipeline state to playing ..."
+if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+  msg = pipeline.get_bus().poll(gst.MESSAGE_ERROR,0)
+  if msg is not None:
+    print msg.parse_error()
+  raise RuntimeError, "pipeline did not enter playing state"
 
-  if options.write_pipeline is not None:
-    pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
-
-
-  if options.verbose:
-    print >>sys.stderr, "running pipeline ..."
-  mainloop.run()
+if options.write_pipeline is not None:
+  pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
 
 
-  #
-  # write output file
-  #
-  finalsink.write_output_file(filename = finalsink.get_output_filename(options.finalsink_output_prefix, options.finalsink_output_name, finalsink.t_snapshot_start, finalsink.snapshot_duration), verbose = options.verbose)
+if options.verbose:
+  print >>sys.stderr, "running pipeline ..."
+mainloop.run()
 
-  # Shutdown the web interface servers
-  bottle.default_app.pop()
 
-  if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
-    raise RuntimeError("pipeline could not be set to NULL")
+#
+# write output file
+#
+finalsink.write_output_file(filename = finalsink.get_output_filename(options.finalsink_output_prefix, options.finalsink_output_name, finalsink.t_snapshot_start, finalsink.snapshot_duration), verbose = options.verbose)
+
+# Shutdown the web interface servers
+bottle.default_app.pop()
+
+if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
+  raise RuntimeError("pipeline could not be set to NULL")
 
 
 #
