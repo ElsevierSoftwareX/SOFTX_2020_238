@@ -161,12 +161,12 @@ def gen_analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max
 			if set(ifo_combos) == set(('H1', 'H2')) or set(ifo_combos) == set(('L1', 'H2')):
 				print >> sys.stderr, "not analyzing: ", ifo_combos, " only time"
 				continue
-			segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
-			segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
-			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(start_pad) #FIXME don't hard code
-			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], segment_length, start_pad) #FIXME don't hardcode
-			if not segsdict[frozenset(ifo_combos)]:
-				del segsdict[frozenset(ifo_combos)]
+			segsdict[ifo_combos] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
+			segsdict[ifo_combos] &= segments.segmentlist([boundary_seg])
+			segsdict[ifo_combos] = segsdict[ifo_combos].protract(start_pad) #FIXME don't hard code
+			segsdict[ifo_combos] = gstlaldagparts.breakupsegs(segsdict[ifo_combos], segment_length, start_pad) #FIXME don't hardcode
+			if not segsdict[ifo_combos]:
+				del segsdict[ifo_combos]
 	return segsdict
 
 def gen_psdJob_options(seg, channeldict, ifos, daggen_options):
@@ -268,8 +268,10 @@ def gen_spiir_bank_cache(spiir_bank_strings, counter, injection = False):
 
 	return [spiir_cache_entry.url for spiir_cache_entry in spiir_cache_entries] 
 
+# This IFO_MAP be reflect the same order of ifos of the IFO_COMBO_MAP in background_stats_utils.c
+IFO_MAP = ["H1", "L1", "V1"]
 # set the histogram trials to be 1 for shift jobs
-def gen_inspiralshiftJob_options(job_tag, spiir_bank_strings, seg, channeldict, daggen_options):
+def gen_inspiralshiftJob_options(job_tag, spiir_bank_strings, seg, channeldict, daggen_options, ifos):
 	input_spiir_bank_string = ""
 	for one_string in spiir_bank_strings:
 		input_spiir_bank_string += "%s --iir-bank " % one_string
@@ -280,7 +282,13 @@ def gen_inspiralshiftJob_options(job_tag, spiir_bank_strings, seg, channeldict, 
 	#for one_string in stats_name_list:
 	#	output_stats_string += "%s --cohfar-accumbackground-output-name " % one_string
 	#output_stats_string = output_stats_string.rstrip(" --cohfar-accumbackground-output-name ")
-	detrsp_map_name = "%s_detrsp_map_start_param.xml" % ifo_string
+	ifo_idx_sorted = sorted([IFO_MAP.index(ifo) for ifo in ifos])
+	ifos_string = "".join(IFO_MAP[idx] for idx in ifo_idx_sorted)
+
+	detrsp_map_name = "%s_detrsp_map_start_param.xml" % ifos_string
+	# exit if the file does not exist
+	if not os.path.exists(detrsp_map_name):
+		raise ValueError, "%s not exists" % detrsp_map_name
 	opts = {
 		"job-tag": job_tag,
 		"iir-bank": input_spiir_bank_string,
@@ -298,7 +306,7 @@ def gen_inspiralshiftJob_options(job_tag, spiir_bank_strings, seg, channeldict, 
 		"cuda-postcoh-output-skymap":daggen_options.cuda_postcoh_output_skymap
 		}
 	return opts
-	
+
 def gen_inspiralJob_options(job_tag, spiir_bank_strings, seg, channeldict, daggen_options, ifos):
 	input_spiir_bank_string = ""
 	for one_string in spiir_bank_strings:
@@ -310,11 +318,14 @@ def gen_inspiralJob_options(job_tag, spiir_bank_strings, seg, channeldict, dagge
 	#for one_string in stats_name_list:
 	#	output_stats_string += "%s --cohfar-accumbackground-output-name " % one_string
 	#output_stats_string = output_stats_string.rstrip(" --cohfar-accumbackground-output-name ")
-	ifos_string = "" 
-	for ifo in ifos:
-		ifos_string += "%s" % ifo
+	ifo_idx_sorted = sorted([IFO_MAP.index(ifo) for ifo in ifos])
+	ifos_string = "".join(IFO_MAP[idx] for idx in ifo_idx_sorted)
 
-	detrsp_map_name = "%s_detrsp_map_start_param.xml" % ifo_string
+	detrsp_map_name = "%s_detrsp_map_start_param.xml" % ifos_string
+	# exit if the file does not exist
+	if not os.path.exists(detrsp_map_name):
+		raise ValueError, "%s not exists" % detrsp_map_name
+
 	opts = {
 		"job-tag": job_tag,
 		"iir-bank": input_spiir_bank_string,
@@ -475,7 +486,11 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 				inj_counter = 0
 				for injections in options.injections:
 					# results for one bank chunk will be stored in the same place
-					job_tag = "%s_inj%d/bankbin%d" % (inspiralPostcohspiirJob.tag_base, inj_counter, chunk_counter)
+					output_path = "%s%d" % (inspiralPostcohspiirInjJob.tag_base, inj_counter)
+					job_tag = "%s/bankbin%d" % (output_path, chunk_counter)
+					if not os.path.exists(output_path):
+						os.mkdir(output_path)
+	
 					# setup output names
 					output_name = inspiral_pipe.T050017_filename(ifos, "bankbin%d_SPIIR_zerolag" % chunk_counter, seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag)
 					stats_name_list = [T050017_filename(ifos, "%04d_SPIIR_stats" % (i + numbanks * chunk_counter, ), seg[0].seconds, seg[1].seconds, "xml.gz", path = job_tag) for i,s in enumerate(spiir_bank_strings)]
