@@ -37,7 +37,7 @@
 #include <cohfar/ssvkernel.h>
 #include <cohfar/knn_kde.h>
 
-char *IFO_COMBO_MAP[] = {"L1", "H1", "V1", "H1L1", "H1V1", "L1V1", "H1L1V1"};
+char *IFO_COMBO_MAP[] = {"H1", "L1", "V1", "H1L1", "H1V1", "L1V1", "H1L1V1"};
 int MAX_COMBOS = sizeof(IFO_COMBO_MAP)/sizeof(*IFO_COMBO_MAP);
 
 int get_icombo(char *ifos) {
