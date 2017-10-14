@@ -593,7 +593,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if verbose:
 		  print "%s: max rate of all banks %d Hz" % (instrument, sngl_max_rate)
-		if instrument in veto_segments.keys():		
+		if veto_segments is not None and instrument in veto_segments.keys():
 			hoftdicts[instrument] = \
 			uni_datasource.mkwhitened_src(pipeline, src,
 					sngl_max_rate, instrument, psd =
