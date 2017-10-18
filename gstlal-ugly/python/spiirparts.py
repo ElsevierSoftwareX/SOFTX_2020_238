@@ -674,11 +674,11 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 			if verbose:
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
-	#		snr = pipeparts.mktee(pipeline, snr)
+			snr = pipeparts.mktee(pipeline, snr)
 
-	#		if nxydump_segment is not None:
-	#			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_cpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
-	#
+			if nxydump_segment is not None:
+				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_cpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
+
 			snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=10, max_size_bytes=100000000)
 
 			if postcoh is None:
