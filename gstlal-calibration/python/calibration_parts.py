@@ -278,6 +278,29 @@ def demodulate(pipeline, head, freq, td, caps, integration_samples, prefactor_re
 
 	return head
 
+def remove_lines(pipeline, head, freq, caps, filter_length):
+	# remove any line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
+	# function argument caps must be complex caps
+
+	integration_samples = filter_length * 16
+	if type(freq) is not list:
+		freq = [freq]
+
+	head = pipeparts.mktee(pipeline, head)
+	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync = True)
+	mkqueue(pipeline, head, 0).link(elem)
+	for f in freq:
+		line = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = f)
+		line = mkresample(pipeline, line, 3, False, "audio/x-raw,rate=16")
+		line = mkcomplexfirbank(pipeline, line, latency = integration_samples / 2, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
+		line = mkresample(pipeline, line, 3, False, caps)
+		line = pipeparts.mkgeneric(pipeline, line, "lal_demodulate", line_frequency = -1.0 * f, prefactor_real = -2.0)
+		real, imag = split_into_real(pipeline, line)
+		pipeparts.mkfakesink(pipeline, imag)
+		mkqueue(pipeline, real, 0).link(elem)
+
+	return elem
+
 def complex_audioamplify(pipeline, chan, WR, WI):
 	# Multiply a complex channel chan by a complex number WR+I WI
 	# Re[out] = -chanI*WI + chanR*WR
