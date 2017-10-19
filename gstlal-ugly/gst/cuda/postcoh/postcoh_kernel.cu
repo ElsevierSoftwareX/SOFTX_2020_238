@@ -347,6 +347,7 @@ __global__ void ker_coh_max_and_chisq
     float       *snglsnr_bg_H,      /* INPUT, maximum single snr    */
     float       *cohsnr_skymap,
     float       *nullsnr_skymap,
+    int     output_skymap, /* INPUT, whether to output skymap */
     int     npeak,      /* INPUT, number of triggers */
     float       *u_map,             /* INPUT, u matrix map */
     float       *toa_diff_map,      /* INPUT, time of arrival difference map */
@@ -449,8 +450,13 @@ __global__ void ker_coh_max_and_chisq
                         dk[1].re, dk[1].im, dk[2].re, dk[2].im, snr_max);
             }
 #endif
-            cohsnr_skymap[peak_cur * num_sky_directions + ipix] = snr_tmp;
-            nullsnr_skymap[peak_cur * num_sky_directions + ipix] = al_all;
+
+            if (output_skymap)
+            {
+                cohsnr_skymap[peak_cur * num_sky_directions + ipix] = snr_tmp;
+                nullsnr_skymap[peak_cur * num_sky_directions + ipix] = al_all;
+            }
+
             if (snr_tmp > snr_max)
             {
                 snr_max = snr_tmp;
@@ -865,6 +871,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									pklist->d_snglsnr_bg_H,
 									pklist->d_cohsnr_skymap,
 									pklist->d_nullsnr_skymap,
+									output_skymap,
 									pklist->npeak[0],
 									state->d_U_map[gps_idx],
 									state->d_diff_map[gps_idx],
@@ -895,11 +902,15 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 			cudaMemcpyDeviceToHost,
 			stream));
 
-	CUDA_CHECK(cudaMemcpyAsync(	pklist->cohsnr_skymap,
+	if(output_skymap)
+	{
+		CUDA_CHECK(cudaMemcpyAsync(pklist->cohsnr_skymap,
 			pklist->d_cohsnr_skymap,
 			sizeof(float) * state->max_npeak * state->npix * 2,
 			cudaMemcpyDeviceToHost,
 			stream));
+	}
+
 
 	cudaStreamSynchronize(stream);
 }

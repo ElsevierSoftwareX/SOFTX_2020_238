@@ -1109,7 +1109,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->ra = phi*RAD2DEG;
 			output->dec = (M_PI_2 - theta)*RAD2DEG;
 			output->event_id = postcoh->cur_event_id++;
-			if (postcoh->output_skymap && output->cohsnr > MIN_OUTPUT_SKYMAP_SNR) {
+			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
 				filename = g_string_new(IFO_COMBO_MAP[get_icombo(output->ifos)]);
@@ -1453,7 +1453,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 				printf("gps %d, ifo %d, gpu peak %d\n", ligo_time.gpsSeconds, cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
 #endif
 				if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
-					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap, postcoh->stream);
+					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR, postcoh->stream);
 					GST_LOG("after coherent analysis for ifo %d, npeak %d", cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
 				}
 
