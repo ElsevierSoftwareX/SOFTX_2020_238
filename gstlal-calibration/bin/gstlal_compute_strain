@@ -918,8 +918,8 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 	if not options.no_fs or not options.no_srcQ:
 		# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
 		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
-		if options.remove_callines and remove_src_pcal_line:
-			pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
+#		if options.remove_callines and remove_src_pcal_line:
+#			pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
 
 		# demodulate DARM_ERR at SRC detuning line frequency
 		derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
