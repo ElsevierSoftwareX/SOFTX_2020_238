@@ -211,7 +211,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.etg_data = deque(maxlen = 2000)
 		if not options.disable_web_service:
 			bottle.route("/psds.xml")(self.web_get_psd_xml)
-			bottle.route("/feature_vectors")(self.web_get_etg_data)
+			bottle.route("/etg_subset")(self.web_get_etg_data)
 
 		super(MultiChannelHandler, self).__init__(*args, **kwargs)
 
@@ -462,12 +462,11 @@ class MultiChannelHandler(simplehandler.Handler):
 	def web_get_etg_data(self):
 		# if queue is empty, send appropriate response
 		if not self.etg_data:
-			# FIXME: add actual HTML response
-			return "no data available"
+			return bottle.HTTPResponse(status = 204, body = "No Response")
 		# else, get etg data and send as JSON
 		else:
 			with self.lock:
-				response = json.dumps(self.etg_data.popleft())
+				response = json.encode(self.etg_data.popleft())
 			return response
 
 class LinkedAppSync(pipeparts.AppSync):
