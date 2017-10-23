@@ -179,7 +179,7 @@ float *tukey(int N)
 long double* MakeFilter(GSTLALFccUpdate *element) {
 	long double FcAverage=element->currentaverage;
 	
-	printf("FcAverage=%Lf\n,",FcAverage);
+	printf("FcAverage=%Lf \n",FcAverage);
 
 	long double FiltDur=(long double) element->filterduration;
 	long double Filtdf=1.0L/(long double)FiltDur;
@@ -363,22 +363,26 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
         gst_buffer_map(buf, &mapinfo, GST_MAP_READ);
         g_assert(mapinfo.size % sizeof(gdouble) == 0);
 
+	guint64 avg_t = gst_gdouble_to_guint64(element->averaging_time*GST_SECOND);
+	guint64 t = GST_BUFFER_PTS(buf);
+	gint64 GCD = gst_util_greatest_common_divisor_int64(t, avg_t);
+
 	gdouble *data, *end;
 	data = (gdouble*) mapinfo.data;
 	end = (gdouble*) (mapinfo.data+mapinfo.size);
-	int averaging_length=floor(element->averaging_time*element->fccrate);
 	int i=element->index;
 	
 	while(data<end) {
 
-		if(i<averaging_length) {
+		//if(i<averaging_length) {
+		if(GCD - avg_t != 0) {
 			//continuously updated the average fcc_filter value
                         FindAverage(element,*data,i);
 			i++;
 			*data++;
 
 		}
-		else {
+		else if(GCD - avg_t == 0) {
 			printf("reached update length\n");
 			//makes the new fir_matrix using the current average fcc_filter value
 		        int filtlength=((int)(element->datarate*element->filterduration/2.0))*2;
@@ -400,7 +404,14 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
 
 			i=0;
 		}
-
+		else
+		{
+			// FIXME: More helpful error message here?
+			printf("ERROR: GCD = %" G_GINT64_FORMAT " and avg_t = %" G_GUINT64_FORMAT " \n", GCD, avg_t);
+			g_assert_not_reached();
+		}
+		t +=  (int) ((1.0/element->fccrate) * GST_SECOND);
+		GCD = gst_util_greatest_common_divisor_int64(t, avg_t);
 	}
 	element->index=i;
 
@@ -652,7 +663,7 @@ static void gstlal_fcc_update_class_init(GSTLALFccUpdateClass *klass)
 		g_param_spec_double(
 			"averaging-time",
 			"Averaging time",
-			"The amount of time to averaging computed f_c values before constructing a new FIR filter.",
+			"The amount of time to average computed f_cc values before constructing a new FIR filter.",
 			1.0,
 			G_MAXDOUBLE,
 			1024.0,
