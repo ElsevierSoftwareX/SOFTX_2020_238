@@ -351,7 +351,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				traceback.print_exc()
 		# append row to feature vector for bottle requests
 		etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
-                           'frequency': freq, 'q': Q, 'phase': row.phase, 'sigma_sq': row.sigmasq, 'chi_sq': row.chisq, 'snr': snr}
+                           'frequency': freq, 'q': q, 'phase': row.phase, 'sigma_sq': row.sigmasq, 'chi_sq': row.chisq, 'snr': row.snr}
 		self.etg_event.append(etg_row)
 
 	def to_hdf5(self, channel, rate, buftime):
