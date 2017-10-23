@@ -27,6 +27,7 @@
 
 from optparse import OptionParser
 from collections import deque
+import json
 import os
 import sys
 import socket
@@ -57,7 +58,6 @@ from gstlal import aggregator
 from gstlal import idq_aggregator
 from gstlal import httpinterface
 from gstlal import bottle
-from glue.ligolw import utils as ligolw_utils
 from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
@@ -204,7 +204,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		
 		# set up ETG bottle related properties
 		self.etg_event = deque(maxlen = 20000)
-		self.last_event_time = None
+		self.etg_event_time = None
 
 		# set up bottle routes for PSDs and extracted ETG data
 		self.psds = {}
@@ -251,12 +251,12 @@ class MultiChannelHandler(simplehandler.Handler):
 			channel, rate  = sink_dict[elem]
 
 			# push new etg event to queue if done processing current timestamp
-			if self.last_event_time is None:
-				self.last_event_time = buftime
-			if self.last_event_time < buftime:
-				self.etg_data.append(list(self.etg_event))
+			if self.etg_event_time is None:
+				self.etg_event_time = buftime
+			if self.etg_event_time < buftime:
+				self.etg_data.append({self.etg_event_time: list(self.etg_event)})
 				self.etg_event.clear()
-				self.last_event_time = buftime
+				self.etg_event_time = buftime
 
 			# set save times appropriately
 			if self.last_save_time is None:
@@ -460,14 +460,17 @@ class MultiChannelHandler(simplehandler.Handler):
 		return outstr
 
 	def web_get_etg_data(self):
+		header = {'Content-type': 'application/json'}
 		# if queue is empty, send appropriate response
 		if not self.etg_data:
-			return bottle.HTTPResponse(status = 204, body = "No Response")
+			status = 204
+			body = json.dumps({'error': "No Content"})
 		# else, get etg data and send as JSON
 		else:
+			status = 200
 			with self.lock:
-				response = json.encode(self.etg_data.popleft())
-			return response
+				body = json.dumps(self.etg_data.popleft())
+		return bottle.HTTPResponse(status = status, headers = header, body = body)
 
 class LinkedAppSync(pipeparts.AppSync):
 	def __init__(self, appsink_new_buffer, sink_dict = {}):
