@@ -350,16 +350,7 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 	inspiral_nodes = {}
 	# setup the dict to index the output by bankbins
 	spiir_zlag = {}
-	spiir_zlag[None] = {}
-	spiir_zlag["shift"] = {}
-	for injections in options.injections:
-		spiir_zlag[sim_tag_from_inj_file(injections)] = {}
-
 	spiir_stats = {}
-	spiir_stats[None] = {}
-	spiir_stats["shift"] = {}
-	for injections in options.injections:
-		spiir_stats[sim_tag_from_inj_file(injections)] = {}
 
 	for ifos in segsdict:
 
@@ -369,7 +360,17 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 		for injections in options.injections:
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
 
-		
+		# setup the dict to index the output by bankbins
+		spiir_zlag[(ifos, None)] = {}
+		spiir_zlag[(ifos, "shift")] = {}
+		for injections in options.injections:
+			spiir_zlag[(ifos, sim_tag_from_inj_file(injections))] = {}
+	
+		spiir_stats[(ifos, None)] = {}
+		spiir_stats[(ifos, "shift")] = {}
+		for injections in options.injections:
+			spiir_stats[(ifos, sim_tag_from_inj_file(injections))] = {}
+
 		numbanks = max(options.num_banks)
 
 		seg_counter = 0
@@ -422,8 +423,8 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 				# impose a priority to help with depth first submission
 				noninjnode.set_priority(chunk_counter)
 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
-				spiir_zlag[None].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
-				spiir_stats[None].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
+				spiir_zlag[(ifos, None)].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
+				spiir_stats[(ifos, None)].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
 
 			""" 
 			output zerolags format example: 
@@ -470,8 +471,8 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 				# impose a priority to help with depth first submission
 				shiftnode.set_priority(chunk_counter)
 				inspiral_nodes[(ifos, "shift")].setdefault(seg, []).append(shiftnode)
-				spiir_zlag["shift"].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
-				spiir_stats["shift"].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
+				spiir_zlag[(ifos, "shift")].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
+				spiir_stats[(ifos, "shift")].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
 
 
 
@@ -523,8 +524,8 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 					# impose a priority to help with depth first submission
 					injnode.set_priority(chunk_counter)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
-					spiir_zlag[sim_name].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
-					spiir_stats[sim_name].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
+					spiir_zlag[(ifos, sim_name)].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
+					spiir_stats[(ifos, sim_name)].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
 					inj_counter += 1
 			seg_counter += 1
 
@@ -545,7 +546,7 @@ with single_ifo to single_ifo stats, double_ifo to double_ifo stats, and tri_ifo
 step 2: merge bankbin1_xx, bankbin2_xx, .. to gstlal_cohfar_merge_stats/bankbox1_SPIIR_stats-boundarystart-boundaryend.xml.gz to assign fap for zerolags
 """
 
-def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, bankbox_list):
+def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, bankbox_list, segsdict):
 
 	mergestats_nodes = []
 	mergestats_bin_nodes = []
@@ -555,13 +556,15 @@ def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, b
 	# FIXME: hard-coded split stats files to be processed
 	nstats_split = 10
 	nstats_remain = 0
-	ifos = "".join(instrument_set)
+	ifos_string = "".join(instrument_set)
 	# non-injections
-	for ibin, binname in enumerate(spiir_stats[None].keys()):
+	for ibin, binname in enumerate(spiir_stats[(segsdict.keys()[0], None)].keys()):
 		tmp_nodes_round1 = []
 		nstats_remain = 0
-		# merge stats every nstats_split files to tmpID_SPIIR_stats-start-end.xml.gz
-		for tmp_counter, binnodes in enumerate(chunks(spiir_stats[None][binname], nstats_split)):
+		# merge every nstats_split stats files to tmpID_SPIIR_stats-start-end.xml.gz
+		# need to loop over ifos
+		all_nodes_in_bankbin = [binnode for ifos in segsdict for binnode in spiir_stats[(ifos, None)][binname]]
+		for tmp_counter, binnodes in enumerate(chunks(all_nodes_in_bankbin, nstats_split)):
 			stats_name = ",".join([one_stats_name for i in xrange(0, len(binnodes)) for one_stats_name in binnodes[i].output_files["cohfar-accumbackground-output-name"]])
 			output_path = "%s/%s" % (mergestatsJob.tag_base, binname)
 			if not os.path.exists(output_path):
@@ -570,7 +573,7 @@ def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, b
 				parent_nodes = binnodes,
 				opts = {"input-format": "stats",
 					"duration": 0,
-					"ifos": ifos},
+					"ifos": ifos_string},
 				input_files = {"input":stats_name},
 				output_files = {"output":inspiral_pipe.T050017_filename("tmp%d" % tmp_counter,"%s_SPIIR_stats" % binname, boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)}
 			)
@@ -590,7 +593,7 @@ def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, b
 					parent_nodes = binnodes,
 					opts = {"input-format": "stats",
 						"duration": 0,
-						"ifos": ifos},
+						"ifos": ifos_string},
 					input_files = {"input":stats_name},
 					output_files = {"output":inspiral_pipe.T050017_filename("tmp%d" % tmp_counter,"%s_SPIIR_stats" % binname, boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)}
 			)
@@ -604,12 +607,13 @@ def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, b
 			stats_name = ",".join([tmp_nodes_round1[i].output_files["output"] for i in xrange(0, len(tmp_nodes_round1))])
 			parent_nodes = tmp_nodes_round1
 
+		# finally, merge all the intermediate tmpxx_bankbinxx files to bankbinxx stats file
 		output_path = "%s/%s" % (mergestatsJob.tag_base, binname)
 		one_bin_merge_node = inspiral_pipe.generic_node(mergestatsJob, dag,
 			parent_nodes = parent_nodes,
 			opts = {"input-format": "stats",
 				"duration": 0,
-				"ifos": ifos},
+				"ifos": ifos_string},
 			input_files = {"input":stats_name},
 			output_files = {"output":inspiral_pipe.T050017_filename("%s" % binname,"SPIIR_stats", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)}
 			)
@@ -631,7 +635,7 @@ def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, b
 			parent_nodes = binnodes,
 			opts = {"input-format": "stats",
 				"duration": 0,
-				"ifos": ifos},
+				"ifos": ifos_string},
 			input_files = {"input":stats_name},
 			output_files = {"output":inspiral_pipe.T050017_filename("bankbox%d" % ibox,"SPIIR_stats", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)}
 		)
@@ -645,9 +649,11 @@ def cluster_zerolags():
 	"""
 	cluster zerolags in 4s window with zerolag SNRs
 	step 1: cluster zerolags over boundary start-end
-	output gstlal_cluster_zerolags_online/bankbin1_SPIIR_zerolag-boundarystart-boundaryend.xml.gz
+	output gstlal_cluster_zerolags_online/bankbin0/H1L1_SPIIR_zerolag-boundarystart-boundaryend.xml.gz
+	output gstlal_cluster_zerolags_online/bankbin0/H1L1V1_SPIIR_zerolag-boundarystart-boundaryend.xml.gz;..
 	step 2: cluster bankbins to bankboxs
-	output gstlal_cluster_zerolags_online/bankbox1_SPIIR_zerolag-boundarystart-boundaryend.xml.gz
+	output gstlal_cluster_zerolags_online/bankbox0/H1L1_SPIIR_zerolag-boundarystart-boundaryend.xml.gz
+	output gstlal_cluster_zerolags_online/bankbox0/H1L1V1_SPIIR_zerolag-boundarystart-boundaryend.xml.gz;..
 	"""
 	# Break up the likelihood jobs into chunks to process fewer files, e.g, 25
 	likelihood_nodes.setdefault(None,[]).append(
@@ -1094,23 +1100,23 @@ bank_nodes = gen_bank_node(bankJob, dag, ref_psd_parent_nodes, ref_psd, inspiral
 #
 
 """
-inspiral_nodes[(ifos, None)] = {"seg0": [noninjnode1, noninjnode2,...]}
-inspiral_nodes[(ifos, "shift")] = {"seg0": [shifnode1, shiftnode2,...]}
-inspiral_nodes[(ifos, "inj_name")] = {"seg0": [injnode1, injnode2,...]}
-spiir_zlag[None] = {"bankbin0": [noninjnode1, noninjnode2,...]}
-spiir_zlag["shift"] = {"bankbin0": [shifnode1, shiftnode2,...]}
-spiir_zlag["inj_name"] = {"banbin0": [injnode1, injnode2,...]}
+inspiral_nodes[(ifos, None)] = {LIGOsegment(gpsstart, gpsend): [injnode1, injnode2,...]}
+inspiral_nodes[(ifos, "shift")] = {LIGOsegment(gpsstart, gpsend): [injnode1, injnode2,...]}
+inspiral_nodes[(ifos, "inj_name")] = {LIGOsegment(gpsstart, gpsend): [injnode1, injnode2,...]}
+spiir_zlag[(ifos, None)] = {"bankbin0": [noninjnode1, noninjnode2,...]}
+spiir_zlag[(ifos, "shift")] = {"bankbin0": [shifnode1, shiftnode2,...]}
+spiir_zlag[(ifos, "inj_name")] = {"banbin0": [injnode1, injnode2,...]}
 """
 inspiral_nodes, spiir_zlag, spiir_stats = gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, inspiralPostcohspiirInjJob, dag, bank_nodes, segsdict, options, channel_dict)
 
 #
 # Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
 if options.bankbox_list is None:
-	bankbox_list = [len(spiir_zlag[None].keys())]
+	bankbox_list = [len(spiir_zlag[(segsdict.keys()[0], None)].keys())]
 else:
 	bankbox_list = options.bankbox_list.split(":")
 
-merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, bankbox_list)
+merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, bankbox_list, segsdict)
 
 
 # make summary plots
