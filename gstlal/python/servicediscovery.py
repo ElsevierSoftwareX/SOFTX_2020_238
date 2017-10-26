@@ -86,7 +86,7 @@ class Publisher(object):
 		is advertised correctly on machines with multiple
 		interfaces.
 
-		If properties is not None is must be a dictionary of
+		If properties is not None it must be a dictionary of
 		name-value pairs all of which are strings.  "=" is not
 		allowed in any of the names.
 		"""
@@ -128,7 +128,7 @@ class Publisher(object):
 class Listener(object):
 	"""
 	Parent class for Listener implementations.  Each method corresponds
-	to a event type.  Subclasses override the desired methods with the
+	to an event type.  Subclasses override the desired methods with the
 	code to be invoked upon those events.  The default methods are all
 	no-ops.  An instance of a Listener implementation is required to
 	initialize a ServiceBrowser.
