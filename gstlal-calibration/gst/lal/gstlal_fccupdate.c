@@ -281,12 +281,14 @@ long double* MakeFilter(GSTLALFccUpdate *element) {
 	fftw_free(out); 
 
 
-/*
+
 	//prints out CavPoleFiltTD
-	for(i=0;i<N;i++) {
-		printf("%Lf,",CavPoleFiltTD[i]);
-	}
-*/
+	//FILE *fptr;
+	//fptr = fopen("cavitypolfilter.txt", "w");
+	//for(i=0;i<N;i++) {
+	//	fprintf(fptr, "%Lf \n",CavPoleFiltTD[i]);
+	//}
+
 
 	return CavPoleFiltTD;
 

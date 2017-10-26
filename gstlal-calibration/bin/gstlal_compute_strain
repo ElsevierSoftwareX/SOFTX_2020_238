@@ -910,15 +910,14 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 			if options.update_fcc:
 				update_fcc = pipeparts.mkgeneric(pipeline, smooth_fcctee, "lal_fcc_update", data_rate = hoftsr, fcc_rate = options.compute_factors_sr, fcc_model = fcc_default, averaging_time = options.fcc_averaging_time, filter_duration = options.fcc_filter_duration)
-				#pipeparts.mknxydumpsink(pipeline, update_fcc, "afterupdate.txt") 
 				pipeparts.mkfakesink(pipeline, update_fcc)
 
 	# compute f_s and Q
 	if not options.no_fs or not options.no_srcQ:
 		# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
 		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
-#		if options.remove_callines and remove_src_pcal_line:
-#			pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
+		if options.remove_callines and remove_src_pcal_line:
+			pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
 
 		# demodulate DARM_ERR at SRC detuning line frequency
 		derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
@@ -1081,6 +1080,7 @@ pumuim_filter_latency += float(pumuimdelay)/pumuimchainsr
 if tstchainsr != pumuimchainsr or options.apply_kappapu or options.apply_kappatst:
 	pumuim = calibration_parts.mkresample(pipeline, pumuim, 3, False, hoft_caps)
 
+
 # apply kappa_tst
 if options.apply_kappatst:
 	# Only apply the real part of \kappa_tst as a correction to A_tst
@@ -1131,8 +1131,9 @@ if options.dewhitening:
 
 if options.update_fcc:
 	default_fir_matrix = numpy.zeros(int(hoftsr*options.fcc_filter_duration-1))
-	default_fir_matrix[0] = 1.0
-	res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = default_fir_matrix[::-1], latency = int(len(default_fir_matrix)/2+1), taper_length = options.fcc_filter_taper_length)
+	latency = int(len(default_fir_matrix)/2)
+	default_fir_matrix[latency] = 1.0
+	res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = default_fir_matrix[::-1], latency = latency, taper_length = options.fcc_filter_taper_length)
 	update_fcc.connect("notify::fir-matrix", fir_matrix_update, res)
 
 # Apply factors to actuation and sensing chains, if applicable
