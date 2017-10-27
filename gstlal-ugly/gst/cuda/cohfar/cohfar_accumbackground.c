@@ -200,8 +200,14 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 
 			nifo = strlen(intable->ifos)/IFO_LEN;
 			/* add single detector stats */
-			for (isingle=0; isingle< nifo; isingle++)
-				background_stats_feature_rates_update((double)(*(&(intable->snglsnr_L) + isingle)), (double)(*(&(intable->chisq_L) + isingle)), stats_snapshot[isingle]->feature, stats_snapshot[isingle]);
+			get_write_ifo_mapping(IFO_COMBO_MAP[icombo], nifo, element->write_ifo_mapping);
+			//printf("found combo %s\n", IFO_COMBO_MAP[icombo]);
+
+			for (isingle=0; isingle< nifo; isingle++){
+				int write_isingle = element->write_ifo_mapping[isingle];
+				//printf("write isingle %d->%d\n", isingle, write_isingle);
+				background_stats_feature_rates_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), stats_snapshot[write_isingle]->feature, stats_snapshot[write_isingle]);
+			}
 			/* add stats to stats_list for prompt FAP estimation */
 			// if (icombo > -1)
 			// 	background_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, cur_stats_in_list[icombo]->rates, cur_stats_in_list[icombo]);

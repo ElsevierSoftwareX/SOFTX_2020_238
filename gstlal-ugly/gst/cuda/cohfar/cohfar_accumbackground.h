@@ -32,6 +32,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <postcoh/postcohinspiral_table.h>
 
 #include <cohfar/background_stats.h>
 
@@ -61,6 +62,7 @@ typedef struct {
 	char *ifos;
 	int nifo;
 	int ncombo; // ifo combination
+	int write_ifo_mapping[MAX_NIFO];
 	BackgroundStats **stats_snapshot;
 	BackgroundStats **stats_prompt;
 	BackgroundStatsPointerList *stats_list;

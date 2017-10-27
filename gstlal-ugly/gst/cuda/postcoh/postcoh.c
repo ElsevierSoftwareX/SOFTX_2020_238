@@ -528,7 +528,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	state->nifo = GST_ELEMENT(postcoh)->numsinkpads;
 	state->input_ifo_mapping = (gint *)malloc(sizeof(gint) * state->nifo);
 	state->ifo_combo_idx = 0;
-	state->all_ifos = (gchar *)malloc(sizeof(gchar) * state->nifo * IFO_LEN);
+	state->all_ifos = (gchar *)malloc(sizeof(gchar) * state->nifo * IFO_LEN+1);
 	state->peak_list = (PeakList **)malloc(sizeof(PeakList*) * state->nifo);
 	state->dt = (float) 1/postcoh->rate;
 
@@ -570,12 +570,13 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		set_offset_per_nanosecond(data, postcoh->offset_per_nanosecond);
 		set_channels(data, postcoh->channels);
 		// FIXME: need to consider non-standard ifo indexing, like HV, need testing
-		strncpy(state->all_ifos + IFO_LEN*i, data->ifo_name, sizeof(data->ifo_name));
+		strncpy(state->all_ifos + IFO_LEN*i, data->ifo_name, sizeof(char)*IFO_LEN);
 	}
-
+	state->all_ifos[IFO_LEN*nifo] = '\0';
 	state->ifo_combo_idx = get_icombo(state->all_ifos);
 	/* overwrite all_ifos to be the same with the combo in the IFO_COMBO_MAP */
 	strncpy(state->all_ifos, IFO_COMBO_MAP[state->ifo_combo_idx], sizeof(IFO_COMBO_MAP[state->ifo_combo_idx]));
+	state->all_ifos[IFO_LEN*nifo] = '\0';
 
 	/* initialize input_ifo_mapping, snglsnr matrix, and peak_list */
 	for (i=0, sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {

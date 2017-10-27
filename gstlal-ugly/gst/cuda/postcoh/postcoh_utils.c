@@ -39,8 +39,11 @@ void get_write_ifo_mapping(char *ifo_combo, int nifo, int *write_ifo_mapping)
 				write_ifo_mapping[iifo] = jifo;
 				break;
 
-	}
-
+			}
+#if 0
+	for (iifo=0; iifo<nifo; iifo++)
+		printf("write_ifo_mapping %d->%d\n", iifo, write_ifo_mapping[iifo]);
+#endif
 }
 PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 {
@@ -191,7 +194,7 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 	sprintf((char *)xns[0].tag, "sigmasq:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_sigmasq[0]);
-	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN);
+	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN+1);
 
 	printf("fname for all_ifos %s\n", fname_cpy);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
@@ -203,6 +206,8 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		token = strtok_r(NULL, ",", &end_ifo);
 		iifo++;
 	}
+
+	all_ifos[IFO_LEN*nifo] = '\0';
 	printf("all_ifos %s\n", all_ifos);
 	int ifo_combo_idx = get_icombo(all_ifos);
 	/* overwrite all_ifos to be the same with the combo in the IFO_COMBO_MAP */
@@ -418,7 +423,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	xns[1].processPtr = readArray;
 	xns[1].data = &(array_autocorr[1]);
 
-	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN);
+	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN+1);
 
 	printf("fname for all_ifos %s\n", fname_cpy);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
@@ -430,6 +435,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 		token = strtok_r(NULL, ",", &end_ifo);
 		iifo++;
 	}
+	all_ifos[IFO_LEN*nifo] = '\0';
 	printf("all_ifos %s\n", all_ifos);
 	int ifo_combo_idx = get_icombo(all_ifos);
 	/* overwrite all_ifos to be the same with the combo in the IFO_COMBO_MAP */
