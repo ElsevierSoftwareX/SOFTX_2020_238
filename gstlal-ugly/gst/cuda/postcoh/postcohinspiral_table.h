@@ -31,6 +31,11 @@
 #define MAX_IFO_LEN 4 
 #define MAX_ALLIFO_LEN 14 
 #define MAX_SKYMAP_FNAME_LEN 50
+#define MAX_NIFO 3
+#ifndef IFO_LEN
+#define IFO_LEN 2
+#endif
+
 
 typedef struct
 tagPostcohInspiralTable

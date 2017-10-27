@@ -100,28 +100,28 @@ typedef struct _PeakList {
 	int *tmplt_idx;
 	int *pix_idx;
 	int *pix_idx_bg; // background Ntoff needs this, do not remove
-	int *ntoff_L;
 	int *ntoff_H;
+	int *ntoff_L;
 	int *ntoff_V;
 
-	float *snglsnr_L;
 	float *snglsnr_H;
+	float *snglsnr_L;
 	float *snglsnr_V;
-	float *coaphase_L;
 	float *coaphase_H;
+	float *coaphase_L;
 	float *coaphase_V;
-	float *chisq_L;
 	float *chisq_H;
+	float *chisq_L;
 	float *chisq_V;
 
-	float *snglsnr_bg_L;
 	float *snglsnr_bg_H;
+	float *snglsnr_bg_L;
 	float *snglsnr_bg_V;
-	float *coaphase_bg_L;
 	float *coaphase_bg_H;
+	float *coaphase_bg_L;
 	float *coaphase_bg_V;
-	float *chisq_bg_L;
 	float *chisq_bg_H;
+	float *chisq_bg_L;
 	float *chisq_bg_V;
 
 
@@ -143,28 +143,28 @@ typedef struct _PeakList {
 	int *d_tmplt_idx;
 	int *d_pix_idx;
 	int *d_pix_idx_bg; // background Ntoff needs this, do not remove
-	int *d_ntoff_L;
 	int *d_ntoff_H;
+	int *d_ntoff_L;
 	int *d_ntoff_V;
 
-	float *d_snglsnr_L;
 	float *d_snglsnr_H;
+	float *d_snglsnr_L;
 	float *d_snglsnr_V;
-	float *d_coaphase_L;
 	float *d_coaphase_H;
+	float *d_coaphase_L;
 	float *d_coaphase_V;
-	float *d_chisq_L;
 	float *d_chisq_H;
+	float *d_chisq_L;
 	float *d_chisq_V;
 
-	float *d_snglsnr_bg_L;
 	float *d_snglsnr_bg_H;
+	float *d_snglsnr_bg_L;
 	float *d_snglsnr_bg_V;
-	float *d_coaphase_bg_L;
 	float *d_coaphase_bg_H;
+	float *d_coaphase_bg_L;
 	float *d_coaphase_bg_V;
-	float *d_chisq_bg_L;
 	float *d_chisq_bg_H;
+	float *d_chisq_bg_L;
 	float *d_chisq_bg_V;
 
 	float *d_cohsnr;
@@ -203,7 +203,11 @@ typedef struct _PostcohState {
   int snglsnr_start_load;
   int snglsnr_start_exe;
   gint nifo;
-  gint8 *ifo_mapping;
+  /* map the input sink to the right position of detector snr series */
+  gint *input_ifo_mapping;
+  /* map the position of detector snr series to the position of output snr instances */
+  gint *write_ifo_mapping;
+  gint *d_write_ifo_mapping;
   /* sigmasq read from bank to compute effective distance */
   double **sigmasq;
   /* parent pointer in host device, each children pointer is in host device,
@@ -226,9 +230,9 @@ typedef struct _PostcohState {
   float snglsnr_thresh;
   gint hist_trials;
   gint trial_sample_inv;
-  gchar cur_ifos[MAX_ALLIFO_LEN];
+  char cur_ifos[MAX_ALLIFO_LEN];
   gint cur_nifo;
-  gchar *all_ifos;
+  char *all_ifos;
   gint ifo_combo_idx;
   gint is_member_init;
   float snglsnr_max;

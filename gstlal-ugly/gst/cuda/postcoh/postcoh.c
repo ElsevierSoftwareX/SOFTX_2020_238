@@ -38,12 +38,12 @@
 #define GST_CAT_DEFAULT gstlal_postcoh_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
-#define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
+#define DEFAULT_DETRSP_FNAME "H1L1V1_detrsp.xml"
 #define EPSILON 5
 #define PEAKFINDER_CLUSTER_WINDOW 5
 #define RAD2DEG 57.2957795
-#define L_MAPPING 0
-#define H_MAPPING 1
+#define H_MAPPING 0
+#define L_MAPPING 1
 #define V_MAPPING 2
 #define ACCELERATE_POSTCOH_MEMORY_COPY
 
@@ -526,7 +526,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	GST_DEBUG_OBJECT(postcoh, "setting GstPostcohCollectData offset_per_nanosecond %f and channels", postcoh->offset_per_nanosecond);
 
 	state->nifo = GST_ELEMENT(postcoh)->numsinkpads;
-	state->ifo_mapping = (gint8 *)malloc(sizeof(gint8) * state->nifo);
+	state->input_ifo_mapping = (gint *)malloc(sizeof(gint) * state->nifo);
 	state->ifo_combo_idx = 0;
 	state->all_ifos = (gchar *)malloc(sizeof(gchar) * state->nifo * IFO_LEN);
 	state->peak_list = (PeakList **)malloc(sizeof(PeakList*) * state->nifo);
@@ -556,36 +556,37 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 
 	CUDA_CHECK(cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo));
 	state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
+	/* when dumping the sngl outputs, need to follow the order in this structure, see ker_coh_max_and_chisq */
+	state->write_ifo_mapping = (int *)malloc(sizeof(int) * state->nifo);
 
 	gint8 i = 0, j = 0, cur_ifo = 0, nifo = state->nifo;
 	GST_OBJECT_LOCK(postcoh->collect);
-	/* find the ifo_combo_mapping and ifo_mapping:
+	/* find the ifo_combo_mapping and input_ifo_mapping:
 	 * first find the ifo_combo index in the IFO_COMBO_MAP
-	 * then, map original sinkpad's ifo to the position in this ifo_combo */
+	 * then, map original sinkpad's ifo to the position in the "H1L1V1" combo */
 	for (i=0, sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {
 		GstPad *pad = GST_PAD(sinkpads->data);
 		data = gst_pad_get_element_private(pad);
 		set_offset_per_nanosecond(data, postcoh->offset_per_nanosecond);
 		set_channels(data, postcoh->channels);
 		// FIXME: need to consider non-standard ifo indexing, like HV, need testing
-		g_strlcpy(state->all_ifos + IFO_LEN*i, data->ifo_name, sizeof(data->ifo_name));
+		strncpy(state->all_ifos + IFO_LEN*i, data->ifo_name, sizeof(data->ifo_name));
 	}
 
 	state->ifo_combo_idx = get_icombo(state->all_ifos);
 	/* overwrite all_ifos to be the same with the combo in the IFO_COMBO_MAP */
-	g_strlcpy(state->all_ifos, IFO_COMBO_MAP[state->ifo_combo_idx], sizeof(IFO_COMBO_MAP[state->ifo_combo_idx]));
+	strncpy(state->all_ifos, IFO_COMBO_MAP[state->ifo_combo_idx], sizeof(IFO_COMBO_MAP[state->ifo_combo_idx]));
 
-	/* initialize ifo_mapping, snglsnr matrix, and peak_list */
+	/* initialize input_ifo_mapping, snglsnr matrix, and peak_list */
 	for (i=0, sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {
 		GstPad *pad = GST_PAD(sinkpads->data);
 		data = gst_pad_get_element_private(pad);
 		for (j = 0; j < nifo; j++ )
 			if (strncmp(data->ifo_name, state->all_ifos + IFO_LEN*j, IFO_LEN) == 0 ) {
-				state->ifo_mapping[i] = j;
+				state->input_ifo_mapping[i] = j;
 				cur_ifo = j;
 				break;
 		}
-
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
 		//printf("device id %d, stream addr %p, alloc for snglsnr %d\n", postcoh->device_id, postcoh->stream, mem_alloc_size);
 		
@@ -599,6 +600,11 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 
 		state->peak_list[cur_ifo] = create_peak_list(postcoh->state, postcoh->stream);
 	}
+	get_write_ifo_mapping(state->all_ifos, nifo, state->write_ifo_mapping);
+
+       	CUDA_CHECK(cudaMalloc((void**) &state->d_write_ifo_mapping, sizeof(int) * state->nifo));
+	CUDA_CHECK(cudaMemsetAsync(state->d_write_ifo_mapping, 0, sizeof(int) * state->nifo, postcoh->stream));
+	CUDA_CHECK(cudaMemcpyAsync(state->d_write_ifo_mapping, state->write_ifo_mapping, sizeof(int)* state->nifo, cudaMemcpyHostToDevice, postcoh->stream));
 
 	state->is_member_init = INIT;
 	GST_OBJECT_UNLOCK(postcoh->collect);
@@ -829,7 +835,7 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 			} else {
 				min_size = min_size > size_cur ? size_cur : min_size;
 			}
-			g_strlcpy(state->cur_ifos + IFO_LEN*state->cur_nifo, data->ifo_name, sizeof(data->ifo_name));
+			strncpy(state->cur_ifos + IFO_LEN*state->cur_nifo, data->ifo_name, sizeof(data->ifo_name));
 			state->cur_nifo++;
 
 	}
@@ -925,7 +931,7 @@ static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
 
 }
 
-static int cuda_postcoh_select_background(PeakList *pklist,int iifo, int hist_trials, int max_npeak, float cohsnr_thresh)
+static int cuda_postcoh_select_background(PeakList *pklist,int write_ifo, int hist_trials, int max_npeak, float cohsnr_thresh)
 {
 	int ipeak, npeak, peak_cur, itrial, background_cur, left_backgrounds = 0;
 	npeak = pklist->npeak[0];
@@ -934,8 +940,8 @@ static int cuda_postcoh_select_background(PeakList *pklist,int iifo, int hist_tr
 		for (itrial=1; itrial<=hist_trials; itrial++) {
 			background_cur = (itrial - 1)*max_npeak + peak_cur;
 			// FIXME: consider a different threshold for 3-detector 
-//			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*max_npeak + peak_cur])
-			if (sqrt(pklist->cohsnr_bg[background_cur]) > 1.414 + pklist->snglsnr_L[iifo*max_npeak + peak_cur]) {
+//			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_H[iifo*max_npeak + peak_cur])
+			if (sqrt(pklist->cohsnr_bg[background_cur]) > 1.414 + pklist->snglsnr_H[write_ifo*max_npeak + peak_cur]) {
 				left_backgrounds++;
 				GST_LOG("mark back,%d ipeak, %d itrial", ipeak, itrial);
 			}
@@ -965,7 +971,7 @@ static int cuda_postcoh_select_foreground(PostcohState *state, float cohsnr_thre
 		 * select background that satisfy the criteria: cohsnr > triggersnr + coh_thresh
 		 */
 		if (npeak > 0 && state->cur_nifo == state->nifo)
-			left_entries += cuda_postcoh_select_background(pklist, iifo, state->hist_trials, state->max_npeak, cohsnr_thresh);
+			left_entries += cuda_postcoh_select_background(pklist, state->write_ifo_mapping[iifo], state->hist_trials, state->max_npeak, cohsnr_thresh);
 	
 		/*
 		 * mark the rest of peak positions to be -1 to identify invalid background
@@ -978,6 +984,7 @@ static int cuda_postcoh_select_foreground(PostcohState *state, float cohsnr_thre
 		/*
 		 * select zerolag that satisfy the criteria: cohsnr > triggersnr + coh_thresh
 		 */
+		int write_ifo = state->write_ifo_mapping[iifo];
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			/* if the difference of maximum single snr and coherent snr is ignorable,
 			 * it means that only one detector is in action,
@@ -985,7 +992,7 @@ static int cuda_postcoh_select_foreground(PostcohState *state, float cohsnr_thre
 			 * */
 			peak_cur = peak_pos[ipeak];
 			// FIXME: consider a different threshold for 3-detector 
-			if (sqrt(pklist->cohsnr[peak_cur]) > 1.414 + pklist->snglsnr_L[iifo*(state->max_npeak) + peak_cur]) {
+			if (sqrt(pklist->cohsnr[peak_cur]) > 1.414 + pklist->snglsnr_H[write_ifo*(state->max_npeak) + peak_cur]) {
 				cluster_peak_pos[final_peaks++] = peak_cur;
 			} else 
 				bubbled_peak_pos[bubbled_peaks++] = peak_cur;
@@ -1043,32 +1050,32 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			len_cur = pklist->len_idx[peak_cur];
 			XLALGPSAdd(&(end_time), (double) len_cur/exe_len);
 			output->end_time = end_time;
-			XLALGPSAdd(&(end_time), (double) pklist->ntoff_L[peak_cur]/exe_len);
-			output->end_time_L = end_time;
-			XLALGPSAdd(&(end_time), (double) (pklist->ntoff_H[peak_cur] - pklist->ntoff_L[peak_cur])/exe_len);
+			XLALGPSAdd(&(end_time), (double) pklist->ntoff_H[peak_cur]/exe_len);
 			output->end_time_H = end_time;
+			XLALGPSAdd(&(end_time), (double) (pklist->ntoff_L[peak_cur] - pklist->ntoff_H[peak_cur])/exe_len);
+			output->end_time_L = end_time;
 			XLALGPSAdd(&(end_time), (double) (pklist->ntoff_V[peak_cur] - pklist->ntoff_H[peak_cur])/exe_len);
 			output->end_time_V = end_time;
-			output->snglsnr_L = pklist->snglsnr_L[peak_cur];
 			output->snglsnr_H = pklist->snglsnr_H[peak_cur];
+			output->snglsnr_L = pklist->snglsnr_L[peak_cur];
 			output->snglsnr_V = pklist->snglsnr_V[peak_cur];
-			output->coaphase_L = pklist->coaphase_L[peak_cur];
 			output->coaphase_H = pklist->coaphase_H[peak_cur];
+			output->coaphase_L = pklist->coaphase_L[peak_cur];
 			output->coaphase_V = pklist->coaphase_V[peak_cur];
-			output->chisq_L = pklist->chisq_L[peak_cur];
 			output->chisq_H = pklist->chisq_H[peak_cur];
+			output->chisq_L = pklist->chisq_L[peak_cur];
 			output->chisq_V = pklist->chisq_V[peak_cur];
 			cur_tmplt_idx = pklist->tmplt_idx[peak_cur];
 
-			//output->deff_L = sqrt(state->sigmasq[L_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_L[peak_cur]; 
 			//output->deff_H = sqrt(state->sigmasq[H_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_H[peak_cur]; 
+			//output->deff_L = sqrt(state->sigmasq[L_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_L[peak_cur]; 
 			if (pklist->snglsnr_V[peak_cur] > 0)
 				output->deff_V = sqrt(state->sigmasq[V_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_V[peak_cur]; 
 			output->is_background = 0;
 			output->livetime = livetime;
 			strncpy(output->ifos, state->cur_ifos, ifos_size);
 			output->ifos[2*state->cur_nifo] = '\0';
-		       	strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
+		       	strncpy(output->pivotal_ifo, state->all_ifos + IFO_LEN*iifo, one_ifo_size);
 			output->pivotal_ifo[2] = '\0';
 			output->tmplt_idx = cur_tmplt_idx;
 			output->pix_idx = pklist->pix_idx[peak_cur];
@@ -1145,17 +1152,17 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 					output->livetime = livetime;
 					strncpy(output->ifos, state->cur_ifos, ifos_size);
 					output->ifos[2*state->cur_nifo] = '\0';
-			       		strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
+			       		strncpy(output->pivotal_ifo, state->all_ifos + IFO_LEN*iifo, one_ifo_size);
 					output->pivotal_ifo[2] = '\0';
 					output->tmplt_idx = pklist->tmplt_idx[peak_cur];
-					output->snglsnr_L = pklist->snglsnr_bg_L[peak_cur_bg];
 					output->snglsnr_H = pklist->snglsnr_bg_H[peak_cur_bg];
+					output->snglsnr_L = pklist->snglsnr_bg_L[peak_cur_bg];
 					output->snglsnr_V = pklist->snglsnr_bg_V[peak_cur_bg];
-					output->coaphase_L = pklist->coaphase_bg_L[peak_cur_bg];
 					output->coaphase_H = pklist->coaphase_bg_H[peak_cur_bg];
+					output->coaphase_L = pklist->coaphase_bg_L[peak_cur_bg];
 					output->coaphase_V = pklist->coaphase_bg_V[peak_cur_bg];
-					output->chisq_L = pklist->chisq_bg_L[peak_cur_bg];
 					output->chisq_H = pklist->chisq_bg_H[peak_cur_bg];
+					output->chisq_L = pklist->chisq_bg_L[peak_cur_bg];
 					output->chisq_V = pklist->chisq_bg_V[peak_cur_bg];
 	
 					//output->pix_idx = pklist->pix_idx[itrial*max_npeak + peak_cur];
@@ -1366,7 +1373,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 		/* copy the snr data to the right location for all detectors */ 
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
-			cur_ifo = state->ifo_mapping[i];
+			cur_ifo = state->input_ifo_mapping[i];
 			PeakList *pklist = state->peak_list[cur_ifo];
 
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
@@ -1425,7 +1432,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 
 			data = collectlist->data;
-			cur_ifo = state->ifo_mapping[i];
+			cur_ifo = state->input_ifo_mapping[i];
 
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
 				// FIXME: GPU peakfinder produces much less peaks than peaks_over_thresh function

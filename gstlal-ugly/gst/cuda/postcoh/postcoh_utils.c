@@ -21,13 +21,27 @@
 #include <gst/gst.h>
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
 #include <postcoh/postcoh_utils.h>
+#include <postcoh/postcohinspiral_table.h>
+#include <cohfar/background_stats_utils.h> // for IFO_COMBO_MAP
 #include <cuda_debug.h>
 
-char* IFO_MAP[] = {"L1", "H1", "V1"};
+char* IFO_MAP[] = {"H1", "L1", "V1"};
 #define __DEBUG__ 1
 #define NSNGL_TMPLT_COLS 12
 
 
+void get_write_ifo_mapping(char *ifo_combo, int nifo, int *write_ifo_mapping)
+{
+	int iifo, jifo;
+	for (iifo=0; iifo<nifo; iifo++)
+		for (jifo=0; jifo<MAX_NIFO; jifo++)
+			if (strncmp(ifo_combo+iifo*IFO_LEN, IFO_MAP[jifo], IFO_LEN) == 0 ) {
+				write_ifo_mapping[iifo] = jifo;
+				break;
+
+	}
+
+}
 PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 {
 		int hist_trials = state->hist_trials;
@@ -48,40 +62,40 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->d_tmplt_idx = pklist->d_npeak + 1 + 2 * max_npeak;
 		pklist->d_pix_idx = pklist->d_npeak + 1 + 3 * max_npeak;
 		pklist->d_pix_idx_bg = pklist->d_npeak + 1 + 4 * max_npeak;
-		pklist->d_ntoff_L = pklist->d_npeak + 1 + (4 + hist_trials) * max_npeak;
-		pklist->d_ntoff_H = pklist->d_npeak + 1 + (5 + hist_trials) * max_npeak;
+		pklist->d_ntoff_H = pklist->d_npeak + 1 + (4 + hist_trials) * max_npeak;
+		pklist->d_ntoff_L = pklist->d_npeak + 1 + (5 + hist_trials) * max_npeak;
 		pklist->d_ntoff_V = pklist->d_npeak + 1 + (6 + hist_trials) * max_npeak;
 
 		//printf("d_npeak %p\n", pklist->d_npeak);
 		//CUDA_CHECK(cudaMemsetAsync(pklist->d_npeak, 0, sizeof(int), stream));
 
 		/* create device space for peak list for float-type variables */	
-		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_snglsnr_L), sizeof(float) * peak_floatlen));
-		CUDA_CHECK(cudaMemsetAsync(pklist->d_snglsnr_L, 0, sizeof(float) * peak_floatlen, stream));
-		pklist->d_snglsnr_H = pklist->d_snglsnr_L + max_npeak;
-		pklist->d_snglsnr_V = pklist->d_snglsnr_L + 2 * max_npeak;
-		pklist->d_coaphase_L = pklist->d_snglsnr_L + 3 * max_npeak;
-		pklist->d_coaphase_H = pklist->d_snglsnr_L + 4 * max_npeak;
-		pklist->d_coaphase_V = pklist->d_snglsnr_L + 5 * max_npeak;
-		pklist->d_chisq_L = pklist->d_snglsnr_L + 6 * max_npeak;
-		pklist->d_chisq_H = pklist->d_snglsnr_L + 7 * max_npeak;
-		pklist->d_chisq_V = pklist->d_snglsnr_L + 8 * max_npeak;
-		pklist->d_cohsnr = pklist->d_snglsnr_L + 9 * max_npeak;
-		pklist->d_nullsnr = pklist->d_snglsnr_L + 10 * max_npeak;
-		pklist->d_cmbchisq = pklist->d_snglsnr_L + 11 * max_npeak;
+		CUDA_CHECK(cudaMalloc((void **) &(pklist->d_snglsnr_H), sizeof(float) * peak_floatlen));
+		CUDA_CHECK(cudaMemsetAsync(pklist->d_snglsnr_H, 0, sizeof(float) * peak_floatlen, stream));
+		pklist->d_snglsnr_L = pklist->d_snglsnr_H + max_npeak;
+		pklist->d_snglsnr_V = pklist->d_snglsnr_H + 2 * max_npeak;
+		pklist->d_coaphase_H = pklist->d_snglsnr_H + 3 * max_npeak;
+		pklist->d_coaphase_L = pklist->d_snglsnr_H + 4 * max_npeak;
+		pklist->d_coaphase_V = pklist->d_snglsnr_H + 5 * max_npeak;
+		pklist->d_chisq_H = pklist->d_snglsnr_H + 6 * max_npeak;
+		pklist->d_chisq_L = pklist->d_snglsnr_H + 7 * max_npeak;
+		pklist->d_chisq_V = pklist->d_snglsnr_H + 8 * max_npeak;
+		pklist->d_cohsnr = pklist->d_snglsnr_H + 9 * max_npeak;
+		pklist->d_nullsnr = pklist->d_snglsnr_H + 10 * max_npeak;
+		pklist->d_cmbchisq = pklist->d_snglsnr_H + 11 * max_npeak;
 	
-		pklist->d_snglsnr_bg_L = pklist->d_snglsnr_L + 12 * max_npeak;
-		pklist->d_snglsnr_bg_H = pklist->d_snglsnr_L + (12 + hist_trials) * max_npeak;
-		pklist->d_snglsnr_bg_V = pklist->d_snglsnr_L + (12 + 2* hist_trials) * max_npeak;
-		pklist->d_coaphase_bg_L = pklist->d_snglsnr_L + (12 + 3*hist_trials) * max_npeak;
-		pklist->d_coaphase_bg_H = pklist->d_snglsnr_L + (12 + 4*hist_trials) * max_npeak;
-		pklist->d_coaphase_bg_V = pklist->d_snglsnr_L + (12 + 5*hist_trials) * max_npeak;
-		pklist->d_chisq_bg_L = pklist->d_snglsnr_L + (12 + 6*hist_trials) * max_npeak;
-		pklist->d_chisq_bg_H = pklist->d_snglsnr_L + (12 + 7*hist_trials) * max_npeak;
-		pklist->d_chisq_bg_V = pklist->d_snglsnr_L + (12 + 8*hist_trials) * max_npeak;
-		pklist->d_cohsnr_bg = pklist->d_snglsnr_L + (12 + 9*hist_trials) * max_npeak;
-		pklist->d_nullsnr_bg = pklist->d_snglsnr_L + (12 + 10*hist_trials) * max_npeak;
-		pklist->d_cmbchisq_bg = pklist->d_snglsnr_L + (12 + 11 * hist_trials) * max_npeak;
+		pklist->d_snglsnr_bg_H = pklist->d_snglsnr_H + 12 * max_npeak;
+		pklist->d_snglsnr_bg_L = pklist->d_snglsnr_H + (12 + hist_trials) * max_npeak;
+		pklist->d_snglsnr_bg_V = pklist->d_snglsnr_H + (12 + 2* hist_trials) * max_npeak;
+		pklist->d_coaphase_bg_H = pklist->d_snglsnr_H + (12 + 3*hist_trials) * max_npeak;
+		pklist->d_coaphase_bg_L = pklist->d_snglsnr_H + (12 + 4*hist_trials) * max_npeak;
+		pklist->d_coaphase_bg_V = pklist->d_snglsnr_H + (12 + 5*hist_trials) * max_npeak;
+		pklist->d_chisq_bg_H = pklist->d_snglsnr_H + (12 + 6*hist_trials) * max_npeak;
+		pklist->d_chisq_bg_L = pklist->d_snglsnr_H + (12 + 7*hist_trials) * max_npeak;
+		pklist->d_chisq_bg_V = pklist->d_snglsnr_H + (12 + 8*hist_trials) * max_npeak;
+		pklist->d_cohsnr_bg = pklist->d_snglsnr_H + (12 + 9*hist_trials) * max_npeak;
+		pklist->d_nullsnr_bg = pklist->d_snglsnr_H + (12 + 10*hist_trials) * max_npeak;
+		pklist->d_cmbchisq_bg = pklist->d_snglsnr_H + (12 + 11 * hist_trials) * max_npeak;
 
 		/* create host space for peak list for int-type variables */	
 		//pklist->npeak = (int *)malloc(sizeof(int) * peak_intlen);
@@ -92,38 +106,38 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->tmplt_idx = pklist->npeak + 1 + 2 * max_npeak;
 		pklist->pix_idx = pklist->npeak + 1 + 3 * max_npeak;
 		pklist->pix_idx_bg = pklist->npeak + 1 + 4 * max_npeak;
-		pklist->ntoff_L = pklist->npeak + 1 + (4 + hist_trials) * max_npeak;
-		pklist->ntoff_H = pklist->npeak + 1 + (5 + hist_trials) * max_npeak;
+		pklist->ntoff_H = pklist->npeak + 1 + (4 + hist_trials) * max_npeak;
+		pklist->ntoff_L = pklist->npeak + 1 + (5 + hist_trials) * max_npeak;
 		pklist->ntoff_V = pklist->npeak + 1 + (6 + hist_trials) * max_npeak;
 
 		/* create host space for peak list for float-type variables */	
 		//pklist->snglsnr_L = (float *)malloc(sizeof(float) * peak_floatlen);
-		CUDA_CHECK(cudaMallocHost((void **) &(pklist->snglsnr_L), sizeof(float) * peak_floatlen));
-		memset(pklist->snglsnr_L, 0, sizeof(float) * peak_floatlen);
-		pklist->snglsnr_H = pklist->snglsnr_L + max_npeak;
-		pklist->snglsnr_V = pklist->snglsnr_L + 2 * max_npeak;
-		pklist->coaphase_L = pklist->snglsnr_L + 3 * max_npeak;
-		pklist->coaphase_H = pklist->snglsnr_L + 4 * max_npeak;
-		pklist->coaphase_V = pklist->snglsnr_L + 5 * max_npeak;
-		pklist->chisq_L = pklist->snglsnr_L + 6 * max_npeak;
-		pklist->chisq_H = pklist->snglsnr_L + 7 * max_npeak;
-		pklist->chisq_V = pklist->snglsnr_L + 8 * max_npeak;
-		pklist->cohsnr = pklist->snglsnr_L + 9 * max_npeak;
-		pklist->nullsnr = pklist->snglsnr_L + 10 * max_npeak;
-		pklist->cmbchisq = pklist->snglsnr_L + 11 * max_npeak;
+		CUDA_CHECK(cudaMallocHost((void **) &(pklist->snglsnr_H), sizeof(float) * peak_floatlen));
+		memset(pklist->snglsnr_H, 0, sizeof(float) * peak_floatlen);
+		pklist->snglsnr_L = pklist->snglsnr_H + max_npeak;
+		pklist->snglsnr_V = pklist->snglsnr_H + 2 * max_npeak;
+		pklist->coaphase_H = pklist->snglsnr_H + 3 * max_npeak;
+		pklist->coaphase_L = pklist->snglsnr_H + 4 * max_npeak;
+		pklist->coaphase_V = pklist->snglsnr_H + 5 * max_npeak;
+		pklist->chisq_H = pklist->snglsnr_H + 6 * max_npeak;
+		pklist->chisq_L = pklist->snglsnr_H + 7 * max_npeak;
+		pklist->chisq_V = pklist->snglsnr_H + 8 * max_npeak;
+		pklist->cohsnr = pklist->snglsnr_H + 9 * max_npeak;
+		pklist->nullsnr = pklist->snglsnr_H + 10 * max_npeak;
+		pklist->cmbchisq = pklist->snglsnr_H + 11 * max_npeak;
 //	
-		pklist->snglsnr_bg_L = pklist->snglsnr_L + 12 * max_npeak;
-		pklist->snglsnr_bg_H = pklist->snglsnr_L + (12 + hist_trials) * max_npeak;
-		pklist->snglsnr_bg_V = pklist->snglsnr_L + (12 + 2* hist_trials) * max_npeak;
-		pklist->coaphase_bg_L = pklist->snglsnr_L + (12 + 3*hist_trials) * max_npeak;
-		pklist->coaphase_bg_H = pklist->snglsnr_L + (12 + 4*hist_trials) * max_npeak;
-		pklist->coaphase_bg_V = pklist->snglsnr_L + (12 + 5*hist_trials) * max_npeak;
-		pklist->chisq_bg_L = pklist->snglsnr_L + (12 + 6*hist_trials) * max_npeak;
-		pklist->chisq_bg_H = pklist->snglsnr_L + (12 + 7*hist_trials) * max_npeak;
-		pklist->chisq_bg_V = pklist->snglsnr_L + (12 + 8*hist_trials) * max_npeak;
-		pklist->cohsnr_bg = pklist->snglsnr_L + (12 + 9*hist_trials) * max_npeak;
-		pklist->nullsnr_bg = pklist->snglsnr_L + (12 + 10*hist_trials) * max_npeak;
-		pklist->cmbchisq_bg = pklist->snglsnr_L + (12 + 11 * hist_trials) * max_npeak;
+		pklist->snglsnr_bg_H = pklist->snglsnr_H + 12 * max_npeak;
+		pklist->snglsnr_bg_L = pklist->snglsnr_H + (12 + hist_trials) * max_npeak;
+		pklist->snglsnr_bg_V = pklist->snglsnr_H + (12 + 2* hist_trials) * max_npeak;
+		pklist->coaphase_bg_H = pklist->snglsnr_H + (12 + 3*hist_trials) * max_npeak;
+		pklist->coaphase_bg_L = pklist->snglsnr_H + (12 + 4*hist_trials) * max_npeak;
+		pklist->coaphase_bg_V = pklist->snglsnr_H + (12 + 5*hist_trials) * max_npeak;
+		pklist->chisq_bg_H = pklist->snglsnr_H + (12 + 6*hist_trials) * max_npeak;
+		pklist->chisq_bg_L = pklist->snglsnr_H + (12 + 7*hist_trials) * max_npeak;
+		pklist->chisq_bg_V = pklist->snglsnr_H + (12 + 8*hist_trials) * max_npeak;
+		pklist->cohsnr_bg = pklist->snglsnr_H + (12 + 9*hist_trials) * max_npeak;
+		pklist->nullsnr_bg = pklist->snglsnr_H + (12 + 10*hist_trials) * max_npeak;
+		pklist->cmbchisq_bg = pklist->snglsnr_H + (12 + 11 * hist_trials) * max_npeak;
 
 //		printf("set peak addr %p, d_npeak addr %p\n", pklist, pklist->d_npeak);
 		//printf("hist trials %d, peak_intlen %d, peak_floatlen %d\n", hist_trials, peak_intlen, peak_floatlen);
@@ -156,7 +170,7 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
 	strcpy(fname_cpy, fname);
 	char *token = strtok_r(fname_cpy, ",", &end_ifo);
-	int mem_alloc_size = 0, ntmplt = 0, match_ifo = 0;
+	int mem_alloc_size = 0, ntmplt = 0, match_ifo;
 
 	/* parsing for nifo */
 	while (token != NULL) {
@@ -174,10 +188,29 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 
 	end_ifo = NULL;
 	strcpy(fname_cpy, fname);
-	token = strtok_r(fname_cpy, ",", &end_ifo);
 	sprintf((char *)xns[0].tag, "sigmasq:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_sigmasq[0]);
+	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN);
+
+	printf("fname for all_ifos %s\n", fname_cpy);
+	token = strtok_r(fname_cpy, ",", &end_ifo);
+	/* parsing for all_ifos */
+	int iifo = 0;
+	while (token != NULL) {
+		printf("token for all_ifos %s, copy size %d, sizeof char %d, sizeof char %d\n", token, sizeof(char)*IFO_LEN, sizeof(char), sizeof(char));
+		strncpy(all_ifos+iifo*IFO_LEN, token, sizeof(char)*IFO_LEN);
+		token = strtok_r(NULL, ",", &end_ifo);
+		iifo++;
+	}
+	printf("all_ifos %s\n", all_ifos);
+	int ifo_combo_idx = get_icombo(all_ifos);
+	/* overwrite all_ifos to be the same with the combo in the IFO_COMBO_MAP */
+	strncpy(all_ifos, IFO_COMBO_MAP[ifo_combo_idx], sizeof(IFO_COMBO_MAP[ifo_combo_idx]));
+	printf("all_ifos %s\n", all_ifos);
+
+	strcpy(fname_cpy, fname);
+	token = strtok_r(fname_cpy, ",", &end_ifo);
 
 	/* used for sanity check the lengths of sigmasq arrays should be equal */
 	int last_dimension = -1;
@@ -191,7 +224,7 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 
 		// FIXME: consider other combos like HV, how we store sigmasq
 		for (int i=0; i<nifo; i++) {
-			if (strncmp(token, IFO_MAP[i], 2) == 0) {
+			if (strncmp(token, all_ifos + IFO_LEN*i, 2) == 0) {
 				match_ifo = i;
 				break;
 			}
@@ -376,8 +409,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 
 	end_ifo = NULL;
 	strcpy(fname_cpy, fname);
-	token = strtok_r(fname_cpy, ",", &end_ifo);
-	//printf("fname_cpy %s\n", fname_cpy);
+	printf("fname_cpy %s\n", fname_cpy);
 	sprintf((char *)xns[0].tag, "autocorrelation_bank_real:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_autocorr[0]);
@@ -385,6 +417,27 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	sprintf((char *)xns[1].tag, "autocorrelation_bank_imag:array");
 	xns[1].processPtr = readArray;
 	xns[1].data = &(array_autocorr[1]);
+
+	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN);
+
+	printf("fname for all_ifos %s\n", fname_cpy);
+	token = strtok_r(fname_cpy, ",", &end_ifo);
+	/* parsing for all_ifos */
+	int iifo = 0;
+	while (token != NULL) {
+		printf("token for all_ifos %s, copy size %d, sizeof char %d, sizeof char %d\n", token, sizeof(char)*IFO_LEN, sizeof(char), sizeof(char));
+		strncpy(all_ifos+iifo*IFO_LEN, token, sizeof(char)*IFO_LEN);
+		token = strtok_r(NULL, ",", &end_ifo);
+		iifo++;
+	}
+	printf("all_ifos %s\n", all_ifos);
+	int ifo_combo_idx = get_icombo(all_ifos);
+	/* overwrite all_ifos to be the same with the combo in the IFO_COMBO_MAP */
+	strncpy(all_ifos, IFO_COMBO_MAP[ifo_combo_idx], sizeof(IFO_COMBO_MAP[ifo_combo_idx]));
+	printf("all_ifos %s\n", all_ifos);
+
+	strcpy(fname_cpy, fname);
+	token = strtok_r(fname_cpy, ",", &end_ifo);
 
 	/* start parsing again */
 	while (token != NULL) {
@@ -395,7 +448,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 		parseFile(token_bankname, xns, 2);
 
 		for (int i=0; i<nifo; i++) {
-			if (strncmp(token, IFO_MAP[i], 2) == 0) {
+			if (strncmp(token, all_ifos+IFO_LEN*i, 2) == 0) {
 				match_ifo = i;
 				break;
 			}
@@ -405,7 +458,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 		ntmplt = array_autocorr[0].dim[1];
 		autochisq_len = array_autocorr[0].dim[0];
 
-		//printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autochisq_len);
+		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autochisq_len);
 		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autochisq_len;
 		CUDA_CHECK(cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt));
