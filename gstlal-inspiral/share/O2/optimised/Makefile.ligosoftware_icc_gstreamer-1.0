@@ -103,7 +103,7 @@ GSL_2_TARGET=$(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
 GSL_1_TARGET=$(INSTALL_DIR)/lib/libgsl.so
 ORC_TARGET=$(INSTALL_DIR)/lib/liborc-0.4.so
 FFTW_TARGET=$(INSTALL_DIR)/lib/libfftw3.so
-PYFFTW_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/pyfftw/pyfftw.so
+PYFFTW_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/pyfftw/pyfftw.so
 # tarballs
 GSTLALINSPIRAL_TAR_TARGET=$(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz
 GSTLALCALIB_TAR_TARGET=$(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz
@@ -787,8 +787,7 @@ $(LOGS_DIR) :
 			echo "Gstlal git repo exists" ; \
 		else \
 			mkdir -p $(GSTLAL_REPO) ; \
-			ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER) ; \
-			git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO) ; \
+			git clone https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
 		fi ; \
 	fi ;
 

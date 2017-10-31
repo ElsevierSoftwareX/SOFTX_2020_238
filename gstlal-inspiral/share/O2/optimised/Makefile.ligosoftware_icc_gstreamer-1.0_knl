@@ -789,8 +789,7 @@ $(LOGS_DIR) :
 			echo "Gstlal git repo exists" ; \
 		else \
 			mkdir -p $(GSTLAL_REPO) ; \
-			ecp-cookie-init LIGO.ORG https://versions.ligo.org/git $(USER) ; \
-			git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO) ; \
+			git clone https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
 		fi ; \
 	fi ;
 

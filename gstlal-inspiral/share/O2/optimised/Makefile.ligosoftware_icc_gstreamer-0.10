@@ -583,7 +583,7 @@ logs/patch.txt : $(LOGS_DIR)/tar.txt $(PATCH_TARGET_1)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 $(PATCH_TARGET_1) : logs/tar.txt
-	@wget --no-check-certificate https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/profile/patches/gstreamer-bison.patch --directory-prefix=$(PATCH_DIR) -nc
+	@wget --no-check-certificate https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/profile/patches/gstreamer-bison.patch --directory-prefix=$(PATCH_DIR) -nc
 
 #tarballs
 logs/tar.txt : $(LOGS_DIR)/git.txt $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(OPROFILE_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLS_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(LALEXTRA_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
@@ -703,7 +703,7 @@ $(GSTLAL_GIT_TARGET) : $(LALSUITE_GIT_TARGET)
 		echo "Gstlal git repo exists" ; \
 	else \
 		mkdir -p $(GSTLAL_REPO) ; \
-		git clone https://versions.ligo.org/git/gstlal.git $(GSTLAL_REPO) ; \
+		git clone https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
 	fi ;
 
 $(LALSUITE_GIT_TARGET) : $(LOGS_DIR)
