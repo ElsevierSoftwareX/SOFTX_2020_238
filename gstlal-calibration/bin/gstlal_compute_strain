@@ -208,7 +208,7 @@ parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_
 parser.add_option("--dewhitening", action = "store_true", help = "Dewhitening should be used on the relevant channels, since the incoming channels are whitened and single precision.")
 parser.add_option("--low-latency", action = "store_true", help = "Run the pipeline in low-latency mode. This uses minimal queueing. Otherwise, maximal queueing is used to prevent the pipeline from locking up.")
 parser.add_option("--update-fcc", action = "store_true", help = "Update the cavity pole filter with time.")
-parser.add_option("--fcc-filter-duration", metavar = "seconds", default = 0.01, help = "Duration of the cavity pole FIR filter. (Default = 0.01 seconds)")
+parser.add_option("--fcc-filter-duration", metavar = "seconds", default = 1.0, type = float, help = "Duration of the cavity pole FIR filter. (Default = 0.01 seconds)")
 parser.add_option("--fcc-averaging-time", metavar = "seconds", type = float, default = 60, help = "Length of time (in seconds) between when cavity pole FIR filter is updated.  The computed cavity pole values are averaged between the update intervals in order to obtain the cavity pole value used to compute the new FIR filter. (Default = 60 seconds)")
 parser.add_option("--fcc-filter-taper-length", metavar = "samples", type = int, default = 16384, help = "Number of samples to be used when tapering old filter and ramping in new filter. (Default = 16384)")
 
@@ -1130,8 +1130,8 @@ if options.dewhitening:
 	res_filter_latency += float(resdewhitendelay)/hoftsr
 
 if options.update_fcc:
-	default_fir_matrix = numpy.zeros(int(hoftsr*options.fcc_filter_duration-1))
-	latency = int(len(default_fir_matrix)/2)
+	default_fir_matrix = numpy.zeros(int(numpy.floor(hoftsr*options.fcc_filter_duration/2.0+1)*2.0-2.0))
+	latency = int(hoftsr*options.fcc_filter_duration/(2.0)+1)
 	default_fir_matrix[latency] = 1.0
 	res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = default_fir_matrix[::-1], latency = latency, taper_length = options.fcc_filter_taper_length)
 	update_fcc.connect("notify::fir-matrix", fir_matrix_update, res)

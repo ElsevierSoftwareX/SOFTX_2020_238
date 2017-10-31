@@ -176,24 +176,24 @@ float *tukey(int N)
 
 
 //constructs the new filter with the computed average
-long double* MakeFilter(GSTLALFccUpdate *element) {
-	long double FcAverage=element->currentaverage;
+double* MakeFilter(GSTLALFccUpdate *element) {
+	double FcAverage=element->currentaverage;
 	
-	printf("FcAverage=%Lf \n",FcAverage);
+	printf("FcAverage=%lf \n",FcAverage);
 
-	long double FiltDur=(long double) element->filterduration;
-	long double Filtdf=1.0L/(long double)FiltDur;
-	long double Filtdt=1.0L/(long double) element->datarate;
+	double FiltDur=(double) element->filterduration;
+	double Filtdf=1.0L/(double)FiltDur;
+	double Filtdt=1.0L/(double) element->datarate;
 	int filtlength= (int) (element->datarate/(2.0*Filtdf))+1;
 
 	int i=0;
-	long double Filtf[filtlength];
+	double Filtf[filtlength];
 	while(i<filtlength) {
 		Filtf[i]=(i*Filtdf);
 		i++;
 	}
 	i=0;
-	long double complex CavPoleFiltForTD[filtlength];
+	double complex CavPoleFiltForTD[filtlength];
 	double instrument_cavity_pole_frequency = element->fcmodel;
 
 	while(i<filtlength) {
@@ -204,13 +204,13 @@ long double* MakeFilter(GSTLALFccUpdate *element) {
 	//adds delay to the filter
 	i=0;
 	double delaysamples=filtlength;
-	long double complex Delay[filtlength];
+	double complex Delay[filtlength];
 	while(i<filtlength) {
-		Delay[i]=cexpl(-2.0L*Pi*I*Filtf[i]*delaysamples*Filtdt);
+		Delay[i]=cexpl(-2.0*Pi*I*Filtf[i]*delaysamples*Filtdt);
 		i++;
 	}
 	i=0;
-	long double complex DelayedFilt[filtlength];
+	double complex DelayedFilt[filtlength];
 	while(i<filtlength) {
 		DelayedFilt[i]=CavPoleFiltForTD[i]*Delay[i];
 		i++;
@@ -218,13 +218,13 @@ long double* MakeFilter(GSTLALFccUpdate *element) {
 
 	//adds the negative frequencies to the filter to prepare for ifft
 	i=0;
-	long double complex NegFrequencies[filtlength];
+	double complex NegFrequencies[filtlength];
 	while(i<filtlength) {
 		NegFrequencies[i]=conjl(DelayedFilt[(filtlength-1-i)]);
 		i++;
 	}
 
-	long double complex CavPoleFiltTotal[filtlength*2-2];
+	double complex CavPoleFiltTotal[filtlength*2-2];
 	i=0;
 	while(i<filtlength) {
 		CavPoleFiltTotal[i]=DelayedFilt[i];
@@ -253,7 +253,7 @@ long double* MakeFilter(GSTLALFccUpdate *element) {
 	fftw_execute(p);
 		
 	i=0;
-	long double * CavPoleFiltTD=malloc(sizeof(long double)*N);
+	double * CavPoleFiltTD=malloc(sizeof(double)*N);
 
 	while(i<N) {
                 CavPoleFiltTD[i]=creall(out[i]/N);
@@ -285,8 +285,9 @@ long double* MakeFilter(GSTLALFccUpdate *element) {
 	//prints out CavPoleFiltTD
 	//FILE *fptr;
 	//fptr = fopen("cavitypolfilter.txt", "w");
+	//printf("Filter length is %d\n", N);
 	//for(i=0;i<N;i++) {
-	//	fprintf(fptr, "%Lf \n",CavPoleFiltTD[i]);
+	//	fprintf(fptr, "%lf \n",CavPoleFiltTD[i]);
 	//}
 
 
@@ -388,7 +389,7 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
 			printf("reached update length\n");
 			//makes the new fir_matrix using the current average fcc_filter value
 		        int filtlength=((int)(element->datarate*element->filterduration/2.0))*2;
-		        long double *FccFilter=MakeFilter(element);
+		        double *FccFilter=MakeFilter(element);
 
 			//updated the values of the fir_matrix
 			element->fir_matrix=gsl_matrix_alloc(1,filtlength);
