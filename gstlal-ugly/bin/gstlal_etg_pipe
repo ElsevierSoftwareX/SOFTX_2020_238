@@ -51,11 +51,33 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 lsctables.use_in(LIGOLWContentHandler)
 
+
+#
+# get a dictionary of all the segments
+#
+
+#def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_template_length, min_instruments = 2):
+def analysis_segments(ifo, allsegs, boundary_seg, max_template_length = 100):  # FIXME Set proper 
+	segsdict = segments.segmentlistdict()
+	# 512 seconds for the whitener to settle + the maximum template_length FIXME don't hard code
+	start_pad = 512 + max_template_length # FIXME set start_pad to be imported value
+	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
+	segment_length = int(10 * start_pad)
+
+	#segsdict[ifo] &= segments.segmentlist([boundary_seg])
+	segsdict[ifo] = segments.segmentlist([boundary_seg])
+	segsdict[ifo] = segsdict[ifo].protract(start_pad)
+	segsdict[ifo] = gstlaldagparts.breakupsegs(segsdict[ifo], segment_length, start_pad)
+	if not segsdict[ifo]:
+		del segsdict[ifo]
+
+	return segsdict
+
 #
 # get a dictionary of all the channels per gstlal_etg job
 #
 
-def etg_node_gen(gstlalETGJob, dag, parent_nodes, options, channels, data_source_info):
+def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, channels, data_source_info):
 	etg_nodes = {}
 	cumsum_rates = 0
 	total_rates = 0
@@ -82,45 +104,47 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, options, channels, data_source
 		print "Total jobs needed =", n_cpu
 		print "Evenly distributed streams per job =", int(n_streams)
 
-	cumsum_rates = 0
+	for seg in segsdict[ifo]:
 
-	for ii, channel in enumerate(channels,1):
-		n_channels += 1
-		samp_rate = data_source_info.channel_dict[channel]['fsamp']
-		max_samp_rate = min(2048, int(samp_rate))
-		min_samp_rate = min(32, max_samp_rate)
-		n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
-		cumsum_rates += n_rates
-		outstr = outstr + channel + ":" + str(int(samp_rate))
+		cumsum_rates = 0
 
-		# Adds channel to current process
-		if cumsum_rates < n_streams:
-			outstr = outstr + " --channel-name="
+		for ii, channel in enumerate(channels,1):
+			n_channels += 1
+			samp_rate = data_source_info.channel_dict[channel]['fsamp']
+			max_samp_rate = min(2048, int(samp_rate))
+			min_samp_rate = min(32, max_samp_rate)
+			n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
+			cumsum_rates += n_rates
+			outstr = outstr + channel + ":" + str(int(samp_rate))
 
-		# Finalise each process once number of streams passes threshold
-		if cumsum_rates >= n_streams or ii == len(data_source_info.channel_dict.keys()):
-			out_index += 1
-			outpath = options.out_path + "/gstlal_etg/gstlal_etg_%04d" % out_index
-			etg_nodes[channel] = \
-				inspiral_pipe.generic_node(gstlalETGJob, dag, parent_nodes = parent_nodes,
-					opts = {"gps-start-time":options.gps_start_time,
-						"gps-end-time":options.gps_end_time,
-						"data-source":"frames",
-						"channel-name":outstr,
-						"mismatch":options.mismatch,
-						"qhigh":options.qhigh,
-						"cadence":options.cadence,
-						#"triggers-from-dataframe":"",
-						"disable-web-service":""
-					},
-					input_files = {"frame-cache":options.frame_cache},
-					output_files = {"out-path":outpath}
-				)
-			if options.verbose:
-				print "Job %04d, number of channels = %3d, number of streams = %4d" %(out_index, n_channels, cumsum_rates)
-			cumsum_rates = 0
-			outstr = ""
-			n_channels = 0
+			# Adds channel to current process
+			if cumsum_rates < n_streams:
+				outstr = outstr + " --channel-name="
+
+			# Finalise each process once number of streams passes threshold
+			if cumsum_rates >= n_streams or ii == len(data_source_info.channel_dict.keys()):
+				out_index += 1
+				outpath = options.out_path + "/gstlal_etg/gstlal_etg_%04d" % out_index
+				etg_nodes[channel] = \
+					inspiral_pipe.generic_node(gstlalETGJob, dag, parent_nodes = parent_nodes,
+						opts = {"gps-start-time":int(seg[0]),
+							"gps-end-time":int(seg[1]),
+							"data-source":"frames",
+							"channel-name":outstr,
+							"mismatch":options.mismatch,
+							"qhigh":options.qhigh,
+							"cadence":options.cadence,
+							#"triggers-from-dataframe":"",
+							"disable-web-service":""
+						},
+						input_files = {"frame-cache":options.frame_cache},
+						output_files = {"out-path":outpath}
+					)
+				if options.verbose:
+					print "Job %04d, number of channels = %3d, number of streams = %4d" %(out_index, n_channels, cumsum_rates)
+				cumsum_rates = 0
+				outstr = ""
+				n_channels = 0
 
 	return etg_nodes
 
@@ -172,8 +196,11 @@ output_dir = "plots"
 #
 
 data_source_info = multichannel_datasource.DataSourceInfo(options)
-instrument = data_source_info.instrument
+ifo = data_source_info.instrument
 channels = data_source_info.channel_dict.keys()
+boundary_seg = data_source_info.seg
+
+max_template_length = 100
 
 #
 # Setup the dag
@@ -183,7 +210,7 @@ try:
 	os.mkdir("logs")
 except:
 	pass
-dag = inspiral_pipe.DAG("etg_pipe")
+dag = inspiral_pipe.DAG("etg_trigger_pipe")
 
 #
 # setup the job classes
@@ -191,11 +218,13 @@ dag = inspiral_pipe.DAG("etg_pipe")
 
 gstlalETGJob = inspiral_pipe.generic_job("gstlal_etg", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
 
+segsdict = analysis_segments(ifo, data_source_info.frame_segments, boundary_seg, max_template_length)
+
 #
 # ETG jobs
 #
 
-etg_nodes = etg_node_gen(gstlalETGJob, dag, [], options, channels, data_source_info)
+etg_nodes = etg_node_gen(gstlalETGJob, dag, [], segsdict, ifo, options, channels, data_source_info)
 
 #
 # all done
