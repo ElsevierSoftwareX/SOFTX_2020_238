@@ -44,7 +44,6 @@ GObject.threads_init()
 Gst.init(None)
 import lal
 
-from confluent_kafka import Producer
 import numpy
 import pandas
 
@@ -325,8 +324,9 @@ class MultiChannelHandler(simplehandler.Handler):
 				# declaration then terrible terrible things
 				# will happen
 				if mapinfo.data:
-					for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
-						self.process_row(channel, rate, buftime, row)
+					if buftime >= int(options.trigger_start_time) and buftime < int(options.trigger_end_time):
+						for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
+							self.process_row(channel, rate, buftime, row)
 				memory.unmap(mapinfo)
 
 			del buf
@@ -442,19 +442,20 @@ class MultiChannelHandler(simplehandler.Handler):
 		# NOTE
 		# This method should only be called by an instance that is locked.
 		# Use T050017 filenaming convention.
-		fname = '%s-%d-%d.%s' % (self.tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
-		path = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
-		fpath = os.path.join(path, fname)
-		tmpfile = fpath+"~"
-		try:
-			os.makedirs(path)
-		except OSError:
-			pass
-		with open(tmpfile, 'w') as f:
- 			f.write(''.join(self.fdata))
-		shutil.move(tmpfile, fpath)
-		latency = numpy.round(int(aggregator.now()) - buftime)
-		print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
+		if len(self.fdata) > 1 :
+			fname = '%s-%d-%d.%s' % (self.tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
+			path = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
+			fpath = os.path.join(path, fname)
+			tmpfile = fpath+"~"
+			try:
+				os.makedirs(path)
+			except OSError:
+				pass
+			with open(tmpfile, 'w') as f:
+ 				f.write(''.join(self.fdata))
+			shutil.move(tmpfile, fpath)
+			latency = numpy.round(int(aggregator.now()) - buftime)
+			print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
 
 	def gen_psd_xmldoc(self):
 		xmldoc = lal.series.make_psd_xmldoc(self.psds)
@@ -608,11 +609,21 @@ def parse_command_line():
 	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
 	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 
+	parser.add_option("--trigger-start-time", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
+	parser.add_option("--trigger-end-time", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
+
 	#
 	# parse the arguments and sanity check
 	#
 
 	options, filenames = parser.parse_args()
+
+	# Sanity check the options
+
+	if options.trigger_start_time is None :
+		options.trigger_start_time = options.gps_start_time
+	if options.trigger_end_time is None :
+		options.trigger_end_time = options.gps_end_time
 
 	return options, filenames
 
@@ -635,6 +646,9 @@ channels = data_source_info.channel_dict.keys()
 
 # dictionary of basis parameters keyed by ifo, rate
 basis_params = {}
+
+if options.use_kafka:
+	from confluent_kafka import Producer
 
 if not options.disable_web_service:	
 	#
