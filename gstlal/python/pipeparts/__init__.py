@@ -115,7 +115,7 @@ class src_deferred_link(object):
 
 	The "pad-added" signal of the element will be used to watch for new
 	pads, and if the "no-more-pads" signal is emitted by the element
-	before the requested pad has appeared ValueException is raised.
+	before the requested pad has appeared ValueError is raised.
 	"""
 	def __init__(self, element, srcpadname, sinkpad):
 		no_more_pads_handler_id = element.connect("no-more-pads", self.no_more_pads, srcpadname)
