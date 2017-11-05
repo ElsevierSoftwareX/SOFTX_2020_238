@@ -203,6 +203,10 @@ class NearestLeafTree(object):
 		>>> del x[150.]
 		>>> x
 		NearestLeafTree([(100, 0), (200, 0)])
+		>>> del x[190.]
+		Traceback (most recent call last):
+			...
+		IndexError: 190.0
 		>>> del x[:]
 		>>> x
 		NearestLeafTree([])
@@ -235,9 +239,15 @@ class NearestLeafTree(object):
 			del self.tree[lo]
 
 	def __nonzero__(self):
+		"""
+		True if the tree is not empty, False otherwise.
+		"""
 		return bool(self.tree)
 
 	def __iadd__(self, other):
+		"""
+		For every (key, value) pair in other, assign self[key]=value.
+		"""
 		for x, val in other.tree:
 			self[x] = val
 		return self
@@ -284,12 +294,18 @@ class NearestLeafTree(object):
 		return self.tree[-1][0]
 
 	def __contains__(self, x):
+		"""
+		True if a key in self equals x, False otherwise.
+		"""
 		try:
 			return bool(self.tree) and self.tree[bisect.bisect_left(self.tree, (x, NegInf))][0] == x
 		except IndexError:
 			return False
 
 	def __len__(self):
+		"""
+		The number of (key, value) pairs in self.
+		"""
 		return len(self.tree)
 
 	def __repr__(self):
