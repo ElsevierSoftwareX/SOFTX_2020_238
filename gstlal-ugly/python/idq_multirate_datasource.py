@@ -44,6 +44,9 @@ from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import datasource
 
+# FIXME: Find a better way than using global variables.
+PSD_FFT_LENGTH = 32
+PSD_DROP_TIME = 16 * PSD_FFT_LENGTH
 
 ## #### produced whitened h(t) at (possibly) multiple sample rates
 # ##### Gstreamer graph describing this function
@@ -105,7 +108,7 @@ from gstlal import datasource
 #
 # }
 # @enddot
-def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd = None, psd_fft_length = 32, veto_segments = None, track_psd = False, block_duration = int(1 * Gst.SECOND), zero_pad = 0, width = 64, channel_name = "hoft"):
+def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd = None, psd_fft_length = PSD_FFT_LENGTH, veto_segments = None, track_psd = False, block_duration = int(1 * Gst.SECOND), zero_pad = 0, width = 64, channel_name = "hoft"):
 	"""!
 	Build pipeline stage to whiten and downsample auxiliary channels.
 
@@ -187,7 +190,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	whiten.connect_after("notify::mean-psd", set_fir_psd, head, psd_fir_kernel)
 
 	# Drop initial data to let the PSD settle
-	head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max_rate)
+	head = pipeparts.mkdrop(pipeline, head, drop_samples = PSD_DROP_TIME * max_rate)
 	#head = pipeparts.mkchecktimestamps(pipeline, head, "%s_%s_timestampsfir" % (instrument, channel_name))
 	
 	#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
