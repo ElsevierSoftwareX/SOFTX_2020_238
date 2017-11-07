@@ -46,6 +46,7 @@ from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 from gstlal import datasource
 from gstlal import multichannel_datasource
+from gstlal import idq_multirate_datasource
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -56,10 +57,10 @@ lsctables.use_in(LIGOLWContentHandler)
 # get a dictionary of all the segments
 #
 
-def analysis_segments(ifo, allsegs, boundary_seg, max_template_length = 100):  # FIXME Set proper 
+def analysis_segments(ifo, allsegs, boundary_seg, max_template_length = 30):
 	segsdict = segments.segmentlistdict()
-	# 512 seconds for the whitener to settle + the maximum template_length FIXME don't hard code
-	start_pad = 512 + max_template_length # FIXME set start_pad to be imported value
+	# 512 seconds for the whitener to settle + the maximum template_length
+	start_pad = idq_multirate_datasource.PSD_DROP_TIME + max_template_length
 	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
 	segment_length = int(10 * start_pad)
 
@@ -71,31 +72,18 @@ def analysis_segments(ifo, allsegs, boundary_seg, max_template_length = 100):  #
 
 	return segsdict
 
-def trigger_segments(ifo, allsegs, boundary_seg, max_template_length = 100):  # FIXME Set proper 
-	trigsegsdict = segments.segmentlistdict()
-	# 512 seconds for the whitener to settle + the maximum template_length FIXME don't hard code
-	start_pad = 512 + max_template_length # FIXME set start_pad to be imported value
-	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
-	segment_length = int(10 * start_pad)
-
-	trigsegsdict[ifo] = segments.segmentlist([boundary_seg])
-	trigsegsdict[ifo] = gstlaldagparts.breakupsegs(trigsegsdict[ifo], segment_length, start_pad)
-	if not trigsegsdict[ifo]:
-		del trigsegsdict[ifo]
-
-	return trigsegsdict
-
 #
 # get a dictionary of all the channels per gstlal_etg job
 #
 
-def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, trigsegsdict, ifo, options, channels, data_source_info):
+def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, channels, data_source_info):
 	etg_nodes = {}
 	cumsum_rates = 0
 	total_rates = 0
 	outstr = ""
 	n_channels = 0
 	n_cpu = 0
+	trig_start = options.gps_start_time
 
 	# Loop over all channels to determine number of streams and minimum number of processes needed
 	for ii, channel in enumerate(channels,1):
@@ -115,7 +103,7 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, trigsegsdict, ifo, o
 		print "Total jobs needed =", n_cpu
 		print "Evenly distributed streams per job =", int(n_streams)
 
-	for seg, trigseg in zip(segsdict[ifo], trigsegsdict[ifo]):
+	for seg in segsdict[ifo]:
 
 		cumsum_rates = 0
 		out_index = 0
@@ -136,13 +124,13 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, trigsegsdict, ifo, o
 			# Finalise each process once number of streams passes threshold
 			if cumsum_rates >= n_streams or ii == len(data_source_info.channel_dict.keys()):
 				out_index += 1
-				outpath = options.out_path + "/gstlal_etg/gstlal_etg_%04d" % out_index
+				outpath = options.out_path + "/gstlal_etg/gstlal_etg_%04d/%i-%i" %(out_index, int(trig_start), int(seg[1])-int(trig_start))
 				etg_nodes[channel] = \
 					inspiral_pipe.generic_node(gstlalETGJob, dag, parent_nodes = parent_nodes,
 						opts = {"gps-start-time":int(seg[0]),
 							"gps-end-time":int(seg[1]),
-							"trigger-start-time":int(trigseg[0]),
-							"trigger-end-time":int(trigseg[1]),
+							"trigger-start-time":int(trig_start),
+							"trigger-end-time":int(seg[1]),
 							"data-source":"frames",
 							"channel-name":outstr,
 							"mismatch":options.mismatch,
@@ -160,6 +148,8 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, trigsegsdict, ifo, o
 				outstr = ""
 				n_channels = 0
 
+		trig_start = int(seg[1])
+
 	return etg_nodes
 
 #
@@ -176,7 +166,7 @@ def parse_command_line():
 	# trigger generation options
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--triggers-from-dataframe", action = "store_true", default = False,
-						help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
+				help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
@@ -214,7 +204,8 @@ ifo = data_source_info.instrument
 channels = data_source_info.channel_dict.keys()
 boundary_seg = data_source_info.seg
 
-max_template_length = 100
+# FIXME Work out better way to determine max template length
+max_template_length = 30
 
 #
 # Setup the dag
@@ -233,13 +224,12 @@ dag = inspiral_pipe.DAG("etg_trigger_pipe")
 gstlalETGJob = inspiral_pipe.generic_job("gstlal_etg", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
 
 segsdict = analysis_segments(ifo, data_source_info.frame_segments, boundary_seg, max_template_length)
-trigsegsdict = trigger_segments(ifo, data_source_info.frame_segments, boundary_seg, max_template_length)
 
 #
 # ETG jobs
 #
 
-etg_nodes = etg_node_gen(gstlalETGJob, dag, [], segsdict, trigsegsdict, ifo, options, channels, data_source_info)
+etg_nodes = etg_node_gen(gstlalETGJob, dag, [], segsdict, ifo, options, channels, data_source_info)
 
 #
 # all done
