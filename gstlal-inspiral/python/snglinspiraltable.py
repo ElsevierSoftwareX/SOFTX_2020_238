@@ -13,6 +13,7 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 	process_id_type = ilwd.get_ilwdchar_class("process", "process_id")
 	event_id_type = ilwd.get_ilwdchar_class("sngl_inspiral", "event_id")
 
+	end = lsctables.gpsproperty("end_time", "end_time_ns")
 	spin1 = lsctables.SnglInspiral.spin1
 	spin2 = lsctables.SnglInspiral.spin2
 
@@ -21,18 +22,6 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 			(self.ifo, self.end, self.mass1, self.mass2, self.spin1, self.spin2, self.search),
 			(other.ifo, other.end, other.mass1, other.mass2, other.spin1, other.spin2, other.search)
 		)
-
-	@property
-	def end(self):
-		return lal.LIGOTimeGPS(self.end_time, self.end_time_ns)
-
-	@end.setter
-	def end(self, val):
-		if val is None:
-			self.end_time = self.end_time_ns = 0
-		else:
-			self.end_time = val.gpsSeconds
-			self.end_time_ns = val.gpsNanoSeconds
 
 	@property
 	def process_id(self):
