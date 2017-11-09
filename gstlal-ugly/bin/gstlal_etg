@@ -197,10 +197,11 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.init_gps_time = int(options.gps_start_time)
 
 		# dataframe properties
-		columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'phase', 'sigmasq', 'chisq', 'snr']
-		self.dataframes = {}
-		for (channel, rate) in self.keys:
-			self.dataframes[(channel, rate)] = pandas.DataFrame(numpy.nan, index = idq_aggregator.create_dataframe_index(self.init_gps_time), columns = columns)
+		if options.triggers_from_dataframe:
+			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'phase', 'sigmasq', 'chisq', 'snr']
+			self.dataframes = {}
+			for (channel, rate) in self.keys:
+				self.dataframes[(channel, rate)] = pandas.DataFrame(numpy.nan, index = idq_aggregator.create_dataframe_index(self.init_gps_time), columns = columns)
 		
 		# set up ETG bottle related properties
 		self.etg_event = deque(maxlen = 20000)
@@ -269,18 +270,19 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.etg_event_time = buftime
 
 			# set save times appropriately
-			if self.last_save_time is None:
-				self.last_save_time = buftime
-			if self.last_hdf_save_time[(channel, int(rate))] is None:
-				self.last_hdf_save_time[(channel, rate)] = buftime
-				# check if dataframe needs to be reindexed with new gps times before first buffer
-				if idq_aggregator.in_new_epoch(buftime, self.init_gps_time, aggregator.MIN_TIME_QUANTA):
-					self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
-			# create path if it doesn't already exist
-			if options.triggers_from_dataframe and options.save_hdf:
-				if not os.path.exists(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime)):
-					aggregator.makedir(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime))
-			
+			if options.triggers_from_dataframe:
+				if self.last_save_time is None:
+					self.last_save_time = buftime
+				if self.last_hdf_save_time[(channel, int(rate))] is None:
+					self.last_hdf_save_time[(channel, rate)] = buftime
+					# check if dataframe needs to be reindexed with new gps times before first buffer
+					if idq_aggregator.in_new_epoch(buftime, self.init_gps_time, aggregator.MIN_TIME_QUANTA):
+						self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
+				# create path if it doesn't already exist
+				if options.save_hdf:
+					if not os.path.exists(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime)):
+						aggregator.makedir(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime))
+
 			# Save triggers once every cadence
 			# ascii file saving
 			if not options.save_hdf:
