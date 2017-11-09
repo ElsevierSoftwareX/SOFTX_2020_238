@@ -271,9 +271,9 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.etg_event_time = buftime
 
 			# set save times appropriately
+			if self.last_save_time is None:
+				self.last_save_time = buftime
 			if options.triggers_from_dataframe:
-				if self.last_save_time is None:
-					self.last_save_time = buftime
 				if self.last_hdf_save_time[(channel, int(rate))] is None:
 					self.last_hdf_save_time[(channel, rate)] = buftime
 					# check if dataframe needs to be reindexed with new gps times before first buffer
