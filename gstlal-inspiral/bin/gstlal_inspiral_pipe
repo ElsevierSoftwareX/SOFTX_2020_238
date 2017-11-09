@@ -228,7 +228,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 					# handle template bank clipping
 					clipleft.append(options.overlap[j] / 2)
 					clipright.append(options.overlap[j] / 2)
-					ids.append("%d_%d" % (i, n))
+					ids.append("%d_%d" % (i+bin_offset, n))
 					if f in template_mchirp_dict:
 						mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
 
