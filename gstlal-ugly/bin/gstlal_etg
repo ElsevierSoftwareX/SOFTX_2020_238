@@ -262,10 +262,11 @@ class MultiChannelHandler(simplehandler.Handler):
 			if self.etg_event_time is None:
 				self.etg_event_time = buftime
 			if self.etg_event_time < buftime:
+				etg_subset = {self.etg_event_time: list(self.etg_event)}
 				if options.use_kafka:
-					self.producer.produce(timestamp = self.etg_event_time, topic = self.kafka_topic, value = json.dumps(list(self.etg_event)))
+					self.producer.produce(timestamp = self.etg_event_time, topic = self.kafka_topic, value = json.dumps(etg_subset))
 				else:
-					self.etg_data.append({self.etg_event_time: list(self.etg_event)})
+					self.etg_data.append(etg_subset)
 				self.etg_event.clear()
 				self.etg_event_time = buftime
 
