@@ -287,7 +287,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			# Save triggers once every cadence
 			# ascii file saving
 			if not options.save_hdf:
-				if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence):
+				if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
 					if options.triggers_from_dataframe:
 						self.to_dataframe_string(buftime)
 					self.to_trigger_file(buftime)
@@ -327,7 +327,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				# declaration then terrible terrible things
 				# will happen
 				if mapinfo.data:
-					if buftime >= int(options.trigger_start_time) and buftime < int(options.trigger_end_time):
+					if options.trigger_end_time and (buftime >= int(options.trigger_start_time) and buftime < int(options.trigger_end_time)):
 						for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
 							self.process_row(channel, rate, buftime, row)
 				memory.unmap(mapinfo)
@@ -623,10 +623,11 @@ def parse_command_line():
 
 	# Sanity check the options
 
-	if options.trigger_start_time is None :
-		options.trigger_start_time = options.gps_start_time
-	if options.trigger_end_time is None :
-		options.trigger_end_time = options.gps_end_time
+	if options.data_source not in ("lvshm", "framexmit"):
+		if options.trigger_start_time is None:
+			options.trigger_start_time = options.gps_start_time
+		if options.trigger_end_time is None:
+			options.trigger_end_time = options.gps_end_time
 
 	return options, filenames
 
