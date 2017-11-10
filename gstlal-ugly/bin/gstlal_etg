@@ -327,7 +327,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				# declaration then terrible terrible things
 				# will happen
 				if mapinfo.data:
-					if options.trigger_end_time and (buftime >= int(options.trigger_start_time) and buftime < int(options.trigger_end_time)):
+					if not options.trigger_end_time or (buftime >= int(options.trigger_start_time) and buftime < int(options.trigger_end_time)):
 						for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
 							self.process_row(channel, rate, buftime, row)
 				memory.unmap(mapinfo)
