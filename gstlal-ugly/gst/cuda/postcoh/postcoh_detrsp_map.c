@@ -83,16 +83,18 @@ create_detresponse_skymap(
 		int nifo,
 		double *horizons,
 		int ingps_step,
-		unsigned order
+		unsigned order,
+		long gps
 		)
 {
 	DetSkymap * det_map = (DetSkymap *)malloc(sizeof(DetSkymap));
 	// from 0h UTC 6 Jan 1980
-	LIGOTimeGPS gps_cur = {0, 0}; 
+	// LIGOTimeGPS gps_cur = {0, 0}; 
+	LIGOTimeGPS gps_cur = {gps, 0}; 
 	// current time
-	LIGOTimeGPS *out_cur = XLALGPSTimeNow(&gps_cur);
-	if (out_cur == NULL)
-		printf("can not find current gps time");
+	//LIGOTimeGPS *out_cur = XLALGPSTimeNow(&gps_cur);
+	//if (out_cur == NULL)
+	//	printf("can not find current gps time");
 	printf("current gps time %d, %d for detector response\n", gps_cur.gpsSeconds, gps_cur.gpsNanoSeconds);
 	LIGOTimeGPS gps_start = {gps_cur.gpsSeconds, 0}; 
 	LIGOTimeGPS gps_end = {gps_cur.gpsSeconds + 24*3600, 0};
@@ -148,12 +150,19 @@ create_detresponse_skymap(
 	
 				A[iifo*2] = fplus*horizons[iifo];
 				A[iifo*2 + 1] = fcross*horizons[iifo];
+				// printf("igps %d, ipix %d, ra %f, dec %f, iifo %d, fplus %f, fcross %f, horizon %f \n", gps_cur.gpsSeconds, ipix, phi, M_PI_2-theta, iifo, fplus, fcross, horizons[iifo]);
+
+
 			}
-#if 0
-			for (i=0; i<6; i++)
-				printf("ipix %d, ra %f, dec %f, A[%d] %f\n", ipix, phi, M_PI_2-theta, i, A[i]);
-#endif
-				
+
+			/* TimeDelay.c */
+			/* note that in the c file, the function is calculating arrival_time from input1 - arrival_time from input2 */
+			for (iifo=0; iifo<nifo; iifo++) 
+				for (jifo=0; jifo<nifo; jifo++) 
+					diff[iifo*nifo+jifo] = XLALArrivalTimeDiff(detectors[jifo]->location, detectors[iifo]->location, phi, M_PI_2-theta, &gps_cur);
+			// printf("igps %d, ipix %d, ra %f, dec %f, A %f, %f, %f, %f, %f, %f, diff %f, %f, %f, %f, %f, %f\n", gps_cur.gpsSeconds, ipix, phi, M_PI_2-theta, A[0], A[1], A[2], A[3], A[4], A[5], diff[0], diff[1], diff[2], diff[3], diff[4], diff[5]);
+		
+			/* compute SVD of A */
 			info = LAPACKE_dgesvd(LAPACK_ROW_MAJOR, 'A', 'A', nifo, 2, A, lda, S, U, ldu, VT, ldvt, superb);
 
 			if(info > 0) {
@@ -161,17 +170,14 @@ create_detresponse_skymap(
 				exit(1);
 			}
 
-			/* TimeDelay.c */
-			for (iifo=0; iifo<nifo; iifo++) 
-				for (jifo=0; jifo<nifo; jifo++) 
-					diff[iifo*nifo+jifo] = XLALArrivalTimeDiff(detectors[iifo]->location, detectors[jifo]->location, phi, M_PI_2-theta, &gps_cur);
 
+			/* save the U and diff into U_map and diff_map */
 			for (iifo=0; iifo<nifo*nifo; iifo++) {
 
 				index = igps*Umatrix_len + iifo*npix +ipix;
 				U_map[index] = (float) U[iifo];
 				diff_map[index] = (float) diff[iifo];
-		//		printf("index %d diff %f\n", index, diff[i]);
+				//printf("index %d diff %f\n", index, diff[i]);
 			}
 
 		}
@@ -296,7 +302,7 @@ static int to_xml(DetSkymap *det_map, const char *detrsp_fname, const char *detr
 
 	return 0;
 }
-static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pnorder, gchar **pout)
+static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pnorder, gchar **pgps, gchar **pout)
 {
 	int option_index = 0;
 	struct option long_opts[] =
@@ -304,16 +310,20 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pnorder, gch
 		{"ifo-horizons",	required_argument,	0,	'i'},
 		{"chealpix-order",	required_argument,	0,	'n'},
 		{"output-filename",	required_argument,	0,	'o'},
+		{"gps-time",		required_argument,	0,	'g'},
 		{0, 0, 0, 0}
 	};
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:n:o:", long_opts, &option_index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "i:n:o:g:", long_opts, &option_index)) != -1) {
 		switch (opt) {
 			case 'i':
 				*pin = g_strdup((gchar *)optarg);
 				break;
 			case 'n':
 				*pnorder = g_strdup((gchar *)optarg);
+				break;
+			case 'g':
+				*pgps = g_strdup((gchar *)optarg);
 				break;
 			case 'o':
 				*pout = g_strdup((gchar *)optarg);
@@ -328,9 +338,10 @@ int main(int argc, char *argv[])
 {
 	gchar **pin = (gchar **)malloc(sizeof(gchar *));
 	gchar **pnorder = (gchar **)malloc(sizeof(gchar *));
+	gchar **pgps = (gchar **)malloc(sizeof(gchar *));
 	gchar **pout = (gchar **)malloc(sizeof(gchar *));
 
-	parse_opts(argc, argv, pin, pnorder, pout);
+	parse_opts(argc, argv, pin, pnorder, pgps, pout);
 	
 	gchar ** in_ifo_strings = g_strsplit(*pin, ",", -1);
 	gchar ** one_ifo_string = NULL;
@@ -358,7 +369,9 @@ int main(int argc, char *argv[])
 	/* GPS interval = 1800 seconds.
 	 * norder is 4, for depth of number of pixels created  */
 	int norder = atoi(*pnorder);
-	DetSkymap *det_map = create_detresponse_skymap(ifo_names, nifo, horizons, 1800 ,norder);
+	// FIXME: can atoi convert to long ?
+	long gps = atoi(*pgps);
+	DetSkymap *det_map = create_detresponse_skymap(ifo_names, nifo, horizons, 1800 ,norder, gps);
 
 	to_xml(det_map, *pout, mapname->str, 0);
 	g_string_free(mapname, TRUE);
