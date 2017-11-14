@@ -44,8 +44,8 @@ tagPostcohInspiralTable
   long		process_id;
   long		event_id;
   LIGOTimeGPS	end_time;
-  LIGOTimeGPS	end_time_L;
   LIGOTimeGPS	end_time_H;
+  LIGOTimeGPS	end_time_L;
   LIGOTimeGPS	end_time_V;
   INT4		is_background;
   INT4		livetime;
@@ -53,14 +53,14 @@ tagPostcohInspiralTable
   CHAR		pivotal_ifo[MAX_IFO_LEN];
   INT4		tmplt_idx;
   INT4		pix_idx;
-  REAL4		snglsnr_L;
   REAL4		snglsnr_H;
+  REAL4		snglsnr_L;
   REAL4		snglsnr_V;
-  REAL4		coaphase_L;
   REAL4		coaphase_H;
+  REAL4		coaphase_L;
   REAL4		coaphase_V;
-  REAL4		chisq_L;
   REAL4		chisq_H;
+  REAL4		chisq_L;
   REAL4		chisq_V;
   REAL4         cohsnr;
   REAL4         nullsnr;
@@ -98,8 +98,8 @@ tagPostcohInspiralTable
   REAL4		eta;
   REAL8		ra;
   REAL8		dec;
-  REAL8		deff_L;
   REAL8		deff_H;
+  REAL8		deff_L;
   REAL8		deff_V;
 }
 
