@@ -193,10 +193,11 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	for (; intable<intable_end; intable++) {
 		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
-			//printf("cohsnr %f, maxsnr %f\n", intable->cohsnr, intable->maxsnglsnr);
 			icombo = get_icombo(intable->ifos);
-			if (icombo > -1)
+			if (icombo > -1) {
 				background_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats_snapshot[icombo]->feature, stats_snapshot[icombo]);
+				//printf("eventime %d, cohsnr %f, chisq %f\n", intable->end_time.gpsSeconds, intable->cohsnr, intable->cmbchisq);
+			}	
 
 			nifo = strlen(intable->ifos)/IFO_LEN;
 			/* add single detector stats */
@@ -207,6 +208,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 				int write_isingle = element->write_ifo_mapping[isingle];
 				//printf("write isingle %d->%d\n", isingle, write_isingle);
 				background_stats_feature_rates_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), stats_snapshot[write_isingle]->feature, stats_snapshot[write_isingle]);
+				// printf("eventime %d, single %d, snr %f, chisq %f\n", intable->end_time.gpsSeconds, isingle, (double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)));
 			}
 			/* add stats to stats_list for prompt FAP estimation */
 			// if (icombo > -1)
