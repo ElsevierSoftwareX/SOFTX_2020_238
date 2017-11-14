@@ -24,6 +24,7 @@ struct gstlal_peak_state *gstlal_peak_state_new(guint channels, gstlal_peak_type
 	new->pad = GSTLAL_PEAK_INTERP_LENGTH;
 	new->thresh = 0;
 	new->type = type;
+	new->is_gap = FALSE;
 
 	switch (new->type)
 	{
@@ -82,6 +83,7 @@ int gstlal_peak_state_clear(struct gstlal_peak_state *val)
 	memset(val->values.as_float, 0.0, val->channels * val->unit);
 	memset(val->interpvalues.as_float, 0.0, val->channels * val->unit);
 	val->num_events = 0;
+	val->is_gap = FALSE;
 	return 0;
 }
 
@@ -103,8 +105,8 @@ GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *state, GstPad *
 	 * this function do its thing so that we get a buffer allocated with
 	 * zeros 
 	 */
-	
-	if (state->num_events == 0)
+
+	if (state->is_gap)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 
 	/* set the offset */

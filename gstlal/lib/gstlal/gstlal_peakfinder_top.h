@@ -46,6 +46,8 @@ struct gstlal_peak_state {
 
 	/* Interpolator */
 	LanczosTriggerInterpolant *interp;
+
+	gboolean is_gap;
 };
 
 

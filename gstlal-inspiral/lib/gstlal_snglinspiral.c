@@ -159,7 +159,8 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 		return srcbuf;
 	}
 
-	if (input->num_events == 0)
+	if (input->is_gap)
+	/* if (input->num_events == 0) FIXME this was what it used to do */
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 
 	/* set the offset */

@@ -542,6 +542,8 @@ static GstFlowReturn push_gap(GSTLALItac *element, guint samps)
 	/* Clearing the max data structure causes the resulting buffer to be a GAP */
 	gstlal_peak_state_clear(element->maxdata);
 	/* create the output buffer */
+	/* set the GAP flag */
+	element->maxdata->is_gap = TRUE;
 	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
