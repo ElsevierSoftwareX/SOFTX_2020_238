@@ -481,16 +481,16 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 				# impose a priority to help with depth first submission
 				shiftnode.set_priority(chunk_counter)
 				inspiral_nodes[(ifos, "shift")].setdefault(seg, []).append(shiftnode)
-				spiir_zlag[(ifos, "shift")].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
-				spiir_stats[(ifos, "shift")].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
+				spiir_zlag[(ifos, "shift")].setdefault("bankbin%d" % chunk_counter, []).append(shiftnode)
+				spiir_stats[(ifos, "shift")].setdefault("bankbin%d" % chunk_counter, []).append(shiftnode)
 
 
 
 			""" 
 			output zerolags format example: 
-			gstlal_inspiral_postcohspiir_shift/bankbin1/H1L1-bankbin1_SPIIR_zerolag-1180xx-14800.xml.gz
+			gstlal_inspiral_postcohspiir_inj0/bankbin1/H1L1-bankbin1_SPIIR_zerolag-1180xx-14800.xml.gz
 			output stats format:
-			gstlal_inspiral_postcohspiir_shift/bankbin1/H1L1-0001_SPIIR_stats-1180xx-14800.xml.gz
+			gstlal_inspiral_postcohspiir_inj0/bankbin1/H1L1-0001_SPIIR_stats-1180xx-14800.xml.gz
 			"""
 			for chunk_counter, spiir_bank_strings in enumerate(chunks(spiir_bank_strings_full, numbanks)):
 				# process injections
@@ -534,8 +534,8 @@ def gen_inspiral_node(inspiralPostcohspiirJob, inspiralPostcohspiirShiftJob, ins
 					# impose a priority to help with depth first submission
 					injnode.set_priority(chunk_counter)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
-					spiir_zlag[(ifos, sim_name)].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
-					spiir_stats[(ifos, sim_name)].setdefault("bankbin%d" % chunk_counter, []).append(noninjnode)
+					spiir_zlag[(ifos, sim_name)].setdefault("bankbin%d" % chunk_counter, []).append(injnode)
+					spiir_stats[(ifos, sim_name)].setdefault("bankbin%d" % chunk_counter, []).append(injnode)
 					inj_counter += 1
 			seg_counter += 1
 
@@ -738,21 +738,49 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 			cluster_nodes.setdefault((ifos, None), []).extend(nodes)
 			output_nodes.setdefault((ifos, None), []).append(output_node)
 
-#	# cluster shifted zlag outputs
-#	for ifos in segsdict:
-#		for binname, binnodes in spiir_zlag[(ifos, "Shift")].items():
-#			nodes, output_node = gen_bankbin_cluster_nodes(binname, binnodes, tagbase)
-#			cluster_nodes.setdefault((ifos, "Shift"), []).extend(nodes)
-#			bankbin_output_nodes.setdefault((ifos, "Shift"), []).extend(output_node)
-#
-#	# then injections
-#	for inj in options.injections:
-#		for ifos in segsdict:
-#			for binname, binnodes in spiir_zlag[(ifos, sim_tag_from_inj_file(inj))].items():
-#				nodes, output_node = gen_bankbin_cluster_nodes(binname, binnodes, tagbase)
-#				cluster_nodes.setdefault((ifos, sim_tag_from_inj_file(inj)), []).extend(nodes)
-#				bankbin_output_nodes.setdefault((ifos, sim_tag_from_inj_file(inj)), []).extend(output_node)
-#
+	# FIXME: hard-coded
+	clusterjob_tagbase = "cluster_zerolags_shift"
+	if not os.path.exists(clusterjob_tagbase):
+		os.mkdir(clusterjob_tagbase)
+	
+	# cluster zerolags
+	for ifos in segsdict:
+		for binname, binnodes in spiir_zlag[(ifos, "shift")].items():
+			nodes, one_output_node = gen_bankbin_cluster_nodes(ifos, binname, binnodes, "finalsink-output-name", clusterjob_tagbase)
+			cluster_nodes.setdefault((ifos, "shift"), []).extend(nodes)
+			output_nodes.setdefault((ifos, "shift"), []).append(one_output_node)
+		ibin_start = 0
+		for ibox, nbin in enumerate(bankbox_list):
+			boxname = "bankbox%d" % ibox
+			ibin_stop = min(ibin_start+nbin, len(output_nodes[(ifos, "shift")]))
+			nodes, output_node = gen_bankbin_cluster_nodes(ifos, boxname, output_nodes[(ifos, "shift")][ibin_start:ibin_stop], "extract", clusterjob_tagbase)
+			ibin_start += nbin
+			cluster_nodes.setdefault((ifos, "shift"), []).extend(nodes)
+			output_nodes.setdefault((ifos, "shift"), []).append(output_node)
+
+	inj_counter = 0
+	for injections in options.injections:
+	        # FIXME: hard-coded
+	        clusterjob_tagbase = "cluster_zerolags_inj%d" % inj_counter
+		if not os.path.exists(clusterjob_tagbase):
+		        os.mkdir(clusterjob_tagbase)
+
+		sim_name = sim_tag_from_inj_file(injections)
+	
+	        # cluster zerolags
+	        for ifos in segsdict:
+		        for binname, binnodes in spiir_zlag[(ifos, sim_name)].items():
+			        nodes, one_output_node = gen_bankbin_cluster_nodes(ifos, binname, binnodes, "finalsink-output-name", clusterjob_tagbase)
+			        cluster_nodes.setdefault((ifos, sim_name), []).extend(nodes)
+			        output_nodes.setdefault((ifos, sim_name), []).append(one_output_node)
+		        ibin_start = 0
+		        for ibox, nbin in enumerate(bankbox_list):
+			        boxname = "bankbox%d" % ibox
+			        ibin_stop = min(ibin_start+nbin, len(output_nodes[(ifos, sim_name)]))
+			        nodes, output_node = gen_bankbin_cluster_nodes(ifos, boxname, output_nodes[(ifos, sim_name)][ibin_start:ibin_stop], "extract", clusterjob_tagbase)
+			        ibin_start += nbin
+			        cluster_nodes.setdefault((ifos, sim_name), []).extend(nodes)
+			        output_nodes.setdefault((ifos, sim_name), []).append(output_node)
 
 	return cluster_nodes, output_nodes
 
@@ -924,7 +952,7 @@ def parse_command_line():
 	# bankbox commands
 	parser.add_option("--bankbox-list", default = None, metavar = "nbin1:nbin2xxx", help = "set the banks to be merged")
 	# cluster script
-	parser.add_option("--cluster-sql-file", default = "simplify_and_cluster.sql", metavar = "filename", help = "detector response filename.")
+	parser.add_option("--cluster-sql-file", default = "simplify_and_cluster_postcoh.sql", metavar = "filename", help = "detector response filename.")
 	
 	options, filenames = parser.parse_args()
 	options.num_banks = [int(v) for v in options.num_banks.split(",")]
@@ -1022,10 +1050,10 @@ mergestatsJob = inspiral_pipe.generic_job("gstlal_cohfar_calc_fap", tag_base="gs
 #ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
 # from xml to sqlite
-toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_to_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite_postcoh", tag_base = "ligolw_sqlite_to_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
 # from sqlite to xml
-toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite_postcoh", tag_base = "ligolw_sqlite_to_xml", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 
 # execute sql script on a sql database
 lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
