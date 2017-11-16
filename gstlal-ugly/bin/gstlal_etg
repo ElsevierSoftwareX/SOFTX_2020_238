@@ -45,7 +45,6 @@ Gst.init(None)
 import lal
 
 import numpy
-import pandas
 
 from gstlal import pipeio
 from gstlal import datasource
@@ -170,25 +169,14 @@ class MultiChannelHandler(simplehandler.Handler):
 		# iDQ saving properties
 		self.last_save_time = None
 		self.cadence = options.cadence
+		self.tag = '%s-%s' % (self.instrument[:1], self.description)
 		# create header for trigger file
-		# header for string output from dataframe
-		if options.triggers_from_dataframe:
-			self.header = "# %18s\t%17s\t%14s\t%9s\t%-2s\t%s\t%2s\t%7s\t%20s\n" % ("start_time", "stop_time", "trigger_time", "freq", "phase", "sigmasq", "chisq", "snr", "channel")
-		# header for standard output straight to string
+		if options.latency:
+			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel", "latency")
 		else:
-			if options.latency:
-				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel", "latency")
-			else:
-				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
+			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
 		self.fdata = deque(maxlen = 25000)
 		self.fdata.append(self.header)
-
-		# dataframe/hdf saving properties
-		self.tag = '%s-%s' % (self.instrument[:1], self.description)
-		self.last_hdf_save_time = dict.fromkeys(self.keys, None)
-		self.reduce_count = dict.fromkeys(self.keys, 0)
-		self.hdf_cadence = 10
-		self.reduce_cadence = 100
 
 		# set initialization time
 		if options.data_source in ("framexmit", "lvshm"):
@@ -196,13 +184,6 @@ class MultiChannelHandler(simplehandler.Handler):
 		else:
 			self.init_gps_time = int(options.gps_start_time)
 
-		# dataframe properties
-		if options.triggers_from_dataframe:
-			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'phase', 'sigmasq', 'chisq', 'snr']
-			self.dataframes = {}
-			for (channel, rate) in self.keys:
-				self.dataframes[(channel, rate)] = pandas.DataFrame(numpy.nan, index = idq_aggregator.create_dataframe_index(self.init_gps_time), columns = columns)
-		
 		# set up ETG bottle related properties
 		self.etg_event = deque(maxlen = 20000)
 		self.etg_event_time = None
@@ -273,43 +254,13 @@ class MultiChannelHandler(simplehandler.Handler):
 			# set save times appropriately
 			if self.last_save_time is None:
 				self.last_save_time = buftime
-			if options.triggers_from_dataframe:
-				if self.last_hdf_save_time[(channel, int(rate))] is None:
-					self.last_hdf_save_time[(channel, rate)] = buftime
-					# check if dataframe needs to be reindexed with new gps times before first buffer
-					if idq_aggregator.in_new_epoch(buftime, self.init_gps_time, aggregator.MIN_TIME_QUANTA):
-						self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
-				# create path if it doesn't already exist
-				if options.save_hdf:
-					if not os.path.exists(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime)):
-						aggregator.makedir(idq_aggregator.to_agg_path(self.out_path, self.tag, buftime))
 
-			# Save triggers once every cadence
-			# ascii file saving
-			if not options.save_hdf:
-				if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
-					if options.triggers_from_dataframe:
-						self.to_dataframe_string(buftime)
-					self.to_trigger_file(buftime)
-					self.fdata.clear()
-					self.fdata.append(self.header)
-					self.last_save_time = buftime
-
-				# save current triggers in dataframe before dataframe is reindexed
-				if options.triggers_from_dataframe and idq_aggregator.in_new_epoch(buftime, self.last_save_time, aggregator.MIN_TIME_QUANTA):
-					self.to_dataframe_string(buftime)
-					self.to_trigger_file(buftime)
-					self.last_save_time = buftime
-
-			# hdf file saving
-			if options.triggers_from_dataframe:
-				if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], self.hdf_cadence):
-					if options.save_hdf:
-						self.to_hdf5(channel, rate, buftime)
-					if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], aggregator.MIN_TIME_QUANTA):
-						# reindex to clean out dataframe and save new triggers
-						self.dataframes[(channel, rate)] = self.dataframes[(channel, rate)].reindex(idq_aggregator.create_dataframe_index(buftime))
-					self.last_hdf_save_time[(channel, rate)] = buftime
+			# Save triggers (in ascii format) once every cadence
+			if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+				self.to_trigger_file(buftime)
+				self.fdata.clear()
+				self.fdata.append(self.header)
+				self.last_save_time = buftime
 
 			# read buffer contents
 			for i in range(buf.n_memory()):
@@ -350,96 +301,15 @@ class MultiChannelHandler(simplehandler.Handler):
 		# Setting stop time to trigger time for use with half sine gaussians
 		stop_time = trigger_time
 		# save iDQ compatible data
-		if not options.triggers_from_dataframe:
-			if options.latency:
-				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag, latency))
-			else:
-				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag))
-		# save dataframe compatible data
+		if options.latency:
+			self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag, latency))
 		else:
-			try:
-				save_idx = idq_aggregator.gps_to_index(buftime)
-				self.dataframes[(channel, rate)].loc[save_idx] = numpy.array([start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr], dtype=float)
-			except ValueError:
-				print >>sys.stderr, "Error saving buffer contents to dataframe at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
-				traceback.print_exc()
+			self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag))
 		# append row to feature vector for bottle requests
 		etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
                            'frequency': freq, 'q': q, 'phase': row.phase, 'sigma_sq': row.sigmasq, 'chi_sq': row.chisq, 'snr': row.snr}
 		self.etg_event.append(etg_row)
 
-	def to_hdf5(self, channel, rate, buftime):
-		"""
-		Given a dataframe, will save triggers + aggregates
-		to hdf5 files. Also handles conditions to deal with
-		reindexing and aggregation at specified intervals.
-		"""
-		# case 1: save current triggers from prev leaf directory, aggregate, reindex and clean out dataframe, move to new leaf directory
-		if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], aggregator.MIN_TIME_QUANTA):
-			current_save_index = idq_aggregator.floor_div(buftime, aggregator.MIN_TIME_QUANTA)
-			self.save_triggers(channel, rate, current_save_index)
-			# find gps times of max snr triggers per cadence and save to file
-			self.aggregate_triggers(channel, rate, current_save_index)
-		else:
-			# case 2: save current triggers
-			current_save_index = idq_aggregator.floor_div(buftime, self.hdf_cadence)
-			self.save_triggers(channel, rate, current_save_index)
-			# case 3: save current triggers from current directory and aggregate
-			if idq_aggregator.in_new_epoch(buftime, self.last_hdf_save_time[(channel, rate)], self.reduce_cadence):
-				# find gps times of max snr triggers per cadence and save to file
-				self.aggregate_triggers(channel, rate, current_save_index)
-
-	def save_triggers(self, channel, rate, current_save_index):
-		"""
-		Given a channel, rate, and the index of the last set
-		of triggers, will save triggers to a dataset in
-		hdf5 format.
-		dataset: channel/rate/'data'
-		file: save_path/tag/save_time.h5
-		"""
-		last_save_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.hdf_cadence)
-		for save_index in range(last_save_index, current_save_index, self.hdf_cadence):
-			save_path = idq_aggregator.to_agg_path(self.out_path, self.tag, save_index)
-			try:
-				idq_aggregator.create_new_dataset(save_path, str(save_index), idq_aggregator.get_dataframe_subset(save_index, save_index + self.hdf_cadence, self.dataframes[(channel, rate)]), channel, rate)
-			except KeyError:
-				print >>sys.stderr, "Error saving dataframe to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
-				traceback.print_exc()
-
-	def aggregate_triggers(self, channel, rate, current_save_index):
-		"""
-		Given a channel, rate, and the index of the last set
-		of triggers, will save aggregates to a dataset in
-		hdf5 format.
-		dataset: channel/rate/aggregate
-		file: save_path/tag/aggregates.h5
-		"""
-		self.reduce_count[(channel, rate)] += 1
-		last_reduce_index = idq_aggregator.floor_div(self.last_hdf_save_time[(channel, rate)], self.reduce_cadence)
-		reduce_path = idq_aggregator.to_agg_path(self.out_path, self.tag, last_reduce_index)
-		try:
-			idq_aggregator.reduce_data(self.dataframes[(channel, rate)], current_save_index, reduce_path, self.reduce_count[(channel, rate)], channel, rate)
-		except (KeyError, AttributeError):
-			print >>sys.stderr, "Error saving dataframe aggregates to hdf at buffer time = %d for channel = %s, rate = %d." % (buftime, channel, rate)
-			traceback.print_exc()
-
-	def to_dataframe_string(self, gps_time):
-		"""
-		Given a gps time, will write contents of
-		dataframe from last save time to gps time
-		to a string.
-		"""
-		idx = pandas.IndexSlice
-		time_format = lambda x: '%20.9f' % x
-		col1_format = lambda x: '%10.3f' % x
-		col2_format = lambda x: '%8.3f' % x
-		trigger_format = {'start_time': time_format, 'stop_time': time_format, 'trigger_time': time_format, 'frequency': col1_format, 'phase': col2_format, 'sigmasq': col2_format, 'chisq': col2_format, 'snr': col1_format}
-		#for (channel, rate) in self.keys:
-		#	channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
-		#	if not idq_aggregator.get_dataframe_subset(self.last_save_time, gps_time, self.dataframes[(channel, rate)]).dropna().empty:
-		#		self.fdata += idq_aggregator.get_dataframe_subset(self.last_save_time, gps_time, self.dataframes[(channel, rate)]).assign(channel_tag = channel_tag).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n"
-		# fast concatenation to do the above:
-		self.fdata = self.fdata.join([(idq_aggregator.get_dataframe_subset(self.last_save_time, gps_time, self.dataframes[(channel, rate)]).assign(channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)).dropna().to_string(header = False, index = False, formatters = trigger_format) + "\n") for (channel, rate) in self.keys if not idq_aggregator.get_dataframe_subset(self.last_save_time, gps_time, self.dataframes[(channel, rate)]).dropna().empty]) 
 
 	def to_trigger_file(self, buftime):
 		# NOTE
@@ -602,7 +472,6 @@ def parse_command_line():
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--triggers-from-dataframe", action = "store_true", default = False, help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
 	parser.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
 	parser.add_option("--etg-partition", metavar = "string", help = "If using Kafka, sets the partition that this ETG is assigned to.")
 	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this ETG publishes feature vector subsets to.")
@@ -610,7 +479,6 @@ def parse_command_line():
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
 	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
-	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 
 	parser.add_option("--trigger-start-time", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
 	parser.add_option("--trigger-end-time", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
