@@ -33,7 +33,7 @@ Attributes = ligolw.sax.xmlreader.AttributesImpl
 
 # FIXME:  require calling code to provide the content handler
 class DefaultContentHandler(ligolw.LIGOLWContentHandler):
-	pass
+  pass
 array.use_in(DefaultContentHandler)
 param.use_in(DefaultContentHandler)
 lsctables.use_in(DefaultContentHandler)
@@ -42,41 +42,48 @@ lsctables.use_in(DefaultContentHandler)
 
 def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
 
-	# Load document
-	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+  # Load document
+  xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
 
-	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
-		result = array.get_array(root, array_name).array 
-	return result
+  for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
+    result = array.get_array(root, array_name).array 
+  return result
 
 def postcoh_table_from_xml(filename, contenthandler = DefaultContentHandler, verbose = False):
  
- 	# Load document
- 	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+   # Load document
+   xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
  
- 	postcoh = PostcohInspiralTable.get_table(xmldoc)
- 	return postcoh
+   postcoh = PostcohInspiralTable.get_table(xmldoc)
+   return postcoh
 
 
 class RankingData(object):
 
-  def __init__(self, stats_filename, hist_trials = 100, livetime = None, verbose = None):
-
+  def __init__(self, stats_filename, hist_trials = 100, verbose = None):
     # xml_snr_min = 0.54
     # xml_snr_step = 0.0082
     # xml_snr_nbin = 299
     # xml_chisq_min = -1.2
     # xml_chisq_step = 0.0173
     # xml_chisq_nbin = 299
-    self.snr_bins = (0.54, 0.0082, 299)
-    self.chisq_bins = (-1.2, 0.0173, 299)
+    # FIXME: bin prop hard-coded
+    step_x = (3.0-0.54)/299
+    self.snr_lowbounds = np.linspace(0.54-step_x/2, 3.0-step_x/2, 300)
+    step_y = (3.0+1.2)/299
+    self.chisq_lowbounds = np.linspace(-1.2-step_y/2, 3.0-step_y/2, 300)
+    step_rank = 30.0/299
+    self.rank_bounds = np.linspace(-30.0-step_rank/2, 0+step_rank/2, 301)
+    self.rank_centers = np.linspace(-30.0, 0, 300)
     ifos = stats_filename.split("/")[-1].split("_")[0]
-    fap_kde_name = "background_fap:%s_lgsnr_lgchisq:array" % ifos
-    rates_name = "background_rates:%s_histogram:array" % ifos
+    rank_map_name = "background_rank:%s_rank_map:array" % ifos
+    rank_pdf_name = "background_rank:%s_rank_pdf:array" % ifos
+    rank_rates_name = "background_rank:%s_rank_rates:array" % ifos
 
 
-    self.fap_kde = array_from_xml(stats_filename, fap_kde_name)
-    rates = array_from_xml(stats_filename, rates_name)
+    self.rank_map = array_from_xml(stats_filename, rank_map_name)
+    self.rank_pdf = array_from_xml(stats_filename, rank_pdf_name)
+    rates = array_from_xml(stats_filename, rank_rates_name)
     self.back_nevent = rates.sum()
     if verbose:
       logging.info("background events %d" % self.back_nevent)
@@ -84,8 +91,8 @@ class RankingData(object):
 
     #crates = np.zeros((300, 300));
     #for snr_idx in range(299, -1, -1):
-    #	for chisq_idx in range(1,301):
-    #		crates[chisq_idx-1, snr_idx] = rates[0:chisq_idx, snr_idx:300].sum()
+    #  for chisq_idx in range(1,301):
+    #    crates[chisq_idx-1, snr_idx] = rates[0:chisq_idx, snr_idx:300].sum()
     #crates[crates==0] = 1
     #cdf_rates = crates/float(back_nevent)
     #min_cdf = cdf_rates.min()
@@ -96,66 +103,160 @@ class RankingData(object):
     #max_lgcdf = lgcdf_rates.max()
     
     
-    self.livetime = livetime
     self.hist_trials = hist_trials
     #tick_lgcdf = np.linspace(min_lgcdf, max_lgcdf, num=nstep)
     
     #back_lgfap_rates = np.zeros(len(tick_lgcdf))
     #back_lgfap_kde = np.zeros(len(tick_lgcdf))
     #
-    self.far_kde = np.zeros((300, 300));
+    #self.far_kde = np.zeros((300, 300));
     
     #for snr_idx in range(299, -1, -1):
     #  for chisq_idx in range(1,301):
     #    lgfar_rates[chisq_idx-1, snr_idx] = np.log10(float(1 + sum(rates[np.where(lgcdf_rates < lgcdf_rates[chisq_idx-1, snr_idx])])) / (nslide * coinc_time))
-    	
-    self.far_kde = self.fap_kde * self.back_nevent / (self.hist_trials * self.livetime)
+      
+    #self.far_kde = self.fap_kde * self.back_nevent / (self.hist_trials * self.livetime)
     
-class FAR(object):
-  def __init__(self, livetime = None):
+class FAPFAR(object):
+  def __init__(self, ranking_stats, connection, livetime = None):
     self.livetime = livetime
-
-
-  def set_ranking_stats(self, ranking_stats):
     self.ranking_stats = ranking_stats
+    # construct zerolag rate distribution
+    connection.create_function("rank_from_features", 2, self.rank_from_features)
+    connection.cursor().execute(""" UPDATE postcoh SET
+  far =  rank_from_features(cohsnr, cmbchisq)
+  """)
+    self.zlag_rates = zeros(1,300)
+    for irank, rank_min in enumerate(self.ranking_stats.rank_bounds):
+      if irank < len(self.ranking_stats.rank_bounds) -1:
+        rank_max = self.ranking_stats.rank_bounds[irank+1]
+        self.zlag_rates[irank] = connection.cursor().execute("""
+  SELECT COUNT(*) FROM postcoh
+  where
+  far >= rank_min and far < rank_max
+  """)
 
-  def far_from_snr_chisq(self, snr, chisq):
+    self.nzlag = self.zlag_rates.sum()
+    extinct_pdf = self.extinct(self.ranking_stats.rank_rates, self.ranking_stats.rank_pdf, self.zlag_rates, self.rank_centers)
+    drank = self.rank_bounds[1] - self.rank_bounds[0]
+    self.rank_center_min = min(self.rank_centers)
+    self.rank_center_max = max(self.rank_centers)
+
+    # cumulative distribution function and its complement.
+    # it's numerically better to recompute the ccdf by
+    # reversing the array of weights than trying to subtract
+    # the cdf from 1.
+    weights = extinct_pdf * drank
+    cdf = weights.cumsum()
+    cdf /= cdf[-1]
+    ccdf = weights[::-1].cumsum()[::-1]
+    ccdf /= ccdf[0]
+
+    # cdf boundary condition:  cdf = 1/e at the ranking
+    # statistic threshold so that self.far_from_rank(threshold)
+    # * livetime = observed count of events above threshold.
+    # FIXME this doesn't actually work.
+    # FIXME not doing it doesn't actually work.
+    # ccdf *= 1. - 1. / math.e
+    # cdf *= 1. - 1. / math.e
+    # cdf += 1. / math.e
+
+    # last checks that the CDF and CCDF are OK
+    assert not numpy.isnan(cdf).any(), "Rank CDF contains NaNs"
+    assert not numpy.isnan(ccdf).any(), "Rank CCDF contains NaNs"
+    assert ((0. <= cdf) & (cdf <= 1.)).all(), "Rank CDF failed to be normalized"
+    assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "Rank CCDF failed to be normalized"
+    assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "Rank CDF + CCDF != 1 (max error = %g)" % abs(1. - (cdf[:-1] + ccdf[1:])).max()
+
+    # build interpolators
+    self.cdf_interpolator = interpolate.interp1d(self.rank_centers, cdf)
+    self.ccdf_interpolator = interpolate.interp1d(self.rank_centers, ccdf)
+
+  def extinct(self, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks):
+    # Generate arrays of complementary cumulative counts
+    # for background events (monte carlo, pre clustering)
+    # and zero lag events (observed, post clustering)
+    zero_lag_compcumcount = zlagcounts_ba_array[::-1].cumsum()[::-1]
+    bg_compcumcount = bgcounts_ba_array[::-1].cumsum()[::-1]
+
+    # Fit for the number of preclustered, independent coincs by
+    # only considering the observed counts safely in the bulk of
+    # the distribution.  Only do the fit above 10 counts and below
+    # 10000, unless that can't be met and trigger a warning
+    fit_min_rank = -30.
+    fit_min_counts = min(10., self.nzlag / 10. + 1)
+    fit_max_counts = min(10000., self.nzlag / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
+    rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
+    if fit_max_counts < 10000.:
+      warnings.warn("There are less than 10000 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
+    if zero_lag_compcumcount.compress(rank_range).size < 1:
+      raise ValueError("not enough zero lag data to fit background")
+
+    # Use curve fit to find the predicted total preclustering
+    # count. First we need an interpolator of the counts
+    obs_counts = interpolate.interp1d(ranks, bg_compcumcount)
+    bg_pdf_interp = interpolate.interp1d(ranks, bgpdf_ba_array)
+
+    def extincted_counts(x, N_ratio):
+      out = max(zero_lag_compcumcount) * (1. - numpy.exp(-obs_counts(x) * N_ratio))
+      out[~numpy.isfinite(out)] = 0.
+      return out
+
+    def extincted_pdf(x, N_ratio):
+      out = numpy.exp(numpy.log(N_ratio) - obs_counts(x) * N_ratio + numpy.log(bg_pdf_interp(x)))
+      out[~numpy.isfinite(out)] = 0.
+      return out
+
+    # Fit for the ratio of unclustered to clustered triggers.
+    # Only fit N_ratio over the range of ranks decided above
+    precluster_normalization, precluster_covariance_matrix = curve_fit(
+      extincted_counts,
+      ranks[rank_range],
+      zero_lag_compcumcount.compress(rank_range),
+      sigma = zero_lag_compcumcount.compress(rank_range)**.5,
+      p0 = 1e-4
+    )
+
+    N_ratio = precluster_normalization[0]
+
+    return extincted_pdf(ranks, N_ratio)
+
+
+  def rank_from_features(self, snr, chisq):
     lgsnr = np.log10(snr)
     lgchisq = np.log10(chisq)
-    snr_idx = max(min((lgsnr - self.ranking_stats.snr_bins[0])/ self.ranking_stats.snr_bins[1], self.ranking_stats.snr_bins[2]), 0)
-    chisq_idx = max(min((lgchisq - self.ranking_stats.chisq_bins[0] )/ self.ranking_stats.chisq_bins[1], self.ranking_stats.chisq_bins[2]), 0)
-    return self.ranking_stats.far_kde[chisq_idx, snr_idx]
-	
+    snr_idx = np.abs(self.snr_lowbounds - lgsnr).argmin()
+    chisq_idx = np.abs(self.chisq_lowbounds - lgchisq).argmin()
+    return self.ranking_stats.ranking_map[chisq_idx, snr_idx]
+  
 
-
-  def far_from_snr_chisq(self, snr, chisq):
-    lgsnr = np.log10(snr)
-    lgchisq = np.log10(chisq)
-    snr_idx = max(min((lgsnr - self.ranking_stats.snr_bins[0])/ self.ranking_stats.snr_bins[1], self.ranking_stats.snr_bins[2]), 0)
-    chisq_idx = max(min((lgchisq - self.ranking_stats.chisq_bins[0] )/ self.ranking_stats.chisq_bins[1], self.ranking_stats.chisq_bins[2]), 0)
-    return self.ranking_stats.far_kde[chisq_idx, snr_idx]
-	
-
-    return self.ranking_stats.far_kde[chisq_idx, snr_idx]
-	
+  def fap_from_features(self, snr, chisq):
+    rank = rank_from_features(snr, chisq)
+    # implements equation (B4) of Phys. Rev. D 88, 024025.
+    # arXiv:1209.0718.  the return value is divided by T to
+    # convert events/experiment to events/second.
+    rank = max(self.rank_center_min, min(self.rank_center_max, rank))
+    fap = float(self.ccdf_interpolator(rank))
+    return fap_after_trials(fap, self.nzlag)
+  
 
   def assign_fars_sql(self, connection):
     # assign false-alarm rates
     # FIXME:  choose a function name more likely to be unique?
-    connection.create_function("far_from_snr_chisq", 2, self.far_from_snr_chisq)
+    connection.create_function("far_from_snr_chisq_extinct", 2, self.far_from_snr_chisq)
     connection.cursor().execute("""
 UPDATE
-	postcoh
+  postcoh
 SET
-	far =	far_from_snr_chisq(cohsnr, cmbchisq)
+  far =  far_from_snr_chisq_extinct(cohsnr, cmbchisq)
 """)
 
   # FIXME: see Kipp's code to adjust fap for clustered zerolag
-  def far_from_snr_chisq_kipp(self, snr, chisq):
+  def far_from_snr_chisq_extinct(self, snr, chisq):
     lgsnr = np.log10(snr)
     lgchisq = np.log10(chisq)
-    snr_idx = max(min((lgsnr - self.ranking_stats.snr_bins[0])/ self.ranking_stats.snr_bins[1], self.ranking_stats.snr_bins[2]), 0)
-    chisq_idx = max(min((lgchisq - self.ranking_stats.chisq_bins[0] )/ self.ranking_stats.chisq_bins[1], self.ranking_stats.chisq_bins[2]), 0)
+    snr_idx = max(min((lgsnr - self.ranking_stats.snr_lowbounds[0])/ self.ranking_stats.snr_lowbounds[1], self.ranking_stats.snr_lowbounds[2]), 0)
+    chisq_idx = max(min((lgchisq - self.ranking_stats.chisq_lowbounds[0] )/ self.ranking_stats.chisq_lowbounds[1], self.ranking_stats.chisq_lowbounds[2]), 0)
     # implements equation (B4) of Phys. Rev. D 88, 024025.
     # arXiv:1209.0718.  the return value is divided by T to
     # convert events/experiment to events/second.
@@ -164,7 +265,7 @@ SET
     # true-dismissal probability = 1 - single-event false-alarm
     # probability, the integral in equation (B4)
     #tdp = float(self.cdf_interpolator(rank))
-	
+  
     tdp = self.ranking_stats.fap_kde[chisq_idx, snr_idx]
     try:
       log_tdp = math.log(tdp)
@@ -174,7 +275,7 @@ SET
     if log_tdp >= -1e-9:
       # rare event:  avoid underflow by using log1p(-FAP)
       log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
-    #return self.zero_lag_total_count * -log_tdp / self.livetime
+    #return self.nzlag * -log_tdp / self.livetime
 
 
 
@@ -184,9 +285,9 @@ SET
     connection.create_function("far_from_snr_chisq", 2, self.far_from_snr_chisq)
     connection.cursor().execute("""
 UPDATE
-	postcoh
+  postcoh
 SET
-	far =	far_from_snr_chisq_kipp(cohsnr, cmbchisq)
+  far =  far_from_snr_chisq_kipp(cohsnr, cmbchisq)
 """)
 
   def count_above_ifar_xml(self, zerolag_fname_str, tick_lgifar):
@@ -203,9 +304,9 @@ SET
     zerolag_lgcevent_kde = np.zeros(len(tick_lgifar))
     
     for itick in range(0, len(tick_lgifar)):
-    	cevent_kde = len(zerolag_lgifar_kde[np.where(zerolag_lgifar_kde > tick_lgifar[itick])])
-    	if cevent_kde > 0:
-    		zerolag_lgcevent_kde[itick] = np.log10(cevent_kde)
+      cevent_kde = len(zerolag_lgifar_kde[np.where(zerolag_lgifar_kde > tick_lgifar[itick])])
+      if cevent_kde > 0:
+        zerolag_lgcevent_kde[itick] = np.log10(cevent_kde)
     return zerolag_lgcevent_kde
     
 
