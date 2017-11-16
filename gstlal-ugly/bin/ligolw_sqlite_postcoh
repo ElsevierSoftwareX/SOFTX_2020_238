@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Copyright (C) 2007-2011  Kipp Cannon
 #
@@ -27,6 +27,12 @@
 
 
 """
+The difference between this file and the glue/bin/ligolw_sqlite is:
+1. add postcoh_table_def.DB_use_in before dbtables.use_in for a wrapper over dbtables.DBTable for event_id to work when xml->sqlite 
+2. local extract() function to call custom get_xml() function, 
+    while in the original file glue.ligolw.ligolw_sqlite, extract() will call dbtables.get_xml()
+3. get_xml() will use the custom postcoh_table_def.DBTableByName to ganrantee valid column types when sqlite->xml
+    e.g. sqlite REAL to real_4 instead of the default real_8
 Transfer table data between LIGO Light Weight XML files and SQLite
 databases.
 """
@@ -48,10 +54,11 @@ from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw.utils import local_path_from_url
 from glue.ligolw.utils import ligolw_sqlite
-from gstlal import ligolw_sqlite_postcoh
 from gstlal import postcoh_table_def
-import pdb
-
+# NOTE: more imports for extract 
+from glue.ligolw import table
+from glue.ligolw import utils as ligolw_utils
+from xml.sax.xmlreader import AttributesImpl
 # so they can be inserted into a database
 dbtables.ligolwtypes.ToPyType["ilwd:char"] = unicode
 
@@ -109,10 +116,64 @@ def parse_command_line():
 #
 # DB content handler
 #
-@postcoh_table_def.use_in
+#@postcoh_table_def.use_in
+@postcoh_table_def.DB_use_in
 @dbtables.use_in
 class ContentHandler(ligolw.LIGOLWContentHandler):
 	pass
+
+# NOTE: custom extract
+def extract(connection, filename, table_names = None, verbose = False, xsl_file = None):
+	"""
+	Convert the database at the given connection to a tabular LIGO
+	Light-Weight XML document.  The XML document is written to the file
+	named filename.  If table_names is not None, it should be a
+	sequence of strings and only the tables in that sequence will be
+	converted.  If verbose is True then progress messages will be
+	printed to stderr.
+	"""
+	xmldoc = ligolw.Document()
+	xmldoc.appendChild(get_xml(connection, table_names))
+	ligolw_utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, xsl_file = xsl_file)
+
+	# delete cursors
+	xmldoc.unlink()
+
+
+def get_xml(connection, table_names = None):
+	"""
+	Construct an XML document tree wrapping around the contents of the
+	database.  On success the return value is a ligolw.LIGO_LW element
+	containing the tables as children.  Arguments are a connection to
+	to a database, and an optional list of table names to dump.  If
+	table_names is not provided the set is obtained from get_table_names()
+	"""
+	ligo_lw = ligolw.LIGO_LW()
+
+	if table_names is None:
+		table_names = dbtables.get_table_names(connection)
+
+	for table_name in table_names:
+		# build the table document tree.  copied from
+		# lsctables.New()
+		try:
+			cls = postcoh_table_def.DBTableByName[table_name]
+		except KeyError:
+			cls = dbtables.DBTable
+		table_elem = cls(AttributesImpl({u"Name": u"%s:table" % table_name}), connection = connection)
+		for column_name, column_type in dbtables.get_column_info(connection, table_elem.Name):
+			if table_elem.validcolumns is not None:
+				# use the pre-defined column type
+				column_type = table_elem.validcolumns[column_name]
+			else:
+				# guess the column type
+				column_type = ligolwtypes.FromSQLiteType[column_type]
+			table_elem.appendChild(table.Column(AttributesImpl({u"Name": u"%s:%s" % (table_name, column_name), u"Type": column_type})))
+		table_elem._end_of_columns()
+		table_elem.appendChild(table.TableStream(AttributesImpl({u"Name": u"%s:table" % table_name, u"Delimiter": table.TableStream.Delimiter.default, u"Type": table.TableStream.Type.default})))
+		ligo_lw.appendChild(table_elem)
+	return ligo_lw
+
 
 
 
@@ -146,7 +207,6 @@ if __name__ == '__main__':
 	# Insert files
 	#
 
-	pdb.set_trace()	
 	if will_write_to_file:
 		for n, url in enumerate(urls):
 			if options.verbose:
@@ -155,12 +215,12 @@ if __name__ == '__main__':
 				source_filename = dbtables.get_connection_filename(local_path_from_url(url), tmp_path = options.tmp_space, verbose = options.verbose)
 				if options.verbose:
 					print >>sys.stderr, "reading '%s' ..." % source_filename
-				xmldoc = dbtables.get_xml(sqlite3.connect(source_filename))
-				ligolw_sqlite_postcoh.insert_from_xmldoc(ContentHandler.connection, xmldoc, preserve_ids = options.preserve_ids, verbose = options.verbose)
+				xmldoc = get_xml(sqlite3.connect(source_filename))
+				ligolw_sqlite.insert_from_xmldoc(ContentHandler.connection, xmldoc, preserve_ids = options.preserve_ids, verbose = options.verbose)
 				xmldoc.unlink()
 				dbtables.discard_connection_filename(local_path_from_url(url), source_filename, verbose = options.verbose)
 			else:
-				ligolw_sqlite_postcoh.insert_from_url(url, contenthandler = ContentHandler, preserve_ids = options.preserve_ids, verbose = options.verbose)
+				ligolw_sqlite.insert_from_url(url, contenthandler = ContentHandler, preserve_ids = options.preserve_ids, verbose = options.verbose)
 		dbtables.build_indexes(ContentHandler.connection, options.verbose)
 
 
@@ -172,9 +232,12 @@ if __name__ == '__main__':
 	if options.extract is not None:
 		if options.extract == "-":
 			# stdout
-			ligolw_sqlite_postcoh.extract(ContentHandler.connection, None, verbose = options.verbose)
+                        # NOTE: chichi, change to custom extract
+			#ligolw_sqlite.extract(ContentHandler.connection, None, verbose = options.verbose)
+			extract(ContentHandler.connection, None, verbose = options.verbose)
 		else:
-			ligolw_sqlite_postcoh.extract(ContentHandler.connection, options.extract, verbose = options.verbose)
+			#ligolw_sqlite.extract(ContentHandler.connection, options.extract, verbose = options.verbose)
+			extract(ContentHandler.connection, options.extract, verbose = options.verbose)
 
 
 	#
@@ -200,3 +263,4 @@ if __name__ == '__main__':
 
 	if options.verbose:
 		print >>sys.stderr, "done."
+

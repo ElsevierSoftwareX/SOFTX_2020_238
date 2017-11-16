@@ -1,6 +1,7 @@
 
 from glue.ligolw import table
 from glue.ligolw import ilwd
+from glue.ligolw import dbtables
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 
 PostcohInspiralID = ilwd.get_ilwdchar_class(u"postcoh", u"event_id")
@@ -73,7 +74,7 @@ class PostcohInspiralTable(table.Table):
 			"deff_V":	"real_8"
 	}
 	constraints = "PRIMARY KEY (event_id)"
-	next_id = PostcohInspiralID(1)
+	next_id = PostcohInspiralID(0)
 
 class PostcohInspiral(table.TableRow):
 	__slots__ = PostcohInspiralTable.validcolumns.keys()
@@ -132,4 +133,54 @@ def use_in(ContentHandler):
 
 	ContentHandler.startTable = startTable
 	return ContentHandler
+
+
+class PostcohInspiralDBTable(dbtables.DBTable):
+	tableName = PostcohInspiralTable.tableName
+	validcolumns = PostcohInspiralTable.validcolumns
+	constraints = PostcohInspiralTable.constraints
+	next_id = PostcohInspiralTable.next_id
+	RowType = PostcohInspiralTable.RowType
+	how_to_index = PostcohInspiralTable.how_to_index
+
+DBTableByName = {
+		table.StripTableName(PostcohInspiralDBTable.tableName): PostcohInspiralDBTable
+		}
+
+
+def DB_use_in(ContentHandler):
+	"""
+	Modify ContentHandler, a sub-class of
+	glue.ligolw.LIGOLWContentHandler, to cause it to use the DBTable
+	class defined in this module when parsing XML documents.  Instances
+	of the class must provide a connection attribute.  When a document
+	is parsed, the value of this attribute will be passed to the
+	DBTable class' .__init__() method as each table object is created,
+	and thus sets the database connection for all table objects in the
+	document.
+
+	Example:
+
+	>>> import sqlite3
+	>>> from glue.ligolw import ligolw
+	>>> class MyContentHandler(ligolw.LIGOLWContentHandler):
+	...	def __init__(self, *args):
+	...		super(MyContentHandler, self).__init__(*args)
+	...		self.connection = sqlite3.connection()
+	...
+	>>> use_in(MyContentHandler)
+
+	Multiple database files can be in use at once by creating a content
+	handler class for each one.
+	"""
+
+	def startTable(self, parent, attrs, __orig_startTable = ContentHandler.startTable):
+		name = table.StripTableName(attrs[u"Name"])
+		if name in DBTableByName:
+			return DBTableByName[name](attrs, connection = self.connection)
+		return __orig_startTable(self, parent, attrs)
+
+	ContentHandler.startTable = startTable
+	return ContentHandler
+
 

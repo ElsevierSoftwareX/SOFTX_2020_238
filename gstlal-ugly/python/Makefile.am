@@ -15,6 +15,4 @@ pkgpython_PYTHON = \
 	postcoh_table_def.py \
 	postcoh_finalsink.py \
 	cohfar.py \
-	ligolw_inspinjfind_postcoh.py \
-	ligolw_sqlite_postcoh.py \
-	dbtables_postcoh.py
+	ligolw_inspinjfind_postcoh.py
