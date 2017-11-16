@@ -141,24 +141,14 @@ maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
 def now():
   return XLALUTCToGPS(time.gmtime())
 
-def get_ifo_combos(ifo_list):
-  # make sure ifo_list is ordered the same ways as the postcoh code: L1, H1, V1, xx
-  ifo_combos = []
-  ordered_ifo_list = []
- 
-  def find_list(ifo_list, some_ifo):
-    for i, ifo in enumerate(ifo_list):
-      if ifo == some_ifo:
-        return True
-    return False
+# This IFO_MAP be reflect the same order of ifos of the IFO_COMBO_MAP in background_stats_utils.c
+IFO_MAP = ["H1", "L1", "V1"]
 
-  ifo_list_order = ['L1', 'H1', 'V1']
-  if find_list(ifo_list, ifo_list_order[0]):
-    ordered_ifo_list.append(ifo_list_order[0])
-  if find_list(ifo_list, ifo_list_order[1]):
-    ordered_ifo_list.append(ifo_list_order[1])
-  if find_list(ifo_list, ifo_list_order[2]):
-    ordered_ifo_list.append(ifo_list_order[2])
+def get_ifo_combos(ifos):
+  # make sure ifo_list is ordered the same ways as the postcoh code: L1, H1, V1, xx
+  ifo_idx_sorted = sorted([IFO_MAP.index(ifo) for ifo in ifos])
+  ordered_ifo_list = [IFO_MAP[ifo_idx] for ifo_idx in ifo_idx_sorted]
+  ifo_combos = []
   for combo_len in range(2, len(ordered_ifo_list)+1):
     this_combo_list = list(itertools.combinations(ordered_ifo_list, combo_len))
     combo_str_list = ["".join(list(i_combo_list)) for i_combo_list in this_combo_list]
