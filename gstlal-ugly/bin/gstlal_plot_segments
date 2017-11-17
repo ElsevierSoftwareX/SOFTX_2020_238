@@ -1,0 +1,235 @@
+#!/usr/bin/env python
+#
+# mainly copied from gstlal_inspiral_plotsummary
+# Copyright (C) 2009-2013  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# A program to produce a variety of plots from a gstlal inspiral analysis, e.g. IFAR plots, missed found, etc.
+
+
+import bisect
+import itertools
+import math
+import matplotlib
+import matplotlib.figure
+matplotlib.rcParams.update({
+	"font.size": 12.0,
+	"axes.titlesize": 12.0,
+	"axes.labelsize": 12.0,
+	"xtick.labelsize": 12.0,
+	"ytick.labelsize": 12.0,
+	"legend.fontsize": 10.0,
+	"figure.dpi": 300,
+	"savefig.dpi": 300,
+	"text.usetex": True,
+	"path.simplify": True,
+	"font.family": "serif"
+})
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import numpy
+import operator
+from optparse import OptionParser
+import os
+import scipy
+import sqlite3
+import sys
+import time, shutil, glob
+
+import lal
+
+from glue import iterutils
+from glue import segments
+from glue.ligolw import param
+from glue.ligolw import ligolw
+from glue.ligolw import utils
+from glue.ligolw import lsctables
+from glue.ligolw.utils import segments as ligolw_segments
+from gstlal import far
+from gstlal import inspiral_pipe
+from gstlal import gviz_api
+from gstlal.postcoh_utils import get_ifo_combos_from_list
+from gstlal import webpage
+import pdb
+
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+    pass
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+
+
+
+golden_ratio = (1. + math.sqrt(5.)) / 2.
+
+
+def to_google_json(fname, description, data):
+	json = open(fname,"w")
+	data_table = gviz_api.DataTable(description)
+	data_table.LoadData(data)
+	print >> json, data_table.ToJSon()
+	json.close()
+
+
+class SimInspiral(lsctables.SimInspiral):
+	@property
+	def mtotal(self):
+		return self.mass1 + self.mass2
+
+	@property
+	def chi(self):
+		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
+
+
+class SnglInspiral(lsctables.SnglInspiral):
+	@property
+	def mtotal(self):
+		return self.mass1 + self.mass2
+
+	@property
+	def eta(self):
+		return self.mass1 * self.mass2 / self.mtotal**2.
+
+	@property
+	def mchirp(self):
+		return self.mtotal * self.eta**0.6
+
+	@property
+	def chi(self):
+		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
+
+lsctables.SimInspiralTable.RowType = SimInspiral
+lsctables.SnglInspiralTable.RowType = SnglInspiral
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
+__version__ = "git id %s" % "FIXME"
+__date__ = "FIXME"
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("-f", "--format", metavar = "{\"png\",\"pdf\",\"svg\",\"eps\",...}", action = "append", default = [], help = "Set the output image format.  Can be given multiple times (default = \"png\").")
+	parser.add_option("--shrink-data-segments", metavar = "float", type = float, help = "Shrink data segments by this much (on each side). e.g. specifying 2 will shrink each datasegment by 4 seconds")
+	parser.add_option("--extend-veto-segments", metavar = "float", type = float, help = "Pad segments by this number of seconds (on both sides)")
+	parser.add_option("--segments-name", metavar = "name", default = "statevectorsegments", help = "Set the name of the segments that were analyzed (default = \"statevectorsegments\").")
+	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the veto segments (default = \"vetoes\").")
+
+	parser.add_option("--segments-file", metavar = "filename", default = "segments.xml.gz", help = "Set the filename of the segments that were analyzed (default = \"segments.xml.gz\").")
+	parser.add_option("--vetoes-file", metavar = "filename", default = "vetoes.xml.gz", help = "Set the name of the veto segments (default = \"vetoes.xml.gz\").")
+	parser.add_option("--on-ifos", metavar = "name", default = "H1,L1", help = "Set the name of the on instruments (default = \"H1,L1\").")
+	parser.add_option("--webserver-dir", help = "Set the directory for the webserver.  Required.  Example /archive/home/channa/public_html/highmass_months_23-24_summary_page")
+	parser.add_option("--output-dir", help = "Set the directory for the output.  Required.  Example plots")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+ 	return options, filenames
+
+options, filenames = parse_command_line()
+
+# retrieve the distinct on and participating instruments
+
+# get the segment lists
+segments_xmldoc = utils.load_filename(options.segments_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
+seglists = ligolw_segments.segmenttable_get_by_name(segments_xmldoc, options.segments_name).coalesce()
+if options.shrink_data_segments is not None:
+	# Make sure all segments are at least long enough to be
+	# contracted (e.g. if a segment is 32 seconds long but
+	# the user is going to contract it by 17 seconds, then
+	# the end time of the segment would come before the
+	# start time of the segment. This is bad)
+	for seglist in seglists.values():
+		iterutils.inplace_filter(lambda s: abs(s) > 2*options.shrink_data_segments, seglist)
+	seglists.contract(options.shrink_data_segments)
+instruments = set(seglists)
+
+# get the veto lists
+vetoes_name = options.vetoes_name
+if vetoes_name is not None:
+	vetoes_xmldoc = utils.load_filename(options.vetoes_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
+	veto_segments = ligolw_segments.segmenttable_get_by_name(vetoes_xmldoc, vetoes_name).coalesce()
+	if options.extend_veto_segments is not None:
+		veto_segments.protract(options.extend_veto_segments)
+else:
+	veto_segments = segments.segmentlistdict()
+seglists -= veto_segments
+
+pdb.set_trace()
+data = []
+for ifo, one_seg_list in seglists.items():
+	for seg in one_seg_list:
+		data.append(["%s: %s" % (str(ifo), str("datasegments")), "", "%.2f-%.2f" % (float(seg[0]), float(seg[1])), float(seg[0])*1000 + 315964800000 - 17000, float(seg[1])*1000 + 315964800000 - 17000])
+
+analyzable_instruments_set = set(seglists.keys())
+f = open("%s/segments.json" % options.output_dir, "w")
+f.write(repr(data))
+f.close()
+
+
+#
+# set up the webpage
+thispage = webpage.page()
+nav = webpage.tabs()
+
+
+summary = webpage.tab("summary", "Summary information", "Summary information", ["segments_div_wrapper"])
+
+#
+# add the sections to the nav bar and the nav bar to the page
+#
+
+nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://versions.ligo.org/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+nav+=[summary]
+nav+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
+thispage+=nav
+thispage+=webpage.elem("br",[])
+
+#FIXME assumes the zero lag database is the first tag
+summary_seg = webpage.section("Segments")
+thispage.header_content.append(webpage.googleTimelineFromJson(os.path.join(options.output_dir, 'segments.json'), "segments_div"))
+summary_seg += [webpage.elem("div", [], "id=segments_div width=100% height=500")]
+
+summary_div = summary([summary_seg])
+
+thispage += [summary_div]
+#
+# write the result
+#
+
+
+try:
+	os.makedirs(options.webserver_dir)
+except OSError:
+	pass
+
+f = open("%s/index.html" % options.webserver_dir, "w")
+thispage.write(f)
+f.close()
+
+shutil.copytree(options.output_dir, os.path.join(options.webserver_dir, os.path.split(options.output_dir)[1]))
+
+
+
