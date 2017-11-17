@@ -37,6 +37,7 @@
 #include <cohfar/ssvkernel.h>
 #include <cohfar/knn_kde.h>
 
+#define RANK_MIN_LIMIT 1e-100
 char *IFO_COMBO_MAP[] = {"H1", "L1", "V1", "H1L1", "H1V1", "L1V1", "H1L1V1"};
 int MAX_COMBOS = sizeof(IFO_COMBO_MAP)/sizeof(*IFO_COMBO_MAP);
 
@@ -540,8 +541,7 @@ static double calc_rank_pdf_val(gsl_matrix *pdfdata, gsl_matrix *cdfdata, double
 	double pdf = 0.0, cur_cdf;
 	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) 
 		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) {
-			// note the rank_min and max is based on log10 scale, need to log10 the cdf data
-			cur_cdf = log10(gsl_matrix_get(cdfdata, ibin_x, ibin_y));
+			cur_cdf = gsl_matrix_get(cdfdata, ibin_x, ibin_y);
 			if (cur_cdf <= rank_max && cur_cdf > rank_min)
 				pdf += gsl_matrix_get(pdfdata, ibin_x, ibin_y);
 		}
@@ -557,8 +557,7 @@ static double calc_rank_rates_val(gsl_matrix_long *ratesdata, gsl_matrix *cdfdat
 	long rates = 0;
 	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) 
 		for (ibin_y=0; ibin_y<nbin_y; ibin_y++) {
-			// note the rank_min and max is based on log10 scale, need to log10 the cdf data
-			cur_cdf = log10(gsl_matrix_get(cdfdata, ibin_x, ibin_y));
+			cur_cdf = gsl_matrix_get(cdfdata, ibin_x, ibin_y);
 			if (cur_cdf <= rank_max && cur_cdf > rank_min)
 				rates += gsl_matrix_long_get(ratesdata, ibin_x, ibin_y);
 		}
@@ -580,7 +579,8 @@ background_stats_pdf_to_fap(Bins2D *pdf, Bins2D *fap)
 	if (pdf_sum < 1e-5)
 		return;
 
-	/* cdf is our rankings statistic */
+	/* cdf is our rankings statistic, 
+         * NOTE, here cdf is not a real cumulative distribution function since it is multiplied by step_x*step_y  */
 	gsl_matrix *cdfdata = gsl_matrix_calloc(pdfdata->size1, pdfdata->size2);
 
 	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
@@ -658,11 +658,22 @@ background_stats_feature_to_rank(FeatureStats *feature, RankingStats *rank)
 				tmp += gsl_matrix_get(cdfdata, ibin_x+1, ibin_y);
 			if (ibin_x < nbin_x-1 && ibin_y > 0)
 				tmp -= gsl_matrix_get(cdfdata, ibin_x+1, ibin_y-1);
-			tmp += gsl_matrix_get(fpdfdata, ibin_x, ibin_y);
+			tmp += gsl_matrix_get(fpdfdata, ibin_x, ibin_y) * fpdf->step_x * fpdf->step_y;
 			// note here we actually assign comulative prob. FIXME: overflow problem ?
-			gsl_matrix_set(cdfdata, ibin_x, ibin_y, tmp*fpdf->step_x*fpdf->step_y);
+		        gsl_matrix_set(cdfdata, ibin_x, ibin_y, tmp);
+
 		}
 	}
+        // note the rank_min and max is based on log10 scale, need to log10 the cdf data
+        double cur_cdf;
+	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
+		for (ibin_y=0; ibin_y<=nbin_y-1; ibin_y++){
+                    /* avoid the log10(0) error, since the rank_min is -30, assign rank to be less than -30 is accurate enough*/
+                    cur_cdf = gsl_matrix_get(cdfdata, ibin_x, ibin_y);
+                    cur_cdf = MAX(RANK_MIN_LIMIT, cur_cdf);
+	            gsl_matrix_set(cdfdata, ibin_x, ibin_y, log10(cur_cdf));
+                }
+        }
 	/* generate rank distribution from rates. The rank_rates will only be used for reference.
 	 * We generate fap using the enlongated pdf
 	 * to cover significant region */
@@ -674,7 +685,10 @@ background_stats_feature_to_rank(FeatureStats *feature, RankingStats *rank)
 	long cur_rates;
 	for (ibin=0; ibin<nbin_rank; ibin++) {
 		// FIXME:consider non-even distribution of cdf bins
-		cur_rank_min = bins1D_get_low_bound(rank->rank_pdf, ibin);
+                if (ibin == 0)
+		    cur_rank_min = log10(RANK_MIN_LIMIT) -1;
+                else
+		    cur_rank_min = bins1D_get_low_bound(rank->rank_pdf, ibin);
 		cur_rank_max = bins1D_get_up_bound(rank->rank_pdf, ibin);
 		cur_pdf = calc_rank_pdf_val(fpdfdata, cdfdata, cur_rank_min, cur_rank_max);
 		cur_pdf = cur_pdf*fpdf->step_x*fpdf->step_y/rank->rank_pdf->step;
