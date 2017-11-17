@@ -143,9 +143,11 @@ def poisson_p_not_0(l):
 	"""
 	assert l >= 0.
 
-	# need -l everywhere
+	# need -l everywhere.  also make sure we haven't been passed an
+	# integer as that will mess up the arithmetic in the Taylor
+	# expansion below
 
-	l = -l
+	l = -float(l)
 
 	#
 	# result is closer to 1 than to 0.  use direct evaluation.
