@@ -22,11 +22,19 @@
 
 # need to update the name when the background_utils.h update
 import numpy as np
+from scipy import interpolate
+# FIXME remove this when the LDG upgrades scipy on the SL6 systems, Debian
+# systems are already fine
+try:
+	from scipy.optimize import curve_fit
+except ImportError:
+	from gstlal.curve_fit import curve_fit
+
 import logging
 from glue import iterutils
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.postcoh_table_def import PostcohInspiralTable
-
+import pdb
 
 Attributes = ligolw.sax.xmlreader.AttributesImpl
 
@@ -60,7 +68,7 @@ def postcoh_table_from_xml(filename, contenthandler = DefaultContentHandler, ver
 
 class RankingData(object):
 
-  def __init__(self, stats_filename, hist_trials = 100, verbose = None):
+  def __init__(self, stats_filename, ifos, hist_trials = 100, verbose = None):
     # xml_snr_min = 0.54
     # xml_snr_step = 0.0082
     # xml_snr_nbin = 299
@@ -75,7 +83,6 @@ class RankingData(object):
     step_rank = 30.0/299
     self.rank_bounds = np.linspace(-30.0-step_rank/2, 0+step_rank/2, 301)
     self.rank_centers = np.linspace(-30.0, 0, 300)
-    ifos = stats_filename.split("/")[-1].split("_")[0]
     rank_map_name = "background_rank:%s_rank_map:array" % ifos
     rank_pdf_name = "background_rank:%s_rank_pdf:array" % ifos
     rank_rates_name = "background_rank:%s_rank_rates:array" % ifos
@@ -83,8 +90,8 @@ class RankingData(object):
 
     self.rank_map = array_from_xml(stats_filename, rank_map_name)
     self.rank_pdf = array_from_xml(stats_filename, rank_pdf_name)
-    rates = array_from_xml(stats_filename, rank_rates_name)
-    self.back_nevent = rates.sum()
+    self.rank_rates = array_from_xml(stats_filename, rank_rates_name)
+    self.back_nevent = self.rank_rates.sum()
     if verbose:
       logging.info("background events %d" % self.back_nevent)
       logging.info("calc fap from rates")
@@ -121,26 +128,17 @@ class FAPFAR(object):
   def __init__(self, ranking_stats, connection, livetime = None):
     self.livetime = livetime
     self.ranking_stats = ranking_stats
+    self.connection = connection
+    pdb.set_trace()
     # construct zerolag rate distribution
-    connection.create_function("rank_from_features", 2, self.rank_from_features)
-    connection.cursor().execute(""" UPDATE postcoh SET
-  far =  rank_from_features(cohsnr, cmbchisq)
-  """)
-    self.zlag_rates = zeros(1,300)
-    for irank, rank_min in enumerate(self.ranking_stats.rank_bounds):
-      if irank < len(self.ranking_stats.rank_bounds) -1:
-        rank_max = self.ranking_stats.rank_bounds[irank+1]
-        self.zlag_rates[irank] = connection.cursor().execute("""
-  SELECT COUNT(*) FROM postcoh
-  where
-  far >= rank_min and far < rank_max
-  """)
+    self.zlag_rates = np.zeros(300)
+    self.count_zlag_rates()
 
     self.nzlag = self.zlag_rates.sum()
-    extinct_pdf = self.extinct(self.ranking_stats.rank_rates, self.ranking_stats.rank_pdf, self.zlag_rates, self.rank_centers)
-    drank = self.rank_bounds[1] - self.rank_bounds[0]
-    self.rank_center_min = min(self.rank_centers)
-    self.rank_center_max = max(self.rank_centers)
+    extinct_pdf = self.extinct(self.ranking_stats.rank_rates, self.ranking_stats.rank_pdf, self.zlag_rates, self.ranking_stats.rank_centers)
+    drank = self.ranking_stats.rank_bounds[3] - self.ranking_stats.rank_bounds[2]
+    self.rank_center_min = min(self.ranking_stats.rank_centers)
+    self.rank_center_max = max(self.ranking_stats.rank_centers)
 
     # cumulative distribution function and its complement.
     # it's numerically better to recompute the ccdf by
@@ -162,15 +160,42 @@ class FAPFAR(object):
     # cdf += 1. / math.e
 
     # last checks that the CDF and CCDF are OK
-    assert not numpy.isnan(cdf).any(), "Rank CDF contains NaNs"
-    assert not numpy.isnan(ccdf).any(), "Rank CCDF contains NaNs"
+    assert not np.isnan(cdf).any(), "Rank CDF contains NaNs"
+    assert not np.isnan(ccdf).any(), "Rank CCDF contains NaNs"
     assert ((0. <= cdf) & (cdf <= 1.)).all(), "Rank CDF failed to be normalized"
     assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "Rank CCDF failed to be normalized"
     assert (abs(1. - (cdf[:-1] + ccdf[1:])) < 1e-12).all(), "Rank CDF + CCDF != 1 (max error = %g)" % abs(1. - (cdf[:-1] + ccdf[1:])).max()
 
     # build interpolators
-    self.cdf_interpolator = interpolate.interp1d(self.rank_centers, cdf)
-    self.ccdf_interpolator = interpolate.interp1d(self.rank_centers, ccdf)
+    self.cdf_interpolator = interpolate.interp1d(self.ranking_stats.rank_centers, cdf)
+    self.ccdf_interpolator = interpolate.interp1d(self.ranking_stats.rank_centers, ccdf)
+
+  def count_zlag_rates(self):
+    # use the far field for tempory rank assignment
+    self.connection.create_function("rank_from_features", 2, self.rank_from_features)
+    self.connection.cursor().execute(""" UPDATE postcoh SET
+  far =  rank_from_features(cohsnr, cmbchisq)
+  """)
+    # count the rate of rank in a given range
+    try:
+        import sqlite3
+        use_sqlite3 = True
+    except ImportError:
+        use_sqlite3 = False
+    cur = self.connection.cursor()
+    for irank, rank_min in enumerate(self.ranking_stats.rank_bounds):
+      if irank < len(self.ranking_stats.rank_bounds) -1:
+        rank_max = self.ranking_stats.rank_bounds[irank+1]
+        if use_sqlite3:
+            cur.execute(""" SELECT COUNT(*) FROM 
+            postcoh WHERE far >= ? and far < ?""", (rank_min, rank_max)
+            )
+            self.zlag_rates[irank] = cur.fetchone()[0]
+        else:
+            cur.execute(""" SELECT COUNT(*) FROM 
+            postcoh WHERE far >= %s and far < %s""", (rank_min, rank_max)
+            )
+            self.zlag_rates[irank] = cur.fetchone()[0]
 
   def extinct(self, bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks):
     # Generate arrays of complementary cumulative counts
@@ -186,7 +211,7 @@ class FAPFAR(object):
     fit_min_rank = -30.
     fit_min_counts = min(10., self.nzlag / 10. + 1)
     fit_max_counts = min(10000., self.nzlag / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
-    rank_range = numpy.logical_and(ranks > fit_min_rank, numpy.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
+    rank_range = np.logical_and(ranks > fit_min_rank, np.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
     if fit_max_counts < 10000.:
       warnings.warn("There are less than 10000 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
     if zero_lag_compcumcount.compress(rank_range).size < 1:
@@ -198,13 +223,13 @@ class FAPFAR(object):
     bg_pdf_interp = interpolate.interp1d(ranks, bgpdf_ba_array)
 
     def extincted_counts(x, N_ratio):
-      out = max(zero_lag_compcumcount) * (1. - numpy.exp(-obs_counts(x) * N_ratio))
-      out[~numpy.isfinite(out)] = 0.
+      out = max(zero_lag_compcumcount) * (1. - np.exp(-obs_counts(x) * N_ratio))
+      out[~np.isfinite(out)] = 0.
       return out
 
     def extincted_pdf(x, N_ratio):
-      out = numpy.exp(numpy.log(N_ratio) - obs_counts(x) * N_ratio + numpy.log(bg_pdf_interp(x)))
-      out[~numpy.isfinite(out)] = 0.
+      out = np.exp(np.log(N_ratio) - obs_counts(x) * N_ratio + np.log(bg_pdf_interp(x)))
+      out[~np.isfinite(out)] = 0.
       return out
 
     # Fit for the ratio of unclustered to clustered triggers.
@@ -225,11 +250,10 @@ class FAPFAR(object):
   def rank_from_features(self, snr, chisq):
     lgsnr = np.log10(snr)
     lgchisq = np.log10(chisq)
-    snr_idx = np.abs(self.snr_lowbounds - lgsnr).argmin()
-    chisq_idx = np.abs(self.chisq_lowbounds - lgchisq).argmin()
-    return self.ranking_stats.ranking_map[chisq_idx, snr_idx]
+    snr_idx = np.abs(self.ranking_stats.snr_lowbounds - lgsnr).argmin()
+    chisq_idx = np.abs(self.ranking_stats.chisq_lowbounds - lgchisq).argmin()
+    return self.ranking_stats.rank_map[chisq_idx, snr_idx]
   
-
   def fap_from_features(self, snr, chisq):
     rank = rank_from_features(snr, chisq)
     # implements equation (B4) of Phys. Rev. D 88, 024025.

@@ -9,15 +9,17 @@
 #
 # This program is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
 # Public License for more details.
 #
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 51 Franklin Street, Fifth Floor, Boston, MA	02110-1301, USA.
 
 
 import os
+import sys
+import re
 import numpy as np
 import scipy
 import math
@@ -30,15 +32,27 @@ except ImportError:
 	# pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
 sqlite3.enable_callback_tracebacks(True)
-from glue.ligolw.utils import process as ligolw_process
-
 from glue.ligolw import dbtables
+#from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw import utils
+from glue.ligolw import ligolw
+from glue.ligolw import param
+from glue.ligolw import lsctables
+from glue.ligolw.utils import segments as ligolw_segments
+from glue import iterutils
 from gstlal import cohfar
 import pdb
 
 
 logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
 	
+
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+    pass
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+
 def append_missing_options(missing_options, options, option):
 	if getattr(options, option) is None:
 		missing_options.append("--%s" % option.replace("_", "-"))
@@ -50,8 +64,11 @@ def parse_command_line():
 	parser.add_option("--input-stats-filename", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--zerolag-sql", default = "", metavar = "name", help = "Set the input sql file name")
 	parser.add_option("--live-time", default = None, help ="input coinc time")
-	parser.add_option("--sql-segment", action = "store_true", default = None, help ="read segments from sql")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
+	parser.add_option("--segments-file", default = None, metavar = "name", help = "Set the input segments file name")
+	parser.add_option("--segments-name", default = None, metavar = "name", help = "Set the input segments file name")
+	parser.add_option("--vetoes-file", default = None, metavar = "name", help = "Set the input vetoes file name")
+	parser.add_option("--vetoes-name", default = None, metavar = "name", help = "Set the input vetoes name in the vetoes file")
 	parser.add_option("--shrink-data-segments", metavar = "float", type = float, help = "Shrink data segments by this much (on each side). e.g. specifying 2 will shrink each datasegment by 4 seconds")
 	parser.add_option("--extend-veto-segments", metavar = "float", type = float, help = "Pad segments by this number of seconds (on both sides)")
 
@@ -61,8 +78,8 @@ def parse_command_line():
 	append_missing_options(missing_options, options, "zerolag_sql")
 	append_missing_options(missing_options, options, "input_stats_filename")
 
-	if options.live_time and options.sql_segment:
-		raise ValueError, "specify live time or sql segment, not both"
+	if options.live_time and (options.segments_file and options.segments_name):
+		raise ValueError, "specify live time or segments file and name"
 
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
@@ -71,87 +88,93 @@ def parse_command_line():
 
 options = parse_command_line()
 
-def get_livetime(options, on_instruments, verbose):
+def get_livetime(options, on_instruments, verbose = False):
 
-  # get the segment lists
-  segments_xmldoc = utils.load_filename(options.segments_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
-  seglists = ligolw_segments.segmenttable_get_by_name(segments_xmldoc, options.segments_name).coalesce()
-  if options.shrink_data_segments is not None:
-  	# Make sure all segments are at least long enough to be
-  	# contracted (e.g. if a segment is 32 seconds long but
-  	# the user is going to contract it by 17 seconds, then
-  	# the end time of the segment would come before the
-  	# start time of the segment. This is bad)
-  	for seglist in seglists.values():
-  		iterutils.inplace_filter(lambda s: abs(s) > 2*options.shrink_data_segments, seglist)
-  	seglists.contract(options.shrink_data_segments)
-  instruments = set(seglists)
-  
-  # get the veto lists
-  vetoes_name = options.vetoes_name
-  if vetoes_name is not None:
-  	vetoes_xmldoc = utils.load_filename(options.vetoes_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
-  	veto_segments = ligolw_segments.segmenttable_get_by_name(vetoes_xmldoc, vetoes_name).coalesce()
-  	if options.extend_veto_segments is not None:
-  		veto_segments.protract(options.extend_veto_segments)
-  else:
-  	veto_segments = segments.segmentlistdict()
-  seglists -= veto_segments
-
-
-  # get the live time
-  if verbose:
-    print >>sys.stderr, "calculating background livetimes: ",
-
-  if verbose:
-    print >>sys.stderr
-  zerolag_livetime = float(abs(seglists.intersection(on_instruments) - seglists.union(instruments - on_instruments)))
-  return zerolag_livetime
+	# get the segment lists
+	segments_xmldoc = utils.load_filename(options.segments_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
+	seglists = ligolw_segments.segmenttable_get_by_name(segments_xmldoc, options.segments_name).coalesce()
+	if options.shrink_data_segments is not None:
+		# Make sure all segments are at least long enough to be
+		# contracted (e.g. if a segment is 32 seconds long but
+		# the user is going to contract it by 17 seconds, then
+		# the end time of the segment would come before the
+		# start time of the segment. This is bad)
+		for seglist in seglists.values():
+			iterutils.inplace_filter(lambda s: abs(s) > 2*options.shrink_data_segments, seglist)
+		seglists.contract(options.shrink_data_segments)
+	instruments = set(seglists)
+	
+	# get the veto lists
+	vetoes_name = options.vetoes_name
+	if vetoes_name is not None:
+		vetoes_xmldoc = utils.load_filename(options.vetoes_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
+		veto_segments = ligolw_segments.segmenttable_get_by_name(vetoes_xmldoc, vetoes_name).coalesce()
+		if options.extend_veto_segments is not None:
+			veto_segments.protract(options.extend_veto_segments)
+	else:
+		veto_segments = segments.segmentlistdict()
+	seglists -= veto_segments
 
 
-if options.verbose:
-  logging.info("reading stats file")
+	# get the live time
+	zerolag_livetime = float(abs(seglists.intersection(on_instruments) - seglists.union(instruments - on_instruments)))
+	if verbose:
+		print >>sys.stderr, "calculated zerolag livetimes %f " % zerolag_livetime
 
-ranking_stats = cohfar.RankingData(options.input_stats_filename, hist_trials = 100)
-myfar = cohfar.FAR()
-myfar.set_ranking_stats(ranking_stats)
 
-if options.verbose:
-  logging.info("assign fars to zerolags")
-#pdb.set_trace()
+	return zerolag_livetime
+
+
 zerolag_sql_list = options.zerolag_sql.split(",")
 
 for filename in zerolag_sql_list:
-  working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
-  connection = sqlite3.connect(working_filename)
-  if options.live_time:
-    livetime = float(options.live_time)
-  elif options.sql_segment:
-    livetime = get_livetime(options, on_instruments, verbose)
+        # read in the stats for corresponding ifos
+        # FIXME: ifos read from filename hard-coded
+        ifos = filename.split("/")[-1].split("_")[0].split("-")[0]
 
-  #
-  # record our passage
-  #
+        if options.verbose:
+	        logging.info("reading stats file %s" % options.input_stats_filename)
 
-#  xmldoc = dbtables.get_xml(connection)
-#  process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_cohfar_assign_far", {})
+        ranking_stats = cohfar.RankingData(options.input_stats_filename, ifos, hist_trials = 100)
+
+        pdb.set_trace()
+	working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
+
+        if options.verbose:
+	        logging.info("reading zerolag file %s" % working_filename)
+
+	zlag_connection = sqlite3.connect(working_filename)
+	if options.live_time:
+		livetime = float(options.live_time)
+	elif options.segments_file:
+                on_instruments = set(re.findall(r"[A-Z][0-9]", ifos))
+		livetime = get_livetime(options, on_instruments, verbose = options.verbose)
+
+        myfar = cohfar.FAPFAR(ranking_stats, zlag_connection, livetime = livetime)
+	#
+	# record our passage
+	#
+
+#	xmldoc = dbtables.get_xml(connection)
+#	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_cohfar_assign_far", {})
 #
-  #
-  # assign FAPs and FARs
-  #
+	#
+	# assign FAPs and FARs
+	#
 
-  myfar.assign_fars_sql(connection, livetime)
-  #
-  # done, restore file to original location
-  #
+        if options.verbose:
+	        logging.info("assign fars to zerolags")
 
-#  ligolw_process.set_process_end_time(process)
-#  connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (process.end_time, process.process_id))
+	myfar.assign_fars_sql(connection, livetime)
+	#
+	# done, restore file to original location
+	#
 
-  connection.commit()
-  connection.close()
-  dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
+#	ligolw_process.set_process_end_time(process)
+#	connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (process.end_time, process.process_id))
 
-
+	connection.commit()
+	connection.close()
+	dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
 
 
