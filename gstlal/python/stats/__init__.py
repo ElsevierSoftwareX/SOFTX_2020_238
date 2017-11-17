@@ -139,7 +139,19 @@ def assert_ln_probability(f):
 def poisson_p_not_0(l):
 	"""
 	Return the probability that a Poisson process with a mean rate of l
-	yields a non-zero count.  = 1 - exp(-l).
+	yields a non-zero count.  = 1 - exp(-l), but computed in a way that
+	avoids loss of precision and over-/underflows.
+
+	Example:
+
+	>>> print(poisson_p_not_0(1e+60))
+	1.0
+	>>> print(poisson_p_not_0(1)
+	0.632120558829
+	>>> print(poisson_p_not_0(1e-60))
+	1e-60
+	>>> print(poisson_p_not_0(0))
+	0.0
 	"""
 	assert l >= 0.
 
