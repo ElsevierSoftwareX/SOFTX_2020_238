@@ -184,8 +184,10 @@ def poisson_p_not_0(l):
 def poisson_p_0(l):
 	"""
 	Return the probability that a Poisson process with a mean rate of l
-	yields a zero count.  = exp(-l).
+	yields a zero count.  = exp(-l), but with a sanity check that l is
+	non-negative.
 	"""
+	assert l >= 0.
 	return numpy.exp(-l)
 
 
@@ -193,8 +195,10 @@ def poisson_p_0(l):
 def poisson_ln_p_0(l):
 	"""
 	Return the natural logarithm of the probability that a Poisson
-	process with a mean rate of l yields a zero count.  = -l.
+	process with a mean rate of l yields a zero count.  = -l, but with
+	a sanity check that l is non-negative.
 	"""
+	assert l >= 0.
 	return -l
 
 
@@ -378,14 +382,14 @@ def trials_from_faps(p0, p1):
 	must be 0 or 1 respectively, and in both cases m is undefined.
 	Otherwise if p1 is 1 then inf is returned.
 	"""
-	assert 0 <= p0 <= 1	# p0 must be a valid probability
-	assert 0 <= p1 <= 1	# p1 must be a valid probability
+	assert 0. <= p0 <= 1.	# p0 must be a valid probability
+	assert 0. <= p1 <= 1.	# p1 must be a valid probability
 
-	if p0 == 0 or p0 == 1:
+	if p0 == 0. or p0 == 1.:
 		assert p0 == p1	# require valid relationship
 		# but we still can't solve for m
 		raise ValueError("m undefined")
-	if p1 == 1:
+	if p1 == 1.:
 		return PosInf
 
 	#
