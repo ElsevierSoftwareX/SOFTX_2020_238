@@ -92,7 +92,7 @@ def make_sim_xmldoc(xmldoc):
 		"simulation_id"
 	]))
 
-	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_lvalert_sim_equiv", {})
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_lvalert_sim_equiv", {}, ifos = lsctables.SnglInspiralTable.get_table(xmldoc).getColumnByName("ifo"))
 	coinc_def_id = ligolw_coincs.get_coinc_def_id(xmldoc, u"gstlal_inspiral_lvalert_sim_equiv", 0, description = u"injections to emulate triggers")
 	time_slide_id = coinc_event_table[0].time_slide_id
 	offsetvector = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()[time_slide_id]
