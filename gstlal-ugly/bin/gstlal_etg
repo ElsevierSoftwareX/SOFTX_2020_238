@@ -311,7 +311,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.etg_event.append(etg_row)
 
 
-	def to_trigger_file(self, buftime):
+	def to_trigger_file(self, buftime = None):
 		# NOTE
 		# This method should only be called by an instance that is locked.
 		# Use T050017 filenaming convention.
@@ -327,8 +327,9 @@ class MultiChannelHandler(simplehandler.Handler):
 			with open(tmpfile, 'w') as f:
  				f.write(''.join(self.fdata))
 			shutil.move(tmpfile, fpath)
-			latency = numpy.round(int(aggregator.now()) - buftime)
-			print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
+			if buftime:
+				latency = numpy.round(int(aggregator.now()) - buftime)
+				print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
 
 	def gen_psd_xmldoc(self):
 		xmldoc = lal.series.make_psd_xmldoc(self.psds)
@@ -651,6 +652,9 @@ if options.verbose:
 	print >>sys.stderr, "running pipeline..."
 
 mainloop.run()
+
+# save remaining triggers
+handler.to_trigger_file()
 
 if options.verbose:
 	print >>sys.stderr, "shutting down pipeline..."
