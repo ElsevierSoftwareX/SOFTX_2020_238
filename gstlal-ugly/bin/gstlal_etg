@@ -209,8 +209,8 @@ class MultiChannelHandler(simplehandler.Handler):
 		Handle application-specific message types, 
 		e.g., spectrum messages.
 		
-		@param bus A reference to the pipeline's bus
-		@param message A reference to the incoming message
+		@param bus: A reference to the pipeline's bus
+		@param message: A reference to the incoming message
 		"""
 		#
 		# return value of True tells parent class that we have done
@@ -233,6 +233,9 @@ class MultiChannelHandler(simplehandler.Handler):
 		"""
 		Processes rows from a Gstreamer buffer and
 		handles conditions for file saving.
+
+		@param elem: A reference to the gstreamer element being processed
+		@param sink_dict: A dictionary containing references to gstreamer elements
 		"""
 		with self.lock:
 			buf = elem.emit("pull-sample").get_buffer()
@@ -312,9 +315,14 @@ class MultiChannelHandler(simplehandler.Handler):
 
 
 	def to_trigger_file(self, buftime = None):
-		# NOTE
-		# This method should only be called by an instance that is locked.
-		# Use T050017 filenaming convention.
+		"""
+		Dumps triggers saved in memory to disk, following an iDQ ingestion format.
+		Contains a header specifying aligned columns, along with triggers, one per row.
+		Uses the T050017 filenaming convention.
+		NOTE: This method should only be called by an instance that is locked.
+		"""
+		# Only write triggers to disk where the associated data structure has more
+		# than the header stored within.
 		if len(self.fdata) > 1 :
 			fname = '%s-%d-%d.%s' % (self.tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
 			path = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
@@ -520,15 +528,17 @@ channels = data_source_info.channel_dict.keys()
 # dictionary of basis parameters keyed by ifo, rate
 basis_params = {}
 
+# only load kafka library if triggers are transferred via kafka topic
 if options.use_kafka:
 	from confluent_kafka import Producer
 
-if not options.disable_web_service:	
-	#
-	# create a new, empty, Bottle application and make it the current
-	# default, then start http server to serve it up
-	#
+#
+# if web services serving up bottle routes are enabled,
+# create a new, empty, Bottle application and make it the
+# current default, then start http server to serve it up
+#
 
+if not options.disable_web_service:
 	bottle.default_app.push()
 	# uncomment the next line to show tracebacks when something fails
 	# in the web server
@@ -544,10 +554,7 @@ if not options.disable_web_service:
 		verbose = options.verbose
 	)
 
-	#
 	# Set up a registry of the resources that this job provides
-	#
-	
 	@bottle.route("/")
 	@bottle.route("/index.html")
 	def index(channel_list = channels):
@@ -579,19 +586,22 @@ if options.verbose:
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
 
-# multiple channel src
+# generate multiple channel sources, and link up pipeline
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
 src = {}
 for channel in channels:
+	# define sampling rates used
 	samp_rate = data_source_info.channel_dict[channel]['fsamp']  
 	max_samp_rate = min(2048, int(samp_rate))
 	min_samp_rate = min(32, max_samp_rate)
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
 	if data_source_info.latency_output:
 		head[channel] = pipeparts.mklatency(pipeline, head[channel], name = 'stage2_beforeWhitening_%s' % channel)
+	# whiten auxiliary channel data
 	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], int(samp_rate), instrument, channel_name = channel, width=32).items():
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage3_afterWhitening_%s_%s' % (str(rate).zfill(5), channel))
+		# choose range of basis parameters for sine-gaussians
 		if data_source_info.extension == 'ini':
 			# use omicron params with .ini files
 			flow = data_source_info.channel_dict[channel]['flow']  
@@ -606,13 +616,16 @@ for channel in channels:
 			fhigh = rate/2.*0.8
 			qhigh = options.qhigh
 		qlow = 4
+		# generate sine-gaussian templates
 		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
 		phase = [0, numpy.pi/2.]
 		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 1e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
-		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
+		# uncomment to determine template durations
 		#print >>sys.stderr, len(list(half_sine_gaussian(sine_gaussian(phi, 0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = 0.2)))
+		# determine whether to do time-domain or frequency-domain convolution
+		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch) for phi_0 in phase]), time_domain = time_domain, block_stride = int(rate), latency = 0)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
@@ -621,11 +634,11 @@ for channel in channels:
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
 		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
-		#thishead = pipeparts.mktrigger(pipeline, thishead, rate, snr_thresh = 4)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage5_afterTrigger_%s_%s' % (str(rate).zfill(5), channel))
 		src[(channel, rate)] = thishead	
 
+# define structures to synchronize output streams and extract triggers from buffer
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline..."
 
@@ -643,8 +656,10 @@ if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter READY state")
 if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
 	datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time)
+#
+# Run pipeline
+#
 
-# run
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 
@@ -656,25 +671,26 @@ mainloop.run()
 # save remaining triggers
 handler.to_trigger_file()
 
+#
+# Shut down pipeline
+#
+
 if options.verbose:
 	print >>sys.stderr, "shutting down pipeline..."
 
+#
+# Shutdown the web interface servers and garbage collect the Bottle
+# app.  This should release the references the Bottle app's routes
+# hold to the pipeline's data (like template banks and so on).
+#
+
 if not options.disable_web_service:
-	#
-	# Shutdown the web interface servers and garbage collect the Bottle
-	# app.  This should release the references the Bottle app's routes
-	# hold to the pipeline's data (like template banks and so on).
-	#
-	
-	
 	del httpservers
 	bottle.default_app.pop()
-	
 
 #
 # Set pipeline state to NULL and garbage collect the handler
 #
-
 
 if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 	raise RuntimeError("pipeline could not be set to NULL")
@@ -684,7 +700,6 @@ del handler
 #
 # close program manually if data source is live
 #
-
 
 if options.data_source in ("lvshm", "framexmit"):
         sys.exit(0)
