@@ -75,7 +75,7 @@ struct _GSTLALResample {
 	gboolean need_buffer_resize;
 	gint16 leading_samples;
 
-	/* timestamp book-keeping */
+	/* timestamp bookkeeping */
 
 	GstClockTime t0;
 	guint64 offset0;
@@ -94,7 +94,9 @@ struct _GSTLALResample {
 	gint32 num_end_samples;
 	gint32 *index_end_samples;
 	gint32 max_end_samples;
+	gint32 sinc_length;
 	double *sinc_table;
+	gboolean produced_outbuf;
 };
 
 
