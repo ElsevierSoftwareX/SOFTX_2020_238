@@ -709,19 +709,19 @@ for bin_type in opts.bin_types:
         fig_eff.tight_layout(pad = .8)
 
         # save and close figures
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_far.savefig(tag)
         pyplot.close(fig_far)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_far_range.savefig(tag)
         pyplot.close(fig_far_range)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_snr.savefig(tag)
         pyplot.close(fig_snr)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_eff.savefig(tag)
         pyplot.close(fig_eff)
 

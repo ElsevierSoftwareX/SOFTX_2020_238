@@ -286,7 +286,7 @@ for instrument in coinc_params_distributions.instruments:
 		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr, sngls = sngls)
 		if fig is None:
 			continue
-		plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_SNRCHI2" % (options.user_tag, snr_chi_type.upper()), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+		plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_SNRCHI2" % (options.user_tag, snr_chi_type.upper()), seg, options.output_format, path = options.output_dir)
 		if options.verbose:
 			print >>sys.stderr, "writing %s" % plotname
 		fig.savefig(plotname)
@@ -294,7 +294,7 @@ for instrument in coinc_params_distributions.instruments:
 
 # Trigger and event rates
 fig = plotfar.plot_rates(coinc_params_distributions)
-plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_RATES" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_RATES" % options.user_tag, seg, options.output_format, path = options.output_dir)
 if options.verbose:
 	print >>sys.stderr, "writing %s" % plotname
 fig.savefig(plotname)
@@ -308,7 +308,7 @@ if options.plot_snr_snr_pdfs:
 		horizon_distances = coinc_params_distributions.SNRPDF.quantized_horizon_distances(horizon_distances)
 		fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions.SNRPDF, instruments, horizon_distances, coinc_params_distributions.min_instruments, options.max_snr, sngls = sngls)
 		if fig is not None:
-			plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+			plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), seg, options.output_format, path = options.output_dir)
 			if options.verbose:
 				print >>sys.stderr, "writing %s" % plotname
 			fig.savefig(plotname)
@@ -318,7 +318,7 @@ if options.plot_snr_snr_pdfs:
 if ranking_data is not None:
 	for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
 		fig = plotfar.plot_likelihood_ratio_pdf(ranking_data, instruments, (options.min_log_lambda, options.max_log_lambda), "Noise", binnedarray_string = "background_likelihood_pdfs")
-		plotname = inspiral_pipe.T050017_filename(instruments or "COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_PDF" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+		plotname = inspiral_pipe.T050017_filename(instruments or "COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_PDF" % options.user_tag, seglists.extent_all, options.output_format, path = options.output_dir)
 		if options.verbose:
 			print >>sys.stderr, "writing %s" % plotname
 		fig.savefig(plotname)
@@ -330,13 +330,13 @@ if ranking_data is not None:
 	else:
 		xhi = options.max_log_lambda
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = zerolag_ln_likelihood_ratios, is_open_box = True)
-	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_openbox" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_openbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = background_ln_likelihood_ratios, is_open_box = False)
-	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_closedbox" % options.user_tag, int(seglists.extent_all()[0]), int(seglists.extent_all()[1]), options.output_format, path = options.output_dir)
+	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_closedbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)

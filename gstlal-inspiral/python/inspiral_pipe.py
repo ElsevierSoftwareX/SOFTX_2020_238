@@ -36,9 +36,11 @@
 # - In inspiral_pipe.py Fix the InsiralJob.___init___: fix the arguments
 # - On line 201, fix the comment or explain what the comment is meant to be
 
+import math
 import sys, os
 import subprocess, socket, tempfile, copy, doctest
 from glue import pipeline
+from glue import segments
 from glue.ligolw import lsctables, ligolw
 from glue.ligolw import utils as ligolw_utils
 from gstlal import svd_bank
@@ -359,13 +361,15 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 	return outstrs
 
 
-def T050017_filename(instruments, description, start, end, extension, path = None):
+def T050017_filename(instruments, description, seg, extension, path = None):
 	"""!
 	A function to generate a T050017 filename.
 	"""
 	if not isinstance(instruments, basestring):
 		instruments = "".join(sorted(instruments))
-	duration = end - start
+	start, end = seg
+	start = int(math.floor(start))
+	duration = int(math.ceil(end)) - start
 	extension = extension.strip('.')
 	if path is not None:
 		return '%s/%s-%s-%d-%d.%s' % (path, instruments, description, start, duration, extension)
@@ -419,8 +423,7 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 	split_description = cache_entries[0].description.split('_')
 	min_bin = [x for x in split_description[:2] if x.isdigit()]
 	max_bin = [x for x in cache_entries[-1].description.split('_')[:2] if x.isdigit()]
-	min_seg = min([int(x.segment[0]) for x in cache_entries])
-	max_seg = max([int(x.segment[1]) for x in cache_entries])
+	seg = segments.segmentlist(cache_entry.segment for cache_entry in cache_entries).extent()
 	if min_bin:
 		min_bin = min_bin[0]
 	if max_bin:
@@ -434,14 +437,14 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 		# all of the DIST_STATS files from a given background bin and
 		# then CREATE_PRIOR_DIST_STATS files which are not generated
 		# for specific bins
-		return T050017_filename(''.join(observatories), cache_entries[0].description, min_seg, max_seg, extension, path = path)
+		return T050017_filename(''.join(observatories), cache_entries[0].description, seg, extension, path = path)
 	elif min_bin and max_bin and min_bin != max_bin:
 		if split_description[1].isdigit():
 			description_base = split_description[2:]
 		else:
 			description_base = split_description[1:]
 		# Files from different bins, thus segments must be same
-		return T050017_filename(''.join(observatories), '_'.join([min_bin, max_bin] + description_base), min_seg, max_seg, extension, path = path)
+		return T050017_filename(''.join(observatories), '_'.join([min_bin, max_bin] + description_base), seg, extension, path = path)
 	else:
 		print >>sys.stderr, "ERROR: first and last file of cache file do not match known pattern, cannot name group file under T050017 convention. \nFile 1: %s\nFile 2: %s" % (cache_entries[0].path, cache_entries[-1].path)
 		raise ValueError

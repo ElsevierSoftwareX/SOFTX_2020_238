@@ -235,7 +235,7 @@ with open(options.output_cache, "w") as output_cache_file:
 			row.mtotal = row.mass1 + row.mass2
 
 		sngl_inspiral_table[:] = rows
-		output = inspiral_pipe.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
+		output = inspiral_pipe.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
 		if not options.write_svd_caches:
 			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
 		else:
@@ -251,7 +251,7 @@ with open(options.output_cache, "w") as output_cache_file:
 			pass
 
 		for svd_cache_group in inspiral_pipe.group(svd_caches, options.num_banks):
-			output = inspiral_pipe.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_SPLIT_BANK" % (svd_cache_group[0][0], svd_cache_group[-1][0]), 0, 0, ".cache", path = cache_path)
+			output = inspiral_pipe.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_SPLIT_BANK" % (svd_cache_group[0][0], svd_cache_group[-1][0]), (0, 0), ".cache", path = cache_path)
 			with open(output, 'w') as svd_cache:
 				for bank_count, split_bank_cache_entry in svd_cache_group:
 					svd_cache.write(split_bank_cache_entry)

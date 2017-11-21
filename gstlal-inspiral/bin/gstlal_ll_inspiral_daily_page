@@ -120,7 +120,7 @@ if __name__ == '__main__':
 		cumulative_segments = os.path.join(os.path.join(options.directory, d), 'H1L1-0000_SEGMENTS-%s00000-100000.xml.gz' % (d,))
 		noninjdball = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite' % (d,))
 		for injection_file in inj_file_bins:
-			injdball[injection_file] = os.path.join(os.path.join(options.directory, d), inspiral_pipe.T050017_filename(instruments, "ALL_LLOID_%s" % injtag(injection_file) , int('%s00000' % (d,)), int('%d00000' % (int(d)+1,)), '.sqlite'))
+			injdball[injection_file] = os.path.join(os.path.join(options.directory, d), inspiral_pipe.T050017_filename(instruments, "ALL_LLOID_%s" % injtag(injection_file), (int(d) * 100000, (int(d) + 1) * 100000), '.sqlite'))
 
 		if float(now()) - float("%s00000" % d) > 125000 and all([os.path.exists(f) for f in injdball.values()]+[os.path.exists(noninjdball), os.path.exists(cumulative_segments)]):
 			print >> sys.stderr, "directory is greater than 125000 seconds old and has already been processed...continuing"

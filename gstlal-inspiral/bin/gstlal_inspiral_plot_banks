@@ -351,7 +351,7 @@ lsctables.use_in(LIGOLWContentHandler)
 
 options, filenames = parse_command_line()
 
-filename_template = inspiral_pipe.T050017_filename('H1L1V1', 'GSTLAL_INSPIRAL_PLOTBANKS_%s', 0, 0, '.png',  path = options.output_dir)
+filename_template = inspiral_pipe.T050017_filename('H1L1V1', 'GSTLAL_INSPIRAL_PLOTBANKS_%s', (0, 0), '.png',  path = options.output_dir)
 
 # Make svd bank plots
 if options.plot_svd_bank:
