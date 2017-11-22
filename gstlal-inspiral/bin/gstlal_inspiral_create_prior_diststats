@@ -80,9 +80,9 @@ def parse_command_line():
 
 	process_params = dict(options.__dict__)
 
-	options.instrument = set(options.instrument)
 	if not options.instrument:
 		raise ValueError("must specify at least one --instrument")
+	options.instrument = set(options.instrument)
 
 	if options.min_instruments < 1:
 		raise ValueError("--min-instruments must be >= 1")
