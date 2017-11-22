@@ -154,7 +154,7 @@ class upper_limit(object):
         '''
         Retrieve the sets of instruments which were on during the search.
         '''
-	for inst in connection.cursor().execute("""SELECT DISTINCT(ifos) FROM search_summary"""):
+	for inst in connection.cursor().execute("""SELECT DISTINCT(ifos) FROM process WHERE ifos NOTNULL""").fetchall():
         	inst =  frozenset(lsctables.instrumentsproperty.get(inst[0]))
         	if not inst in self.instruments:
          		self.instruments.append(inst)
@@ -172,8 +172,8 @@ class upper_limit(object):
         # naming. these may extend beyond the actual analyzed
         # segments because of vetoes.
         #
-        start_time = int( connection.cursor().execute('SELECT MIN(start_time) FROM segment').fetchone()[0] )
-        end_time = int( connection.cursor().execute('SELECT MAX(end_time) FROM segment').fetchone()[0] )
+        start_time = int( connection.cursor().execute('SELECT MIN(start_time + 1e-9 * start_time_ns) FROM segment').fetchone()[0] )
+        end_time = int( connection.cursor().execute('SELECT MAX(end_time + 1e-9 * end_time_ns) FROM segment').fetchone()[0] )
         if not self.start_time or start_time < self.start_time:
             self.start_time = start_time
         if not self.end_time or end_time < self.end_time:
