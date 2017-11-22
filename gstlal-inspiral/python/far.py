@@ -1544,7 +1544,6 @@ class FAPFAR(object):
 	def ccdf_from_rank(self, rank):
 		return self.ccdf_interpolator(numpy.clip(rank, self.minrank, self.maxrank))
 
-	@gstlalstats.assert_probability
 	def fap_from_rank(self, rank):
 		# implements equation (8) from Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718.
