@@ -792,7 +792,7 @@ class Data(object):
 					break
 				del event.snr_time_series
 
-	def __get_likelihood_file(self):
+	def __get_likelihood_xmldoc(self):
 		# generate a coinc parameter distribution document.  NOTE:
 		# likelihood ratio PDFs *are* included if they were present in
 		# the --likelihood-file that was loaded.
@@ -809,12 +809,12 @@ class Data(object):
 	def web_get_likelihood_file(self):
 		with self.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.__get_likelihood_file(), output)
+			ligolw_utils.write_fileobj(self.__get_likelihood_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
 
-	def __get_zero_lag_ranking_stats_file(self):
+	def __get_zero_lag_ranking_stats_xmldoc(self):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
@@ -828,7 +828,7 @@ class Data(object):
 	def web_get_zero_lag_ranking_stats_file(self):
 		with self.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.__get_zero_lag_ranking_stats_file(), output)
+			ligolw_utils.write_fileobj(self.__get_zero_lag_ranking_stats_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
@@ -1015,7 +1015,7 @@ class Data(object):
 			if self.verbose:
 				print >>sys.stderr, "generating ranking_data.xml.gz ..."
 			fobj = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.__get_likelihood_file(), fobj, gz = True)
+			ligolw_utils.write_fileobj(self.__get_likelihood_xmldoc(), fobj, gz = True)
 			message, filename, tag, contents = ("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue())
 			del fobj
 			self.__upload_gracedb_aux_data(message, filename, tag, contents, gracedb_ids, retries, gracedb_client)
@@ -1208,21 +1208,15 @@ class Data(object):
 		# thinca.  we want to know precisely when the arrays get
 		# updated so we can have a hope of computing the likelihood
 		# ratio PDFs correctly.
-		#
-		# FIXME Can we delete the temporary file atomic process now
-		# that glue creates temp files before writing
 
-		scheme_host_path, filename = os.path.split(url)
-		tmp_likelihood_url = os.path.join(scheme_host_path, 'tmp_%s' % filename)
-		ligolw_utils.write_url(self.__get_likelihood_file(), tmp_likelihood_url, gz = (tmp_likelihood_url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
-		shutil.move(ligolw_utils.local_path_from_url(tmp_likelihood_url), ligolw_utils.local_path_from_url(url))
+		ligolw_utils.write_url(self.__get_likelihood_xmldoc(), ligolw_utils.local_path_from_url(url), gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 		# Snapshots get their own custom file and path
 		if snapshot:
 			fname = self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz')
 			shutil.copy(ligolw_utils.local_path_from_url(url), os.path.join(subdir_from_T050017_filename(fname), fname))
 
 	def __write_zero_lag_ranking_stats_file(self, filename, verbose = False):
-		ligolw_utils.write_filename(self.__get_zero_lag_ranking_stats_file(), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		ligolw_utils.write_filename(self.__get_zero_lag_ranking_stats_xmldoc(), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 	def write_output_url(self, url = None, description = "", verbose = False):
 		with self.lock:
