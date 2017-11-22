@@ -93,7 +93,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 def duration(phi, q, tolerance = 1e-7):
         # return the duration of the waveform such that its edges will die out to tolerance of the peak.
 	# phi is the central frequency of the frequency band
-	return 2.*q/(2.*numpy.pi*phi)*numpy.log(1./tolerance)
+	return q/(2.*numpy.pi*phi)*numpy.log(1./tolerance)
 
 def sine_gaussian(phi, phi_0, q, time_arr):
         # edges should be 1e-7 times peak
@@ -107,10 +107,10 @@ def sine_gaussian(phi, phi_0, q, time_arr):
 	sg_vals = numpy.cos(2.*numpy.pi*phi*time_arr + phi_0)*numpy.exp(-1.*time_arr**2./tau**2.)
 
 	# normalize sine gaussians to have unit length in their vector space
-	inner_product = numpy.sum(sg_vals*sg_vals)
-	norm_factor = 1./(inner_product**0.5)
+	#inner_product = numpy.sum(sg_vals*sg_vals)
+	#norm_factor = 1./(inner_product**0.5)
 
-	return norm_factor*sg_vals 
+	return sg_vals 
 
 def half_sine_gaussian(sg_arr):
 	samples = sg_arr.size/2 + 1
@@ -488,6 +488,7 @@ def parse_command_line():
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
 	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
+	parser.add_option("-t", "--t-arr-factor", type = "float", default = 1.0, help = "Add scaling factor to template time array to increase number of samples. Temporary.")
 
 	parser.add_option("--trigger-start-time", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
 	parser.add_option("--trigger-end-time", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
@@ -617,10 +618,10 @@ for channel in channels:
 			qhigh = options.qhigh
 		qlow = 4
 		# generate sine-gaussian templates
-		dur = max([duration(phi, q, 1e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
-		t_arr = numpy.linspace(-dur/2., dur/2., int(dur*rate))
+		dur = max([duration(phi, q, 5e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
+		t_arr = numpy.linspace(-dur/2., dur/2., int(numpy.floor(options.t_arr_factor*dur*rate)+1))
 		phase = [0, numpy.pi/2.]
-		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 1e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
+		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 5e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 		# uncomment to determine template durations
 		#print >>sys.stderr, len(list(half_sine_gaussian(sine_gaussian(phi, 0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = 0.2)))
