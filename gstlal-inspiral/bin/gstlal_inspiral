@@ -179,6 +179,7 @@ except ImportError:
 	# fpconst is not part of the standard library and might not be
 	# available
 	PosInf = float("+inf")
+import gzip
 import itertools
 import math
 from optparse import OptionParser
@@ -186,7 +187,6 @@ import os
 import resource
 import signal
 import socket
-import subprocess
 import sys
 import tempfile
 import time
@@ -600,12 +600,18 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 	if options.data_source not in ("lvshm", "framexmit") and output_url.endswith('.gz'):
 		try:
-			subprocess.check_call(["gzip", "--test", ligolw_utils.local_path_from_url(output_url)])
-			subprocess.check_call(["gzip", "--test", ligolw_utils.local_path_from_url(likelihood_url_namedtuple[0])])
-			# File is OK and there is no need to process it, skip ahead in the loop
+			# a single .read() would be easier but looping over
+			# lines uses less memory
+			for line in gzip.open(ligolw_utils.local_path_from_url(output_url)):
+				pass
+			for line in gzip.open(ligolw_utils.local_path_from_url(likelihood_url_namedtuple[0])):
+				pass
+			# File is OK and there is no need to process it,
+			# skip ahead in the loop
 			continue
-		except subprocess.CalledProcessError:
-			# File does not exist or is corrupted, need to reprocess
+		except IOError:
+			# File does not exist or is corrupted, need to
+			# reprocess
 			print >>sys.stderr, "Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_url))
 			pass
 
