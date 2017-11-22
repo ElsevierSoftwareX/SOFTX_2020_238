@@ -27,7 +27,6 @@
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
 #	+ `--vetoes-name` [name]: Set the name of the segment lists to use as vetoes (default = do not apply vetoes).
 #	+ `--verbose`: Be verbose.
-#	+ `--write-rates` [filename]: Write combined event parameter histograms together with histograms of asssigned zero-lag ranking statistic values to this file.
 
 
 #
@@ -43,7 +42,6 @@ from optparse import OptionParser
 import sys
 
 
-from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
@@ -51,7 +49,6 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
 from lalburst import ligolw_burca2
-from lalburst import snglcoinc
 from lalinspiral import thinca
 from gstlal import far
 from lal.utils import CacheEntry
@@ -86,7 +83,6 @@ def parse_command_line():
 	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("-f", "--force", action = "store_true", help = "Force recomputation of likelihood values.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("-w", "--write-rates", metavar = "filename", help = "Write combined event parameter histograms together with histograms of asssigned zero-lag ranking statistic values to this file.")
 	options, urls = parser.parse_args()
 
 	paramdict = options.__dict__.copy()
@@ -253,22 +249,6 @@ for n, url in enumerate(urls, 1):
 	)
 
 	#
-	# collect ranking statistic values if that's what we're doing.
-	#
-
-	if ranking_data is not None:
-		for row in lsctables.CoincTable.get_table(xmldoc):
-			if row.coinc_def_id != coinc_def_id:
-				continue
-			instruments = lsctables.instrumentsproperty.get(coinc_inspiral_index[row.coinc_event_id].ifos)
-			instruments -= set(("V1",))	# don't claim Virgo participated or was on. FIXME:  remove after O2
-			ln_likelihood_ratio = row.likelihood
-			if any(offset_vectors[row.time_slide_id].values()):
-				ranking_data.background_likelihood_rates[frozenset(instruments)][ln_likelihood_ratio,] += 1.
-			else:
-				ranking_data.zero_lag_likelihood_rates[frozenset(instruments)][ln_likelihood_ratio,] += 1.
-
-	#
 	# close out process metadata.
 	#
 
@@ -289,17 +269,3 @@ for n, url in enumerate(urls, 1):
 
 if failed:
 	raise ValueError("%s could not be processed" % ", ".join("'%s'" % url for url in failed))
-
-
-#
-# finally write combined ranking data file if requested
-#
-
-
-if options.write_rates is not None:
-	xmldoc = ligolw.Document()
-	xmldoc.appendChild(ligolw.LIGO_LW())
-	process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
-	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
-	far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
-	ligolw_utils.write_filename(xmldoc, options.write_rates, gz = (options.write_rates or "stdout").endswith(".gz"), verbose = options.verbose)
