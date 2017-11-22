@@ -117,6 +117,7 @@ def parse_command_line():
 
 
 options, process_params, segs, horizon_history, num_templates, mchirp = parse_command_line()
+segs.coalesce()	# just in case
 
 if options.verbose:
 	print >> sys.stderr, "Livetime: ", abs(segs)
