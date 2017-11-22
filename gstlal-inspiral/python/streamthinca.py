@@ -262,8 +262,7 @@ class StreamThinca(object):
 			if len(events) == 1 and events[0].ifo == "V1": return True	# exclude single-detector Virgo-only coincs.  FIXME:  remove after O2
 			return min(event.end for event in events) not in seg
 
-		# find coincs.  NOTE:  do not pass veto segments to this
-		# function.
+		# find coincs.
 		thinca.ligolw_thinca(
 			xmldoc,
 			process_id = process_id,

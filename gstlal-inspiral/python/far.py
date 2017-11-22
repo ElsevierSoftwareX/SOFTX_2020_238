@@ -1547,7 +1547,7 @@ class FAPFAR(object):
 	@gstlalstats.assert_probability
 	def fap_from_rank(self, rank):
 		# implements equation (8) from Phys. Rev. D 88, 024025.
-		# arXiv:1209.0718
+		# arXiv:1209.0718.
 		return gstlalstats.fap_after_trials(self.ccdf_from_rank(rank), self.zero_lag_total_count)
 
 	def rank_from_fap(self, p, tolerance = 1e-6):
@@ -1576,7 +1576,7 @@ class FAPFAR(object):
 	def far_from_rank(self, rank):
 		# implements equation (B4) of Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718.  the return value is divided by T to
-		# convert events/experiment to events/second.
+		# convert events/experiment to events/second.  "tdp" =
 		assert self.livetime is not None, "cannot compute FAR without livetime"
 		# true-dismissal probability = 1 - single-event false-alarm
 		# probability, the integral in equation (B4)

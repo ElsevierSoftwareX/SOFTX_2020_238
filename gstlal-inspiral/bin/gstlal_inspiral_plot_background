@@ -27,9 +27,24 @@
 #	+ `--max-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 40).
 #	+ `--min-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -5).
 #	+ `--output-dir` [path]: Write output to this directory (default = ".").
+#	+ `--output-format` [extension]: Select output format by setting the filename extension (default = ".png").
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
+#	+ `--threshold` [log likelihood ratio]: When plotting ranking statistic PDFs and CCDFs, discard everything below this threshold and renormalize accordingly (default = plot PDFs and CCDFs as found).
+#	+ `--add-zerolag-to-background`: Add zerolag events to background before populating coincident parameter PDF histograms.
 #	+ `--user-tag` [tag]: Set the adjustable component of the description fields in the output filenames (default = "ALL").
+#	+ `--plot-snr-snr-pdfs`: Plot the full cache of snr-snr-pdfs.
+#	+ `--dont-apply-extinction`: Don't apply the extinction model.
 #	+ `--verbose`: Be verbose.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
 
 import itertools
 import math
@@ -65,6 +80,64 @@ from gstlal import plotfar
 from gstlal import inspiral_pipe
 
 
+class SnrChiColourNorm(matplotlib.colors.Normalize):
+	def __call__(self, value, clip = None):
+		value, is_scalar = self.process_value(value)
+		numpy.clip(value, 1e-200, 1e+200, value)
+
+		self.autoscale_None(value)
+
+		vmin = math.log(self.vmin)
+		vmax = math.log(self.vmax)
+		xbar = (vmax + vmin) / 2.
+		delta = (vmax - vmin) / 2.
+		pi_2 = math.pi / 2.
+
+		value = (numpy.arctan((numpy.log(value) - xbar) * pi_2 / delta) + pi_2) / math.pi
+		return value[0] if is_scalar else value
+
+	def inverse(self, value):
+		vmin = math.log(self.vmin)
+		vmax = math.log(self.vmax)
+		xbar = (vmax + vmin) / 2.
+		delta = (vmax - vmin) / 2.
+		pi_2 = math.pi / 2.
+
+		value = numpy.exp(numpy.tan(value * math.pi - pi_2) * delta / pi_2 + xbar)
+		numpy.clip(value, 1e-200, 1e+200, value)
+		return value
+
+	def _autoscale(self, vmin, vmax):
+		vmin = math.log(vmin)
+		vmax = math.log(vmax)
+		xbar = (vmax + vmin) / 2.
+		delta = (vmax - vmin) / 2.
+		xbar += 2. * delta / 3.
+		delta /= 4.
+		vmin = math.exp(xbar - delta)
+		vmax = math.exp(xbar + delta)
+		return vmin, vmax
+
+	def autoscale(self, A):
+		self.vmin, self.vmax = self._autoscale(numpy.ma.min(A), numpy.ma.max(A))
+
+	def autoscale_None(self, A):
+		vmin, vmax = self._autoscale(numpy.ma.min(A), numpy.ma.max(A))
+		if self.vmin is None:
+			self.vmin = vmin
+		if self.vmax is None:
+			self.vmax = vmax
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("-d", "--database", metavar = "filename", action = "append", help = "Retrieve search results from this database (optional).  Can be given multiple times.")
@@ -74,13 +147,13 @@ def parse_command_line():
 	parser.add_option("--min-log-lambda", metavar = "value", default = -5., type = "float", help = "Plot ranking statistic CCDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -5).")
 	parser.add_option("--scatter-log-lambdas", metavar = "[low]:[high][,[low]:[high]...]", help = "Overlay scatter plots of candidate parameter co-ordinates on various PDF plots, limiting the candidates to those whose log likelihood ratios are in the given range (default = don't overlay scatter plot).  Use a range of \":\" to plot all candidates.")
 	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Write output to this directory (default = \".\").")
-	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by choosen the filename extension (default = \".png\").")
+	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by setting the filename extension (default = \".png\").")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "When plotting ranking statistic PDFs and CCDFs, discard everything below this threshold and renormalize accordingly (default = plot PDFs and CCDFs as found).")
-	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
+	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms.")
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the adjustable component of the description fields in the output filenames (default = \"ALL\").")
-	parser.add_option("--plot-snr-snr-pdfs", action = "store_true", help = "Plot the full cache of snr-snr-pdfs")
-	parser.add_option("--dont-apply-extinction", action = "store_true", help = "Don't apply the extinction model")
+	parser.add_option("--plot-snr-snr-pdfs", action = "store_true", help = "Plot the full cache of snr-snr-pdfs.")
+	parser.add_option("--dont-apply-extinction", action = "store_true", help = "Don't apply the extinction model.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -89,8 +162,9 @@ def parse_command_line():
 			options.database = []
 		options.database += [CacheEntry(line).path for line in open(options.database_cache)]
 
-	if options.output_format not in (".png", ".pdf", ".svg"):
-		raise ValueError("invalid --output-format \"%s\"" % options.output_format)
+	valid_formats = (".png", ".pdf", ".svg")
+	if options.output_format not in valid_formats:
+		raise ValueError("invalid --output-format \"%s\", allowed are %s" % (options.output_format, ", ".join("\"%s\"" % fmt for fmt in valid_formats)))
 
 	if options.scatter_log_lambdas is not None:
 		options.scatter_log_lambdas = segmentsUtils.from_range_strings(options.scatter_log_lambdas.split(","), boundtype = float).coalesce()
@@ -98,6 +172,15 @@ def parse_command_line():
 	options.user_tag = options.user_tag.upper()
 
 	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                    Input
+#
+# =============================================================================
+#
 
 
 def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
@@ -121,9 +204,9 @@ def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose 
 
 
 def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
-	background_ln_likelihood_ratios = []
-	zerolag_ln_likelihood_ratios = []
-	background_sngls = []
+	timeslide_ln_lr = []
+	zerolag_ln_lr = []
+	timeslide_sngls = []
 	zerolag_sngls = []
 
 	for n, filename in enumerate(filenames, 1):
@@ -177,13 +260,13 @@ ORDER BY
 	coinc_event_map.coinc_event_id
 		""", (definer_id, ln_likelihood_ratio_threshold, ln_likelihood_ratio_threshold)), lambda row: row[0]):
 			rows = list(rows)
-			is_background = rows[0][3]
+			is_timeslide = rows[0][3]
 			# {instrument: (snr, chisq)} dictionary
 			sngls = snglsdict((row[4], (row[5], row[6])) for row in rows)
 			sngls.ln_likelihood_ratio = rows[0][1]
 			sngls.fap = rows[0][2]
-			if is_background:
-				background_sngls.append(sngls)
+			if is_timeslide:
+				timeslide_sngls.append(sngls)
 			else:
 				zerolag_sngls.append(sngls)
 
@@ -191,59 +274,19 @@ ORDER BY
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
 
-	background_ln_likelihood_ratios = sorted((sngls.ln_likelihood_ratio, sngls.fap) for sngls in background_sngls)
-	zerolag_ln_likelihood_ratios = sorted((sngls.ln_likelihood_ratio, sngls.fap) for sngls in zerolag_sngls)
+	timeslide_ln_lr = sorted((sngls.ln_likelihood_ratio, sngls.fap) for sngls in timeslide_sngls)
+	zerolag_ln_lr = sorted((sngls.ln_likelihood_ratio, sngls.fap) for sngls in zerolag_sngls)
 
-	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, background_sngls, zerolag_sngls
+	return timeslide_ln_lr, zerolag_ln_lr, timeslide_sngls, zerolag_sngls
 
 
-class SnrChiColourNorm(matplotlib.colors.Normalize):
-	def __call__(self, value, clip = None):
-		value, is_scalar = self.process_value(value)
-		numpy.clip(value, 1e-200, 1e+200, value)
-
-		self.autoscale_None(value)
-
-		vmin = math.log(self.vmin)
-		vmax = math.log(self.vmax)
-		xbar = (vmax + vmin) / 2.
-		delta = (vmax - vmin) / 2.
-		pi_2 = math.pi / 2.
-
-		value = (numpy.arctan((numpy.log(value) - xbar) * pi_2 / delta) + pi_2) / math.pi
-		return value[0] if is_scalar else value
-
-	def inverse(self, value):
-		vmin = math.log(self.vmin)
-		vmax = math.log(self.vmax)
-		xbar = (vmax + vmin) / 2.
-		delta = (vmax - vmin) / 2.
-		pi_2 = math.pi / 2.
-
-		value = numpy.exp(numpy.tan(value * math.pi - pi_2) * delta / pi_2 + xbar)
-		numpy.clip(value, 1e-200, 1e+200, value)
-		return value
-
-	def _autoscale(self, vmin, vmax):
-		vmin = math.log(vmin)
-		vmax = math.log(vmax)
-		xbar = (vmax + vmin) / 2.
-		delta = (vmax - vmin) / 2.
-		xbar += 2. * delta / 3.
-		delta /= 4.
-		vmin = math.exp(xbar - delta)
-		vmax = math.exp(xbar + delta)
-		return vmin, vmax
-
-	def autoscale(self, A):
-		self.vmin, self.vmax = self._autoscale(numpy.ma.min(A), numpy.ma.max(A))
-
-	def autoscale_None(self, A):
-		vmin, vmax = self._autoscale(numpy.ma.min(A), numpy.ma.max(A))
-		if self.vmin is None:
-			self.vmin = vmin
-		if self.vmax is None:
-			self.vmax = vmax
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
 
 
 #
@@ -280,7 +323,8 @@ else:
 # plots
 #
 
-# SNR and Chisquared
+
+# SNR and \chi^2
 for instrument in coinc_params_distributions.instruments:
 	for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
 		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr, sngls = sngls)
@@ -292,7 +336,7 @@ for instrument in coinc_params_distributions.instruments:
 		fig.savefig(plotname)
 
 
-# Trigger and event rates
+# candidate rates
 fig = plotfar.plot_rates(coinc_params_distributions)
 plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_RATES" % options.user_tag, seg, options.output_format, path = options.output_dir)
 if options.verbose:

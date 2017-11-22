@@ -19,6 +19,16 @@
 ## @file
 # A program to recalculate likelihood values and FARs of gracedb events
 
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
 from optparse import OptionParser
 
 from glue.ligolw import array as ligolw_array

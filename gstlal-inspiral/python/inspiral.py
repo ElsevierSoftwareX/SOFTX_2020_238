@@ -109,6 +109,22 @@ from gstlal import far
 #
 # =============================================================================
 #
+#                         glue.ligolw Content Handlers
+#
+# =============================================================================
+#
+
+
+@ligolw_array.use_in
+@ligolw_param.use_in
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+
+#
+# =============================================================================
+#
 #                                     Misc
 #
 # =============================================================================
@@ -209,11 +225,14 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 
 	for instrument, filename in svd_banks.items():
 		for n, bank in enumerate(svd_bank.read_banks(filename, contenthandler = LIGOLWContentHandler, verbose = verbose)):
-			# Write out sngl inspiral table to temp file for trigger generator
-			# FIXME teach the trigger generator to get this information a better way
+			# Write out sngl inspiral table to temp file for
+			# trigger generator
+			# FIXME teach the trigger generator to get this
+			# information a better way
 			bank.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
 			xmldoc = ligolw.Document()
-			# FIXME if this table reference is from a DB this is a problem (but it almost certainly isn't)
+			# FIXME if this table reference is from a DB this
+			# is a problem (but it almost certainly isn't)
 			xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(bank.sngl_inspiral_table.copy()).extend(bank.sngl_inspiral_table)
 			ligolw_utils.write_filename(xmldoc, bank.template_bank_filename, gz = True, verbose = verbose)
 			xmldoc.unlink()	# help garbage collector
@@ -254,22 +273,6 @@ def subdir_from_T050017_filename(fname):
 	except OSError:
 		pass
 	return path
-
-
-#
-# =============================================================================
-#
-#                         glue.ligolw Content Handlers
-#
-# =============================================================================
-#
-
-
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
-lsctables.use_in(LIGOLWContentHandler)
 
 
 #
