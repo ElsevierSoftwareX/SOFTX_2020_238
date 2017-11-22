@@ -30,10 +30,8 @@
 
 
 from optparse import OptionParser
-import uuid
 
 
-import lal
 import lal.series
 from lal.utils import CacheEntry
 from glue.ligolw import utils as ligolw_utils
