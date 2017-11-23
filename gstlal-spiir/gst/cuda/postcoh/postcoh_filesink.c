@@ -44,6 +44,12 @@ enum
 	PROP_SNAPSHOT_INTERVAL
 };
 
+G_DEFINE_TYPE_WITH_CODE (
+		PostcohFilesink, 
+		postcoh_filesink, 
+    		GST_TYPE_BASE_SINK, 
+		GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "postcoh filesink", 0, "postcoh filesink element"););
+
 /* The following content is mostly copied from gstfilesink.c */
 
 #if 0
@@ -133,13 +139,8 @@ _do_init (GType filesink_type)
       "postcoh filesink element");
 }
 
-GST_BOILERPLATE_FULL (
-		PostcohFilesink, 
-		postcoh_filesink, 
-		GstBaseSink,
-    		GST_TYPE_BASE_SINK, 
-		_do_init);
 
+#if 0
 static void
 postcoh_filesink_base_init(gpointer g_class)
 {
@@ -163,19 +164,37 @@ postcoh_filesink_base_init(gpointer g_class)
 		  );
 
 }
-
+#endif
 static void
 postcoh_filesink_class_init (PostcohFilesinkClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS (klass);
 
-  parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
+  postcoh_filesink_parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
   
   gobject_class->dispose = postcoh_filesink_dispose;
 
   gobject_class->set_property = postcoh_filesink_set_property;
   gobject_class->get_property = postcoh_filesink_get_property;
+
+  GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
+  gst_element_class_set_details_simple (gstelement_class,
+      "Postcoh File Sink",
+      "Sink/File", "Write postcoh tables to a xml file",
+      "Qi Chu <qi.chu at ligo dot org>");
+
+  gst_element_class_add_pad_template (
+		  gstelement_class,
+		  gst_pad_template_new(
+			  "sink",
+			  GST_PAD_SINK,
+			  GST_PAD_ALWAYS,
+			  gst_caps_from_string(
+				  "application/x-lal-postcoh"
+			  )
+			  )
+		  );
 
   g_object_class_install_property (gobject_class, PROP_LOCATION,
       g_param_spec_string ("location", "File Location",
@@ -201,7 +220,7 @@ postcoh_filesink_class_init (PostcohFilesinkClass * klass)
 }
 
 static void
-postcoh_filesink_init (PostcohFilesink * sink, PostcohFilesinkClass *klass)
+postcoh_filesink_init (PostcohFilesink * sink)
 {
   sink->filename = NULL;
   sink->file = NULL;
@@ -216,7 +235,7 @@ postcoh_filesink_dispose (GObject * object)
 {
   PostcohFilesink *sink = POSTCOH_FILESINK (object);
 
-  G_OBJECT_CLASS (parent_class)->dispose (object);
+  G_OBJECT_CLASS (postcoh_filesink_parent_class)->dispose (object);
 
   if (sink->uri) {
 	  g_free (sink->uri);
@@ -623,8 +642,11 @@ static gboolean postcoh_filesink_is_invalid_background(PostcohInspiralTable *tab
 static GstFlowReturn
 postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 {
-  PostcohInspiralTable *table = (PostcohInspiralTable *) GST_BUFFER_DATA(buf);
-  PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
+  GstMapInfo mapinfo;
+  gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
+
+  PostcohInspiralTable *table = (PostcohInspiralTable *)&mapinfo.data;
+  PostcohInspiralTable *table_end = (PostcohInspiralTable *) (&mapinfo.data + mapinfo.size);
 
   XmlTable *xtable = sink->xtable;
   int rc;
@@ -632,71 +654,22 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 
   GST_LOG_OBJECT(sink, "start to write postcoh table");
   for(; table<table_end; table++) {
-	is_invalid = postcoh_filesink_is_invalid_background(table);
+	//is_invalid = postcoh_filesink_is_invalid_background(table);
 	if (!is_invalid) {
         GString *line = g_string_new("\t\t\t\t");
-	g_string_append_printf(line, "%d%s", table->end_time_L.gpsSeconds, xtable->delimiter->str); // for end_time_ns
-	g_string_append_printf(line, "%d%s", table->end_time_L.gpsNanoSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->end_time_L.gpsSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->end_time_L.gpsNanoSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->end_time_H.gpsSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->end_time_H.gpsNanoSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->end_time_V.gpsSeconds, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->end_time_V.gpsNanoSeconds, xtable->delimiter->str);
-	
-	g_string_append_printf(line, "%d%s", table->is_background, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->livetime, xtable->delimiter->str);
-	g_string_append_printf(line, "%s%s", table->ifos, xtable->delimiter->str);
-	g_string_append_printf(line, "%s%s", table->pivotal_ifo, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->tmplt_idx, xtable->delimiter->str);
-	g_string_append_printf(line, "%d%s", table->pix_idx, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->snglsnr_L, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->snglsnr_H, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->snglsnr_V, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->coaphase_L, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->coaphase_H, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->coaphase_V, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->chisq_L, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->chisq_H, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->chisq_V, xtable->delimiter->str);
-
-	g_string_append_printf(line, "%g%s", table->cohsnr, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->nullsnr, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->cmbchisq, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->spearman_pval, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->fap, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->far, xtable->delimiter->str);
-	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
-	g_string_append_printf(line, "%lg%s", table->template_duration, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->mchirp, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->mtotal, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->mass1, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->mass2, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->spin1x, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->spin1y, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->spin1z, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->spin2x, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->spin2y, xtable->delimiter->str);
-	g_string_append_printf(line, "%g%s", table->spin2z, xtable->delimiter->str);
-	g_string_append_printf(line, "%lg%s", table->ra, xtable->delimiter->str);
-	g_string_append_printf(line, "%lg%s", table->dec, xtable->delimiter->str);
-	g_string_append_printf(line, "%lg%s", table->deff_L, xtable->delimiter->str);
-	g_string_append_printf(line, "%lg%s", table->deff_H, xtable->delimiter->str);
-	g_string_append_printf(line, "%lg%s", table->deff_V, xtable->delimiter->str);
-	
-	g_string_append(line, "\n");
-	//printf("%s", line->str);
+	postcohinspiral_table_set_line(line, table, xtable);
         rc = xmlTextWriterWriteFormatRaw(sink->writer, line->str);
 	if (rc < 0)
 		return GST_FLOW_ERROR;
         g_string_free(line, TRUE);
 	}
   }
+  gst_buffer_unmap(buf, &mapinfo);
 
   GST_LOG_OBJECT (sink,
 		"Writen a buffer (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
 		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
-		G_GUINT64_FORMAT,  GST_BUFFER_SIZE (buf),
+		G_GUINT64_FORMAT,  (unsigned int) gst_buffer_get_size(buf),
 		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
 		GST_TIME_ARGS (GST_BUFFER_DURATION (buf)),
 		GST_BUFFER_OFFSET (buf), GST_BUFFER_OFFSET_END (buf));

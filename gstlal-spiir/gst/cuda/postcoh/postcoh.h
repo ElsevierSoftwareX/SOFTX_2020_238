@@ -24,7 +24,11 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
-#include <gst/base/gstadapter.h>
+#include <gst/audio/audio.h>
+#include <gstlal/gstaudioadapter.h>
+#include <gstlal/gstlalcollectpads.h>
+#include <gstlal/gstlal_audio_info.h>
+#include <gstlal/gstlal_debug.h>
 #include <cuda_runtime.h>
 
 // FIXME: hack for cuda-6.5 and lal header to work
@@ -50,6 +54,11 @@ G_BEGIN_DECLS
 #ifndef MAX_ALLIFO_LEN
 #define MAX_ALLIFO_LEN 14
 #endif
+
+#ifndef MIN_OUTPUT_SKYMAP_SNR
+#define MIN_OUTPUT_SKYMAP_SNR 8
+#endif
+
 typedef struct _CudaPostcoh CudaPostcoh;
 typedef struct _CudaPostcohClass CudaPostcohClass;
 
@@ -74,7 +83,8 @@ typedef void (*CudaPostcohPeakfinder) (gpointer d_snglsnr, gint size);
 struct _GstPostcohCollectData {
 	GstCollectData data;
 	gchar *ifo_name;
-	GstAdapter *adapter;
+	GstAudioInfo audio_info;
+	GstAudioAdapter *adapter;
   	double offset_per_nanosecond;
 	gint channels;
 	gboolean is_aligned;
@@ -129,7 +139,8 @@ typedef struct _PeakList {
 	
 	float *cohsnr_skymap;
 	float *nullsnr_skymap;
-
+	
+	/* structure on GPU device */
 	int *d_npeak;
 	int *d_peak_pos;
 	int *d_len_idx;
@@ -174,12 +185,22 @@ typedef struct _PeakList {
 	float *d_peak_tmplt;
 	float *d_maxsnglsnr; // for cuda peakfinder, not used now
 
+	float *d_snglsnr_buffer;  // we need to copy data from CPU memory to this buffer; then do transpose for new postcoh kernel optimized by Xiaoyang Guo
+	int len_snglsnr_buffer;
 } PeakList;
 
 typedef struct _PostcohState {
+  /* parent pointer in host device, each children pointer is in host device, 
+   * pointing to a detector snglsnr array in GPU device */
   COMPLEX_F **d_snglsnr;
+  /* parent pointer in host device, each children pointer is in GPU device,
+   * pointing to a detector snglsnr array in GPU device*/
   COMPLEX_F **dd_snglsnr;
+  /* parent pointer in host device, each children pointer is in GPU device,
+   * pointing to a detector autocorrelation array in GPU device*/
   COMPLEX_F **dd_autocorr_matrix;
+  /* parent pointer in host device, each children pointer is in GPU device,
+   * pointing to a detector autocorrealtion norm value in GPU device*/
   float **dd_autocorr_norm;
   int autochisq_len;
   int snglsnr_len;
@@ -187,9 +208,17 @@ typedef struct _PostcohState {
   int snglsnr_start_exe;
   gint nifo;
   gint8 *ifo_mapping;
+  /* sigmasq read from bank to compute effective distance */
+  double **sigmasq;
+  /* parent pointer in host device, each children pointer is in host device,
+   * pointing to the coherent U map of a certain time in GPU device*/
   float **d_U_map;
+  /* parent pointer in host device, each children pointer is in host device,
+   * pointing to the coherent time arrival diff map of a certain time in GPU device*/
   float **d_diff_map;
   int gps_step;
+  /* be careful that long has different length in different machines */
+  long gps_start;
   unsigned long nside;
   int npix;
   PeakList **peak_list;
@@ -204,6 +233,7 @@ typedef struct _PostcohState {
   char cur_ifos[MAX_ALLIFO_LEN];
   gint cur_nifo;
   gint is_member_init;
+  float snglsnr_max;
   float *tmp_maxsnr;
   int *tmp_tmpltidx;
 } PostcohState;
@@ -215,10 +245,21 @@ typedef struct _PostcohState {
  */
 struct _CudaPostcoh {
   GstElement element;
+  GstAudioInfo info;
 
   /* <private> */
-  GstPad *srcpad;
+  GstPad *srcpad, *sinkpad;
   GstCollectPads *collect;
+  GstSegment      segment;
+  gint padcount;
+  guint64 offset;
+
+  volatile gboolean new_segment_pending;
+  volatile gboolean flush_stop_pending;
+
+  GstCaps *current_caps;
+  GstCaps *filter_caps;
+  GList *pending_events;
 
   gint rate;
   gint channels;
@@ -226,7 +267,7 @@ struct _CudaPostcoh {
   gint bps;
 
   char *detrsp_fname;
-  char *autocorr_fname;
+  char *spiir_bank_fname;
   gint exe_len;
   gint preserved_len;
   float max_dt;
@@ -243,8 +284,8 @@ struct _CudaPostcoh {
   PostcohState *state;
   float snglsnr_thresh;
   float cohsnr_thresh;
-  GMutex *prop_lock;
-  GCond *prop_avail;
+  GMutex prop_lock;
+  GCond prop_avail;
   gint hist_trials;
   float trial_interval;
   gint trial_interval_in_samples;
@@ -258,6 +299,9 @@ struct _CudaPostcoh {
 
   gint stream_id;
   gint device_id;
+  /* book-keeping */
+  long process_id;
+  long cur_event_id;
   cudaStream_t stream;
 };
 

@@ -40,20 +40,102 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define DEFAULT_DETRSP_FNAME "L1H1V1_detrsp.xml"
 #define EPSILON 5
 #define PEAKFINDER_CLUSTER_WINDOW 5
+#define RAD2DEG 57.2957795
+#define L_MAPPING 0
+#define H_MAPPING 1
+#define V_MAPPING 2
+#define ACCELERATE_POSTCOH_MEMORY_COPY
+static gboolean cuda_postcoh_sink_setcaps(CudaPostcoh *postcoh, GstPad *pad, GstCaps *caps);
+static guint64 adapter_available_samples(GstAudioAdapter *adapter);
+const guint8* gst_adapter_peek_cuda(GstAudioAdapter *adapter, guint size);
+static void cuda_postcoh_device_set_init(CudaPostcoh *element);
+static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *value, GParamSpec *pspec);
+static gboolean sink_event(GstCollectPads *pads, GstCollectData *pad, GstEvent *event, gpointer user_data);
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cuda_postcoh", 0, "cuda_postcoh element");
-}
 
-
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
 	CudaPostcoh,
 	cuda_postcoh,
-	GstElement,
 	GST_TYPE_ELEMENT,
-	additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cuda_postcoh", 0, "cuda_postcoh element")
 );
+
+//G_DEFINE_TYPE(CudaPostcohPad, cuda_postcoh_pad, GST_TYPE_PAD);
+
+static guint64 adapter_available_samples(GstAudioAdapter *adapter)
+{
+  guint size;
+  g_object_get(adapter, "size", &size, NULL);
+  return size;
+}
+
+#ifdef ACCELERATE_POSTCOH_MEMORY_COPY
+// This function is just copy from gst_adapter_peek and change malloc to cudaMallocHost
+// FIXME: temporarily used to speed up cudaMemcpy, will be deleted when transfered to gstreamer1.x
+const guint8* gst_adapter_peek_cuda(GstAudioAdapter *adapter, guint size)
+{
+  //int DEFAULT_SIZE = 16;
+  //GstBuffer *cur;
+  //GSList *cur_list;
+  //guint copied;
+  
+  guint8 *output;
+
+#if 0
+  g_return_val_if_fail (GST_IS_ADAPTER (adapter), NULL);
+  g_return_val_if_fail (size > 0, NULL);
+
+  /* we don't have enough data, return NULL. This is unlikely
+ *    * as one usually does an _available() first instead of peeking a
+ *       * random size. */
+  if (G_UNLIKELY (size > adapter->size))
+    return NULL;
+
+  /* we have enough assembled data, return it */
+  if (adapter->assembled_len >= size)
+    return adapter->assembled_data;
+
+  /* our head buffer has enough data left, return it */
+  cur = adapter->buflist->data;
+  if (GST_BUFFER_SIZE (cur) >= size + adapter->skip)
+    return GST_BUFFER_DATA (cur) + adapter->skip;
+
+#endif
+  /*if (adapter->assembled_size < size) {
+    adapter->assembled_size = (size / DEFAULT_SIZE + 1) * DEFAULT_SIZE;
+    GST_DEBUG_OBJECT (adapter, "setting size of internal buffer to %u",
+        adapter->assembled_size);
+    CUDA_CHECK(cudaMallocHost((void**)&(adapter->assembled_data), adapter->assembled_size));
+  }*/
+
+  /* FIXME: Currently using a very simplified code, can add those conditions check later  */
+  CUDA_CHECK(cudaMallocHost((void **)&output, size));
+  gst_audioadapter_copy_samples(adapter, output, size, NULL, NULL);
+
+#if 0
+  adapter->assembled_len = size;
+  copied = GST_BUFFER_SIZE (cur) - adapter->skip;
+  memcpy (adapter->assembled_data, GST_BUFFER_DATA (cur) + adapter->skip,
+      copied);
+
+  cur_list = g_slist_next (adapter->buflist);
+  while (copied < size) {
+    g_assert (cur_list);
+    cur = cur_list->data;
+    cur_list = g_slist_next (cur_list);
+    memcpy (adapter->assembled_data + copied, GST_BUFFER_DATA (cur),
+        MIN (GST_BUFFER_SIZE (cur), size - copied));
+    copied = MIN (size, copied + GST_BUFFER_SIZE (cur));
+  }
+#endif
+  //return adapter->assembled_data;
+  return output;
+}
+#endif
+
+
+
+
 
 //FIXME: not support width=64 yet
 static GstStaticPadTemplate cuda_postcoh_sink_template =
@@ -62,11 +144,9 @@ GST_STATIC_PAD_TEMPLATE (
 		GST_PAD_SINK, 
 		GST_PAD_REQUEST, 
 		GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 32"
+		  GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(F32) "}") ", " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 		));
 /* the following is for a src template that's the same with
  * the sink template 
@@ -89,7 +169,7 @@ enum
 {
 	PROP_0,
 	PROP_DETRSP_FNAME,
-	PROP_AUTOCORRELATION_FNAME,
+	PROP_SPIIR_BANK_FNAME,
 	PROP_SNGL_TMPLT_FNAME,
 	PROP_HIST_TRIALS,
 	PROP_TRIAL_INTERVAL,
@@ -118,50 +198,67 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
+		/* read in detector response map */
 		case PROP_DETRSP_FNAME:
-
        			/* must make sure stream_id has already loaded */
 			g_assert(element->stream_id != NOT_INIT);
-			g_mutex_lock(element->prop_lock);
+			g_mutex_lock(&element->prop_lock);
 			element->detrsp_fname = g_value_dup_string(value);
 			cuda_postcoh_device_set_init(element);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
 			cuda_postcoh_map_from_xml(element->detrsp_fname, element->state, element->stream);
-			g_cond_broadcast(element->prop_avail);
-			g_mutex_unlock(element->prop_lock);
+			GST_DEBUG("detrsp map has been read in, broad cast the lock avail");
+			g_cond_broadcast(&element->prop_avail);
+			g_mutex_unlock(&element->prop_lock);
+			GST_DEBUG("detrsp map lock broad cast done");
 			break;
 
-		case PROP_AUTOCORRELATION_FNAME: 
-
+		/* read in autocorrelation and sigmasq */
+		case PROP_SPIIR_BANK_FNAME: 
        			/* must make sure stream_id has already loaded */
 			g_assert(element->stream_id != NOT_INIT);
-			g_mutex_lock(element->prop_lock);
+			GST_DEBUG("autocorrelation and sigma acquiring the lock");
+			g_mutex_lock(&element->prop_lock);
+			GST_DEBUG("autocorrelation and sigma have acquired the lock");
 			cuda_postcoh_device_set_init(element);
 			CUDA_CHECK(cudaSetDevice(element->device_id));
-			element->autocorr_fname = g_value_dup_string(value);
-			cuda_postcoh_autocorr_from_xml(element->autocorr_fname, element->state, element->stream);
-			g_cond_broadcast(element->prop_avail);
-			g_mutex_unlock(element->prop_lock);
+			element->spiir_bank_fname = g_value_dup_string(value);
+			cuda_postcoh_autocorr_from_xml(element->spiir_bank_fname, element->state, element->stream);
+			cuda_postcoh_sigmasq_from_xml(element->spiir_bank_fname, element->state);
+			GST_DEBUG("autocorrelation and sigma have been read in, broad cast the lock avail");
+			g_cond_broadcast(&element->prop_avail);
+			g_mutex_unlock(&element->prop_lock);
+			GST_DEBUG("autocorrelation and sigma lock broad cast done");
 			break;
 
+		/* read in source information masses and spins */
 		case PROP_SNGL_TMPLT_FNAME: 
+       			/* must make sure stream_id has already loaded */
+			g_assert(element->stream_id != NOT_INIT);
+			GST_DEBUG("sngl table acquiring the lock");
+			g_mutex_lock(&element->prop_lock);
+			GST_DEBUG("sngl table has acquired the lock");
 			element->sngl_tmplt_fname = g_value_dup_string(value);
 			cuda_postcoh_sngl_tmplt_from_xml(element->sngl_tmplt_fname, &(element->sngl_table));
+			GST_DEBUG("sngl tables has been read in, broad cast the lock avail");
+			g_cond_broadcast(&element->prop_avail);
+			g_mutex_unlock(&element->prop_lock);
+			GST_DEBUG("sngl tables lock broad cast done");
 			break;
 
 
 		case PROP_HIST_TRIALS:
-			g_mutex_lock(element->prop_lock);
+			g_mutex_lock(&element->prop_lock);
 			element->hist_trials = g_value_get_int(value);
-			g_cond_broadcast(element->prop_avail);
-			g_mutex_unlock(element->prop_lock);
+			g_cond_broadcast(&element->prop_avail);
+			g_mutex_unlock(&element->prop_lock);
 			break;
 
 		case PROP_TRIAL_INTERVAL:
-			g_mutex_lock(element->prop_lock);
+			g_mutex_lock(&element->prop_lock);
 			element->trial_interval = g_value_get_float(value);
-			g_cond_broadcast(element->prop_avail);
-			g_mutex_unlock(element->prop_lock);
+			g_cond_broadcast(&element->prop_avail);
+			g_mutex_unlock(&element->prop_lock);
 			break;
 
 		case PROP_OUTPUT_SKYMAP:
@@ -199,8 +296,8 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 			g_value_set_string(value, element->detrsp_fname);
 			break;
 
-		case PROP_AUTOCORRELATION_FNAME:
-			g_value_set_string(value, element->autocorr_fname);
+		case PROP_SPIIR_BANK_FNAME:
+			g_value_set_string(value, element->spiir_bank_fname);
 			break;
 
 		case PROP_SNGL_TMPLT_FNAME:
@@ -258,26 +355,403 @@ static void set_aligned_offset0(GstPostcohCollectData *data, guint64 offset)
 
 }
 
-static gboolean
-sink_event(GstPad *pad, GstEvent *event)
+/*
+ * Copied from gstadder.c on 14 Nov 2071, shinkee
+ */
+static GstCaps *
+cuda_postcoh_sink_getcaps (GstPad * pad, GstCaps * filter)
 {
-	CudaPostcoh *postcoh = CUDA_POSTCOH(GST_PAD_PARENT(pad));
-	GstPostcohCollectData *data = gst_pad_get_element_private(pad);
-	gboolean ret = TRUE;
+  CudaPostcoh *postcoh;
+  GstCaps *result, *peercaps, *current_caps, *filter_caps;
 
-	switch(GST_EVENT_TYPE(event)) {
-		case GST_EVENT_NEWSEGMENT:
-			GST_DEBUG_OBJECT(pad, "new segment");
-			break;
-		// do not process tag.
-		case GST_EVENT_TAG:
-			gst_object_unref(event);
-			return TRUE;
-		default:
-			break;
-	}
-	ret = postcoh->collect_event(pad, event);
-	return TRUE;
+  postcoh = CUDA_POSTCOH(GST_PAD_PARENT (pad));
+
+  GST_OBJECT_LOCK (postcoh);
+  /* take filter */
+  if ((filter_caps = postcoh->filter_caps)) {
+    if (filter)
+      filter_caps =
+          gst_caps_intersect_full (filter, filter_caps,
+          GST_CAPS_INTERSECT_FIRST);
+    else
+      gst_caps_ref (filter_caps);
+  } else {
+    filter_caps = filter ? gst_caps_ref (filter) : NULL;
+  }
+  GST_OBJECT_UNLOCK (postcoh);
+
+  if (filter_caps && gst_caps_is_empty (filter_caps)) {
+    GST_WARNING_OBJECT (pad, "Empty filter caps");
+    return filter_caps;
+  }
+
+  /* get the downstream possible caps */
+  peercaps = gst_pad_peer_query_caps (postcoh->srcpad, filter_caps);
+
+  /* get the allowed caps on this sinkpad */
+  GST_OBJECT_LOCK (postcoh);
+  current_caps =
+      postcoh->current_caps ? gst_caps_ref (postcoh->current_caps) : NULL;
+  if (current_caps == NULL) {
+    current_caps = gst_pad_get_pad_template_caps (pad);
+    if (!current_caps)
+      current_caps = gst_caps_new_any ();
+  }
+  GST_OBJECT_UNLOCK (postcoh);
+
+  if (peercaps) {
+    /* if the peer has caps, intersect */
+    GST_DEBUG_OBJECT (postcoh, "intersecting peer and our caps");
+    result =
+        gst_caps_intersect_full (peercaps, current_caps,
+        GST_CAPS_INTERSECT_FIRST);
+    gst_caps_unref (peercaps);
+    gst_caps_unref (current_caps);
+  } else {
+    /* the peer has no caps (or there is no peer), just use the allowed caps
+     * of this sinkpad. */
+    /* restrict with filter-caps if any */
+    if (filter_caps) {
+      GST_DEBUG_OBJECT (postcoh, "no peer caps, using filtered caps");
+      result =
+          gst_caps_intersect_full (filter_caps, current_caps,
+          GST_CAPS_INTERSECT_FIRST);
+      gst_caps_unref (current_caps);
+    } else {
+      GST_DEBUG_OBJECT (postcoh, "no peer caps, using our caps");
+      result = current_caps;
+    }
+  }
+
+  if (filter_caps)
+    gst_caps_unref (filter_caps);
+
+  GST_LOG_OBJECT (postcoh, 
+      "getting caps on pad %p,%s to %" GST_PTR_FORMAT, 
+      pad, GST_PAD_NAME (pad), result);
+
+  return result;
+}
+
+/*
+ * Copied from gstadder.c on 14 Nov 2071, shinkee
+ */
+static gboolean
+cuda_postcoh_query_duration (CudaPostcoh * postcoh, GstQuery * query)
+{
+  gint64 max;
+  gboolean res;
+  GstFormat format;
+  GstIterator *it;
+  gboolean done;
+  GValue item = { 0, };
+
+  /* parse format */
+  gst_query_parse_duration (query, &format, NULL);
+
+  max = -1;
+  res = TRUE;
+  done = FALSE;
+
+  it = gst_element_iterate_sink_pads (GST_ELEMENT_CAST (postcoh));
+  while (!done) {
+    GstIteratorResult ires;
+
+    ires = gst_iterator_next (it, &item);
+    switch (ires) {
+      case GST_ITERATOR_DONE:
+        done = TRUE;
+        break;
+      case GST_ITERATOR_OK:
+      {
+        GstPad *pad = g_value_get_object (&item);
+        gint64 duration;
+
+        /* ask sink peer for duration */
+        res &= gst_pad_peer_query_duration (pad, format, &duration);
+        /* take max from all valid return values */
+        if (res) {
+          /* valid unknown length, stop searching */
+          if (duration == -1) {
+            max = duration;
+            done = TRUE;
+          }
+          /* else see if bigger than current max */
+          else if (duration > max)
+            max = duration;
+        }
+        g_value_reset (&item);
+        break;
+      }
+      case GST_ITERATOR_RESYNC:
+        max = -1;
+        res = TRUE;
+        gst_iterator_resync (it);
+        break;
+      default:
+        res = FALSE;
+        done = TRUE;
+        break;
+    }
+  }
+  g_value_unset (&item);
+  gst_iterator_free (it);
+
+  if (res) {
+    /* and store the max */
+    GST_DEBUG_OBJECT (postcoh, "Total duration in format %s: %"
+        GST_TIME_FORMAT, gst_format_get_name (format), GST_TIME_ARGS (max));
+    gst_query_set_duration (query, format, max);
+  }
+
+  return res;
+}
+
+/*
+ * Copied from gstadder.c on 14 Nov 2071, shinkee
+ */
+
+static gboolean
+cuda_postcoh_query_latency (CudaPostcoh *postcoh, GstQuery * query)
+{
+  GstClockTime min, max;
+  gboolean live;
+  gboolean res;
+  GstIterator *it;
+  gboolean done;
+  GValue item = { 0, };
+
+  res = TRUE;
+  done = FALSE;
+
+  live = FALSE;
+  min = 0;
+  max = GST_CLOCK_TIME_NONE;
+
+  /* Take maximum of all latency values */
+  it = gst_element_iterate_sink_pads (GST_ELEMENT_CAST (postcoh));
+  while (!done) {
+    GstIteratorResult ires;
+
+    ires = gst_iterator_next (it, &item);
+    switch (ires) {
+      case GST_ITERATOR_DONE:
+        done = TRUE;
+        break;
+      case GST_ITERATOR_OK:
+      {
+        GstPad *pad = g_value_get_object (&item);
+        GstQuery *peerquery;
+        GstClockTime min_cur, max_cur;
+        gboolean live_cur;
+
+        peerquery = gst_query_new_latency ();
+
+        /* Ask peer for latency */
+        res &= gst_pad_peer_query (pad, peerquery);
+
+        /* take max from all valid return values */
+        if (res) {
+          gst_query_parse_latency (peerquery, &live_cur, &min_cur, &max_cur);
+
+          if (min_cur > min)
+            min = min_cur;
+
+          if (max_cur != GST_CLOCK_TIME_NONE &&
+              ((max != GST_CLOCK_TIME_NONE && max_cur > max) ||
+                  (max == GST_CLOCK_TIME_NONE)))
+            max = max_cur;
+
+          live = live || live_cur;
+        }
+
+        gst_query_unref (peerquery);
+        g_value_reset (&item);
+        break;
+      }
+      case GST_ITERATOR_RESYNC:
+        live = FALSE;
+        min = 0;
+        max = GST_CLOCK_TIME_NONE;
+        res = TRUE;
+        gst_iterator_resync (it);
+        break;
+      default:
+        res = FALSE;
+        done = TRUE;
+        break;
+    }
+  }
+  g_value_unset (&item);
+  gst_iterator_free (it);
+
+  if (res) {
+    /* store the results */
+    GST_DEBUG_OBJECT (postcoh, "Calculated total latency: live %s, min %"
+        GST_TIME_FORMAT ", max %" GST_TIME_FORMAT,
+        (live ? "yes" : "no"), GST_TIME_ARGS (min), GST_TIME_ARGS (max));
+    gst_query_set_latency (query, live, min, max);
+  }
+
+  return res;
+}
+
+/*
+ * Copied from gstadder.c on 14 Nov 2071, shinkee
+ */
+static gboolean 
+src_query(GstPad * pad, GstObject * parent, GstQuery * query)
+{
+  CudaPostcoh *postcoh = CUDA_POSTCOH(parent);
+  gboolean res = FALSE;
+
+  switch (GST_QUERY_TYPE (query)) {
+    case GST_QUERY_POSITION:
+    {
+      GstFormat format;
+
+      gst_query_parse_position (query, &format, NULL);
+
+      switch (format) {
+        case GST_FORMAT_TIME:
+          /* FIXME, bring to stream time, might be tricky */
+          gst_query_set_position (query, format, postcoh->segment.position);
+          res = TRUE;
+          break;
+        case GST_FORMAT_DEFAULT:
+          gst_query_set_position (query, format, postcoh->offset);
+          res = TRUE;
+          break;
+        default:
+          break;
+      }
+      break;
+    }
+    case GST_QUERY_DURATION:
+      res = cuda_postcoh_query_duration (postcoh, query);
+      break;
+    case GST_QUERY_LATENCY:
+      res = cuda_postcoh_query_latency (postcoh, query);
+      break;
+    default:
+      /* FIXME, needs a custom query handler because we have multiple
+       * sinkpads */
+      res = gst_pad_query_default (pad, parent, query);
+      break;
+  }
+
+  return res;
+}
+
+/*
+ * Copied from gstadder.c on 14 Nov 2071, shinkee
+ */
+static gboolean
+sink_query (GstCollectPads * pads, GstCollectData * pad,
+    GstQuery *query, gpointer user_data)
+{
+  gboolean res = FALSE;
+
+  switch (GST_QUERY_TYPE (query)) {
+    case GST_QUERY_CAPS:
+    {
+      GstCaps *filter, *caps;
+
+      gst_query_parse_caps (query, &filter);
+      caps = cuda_postcoh_sink_getcaps (pad->pad, filter);
+      gst_query_set_caps_result (query, caps);
+      GST_LOG( "DEBUG %d %s\n", __LINE__, __FILE__ );
+      gst_caps_unref (caps);
+      res = TRUE;
+      break;
+    }
+    default:
+      res = gst_collect_pads_query_default (pads, pad, query, FALSE);
+      break;
+  }
+
+  return res;
+}
+
+
+/*
+ * Updated copy from gstadder.c on 14 Nov 2017, shinkee
+ */
+static gboolean
+sink_event(GstCollectPads *pads, GstCollectData *pad, GstEvent *event, gpointer user_data)
+{
+  CudaPostcoh *postcoh = CUDA_POSTCOH(user_data);
+  gboolean res = TRUE, discard = FALSE;
+
+  switch(GST_EVENT_TYPE(event)) {
+    case GST_EVENT_CAPS:
+    {
+      GstCaps *caps;
+      gst_event_parse_caps(event, &caps);
+      res = cuda_postcoh_sink_setcaps(postcoh, pad->pad, caps);
+      gst_event_unref(event);
+      event = NULL;
+      break;
+    }
+    case GST_EVENT_FLUSH_START:
+      /* ensure that we will send a flush stop */
+      res = gst_collect_pads_event_default (pads, pad, event, discard);
+      event = NULL;
+      GST_COLLECT_PADS_STREAM_LOCK (postcoh->collect);
+      postcoh->flush_stop_pending = TRUE;
+      GST_COLLECT_PADS_STREAM_UNLOCK (postcoh->collect);
+      break;
+    case GST_EVENT_FLUSH_STOP:
+      /* we received a flush-stop. We will only forward it when
+       * flush_stop_pending is set, and we will unset it then.
+       */
+      g_atomic_int_set (&postcoh->new_segment_pending, TRUE);
+      GST_COLLECT_PADS_STREAM_LOCK (postcoh->collect);
+      if (postcoh->flush_stop_pending) {
+        GST_DEBUG_OBJECT (pad->pad, "forwarding flush stop");
+        res = gst_collect_pads_event_default (pads, pad, event, discard);
+        postcoh->flush_stop_pending = FALSE;
+        event = NULL;
+      } else {
+        discard = TRUE;
+        GST_DEBUG_OBJECT (pad->pad, "eating flush stop");
+      }
+      GST_COLLECT_PADS_STREAM_UNLOCK (postcoh->collect);
+      /* Clear pending tags */
+      if (postcoh->pending_events) {
+        g_list_foreach (postcoh->pending_events, (GFunc) gst_event_unref, NULL);
+        g_list_free (postcoh->pending_events);
+        postcoh->pending_events = NULL;
+      }
+      break;
+    case GST_EVENT_TAG:
+      /* collect tags here so we can push them out when we collect data */
+      postcoh->pending_events = g_list_append (postcoh->pending_events, event);
+      event = NULL;
+      break;
+    case GST_EVENT_SEGMENT:
+      GST_DEBUG_OBJECT(pad, "new segment");
+      const GstSegment *segment;
+      gst_event_parse_segment(event, &segment);
+      if( segment->rate != postcoh->segment.rate )
+      {
+	GST_ERROR_OBJECT(pad->pad, "Got segment event with wrong rate %lf, expected %lf",
+	    segment->rate, postcoh->segment.rate);
+	res = FALSE;
+	gst_event_unref(event);
+	event = NULL;
+      }
+      discard = TRUE;
+      break;
+    // do not process tag.
+    default:
+      break;
+  }
+
+  if(G_LIKELY(event))
+    return gst_collect_pads_event_default(pads, pad, event, discard);
+  else
+    return res;
 }
 
 /*
@@ -290,224 +764,358 @@ typedef struct {
 	gboolean flush;
 } EventData;
 
-
-static gboolean forward_src_event_func(GstPad *pad, GValue *ret, EventData *data)
+/*
+ * Updated copy from gstadder.c on 14 Nov 2017, shinkee
+ */
+static gboolean forward_src_event_func(GValue *val, GValue *ret, EventData *data)
 {
-	GST_DEBUG_OBJECT(pad, "forward an event");
-	gst_event_ref(data->event);
-	if(!gst_pad_push_event(pad, data->event)) {
-		/* quick hack to unflush the pads. ideally we need  a way
-		 * to just unflush this single collect pad */
-		if(data->flush)
-			gst_pad_send_event(pad, gst_event_new_flush_stop());
-	} else {
-		g_value_set_boolean(ret, TRUE);
-	}
-	gst_object_unref(GST_OBJECT(pad));
-	return TRUE;
+  GstPad *pad = g_value_get_object(val);
+  GstEvent *event = data->event;
+  GstPad *peer;
+
+  gst_event_ref(event);
+
+  GST_DEBUG_OBJECT(pad, "forward an event");
+  peer = gst_pad_get_peer(pad);
+
+  if(!peer || !gst_pad_send_event(peer, event))
+  {
+    if(!peer)
+      gst_event_unref(event);
+    GST_WARNING_OBJECT(pad, "Sending event %p (%s) failed.",
+	event, GST_EVENT_TYPE_NAME(event));
+
+    if(data->flush)
+      gst_pad_send_event(pad, gst_event_new_flush_stop(TRUE));
+  } 
+  else
+  {
+    g_value_set_boolean(ret, TRUE);
+    GST_LOG_OBJECT(pad, "Sent event %p (%s).",
+	event, GST_EVENT_TYPE_NAME(event));
+  }
+  if(peer)
+    gst_object_unref(peer);
+
+  return TRUE;
 }
 
-
+/*
+ * Updated copy from gstadder.c on 14 Nov 2017, shinkee
+ */
 static gboolean forward_src_event(CudaPostcoh *postcoh, GstEvent *event, gboolean flush)
 {
-	GstIterator *it;
-	GValue vret = {0};
-	EventData data = {
-		event,
-		flush
-	};
-	gboolean success;
+  gboolean ret;
+  GstIterator *it;
+  GstIteratorResult ires;
+  GValue vret = {0};
+  EventData data = {event, flush};
+  
+  GST_LOG_OBJECT(postcoh, "Forwarding event %p (%s)", event,
+      GST_EVENT_TYPE_NAME(event));
 
-	g_value_init(&vret, G_TYPE_BOOLEAN);
-	g_value_set_boolean(&vret, FALSE);
+  g_value_init(&vret, G_TYPE_BOOLEAN);
+  g_value_set_boolean(&vret, FALSE);
 
-	it = gst_element_iterate_sink_pads(GST_ELEMENT(postcoh));
-	while(TRUE) {
-		switch(gst_iterator_fold(it, (GstIteratorFoldFunction) forward_src_event_func, &vret, &data)) {
-		case GST_ITERATOR_RESYNC:
-			gst_iterator_resync(it);
-			g_value_set_boolean(&vret, TRUE);
-			break;
+  it = gst_element_iterate_sink_pads(GST_ELEMENT(postcoh));
+  while(TRUE) {
+    ires = gst_iterator_fold(it, (GstIteratorFoldFunction) forward_src_event_func, &vret, &data);
+    switch (ires)
+    {
+      case GST_ITERATOR_RESYNC:
+	GST_WARNING("resync");
+	gst_iterator_resync(it);
+	g_value_set_boolean(&vret, TRUE);
+	break;
 
-		case GST_ITERATOR_OK:
-		case GST_ITERATOR_DONE:
-			success = g_value_get_boolean(&vret);
-			goto done;
+      case GST_ITERATOR_OK:
+      case GST_ITERATOR_DONE:
+	ret = g_value_get_boolean(&vret);
+	goto done;
 
-		default:
-			success = FALSE;
-			goto done;
-		}
-	}
+      default:
+	ret = FALSE;
+	goto done;
+    }
+  }
 done:
-	gst_iterator_free(it);
-	gst_event_unref(event);
+  gst_iterator_free(it);
+  GST_LOG_OBJECT(postcoh, "Forwarded event %p (%s), ret=%d", event,
+    GST_EVENT_TYPE_NAME(event), ret);
+  gst_event_unref(event);
 
-	return success;
+  return ret;
 }
 
 
 /*
  * handle events received on the source pad
+ * Updated copy from gstadder.c on 14 Nov 2017, shinkee
  */
-
-
-static gboolean src_event(GstPad *pad, GstEvent *event)
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	CudaPostcoh *postcoh = CUDA_POSTCOH(gst_pad_get_parent(pad));
-	gboolean success;
+  CudaPostcoh *postcoh;
+  gboolean result;
+  
+  postcoh = CUDA_POSTCOH(parent);
 
-	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_SEEK: {
-		gdouble rate;
-		GstSeekFlags flags;
-		GstSeekType curtype, endtype;
-		gint64 cur, end;
-		gboolean flush;
+  GST_DEBUG_OBJECT(pad, "Got %s event on src pad",
+      GST_EVENT_TYPE_NAME(event));
+  switch(GST_EVENT_TYPE(event)) {
+    case GST_EVENT_SEEK: 
+    {
+      GstSeekFlags flags;
+      gdouble rate;
+      GstSeekType start_type, stop_type;
+      gint64 start, stop;
+      GstFormat seek_format, dest_format;
+      gboolean flush;
 
-		gst_event_parse_seek(event, &rate, NULL, &flags, &curtype, &cur, &endtype, &end);
-		flush = flags & GST_SEEK_FLAG_FLUSH;
+      gst_event_parse_seek(event, &rate, &seek_format, &flags, &start_type, &start, &stop_type, &stop);
+	
+      if( (start_type != GST_SEEK_TYPE_NONE)
+	&& (start_type != GST_SEEK_TYPE_SET) )
+      {
+	result = FALSE;
+	GST_DEBUG_OBJECT( postcoh,
+	    "seeking failed, unhandled seek type for start: %d", start_type);
+	goto done;
+	/* FIXME:  copy the adder's logic re flushing */
+      }
+      if( (stop_type != GST_SEEK_TYPE_NONE) 
+	  && (stop_type != GST_SEEK_TYPE_SET) )
+      {
+	result = FALSE;
+	GST_DEBUG_OBJECT( postcoh,
+	    "seeking failed, unhandled seek type for end: %d", stop_type);
+	goto done;
+      }
 
-		/* FIXME:  copy the adder's logic re flushing */
+      dest_format = postcoh->segment.format;
+      if( seek_format != dest_format )
+      {
+	result = FALSE;
+	GST_DEBUG_OBJECT( postcoh,
+	    "seeking failed, unhandled seek format: %d", seek_format );
+      }
+      
+      flush = (flags & GST_SEEK_FLAG_FLUSH) == GST_SEEK_FLAG_FLUSH;
 
-		success = forward_src_event(postcoh, event, flush);
-		break;
-	}
+      if( flush )
+      {
+	gst_pad_push_event( postcoh->srcpad, gst_event_new_flush_start() );
+	gst_collect_pads_set_flushing( postcoh->collect, TRUE );
 
-	/* events that can't be handled */
-	case GST_EVENT_QOS:
-	case GST_EVENT_NAVIGATION:
-		gst_event_unref(event);
-		success = FALSE;
-		break;
+	GST_COLLECT_PADS_STREAM_LOCK(postcoh->collect);
+	postcoh->flush_stop_pending = TRUE;
+	GST_COLLECT_PADS_STREAM_UNLOCK(postcoh->collect);
+	GST_DEBUG_OBJECT(postcoh, "mark pending flush stop event");
+      }
+      GST_DEBUG_OBJECT(postcoh, "handling seek event : %" GST_PTR_FORMAT, event);
+      GST_COLLECT_PADS_STREAM_LOCK(postcoh->collect);
 
-	/* forward the rest out all sink pads */
-	default:
-		GST_DEBUG_OBJECT(postcoh, "forward src event");
-		success = forward_src_event(postcoh, event, FALSE);
-		break;
-	}
+      if( postcoh->segment.stop != (guint64) -1 )
+      {
+	postcoh->segment.position = postcoh->segment.stop;
+      }
+      gst_segment_do_seek(&postcoh->segment, rate, seek_format, flags,
+	  start_type, start, stop_type, stop, NULL);
 
-	return success;
+      if( flush )
+      {
+	gst_collect_pads_set_flushing(postcoh->collect, TRUE);
+      }
+      GST_COLLECT_PADS_STREAM_UNLOCK(postcoh->collect);
+      GST_DEBUG_OBJECT(postcoh, "forwarding seek event: %" GST_PTR_FORMAT, event);
+      GST_DEBUG_OBJECT(postcoh, "updated segment: %" GST_SEGMENT_FORMAT, &postcoh->segment);
+
+      g_atomic_int_set( &postcoh->new_segment_pending, TRUE);
+      result = forward_src_event(postcoh, event, flush);
+
+      if(!result)
+      {
+	GST_DEBUG_OBJECT(postcoh, "seeking failed");
+      }
+      if(g_atomic_int_compare_and_exchange(&postcoh->flush_stop_pending, TRUE, FALSE))
+      {
+	GST_DEBUG_OBJECT(postcoh, "pending flush stop");
+      }
+      if(!gst_pad_push_event(postcoh->srcpad, 
+	    gst_event_new_flush_stop(TRUE)))
+      {
+	GST_WARNING_OBJECT(postcoh, "Sending flush stop event failed");
+      }
+    }
+    /* events that can't be handled */
+    case GST_EVENT_QOS:
+      result = FALSE;
+      gst_event_unref(event);
+      break;
+    case GST_EVENT_NAVIGATION:
+      gst_event_unref(event);
+      result = FALSE;
+      break;
+
+    /* forward the rest out all sink pads */
+    default:
+      GST_DEBUG_OBJECT(postcoh, "forward unhandled event");
+      result = forward_src_event(postcoh, event, FALSE);
+      break;
+  }
+  
+done:
+  return result;
 }
 
 
-/* This is modified from gstadder.c 0.10.32 */
+/* Updated copy from gstadder.c on 14 Nov 2017 by shinkee */
 static gboolean
-cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
+cuda_postcoh_sink_setcaps(CudaPostcoh *postcoh, GstPad *pad, GstCaps *caps)
 {
-	size_t freemem;
-	size_t totalmem;
+  GstAudioInfo info;
 
-	CudaPostcoh *postcoh = CUDA_POSTCOH(GST_PAD_PARENT(pad));
-	PostcohState *state = postcoh->state;
-	g_mutex_lock(postcoh->prop_lock);
-	while (state->npix == NOT_INIT || state->autochisq_len == NOT_INIT || postcoh->hist_trials ==NOT_INIT) {
-		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
-		GST_LOG_OBJECT(postcoh, "setcaps have to wait");
-	}
-	g_mutex_unlock(postcoh->prop_lock);
+  if( !gstlal_audio_info_from_caps(&info, caps) )
+  {
+    GST_DEBUG_OBJECT(caps, "Invalid format");
+    return FALSE;
+  }
 
-	CUDA_CHECK(cudaSetDevice(postcoh->device_id));
-	GList *sinkpads;
-	GstStructure *s;
-	GstPostcohCollectData *data;
+  size_t freemem;
+  size_t totalmem;
 
-	/* FIXME: this is copied from gstadder.c. Replace with new version of that file
-	 * if any. */
-	GST_OBJECT_LOCK(postcoh);
-	sinkpads = GST_ELEMENT(postcoh)->sinkpads;
-//	sinkpads = GST_ELEMENT(postcoh)->pads;
+  GList *sinkpads;
+  GstPostcohCollectData *data;
+  
+  PostcohState *state = postcoh->state;
+  
+  g_mutex_lock(&postcoh->prop_lock);
+  while (state->npix == NOT_INIT || state->autochisq_len == NOT_INIT || postcoh->hist_trials ==NOT_INIT) 
+  {
+    g_cond_wait(&postcoh->prop_avail, &postcoh->prop_lock);
+    GST_LOG_OBJECT(postcoh, "setcaps have to wait");
+  }
+  g_mutex_unlock(&postcoh->prop_lock);
 
-	GST_LOG_OBJECT(postcoh, "setting caps on pad %p,%s to %" GST_PTR_FORMAT, pad,
-			GST_PAD_NAME(pad), caps);
+  CUDA_CHECK(cudaSetDevice(postcoh->device_id));
+  
 
-	while (sinkpads) {
-		GstPad *otherpad = GST_PAD(sinkpads->data);
+  /* FIXME: this is copied from gstadder.c. Replace with new version of that file
+   * if any. */
+  GST_OBJECT_LOCK(postcoh);
 
-		if (otherpad != pad) {
-			gst_caps_replace(&GST_PAD_CAPS(otherpad), caps);
-		}
-		sinkpads = g_list_next(sinkpads);
-	}
-	GST_OBJECT_UNLOCK(postcoh);
+  if( postcoh->current_caps != NULL )
+  {
+    if( gst_audio_info_is_equal(&info, &postcoh->info) )
+    {
+      gstlal_collect_pads_set_unit_size( pad, GST_AUDIO_INFO_BPF(&postcoh->info) );
+      gstlal_collect_pads_set_rate( pad, GST_AUDIO_INFO_RATE(&postcoh->info) );
+      GST_OBJECT_UNLOCK(postcoh);
+    } else
+    {
+      GST_DEBUG_OBJECT( pad, "got input caps %" GST_PTR_FORMAT ", but "
+	  "current caps are %" GST_PTR_FORMAT, caps, postcoh->current_caps );
+      GST_OBJECT_UNLOCK(postcoh);
+      gst_pad_push_event( pad, gst_event_new_reconfigure() );
+    }
+  } else
+  {
+    GST_INFO_OBJECT( pad, "setting caps to %" GST_PTR_FORMAT, caps );
+    postcoh->current_caps = gst_caps_ref(caps);
 
-	s = gst_caps_get_structure(caps, 0);
-	gst_structure_get_int(s, "width", &postcoh->width);
-	gst_structure_get_int(s, "rate", &postcoh->rate);
-	gst_structure_get_int(s, "channels", &postcoh->channels);
+    memcpy( &postcoh->info, &info, sizeof(info) );
+    gstlal_collect_pads_set_unit_size(pad, GST_AUDIO_INFO_BPF(&postcoh->info));
+    gstlal_collect_pads_set_rate(pad, GST_AUDIO_INFO_RATE(&postcoh->info));
+    GST_OBJECT_UNLOCK(postcoh);
 
+    GST_INFO_OBJECT(pad, "handle caps change to %" GST_PTR_FORMAT, caps);
+  }
 
-	/* postcoh and state initialization */
-	postcoh->bps = (postcoh->width/8) * postcoh->channels;	
-	postcoh->offset_per_nanosecond = postcoh->bps / 1e9 * (postcoh->rate);	
+  //postcoh->bps = GST_AUDIO_INFO_BPS(&postcoh->info);
+  postcoh->channels = GST_AUDIO_INFO_CHANNELS(&postcoh->info);
+  postcoh->width = GST_AUDIO_INFO_WIDTH(&postcoh->info);
+  postcoh->rate = GST_AUDIO_INFO_RATE(&postcoh->info);
 
-	GST_DEBUG_OBJECT(postcoh, "setting GstPostcohCollectData offset_per_nanosecond %f and channels", postcoh->offset_per_nanosecond);
+  /* postcoh and state initialization */
+  postcoh->bps = (postcoh->width/8) * postcoh->channels;	
+  postcoh->offset_per_nanosecond = postcoh->bps / 1e9 * (postcoh->rate);
 
-	state->nifo = GST_ELEMENT(postcoh)->numsinkpads;
-	state->ifo_mapping = (gint8 *)malloc(sizeof(gint8) * state->nifo);
-	state->peak_list = (PeakList **)malloc(sizeof(PeakList*) * state->nifo);
-	state->dt = (float) 1/postcoh->rate;
+  GST_LOG("DEBUG bps %d, width %d, channels %d\n", postcoh->bps, postcoh->width, postcoh->channels);
+  GST_DEBUG_OBJECT(postcoh, "setting GstPostcohCollectData offset_per_nanosecond %f and channels", postcoh->offset_per_nanosecond);
 
-	/* need to cover head and tail */
-	postcoh->preserved_len = state->autochisq_len + 160; 
-	postcoh->exe_len = postcoh->rate;
+  state->nifo = GST_ELEMENT(postcoh)->numsinkpads;
+  state->ifo_mapping = (gint8 *)malloc(sizeof(gint8) * state->nifo);
+  state->peak_list = (PeakList **)malloc(sizeof(PeakList*) * state->nifo);
+  state->dt = (float) 1/postcoh->rate;
+  GST_DEBUG("DEBUG nifo %d peaklist size %d\n", state->nifo, sizeof(PeakList*));
 
-	state->exe_len = postcoh->rate;
-	state->tmp_maxsnr = (float *) malloc(sizeof(float) * state->exe_len);
-	state->tmp_tmpltidx = (int *) malloc(sizeof(int) * state->exe_len);
-	state->max_npeak = postcoh->rate > postcoh->channels/2 ? postcoh->channels/2 : postcoh->rate;
-	state->trial_sample_inv = round(postcoh->trial_interval * postcoh->rate);
-	state->snglsnr_len = postcoh->preserved_len + postcoh->exe_len + postcoh->hist_trials * state->trial_sample_inv;
-	state->hist_trials = postcoh->hist_trials;
-	state->snglsnr_start_load = postcoh->hist_trials * state->trial_sample_inv;
-	state->snglsnr_start_exe = state->snglsnr_start_load;
+  /* need to cover head and tail */
+  postcoh->preserved_len = state->autochisq_len + 160; 
+  postcoh->exe_len = postcoh->rate;
 
-	GST_DEBUG_OBJECT(postcoh, "hist_trials %d, autochisq_len %d, preserved_len %d, sngl_len %d, start_load %d, start_exe %d, max_npeak %d", 
-			state->hist_trials, state->autochisq_len, postcoh->preserved_len, state->snglsnr_len, state->snglsnr_start_load, state->snglsnr_start_exe, state->max_npeak);
+  state->exe_len = postcoh->rate;
+  state->tmp_maxsnr = (float *) malloc(sizeof(float) * state->exe_len);
+  state->tmp_tmpltidx = (int *) malloc(sizeof(int) * state->exe_len);
+  state->max_npeak = postcoh->rate > postcoh->channels/2 ? postcoh->channels/2 : postcoh->rate;
+  state->trial_sample_inv = round(postcoh->trial_interval * postcoh->rate);
+  state->snglsnr_len = postcoh->preserved_len + postcoh->exe_len + postcoh->hist_trials * state->trial_sample_inv;
+  state->hist_trials = postcoh->hist_trials;
+  state->snglsnr_start_load = postcoh->hist_trials * state->trial_sample_inv;
+  state->snglsnr_start_exe = state->snglsnr_start_load;
 
-	state->ntmplt = postcoh->channels/2;
-	cudaMemGetInfo(&freemem, &totalmem);
-	printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
-	printf( "Allocating %d B\n", (int) sizeof(COMPLEX_F *) * state->nifo );
+  GST_DEBUG_OBJECT(postcoh, "hist_trials %d, autochisq_len %d, preserved_len %d, sngl_len %d, start_load %d, start_exe %d, max_npeak %d", 
+    state->hist_trials, state->autochisq_len, postcoh->preserved_len, state->snglsnr_len, state->snglsnr_start_load, state->snglsnr_start_exe, state->max_npeak);
 
-	CUDA_CHECK(cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo));
-	state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
+  state->ntmplt = postcoh->channels/2;
+  cudaMemGetInfo(&freemem, &totalmem);
+  GST_LOG( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
+  GST_LOG( "Allocating %d B\n", (int) sizeof(COMPLEX_F *) * state->nifo );
 
-	gint8 i = 0, j = 0, cur_ifo = 0;
-	GST_OBJECT_LOCK(postcoh->collect);
+  CUDA_CHECK(cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo));
+  state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
 
-	/* initialize ifo_mapping, snglsnr matrix, and peak_list */
-	for (sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {
-		GstPad *pad = GST_PAD(sinkpads->data);
-		data = gst_pad_get_element_private(pad);
-		set_offset_per_nanosecond(data, postcoh->offset_per_nanosecond);
-		set_channels(data, postcoh->channels);
-		for (j=0; j<state->nifo; j++) {
-			if (strncmp(data->ifo_name, IFO_MAP[j], 2) == 0 ) {
-				state->ifo_mapping[i] = j;
-				cur_ifo = j;
-				break;
-			}
-		}
+  gint8 i = 0, j = 0, cur_ifo = 0;
+
+  GST_OBJECT_LOCK(postcoh->collect);
+
+  /* initialize ifo_mapping, snglsnr matrix, and peak_list */
+  for (sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {
+    GstPad *pad = GST_PAD(sinkpads->data);
+    data = gst_pad_get_element_private(pad);
+    set_offset_per_nanosecond(data, postcoh->offset_per_nanosecond);
+    set_channels(data, postcoh->channels);
+    for (j=0; j<state->nifo; j++) {
+      if (strncmp(data->ifo_name, IFO_MAP[j], 2) == 0 ) {
+	state->ifo_mapping[i] = j;
+	cur_ifo = j;
+	break;
+      }
+    }
+
+    guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
+    //printf("device id %d, stream addr %p, alloc for snglsnr %d\n", postcoh->device_id, postcoh->stream, mem_alloc_size);
 		
-		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
-		//printf("device id %d, stream addr %p, alloc for snglsnr %d\n", postcoh->device_id, postcoh->stream, mem_alloc_size);
-		
-		cudaMemGetInfo(&freemem, &totalmem);
-		printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
-		printf( "Allocating %d MB\n", (int) (mem_alloc_size / 1024 / 1024) );
+    cudaMemGetInfo(&freemem, &totalmem);
+    GST_LOG( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
+    GST_LOG( "Allocating %d MB\n", (int) (mem_alloc_size / 1024 / 1024) );
 
-	       	CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
-		CUDA_CHECK(cudaMemsetAsync(state->d_snglsnr[cur_ifo], 0, mem_alloc_size, postcoh->stream));
-		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, postcoh->stream));
+    CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
+    CUDA_CHECK(cudaMemsetAsync(state->d_snglsnr[cur_ifo], 0, mem_alloc_size, postcoh->stream));
+  GST_LOG( "DEBUG %d %s\n", __LINE__, __FILE__ );
+    CUDA_CHECK(cudaMemcpyAsync(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, postcoh->stream));
+  GST_LOG( "DEBUG %d %s\n", __LINE__, __FILE__ );
+  GST_LOG( "DEBUG cur_ifo %d stream %d\n", cur_ifo, postcoh->stream );
+  GST_LOG( "DEBUG peak_list %d\n", state->peak_list[cur_ifo]->peak_intlen );
 
-		state->peak_list[cur_ifo] = create_peak_list(postcoh->state, postcoh->stream);
-	}
+    GST_LOG( "DEBUG %d %s\n", __LINE__, __FILE__ );
+    state->peak_list[cur_ifo] = create_peak_list(postcoh->state, postcoh->stream);
+  }
 
-	state->is_member_init = INIT;
-	GST_OBJECT_UNLOCK(postcoh->collect);
-	return TRUE;
+  GST_LOG( "DEBUG %d %s\n", __LINE__, __FILE__ );
+  state->is_member_init = INIT;
+  GST_OBJECT_UNLOCK(postcoh->collect);
+
+  GST_LOG( "End of setcaps" );
+  return TRUE;
 }
 
 static void destroy_notify(GstPostcohCollectData *data)
@@ -515,7 +1123,7 @@ static void destroy_notify(GstPostcohCollectData *data)
 	if (data) {
 		free(data->ifo_name);
 		if (data->adapter) {
-			gst_adapter_clear(data->adapter);
+			gst_audioadapter_clear(data->adapter);
 			g_object_unref(data->adapter);
 			data->adapter = NULL;
 		}
@@ -523,40 +1131,53 @@ static void destroy_notify(GstPostcohCollectData *data)
 
 }
 
+/*  */
 static GstPad *cuda_postcoh_request_new_pad(GstElement *element, GstPadTemplate *templ, const gchar *name)
 {
-	CudaPostcoh* postcoh = CUDA_POSTCOH(element);
+  CudaPostcoh* postcoh = CUDA_POSTCOH(element);
+  
+  GstPad* newpad;
+  gchar *newname;
+  gint padcount;
 
-	GstPad* newpad;
-       	newpad = gst_pad_new_from_template(templ, name);
+  padcount = g_atomic_int_add(&postcoh->padcount, 1);
 
-	gst_pad_set_setcaps_function(GST_PAD(newpad), GST_DEBUG_FUNCPTR(cuda_postcoh_sink_setcaps));
+  //newname = g_strdup_printf("%ssink_%u", name, padcount);
+  //newpad = g_object_new(GST_TYPE_CUDA_POSTCOH_PAD, "name", newname, 
+  //    "direction", templ->direction, "template", templ, NULL);
+  newpad = gst_pad_new_from_template(templ, name);
 
-	if (!gst_element_add_pad(element, newpad)) {
-		gst_object_unref(newpad);
-		return NULL;
-	}
+  GST_DEBUG_OBJECT(postcoh, "DEBUG creating newpad %s", name);
 
-	GstPostcohCollectData* data;
-       	data = (GstPostcohCollectData*) gst_collect_pads_add_pad_full(postcoh->collect, newpad, sizeof(GstPostcohCollectData), (GstCollectDataDestroyNotify) GST_DEBUG_FUNCPTR(destroy_notify));
-	postcoh->collect_event = (GstPadEventFunction) GST_PAD_EVENTFUNC(newpad);
-	gst_pad_set_event_function(newpad, sink_event);
+  /* Obsolete function in 1.0 */
+  //gst_pad_set_setcaps_function(GST_PAD(newpad), GST_DEBUG_FUNCPTR(cuda_postcoh_sink_setcaps));
 
-	if (!data) {
-		gst_element_remove_pad(element, newpad);
-		gst_object_unref(newpad);
-		return NULL;
-	}
+  GstPostcohCollectData* data;
+  data = (GstPostcohCollectData*) gst_collect_pads_add_pad(postcoh->collect, newpad, sizeof(GstPostcohCollectData), (GstCollectDataDestroyNotify) GST_DEBUG_FUNCPTR(destroy_notify), 0);
+  //postcoh->collect_event = (GstPadEventFunction) GST_PAD_EVENTFUNC(newpad);
+  gstlal_collect_pads_set_unit_size(newpad, GST_AUDIO_INFO_BPF(&postcoh->info));
+  gstlal_collect_pads_set_rate(newpad, GST_AUDIO_INFO_RATE(&postcoh->info));
+  
+  //gst_pad_set_event_function(newpad, sink_event);
 
-	data->ifo_name = (gchar *)malloc(2*sizeof(gchar));
-	strncpy(data->ifo_name, name, 2*sizeof(gchar));
-	data->adapter = gst_adapter_new();
-	data->is_aligned = FALSE;
-	data->aligned_offset0 = 0;
-	data->next_offset = 0;
-	GST_DEBUG_OBJECT(element, "new pad for %s is added and initialised", data->ifo_name);
+  if (!data || !gst_element_add_pad(element, newpad)) 
+  {
+    GST_DEBUG_OBJECT(postcoh, "DEBUG error in adding pad");
+    gst_collect_pads_remove_pad(postcoh->collect, newpad);
+    gst_object_unref(newpad);
+    return NULL;
+  }
 
-	return GST_PAD(newpad);
+  data->ifo_name = (gchar *)malloc(2*sizeof(gchar));
+  strncpy(data->ifo_name, name, 2*sizeof(gchar));
+  //data->adapter = gst_adapter_new();
+  data->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
+  data->is_aligned = FALSE;
+  data->aligned_offset0 = 0;
+  data->next_offset = 0;
+  GST_DEBUG_OBJECT(element, "new pad for %s is added and initialised", data->ifo_name);
+
+  return newpad; 
 }
 
 
@@ -595,7 +1216,7 @@ static GstStateChangeReturn cuda_postcoh_change_state(GstElement *element, GstSt
 		break;
 	}
 
-	return GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
+	return GST_ELEMENT_CLASS(cuda_postcoh_parent_class)->change_state(element, transition);
 }
 
 static gboolean cuda_postcoh_get_latest_start_time(GstCollectPads *pads, GstClockTime *t_latest_start, guint64 *offset_latest_start)
@@ -658,6 +1279,8 @@ cuda_postcoh_fillin_discont(GstCollectPads *pads, CudaPostcoh *postcoh)
 	GstPostcohCollectData *data;
 	GstBuffer *buf = NULL;
 
+	GstMapInfo mapinfo;
+
 	/* invalid pads */
 	g_return_val_if_fail(pads != NULL, FALSE);
 	g_return_val_if_fail(GST_IS_COLLECT_PADS(pads), FALSE);
@@ -674,12 +1297,15 @@ cuda_postcoh_fillin_discont(GstCollectPads *pads, CudaPostcoh *postcoh)
 		if (GST_BUFFER_OFFSET(buf) > data->next_offset) {
 			printf("catch a gap\n");
 			GST_DEBUG_OBJECT(data, "gap :data offset %" G_GUINT64_FORMAT "current next offset %" G_GUINT64_FORMAT, GST_BUFFER_OFFSET(buf), data->next_offset);
-			GstBuffer *zerobuf = gst_buffer_new_and_alloc((GST_BUFFER_OFFSET(buf)- data->next_offset) * postcoh->bps); 
+			GstBuffer *zerobuf = gst_buffer_new_allocate(NULL, (GST_BUFFER_OFFSET(buf)- data->next_offset) * postcoh->bps, NULL); 
 			if(!zerobuf) {
 				GST_DEBUG_OBJECT(data, "failure allocating zero-pad buffer");
 			}
-			memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
-			gst_adapter_push(data->adapter, zerobuf);
+
+			gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
+			memset(mapinfo.data, 0, mapinfo.size);
+			gst_audioadapter_push(data->adapter, zerobuf);
+			gst_buffer_unmap(buf, &mapinfo);
 
 		}
 		((GstPostcohCollectData *)data)->next_offset = GST_BUFFER_OFFSET_END(buf);
@@ -715,7 +1341,7 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 			data = collectlist->data;
 			buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
 			if (buf == NULL) {
-				size_cur = gst_adapter_available(data->adapter);
+				size_cur = adapter_available_samples(data->adapter);
 				if(!min_size_init) {
 					min_size = size_cur;
 					min_size_init = size_cur > 0 ? TRUE : FALSE;
@@ -726,8 +1352,8 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 				continue;
 			}
 
-			gst_adapter_push(data->adapter, buf);
-			size_cur = gst_adapter_available(data->adapter);
+			gst_audioadapter_push(data->adapter, buf);
+			size_cur = adapter_available_samples(data->adapter);
 			if(!min_size_init) {
 				min_size = size_cur;
 				min_size_init = TRUE;
@@ -777,16 +1403,16 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 		offset_end_cur = GST_BUFFER_OFFSET_END(buf);
 		if (t_end_cur > t0) {
 			buf_aligned_offset0 = (gint) (postcoh->offset0 - offset_cur);
-			GST_DEBUG_OBJECT(data, "buffer aligned offset0 %u", buf_aligned_offset0);
-			subbuf = gst_buffer_create_sub(buf, buf_aligned_offset0, (offset_end_cur - offset_cur - buf_aligned_offset0) * data->channels * sizeof(float));
+			GST_DEBUG_OBJECT(data, "buffer aligned offset0 %u", (unsigned int)buf_aligned_offset0);
+			subbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_MEMORY, buf_aligned_offset0, (offset_end_cur - offset_cur - buf_aligned_offset0) * data->channels * sizeof(float));
 			GST_LOG_OBJECT (pads,
-				"Created sub buffer of (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
+				"Created sub buffer of (%ld bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
 				GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
-				G_GUINT64_FORMAT,  GST_BUFFER_SIZE (subbuf),
+				G_GUINT64_FORMAT,  gst_buffer_get_size(subbuf),
 				GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (subbuf)),
 				GST_TIME_ARGS (GST_BUFFER_DURATION (subbuf)),
 				GST_BUFFER_OFFSET (subbuf), GST_BUFFER_OFFSET_END (subbuf));
-			gst_adapter_push(data->adapter, subbuf);
+			gst_audioadapter_push(data->adapter, subbuf);
 			data->is_aligned = TRUE;
 			set_aligned_offset0(data, buf_aligned_offset0 + offset_cur);
 			/* from the first buffer in the adapter, we initiate the next offset */
@@ -806,6 +1432,9 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 	
 
 }
+
+#if 0
+/* Unused */
 static void cuda_postcoh_flush(GstCollectPads *pads, guint64 common_size)
 {
 	GSList *collectlist;
@@ -813,10 +1442,11 @@ static void cuda_postcoh_flush(GstCollectPads *pads, guint64 common_size)
 
 	for (collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist)) {
 		data = collectlist->data;
-		gst_adapter_flush(data->adapter, common_size);
+		gst_audioadapter_flush_samples(data->adapter, common_size);
 	}
 
 }
+#endif
 
 static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
 {
@@ -828,7 +1458,7 @@ static gboolean is_cur_ifo_has_data(PostcohState *state, gint cur_ifo)
 
 }
 
-static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist, int hist_trials, int max_npeak, float cohsnr_thresh)
+static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist,int iifo, int hist_trials, int max_npeak, float cohsnr_thresh)
 {
 	int ipeak, npeak, peak_cur, itrial, background_cur, left_backgrounds = 0;
 	npeak = pklist->npeak[0];
@@ -836,8 +1466,11 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist, int his
 		peak_cur = pklist->peak_pos[ipeak];
 		for (itrial=1; itrial<=hist_trials; itrial++) {
 			background_cur = (itrial - 1)*max_npeak + peak_cur;
-			if ( sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh)
+//			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_L[iifo*max_npeak + peak_cur])
+			if (sqrt(pklist->cohsnr_bg[background_cur]) > 1.414 + pklist->snglsnr_L[iifo*max_npeak + peak_cur]) {
 				left_backgrounds++;
+				GST_LOG("mark back,%d ipeak, %d itrial", ipeak, itrial);
+			}
 			else
 				pklist->cohsnr_bg[background_cur] = -1;
 		}
@@ -847,38 +1480,63 @@ static int cuda_postcoh_pklist_mark_invalid_background(PeakList *pklist, int his
 
 static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh)
 {
-	int iifo, ipeak, npeak, nifo = state->nifo, final_peaks = 0, tmp_peak_pos[state->max_npeak], peak_cur;
+	int iifo, ipeak, npeak, nifo = state->nifo,  cluster_peak_pos[state->max_npeak], bubbled_peak_pos[state->max_npeak], peak_cur;
+	int final_peaks = 0, bubbled_peaks = 0;
 	PeakList *pklist; 
 	int *peak_pos;
 	int left_entries = 0;
 
-	for(iifo=0; iifo<nifo; iifo++) {
-		if(is_cur_ifo_has_data(state, iifo)) {
+	for(iifo=0; iifo<nifo && is_cur_ifo_has_data(state, iifo); iifo++) {
 		final_peaks = 0;
+		bubbled_peaks = 0;
 		pklist= state->peak_list[iifo];
 		npeak = pklist->npeak[0];
 		peak_pos = pklist->peak_pos;
+
+		/*
+		 * select background that satisfy the criteria: cohsnr > triggersnr + coh_thresh
+		 */
+		if (npeak > 0 && state->cur_nifo == state->nifo)
+			left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, iifo, state->hist_trials, state->max_npeak, cohsnr_thresh);
+	
+		/*
+		 * mark the rest of peak positions to be -1 to identify invalid background
+		 */
+
+		for(ipeak=0; ipeak<state->max_npeak; ipeak++)
+		   cluster_peak_pos[ipeak] = -1;
+		memcpy(cluster_peak_pos, peak_pos, sizeof(int) * npeak);
+
+		/*
+		 * select zerolag that satisfy the criteria: cohsnr > triggersnr + coh_thresh
+		 */
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			/* if the difference of maximum single snr and coherent snr is ignorable,
 			 * it means that only one detector is in action,
 			 * we abandon this peak
 			 * */
 			peak_cur = peak_pos[ipeak];
-			if (pklist->cohsnr[peak_cur] > 0 && sqrt(pklist->cohsnr[peak_cur]) > cohsnr_thresh) {
-				tmp_peak_pos[final_peaks++] = peak_cur;
-			}
+			if (sqrt(pklist->cohsnr[peak_cur]) > 1.414 + pklist->snglsnr_L[iifo*(state->max_npeak) + peak_cur]) {
+				cluster_peak_pos[final_peaks++] = peak_cur;
+			} else 
+				bubbled_peak_pos[bubbled_peaks++] = peak_cur;
 
 		}
+
+		/*
+		 * bubble out the rest peaks
+		 */
+		for(ipeak=final_peaks; ipeak<npeak; ipeak++)
+			cluster_peak_pos[ipeak] = bubbled_peak_pos[ipeak - final_peaks];
+
 
 		npeak = final_peaks;
-		memcpy(peak_pos, tmp_peak_pos, sizeof(int) * npeak);
+		memcpy(peak_pos, cluster_peak_pos, sizeof(int) * state->max_npeak);
 		pklist->npeak[0] = npeak;
+
+		GST_DEBUG("ifo %d, back entries %d, npeak %d", iifo, left_entries, npeak);
 		/* mark background triggers which do not pass the test */
 		left_entries += npeak;
-		if (npeak > 0 && state->cur_nifo == state->nifo)
-			left_entries += cuda_postcoh_pklist_mark_invalid_background(pklist, state->hist_trials, state->max_npeak, cohsnr_thresh);
-	
-		}
 	}
 	return left_entries;
 
@@ -886,29 +1544,34 @@ static int cuda_postcoh_rm_invalid_peak(PostcohState *state, float cohsnr_thresh
 
 static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outbuf)
 {
+	  
 	PostcohState *state = postcoh->state;
 
-	PostcohInspiralTable *output = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
+	GstMapInfo mapinfo;
+	PostcohInspiralTable *output;
+	
 	int iifo = 0, nifo = state->nifo;
 	int ifos_size = sizeof(char) * 2 * state->cur_nifo, one_ifo_size = sizeof(char) * 2 ;
 	int ipeak, npeak = 0, itrial = 0, exe_len = state->exe_len, max_npeak = state->max_npeak;
 	int hist_trials = postcoh->hist_trials;
 
 	int tmplt_idx;
+	int write_entries = 0;
 	
 	GstClockTime ts = GST_BUFFER_TIMESTAMP(outbuf);
 
-	int livetime = (int) ((ts - postcoh->t0)/GST_SECOND);
+	int livetime = (int) ((ts - postcoh->t0)/GST_SECOND), cur_tmplt_idx;
 
+	gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+	output = (PostcohInspiralTable *)mapinfo.data;
 	SnglInspiralTable *sngl_table = postcoh->sngl_table;
 
-	for(iifo=0; iifo<nifo; iifo++) {
-		if (is_cur_ifo_has_data(state, iifo)) {
+	for(iifo=0; iifo<nifo && is_cur_ifo_has_data(state, iifo); iifo++)
+	{
 		PeakList *pklist = state->peak_list[iifo];
 		npeak = pklist->npeak[0];
 		LIGOTimeGPS end_time;
 
-		GST_LOG_OBJECT(postcoh, "write to output, ifo %d, npeak %d", iifo, npeak);
 		int peak_cur, len_cur, peak_cur_bg;
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			XLALINT8NSToGPS(&end_time, ts);
@@ -932,14 +1595,19 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->chisq_L = pklist->chisq_L[peak_cur];
 			output->chisq_H = pklist->chisq_H[peak_cur];
 			output->chisq_V = pklist->chisq_V[peak_cur];
-	
+			cur_tmplt_idx = pklist->tmplt_idx[peak_cur];
+
+			output->deff_L = sqrt(state->sigmasq[L_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_L[peak_cur]; 
+			output->deff_H = sqrt(state->sigmasq[H_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_H[peak_cur]; 
+			if (pklist->snglsnr_V[peak_cur] > 0)
+				output->deff_V = sqrt(state->sigmasq[V_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_V[peak_cur]; 
 			output->is_background = 0;
 			output->livetime = livetime;
 			strncpy(output->ifos, state->cur_ifos, ifos_size);
 			output->ifos[2*state->cur_nifo] = '\0';
 		       	strncpy(output->pivotal_ifo, IFO_MAP[iifo], one_ifo_size);
 			output->pivotal_ifo[2] = '\0';
-			output->tmplt_idx = pklist->tmplt_idx[peak_cur];
+			output->tmplt_idx = cur_tmplt_idx;
 			output->pix_idx = pklist->pix_idx[peak_cur];
 			output->cohsnr = sqrt(pklist->cohsnr[peak_cur]); /* the returned snr from cuda kernel is snr^2 */
 			output->nullsnr = pklist->nullsnr[peak_cur];
@@ -963,19 +1631,20 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->eta = sngl_table[tmplt_idx].eta;
 			/* convert pixel index to ra and dec */
 			double theta, phi;
-			/* ra = phi, dec = 2pi - theta */	
+			/* ra = phi, dec = pi/2 - theta */	
 			pix2ang_nest(postcoh->state->nside, output->pix_idx, &theta, &phi);
 	
-			output->ra = phi;
-			output->dec = 2*M_PI - theta;
-			if (postcoh->output_skymap) {
+			output->ra = phi*RAD2DEG;
+			output->dec = (M_PI_2 - theta)*RAD2DEG;
+			//output->event_id = postcoh->cur_event_id++;
+			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
 				filename = g_string_new(output->ifos);
-				g_string_append_printf(filename, "_%s_%d_%d", output->pivotal_ifo, output->end_time_L.gpsSeconds, output->end_time_L.gpsNanoSeconds);
-				g_string_append_printf(filename, "_%d_skymap.txt", output->tmplt_idx);
+				g_string_append_printf(filename, "_skymap/%s_%d_%d", output->pivotal_ifo, output->end_time_L.gpsSeconds, output->end_time_L.gpsNanoSeconds);
+				g_string_append_printf(filename, "_%d", output->tmplt_idx);
 				strcpy(output->skymap_fname, filename->str);
-//				printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
+				printf("file %s is written, skymap addr %p\n", output->skymap_fname, &(pklist->cohsnr_skymap[ipeak * state->npix]));
 				file = fopen(output->skymap_fname, "w");
 				fwrite(&(pklist->cohsnr_skymap[ipeak * state->npix]), sizeof(float), state->npix, file);
 				fclose(file);
@@ -984,18 +1653,19 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			} else
 				output->skymap_fname[0] = '\0';
 
-			GST_LOG_OBJECT(postcoh, "ipeak %d, peak_cur %d, len_cur %d, tmplt_idx %d, pix_idx %d \t,"
+			GST_LOG_OBJECT(postcoh, "end_time_L %d, ipeak %d, peak_cur %d, len_cur %d, tmplt_idx %d, pix_idx %d \t,"
 				"snglsnr_L %f, snglsnr_H %f, snglsnr_V %f,"
 			     "coaphase_L %f, coaphase_H %f, coa_phase_V %f,"
 			     "chisq_L %f, chisq_H %f, chisq_V %f,"
 			     "cohsnr %f, nullsnr %f, cmbchisq %f\n",
-			     ipeak, peak_cur, len_cur, output->tmplt_idx, output->pix_idx,
+			     output->end_time_L.gpsSeconds, ipeak, peak_cur, len_cur, output->tmplt_idx, output->pix_idx,
 			     output->snglsnr_L, output->snglsnr_H, output->snglsnr_V,
 			     output->coaphase_L, output->coaphase_H, output->coaphase_V,
 			     output->chisq_L, output->chisq_H, output->chisq_V,
 			     output->cohsnr, output->nullsnr, output->cmbchisq
 			      );
 			output++;
+			write_entries++;
 		}
 
 		if (pklist->d_cohsnr_skymap) {
@@ -1009,14 +1679,14 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 		}
 
 		if (state->cur_nifo == state->nifo) {
-			for(itrial=1; itrial<=hist_trials; itrial++) {
-				for(ipeak=0; ipeak<npeak; ipeak++) {
-					int *peak_pos = pklist->peak_pos;
+			int *peak_pos = pklist->peak_pos;
+			for(ipeak=0; ipeak<state->max_npeak; ipeak++) {
+				for(itrial=1; itrial<=hist_trials; itrial++) {
 					peak_cur = peak_pos[ipeak];
 					len_cur = pklist->len_idx[peak_cur];
 					/* check if cohsnr pass the valid test */
 					peak_cur_bg = (itrial - 1)*max_npeak + peak_cur;
-					if (pklist->cohsnr_bg[peak_cur_bg] > 0) {
+					if (peak_cur >= 0 && pklist->cohsnr_bg[peak_cur_bg] > 0) {
 					//output->end_time = end_time[ipeak];
 					output->is_background = 1;
 					output->livetime = livetime;
@@ -1043,12 +1713,12 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 					output->fap = 0;
 					output->far = 0;
 					output->skymap_fname[0] ='\0';
-					GST_LOG_OBJECT(postcoh, "ipeak %d, peak_cur %d, len_cur %d, tmplt_idx %d, pix_idx %d,"
+					GST_LOG_OBJECT(postcoh, "ipeak %d, itrial %d, len_cur %d, tmplt_idx %d, pix_idx %d,"
 					"snglsnr_L %f, snglsnr_H %f, snglsnr_V %f,"
 				     "coaphase_L %f, coaphase_H %f, coa_phase_V %f,"
 				     "chisq_L %f, chisq_H %f, chisq_V %f,"
 				     "cohsnr %f, nullsnr %f, cmbchisq %f\n",
-				     ipeak, peak_cur, len_cur, output->tmplt_idx, output->pix_idx,
+				     ipeak, itrial, len_cur, output->tmplt_idx, output->pix_idx,
 				     output->snglsnr_L, output->snglsnr_H, output->snglsnr_V,
 				     output->coaphase_L, output->coaphase_H, output->coaphase_V,
 				     output->chisq_L, output->chisq_H, output->chisq_V,
@@ -1056,34 +1726,41 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 				      );
 	
 					output++;
+					write_entries++;
 					}
 				}
 			}
 		}
+		GST_LOG_OBJECT(postcoh, "write to output, ifo %d, npeak %d, %d total entries", iifo, npeak, write_entries);
 	}
-
-	}
+	gst_buffer_unmap(outbuf, &mapinfo);
 }
 
 static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 {
+	GstMapInfo mapinfo;
 	GstBuffer *outbuf = NULL;
 	GstPad *srcpad = postcoh->srcpad;
-	GstCaps *caps = GST_PAD_CAPS(srcpad);
+	//GstCaps *caps = gst_pad_get_current_caps(srcpad);
 	GstFlowReturn ret;
 	PostcohState *state = postcoh->state;
 	int left_entries = 0;
 
 	left_entries = cuda_postcoh_rm_invalid_peak(state, postcoh->cohsnr_thresh);
-	GST_LOG_OBJECT(postcoh, "left entries %d", left_entries);
 	int out_size = sizeof(PostcohInspiralTable) * left_entries ;
 
-	ret = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
+	outbuf = gst_buffer_new_allocate(NULL, out_size, NULL);
+
+	ret = gst_pad_push(srcpad, outbuf);
+
 	if (ret != GST_FLOW_OK) {
 		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", ret);
 		return NULL;
 	}
-	memset(GST_BUFFER_DATA(outbuf), 0, out_size);
+
+	gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+	memset(mapinfo.data, 0, out_size);
+	gst_buffer_unmap(outbuf, &mapinfo);
 
         /* set the time stamps */
 	GstClockTime ts = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
@@ -1096,14 +1773,14 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
         GST_BUFFER_OFFSET(outbuf) = postcoh->offset0 + postcoh->samples_out;
         GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
 
-	GST_BUFFER_SIZE(outbuf) = out_size;
+	gst_buffer_set_size(outbuf, out_size);
 
 	cuda_postcoh_write_table_to_buf(postcoh, outbuf);
 
 	GST_LOG_OBJECT (srcpad,
-		"Processed of (%d bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
+		"Processed of (%d entries) with timestamp %" GST_TIME_FORMAT ", duration %"
 		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
-		G_GUINT64_FORMAT,  GST_BUFFER_SIZE (outbuf),
+		G_GUINT64_FORMAT,  left_entries,
 		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
 		GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
 		GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));
@@ -1111,20 +1788,27 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	return outbuf;
 }
 
-int timestamp_to_gps_idx(int gps_step, GstClockTime t)
+int timestamp_to_gps_idx(long gps_start, int gps_step, GstClockTime t)
 {
 	int seconds_in_one_day = 24 * 3600;
-	unsigned long days_from_utc0 = (t / GST_SECOND) / seconds_in_one_day;
 	int gps_len = seconds_in_one_day / gps_step;
-	double time_in_one_day = (double) (t/GST_SECOND) - days_from_utc0 * seconds_in_one_day;
+
+	/* DEPRECATED: not using utc0 as the gps_start time any more */
+	//unsigned long days_from_gps_start = (t / GST_SECOND) / seconds_in_one_day;
+	//double time_in_one_day = (double) (t/GST_SECOND) - days_from_gps_start * seconds_in_one_day;
+	//int gps_idx = (int) (round( time_in_one_day / gps_step)) % gps_len;
+
+	int days_from_gps_start = floor((t / GST_SECOND - (double)gps_start) / seconds_in_one_day);
+	double time_in_one_day = (double) (t/GST_SECOND) -  ((double)gps_start + days_from_gps_start * seconds_in_one_day);
 	int gps_idx = (int) (round( time_in_one_day / gps_step)) % gps_len;
 
-	GST_LOG("current days from utc0 %lu, current time in one day %f, length of gps array %d, gps_idx %d,\n", days_from_utc0, time_in_one_day, gps_len, gps_idx);
+	GST_DEBUG("current days from gps_start %d, current time in one day %f, length of gps array %d, gps_idx %d,\n", days_from_gps_start, time_in_one_day, gps_len, gps_idx);
 	return gps_idx;
 }
 
 static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_ifo, cudaStream_t stream)
 {
+        state->snglsnr_max = 0;
 	int exe_len = state->exe_len, ntmplt = state->ntmplt, itmplt, ilen, jlen, npeak = 0;
 	COMPLEX_F *isnr = snglsnr;
 	float tmp_abssnr, tmp_tmplt, snglsnr_thresh = state->snglsnr_thresh;
@@ -1134,6 +1818,7 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 	int *peak_pos = pklist->peak_pos;
 	int *tmplt_idx = pklist->tmplt_idx;
 	int *len_idx = pklist->len_idx;
+	/* find maxsnr for each sampling point, keep the record of the tmplt_idx */
 	for (ilen=0; ilen<exe_len; ilen++) {
 		tmp_maxsnr[ilen] = 0.0;
 		tmp_tmpltidx[ilen] = -1;
@@ -1146,9 +1831,12 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 			isnr++;
 		}
 	}
-
+	/* find the maxsnr acrros each tmplt */
 	for (ilen=0; ilen<exe_len; ilen++) {
 		if (tmp_tmpltidx[ilen] > -1) {
+			/* find if the subsequential snr has larger snr, 
+			 * yes: continue to next sample point, 
+			 * no: save this snr and delete snr on other times of the same tmplt*/
 			for (jlen=ilen+1; jlen<exe_len; jlen++) {
 				if (tmp_tmpltidx[jlen] == tmp_tmpltidx[ilen] && tmp_maxsnr[jlen] > tmp_maxsnr[ilen])
 					break;
@@ -1165,24 +1853,30 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 		}
 	}
 
-	/* do clustering every 5 samples */
-	int tmp_peak_pos[state->max_npeak], len_tmp_peak, len_next_peak, final_peaks=0, ipeak;
-	tmp_peak_pos[0] = peak_pos[0];
+        /* keep track of the maximum single snr in this snr chunk */
+	for (ilen=0; ilen<exe_len; ilen++) {
+	  if (tmp_maxsnr[ilen] > state->snglsnr_max)
+	    state->snglsnr_max = tmp_maxsnr[ilen];
+	}
+
+	/* do clustering every PEAKFINDER_CLUSTER_WINDOW samples, FIXME: if set to 0, the size of output will be ten times */
+	int cluster_peak_pos[state->max_npeak], len_cluster_peak, len_next_peak, final_peaks=0, ipeak;
+	cluster_peak_pos[0] = peak_pos[0];
 	for(ipeak=0; ipeak<npeak-1; ipeak++) {
-		if (peak_pos[ipeak+1] - tmp_peak_pos[final_peaks] > PEAKFINDER_CLUSTER_WINDOW) {
+		if (peak_pos[ipeak+1] - cluster_peak_pos[final_peaks] > PEAKFINDER_CLUSTER_WINDOW) {
 			final_peaks++;
-			tmp_peak_pos[final_peaks] = peak_pos[ipeak+1];
+			cluster_peak_pos[final_peaks] = peak_pos[ipeak+1];
 		}
-		else { // update the tmp_peak_pos if next peak pos has larger SNR
-			len_tmp_peak = len_idx[tmp_peak_pos[final_peaks]];
+		else { // update the cluster_peak_pos if next peak pos has larger SNR
+			len_cluster_peak = len_idx[cluster_peak_pos[final_peaks]];
 			len_next_peak = len_idx[peak_pos[ipeak+1]];
-			if (tmp_maxsnr[len_tmp_peak] < tmp_maxsnr[len_next_peak])
-				tmp_peak_pos[final_peaks] = peak_pos[ipeak+1];
+			if (tmp_maxsnr[len_cluster_peak] < tmp_maxsnr[len_next_peak])
+				cluster_peak_pos[final_peaks] = peak_pos[ipeak+1];
 		}
 	}
 
-	npeak = final_peaks;
-	memcpy(peak_pos, tmp_peak_pos, sizeof(int) * npeak);
+	npeak = npeak == 0 ? 0 : final_peaks + 1;
+	memcpy(peak_pos, cluster_peak_pos, sizeof(int) * npeak);
 	pklist->npeak[0] = npeak;
 
 	//printf("peaks_over_thresh , ifo %d, npeak %d\n", cur_ifo, npeak);
@@ -1206,7 +1900,8 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 {
 	GSList *collectlist;
 	GstPostcohCollectData *data;
-	COMPLEX_F *snglsnr, *pos_dd_snglsnr, *pos_in_snglsnr;
+	COMPLEX_F *snglsnr;
+	//*pos_dd_snglsnr, *pos_in_snglsnr;
 	gint one_take_len = one_take_size / postcoh->bps;
 
 	int i = 0, cur_ifo = 0;
@@ -1221,7 +1916,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 	LIGOTimeGPS ligo_time;
 	XLALINT8NSToGPS(&ligo_time, ts);
 	while (common_size >= one_take_size) {
-		int gps_idx = timestamp_to_gps_idx(state->gps_step, postcoh->next_exe_t);
+		int gps_idx = timestamp_to_gps_idx(state->gps_start, state->gps_step, postcoh->next_exe_t);
 		/* copy the snr data to the right location for all detectors */ 
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
@@ -1229,15 +1924,25 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			PeakList *pklist = state->peak_list[cur_ifo];
 
 			if (is_cur_ifo_has_data(state, cur_ifo)) {
+#ifdef ACCELERATE_POSTCOH_MEMORY_COPY
+			// temporal solution for low memory copy speed
+			snglsnr = (COMPLEX_F *) gst_adapter_peek_cuda(data->adapter, one_take_size);
+#else 
 			snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
+#endif
 //			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo, postcoh->stream);
 
-			GST_LOG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d\n", ligo_time.gpsSeconds, cur_ifo, c_npeak);
+			GST_LOG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d, max_snglsnr %f\n", ligo_time.gpsSeconds, cur_ifo, c_npeak, state->snglsnr_max);
+
+			/* 
+			// because you use new postcoh kernel optimized by Xiaoyang Guo now, you cannot use 
+			// the following memory copy code any more
+			// new postcoh kernel need transposed state->d_snglsnr[cur_ifo] matrix and there is no transpose in the following code 
 			pos_dd_snglsnr = state->d_snglsnr[cur_ifo] + state->snglsnr_start_load * state->ntmplt;
-			/* copy the snglsnr to the right cuda memory */
+			// copy the snglsnr to the right cuda memory
 			if(state->snglsnr_start_load + one_take_len <= state->snglsnr_len){
-				/* when the snglsnr can be put in as one chunk */
+				// when the snglsnr can be put in as one chunk 
 				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, snglsnr, one_take_size, cudaMemcpyHostToDevice, postcoh->stream));
 				GST_LOG("load snr to gpu as a chunk");
 			} else {
@@ -1250,6 +1955,23 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 				CUDA_CHECK(cudaMemcpyAsync(pos_dd_snglsnr, pos_in_snglsnr, head_cpy_size, cudaMemcpyHostToDevice, postcoh->stream));
 				GST_LOG("load snr to gpu as as two chunks");
 			}
+			*/			
+
+			// this is necessory for new postcoh kernel
+			// 1. expand temporal memory space if necessary
+			g_assert(pklist->len_snglsnr_buffer >= 0);
+			if (one_take_size > pklist->len_snglsnr_buffer) {
+				// re-malloc pklist->d_snglsnr_buffer
+				if (pklist->d_snglsnr_buffer != NULL) {
+					cudaFree(pklist->d_snglsnr_buffer);
+				}
+				cudaMalloc((void**)&pklist->d_snglsnr_buffer, one_take_size);
+				pklist->len_snglsnr_buffer = one_take_size;
+			}
+			// 2. copy snglsnr to temporal gpu memory d_snglsnr_buffer
+			CUDA_CHECK(cudaMemcpyAsync(pklist->d_snglsnr_buffer, snglsnr, one_take_size, cudaMemcpyHostToDevice, postcoh->stream));
+			// 3. do transpose, at the same time, snr data will be moved to proper positions in state->d_snglsnr[cur_ifo]
+			transpose_snglsnr(pklist->d_snglsnr_buffer, state->d_snglsnr[cur_ifo], state->snglsnr_start_load, one_take_len, state->snglsnr_len, state->ntmplt, postcoh->stream);
 			}
 
 		}
@@ -1280,7 +2002,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 				}
 
 				/* move along */
-				gst_adapter_flush(data->adapter, exe_size);
+				gst_audioadapter_flush_samples(data->adapter, exe_size);
 			}
 		}
 		common_size -= exe_size;
@@ -1308,12 +2030,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 {
 	CudaPostcoh* postcoh = CUDA_POSTCOH(user_data);
 	PostcohState *state = postcoh->state;
-	g_mutex_lock(postcoh->prop_lock);
+	g_mutex_lock(&postcoh->prop_lock);
 	while (state->npix == NOT_INIT || state->autochisq_len == NOT_INIT || postcoh->hist_trials == NOT_INIT) {
-		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
+		g_cond_wait(&postcoh->prop_avail, &postcoh->prop_lock);
 		GST_LOG_OBJECT(postcoh, "collected have to wait");
 	}
-	g_mutex_unlock(postcoh->prop_lock);
+	g_mutex_unlock(&postcoh->prop_lock);
 
 	CUDA_CHECK(cudaSetDevice(postcoh->device_id));
 	GstElement* element = GST_ELEMENT(postcoh);
@@ -1352,7 +2074,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		
 	if (postcoh->is_all_aligned) {
 		common_size = cuda_postcoh_push_and_get_common_size(pads, postcoh);
-		GST_DEBUG_OBJECT(postcoh, "get spanned size %d, get spanned samples %f", common_size, common_size/ postcoh->bps);
+		GST_DEBUG_OBJECT(postcoh, "get spanned size %d, get spanned samples %d", common_size, common_size/ postcoh->bps);
 
 		if (common_size == -1) {
 			res = gst_pad_push_event(postcoh->srcpad, gst_event_new_eos());
@@ -1381,29 +2103,46 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 static void cuda_postcoh_dispose(GObject *object)
 {
-	CudaPostcoh *element = CUDA_POSTCOH(object);
-	if(element->collect)
-		gst_object_unref(GST_OBJECT(element->collect));
-	element->collect = NULL;
+  CudaPostcoh *element = CUDA_POSTCOH(object);
+  GST_DEBUG_OBJECT(element, "disposing CudaPostcoh element");
+  
+  if(element->collect)
+  {
+    gst_object_unref(GST_OBJECT(element->collect));
+    element->collect = NULL;
+  }
 
-	if(element->state){
-		state_destroy(element->state);
-		free(element->state);
-		element->state = NULL;
-	}
+  //gst_caps_replace(element->filter_caps, NULL);
+  //gst_caps_replace(element->current_caps, NULL);
 
-	if(element->srcpad)
-		gst_object_unref(element->srcpad);
-	element->srcpad = NULL;
+  if(element->state){
+    state_destroy(element->state);
+    free(element->state);
+    element->state = NULL;
+  }
 
-	g_mutex_free(element->prop_lock);
-	g_cond_free(element->prop_avail);
+  //if(element->srcpad)
+  //  gst_object_unref(element->srcpad);
+  //element->srcpad = NULL;
 
-	/* destroy hashtable and its contents */
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+  g_mutex_clear(&element->prop_lock);
+  g_cond_clear(&element->prop_avail);
+
+  gst_caps_replace(&element->filter_caps, NULL);
+  gst_caps_replace(&element->current_caps, NULL);
+
+  if( element->pending_events) 
+  {
+    g_list_foreach( element->pending_events, (GFunc) gst_event_unref, NULL );
+    g_list_free(element->pending_events);
+    element->pending_events = NULL;
+  }
+
+  /* destroy hashtable and its contents */
+  G_OBJECT_CLASS(cuda_postcoh_parent_class)->dispose(object);
 }
 
-
+#if 0
 static void cuda_postcoh_base_init(gpointer g_class)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
@@ -1433,14 +2172,14 @@ static void cuda_postcoh_base_init(gpointer g_class)
 		)
 	);
 }
-
+#endif
 
 static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
 
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	cuda_postcoh_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(cuda_postcoh_get_property);
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(cuda_postcoh_set_property);
@@ -1448,6 +2187,29 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 	gstelement_class->request_new_pad = GST_DEBUG_FUNCPTR(cuda_postcoh_request_new_pad);
 	gstelement_class->release_pad = GST_DEBUG_FUNCPTR(cuda_postcoh_release_pad);
 	gstelement_class->change_state = GST_DEBUG_FUNCPTR(cuda_postcoh_change_state);
+
+	gst_element_class_set_details_simple(
+		gstelement_class,
+		"Post Coherent SNR and Nullstream Generator",
+		"Filter",
+		"Coherent trigger generation.\n",
+		"Qi Chu <qi.chu at ligo dot org>"
+	);
+	gst_element_class_add_pad_template(
+		gstelement_class,
+		gst_static_pad_template_get(&cuda_postcoh_sink_template)
+	);
+
+	gst_element_class_add_pad_template(
+		gstelement_class,
+//		gst_static_pad_template_get(&cuda_postcoh_src_template)
+		gst_pad_template_new(
+			"src",
+			GST_PAD_SRC,
+			GST_PAD_ALWAYS,
+			gst_caps_from_string("application/x-lal-postcoh")
+		)
+	);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1463,7 +2225,7 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_AUTOCORRELATION_FNAME,
+		PROP_SPIIR_BANK_FNAME,
 		g_param_spec_string(
 			"autocorrelation-fname",
 			"Autocorrelation matrix filename",
@@ -1530,7 +2292,7 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 			"cohsnr-thresh",
 			"coherent snr threshold",
 			"coherent snr threshold",
-			0.0, G_MAXFLOAT, 5.0,
+			0.0, G_MAXFLOAT, 1.05,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -1564,35 +2326,66 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 }
 
 
-static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
+static void cuda_postcoh_init(CudaPostcoh *postcoh)
 {
-	GstElement *element = GST_ELEMENT(postcoh);
+  GstElement *element = GST_ELEMENT(postcoh);
+  //GstPadTemplate *template;
 
-	gst_element_create_all_pads(element);
-	postcoh->srcpad = gst_element_get_static_pad(element, "src");
-	GST_DEBUG_OBJECT(postcoh, "%s caps %" GST_PTR_FORMAT, GST_PAD_NAME(postcoh->srcpad), gst_pad_get_caps(postcoh->srcpad));
+  gst_element_create_all_pads(element);
+  /*template = gst_pad_template_new(
+		"src",
+		GST_PAD_SRC,
+		GST_PAD_ALWAYS,
+		gst_caps_from_string(
+		"application/x-lal-postcoh" 
+	      )
+	    );
+*/
+  postcoh->srcpad = gst_element_get_static_pad(element, "src");
+  //postcoh->srcpad = gst_pad_new_from_template(template, "src");
+  GST_DEBUG_OBJECT(postcoh, "Initialized postcoh srcpad %s caps %" GST_PTR_FORMAT, GST_PAD_NAME(postcoh->srcpad), gst_pad_query_caps(postcoh->srcpad, NULL));
 
-	gst_pad_set_event_function(postcoh->srcpad, GST_DEBUG_FUNCPTR(src_event));
-	postcoh->collect = gst_collect_pads_new();
-	gst_collect_pads_set_function(postcoh->collect, GST_DEBUG_FUNCPTR(collected), postcoh);
+  gst_pad_set_query_function(postcoh->srcpad,
+      GST_DEBUG_FUNCPTR(src_query));
+  gst_pad_set_event_function(postcoh->srcpad, 
+      GST_DEBUG_FUNCPTR(src_event));
+  //GST_PAD_SET_PROXY_CAPS(postcoh->srcpad);
+  gst_pad_use_fixed_caps(postcoh->srcpad);
+  
+  //gst_element_add_pad(GST_ELEMENT(postcoh), postcoh->srcpad);
 
-	postcoh->t0 = GST_CLOCK_TIME_NONE;
-	postcoh->next_exe_t = GST_CLOCK_TIME_NONE;
-	postcoh->offset0 = GST_BUFFER_OFFSET_NONE;
-	//postcoh->next_in_offset = GST_BUFFER_OFFSET_NONE;
-	postcoh->set_starttime = FALSE;
-	postcoh->is_all_aligned = FALSE;
-	postcoh->samples_in = 0;
-	postcoh->samples_out = 0;
-	postcoh->state = (PostcohState *) malloc (sizeof(PostcohState));
-	postcoh->state->autochisq_len = NOT_INIT;
-	postcoh->state->npix = NOT_INIT;
-	postcoh->state->is_member_init = NOT_INIT;
-	postcoh->hist_trials = NOT_INIT;
-	postcoh->prop_lock = g_mutex_new();
-	postcoh->prop_avail = g_cond_new();
-	postcoh->stream_id = NOT_INIT;
-	postcoh->device_id = NOT_INIT;
+  postcoh->collect = gst_collect_pads_new();
+  gst_collect_pads_set_function(postcoh->collect, 
+      GST_DEBUG_FUNCPTR(collected), postcoh);
+  gst_collect_pads_set_event_function( postcoh->collect, 
+      GST_DEBUG_FUNCPTR(sink_event), postcoh );
+  gst_collect_pads_set_query_function( postcoh->collect,
+      GST_DEBUG_FUNCPTR(sink_query), postcoh );
+
+  postcoh->t0 = GST_CLOCK_TIME_NONE;
+  postcoh->next_exe_t = GST_CLOCK_TIME_NONE;
+  postcoh->offset0 = GST_BUFFER_OFFSET_NONE;
+  //postcoh->next_in_offset = GST_BUFFER_OFFSET_NONE;
+  postcoh->set_starttime = FALSE;
+  postcoh->is_all_aligned = FALSE;
+  postcoh->samples_in = 0;
+  postcoh->samples_out = 0;
+  postcoh->state = (PostcohState *) malloc (sizeof(PostcohState));
+  postcoh->state->autochisq_len = NOT_INIT;
+  postcoh->state->npix = NOT_INIT;
+  postcoh->state->is_member_init = NOT_INIT;
+  postcoh->hist_trials = NOT_INIT;
+  g_mutex_init(&postcoh->prop_lock);
+  g_cond_init(&postcoh->prop_avail);
+  postcoh->stream_id = NOT_INIT;
+  postcoh->device_id = NOT_INIT;
+  postcoh->process_id = 0;
+  postcoh->cur_event_id = 0;
+  postcoh->padcount = 0;
+
+  postcoh->current_caps = NULL;
+  gst_audio_info_init(&postcoh->info);
+  postcoh->filter_caps = NULL;
 }
 
 

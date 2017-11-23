@@ -36,3 +36,5 @@ state_reset_npeak(PeakList *pklist);
 void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_skymap, cudaStream_t stream);
 
 void cohsnr_and_chisq_background(PostcohState *state, int iifo, int hist_trials , int gps_idx);
+
+void transpose_snglsnr(COMPLEX_F* idata, COMPLEX_F* odata, int offset, int copy_snglsnr_len, int snglsnr_len, int tmplt_len, cudaStream_t stream);

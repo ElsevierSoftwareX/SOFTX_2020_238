@@ -18,6 +18,7 @@
  */
 
 #include "postcohinspiral_table_utils.h"
+// FIXME: The current code works. But it misses 4 fields in output compared with the online pipeline output: eta, fap_l, h, v
 
 void postcohinspiral_table_init(XmlTable *table)
 {
@@ -51,10 +52,16 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->names, *g_string_new("postcoh:chisq_V"));
     g_array_append_val(table->names, *g_string_new("postcoh:cohsnr"));
     g_array_append_val(table->names, *g_string_new("postcoh:nullsnr"));
-    g_array_append_val(table->names, *g_string_new("postcoh:chisq"));
+    g_array_append_val(table->names, *g_string_new("postcoh:cmbchisq"));
     g_array_append_val(table->names, *g_string_new("postcoh:spearman_pval"));
     g_array_append_val(table->names, *g_string_new("postcoh:fap"));
     g_array_append_val(table->names, *g_string_new("postcoh:far"));
+    g_array_append_val(table->names, *g_string_new("postcoh:far_l"));
+    g_array_append_val(table->names, *g_string_new("postcoh:far_h"));
+    g_array_append_val(table->names, *g_string_new("postcoh:far_v"));
+    g_array_append_val(table->names, *g_string_new("postcoh:far_2h"));
+    g_array_append_val(table->names, *g_string_new("postcoh:far_1d"));
+    g_array_append_val(table->names, *g_string_new("postcoh:far_1w"));
     g_array_append_val(table->names, *g_string_new("postcoh:skymap_fname"));
     g_array_append_val(table->names, *g_string_new("postcoh:template_duration"));
     g_array_append_val(table->names, *g_string_new("postcoh:mchirp"));
@@ -103,6 +110,12 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
+    g_array_append_val(table->type_names, *g_string_new("real_4"));
     g_array_append_val(table->type_names, *g_string_new("lstring"));
     g_array_append_val(table->type_names, *g_string_new("real_8"));
     g_array_append_val(table->type_names, *g_string_new("real_4"));
@@ -121,5 +134,68 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->type_names, *g_string_new("real_8"));
     g_array_append_val(table->type_names, *g_string_new("real_8"));
 }
+
+void postcohinspiral_table_set_line(GString *line, PostcohInspiralTable *table, XmlTable *xtable)
+{
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsSeconds, xtable->delimiter->str); // for end_time_ns
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsNanoSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_L.gpsNanoSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_H.gpsSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_H.gpsNanoSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_V.gpsSeconds, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->end_time_V.gpsNanoSeconds, xtable->delimiter->str);
+	
+	g_string_append_printf(line, "%d%s", table->is_background, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->livetime, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->ifos, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->pivotal_ifo, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->tmplt_idx, xtable->delimiter->str);
+	g_string_append_printf(line, "%d%s", table->pix_idx, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->snglsnr_L, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->snglsnr_H, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->snglsnr_V, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->coaphase_L, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->coaphase_H, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->coaphase_V, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->chisq_L, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->chisq_H, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->chisq_V, xtable->delimiter->str);
+
+	g_string_append_printf(line, "%g%s", table->cohsnr, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->nullsnr, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->cmbchisq, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spearman_pval, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->fap, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_l, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_h, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_v, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_2h, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_1d, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->far_1w, xtable->delimiter->str);
+	g_string_append_printf(line, "%s%s", table->skymap_fname, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->template_duration, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mchirp, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mtotal, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mass1, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->mass2, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1x, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1y, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin1z, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2x, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2y, xtable->delimiter->str);
+	g_string_append_printf(line, "%g%s", table->spin2z, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->ra, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->dec, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->deff_L, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->deff_H, xtable->delimiter->str);
+	g_string_append_printf(line, "%lg%s", table->deff_V, xtable->delimiter->str);
+	
+	g_string_append(line, "\n");
+	//printf("%s", line->str);
+
+}
+
 
 

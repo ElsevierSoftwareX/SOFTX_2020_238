@@ -36,6 +36,8 @@ typedef struct
 tagPostcohInspiralTable
 {
   struct tagPostcohInspiralTable *next;
+  long		process_id;
+  long		event_id;
   LIGOTimeGPS	end_time;
   LIGOTimeGPS	end_time_L;
   LIGOTimeGPS	end_time_H;
@@ -60,7 +62,22 @@ tagPostcohInspiralTable
   REAL4         cmbchisq;
   REAL4		spearman_pval;
   REAL4		fap;
+  REAL4		far_h;
+  REAL4		far_l;
+  REAL4		far_v;
+  REAL4		far_h_1w;
+  REAL4		far_l_1w;
+  REAL4		far_v_1w;
+  REAL4		far_h_1d;
+  REAL4		far_l_1d;
+  REAL4		far_v_1d;
+  REAL4		far_h_2h;
+  REAL4		far_l_2h;
+  REAL4		far_v_2h;
   REAL4		far;
+  REAL4		far_2h;
+  REAL4		far_1d;
+  REAL4		far_1w;
   CHAR		skymap_fname[MAX_SKYMAP_FNAME_LEN];			// location of skymap
   REAL8		template_duration;
   REAL4		mass1;

@@ -1,12 +1,32 @@
-#include <lal/LIGOMetadataTables.h> // SnglInspiralTable
+/* GStreamer
+ * Copyright (C) Qi Chu,
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more deroll-offss.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+ * Boston, MA 02111-1307, USA.
+ */
+
+
+#include <gst/gst.h>
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
-#include <chealpix.h>
-#include "postcoh_utils.h"
+#include <postcoh/postcoh_utils.h>
 #include <cuda_debug.h>
 
 char* IFO_MAP[] = {"L1", "H1", "V1"};
 #define __DEBUG__ 1
 #define NSNGL_TMPLT_COLS 12
+
 
 PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 {
@@ -106,6 +126,10 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		/* temporary struct to store tmplt max in one max_npeak data */
 		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_peak_tmplt), sizeof(float) * state->ntmplt));
 		CUDA_CHECK(cudaMemsetAsync(pklist->d_peak_tmplt, 0, sizeof(float) * state->ntmplt, stream));
+		
+		// add for new postcoh kernel optimized by Xiaoyang Guo
+		pklist->d_snglsnr_buffer = NULL;
+		pklist->len_snglsnr_buffer = 0;
 
 		pklist->d_cohsnr_skymap = NULL;
 		pklist->cohsnr_skymap = NULL;
@@ -113,25 +137,128 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 }
 
 void
+cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
+{
+
+	int ntoken = 0;
+
+	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
+	strcpy(fname_cpy, fname);
+	//printf("fname_cpy %s\n", fname_cpy);
+	char *token = strtok_r(fname_cpy, ",", &end_ifo);
+	int mem_alloc_size = 0, ntmplt = 0, match_ifo = 0;
+
+	/* parsing for nifo */
+	while (token != NULL) {
+		token = strtok_r(NULL, ",", &end_ifo);
+		ntoken++;
+	}
+	printf("read in sigmasq from xml %s\n", fname);
+
+	int nifo = ntoken;
+	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct));
+	XmlArray *array_sigmasq = (XmlArray *)malloc(sizeof(XmlArray));
+
+	state->sigmasq = (double **)malloc(sizeof(double *) * nifo );
+	double **sigmasq = state->sigmasq;
+	sigmasq[0] = NULL;
+
+	end_ifo = NULL;
+	strcpy(fname_cpy, fname);
+	token = strtok_r(fname_cpy, ",", &end_ifo);
+	//printf("fname_cpy %s\n", fname_cpy);
+	sprintf((char *)xns[0].tag, "sigmasq:array");
+	xns[0].processPtr = readArray;
+	xns[0].data = &(array_sigmasq[0]);
+
+	/* used for sanity check the lenghts of sigmasq arrays should be equal */
+	int last_dimension = -1;
+	/* start parsing again */
+	while (token != NULL) {
+		char *end_token;
+		char *token_bankname = strtok_r(token, ":", &end_token);
+		token_bankname = strtok_r(NULL, ":", &end_token);
+
+		printf("read in sigmasq now from xml %s\n", token_bankname);
+		parseFile(token_bankname, xns, 1);
+
+		for (int i=0; i<nifo; i++) {
+			if (strncmp(token, IFO_MAP[i], 2) == 0) {
+				match_ifo = i;
+				break;
+			}
+		
+		}
+
+		ntmplt = array_sigmasq[0].dim[0];
+		/* check if the lengths of sigmasq arrays are equal for all detectors */
+		if (last_dimension == -1)
+			last_dimension = ntmplt;
+		else
+			if (last_dimension != ntmplt) {
+				fprintf(stderr, "reading different lengths of sigmasq arrays from different detectors, should exit\n");
+				//exit(0);
+			}
+
+
+		printf("sigmasq, parse match ifo %d, %s, ntmplt %d\n", match_ifo, token_bankname, ntmplt);
+		mem_alloc_size = sizeof(double) * ntmplt;
+
+		if (sigmasq[0] == NULL) {
+			for (int i = 0; i < nifo; i++) {
+				sigmasq[i] = (double *)malloc(mem_alloc_size);
+				memset(sigmasq[i], 0, mem_alloc_size);
+			}
+
+		}
+
+		for (int j=0; j<ntmplt; j++) {
+			//sigmasq[match_ifo][j] = (double)((double *)(array_sigmasq[0].data))[j];
+			//printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
+		}
+
+		freeArraydata(array_sigmasq);
+		token = strtok_r(NULL, ",", &end_ifo);
+		/*
+		 * Cleanup function for the XML library.
+		 */
+		xmlCleanupParser();
+		/*
+		 * this is to debug memory for regression tests
+		 */
+		xmlMemoryDump();
+
+		printf("next token %s \n", token);
+
+	}
+
+}
+void
 cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
 	// FIXME: sanity check that the size of U matrix and diff matrix for
 	// each sky pixel is consistent with number of detectors
 	//printf("read map from xml\n");
 	/* first get the params */
-	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2);
-	XmlParam param_gps = {0, NULL};
+	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 3);
+	XmlParam param_gps_step = {0, NULL};
+	XmlParam param_gps_start = {0, NULL};
 	XmlParam param_order = {0, NULL};
 
 	sprintf((char *)xns[0].tag, "gps_step:param");
 	xns[0].processPtr = readParam;
-	xns[0].data = &param_gps;
+	xns[0].data = &param_gps_step;
 
-	sprintf((char *)xns[1].tag, "chealpix_order:param");
+	sprintf((char *)xns[1].tag, "gps_start:param");
 	xns[1].processPtr = readParam;
-	xns[1].data = &param_order;
+	xns[1].data = &param_gps_start;
 
-	parseFile(fname, xns, 2);
+	sprintf((char *)xns[2].tag, "chealpix_order:param");
+	xns[2].processPtr = readParam;
+	xns[2].data = &param_order;
+	printf("read in detrsp map from xml %s\n", fname);
+
+	parseFile(fname, xns, 3);
 	/*
 	 * Cleanup function for the XML library.
 	 */
@@ -143,23 +270,26 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 
 
 	//printf("test\n");
-	printf("%s \n", xns[0].tag);
+	printf("reading detrsp map %s %s %s\n", xns[0].tag, xns[1].tag, xns[2].tag);
 
-	printf("%p\n", param_gps.data);
-	state->gps_step = *((int *)param_gps.data);
+	state->gps_step = *((int *)param_gps_step.data);
+	state->gps_start = *((long *)param_gps_start.data);
 	printf("gps_step %d\n", state->gps_step);
+	printf("gps_start %d\n", state->gps_start);
 	unsigned long nside = (unsigned long) 1 << *((int *)param_order.data);
 	state->nside = nside;
 	state->npix = nside2npix(nside);
-	free(param_gps.data);
-	param_gps.data = NULL;
+	free(param_gps_step.data);
+	free(param_gps_start.data);
+	param_gps_step.data = NULL;
+	param_gps_start.data = NULL;
 	//printf("test\n");
 	free(param_order.data);
 	param_order.data = NULL;
 	free(xns);
 
 
-	int gps = 0, gps_start = 0, gps_end = 24*3600;
+	int gps = 0, gps_end = 24*3600;
 	int ngps = gps_end/(state->gps_step);
 
 	xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2* ngps);
@@ -211,13 +341,13 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 void
 cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
-	//printf("read autocorr from xml\n");
+	printf("read in autocorr from xml %s\n", fname);
 
 	int ntoken = 0;
 
 	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
 	strcpy(fname_cpy, fname);
-	char *token = strtok_r(fname, ",", &end_ifo);
+	char *token = strtok_r(fname_cpy, ",", &end_ifo);
 	int mem_alloc_size = 0, autochisq_len = 0, ntmplt = 0, match_ifo = 0;
 
 	/* parsing for nifo */
@@ -238,6 +368,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	cudaMalloc((void **)&(state->dd_autocorr_norm), sizeof(float *) * nifo);
 
 	end_ifo = NULL;
+	strcpy(fname_cpy, fname);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
 	//printf("fname_cpy %s\n", fname_cpy);
 	sprintf((char *)xns[0].tag, "autocorrelation_bank_real:array");
@@ -290,7 +421,8 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 			}
 //			printf("match ifo %d, norm %d: %f\n", match_ifo, j, tmp_norm[j]);
 		}
-
+		/* copy the autocorr array to GPU device;
+		 * copy the array address to GPU device */
 		CUDA_CHECK(cudaMemcpyAsync(autocorr[match_ifo], tmp_autocorr, mem_alloc_size, cudaMemcpyHostToDevice, stream));
 		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_autocorr_matrix[match_ifo]), &(autocorr[match_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, stream));
 		CUDA_CHECK(cudaMemcpyAsync(autocorr_norm[match_ifo], tmp_norm, sizeof(float) * ntmplt, cudaMemcpyHostToDevice, stream));
@@ -345,7 +477,8 @@ cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 	strncpy((char *) xns->tag, "sngl_inspiral:table", XMLSTRMAXLEN);
 	xns->processPtr = readTable;
 	xns->data = xtable;
-
+	
+	printf("read in sngl_tmplt from xml %s\n", fname);
 	parseFile(fname, xns, 1);
 
     /*

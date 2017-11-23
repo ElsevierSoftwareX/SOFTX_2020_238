@@ -30,5 +30,6 @@
 #include "postcohinspiral_table.h"
 
 void postcohinspiral_table_init(XmlTable *table);
+void postcohinspiral_table_set_line(GString *line, PostcohInspiralTable *table, XmlTable *xtable);
 #endif /* __POSTCOH_TABLE_UTILS_H__ */
 
