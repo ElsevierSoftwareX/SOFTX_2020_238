@@ -875,7 +875,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 	#
 
 
-	output.write_output_url(url = output_url or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
+	output.write_output_url(url = output_url or output.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
 
 
 	#

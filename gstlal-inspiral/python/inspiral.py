@@ -449,12 +449,6 @@ class CoincsDocument(object):
 		return self.sngl_inspiral_table.get_next_id()
 
 
-	def T050017_filename(self, description, extension):
-		start, end = self.search_summary_outseg
-		start, end = int(math.floor(start)), int(math.ceil(end))
-		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
-
-
 	def write_output_url(self, verbose = False):
 		self.llwsegments.finalize()
 		ligolw_process.set_process_end_time(self.process)
@@ -791,6 +785,11 @@ class Data(object):
 				if event.end >= discard_boundary:
 					break
 				del event.snr_time_series
+
+	def T050017_filename(self, description, extension):
+		start, end = self.seglistdicts.extent_all()
+		start, end = int(math.floor(start)), int(math.ceil(end))
+		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
 
 	def __get_likelihood_xmldoc(self):
 		# generate a coinc parameter distribution document.  NOTE:
@@ -1210,7 +1209,7 @@ class Data(object):
 		ligolw_utils.write_url(self.__get_likelihood_xmldoc(), ligolw_utils.local_path_from_url(url), gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 		# Snapshots get their own custom file and path
 		if snapshot:
-			fname = self.coincs_document.T050017_filename(description + '_DISTSTATS', 'xml.gz')
+			fname = self.T050017_filename(description + '_DISTSTATS', 'xml.gz')
 			shutil.copy(ligolw_utils.local_path_from_url(url), os.path.join(subdir_from_T050017_filename(fname), fname))
 
 	def __write_zero_lag_ranking_stats_file(self, filename, verbose = False):
@@ -1231,7 +1230,7 @@ class Data(object):
 			# We require the likelihood file to have the same name
 			# as the input to this program to accumulate statistics
 			# as we go
-			fname = self.coincs_document.T050017_filename(description, extension)
+			fname = self.T050017_filename(description, extension)
 			fname = os.path.join(subdir_from_T050017_filename(fname), fname)
 			self.__write_output_url(url = fname, verbose = verbose)
 			if self.likelihood_url_namedtuple.likelihood_url:
