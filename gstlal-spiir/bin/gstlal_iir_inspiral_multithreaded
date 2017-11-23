@@ -1,0 +1,604 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011  Shaun Hooper, Chad Hanna
+# Copyright (C) 2013-2014 Qi Chu
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Stream-based inspiral analysis tool use IIR filters"""
+
+## @file
+# A version of gstlal_inspiral that uses IIR filter banks
+#
+#	+ `--psd-fft-length` [s] (int): FFT length, default 16s.
+#	+ `--veto-segments-file` [filename]: Set the name of the LIGO light-weight XML file from which to load vetoes (optional).
+#	+ `--veto-segments-name` [name]: Set the name of the segments to extract from the segment tables and use as the veto list (default = "vetoes").
+#	+ `--nxydump-segment` [start:stop]: Set the time interval to dump from nxydump elments (optional).  (default is \":\", i.e. dump all time.")
+#	+ `--output` [filename]: Set the filename in which to save the triggers (required).
+#	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
+#	+ `--track-psd`: Track PSD even if a reference is given
+#	+ `--iir-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
+#	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets.
+#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal).
+#	+ `--chisq-type` [type]: Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.
+#	+ `--coincidence-threshold` [value] (float): Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.
+#	+ `--write-pipeline` [filename]: Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.
+#	+ `--comment`  [str]
+#	+ `--check-time-stamps`: Turn on time stamp checking.
+#	+ `--verbose`: Be verbose (optional).
+#	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
+#	+ `--blind-injections` [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case.
+#	+ `--svd-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.
+#	+ `--control-peak-time` [time] (int): Set a time window in seconds to find peaks in the control signal.
+#	+ `--fir-stride` [time] (int): Set the length of the fir filter stride in seconds (default = 8).
+#	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required"
+#	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.
+#	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data (required).
+#	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
+#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data and snapshot the trigger files.
+#	+ `--gracedb-type`: gracedb type (default is LowMass).
+#	+ `--gracedb-group`: gracedb group (default is Test).
+#	+ `--thinca-interval` [secs] (float): Set the thinca interval (default = 30s).
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import os
+import resource
+import sys
+from optparse import OptionParser
+import signal
+import subprocess
+import socket
+import time
+
+import multiprocessing
+
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+
+from glue import segments
+from glue import segmentsUtils
+from glue.ligolw import ligolw
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import segments as ligolw_segments
+from pylal.datatypes import LIGOTimeGPS
+from pylal import series as lalseries
+from gstlal import far
+from gstlal import inspiral
+from gstlal import pipeparts
+from gstlal import lloidparts
+from gstlal import spiirparts
+from gstlal import simplehandler
+from gstlal import inspiral
+from gstlal import httpinterface
+from gstlal import datasource
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+  pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
+
+def excepthook(*args):
+  # system exception hook that forces hard exit.  without this,
+  # exceptions that occur inside python code invoked as a call-back
+  # from the gstreamer pipeline just stop the pipeline, they don't
+  # cause gstreamer to exit.
+
+  # FIXME:  they probably *would* cause if we could figure out why
+  # element errors and the like simply stop the pipeline instead of
+  # crashing it, as well.  Perhaps this should be removed when/if the
+  # "element error's don't crash program" problem is fixed
+  sys.__excepthook__(*args)
+  os._exit(1)
+
+sys.excepthook = excepthook
+
+#
+# Make sure we have sufficient resources
+# We allocate far more memory than we need, so this is okay
+#
+
+# set the number of processes up to hard limit
+maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
+resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
+
+# set the total set size up to hard limit
+maxas = resource.getrlimit(resource.RLIMIT_AS)[1]
+resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
+
+# set the stack size per thread to be smaller
+maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
+resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
+
+
+def now():
+  return XLALUTCToGPS(time.gmtime())
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+def parse_command_line():
+  parser = OptionParser(
+    description = __doc__
+  )
+
+	# append all the datasource specific options
+  datasource.append_options(parser)
+
+  parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+  parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+  parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
+  parser.add_option("--nxydump-segment", metavar = "start:stop", default = None, help = "Set the time interval to dump from nxydump elments (optional).  The default is None, i.e. no dump.")
+  parser.add_option("--output", metavar = "filename", action = "append", help = "Set the filename in which to save the triggers (required)")
+  parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
+  parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
+  parser.add_option("--iir-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
+  parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
+  parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
+  parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
+  parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
+  parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+  parser.add_option("--comment",  metavar="str")
+  parser.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
+  parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+  parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+  parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case")
+  #FIXME: in order to be compatible with SVD method, the following paramters are kept though not used for iir filtering
+  parser.add_option("--svd-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
+  parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
+  parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
+  parser.add_option("--local-frame-caching", action = "store_true", help = "Unused")
+
+
+  #FIXME: do not consider online paramters yet
+  parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
+  parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
+  parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
+  parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+  parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data and snapshot the trigger files.")
+  parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
+  parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
+  parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
+	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
+	# in the process_params table to determine the threshold below
+	# which it can delete uninteresting singles after the coincs are
+	# ranked.  if the name of this option is changed, be sure to update
+	# gstlal_inspiral_calc_likelihood
+  parser.add_option("--singles-threshold-record", metavar = "SNRrecord", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
+  parser.add_option("--peak-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
+
+  # gpu acceleartion support
+  parser.add_option("--gpu-acc", action = "store_true", help = "gpu acceleration for IIR filtering (optional).")
+
+
+
+  options, filenames = parser.parse_args()
+
+  if options.reference_psd is None and not options.track_psd:
+    raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+
+  if options.blind_injections and options.injections:
+    raise ValueError("must use only one of --blind-injections or --injections")
+
+  required_options = []
+	
+  missing_options = []
+  # FIXME: wield way to be compatible with SVD method
+  if options.svd_bank is not None:
+    options.iir_bank = options.svd_bank
+
+  if options.iir_bank is None:
+    missing_options += ["--iir-bank"]
+  missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+  if missing_options:
+    raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+
+  # parse the datasource specific information and do option checking
+  detectors = datasource.GWDataSourceInfo(options)
+  if len(detectors.channel_dict) < 2:
+    raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
+
+  # Get the banks and make the detectors
+  iir_banks = inspiral.parse_iirbank_string(options.iir_bank[0])
+	
+  # FIXME: should also check for read permissions
+  required_files = []
+  
+  for instrument in iir_banks:
+    required_files.extend(iir_banks[instrument])
+  #for iir_bank_set in iir_banks:
+  #  for instrument in iir_bank_set:
+  #    required_files += iir_bank_set[instrument]
+
+  if options.veto_segments_file:
+    required_files += [options.veto_segments_file]
+  
+  missing_files = [filename for filename in required_files if not os.path.exists(filename)]
+  
+  if missing_files:
+    raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
+
+  if options.chisq_type not in ["autochisq", "timeslicechisq"]:
+    raise ValueError, "--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type)
+
+  # do this before converting option types
+  process_params = options.__dict__.copy() 
+
+  if options.nxydump_segment: 
+    options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
+
+	# Online specific initialization
+  if options.data_source in ("lvshm", "framexmit"):
+    # make an "infinite" extent segment
+    detectors.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
+
+    # this gets set so that if you log into a node you can find out what the job id is easily
+    os.environ['GSTLAL_LL_JOB'] = options.job_tag
+
+    # check required options in this case
+    required_options = ["likelihood_file", "job_tag", "marginalized_likelihood_file"]
+
+    missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+    if missing_options:
+      raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+  else:
+    bad_options = []
+    for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
+      if getattr(options, option) is not None:
+	bad_options.append("--%s" % option.replace("_", "-"))
+    if bad_options:
+      raise ValueError("%s options should only be given for --data-source is lvshm or framexmit " % ", ".join(bad_options))
+
+  #FIXME: job tag and output can not be both none
+  #	if options.job_tag is None and options.output is None:
+  #		raise ValueError("must provide --job-tag or --output for output file naming purpose")
+
+  return options, filenames, process_params, iir_banks, detectors
+################################################################
+# end parse_command_line
+################################################################
+
+################################################################
+    #
+    # setup sigint handler to shutdown pipeline.  this is how the program stops
+    # gracefully, it is the only way to stop it.  Otherwise it runs forever
+    # man.
+    #
+###############################################################
+
+class OneTimeSignalHandler(object):
+  def __init__(self, pipeline):
+    self.pipeline = pipeline
+    self.count = 0
+
+  def __call__(self, signum, frame):
+    self.count += 1
+    if self.count == 1:
+      print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+      try:
+	#FIXME how do I choose a timestamp?
+	self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
+	if not self.pipeline.send_event(gst.event_new_eos()):
+	  raise Exception("pipeline.send_event(EOS) returned failure")
+      except Exception, e:
+	print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+	os._exit(1)
+    else:
+      print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+#################################################################
+# end class OneTimeSignalHandler()
+#################################################################
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, filenames, process_params, iir_banks, detectors = parse_command_line()
+
+if not options.check_time_stamps:
+  pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
+
+
+#
+# Parse the vetos segments file(s) if provided
+#
+
+
+if options.veto_segments_file is not None:
+  veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
+else:
+  veto_segments = None
+
+
+#
+# set up the PSDs
+#
+# There are three modes for psds in this program
+# 1) --reference-psd without --track-psd - a fixed psd (provided by the user) will be used to whiten the data
+# 2) --track-psd without --reference-psd - a psd will me measured and used on the fly
+# 3) --track-psd with --reference-psd - a psd will be measured on the fly, but the first "guess will come from the users provided psd
+#
+
+
+if options.reference_psd is not None:
+  psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
+else:
+  psd = dict((instrument, None) for instrument in detectors.channel_dict)
+
+
+#
+# Process banks in serial
+#
+def one_pipeline(iir_bank, 
+		output_filename, 
+		likelihood_file,
+		detectors,
+		psd,
+		options,
+		veto_segments,
+		):
+  if options.verbose:
+    print >>sys.stderr, "just one pipeline"
+
+  print iir_bank
+  print output_filename
+  print likelihood_file
+
+  from gstlal import bottle
+  # create a new, empty, Bottle application
+  bottle.default_app.push()
+
+  # show trackbacks when something fails
+  #bottle.app().catchall = False
+  httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_iir_inspiral" + (" (%s)" % options.job_ta if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
+
+  # Set up a registry of the resources that this job provides
+  @bottle.route("/")
+  @bottle.route("/index.html")
+
+  
+  def index(job_tag = options.job_tag, instruments = set(iir_bank.keys())):
+    host = socket.gethostname()
+    server_address = "http://%s:%d" % (host, httpservers[0][0].port)
+    yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
+    for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+      if route.rule in ("/", "/index.html"):
+	# don't create links back to this page
+	continue
+      if route.method != "GET":
+	# only create links for GET methods
+	continue
+      yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
+    yield "</p>\n</body></html>"
+  # FIXME:  get service-discovery working, then don't do this
+  if "GSTLAL_LL_JOB" in os.environ:
+    open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
+
+#  banks = {}
+#  banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
+#  for instrument in banks:
+#    for n, bank in enumerate(banks[instrument]):
+#      bank.logname = "%sbank%d" % (instrument,n)
+#  @bottle.route("/bank.txt")
+#  def get_name(banks = banks):
+#    bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
+#    yield '%.14g %.4g ' % (float(now()), bank.template_bank_filename)
+
+  #
+  # Build pipeline
+  #
+
+  if options.verbose:
+    print >>sys.stderr, "assembling pipeline ...",
+
+  pipeline = gst.Pipeline("gstlal_iir_inspiral")
+  mainloop = gobject.MainLoop()
+
+  if options.gpu_acc is True:
+    triggersrc = spiirparts.mkBuildBossSPIIR(
+      pipeline,
+      detectors = detectors,
+      banks = iir_bank,
+      psd = psd,
+      psd_fft_length = options.psd_fft_length,
+      ht_gate_threshold = options.ht_gate_threshold,
+      veto_segments = veto_segments,
+      verbose = options.verbose,
+      nxydump_segment = options.nxydump_segment,
+      chisq_type = options.chisq_type,
+      track_psd = options.track_psd,
+      blind_injections = options.blind_injections,
+      peak_thresh = options.peak_thresh
+    )
+  else:
+    banks = {}
+    banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
+    triggersrc = spiirparts.mkSPIIRmulti(
+      pipeline,
+      detectors = detectors,
+      banks = banks,
+      psd = psd,
+      psd_fft_length = options.psd_fft_length,
+      ht_gate_threshold = options.ht_gate_threshold,
+      veto_segments = veto_segments,
+      verbose = options.verbose,
+      nxydump_segment = options.nxydump_segment,
+      chisq_type = options.chisq_type,
+      track_psd = options.track_psd,
+      blind_injections = options.blind_injections,
+      peak_thresh = options.peak_thresh
+    )
+
+
+
+  if options.verbose:
+    print >>sys.stderr, "done"
+
+
+  #
+  # Load likelihood ratio data, assume injections are present
+  #
+  if options.data_source in ("lvshm", "framexmit"):
+    coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[0]
+    if coinc_params_distributions is None:
+      raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_file)
+  else:
+	coinc_params_distributions = far.ThincaCoincParamsDistributions()
+
+  #
+  # build output document
+  #
+
+
+  if options.verbose:
+    print >>sys.stderr, "initializing output document ..."
+  output = inspiral.Data(
+    filename = output_filename or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
+    process_params = process_params,
+    pipeline = pipeline,
+    instruments = set(detectors.channel_dict),
+    seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
+    coincidence_threshold = options.coincidence_threshold,
+    coinc_params_distributions = coinc_params_distributions,
+    marginalized_likelihood_file = options.marginalized_likelihood_file,
+    injection_filename = options.injections,
+    time_slide_file = options.time_slide_file,
+    comment = options.comment,
+    tmp_path = options.tmp_space,
+    likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
+    thinca_interval = options.thinca_interval,
+    gracedb_far_threshold = options.gracedb_far_threshold,
+    gracedb_group = options.gracedb_group,
+    gracedb_type = options.gracedb_type,
+    verbose = options.verbose
+  )
+  if options.verbose:
+    print >>sys.stderr, "... output document initialized"
+  
+  handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, verbose = options.verbose)
+
+  if options.verbose:
+    print >>sys.stderr, "attaching appsinks to pipeline ...",
+  
+  appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
+  appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
+  
+  if options.verbose:
+    print >>sys.stderr, "attached %d, done" % len(appsinks)
+
+
+  #
+  # if we request a dot graph of the pipeline, set it up
+  #
+  if options.write_pipeline is not None:
+    pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
+    pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+
+
+  #
+  # Run pipeline
+  #
+  if options.data_source in ("lvshm", "framexmit"):
+
+    # setup sigint handler to shutdown pipeline. This is
+    # how the program stops gracefully.
+    # Otherwise it runs forever.
+    signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+    signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+    
+  if options.verbose:
+    print >>sys.stderr, "setting pipeline state to playing ..."
+  if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+    raise RuntimeError, "pipeline did not enter playing state"
+
+  if options.write_pipeline is not None:
+    pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+
+  if options.verbose:
+    print >>sys.stderr, "running pipeline ..."
+  mainloop.run()
+
+  print "before output"
+
+  #
+  # write output file
+  #
+  output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), likelihood_file = likelihood_file, verbose = options.verbose)
+
+  # Shutdown the web interface servers
+  bottle.default_app.pop()
+
+  if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
+    raise RuntimeError("pipeline could not be set to NULL")
+
+  del handler.pipeline
+  del output.pipeline
+  del handler
+#  del bank
+#  del banks
+
+#
+# done
+#
+
+#  if options.data_source in ("lvshm", "framexmit"):
+#    sys.exit(1) # online pipeline always ends with an error code
+
+
+print iir_banks
+print options.output
+print options.likelihood_file
+one_pipeline(iir_banks, 
+		options.output[0], 
+		options.likelihood_file[0],
+		detectors,
+		psd,
+		options,
+		veto_segments)
+
+
