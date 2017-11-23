@@ -18,14 +18,15 @@
  */
 
 
-#ifndef __CUDA_MULTIRATE_SPIIR_H__
-#define __CUDA_MULTIRATE_SPIIR_H__
+#ifndef __CUDA_MULTIRATESPIIR_H__
+#define __CUDA_MULTIRATESPIIR_H__
 
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/base/gstadapter.h>
+#include <gst/audio/audio.h>
 
+#include <gstlal/gstaudioadapter.h>
 #include <cuda_runtime.h>
 
 
@@ -60,6 +61,7 @@ typedef struct _Complex_F{
 typedef struct _ResamplerState{
   float *d_sinc_table;
   float *d_mem; 		/* fixed length to store input */
+  float *d_mem_copy;     /* fixed length to store input */
   gint channels;
   gint mem_len;
   gint last_sample;
@@ -114,7 +116,8 @@ struct _CudaMultirateSPIIR {
 
   /* <private> */
 
-  GstAdapter *adapter;
+  GstAudioInfo audio_info;
+  GstAudioAdapter *adapter;
 
   gboolean need_discont;
   guint num_depths;
@@ -138,8 +141,8 @@ struct _CudaMultirateSPIIR {
   //gdouble *bank;
   //gint bank_len;
   gchar *bank_fname;
-  GMutex *iir_bank_lock;
-  GCond *iir_bank_available;
+  GMutex iir_bank_lock;
+  GCond iir_bank_available;
   SpiirState **spstate;
   gboolean spstate_initialised;
 
@@ -148,6 +151,10 @@ struct _CudaMultirateSPIIR {
   cudaStream_t stream;
 
   gint gap_handle;
+
+  // for ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
+  float* h_snglsnr_buffer;
+  int len_snglsnr_buffer;
 };
 
 struct _CudaMultirateSPIIRClass {
@@ -158,4 +165,4 @@ GType cuda_multirate_spiir_get_type(void);
 
 G_END_DECLS
 
-#endif /* __CUDA_MULTIRATE_SPIIR_H__ */
+#endif /* __CUDA_MULTIRATESPIIR_H__ */
