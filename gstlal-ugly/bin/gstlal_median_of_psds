@@ -19,17 +19,11 @@
 import numpy
 import sys
 import glob
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
+import lal
+import lal.series
 from glue.ligolw import utils as ligolw_utils
 from gstlal import reference_psd
 from optparse import OptionParser
-
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--output-name", metavar = "filename", help = "The output xml file (required)")
@@ -39,7 +33,7 @@ options, filenames = parser.parse_args()
 psd_dict = {}
 # FIXME not memory efficient
 for f in filenames:
-	for ifo, psd in reference_psd.read_psd_xmldoc(ligolw_utils.load_filename(f, verbose =options.verbose, contenthandler = LIGOLWContentHandler)).items():
+	for ifo, psd in lal.series.read_psd_xmldoc(ligolw_utils.load_filename(f, verbose =options.verbose, contenthandler = lal.series.PSDContentHandler)).items():
 		if psd is not None:
 			psd_dict.setdefault(ifo, []).append(psd)
 
@@ -48,7 +42,7 @@ for f in filenames:
 psd_out_dict = dict((ifo, psds[0]) for ifo, psds in psd_dict.items())
 
 for ifo in psd_dict:
-	psd_out_dict[ifo].data = numpy.median(numpy.array([psd.data for psd in psd_dict[ifo]]), axis= 0)
+	psd_out_dict[ifo].data.data = numpy.median(numpy.array([psd.data.data for psd in psd_dict[ifo]]), axis= 0)
 
 # Write it to disk
 reference_psd.write_psd(

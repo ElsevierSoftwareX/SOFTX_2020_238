@@ -1,11 +1,10 @@
 #!/usr/bin/python
 import sys
 
-import pygtk
-pygtk.require("2.0")
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import GObject
+from gi.repository import Gst
 GObject.threads_init()
 Gst.init(None)
 
@@ -15,7 +14,8 @@ import test_common
 import numpy
 
 in_rate = 512
-out_rate = 2048
+out_rate = 1024
+num_chan = 100
 
 opt = sys.argv[1]
 
@@ -26,11 +26,12 @@ pipeline = Gst.Pipeline(name="gstlal_play_frames")
 handler = simplehandler.Handler(mainloop, pipeline)
 
 head = test_common.test_src(pipeline, buffer_length = 10.0, rate = in_rate, width = 32, channels = 1, test_duration = 10000.0, wave = 5, freq = 0, is_live = False, verbose = True)
-head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.ones((200,1)))
+head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.ones((num_chan,1)))
 if opt == "resample":
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality=1), "audio/x-raw, rate=%d" % out_rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % out_rate)
 if opt == "interp":
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw, rate=%d" % out_rate)
+	print "Notice-- running interpolator"
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head), "audio/x-raw, format=F32LE, rate=%d" % out_rate)
 pipeparts.mkfakesink(pipeline, head)
 
 # run

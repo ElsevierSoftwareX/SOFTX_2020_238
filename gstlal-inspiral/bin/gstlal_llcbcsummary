@@ -131,7 +131,7 @@ form = cgi.FieldStorage()
 # Please see gstlal_llcbcnode for more information
 
 def now():
-	#FIXME use pylal when available
+	#FIXME use lal when available
 	return time.time() - 315964785
 
 def to_png_image():

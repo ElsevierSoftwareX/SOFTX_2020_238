@@ -26,7 +26,7 @@ from gstlal import svd_bank
 
 #FIXME hack to deal with pre ER5 / post ER5 bank file formats, remove when not an issue
 try:
-	banks = svd_bank.read_banks(sys.argv[1])
+	banks = svd_bank.read_banks(sys.argv[1], svd_bank.DefaultContentHandler)
 except AttributeError:
 	banks = [svd_bank.read_bank(sys.argv[1])]
 

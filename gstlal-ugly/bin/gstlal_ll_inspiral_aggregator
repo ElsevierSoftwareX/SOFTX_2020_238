@@ -1,0 +1,126 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2016  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+import h5py
+import numpy
+import sys, os
+import itertools
+import argparse
+import lal
+from lal import LIGOTimeGPS
+import time
+from gi.repository import GLib
+import logging
+import subprocess
+import urllib2
+import shutil
+import collections
+from multiprocessing import Pool
+from gstlal import aggregator
+
+MIN_TIME_QUANTA = 10000
+DIRS = 6
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+# Read command line options
+def parse_command_line():
+
+	parser = argparse.ArgumentParser(description="Online data aggregator")
+
+	# directory to put everything in
+	parser.add_argument("--base-dir", action="store", default="aggregator", help="Specify output path")
+	parser.add_argument("--job-start", type=int, help="job id to start aggregating from")
+	parser.add_argument("--route", action="append", help="Specify routes to download. Can be given multiple times.")
+	parser.add_argument("--data-type", action="append", help="Specify datatypes to aggregate from 'min', 'max', 'median'. Can be given multiple times. Default all")
+	parser.add_argument("--dump-period", type = float, default = 1., help = "Wait this many seconds between dumps of the  URLs (default = 1., set to 0 to disable)")
+	parser.add_argument("--num-jobs", action="store", type=int, default=10, help="number of running jobs")
+	parser.add_argument("--job-tag", help = "Collect URLs for jobs reporting this job tag (default = collect all gstlal_inspiral URLs).")
+	parser.add_argument("--num-threads", type = int, default = 16, help = "Number of threads to use concurrently, default 16.")
+
+	args = parser.parse_args()
+
+	#FIXME do error checking
+	if args.data_type is None:
+		args.data_type = ["min", "max", "median"]
+	return args
+
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+if __name__ == '__main__':
+
+	options = parse_command_line()
+	# FIXME don't hardcode some of these?
+
+	datatypes = [x for x in [("min", min), ("max", max), ("median", aggregator.median)] if x[0] in options.data_type]
+	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.job_start + options.num_jobs)]
+	routes = options.route
+
+	logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
+
+	pool = Pool(options.num_threads)
+	prevdataspan = set()
+	while True:
+		logging.info("sleeping")
+		time.sleep(options.dump_period)
+		dataspan = set()
+
+		# First get the raw and reduced data for each job in parallel
+		mapargs = [(job, options.job_tag, routes, datatypes, prevdataspan, options.base_dir, jobs) for job in jobs]
+		for ds in pool.map(aggregator.get_data_from_job_and_reduce, mapargs):
+		#for ds in map(aggregator.get_data_from_job_and_reduce, mapargs):
+			dataspan.update(ds)
+		prevdataspan = dataspan.copy()
+		# Then reduce the data across jobs at each level
+		mapargs = []
+		for start, end in zip(*aggregator.job_expanse(dataspan)):
+			# FIXME don't hardcode this range
+			for level in range(DIRS):
+				this_level_dir = "/".join([options.base_dir, aggregator.gps_to_leaf_directory(start, level = level)])
+				mapargs = []
+				for route in routes:
+					for (typ,func) in datatypes:
+						aggregator.setup_dir_across_job_by_level(start, typ, route, options.base_dir, verbose = True, level = level)
+						mapargs.append((jobs, this_level_dir, typ, route, func, level, start, end))
+				pool.map(aggregator.reduce_across_jobs, mapargs)
+				#map(aggregator.reduce_across_jobs, mapargs)
+			logging.info("processed reduced data in [%d %d) at %d" % (int(start), int(end), int(aggregator.now())))
+
+	#
+	# always end on an error so that condor won't think we're done and will
+	# restart us
+	#
+
+	sys.exit(1)

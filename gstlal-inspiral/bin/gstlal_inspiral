@@ -121,7 +121,7 @@
 # ### Command line interface
 #
 #	+ `--local-frame-caching`
-#	+ `--psd-fft-length` [s] (int): FFT length, default 16s.
+#	+ `--psd-fft-length` [s] (int): The length of the FFT used to used to whiten the data (default 32 s).
 #	+ `--veto-segments-file` [filename]: Set the name of the LIGO light-weight XML file from which to load vetoes (optional).
 #	+ `--veto-segments-name` [name]: Set the name of the segments to extract from the segment tables and use as the veto list, default = "vetoes".
 #	+ `--nxydump-segment` [start:stop]: Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time."
@@ -129,12 +129,14 @@
 #	+ `--reference-psd` [filename]: Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).
 #	+ `--track-psd`: Track PSD even if a reference is given.
 #	+ `--svd-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.
-#	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets.
+#	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets (required).
 #	+ `--control-peak-time` [time] (int): Set a time window in seconds to find peaks in the control signal.
 #	+ `--fir-stride` [time] (int): Set the length of the fir filter stride in seconds, default = 8.
-#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal), default = infinity.
+#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal), default = infinity. Should be given per bank file.
 #	+ `--chisq-type" [type]: Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.
 #	+ `--coincidence-threshold` [value] (float): Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.
+#	+ `--min-instruments` [count] (int): Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).
+#	+ `--min-log-L` [log likelihood ratio] (float): Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).
 #	+ `--write-pipeline` [filename]: Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.
 #	+ `--comment`: Set the string to be recorded in comment and tag columns in various places in the output file (optional).
 #	+ `--check-time-stamps`: Turn on time stamp checking.
@@ -152,8 +154,8 @@
 #	+ `--gracedb-pipeline`: gracedb pipeline (default is gstlal).
 #	+ `--gracedb-group`: gracedb group (default is Test).
 #	+ `--gracedb-service-url`: gracedb service url (default is https://gracedb.ligo.org/api/)
-#	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 4s.
-#	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = 8).
+#	+ `--thinca-interval` [secs] (float): Set the thinca interval, default = 30s.
+#	+ `--singles-threshold` [SNR] (float): Set the SNR threshold at which to record single-instrument events in the output (default = +inf, i.e., don't retain singles).
 #
 # ### Review Status
 #
@@ -170,38 +172,41 @@
 # - Consider deleting timeslicechisq
 
 
+from collections import namedtuple
+try:
+	from fpconst import PosInf
+except ImportError:
+	# fpconst is not part of the standard library and might not be
+	# available
+	PosInf = float("+inf")
+import gzip
+import itertools
+import math
+from optparse import OptionParser
 import os
 import resource
-import sys
-from optparse import OptionParser
 import signal
 import socket
-import time
+import sys
 import tempfile
-import math
-import subprocess
-from collections import namedtuple
+import time
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require("0.10")
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 import lal
+from lal import LIGOTimeGPS
+from lal.utils import CacheEntry
 
-from glue.lal import CacheEntry
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
-from pylal.datatypes import LIGOTimeGPS
-from pylal import series as lalseries
 from gstlal import bottle
 from gstlal import datasource
 from gstlal import lloidparts
@@ -213,9 +218,9 @@ from gstlal import inspiral_pipe
 from gstlal import pipeparts
 from gstlal import simulation
 
+@lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-lsctables.use_in(LIGOLWContentHandler)
 
 #
 # Make sure we have sufficient resources
@@ -231,11 +236,14 @@ def setrlimit(res, lim):
 setrlimit(resource.RLIMIT_NPROC, None)
 setrlimit(resource.RLIMIT_AS, None)
 setrlimit(resource.RLIMIT_RSS, None)
+# FIXME:  tests at CIT show that this next tweak has no effect.  it's
+# possible that SL7 has lowered the default stack size from SL6 and we
+# don't need to do this anymore.  remove?
 setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def now():
-	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()))
 
 
 #
@@ -258,7 +266,7 @@ def parse_command_line():
 	# local caching to help with I/O for offline running
 	parser.add_option("--local-frame-caching", action = "store_true", help = "blah")
 
-	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+	parser.add_option("--psd-fft-length", metavar = "s", default = 32, type = "int", help = "The length of the FFT used to used to whiten the data (default 32 s).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
@@ -268,12 +276,14 @@ def parse_command_line():
 	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
 	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.")
 	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Provide a cache file of svd-bank files")
-	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
+	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (required).")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
-	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
+	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", action = "append", default = [], help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
+	parser.add_option("--min-log-L", metavar = "log likelihood ratio", type = "float", help = "Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
@@ -295,15 +305,16 @@ def parse_command_line():
 	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb pipeline, default is gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "gracedb service url, default is https://gracedb.ligo.org/api/")
-	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 4.0, help = "Set the thinca interval, default = 4s")
-	# NOTE:  gstlal_inspiral_calc_likelihood searches for this option
-	# in the process_params table to determine the threshold below
-	# which it can delete uninteresting singles after the coincs are
-	# ranked.  if the name of this option is changed, be sure to update
-	# gstlal_inspiral_calc_likelihood
-	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = 8.0, help = "Set the SNR threshold at which to record single-instrument events in the output (default = 8).")
+	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
+	# NOTE:  the clustering SQL scripts search for this option in the
+	# process_params table to determine the threshold below which it
+	# can delete uninteresting singles after the coincs are ranked.  if
+	# the name of this option is changed, be sure to update
+	# simplify_and_cluster.sql and derivatives
+	parser.add_option("--singles-threshold", metavar = "SNR", type = "float", default = PosInf, help = "Set the SNR threshold at which to record single-instrument events in the output (default = +inf, i.e. don't retain singles).")
 
 	options, filenames = parser.parse_args()
+	missing_options = []
 
 	#
 	# do this before messing with options object
@@ -314,53 +325,54 @@ def parse_command_line():
 	#
 	# check for options, files that are always required
 	#
-	
+
+	# FIXME Put all svd banks for different detectors in one file.
+	svd_banks = []
 	if options.svd_bank_cache:
-		#FIXME Use Ordered Dictionary when we use python 2.7
-		svd_bank_dict = {}
-		descriptions = []
-		for line in open(options.svd_bank_cache):
-			svd_bank_cache_entry = CacheEntry(line)
-			if svd_bank_cache_entry.description not in descriptions:
-				descriptions.append(svd_bank_cache_entry.description)
-			svd_bank_dict.setdefault(svd_bank_cache_entry.description, []).append("{0}:{1}".format(svd_bank_cache_entry.observatory, svd_bank_cache_entry.url))
-		# do this out-of-place to preserve process_params' contents
-		options.svd_bank = options.svd_bank + [",".join(svd_bank_dict[description]) for description in descriptions]
+		svd_bank_cache = map(CacheEntry, open(options.svd_bank_cache))
+		svd_bank_cache.sort(key = lambda cache_entry: cache_entry.description)
+		for key, seq in itertools.groupby(svd_bank_cache, key = lambda cache_entry: cache_entry.description):
+			svd_banks.append(dict((cache_entry.observatory, cache_entry.url) for cache_entry in seq))
+	if options.svd_bank:
+		try:
+			svd_banks += map(inspiral.parse_svdbank_string, options.svd_bank)
+		except ValueError as e:
+			print "Unable to parse --svd-bank"
+			raise
+	if not svd_banks:
+		missing_options.append("must supply at least one of --svd-bank or --svd-bank-cache")
 
 	if options.output_cache:
 		# do this out-of-place to preserve process_params' contents
 		options.output = options.output + [CacheEntry(line).url for line in open(options.output_cache)]
+	missing_options += ["--%s" % option.replace("_", "-") for option in ["output"] if getattr(options, option) is None]
 
 	if options.likelihood_file_cache:
 		# do this out-of-place to preserve process_params' contents
 		options.likelihood_file = options.likelihood_file + [CacheEntry(line).url for line in open(options.likelihood_file_cache)]
-
-	missing_options = ["--%s" % option.replace("_", "-") for option in ["svd_bank", "output"] if getattr(options, option) is None]
 	if options.likelihood_file is None and options.reference_likelihood_file is None:
 		missing_options.append("either --likelihood-file or --reference-likelihood-file")
+
+	if not options.time_slide_file:
+		missing_options.append("--time-slide-file")
 
 	if missing_options:
 		raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
 	detectors = datasource.GWDataSourceInfo(options)
-	if len(detectors.channel_dict) < 2:
-		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
-
-	# FIXME Put all svd banks for different detectors in one file.  
-	try:
-		svd_banks = [inspiral.parse_svdbank_string(svdbank) for svdbank in options.svd_bank]
-	except ValueError as e:
-		print "Unable to parse svd banks"
-		raise
 
 	# FIXME: should also check for read permissions
-	required_files = []
+	required_urls = []
 	for svd_bank_set in svd_banks: 
-		for instrument in svd_bank_set:
-			required_files.append(svd_bank_set[instrument])
+		required_urls += svd_bank_set.values()
 	if options.veto_segments_file:
-		required_files += [options.veto_segments_file]
-	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
+		required_urls += [options.veto_segments_file]
+	for i in range(len(required_urls)):
+		try:
+			required_urls[i] = ligolw_utils.local_path_from_url(required_urls[i])
+		except ValueError:
+			required_urls[i] = None
+	missing_files = [ligolw_utils.local_path_from_url(url) for url in required_urls if url is not None and not os.path.exists(ligolw_utils.local_path_from_url(url))]
 
 	if missing_files:
 		raise ValueError("files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files)))
@@ -372,11 +384,8 @@ def parse_command_line():
 	bad_combos = []
 	if options.blind_injections and options.injections:
 		bad_combos.append("(--blind-injections, --injections)")
-	if options.likelihood_file and options.reference_likelihood_file:
-		bad_combos.append(("--likelihood-file", "--reference-likelihood-file"))
-
 	if bad_combos:
-		raise ValueError("must use only one option from each set: %s" % ', '.join(bad_combos))
+		raise ValueError("must use only one option from each set: %s" % ','.join(bad_combos))
 
 	#
 	# check sanity of options
@@ -393,7 +402,7 @@ def parse_command_line():
 		if missed_options:
 			raise ValueError("%s required for --data-source is lvshm or framexmit" % ", ".join(missed_options))
 
-		if len(options.svd_bank) > 1:
+		if len(svd_banks) > 1:
 			raise ValueError("more than one --svd-bank not allowed for --datasource lvshm or framexmit, %d given" % len(options.likelihood_file))
 
 		# make an "infinite" extent segment
@@ -403,7 +412,7 @@ def parse_command_line():
 		os.environ['GSTLAL_LL_JOB'] = options.job_tag
 	else:
 		bad_options = []
-		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval", "reference_likelihood_file"]:
+		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
 			if getattr(options, option) is not None:
 				bad_options.append("--%s" % option.replace("_","-"))
 		if bad_options:
@@ -411,18 +420,34 @@ def parse_command_line():
 
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+	if options.psd_fft_length < 32:
+		raise ValueError("--psd-fft-length cannot be less than 32")
 	if options.local_frame_caching and not options.data_source == "frames":
 		raise ValueError('--local-frame-caching can only be used if --data-source = "frames"')
 	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
 		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
 	
-	if options.reference_likelihood_file:
-		likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(None, options.reference_likelihood_file)]
+	if options.reference_likelihood_file and options.likelihood_file:
+		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file, options.reference_likelihood_file) for likelihood_file in options.likelihood_file]
+	elif options.reference_likelihood_file and not options.likelihood_file:
+		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(None, options.reference_likelihood_file)]
 	else:
-		likelihood_namedtuples_list = [namedtuple('likelihood_namedtuple',('likelihood_file','reference_likelihood_file'))(likelihood_file,None) for likelihood_file in options.likelihood_file]
+		likelihood_url_namedtuples_list = [namedtuple('likelihood_url_namedtuple',('likelihood_url','reference_likelihood_url'))(likelihood_file, None) for likelihood_file in options.likelihood_file]
 
-	if not (len(options.svd_bank) == len(options.output) == len(likelihood_namedtuples_list)):
-		raise ValueError("must have equal numbers of svd banks, output files and likelihood files")
+	# Checking options.ht_gate_threshold
+	# If no gate threshold is given, use threshold of infinity
+	if options.ht_gate_threshold == []:
+		options.ht_gate_threshold = [float("inf")]*len(svd_banks)
+	if not (len(options.ht_gate_threshold) == len(svd_banks)):
+		raise ValueError("must have equal numbers of svd banks (%d) and ht-gate-threshold values (%d)" % (len(svd_banks), len(options.ht_gate_threshold)))
+
+	if not (len(svd_banks) == len(options.output) == len(likelihood_url_namedtuples_list)):
+		raise ValueError("must have equal numbers of --svd-bank (%d), --output (%d) and --likelihood-file (%d) (and/or entries in the corresponding caches)" % (len(svd_banks), len(options.output), len(likelihood_url_namedtuples_list)))
+
+	if options.min_instruments < 1:
+		raise ValueError("--min-instruments must be >= 1")
+	if options.min_instruments > len(detectors.channel_dict):
+		raise ValueError("--min-instruments is greater than the number of --channel-name's")
 
 	#
 	# Option checks complete
@@ -464,17 +489,11 @@ def parse_command_line():
 		# the injections are now present in the data so we don't want to do them twice
 		detectors.injection_filename = None
 
-	# Choose to optionally reconstruct segments around injections (not blind injections!)
-	if options.injections:
-		reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections)
-	else:
-		reconstruction_segment_list = None
-
-	if options.zero_lag_ranking_stat_file is None and likelihood_namedtuples_list:
-		options.zero_lag_ranking_stat_file = [None] * len(likelihood_namedtuples_list)
+	if options.zero_lag_ranking_stat_file is None and likelihood_url_namedtuples_list:
+		options.zero_lag_ranking_stat_file = [None] * len(likelihood_url_namedtuples_list)
 
 	# we're done
-	return options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list
+	return options, filenames, process_params, svd_banks, detectors, likelihood_url_namedtuples_list
 
 
 #
@@ -498,7 +517,7 @@ class OneTimeSignalHandler(object):
 			try:
 				#FIXME how do I choose a timestamp?
 				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
-				if not self.pipeline.send_event(gst.event_new_eos()):
+				if not self.pipeline.send_event(Gst.Event.new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
 			except Exception as e:
 				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
@@ -521,7 +540,7 @@ class OneTimeSignalHandler(object):
 #
 
 
-options, filenames, process_params, svd_banks, detectors, reconstruction_segment_list, likelihood_namedtuples_list = parse_command_line()
+options, filenames, process_params, svd_banks, detectors, likelihood_url_namedtuples_list = parse_command_line()
 
 if not options.check_time_stamps:
 	pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
@@ -539,6 +558,19 @@ else:
 
 
 #
+# Load the time slide vectors, and use them to define the complete
+# instrument list for the network
+#
+
+
+offsetvectors = lsctables.TimeSlideTable.get_table(ligolw_utils.load_filename(options.time_slide_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)).as_dict().values()
+all_instruments = reduce(lambda a, b: a | set(b), offsetvectors, set())
+all_instruments -= set(("V1",))	# hide Virgo. FIXME:  remove after O2
+if len(all_instruments) < options.min_instruments:
+	raise ValueError("--time-slide-file \"%s\" names %s but we need at least %d instruments" % (options.time_slide_file, ", ".join(sorted(all_instruments)), options.min_instruments))
+
+
+#
 # set up the PSDs
 #
 # There are three modes for psds in this program
@@ -549,7 +581,7 @@ else:
 
 
 if options.reference_psd is not None:
-	psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lalseries.LIGOLWContentHandler))
+	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
 else:
 	psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
@@ -559,21 +591,28 @@ else:
 #
 
 
-for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_lag_ranking_stats_file) in enumerate(zip(svd_banks, options.output, likelihood_namedtuples_list, options.zero_lag_ranking_stat_file)):
+for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtuple, zero_lag_ranking_stats_file, ht_gate_threshold) in enumerate(zip(svd_banks, options.output, likelihood_url_namedtuples_list, options.zero_lag_ranking_stat_file, options.ht_gate_threshold)):
 	#
 	# Checkpointing only supported for gzip files in offline analysis
-	# FIXME Is there a better way to check if a file is corrupted? Implement a means by which to check for sqlite file validity
+	# FIXME Implement a means by which to check for sqlite file
+	# validity
 	#
 
-	if options.data_source not in ("lvshm", "framexmit") and output_filename.endswith('.gz'):
+	if options.data_source not in ("lvshm", "framexmit") and output_url.endswith('.gz'):
 		try:
-			subprocess.check_call(["gzip", "--test", output_filename])
-			subprocess.check_call(["gzip", "--test", likelihood_namedtuple[0]])
-			# File is OK and there is no need to process it, skip ahead in the loop
+			# a single .read() would be easier but looping over
+			# lines uses less memory
+			for line in gzip.open(ligolw_utils.local_path_from_url(output_url)):
+				pass
+			for line in gzip.open(ligolw_utils.local_path_from_url(likelihood_url_namedtuple[0])):
+				pass
+			# File is OK and there is no need to process it,
+			# skip ahead in the loop
 			continue
-		except subprocess.CalledProcessError:
-			# File does not exist or is corrupted, need to reprocess
-			print >>sys.stderr, "Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_filename))
+		except IOError:
+			# File does not exist or is corrupted, need to
+			# reprocess
+			print >>sys.stderr, "Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_url))
 			pass
 
 	#
@@ -586,7 +625,19 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	# uncomment the next line to show tracebacks when something fails
 	# in the web server
 	#bottle.app().catchall = False
-	httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_inspiral" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
+	import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
+	httpservers = httpinterface.HTTPServers(
+		# FIXME:  either switch to using avahi's native name
+		# uniquification system or adopt a naturally unique naming
+		# scheme (e.g., include a search identifier and job
+		# number).
+		service_name = "gstlal_inspiral (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
+		service_properties = {
+			"job_tag": os.getcwd(),
+			"GSTLAL_LL_JOB": os.environ.get("GSTLAL_LL_JOB", "")
+		},
+		verbose = options.verbose
+	)
 
 
 	#
@@ -596,10 +647,13 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 
 	@bottle.route("/")
 	@bottle.route("/index.html")
-	def index(job_tag = options.job_tag, instruments = set(svd_bank.keys())):
-		host = socket.gethostname()
-		server_address = "http://%s:%d" % (host, httpservers[0][0].port)
-		yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
+	def index(job_tag = options.job_tag, instruments = all_instruments):
+		# get the host and port to report in the links from the
+		# request we've received so that the URLs contain the IP
+		# address by which client has contacted us
+		netloc = bottle.request.urlparts[1]
+		server_address = "http://%s" % netloc
+		yield "<html><body>\n<h3>%s %s %s %s</h3>\n<p>\n" % (job_tag, os.environ.get("GSTLAL_LL_JOB"), netloc, " ".join(sorted(instruments)))
 		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
 			# don't create links back to this page
 			if route.rule in ("/", "/index.html"):
@@ -619,7 +673,16 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	#
 
 
-	banks = inspiral.parse_bank_files(svd_bank, verbose = options.verbose)
+	banks = inspiral.parse_bank_files(svd_bank_url_dict, verbose = options.verbose)
+
+	# Choose to optionally reconstruct segments around injections (not
+	# blind injections!)
+	if options.injections:
+		offset_padding = max([int(abs(float(offset)))+2 for bank in banks.items()[0][-1] for offset in bank.sngl_inspiral_table.get_end()]) # Add 2 to achieve rounding up and adding 1
+		reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections, pad = offset_padding)
+	else:
+		reconstruction_segment_list = None
+
 
 	@bottle.route("/bank.txt")
 	def get_filter_length_and_chirpmass(banks = banks):
@@ -635,8 +698,8 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	if options.verbose:
 		print >>sys.stderr, "assembling pipeline ...",
 
-	pipeline = gst.Pipeline("gstlal_inspiral")
-	mainloop = gobject.MainLoop()
+	pipeline = Gst.Pipeline(name="gstlal_inspiral")
+	mainloop = GObject.MainLoop()
 		
 	triggersrc = lloidparts.mkLLOIDmulti(
 		pipeline,
@@ -644,7 +707,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 		banks = banks,
 		psd = psd,
 		psd_fft_length = options.psd_fft_length,
-		ht_gate_threshold = options.ht_gate_threshold,
+		ht_gate_threshold = ht_gate_threshold,
 		veto_segments = veto_segments,
 		verbose = options.verbose,
 		nxydump_segment = options.nxydump_segment,
@@ -666,19 +729,28 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 
 
 	if options.data_source in ("lvshm", "framexmit"):
-		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1], verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-		assert set(seglists) == set(detectors.channel_dict)
+		filename = likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1]
+		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(filename, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+		if set(seglists) != set(detectors.channel_dict):
+			raise ValueError("segment lists in \"%s\" are for instruments %s but we need %s" % (filename, ", ".join(sorted(seglists)), ", ".join(sorted(detectors.channel_dict))))
 		if coinc_params_distributions is None:
-			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_namedtuple[0] if likelihood_namedtuple[0] is not None else likelihood_namedtuple[1])
+			raise ValueError("\"%s\" does not contain parameter distribution data" % filename)
+		if coinc_params_distributions.delta_t != options.coincidence_threshold:
+			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (filename, coinc_params_distributions.delta_t, options.coincidence_threshold))
+		if coinc_params_distributions.min_instruments != options.min_instruments:
+			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (filename, coinc_params_distributions.min_instruments, options.min_instruments))
+		if coinc_params_distributions.instruments != all_instruments:
+			raise ValueError("\"%s\" is for %s but we need %s" % (filename, ", ".join(sorted(coinc_params_distributions.instruments)), ", ".join(sorted(all_instruments))))
 	else:
-		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
+		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
+		if "V1" in seglists: del seglists["V1"]	# drop Virgo FIXME:  remove after O2
 
 	if zero_lag_ranking_stats_file is None:
 		zero_lag_ranking_stats = None
 	else:
 		_, zero_lag_ranking_stats, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(zero_lag_ranking_stats_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 		if zero_lag_ranking_stats is None:
-			raise Valueerror("\"%s\" does not contain ranking statistic PDF data" % zero_lag_ranking_stat_file)
+			raise ValueError("\"%s\" does not contain ranking statistic PDF data" % zero_lag_ranking_stat_file)
 
 
 	#
@@ -689,24 +761,24 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	if options.verbose:
 		print >>sys.stderr, "initializing output document ..."
 	output = inspiral.Data(
-		filename = output_filename or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
+		url = output_url or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.instrumentsproperty.set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
 		process_params = process_params,
 		pipeline = pipeline,
-		instruments = set(detectors.channel_dict),
 		seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
-		coincidence_threshold = options.coincidence_threshold,
 		coinc_params_distributions = coinc_params_distributions,
 		zero_lag_ranking_stats = zero_lag_ranking_stats,
 		marginalized_likelihood_file = options.marginalized_likelihood_file,
-		likelihood_files_namedtuple = likelihood_namedtuple,
+		likelihood_url_namedtuple = likelihood_url_namedtuple,
 		injection_filename = options.injections,
-		time_slide_file = options.time_slide_file,
+		offsetvectors = offsetvectors,
 		comment = options.comment,
 		tmp_path = options.tmp_space,
 		likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
 		thinca_interval = options.thinca_interval,
+		min_log_L = options.min_log_L,
 		sngls_snr_threshold = options.singles_threshold,
 		gracedb_far_threshold = options.gracedb_far_threshold,
+		gracedb_min_instruments = 2,
 		gracedb_group = options.gracedb_group,
 		gracedb_search = options.gracedb_search,
 		gracedb_pipeline = options.gracedb_pipeline,
@@ -717,13 +789,19 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	if options.verbose:
 		print >>sys.stderr, "... output document initialized"
 
-	handler = lloidparts.Handler(mainloop, pipeline, output, instruments = set(detectors.channel_dict), tag = options.job_tag, seglistdict = seglists, zero_lag_ranking_stats_filename = zero_lag_ranking_stats_file, verbose = options.verbose)
-
+	handler = lloidparts.Handler(mainloop, pipeline,
+		output,
+		instruments = coinc_params_distributions.instruments,
+		tag = options.job_tag,
+		seglistdict = seglists,
+		zero_lag_ranking_stats_filename = zero_lag_ranking_stats_file,
+		verbose = options.verbose
+	)
 
 	if options.verbose:
 		print >>sys.stderr, "attaching appsinks to pipeline ...",
 	appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
-	appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
+	appsinks = set(appsync.add_sink(pipeline, src, caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
 	if options.verbose:
 		print >>sys.stderr, "attached %d, done" % len(appsinks)
 
@@ -736,6 +814,23 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	if options.write_pipeline is not None:
 		pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 		pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+
+	#
+	# put a 0 into all horizon histories at the boundaries of the
+	# analysis segment so that queries for horizon distance at times
+	# outside the segment and for horizon distance for instruments for
+	# which there is no data report 0.  NOTE:  if this job is
+	# contiguous with another job then this makes it seem like there is
+	# a 0 in the horizon distance history at the boundary between them
+	# when that is probably not correct.  because it's a single sample
+	# it shouldn't lead to significant problems, but this is something
+	# to be aware of.
+	#
+
+	if detectors.seg:
+		for instrument in coinc_params_distributions.instruments:
+			handler.record_horizon_distance(instrument, float(detectors.seg[0]), 0.0)
+			handler.record_horizon_distance(instrument, float(detectors.seg[1]), 0.0)
 
 
 	#
@@ -758,8 +853,13 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 
 
 	if options.verbose:
+		print >>sys.stderr, "setting pipeline state to ready ..."
+	if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+		raise RuntimeError("pipeline did not enter ready state")
+	datasource.pipeline_seek_for_gps(pipeline, *detectors.seg)
+	if options.verbose:
 		print >>sys.stderr, "setting pipeline state to playing ..."
-	if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+	if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline did not enter playing state")
 
 	if options.write_pipeline is not None:
@@ -775,7 +875,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	#
 
 
-	output.write_output_file(filename = output_filename or output.coincs_document.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
+	output.write_output_url(url = output_url or output.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
 
 
 	#
@@ -806,7 +906,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 	#
 
 
-	if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
+	if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline could not be set to NULL")
 	del handler.pipeline
 	del output.pipeline
@@ -816,7 +916,7 @@ for output_file_number, (svd_bank, output_filename, likelihood_namedtuple, zero_
 
 
 #
-# Cleanup local caches
+# Cleanup local frame file cache
 #
 
 

@@ -34,6 +34,7 @@
 
 
 #include <signal.h>
+#include <stdio.h>
 #include <string.h>
 
 
@@ -86,31 +87,25 @@ static GstURIType uri_get_type(GType type)
 }
 
 
-/* 1.0:  this becomes static const gchar *const * */
-static gchar **uri_get_protocols(GType type)
+static const gchar *const *uri_get_protocols(GType type)
 {
-	/* 1.0:  this becomes
 	static const gchar *protocols[] = {URI_SCHEME, NULL};
-	*/
-	static gchar *protocols[] = {(gchar *) URI_SCHEME, NULL};
 
 	return protocols;
 }
 
 
-/* 1.0:  this becomes static gchar * */
-static const gchar *uri_get_uri(GstURIHandler *handler)
+static gchar *uri_get_uri(GstURIHandler *handler)
 {
 	GstGDSFramexmitSink *element = GDS_FRAMEXMITSINK(handler);
 
-	/* 1.0:  this won't be a memory leak */
 	return g_strdup_printf(URI_SCHEME "://%s:%d", element->group, element->port);
 }
 
 
-/* 1.0:  this gets a GError ** argument */
-static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri, GError **error)
 {
+	/* FIXME:  report errors via err argument */
 	GstGDSFramexmitSink *element = GDS_FRAMEXMITSINK(handler);
 	gchar *scheme = g_uri_parse_scheme(uri);
 	gchar group[strlen(uri)];
@@ -134,10 +129,8 @@ static void uri_handler_init(gpointer g_iface, gpointer iface_data)
 
 	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
 	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
-	/* 1.0:  this is ->get_type */
-	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
-	/* 1.0:  this is ->get_protocols */
-	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+	iface->get_type = GST_DEBUG_FUNCPTR(uri_get_type);
+	iface->get_protocols = GST_DEBUG_FUNCPTR(uri_get_protocols);
 }
 
 
@@ -167,7 +160,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GstGDSFramexmitSink, gds_framexmitsink, GstBaseSink, GST_TYPE_BASE_SINK, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GstGDSFramexmitSink,
+	gds_framexmitsink,
+	GST_TYPE_BASE_SINK,
+	additional_initializations(g_define_type_id)
+);
 
 
 /*
@@ -183,22 +181,6 @@ GST_BOILERPLATE_FULL(GstGDSFramexmitSink, gds_framexmitsink, GstBaseSink, GST_TY
 #define DEFAULT_MULTICAST_IFACE NULL
 #define DEFAULT_MULTICAST_GROUP "0.0.0.0"
 #define DEFAULT_PORT 0
-
-
-/*
- * ============================================================================
- *
- *                                 Utilities
- *
- * ============================================================================
- */
-
-
-static GstClockTime GPSNow(void)
-{
-	/* FIXME:  why does TAInow() return the GPS time? */
-	return gst_util_uint64_scale_int_round(TAInow(), GST_SECOND, _ONESEC);
-}
 
 
 /*
@@ -261,17 +243,22 @@ static gboolean stop(GstBaseSink *object)
 static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 {
 	GstGDSFramexmitSink *element = GDS_FRAMEXMITSINK(basesink);
+	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
-	 * retrieve data
+	 * send data
 	 */
 
+	gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
+
 	GST_DEBUG_OBJECT(element, "sending %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
-	if(!FRAMESEND(element)->send((char *) GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer), NULL, TRUE, GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND, GST_BUFFER_DURATION(buffer) / GST_SECOND)) {
+	if(!FRAMESEND(element)->send((char *) mapinfo.data, mapinfo.size, NULL, TRUE, GST_BUFFER_PTS(buffer) / GST_SECOND, GST_BUFFER_DURATION(buffer) / GST_SECOND)) {
 		GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameSend.send() failed"));
 		result = GST_FLOW_ERROR;
 	}
+
+	gst_buffer_unmap(buffer, &mapinfo);
 
 	/*
 	 * done
@@ -393,17 +380,7 @@ static void finalize(GObject *object)
 	g_free(element->group);
 	element->group = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gds_framexmitsink_base_init(gpointer klass)
-{
+	G_OBJECT_CLASS(gds_framexmitsink_parent_class)->finalize(object);
 }
 
 
@@ -499,7 +476,7 @@ static void gds_framexmitsink_class_init(GstGDSFramexmitSinkClass *klass)
  */
 
 
-static void gds_framexmitsink_init(GstGDSFramexmitSink *element, GstGDSFramexmitSinkClass *klass)
+static void gds_framexmitsink_init(GstGDSFramexmitSink *element)
 {
 	/*
 	 * internal data

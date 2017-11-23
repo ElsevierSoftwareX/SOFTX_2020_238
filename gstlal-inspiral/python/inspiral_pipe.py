@@ -36,10 +36,15 @@
 # - In inspiral_pipe.py Fix the InsiralJob.___init___: fix the arguments
 # - On line 201, fix the comment or explain what the comment is meant to be
 
+import math
 import sys, os
 import subprocess, socket, tempfile, copy, doctest
-from glue import pipeline, lal
-from glue.ligolw import utils, lsctables, array
+from glue import pipeline
+from glue import segments
+from glue.ligolw import lsctables, ligolw
+from glue.ligolw import utils as ligolw_utils
+from gstlal import svd_bank
+from lal.utils import CacheEntry
 
 
 #
@@ -219,7 +224,7 @@ class generic_node(InspiralNode):
 	an empty argument by setting it to "".  However options set to None are simply
 	ignored.
 	"""
-	def __init__(self, job, dag, parent_nodes, opts = {}, input_files = {}, output_files = {}, input_cache_files = {}, output_cache_files = {}):
+	def __init__(self, job, dag, parent_nodes, opts = {}, input_files = {}, output_files = {}, input_cache_files = {}, output_cache_files = {}, input_cache_file_name = None):
 		InspiralNode.__init__(self, job, dag, parent_nodes)
 
 		self.input_files = input_files.copy()
@@ -248,20 +253,27 @@ class generic_node(InspiralNode):
 		# Create cache files for long command line arguments and store them in the job's subdirectory. NOTE the svd-bank string
 		# is handled by gstlal_inspiral_pipe directly
 
+		cache_dir = os.path.join(job.tag_base, 'cache')
+
 		for opt, val in input_cache_files.items():
-			cache_entries = [lal.CacheEntry.from_T050017(url) for url in val]
-			cache_file_name = "{0}/{1}_{2}.cache".format(job.tag_base, opt.replace("-cache", "").replace("-", "_"), job.number-1)
-			with open(cache_file_name, "w") as cache_file:
-				lal.Cache(cache_entries).tofile(cache_file)
+			if not os.path.isdir(cache_dir):
+				os.mkdir(cache_dir)
+			cache_entries = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in val]
+			if input_cache_file_name is None:
+				cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = cache_dir)
+			else:
+				cache_file_name = os.path.join(cache_dir, input_cache_file_name)
+			open(cache_file_name, "w").write("\n".join(map(str, cache_entries)))
 			self.add_var_opt(opt, cache_file_name)
 			# Keep track of the cache files being created
 			self.cache_inputs.setdefault(opt, []).append(cache_file_name)
 
 		for opt, val in output_cache_files.items():
-			cache_entries = [lal.CacheEntry.from_T050017(url) for url in val]
-			cache_file_name = "{0}/{1}_{2}.cache".format(job.tag_base, opt.replace("-cache", "").replace("-", "_"), job.number-1)
-			with open(cache_file_name, "w") as cache_file:
-				lal.Cache(cache_entries).tofile(cache_file)
+			if not os.path.isdir(cache_dir):
+				os.mkdir(cache_dir)
+			cache_entries = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in val]
+			cache_file_name = group_T050017_filename_from_T050017_files(cache_entries, '.cache', path = cache_dir)
+			open(cache_file_name, "w").write("\n".join(map(str, cache_entries)))
 			self.add_var_opt(opt, cache_file_name)
 			# Keep track of the cache files being created
 			self.cache_outputs.setdefault(opt, []).append(cache_file_name)
@@ -339,7 +351,7 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 	"""
 	outstrs = []
 	ifos = sorted(cachedict.keys())
-	files = zip(*[[lal.CacheEntry(f).path for f in open(cachedict[ifo],'r').readlines()] for ifo in ifos])
+	files = zip(*[[CacheEntry(f).path for f in open(cachedict[ifo],'r').readlines()] for ifo in ifos])
 	for n, bank_group in enumerate(group(files, numbanks)):
 		if maxjobs is not None and n > maxjobs:
 			break
@@ -349,13 +361,15 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 	return outstrs
 
 
-def T050017_filename(instruments, description, start, end, extension, path = None):
+def T050017_filename(instruments, description, seg, extension, path = None):
 	"""!
 	A function to generate a T050017 filename.
 	"""
-	if type(instruments) != type(str()):
+	if not isinstance(instruments, basestring):
 		instruments = "".join(sorted(instruments))
-	duration = end - start
+	start, end = seg
+	start = int(math.floor(start))
+	duration = int(math.ceil(end)) - start
 	extension = extension.strip('.')
 	if path is not None:
 		return '%s/%s-%s-%d-%d.%s' % (path, instruments, description, start, duration, extension)
@@ -386,3 +400,89 @@ def condor_command_dict_from_opts(opts, defaultdict = {}):
 		v = "=".join(osplit[1:])
 		defaultdict.update([(k, v)])
 	return defaultdict
+
+
+def group_T050017_filename_from_T050017_files(cache_entries, extension, path = None):
+	"""!
+	A function to return the name of a file created from multiple files following
+	the T050017 convention. In addition to the T050017 requirements, this assumes
+	that numbers relevant to organization schemes will be the first entry in the
+	description, e.g. 0_DIST_STATS, and that all files in a given cache file are
+	from the same group of ifos and either contain data from the same segment or
+	from the same background bin.  Note, that each file doesn't have to be from
+	the same IFO, for example the template bank cache could contain template bank
+	files from H1 and template bank files from L1.
+	"""
+	# Check that every file has same observatory. 
+	observatories = [cache_entries[0].observatory]
+	for entry in cache_entries[1:]:
+		if entry.observatory == observatories[0]:
+			break
+		observatories.append(entry.observatory)
+
+	split_description = cache_entries[0].description.split('_')
+	min_bin = [x for x in split_description[:2] if x.isdigit()]
+	max_bin = [x for x in cache_entries[-1].description.split('_')[:2] if x.isdigit()]
+	seg = segments.segmentlist(cache_entry.segment for cache_entry in cache_entries).extent()
+	if min_bin:
+		min_bin = min_bin[0]
+	if max_bin:
+		max_bin = max_bin[-1]
+	if min_bin and (min_bin == max_bin or not max_bin):
+		# All files from same bin, thus segments may be different.
+		# Note that this assumes that if the last file in the cache
+		# does not start with a number that every file in the cache is
+		# from the same bin, an example of this is the cache file
+		# generated for gstlal_inspiral_calc_likelihood, which contains
+		# all of the DIST_STATS files from a given background bin and
+		# then CREATE_PRIOR_DIST_STATS files which are not generated
+		# for specific bins
+		return T050017_filename(''.join(observatories), cache_entries[0].description, seg, extension, path = path)
+	elif min_bin and max_bin and min_bin != max_bin:
+		if split_description[1].isdigit():
+			description_base = split_description[2:]
+		else:
+			description_base = split_description[1:]
+		# Files from different bins, thus segments must be same
+		return T050017_filename(''.join(observatories), '_'.join([min_bin, max_bin] + description_base), seg, extension, path = path)
+	else:
+		print >>sys.stderr, "ERROR: first and last file of cache file do not match known pattern, cannot name group file under T050017 convention. \nFile 1: %s\nFile 2: %s" % (cache_entries[0].path, cache_entries[-1].path)
+		raise ValueError
+
+def get_svd_bank_params_online(svd_bank_cache):
+	template_mchirp_dict = {}
+	for ce in [CacheEntry(f) for f in open(svd_bank_cache)]:
+		if not template_mchirp_dict.setdefault("%04d" % int(ce.description.split("_")[3]), []):
+			min_mchirp, max_mchirp = float("inf"), 0
+			xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
+			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
+				mchirp_column = snglinspiraltable.getColumnByName("mchirp")
+				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
+			template_mchirp_dict["%04d" % int(ce.description.split("_")[3])] = (min_mchirp, max_mchirp)
+			xmldoc.unlink()
+	return template_mchirp_dict
+
+def get_svd_bank_params(svd_bank_cache, online = False):
+	if not online:
+		bgbin_file_map = {}
+		max_time = 0
+	template_mchirp_dict = {}
+	for ce in sorted([CacheEntry(f) for f in open(svd_bank_cache)], cmp = lambda x,y: cmp(int(x.description.split("_")[0]), int(y.description.split("_")[0]))):
+		if not online:
+			bgbin_file_map.setdefault(ce.observatory, []).append(ce.path)
+		if not template_mchirp_dict.setdefault(ce.description.split("_")[0], []):
+			min_mchirp, max_mchirp = float("inf"), 0
+			xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
+			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
+				mchirp_column = snglinspiraltable.getColumnByName("mchirp")
+				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
+				if not online:
+					max_time = max(max_time, max(snglinspiraltable.getColumnByName("template_duration")))
+			template_mchirp_dict[ce.description.split("_")[0]] = (min_mchirp, max_mchirp)
+			xmldoc.unlink()
+	if not online:
+		return template_mchirp_dict, bgbin_file_map, max_time
+	else:
+		return template_mchirp_dict

@@ -30,20 +30,19 @@ import sys
 import threading
 
 
-import pygtk
-pygtk.require("2.0")
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import GObject
+from gi.repository import Gst
 GObject.threads_init()
 Gst.init(None)
 
 
 from glue import iterutils
-from glue import lal
 from glue import segments
 from gstlal import pipeio
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from lal import LIGOTimeGPS
+from lal.utils import CacheEntry
 
 
 if sys.byteorder == "little":
@@ -116,7 +115,7 @@ class src_deferred_link(object):
 
 	The "pad-added" signal of the element will be used to watch for new
 	pads, and if the "no-more-pads" signal is emitted by the element
-	before the requested pad has appeared ValueException is raised.
+	before the requested pad has appeared ValueError is raised.
 	"""
 	def __init__(self, element, srcpadname, sinkpad):
 		no_more_pads_handler_id = element.connect("no-more-pads", self.no_more_pads, srcpadname)
@@ -168,6 +167,7 @@ class framecpp_channeldemux_set_units(object):
 		"""
 		self.elem = elem
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, units_dict)
+		assert self.pad_added_handler_id > 0
 
 	@staticmethod
 	def pad_added(element, pad, units_dict):
@@ -177,13 +177,34 @@ class framecpp_channeldemux_set_units(object):
 
 
 class framecpp_channeldemux_check_segments(object):
+	"""
+	Utility to watch for missing data.  Pad probes are used to collect
+	the times spanned by buffers, these are compared to a segment list
+	defining the intervals of data the stream is required to have.  If
+	any intervals of data are found to have been skipped or if EOS is
+	seen before the end of the segment list then a ValueError exception
+	is raised.
+
+	There are two ways to use this tool.  To directly install a segment
+	list monitor on a single pad use the .set_probe() class method.
+	For elements with dynamic pads, the class can be allowed to
+	automatically add monitors to pads as they become available by
+	using the element's pad-added signal.  In this case initialize an
+	instance of the class with the element and a dictionary of segment
+	lists mapping source pad name to the segment list to check that
+	pad's output against.
+
+	In both cases a jitter parameter sets the maximum size of a skipped
+	segment that will be ignored (for example, to accomodate round-off
+	error in element timestamp computations).  The default is 1 ns.
+	"""
 	def __init__(self, elem, seglists, jitter = LIGOTimeGPS(0, 1)):
-		self.elem = elem
-		self.probe_handler_ids = {}
 		self.jitter = jitter
-		# keep a copy of the segmentlistdict incase the calling
+		self.probe_handler_ids = {}
+		# make a copy of the segmentlistdict in case the calling
 		# code modifies it
 		self.pad_added_handler_id = elem.connect("pad-added", self.pad_added, seglists.copy())
+		assert self.pad_added_handler_id > 0
 
 	def pad_added(self, element, pad, seglists):
 		name = pad.get_name()
@@ -191,28 +212,33 @@ class framecpp_channeldemux_check_segments(object):
 			pad.remove_data_probe(self.probe_handler_ids.pop(name))
 		if name in seglists:
 			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name], self.jitter)
+			assert self.probe_handler_ids[name] > 0
 
-	@staticmethod
-	def set_probe(pad, seglist, jitter = LIGOTimeGPS(0, 1)):
+	@classmethod
+	def set_probe(cls, pad, seglist, jitter = LIGOTimeGPS(0, 1)):
 		# use a copy of the segmentlist so the probe can modify it
-		return pad.add_data_probe(framecpp_channeldemux_check_segments.probe, (segments.segmentlist(seglist), jitter))
+		return pad.add_probe(Gst.PadProbeType.DATA_DOWNSTREAM, cls.probe, (segments.segmentlist(seglist), jitter))
 
 	@staticmethod
-	def probe(pad, obj, (seglist, jitter)):
-		if isinstance(obj, Gst.Buffer):
-			if not obj.flag_is_set(Gst.BUFFER_FLAG_GAP):
+	def probe(pad, probeinfo, (seglist, jitter)):
+		if probeinfo.type & Gst.PadProbeType.BUFFER:
+			obj = probeinfo.get_buffer()
+			if not obj.mini_object.flags & Gst.BufferFlags.GAP:
 				# remove the current buffer from the data
 				# we're expecting to see
-				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.timestamp), LIGOTimeGPS(0, obj.timestamp + obj.duration)))])
+				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.pts), LIGOTimeGPS(0, obj.pts + obj.duration)))])
 				# ignore missing data intervals unless
 				# they're bigger than the jitter
 				iterutils.inplace_filter(lambda seg: abs(seg) > jitter, seglist)
 			# are we still expecting to see something that
 			# precedes the current buffer?
-			preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(0, obj.timestamp)))
+			preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(0, obj.pts)))
 			if seglist.intersects_segment(preceding):
 				raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & segments.segmentlist([preceding])))
-		elif isinstance(obj, Gst.Event) and obj.type == Gst.EVENT_EOS:
+		elif probeinfo.type & Gst.PadProbeType.EVENT_DOWNSTREAM and probeinfo.get_event().type == Gst.EventType.EOS:
+			# ignore missing data intervals unless they're
+			# bigger than the jitter
+			iterutils.inplace_filter(lambda seg: abs(seg) > jitter, seglist)
 			if seglist:
 				raise ValueError("%s: at EOS detected missing data: %s" % (pad.get_name(), seglist))
 		return True
@@ -249,19 +275,19 @@ def framecpp_filesink_ldas_path_handler(elem, pspec, (outpath, dir_digits)):
 def framecpp_filesink_cache_entry_from_mfs_message(message):
 	"""
 	Translate an element message posted by the multifilesink element
-	inside a framecpp_filesink bin into a lal.CacheEntry object
+	inside a framecpp_filesink bin into a lal.utils.CacheEntry object
 	describing the file being written by the multifilesink element.
 	"""
 	# extract the segment spanned by the file from the message directly
-	start = LIGOTimeGPS(0, message.structure["timestamp"])
-	end = start + LIGOTimeGPS(0, message.structure["duration"])
+	start = LIGOTimeGPS(0, message.get_structure()["timestamp"])
+	end = start + LIGOTimeGPS(0, message.get_structure()["duration"])
 
 	# retrieve the framecpp_filesink bin (for instrument/observatory
 	# and frame file type)
 	parent = message.src.get_parent()
 
 	# construct and return a CacheEntry object
-	return lal.CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.structure["filename"]))
+	return CacheEntry(parent.get_property("instrument"), parent.get_property("frame-type"), segments.segment(start, end), "file://localhost%s" % os.path.abspath(message.get_structure()["filename"]))
 
 
 #
@@ -322,8 +348,8 @@ def mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = Non
 	elem = mkgeneric(pipeline, None, "framecpp_channelmux", **properties)
 	if channel_src_map is not None:
 		for channel, src in channel_src_map.items():
-			for srcpad in src.src_pads():
-				if srcpad.link(elem.get_static_pad(channel)) == Gst.PAD_LINK_OK:
+			for srcpad in src.srcpads:
+				if srcpad.link(elem.get_request_pad(channel)) == Gst.PadLinkReturn.OK:
 					break
 	if units is not None:
 		framecpp_channeldemux_set_units(elem, units)
@@ -442,8 +468,8 @@ def mkaudiochebband(pipeline, src, lower_frequency, upper_frequency, poles = 8):
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audiocheblimit.html">audiocheblimit</a> element to a pipeline with useful default properties
-def mkaudiocheblimit(pipeline, src, cutoff, mode = 0, poles = 8):
-	return mkgeneric(pipeline, src, "audiocheblimit", cutoff = cutoff, mode = mode, poles = poles)
+def mkaudiocheblimit(pipeline, src, cutoff, mode = 0, poles = 8, type = 1, ripple = 0.25):
+	return mkgeneric(pipeline, src, "audiocheblimit", cutoff = cutoff, mode = mode, poles = poles, type = type, ripple = ripple)
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audioamplify.html">audioamplify</a> element to a pipeline with useful default properties
@@ -476,13 +502,18 @@ def mktee(pipeline, src):
 	return mkgeneric(pipeline, src, "tee")
 
 
-## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline with useful default properties
-def mkadder(pipeline, srcs, sync = True, **properties):
-	elem = mkgeneric(pipeline, None, "lal_adder", sync = sync, **properties)
+## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline configured for synchronous "sum" mode mixing.
+def mkadder(pipeline, srcs, sync = True, mix_mode = "sum", **properties):
+	elem = mkgeneric(pipeline, None, "lal_adder", sync = sync, mix_mode = mix_mode, **properties)
 	if srcs is not None:
 		for src in srcs:
 			src.link(elem)
 	return elem
+
+
+## Adds a <a href="@gstdoc/GstLALAdder.html">lal_adder</a> element to a pipeline configured for synchronous "product" mode mixing.
+def mkmultiplier(pipeline, srcs, sync = True, mix_mode = "product", **properties):
+	return mkadder(pipeline, srcs, sync = sync, mix_mode = mix_mode, **properties)
 
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-queue.html">queue</a> element to a pipeline with useful default properties
@@ -615,8 +646,8 @@ def mkfakesink(pipeline, src):
 
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-filesink.html">filesink</a> element to a pipeline with useful default properties
-def mkfilesink(pipeline, src, filename):
-	return mkgeneric(pipeline, src, "filesink", sync = False, async = False, buffer_mode = 2, location = filename)
+def mkfilesink(pipeline, src, filename, sync = False, async = False):
+	return mkgeneric(pipeline, src, "filesink", sync = sync, async = async, buffer_mode = 2, location = filename)
 
 
 ## Adds a <a href="@gstlalgtkdoc/GstTSVEnc.html">lal_nxydump</a> element to a pipeline with useful default properties
@@ -708,7 +739,7 @@ def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = Fals
 	src = mktheoraenc(pipeline, src, border = 2, quality = 48, quick = False)
 	src = mkoggmux(pipeline, src)
 	if audiosrc is not None:
-		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=F32%s, depth=24" % BYTE_ORDER)).link(src)
+		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw, format=S24%s" % BYTE_ORDER)).link(src)
 	if verbose:
 		src = mkprogressreport(pipeline, src, filename)
 	mkfilesink(pipeline, src, filename)
@@ -741,8 +772,8 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 # FIXME no specific alias for this url since this library only has one element.
 # DO NOT DOCUMENT OTHER CODES THIS WAY! Use @gstdoc @gstpluginsbasedoc etc.
 ## Adds a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-libs/html/gstreamer-app.html">appsink</a> element to a pipeline with useful default properties
-def mkappsink(pipeline, src, max_buffers = 1, drop = False, **properties):
-	return mkgeneric(pipeline, src, "appsink", sync = False, async = False, emit_signals = True, max_buffers = max_buffers, drop = drop, **properties)
+def mkappsink(pipeline, src, max_buffers = 1, drop = False, sync = False, async = False, **properties):
+	return mkgeneric(pipeline, src, "appsink", sync = sync, async = async, emit_signals = True, max_buffers = max_buffers, drop = drop, **properties)
 
 
 class AppSync(object):
@@ -756,96 +787,113 @@ class AppSync(object):
 		self.appsinks = {}
 		# set of sink elements that are currently at EOS
 		self.at_eos = set()
-		# do equivalent of .add_sink() for each pre-built appsink
-		# element provided at this time
+		# attach handlers to appsink elements provided at this time
 		for elem in appsinks:
-			if elem in self.appsinks:
-				raise ValueError("duplicate appsinks %s" % repr(elem))
-			elem.connect("new-buffer", self.appsink_handler, False)
-			elem.connect("eos", self.appsink_handler, True)
-			self.appsinks[elem] = None
+			self.attach(elem)
 
 	def add_sink(self, pipeline, src, drop = False, **properties):
-		# NOTE that max buffers must be 1 for this to work
-		assert "max_buffers" not in properties
-		elem = mkappsink(pipeline, src, max_buffers = 1, drop = drop, **properties)
-		elem.connect("new-buffer", self.appsink_handler, False)
-		elem.connect("eos", self.appsink_handler, True)
-		self.appsinks[elem] = None
-		return elem
+		return self.attach(mkappsink(pipeline, src, drop = drop, **properties))
 
-	def appsink_handler(self, elem, eos):
+	def attach(self, appsink):
+		"""
+		connect this AppSync's signal handlers to the given appsink
+		element.  the element's max-buffers property will be set to
+		1 (required for AppSync to work).
+		"""
+		if appsink in self.appsinks:
+			raise ValueError("duplicate appsinks %s" % repr(appsink))
+		appsink.set_property("max-buffers", 1)
+		handler_id = appsink.connect("new-preroll", self.new_preroll_handler)
+		assert handler_id > 0
+		handler_id = appsink.connect("new-sample", self.new_sample_handler)
+		assert handler_id > 0
+		handler_id = appsink.connect("eos", self.eos_handler)
+		assert handler_id > 0
+		self.appsinks[appsink] = None
+		return appsink
+
+	def new_preroll_handler(self, elem):
 		with self.lock:
-			# update eos status, and retrieve buffer timestamp
-			if eos:
-				self.at_eos.add(elem)
-			else:
-				self.at_eos.discard(elem)
-				assert self.appsinks[elem] is None
-				self.appsinks[elem] = elem.get_last_buffer().timestamp
+			# clear eos status
+			self.at_eos.discard(elem)
+			# ignore preroll buffers
+			elem.emit("pull-preroll")
+			return Gst.FlowReturn.OK
 
-			# keep looping while we can process buffers
-			while True:
-				# retrieve the timestamps of all elements that
-				# aren't at eos and all elements at eos that still
-				# have buffers in them
-				timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
-				# nothing to do if all elements are at eos and do
-				# not have buffers
-				if not timestamps:
-					break
-				# find the element with the oldest timestamp.  None
-				# compares as less than everything, so we'll find
-				# any element (that isn't at eos) that doesn't yet
-				# have a buffer (elements at eos and that are
-				# without buffers aren't in the list)
-				timestamp, elem_with_oldest = min(timestamps)
-				# if there's an element without a buffer, do
-				# nothing --- we require all non-eos elements to
-				# have buffers before proceding
-				if timestamp is None:
-					break
-				# clear timestamp and pass element to
-				# handler func.  function call is done last
-				# so that all of our book-keeping has been
-				# taken care of in case an exception gets
-				# raised
-				self.appsinks[elem_with_oldest] = None
-				self.appsink_new_buffer(elem_with_oldest)
+	def new_sample_handler(self, elem):
+		with self.lock:
+			# clear eos status, and retrieve buffer timestamp
+			self.at_eos.discard(elem)
+			assert self.appsinks[elem] is None
+			self.appsinks[elem] = elem.get_last_sample().get_buffer().pts
+			# pull available buffers from appsink elements
+			return self.pull_buffers(elem)
+
+	def eos_handler(self, elem):
+		with self.lock:
+			# set eos status
+			self.at_eos.add(elem)
+			# pull available buffers from appsink elements
+			return self.pull_buffers(elem)
+
+	def pull_buffers(self, elem):
+		"""
+		for internal use.  must be called with lock held.
+		"""
+		# keep looping while we can process buffers
+		while 1:
+			# retrieve the timestamps of all elements that
+			# aren't at eos and all elements at eos that still
+			# have buffers in them
+			timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
+			# if all elements are at eos and none have buffers,
+			# then we're at eos
+			if not timestamps:
+				return Gst.FlowReturn.EOS
+			# find the element with the oldest timestamp.  None
+			# compares as less than everything, so we'll find
+			# any element (that isn't at eos) that doesn't yet
+			# have a buffer (elements at eos and that are
+			# without buffers aren't in the list)
+			timestamp, elem_with_oldest = min(timestamps)
+			# if there's an element without a buffer, quit for
+			# now --- we require all non-eos elements to have
+			# buffers before proceding
+			if timestamp is None:
+				return Gst.FlowReturn.OK
+			# clear timestamp and pass element to handler func.
+			# function call is done last so that all of our
+			# book-keeping has been taken care of in case an
+			# exception gets raised
+			self.appsinks[elem_with_oldest] = None
+			self.appsink_new_buffer(elem_with_oldest)
 
 
-def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
-
+class connect_appsink_dump_dot(object):
 	"""
 	add a signal handler to write a pipeline graph upon receipt of the
 	first trigger buffer.  the caps in the pipeline graph are not fully
 	negotiated until data comes out the end, so this version of the graph
 	shows the final formats on all links
 	"""
+	def __init__(self, pipeline, appsinks, basename, verbose = False):
+		self.pipeline = pipeline
+		self.filestem = "%s.%s" % (basename, "TRIGGERS")
+		self.verbose = verbose
+		# map element to handler ID
+		self.remaining_lock = threading.Lock()
+		self.remaining = {}
+		for sink in appsinks:
+			self.remaining[sink] = sink.connect_after("new-preroll", self.execute)
+			assert self.remaining[sink] > 0
 
-	class AppsinkDumpDot(object):
-		# data shared by all instances
-		# number of times execute method has been invoked, and a mutex
-		n_lock = threading.Lock()
-		n = 0
-
-		def __init__(self, pipeline, write_after, basename, verbose = False):
-			self.pipeline = pipeline
-			self.handler_id = None
-			self.write_after = write_after
-			self.filestem = "%s.%s" % (basename, "TRIGGERS")
-			self.verbose = verbose
-
-		def execute(self, elem):
-			with self.n_lock:
-				type(self).n += 1
-				if self.n >= self.write_after:
-					write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
-			elem.disconnect(self.handler_id)
-
-	for sink in appsinks:
-		appsink_dump_dot = AppsinkDumpDot(pipeline, len(appsinks), basename = basename, verbose = verbose)
-		appsink_dump_dot.handler_id = sink.connect_after("new-buffer", appsink_dump_dot.execute)
+	def execute(self, elem):
+		with self.remaining_lock:
+			handler_id = self.remaining.pop(elem)
+			if not self.remaining:
+				write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
+		elem.disconnect(handler_id)
+		return Gst.FlowReturn.OK
 
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz = 1):
@@ -871,6 +919,22 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, mask_matrix = 
 		properties["sigmasq"] = sigmasq
 	return mkgeneric(pipeline, src, "lal_itac", **properties)
 
+def mktrigger(pipeline, src, n, autocorrelation_matrix = None, mask_matrix = None, snr_thresh = 0, sigmasq = None, max_snr = False):
+	properties = {
+		"n": n,
+		"snr_thresh": snr_thresh,
+		"max_snr": max_snr
+	}
+	if autocorrelation_matrix is not None:
+		properties["autocorrelation_matrix"] = pipeio.repack_complex_array_to_real(autocorrelation_matrix)
+	if mask_matrix is not None:
+		properties["autocorrelation_mask"] = mask_matrix
+	if sigmasq is not None:
+		properties["sigmasq"] = sigmasq
+	return mkgeneric(pipeline, src, "lal_trigger", **properties)
+
+def mklatency(pipeline, src, name = None, silent = False):
+	return mkgeneric(pipeline, src, "lal_latency", name = name, silent = silent)
 
 def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse, H2_latency, srate):
 	elem = mkgeneric(pipeline, None, "lal_lho_coherent_null", block_stride = srate, H1_impulse = H1_impulse, H2_impulse = H2_impulse, H1_latency = H1_latency, H2_latency = H2_latency)
@@ -1023,6 +1087,6 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	"""
 	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
 		raise ValueError("cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set")
-	Gst.DEBUG_BIN_TO_DOT_FILE(pipeline, Gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+	Gst.debug_bin_to_dot_file(pipeline, Gst.DebugGraphDetails.ALL, filestem)
 	if verbose:
 		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)

@@ -43,6 +43,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -50,6 +51,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_frhistory.h>
 #include <gstlal/gstlal_tags.h>
 #include <gstfrpad.h>
@@ -65,7 +67,7 @@
  */
 
 
-GST_BOILERPLATE(GstFrPad, gst_frpad, GstPad, GST_TYPE_PAD);
+G_DEFINE_TYPE(GstFrPad, gst_frpad, GST_TYPE_PAD);
 
 
 /*
@@ -133,36 +135,18 @@ GType gst_frpad_type_get_type(void)
  */
 
 
-static gint get_bitrate(GstFrPad *pad)
-{
-	GstCaps *caps = GST_PAD_CAPS(pad);
-	GstStructure *s;
-	gint samples_per_second, channels, bits_per_sample;
-	gboolean success = caps != NULL;
-
-	if(success)
-		success = (s = gst_caps_get_structure(caps, 0)) != NULL;
-	if(success) {
-		success &= gst_structure_get_int(s, "rate", &samples_per_second);
-		success &= gst_structure_get_int(s, "channels", &channels);
-		if(!gst_structure_get_int(s, "depth", &bits_per_sample))
-			success &= gst_structure_get_int(s, "width", &bits_per_sample);
-	}
-
-	return success ? bits_per_sample * samples_per_second * channels : -1;
-}
-
-
 static void update_tag_list(GstFrPad *pad)
 {
+	GstPad *gstpad = GST_PAD(pad);
+	/* can't do this with lock held */
+	GstCaps *caps = gst_pad_get_current_caps(gstpad);
 	GstTagList *new_tags;
-	gint bitrate;
 
 	GST_OBJECT_LOCK(pad);
 
-	new_tags = gst_tag_list_new_full(
+	new_tags = gst_tag_list_new(
 		GST_TAG_CODEC, "RAW",
-		GST_TAG_TITLE, GST_PAD_NAME(GST_PAD_CAST(pad)),
+		GST_TAG_TITLE, GST_PAD_NAME(gstpad),
 		GSTLAL_TAG_INSTRUMENT, pad->instrument && g_strcmp0(pad->instrument, "") ? pad->instrument : " ",
 		GSTLAL_TAG_CHANNEL_NAME, pad->channel_name && g_strcmp0(pad->channel_name, "") ? pad->channel_name : " ",
 		/*GST_TAG_GEO_LOCATION_NAME, observatory,
@@ -170,7 +154,6 @@ static void update_tag_list(GstFrPad *pad)
 		GSTLAL_TAG_UNITS, pad->units && g_strcmp0(pad->units, "") ? pad->units : " ",
 		NULL
 	);
-	bitrate = get_bitrate(pad);
 
 	if(!new_tags) {
 		GST_OBJECT_UNLOCK(pad);
@@ -179,11 +162,15 @@ static void update_tag_list(GstFrPad *pad)
 		return;
 	}
 
+	if(caps) {
+		GstAudioInfo info;
+		gstlal_audio_info_from_caps(&info, caps);
+		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, GST_AUDIO_INFO_BPF(&info) * 8 * GST_AUDIO_INFO_RATE(&info), NULL);
+		gst_caps_unref(caps);
+	}
+
 	if(pad->pad_type == GST_FRPAD_TYPE_FRADCDATA)
 		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_BIAS, pad->bias, GSTLAL_TAG_SLOPE, pad->slope, GSTLAL_TAG_PHASE, pad->phase, GSTLAL_TAG_DATAVALID, pad->datavalid, NULL);
-
-	if(bitrate >= 0)
-		gst_tag_list_add(new_tags, GST_TAG_MERGE_REPLACE, GST_TAG_BITRATE, bitrate, NULL);
 
 	gst_tag_list_free(pad->tags);
 	pad->tags = new_tags;
@@ -443,13 +430,7 @@ static void finalize(GObject *object)
 	g_value_array_free(pad->history);
 	pad->history = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-static void gst_frpad_base_init(gpointer klass)
-{
-	/* no-op */
+	G_OBJECT_CLASS(gst_frpad_parent_class)->finalize(object);
 }
 
 
@@ -625,9 +606,9 @@ static void gst_frpad_class_init(GstFrPadClass *klass)
 }
 
 
-static void gst_frpad_init(GstFrPad *pad, GstFrPadClass *klass)
+static void gst_frpad_init(GstFrPad *pad)
 {
 	pad->history = g_value_array_new(0);
-	pad->tags = gst_tag_list_new();
+	pad->tags = gst_tag_list_new_empty();
 	g_signal_connect_after(pad, "notify::caps", (GCallback) caps_notify_handler, NULL);
 }

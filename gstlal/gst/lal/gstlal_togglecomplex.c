@@ -123,10 +123,15 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-G_DEFINE_TYPE(
+#define GST_CAT_DEFAULT gstlal_autochisq_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+G_DEFINE_TYPE_WITH_CODE(
 	GSTLALToggleComplex,
 	gstlal_togglecomplex,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_togglecomplex", 0, "lal_togglecomplex element")
 );
 
 
@@ -137,25 +142,6 @@ G_DEFINE_TYPE(
  *
  * ============================================================================
  */
-
-
-/*
- * get_unit_size()
- */
-
-
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
-{
-	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
-
-	if(success)
-		*size = GST_AUDIO_INFO_BPF(&info);
-	else
-		GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
-
-	return success;
-}
 
 
 /*
@@ -189,7 +175,7 @@ static GValue *g_value_scale_int(const GValue *src, GValue *dst, double factor)
 		guint i;
 		g_value_init(dst, GST_TYPE_LIST);
 		for(i = 0; i < gst_value_list_get_size(src); i++) {
-			GValue x = {0};
+			GValue x = G_VALUE_INIT;
 			if(!g_value_scale_int(gst_value_list_get_value(src, i), &x, factor)) {
 				g_value_unset(dst);
 				return NULL;
@@ -219,7 +205,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			GstStructure *str = gst_caps_get_structure(caps, n);
 			const gchar *format = gst_structure_get_string(str, "format");
-			GValue channels = {0};
+			GValue channels = G_VALUE_INIT;
 
 			if(!format) {
 				GST_DEBUG_OBJECT(trans, "unrecognized caps %" GST_PTR_FORMAT, caps);
@@ -302,7 +288,6 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 

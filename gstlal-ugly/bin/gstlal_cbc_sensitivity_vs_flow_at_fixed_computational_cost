@@ -37,16 +37,10 @@ matplotlib.rcParams.update({
         "text.usetex": True     # render all text with TeX
 })
 from matplotlib import pyplot
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
-import pylal.coherent_inspiral_metric as metric
-import pylal.coherent_inspiral_metric_detector_details as detector_details
-import pylal.coherent_inspiral_metric_plots as metric_plots
-from pylal import spawaveform
+import lal
+from glue.ligolw import utils as ligolw_utils
+import gstlal.coherent_inspiral_metric as metric
+import gstlal.coherent_inspiral_metric_detector_details as detector_details
 import scipy
 import numpy
 from scipy import pi,sin,cos,exp,log
@@ -71,10 +65,6 @@ if options.filter_cost not in ['fixed', 'cycles']:
 	print >> sys.stderr, "--filter-cost must be one of (fixed|cycles)"
 	sys.exit(1)
 
-# delayed import from gstlal
-from gstlal import reference_psd
-
-
 # set up the parameters of the signal
 m1 = 1.
 m2 = 1.
@@ -88,7 +78,7 @@ flow_bank = options.flow_ref
 fNyq = 2048.
 
 # load and condition psd
-new_psds = reference_psd.read_psd_xmldoc(utils.load_filename(options.psd_file, verbose=options.verbose, contenthandler=ligolw.LIGOLWContentHandler))
+new_psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_file, verbose=options.verbose, contenthandler=lal.series.PSDContentHandler))
 psd_REAL8FrequencySeries = new_psds[options.psd_name]
 deltaF = psd_REAL8FrequencySeries.deltaF
 f0 = psd_REAL8FrequencySeries.f0

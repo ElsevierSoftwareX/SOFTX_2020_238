@@ -80,7 +80,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
-#include <gst/controller/gstcontroller.h>
+#include <gst/controller/controller.h>
 #include <math.h>
 #include <string.h>
 
@@ -97,11 +97,51 @@
 #include <gstlal/gstlal_autocorrelation_chi2.h>
 #include <gstlal_snglinspiral.h>
 
-#define DEFAULT_SNR_THRESH 5.5
+
+/*
+ * ============================================================================
+ *
+ *                           GStreamer Boiler Plate
+ *
+ * ============================================================================
+ */
 
 
 #define GST_CAT_DEFAULT gstlal_itac_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
+G_DEFINE_TYPE_WITH_CODE(
+	GSTLALItac,
+	gstlal_itac,
+	GST_TYPE_ELEMENT,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_itac", 0, "lal_itac debug category")
+);
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Parameters
+ *
+ * ============================================================================
+ */
+
+
+#define DEFAULT_SNR_THRESH 5.5
+
+
+/* FIXME the function placements should be moved around to avoid putting this static prototype here */
+static GstFlowReturn process(GSTLALItac *element);
+
+
+/*
+ * ========================================================================
+ *
+ *                             Utility Functions
+ *
+ * ========================================================================
+ */
 
 
 static unsigned autocorrelation_channels(const GSTLALItac *element)
@@ -135,12 +175,14 @@ static int reset_time_and_offset(GSTLALItac *element)
 	return 0;
 }
 
+
 static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 {
 	guint size;
 	g_object_get(adapter, "size", &size, NULL);
 	return size;
 }
+
 
 static void free_bank(GSTLALItac *element)
 {
@@ -150,6 +192,7 @@ static void free_bank(GSTLALItac *element)
 	element->bankarray = NULL;
 }
 
+
 static void update_peak_info_from_autocorrelation_properties(GSTLALItac *element)
 {
 	if (element->maxdata && element->autocorrelation_matrix) {
@@ -157,8 +200,15 @@ static void update_peak_info_from_autocorrelation_properties(GSTLALItac *element
 		if (element->snr_mat)
 			free(element->snr_mat);
 		element->snr_mat = calloc(autocorrelation_channels(element) * autocorrelation_length(element), element->maxdata->unit);
+		/*
+		 * Each row is one sample point of the snr time series with N
+		 * columns for N channels. Assumes proper packing to go from real to complex.
+		 * FIXME assumes single precision
+		 */
+		element->snr_matrix_view = gsl_matrix_complex_float_view_array((float *) element->snr_mat, autocorrelation_length(element), autocorrelation_channels(element));
 	}
 }
+
 
 /*
  * ============================================================================
@@ -168,6 +218,7 @@ static void update_peak_info_from_autocorrelation_properties(GSTLALItac *element
  * ============================================================================
  */
 
+
 static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest)
 {
 	if(!gst_tag_list_get_string(taglist, tagname, dest)) {
@@ -176,53 +227,105 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 	}
 	return TRUE;
 }
-/* FIXME the function placements should be moved around to avoid putting this static prototype here */
 
-static GstFlowReturn process(GSTLALItac *element);
 
-static gboolean sink_event(GstPad *pad, GstEvent *event)
+static gboolean setcaps(GSTLALItac *element, GstPad *pad, GstCaps *caps)
 {
-	GSTLALItac *element = GSTLAL_ITAC(GST_PAD_PARENT(pad));
-	gboolean success = FALSE;
-	GstFlowReturn result;
+	guint width = 0;
+	GstStructure *str = gst_caps_get_structure(caps, 0);
+	const gchar *format = gst_structure_get_string(str, "format");
+	gboolean success = TRUE;
+	gst_structure_get_int(str, "rate", &(element->rate));
+	gst_structure_get_uint(str, "channels", &(element->channels));
 
-	switch(GST_EVENT_TYPE(event)) {
+	/*
+	 * update the element metadata
+	 */
 
-	case GST_EVENT_TAG: {
-		GstTagList *taglist;
-		gchar *instrument, *channel_name;
-		gst_event_parse_tag(event, &taglist);
-		success = taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
-		success &= taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
-		if(success) {
-			GST_DEBUG_OBJECT(pad, "found tags \"%s\"=\"%s\", \"%s\"=\"%s\"", GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME, channel_name);
-			g_free(element->instrument);
-			element->instrument = instrument;
-			g_free(element->channel_name);
-			element->channel_name = channel_name;
-			g_mutex_lock(element->bank_lock);
-			gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
-			gstlal_set_instrument_in_snglinspiral_array(element->bankarray, element->channels, element->instrument);
-			g_mutex_unlock(element->bank_lock);
-			}
-		success = gst_pad_event_default(pad, event);
-		break;
+
+	if(!strcmp(format, GST_AUDIO_NE(Z64)))
+		width = 64;
+	else if(!strcmp(format, GST_AUDIO_NE(Z128)))
+		width = 128;
+	else
+		GST_ERROR_OBJECT(element, "unsupported format %s", format);
+
+	g_object_set(element->adapter, "unit-size", width / 8 * element->channels, NULL);
+	if (width == 128) {
+		element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+		element->chi2 = calloc(element->channels, sizeof(double));
 		}
-	/* FIXME, will this always occur before last chain function is called?? */
-	case GST_EVENT_EOS: {
-		element->EOS = TRUE;
-		/* FIXME check this output */
-		result = process(element);
-		success = gst_pad_event_default(pad, event);
-		break;
+	if (width == 64) {
+		element->peak_type = GSTLAL_PEAK_COMPLEX;
+		element->chi2 = calloc(element->channels, sizeof(float));
 		}
-	default: {
-		success = gst_pad_event_default(pad, event);
-		break;
-		}
-	}
+	if (element->maxdata)
+		gstlal_peak_state_free(element->maxdata);
+	element->maxdata = gstlal_peak_state_new(element->channels, element->peak_type);
+	/* This should be called any time the autocorrelation property is updated */
+	update_peak_info_from_autocorrelation_properties(element);
+
+	/*
+	 * done
+	 */
+
 
 	return success;
+}
+
+
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALItac *itac = GSTLAL_ITAC(parent);
+	gboolean res = TRUE;
+
+	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
+
+	switch (GST_EVENT_TYPE (event))
+	{
+		case GST_EVENT_CAPS:
+		{
+			GstCaps *caps;
+			gst_event_parse_caps(event, &caps);
+			res = setcaps(itac, pad, caps);
+			break;
+		}
+		case GST_EVENT_TAG:
+			{
+			GstTagList *taglist;
+			gchar *instrument, *channel_name;
+			gst_event_parse_tag(event, &taglist);
+			res = taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
+			res &= taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
+			if(res) {
+				GST_DEBUG_OBJECT(pad, "found tags \"%s\"=\"%s\", \"%s\"=\"%s\"", GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME, channel_name);
+				g_free(itac->instrument);
+				itac->instrument = instrument;
+				g_free(itac->channel_name);
+				itac->channel_name = channel_name;
+				g_mutex_lock(&itac->bank_lock);
+				gstlal_set_channel_in_snglinspiral_array(itac->bankarray, itac->channels, itac->channel_name);
+				gstlal_set_instrument_in_snglinspiral_array(itac->bankarray, itac->channels, itac->instrument);
+				g_mutex_unlock(&itac->bank_lock);
+				}
+			break;
+			}
+		case GST_EVENT_EOS: {
+			itac->EOS = TRUE;
+			/* ignore failures */
+			process(itac);
+			break;
+			}
+		default:
+			break;
+		}
+
+	if(!res)
+		gst_event_unref(event);
+	else
+		res = gst_pad_event_default(pad, parent, event);
+
+	return res;
 }
 
 
@@ -262,18 +365,19 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_BANK_FILENAME:
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		element->bank_filename = g_value_dup_string(value);
 		element->channels = gstlal_snglinspiral_array_from_file(element->bank_filename, &(element->bankarray));
+		gstlal_set_min_offset_in_snglinspiral_array(element->bankarray, element->channels, &(element->difftime));
 		if (element->instrument && element->channel_name) {
 			gstlal_set_instrument_in_snglinspiral_array(element->bankarray, element->channels, element->instrument);
 			gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
 		}
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 
 	case ARG_SIGMASQ: {
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		if(element->bankarray) {
 			gint length;
 			double *sigmasq = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &length);
@@ -284,19 +388,17 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			g_free(sigmasq);
 		} else
 			GST_WARNING_OBJECT(element, "must set template bank before setting sigmasq");
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 	}
 
 	case ARG_AUTOCORRELATION_MATRIX: {
-		unsigned channels;
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 
 		if(element->autocorrelation_matrix)
 			gsl_matrix_complex_free(element->autocorrelation_matrix);
 
 		element->autocorrelation_matrix = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value));
-		channels = autocorrelation_channels(element);
 
 		/* This should be called any time caps change too */
 		update_peak_info_from_autocorrelation_properties(element);
@@ -310,19 +412,19 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			element->autocorrelation_norm = NULL;
 		}
 
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 	}
 
 	case ARG_AUTOCORRELATION_MASK: {
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 
 		if(element->autocorrelation_mask)
 			gsl_matrix_int_free(element->autocorrelation_mask);
 
 		element->autocorrelation_mask = gstlal_gsl_matrix_int_from_g_value_array(g_value_get_boxed(value));
 
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 	}
 
@@ -352,13 +454,13 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case ARG_BANK_FILENAME:
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		g_value_set_string(value, element->bank_filename);
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 
 	case ARG_SIGMASQ: {
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		if(element->bankarray) {
 			double sigmasq[element->channels];
 			gint i;
@@ -369,30 +471,30 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			GST_WARNING_OBJECT(element, "no template bank");
 			g_value_take_boxed(value, g_value_array_new(0));
 		}
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 	}
 
 	case ARG_AUTOCORRELATION_MATRIX:
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		if(element->autocorrelation_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->autocorrelation_matrix));
 		else {
 			GST_WARNING_OBJECT(element, "no autocorrelation matrix");
 			g_value_take_boxed(value, g_value_array_new(0));
 			}
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 
 	case ARG_AUTOCORRELATION_MASK:
-		g_mutex_lock(element->bank_lock);
+		g_mutex_lock(&element->bank_lock);
 		if(element->autocorrelation_mask)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_int(element->autocorrelation_mask));
 		else {
 			GST_WARNING_OBJECT(element, "no autocorrelation mask");
 			g_value_take_boxed(value, g_value_array_new(0));
 			}
-		g_mutex_unlock(element->bank_lock);
+		g_mutex_unlock(&element->bank_lock);
 		break;
 
 	default:
@@ -413,59 +515,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
-{
-	GSTLALItac *element = GSTLAL_ITAC(gst_pad_get_parent(pad));
-	GstStructure *structure;
-	gint rate, width, channels;
-	gboolean success = TRUE;
-
-	/*
-	 * parse caps
-	 */
-
-	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "channels", &channels))
-		success = FALSE;
-
-	/*
-	 * update the element metadata
-	 */
-
-	if(success) {
-		element->channels = channels;
-		element->rate = rate;
-		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
-		/* FIXME support single precision and get it from caps */
-		if (width == 128) {
-			element->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
-			element->chi2 = calloc(element->channels, sizeof(double));
-			}
-		if (width == 64) {
-			element->peak_type = GSTLAL_PEAK_COMPLEX;
-			element->chi2 = calloc(element->channels, sizeof(float));
-			}
-		if (element->maxdata)
-			gstlal_peak_state_free(element->maxdata);
-		element->maxdata = gstlal_peak_state_new(channels, element->peak_type);
-		/* This should be called any time the autocorrelation property is updated */
-		update_peak_info_from_autocorrelation_properties(element);
-	}
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return success;
-}
-
-
-
 /*
  * chain()
  */
@@ -473,13 +522,15 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 static void update_state(GSTLALItac *element, GstBuffer *srcbuf)
 {
 	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
-	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
+	element->next_output_timestamp = GST_BUFFER_PTS(srcbuf) - element->difftime;
+	element->next_output_timestamp += GST_BUFFER_DURATION(srcbuf);
 }
 
 static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
 {
 	GstFlowReturn result = GST_FLOW_OK;
 	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+	GST_BUFFER_DTS(srcbuf) = GST_BUFFER_PTS(srcbuf);
 	result =  gst_pad_push(element->srcpad, srcbuf);
 	return result;
 }
@@ -491,7 +542,7 @@ static GstFlowReturn push_gap(GSTLALItac *element, guint samps)
 	/* Clearing the max data structure causes the resulting buffer to be a GAP */
 	gstlal_peak_state_clear(element->maxdata);
 	/* create the output buffer */
-	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL);
+	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
 	/* push the result */
@@ -520,11 +571,13 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		/* Find the peak */
 		gstlal_float_complex_peak_over_window_interp(element->maxdata, dataptr.as_complex, outsamps);
 		}
-	if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
+	else if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 		dataptr.as_double_complex = ((double complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
 		/* Find the peak */
 		gstlal_double_complex_peak_over_window_interp(element->maxdata, dataptr.as_double_complex, outsamps);
 		}
+	else
+		g_assert_not_reached();
 
 	/* compute \chi^2 values if we can */
 	if (element->autocorrelation_matrix) {
@@ -538,17 +591,22 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 			/* extract data around peak for chisq calculation */
 			gstlal_double_complex_series_around_peak(element->maxdata, dataptr.as_double_complex, (double complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2((double *) element->chi2, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
+			/* create the output buffer */
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, NULL, element->difftime);
 			}
-		if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
+		else if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_float_complex_series_around_peak(element->maxdata, dataptr.as_complex, (float complex *) element->snr_mat, element->maxdata->pad);
 			gstlal_autocorrelation_chi2_float((float *) element->chi2, (float complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, element->autocorrelation_mask, element->autocorrelation_norm);
+			/* create the output buffer */
+			/* FIXME snr snippets not supported for double precision yet */
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2, &(element->snr_matrix_view), element->difftime);
 			}
-		/* create the output buffer */
-		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, element->chi2);
+		else
+			g_assert_not_reached();
 		}
 	else
-		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL);
+		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL, NULL, element->difftime);
 		
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
@@ -613,14 +671,14 @@ static GstFlowReturn process(GSTLALItac *element)
 	return result;
 }
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
+static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 {
-	GSTLALItac *element = GSTLAL_ITAC(gst_pad_get_parent(pad));
+	GSTLALItac *element = GSTLAL_ITAC(parent);
 	GstFlowReturn result = GST_FLOW_OK;
 	guint64 maxsize;
 
 	/* do this before accessing any element properties */
-	gst_object_sync_values(G_OBJECT(element), GST_BUFFER_TIMESTAMP(sinkbuf));
+	gst_object_sync_values(parent, GST_BUFFER_PTS(sinkbuf));
 
 	/* The max size to copy from an adapter is the typical output size plus the padding */
 	maxsize = output_num_bytes(element) + element->adapter->unit_size * element->maxdata->pad * 2;
@@ -633,7 +691,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * check validity of timestamp, offsets, tags, bank array
 	 */
 
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+	if(!GST_BUFFER_PTS_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
 		gst_buffer_unref(sinkbuf);
 		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
 		result = GST_FLOW_ERROR;
@@ -661,7 +719,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);// + output_duration(element);
+		element->next_output_timestamp = GST_BUFFER_PTS(sinkbuf);// + output_duration(element);
 	}
 
 	/* put the incoming buffer into an adapter, handles gaps */
@@ -671,7 +729,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	process(element);
 
 done:
-	gst_object_unref(element);
 	return result;
 }
 
@@ -686,14 +743,6 @@ done:
 
 
 /*
- * Parent class.
- */
-
-
-static GstElementClass *parent_class = NULL;
-
-
-/*
  * Instance finalize function.  See ???
  */
 
@@ -702,7 +751,7 @@ static void finalize(GObject *object)
 {
 
 	GSTLALItac *element = GSTLAL_ITAC(object);
-	g_mutex_free(element->bank_lock);
+	g_mutex_clear(&element->bank_lock);
 	gst_object_unref(element->sinkpad);
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
@@ -745,28 +794,30 @@ static void finalize(GObject *object)
 	if(element->chi2) {
 		free(element->chi2);
 	}
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_itac_parent_class)->finalize(object);
 }
 
 
 /*
- * Base init function.  See
+ * Class init function.  See
  *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
  */
 
 
 #define CAPS \
-	"audio/x-raw-complex, " \
-	"rate = (int) [1, MAX], " \
-	"channels = (int) [1, MAX], " \
-	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {64, 128}; "
+	"audio/x-raw, " \
+	"format = (string) { " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
+	"rate = " GST_AUDIO_RATE_RANGE ", " \
+	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0"
 
 
-static void base_init(gpointer class)
+static void gstlal_itac_class_init(GSTLALItacClass *klass)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -776,7 +827,9 @@ static void base_init(gpointer class)
 		"Chad Hanna <chad.hanna@ligo.org>"
 	);
 
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_itac", 0, "lal_itac debug category");
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	gst_element_class_add_pad_template(
 		element_class,
@@ -796,26 +849,6 @@ static void base_init(gpointer class)
 			gst_caps_from_string("application/x-lal-snglinspiral")
 		)
 	);
-
-}
-
-
-/*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
- */
-
-
-static void class_init(gpointer class, gpointer class_data)
-{
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -929,22 +962,28 @@ static void class_init(gpointer class, gpointer class_data)
  * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
  */
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gstlal_itac_init(GSTLALItac *element)
 {
-	GSTLALItac *element = GSTLAL_ITAC(object);
 	GstPad *pad;
 	gst_element_create_all_pads(GST_ELEMENT(element));
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
-	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
+	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
+	/* FIXME maybe these are necessary but they prevent buffers from leaving the element */
+	//GST_PAD_SET_PROXY_CAPS(pad);
+	//GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 	gst_pad_use_fixed_caps(pad);
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	/* FIXME maybe these are necessary but they prevent buffers from leaving the element */
+	//GST_PAD_SET_PROXY_CAPS(pad);
+	//GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->srcpad = pad;
 
 	{
@@ -956,6 +995,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	
 	/* internal data */
 	element->rate = 0;
+	element->difftime = 0;
 	element->snr_thresh = 0;
 	reset_time_and_offset(element);
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
@@ -965,35 +1005,11 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->bank_filename = NULL;
 	element->data = NULL;
 	element->maxdata = NULL;
-	element->bank_lock = g_mutex_new();
+	g_mutex_init(&element->bank_lock);
 	element->last_gap = TRUE;
 	element->EOS = FALSE;
 	element->snr_mat = NULL;
 	element->autocorrelation_matrix = NULL;
 	element->autocorrelation_mask = NULL;
 	element->autocorrelation_norm = NULL;
-}
-
-
-/*
- * gstlal_itac_get_type().
- */
-
-
-GType gstlal_itac_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALItacClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALItac),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALItac", &info, 0);
-	}
-
-	return type;
 }

@@ -47,6 +47,7 @@
 
 
 #include <pthread.h>
+#include <stdio.h>
 #include <string.h>
 
 
@@ -96,31 +97,25 @@ static GstURIType uri_get_type(GType type)
 }
 
 
-/* 1.0:  this becomes static const gchar *const * */
-static gchar **uri_get_protocols(GType type)
+static const gchar *const *uri_get_protocols(GType type)
 {
-	/* 1.0:  this becomes
 	static const gchar *protocols[] = {URI_SCHEME, NULL};
-	*/
-	static gchar *protocols[] = {(gchar *) URI_SCHEME, NULL};
 
 	return protocols;
 }
 
 
-/* 1.0:  this becomes static gchar * */
-static const gchar *uri_get_uri(GstURIHandler *handler)
+static gchar *uri_get_uri(GstURIHandler *handler)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(handler);
 
-	/* 1.0:  this won't be a memory leak */
 	return g_strdup_printf(URI_SCHEME "://%s", element->name);
 }
 
 
-/* 1.0:  this gets a GError ** argument */
-static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri, GError **err)
 {
+	/* FIXME:  report errors via err argument */
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(handler);
 	gchar *scheme = g_uri_parse_scheme(uri);
 	gchar name[strlen(uri)];
@@ -143,10 +138,8 @@ static void uri_handler_init(gpointer g_iface, gpointer iface_data)
 
 	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
 	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
-	/* 1.0:  this is ->get_type */
-	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
-	/* 1.0:  this is ->get_protocols */
-	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+	iface->get_type = GST_DEBUG_FUNCPTR(uri_get_type);
+	iface->get_protocols = GST_DEBUG_FUNCPTR(uri_get_protocols);
 }
 
 
@@ -176,7 +169,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GDSLVSHMSrc, gds_lvshmsrc, GstBaseSrc, GST_TYPE_BASE_SRC, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GDSLVSHMSrc,
+	gds_lvshmsrc,
+	GST_TYPE_BASE_SRC,
+	additional_initializations(g_define_type_id)
+);
 
 
 /*
@@ -258,6 +256,11 @@ static gboolean start(GstBaseSrc *object)
 	element->next_timestamp = 0;
 
 done:
+	/* FIXME:  documentation says this needs to be called when start()
+	 * is overridden but doing so causes frequent lock-ups in our
+	 * applications and I can't find any examples in gstreamer's own
+	 * code where an element calls this so ... !?  it's commented out */
+	/*gst_base_src_start_complete(object, success ? GST_FLOW_OK : GST_FLOW_ERROR);*/
 	return success;
 }
 
@@ -293,10 +296,10 @@ static gboolean unlock(GstBaseSrc *basesrc)
 
 	element->unblocked = TRUE;
 
-	if(!g_mutex_trylock(element->create_thread_lock))
+	if(!g_mutex_trylock(&element->create_thread_lock))
 		success = !pthread_kill(element->create_thread, SIGALRM);
 	else
-		g_mutex_unlock(element->create_thread_lock);
+		g_mutex_unlock(&element->create_thread_lock);
 
 	return success;
 }
@@ -325,7 +328,9 @@ static gboolean unlock_stop(GstBaseSrc *basesrc)
 
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
+	GstBaseSrcClass *basesrc_class = GST_BASE_SRC_CLASS(G_OBJECT_GET_CLASS(basesrc));
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(basesrc);
+	GstMapInfo mapinfo;
 	GstClockTime t_before, t_after;
 	int flags = 0;	/* LVSHM_NOWAIT is not set = respect wait time */
 	const char *data;
@@ -346,16 +351,16 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	if(element->unblocked) {
 		GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-		return GST_FLOW_UNEXPECTED;
+		return GST_FLOW_EOS;
 	}
 
 	element->create_thread = pthread_self();
 	while(1) {
-		g_mutex_lock(element->create_thread_lock);
+		g_mutex_lock(&element->create_thread_lock);
 		t_before = GPSNow();
 		data = lsmp_partition(element)->get_buffer(flags);
 		t_after = GPSNow();
-		g_mutex_unlock(element->create_thread_lock);
+		g_mutex_unlock(&element->create_thread_lock);
 		if(!data) {
 			/*
 			 * data retrieval failed.  guess cause.
@@ -372,7 +377,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				 */
 
 				GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-				return GST_FLOW_UNEXPECTED;
+				return GST_FLOW_EOS;
 			} else if(element->wait_time > 0. && (GstClockTimeDiff) (t_after - t_before) >= (GstClockTimeDiff) (element->wait_time * GST_SECOND)) {
 				/*
 				 * assume reason for failure was a timeout.
@@ -392,21 +397,20 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				GST_DEBUG_OBJECT(element, "timeout occured, creating 0-length heartbeat buffer");
 
 				*buffer = gst_buffer_new();
-				gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
-				GST_BUFFER_TIMESTAMP(*buffer) = t_before;
+				GST_BUFFER_PTS(*buffer) = t_before;
 				if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
-					GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
-				if(GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
+					GST_BUFFER_PTS(*buffer) -= element->max_latency;
+				if(GST_BUFFER_PTS(*buffer) < element->next_timestamp) {
 					GST_LOG_OBJECT(element, "time reversal.  skipping buffer.");
 					gst_buffer_unref(*buffer);
 					*buffer = NULL;
 					continue;
 				}
-				GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
+				GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(*buffer)));
 				GST_BUFFER_DURATION(*buffer) = 0;
 				GST_BUFFER_OFFSET(*buffer) = offset;
 				GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
-				element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
+				element->next_timestamp = GST_BUFFER_PTS(*buffer) + GST_BUFFER_DURATION(*buffer);
 				return result;
 			} else {
 				/*
@@ -415,7 +419,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				 */
 
 				GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
-				return GST_FLOW_UNEXPECTED;
+				return GST_FLOW_EOS;
 			}
 		}
 
@@ -438,39 +442,45 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 * copy into a GstBuffer
 	 */
 
+/*
+ * FIXME:  why was this here?  can't we just push it anyway?
 	if(!length) {
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("received 0-byte shared-memory buffer"));
 		result = GST_FLOW_UNEXPECTED;
 		goto done;
 	}
-	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), offset, length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+*/
+	result = basesrc_class->alloc(basesrc, offset, length, buffer);
 	if(result != GST_FLOW_OK) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result)));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("alloc() returned %d (%s)", result, gst_flow_get_name(result)));
 		goto done;
 	}
-	if(GST_BUFFER_SIZE(*buffer) != length) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer(): requested buffer size %u, got buffer size %u", length, GST_BUFFER_SIZE(*buffer)));
+	gst_buffer_map(*buffer, &mapinfo, GST_MAP_WRITE);
+	if(mapinfo.size != length) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer(): requested buffer size %u, got buffer size %zu", length, mapinfo.size));
+		gst_buffer_unmap(*buffer, &mapinfo);
 		gst_buffer_unref(*buffer);
 		*buffer = NULL;
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	memcpy(GST_BUFFER_DATA(*buffer), data, length);
-	GST_BUFFER_TIMESTAMP(*buffer) = timestamp;
+	memcpy(mapinfo.data, data, length);
+	GST_BUFFER_PTS(*buffer) = timestamp;
 	GST_BUFFER_DURATION(*buffer) = element->assumed_duration * GST_SECOND;	/* FIXME:  we need to know this! */
 	GST_BUFFER_OFFSET(*buffer) = offset;
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
-	element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
+	element->next_timestamp = GST_BUFFER_PTS(*buffer) + GST_BUFFER_DURATION(*buffer);
 
-	element->max_latency = GPSNow() - GST_BUFFER_TIMESTAMP(*buffer);
+	element->max_latency = GPSNow() - GST_BUFFER_PTS(*buffer);
 	element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
+	gst_buffer_unmap(*buffer, &mapinfo);
 
 	/*
 	 * adjust segment
 	 */
 
 	if(element->need_new_segment) {
-		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_TIMESTAMP(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_TIMESTAMP(*buffer));
+		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_PTS(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_PTS(*buffer));
 		element->need_new_segment = FALSE;
 	}
 
@@ -516,7 +526,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 #endif
 
 	default:
-		success = GST_BASE_SRC_CLASS(parent_class)->query(basesrc, query);
+		success = GST_BASE_SRC_CLASS(gds_lvshmsrc_parent_class)->query(basesrc, query);
 		break;
 	}
 
@@ -629,25 +639,14 @@ static void finalize(GObject *object)
 
 	g_free(element->name);
 	element->name = NULL;
-	g_mutex_free(element->create_thread_lock);
-	element->create_thread_lock = NULL;
+	g_mutex_clear(&element->create_thread_lock);
 	if(element->partition) {
 		GST_WARNING_OBJECT(element, "parent class failed to invoke stop() method.  doing shared-memory de-access in finalize() instead.");
 		delete lsmp_partition(element);
 		element->partition = NULL;
 	}
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gds_lvshmsrc_base_init(gpointer klass)
-{
+	G_OBJECT_CLASS(gds_lvshmsrc_parent_class)->finalize(object);
 }
 
 
@@ -746,7 +745,7 @@ static void gds_lvshmsrc_class_init(GDSLVSHMSrcClass *klass)
  */
 
 
-static void gds_lvshmsrc_init(GDSLVSHMSrc *element, GDSLVSHMSrcClass *klass)
+static void gds_lvshmsrc_init(GDSLVSHMSrc *element)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 
@@ -760,6 +759,6 @@ static void gds_lvshmsrc_init(GDSLVSHMSrc *element, GDSLVSHMSrcClass *klass)
 	element->name = NULL;
 	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 	element->unblocked = FALSE;
-	element->create_thread_lock = g_mutex_new();
+	g_mutex_init(&element->create_thread_lock);
 	element->partition = NULL;
 }

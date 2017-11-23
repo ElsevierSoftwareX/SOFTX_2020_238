@@ -14,6 +14,6 @@ ligolw_sqlite --verbose --database ${i}all.sqlite --tmp-space /dev/shm --replace
 sqlite3 ${i}all.sqlite 'DROP TABLE sim_inspiral'
 ligolw_sqlite --verbose --database ${i}all.sqlite --tmp-space /dev/shm --extract ${i}all_added.xml
 ligolw_add --verbose --output ${i}all.xml ../segments/injections.xml ${i}all_added.xml
-ligolw_inspinjfind ${i}all.xml
+lalapps_inspinjfind ${i}all.xml
 ligolw_sqlite --verbose --database ${i}all.sqlite --tmp-space /dev/shm --replace ${i}all.xml
 done

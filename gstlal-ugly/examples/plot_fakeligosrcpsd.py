@@ -6,7 +6,6 @@ Example gst-python applicaiton for trying out new ideas
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 from gstlal.pipeutil import *
 from gstlal import pipeio
-from pylal import series as lalseries
 import sys
 
 gps_start_time = 956858656
@@ -32,7 +31,7 @@ class PSDHandler(object):
 			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_ELEMENT:
+		elif message.type == gst.MessageType.ELEMENT:
 			if message.structure.get_name() == "spectrum":
 				self.psd = pipeio.parse_spectrum_message(message)
 

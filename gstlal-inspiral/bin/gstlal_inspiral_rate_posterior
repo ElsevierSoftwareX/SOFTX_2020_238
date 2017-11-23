@@ -57,14 +57,14 @@ import sys
 
 
 from glue import segments
-from glue.lal import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.text_progress_bar import ProgressBar
-from pylal import ligolw_thinca
+from lal.utils import CacheEntry
+from lalinspiral import thinca
 
 
 from gstlal import far
@@ -165,7 +165,7 @@ def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_pat
 		connection = sqlite3.connect(working_filename)
 
 		xmldoc = dbtables.get_xml(connection)
-		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 
 		for ln_likelihood_ratio, is_background in connection.cursor().execute("""
 SELECT
@@ -259,9 +259,9 @@ options, paramdict, filenames = parse_command_line()
 
 
 if options.likelihood_filenames:
-	ranking_data = load_ranking_data(options.likelihood_filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
+	rankingstatpdf = load_ranking_data(options.likelihood_filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
 else:
-	ranking_data = None
+	rankingstatpdf = None
 
 
 #
@@ -287,9 +287,9 @@ if options.chain_file is not None:
 	kwargs["chain_file"] = h5py.File(options.chain_file)
 if options.samples is not None:
 	kwargs["nsample"] = options.samples
-signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
-#signal_rate_pdf, signal2_rate_pdf, signal12_rate_pdf, noise_rate_pdf = rate_estimation.calculate_alphabetsoup_rate_posteriors(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
-#p_signal = rate_estimation.calculate_psignal_posteriors_from_rate_samples(ranking_data, zerolag_ln_likelihood_ratios, progressbar = progressbar)
+signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(rankingstatpdf, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
+#signal_rate_pdf, signal2_rate_pdf, signal12_rate_pdf, noise_rate_pdf = rate_estimation.calculate_alphabetsoup_rate_posteriors(rankingstatpdf, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
+#p_signal = rate_estimation.calculate_psignal_posteriors_from_rate_samples(rankingstatpdf, zerolag_ln_likelihood_ratios, progressbar = progressbar)
 #while open("p_signal.txt", "w") as f:
 #	for vals in zip(zerolag_ln_likelihood_ratios, p_signal):
 #		print >>f, "%.17g %.17g" % vals

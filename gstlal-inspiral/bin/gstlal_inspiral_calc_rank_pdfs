@@ -40,13 +40,11 @@ from optparse import OptionParser
 import sys
 
 
-from glue import iterutils
-from glue.lal import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import search_summary as ligolw_search_summary
 from gstlal import far
+from lal.utils import CacheEntry
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -114,12 +112,6 @@ coincparamsdistributions, _, seglists = far.marginalize_pdf_urls(urls, require_c
 if options.verbose:
 	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
 
-# Compute the probability of instruments given signal
-coincparamsdistributions.populate_prob_of_instruments_given_signal(segs = seglists, n = 1.0, verbose = options.verbose)
-
-# Compute the intrument combination counts
-coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
-
 
 #
 # rebuild event parameter PDFs (+= method has not constructed these
@@ -130,23 +122,10 @@ coincparamsdistributions.add_instrument_combination_counts(segs = seglists, verb
 if options.add_zerolag_to_background:
 	sampler_coincparamsdistributions = copy.deepcopy(coincparamsdistributions)
 	sampler_coincparamsdistributions.zero_lag_in_background = True
-	sampler_coincparamsdistributions.finish(verbose = options.verbose)
+	sampler_coincparamsdistributions.finish(segs = seglists, verbose = options.verbose)
 else:
 	sampler_coincparamsdistributions = None
-coincparamsdistributions.finish(verbose = options.verbose)
-
-
-#
-# take a moment to make sure we have SNR PDFs for all instrument
-# combinations so that we don't end up doing this inside the sampling
-# threads
-#
-
-
-all_instrument_combos = [instruments for n in range(2, len(seglists) + 1) for instruments in iterutils.choices(seglists.keys(), n)]
-for horizon_distances in coincparamsdistributions.horizon_history.all():
-	for instruments in all_instrument_combos:
-		coincparamsdistributions.get_snr_joint_pdf(instruments, horizon_distances, verbose = options.verbose)
+coincparamsdistributions.finish(segs = seglists, verbose = options.verbose)
 
 
 #
@@ -154,7 +133,7 @@ for horizon_distances in coincparamsdistributions.horizon_history.all():
 #
 
 
-ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.keys(), sampler_coinc_params_distributions = sampler_coincparamsdistributions, nsamples = options.ranking_stat_samples, verbose = options.verbose)
+ranking_data = far.RankingData(coincparamsdistributions, sampler_coinc_params_distributions = sampler_coincparamsdistributions, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
 #
@@ -165,7 +144,6 @@ ranking_data = far.RankingData(coincparamsdistributions, instruments = seglists.
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_rank_pdfs", paramdict = paramdict)
-search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
 ligolw_process.set_process_end_time(process)
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

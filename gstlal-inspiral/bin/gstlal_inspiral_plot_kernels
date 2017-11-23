@@ -1,0 +1,135 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017 Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import math
+import matplotlib
+matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 600,
+	"savefig.dpi": 600,
+	"text.usetex": True
+})
+import numpy
+from optparse import OptionParser
+import sys
+
+
+from glue import segments
+from gstlal import far
+from gstlal import plotfar
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--max-snr", metavar = "snr", type = "float", default = 200.0, help = "Set the maximum SNR for (chi^2, snr) plots (default = 200.0).")
+	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by choosen the filename extension (default = \".png\").")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+
+	if options.output_format not in (".png", ".pdf", ".svg"):
+		raise ValueError("invalid --output-format \"%s\"" % options.output_format)
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# load input
+#
+
+
+#coinc_params_distributions, ranking_data, seglists = far.marginalize_pdf_urls(filenames, require_coinc_param_data = False, require_ranking_stat_data = False, verbose = options.verbose)
+coinc_params_distributions = far.ThincaCoincParamsDistributions(instruments = frozenset(("H1",)), min_instruments = 1)
+
+
+#
+# place a grid of impulses into the arrays and smooth
+#
+
+
+for x in 1.5**numpy.arange(4, 13):
+	for y in 3.**numpy.arange(-8, 0):
+		coinc_params_distributions.background_rates["H1_snr_chi"][x, y] = 1e8
+coinc_params_distributions.background_rates["singles"]["H1",] = coinc_params_distributions.background_rates["H1_snr_chi"].array.sum()
+coinc_params_distributions.horizon_history["H1"][0.] = 1.
+coinc_params_distributions.finish(
+	segments.segmentlistdict(
+		{"H1": segments.segmentlist([segments.segment(0., 1.)])}
+	), verbose = True)
+
+
+#
+# plots
+#
+
+
+if coinc_params_distributions is not None:
+	fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, "H1", "background_pdf", options.max_snr)
+	plotname = "coinc_params_binning%s" % options.output_format
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
+
+
+# ranking statistic PDFs and CCDFs
+#for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
+#	fig = plotfar.plot_likelihood_ratio_pdf(ranking_data, instruments, (options.min_log_lambda, options.max_log_lambda), "Noise", binnedarray_string = "background_likelihood_pdfs")
+#	plotname = "coinc_params_binning%s" % options.output_format
+#	if options.verbose:
+#		print >>sys.stderr, "writing %s" % plotname
+#	fig.savefig(plotname)

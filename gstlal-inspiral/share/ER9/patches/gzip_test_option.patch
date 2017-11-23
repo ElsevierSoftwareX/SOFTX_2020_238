@@ -1,0 +1,50 @@
+--- gstlal/gstlal-inspiral/bin/gstlal_inspiral_pipe	2016-03-09 15:37:33.617613230 -0600
++++ gstlal-tar/gstlal-inspiral-0.8.0/bin/gstlal_inspiral_pipe	2016-06-16 14:23:51.355634149 -0500
+@@ -292,8 +292,9 @@
+ 							}
+ 						)
+ 				# Set a post script to check for file integrity
+-				noninjnode.set_post_script("gzip_test.sh")
+-				noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
++				if options.gzip_test:
++					noninjnode.set_post_script("gzip_test.sh")
++					noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
+ 				# impose a priority to help with depth first submission
+ 				noninjnode.set_priority(chunk_counter+15)
+ 				inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
+@@ -338,8 +339,9 @@
+ 								}
+ 							)
+ 					# Set a post script to check for file integrity
+-					injnode.set_post_script("gzip_test.sh")
+-					injnode.add_post_script_arg(" ".join(output_names))
++					if options.gzip_test:
++						injnode.set_post_script("gzip_test.sh")
++						injnode.add_post_script_arg(" ".join(output_names))
+ 					# impose a priority to help with depth first submission
+ 					injnode.set_priority(chunk_counter)
+ 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
+@@ -676,6 +678,7 @@
+ 	parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
+ 	parser.add_option("--singles-threshold", default=8, action = "store", metavar="THRESH", help = "Record all (including non-coincident) single detector triggers above the specified SNR threshold (by default = 8).")
+ 	parser.add_option("--copy-raw-results", default=False, action = "store_true", help = "Copy raw gstlal_inspiral results before applying clustering and other lossy operations.")
++	parser.add_option("--gzip-test", default=False, action = "store_true", help = "Perform gzip --test on all output files.")
+ 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+ 
+ 	# Override the datasource injection option
+@@ -743,10 +746,11 @@
+ # Make an xml integrity checker
+ #
+ 
+-f = open("gzip_test.sh", "w")
+-f.write("#!/bin/bash\nsleep 60\ngzip --test $@")
+-f.close()
+-os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
++if options.gzip_test:
++	f = open("gzip_test.sh", "w")
++	f.write("#!/bin/bash\nsleep 60\ngzip --test $@")
++	f.close()
++	os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
+ 
+ #
+ # A pre script to backup data before feeding to lossy programs

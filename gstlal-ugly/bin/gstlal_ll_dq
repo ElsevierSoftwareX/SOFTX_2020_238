@@ -1,0 +1,192 @@
+#!/usr/bin/python
+import os
+import numpy, scipy
+import shutil
+from collections import deque
+from scipy import signal
+import sys
+import StringIO
+from gstlal import pipeparts, datasource, simplehandler, pipeio, reference_psd, aggregator
+from optparse import OptionParser
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
+import h5py
+import logging
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	# generic "source" options
+	datasource.append_options(parser)
+
+	# add our own options
+	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
+	parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 16384 Hz")
+	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 8s")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+class PSDHandler(simplehandler.Handler):
+	def __init__(self, *args, **kwargs):
+		self.psd = None
+		self.out_path = kwargs["out_path"]
+		self.instrument = kwargs["instrument"]
+		del kwargs["out_path"]
+		del kwargs["instrument"]
+		simplehandler.Handler.__init__(self, *args, **kwargs)
+		self.horizon_distance_func = reference_psd.HorizonDistance(20., 2048., 1./16., 1.4, 1.4)
+		self.horizon_history = deque(maxlen = 10000)
+		self.horizon_history_time = deque(maxlen = 10000)
+		self.noisedeq = deque(maxlen = 10000)
+		self.timedeq = deque(maxlen = 10000)
+		self.last_reduce_time = None
+	def do_on_message(self, bus, message):
+		if message.type == Gst.MessageType.ELEMENT and message.get_structure().get_name() == "spectrum":
+			self.psd = pipeio.parse_spectrum_message(message)
+			return True
+		return False
+
+	def bufhandler(self,elem):
+		buf = elem.emit("pull-sample").get_buffer()
+		buftime = int(buf.pts / 1e9)
+		if self.last_reduce_time is None:
+			self.last_reduce_time = int(round(buftime,-2))
+		(result, mapinfo) = buf.map(Gst.MapFlags.READ)
+		thisdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime)), self.instrument)
+		for typ in ("min", "median", "max"):
+			aggregator.makedir(os.path.join(thisdir, typ))
+		if mapinfo.data:
+			# First noise
+			s = StringIO.StringIO(mapinfo.data)
+			data = numpy.array([(float(x.split()[0]), abs(float(x.split()[1]))) for x in s.getvalue().split('\n') if x])
+			ix = numpy.argmax(data, axis=0)[1]
+			self.timedeq.append(buftime)
+			self.noisedeq.append(data[ix,1])
+
+			# Then range
+			self.horizon_history.append(self.horizon_distance_func(self.psd, 8)[0])
+
+			# The PSD
+			psd_freq = numpy.arange(self.psd.data.length / 4) * self.psd.deltaF * 4
+			psd_data = signal.decimate(self.psd.data.data[:], 4, ftype='fir')[:-1]**.5
+		else:
+			buf.unmap(mapinfo)
+			del buf
+			return Gst.FlowReturn.OK
+
+
+		# Save a "latest"
+		self.to_hdf5(os.path.join(os.path.join(self.out_path, self.instrument), "psd.hdf5"), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
+		# write out all of the file types
+		for typ in ("min", "median", "max"):
+			self.to_hdf5(os.path.join("%s/%s" % (thisdir, typ), "noise.hdf5"), {"time": numpy.array(self.timedeq), "data": numpy.array(self.noisedeq)})
+			self.to_hdf5(os.path.join("%s/%s" % (thisdir, typ), "horizon_history.hdf5"), {"time": numpy.array(self.timedeq), "data": numpy.array(self.horizon_history)})
+
+		#
+		# FIXME do data reduction by levels here.
+		#
+
+		# Only reduce every 100s
+		if (buftime - self.last_reduce_time) >= 100:
+			logging.info("reducing data and writing PSD snaphot for %d @ %d" % (buftime, int(aggregator.now()))) 
+			self.last_reduce_time = int(round(buftime,-2))
+			for typ, func in (("min", min), ("median", aggregator.median), ("max", max)):
+				for route in ("noise", "horizon_history"):
+					for level in range(0, aggregator.DIRS-1):
+						thisdir = os.path.join(os.path.join(self.out_path, os.path.join(aggregator.gps_to_leaf_directory(buftime, level = level)), self.instrument), typ)
+						nextdir = os.path.join(os.path.join(self.out_path, os.path.join(aggregator.gps_to_leaf_directory(buftime, level = level+1)), self.instrument), typ)
+						aggregator.makedir(nextdir)
+						this_fname, this_x, this_y = aggregator.get_dataset(thisdir, route)
+						next_fname, next_x, next_y = aggregator.get_dataset(nextdir, route)
+						xarr, yarr = aggregator.reduce_data(this_x + next_x, this_y + next_y, func, level = level + 1)
+						self.to_hdf5(next_fname, {"time": numpy.array(xarr), "data": numpy.array(yarr)})
+			# The PSD is special, we just record it. No min/median/max
+			thisdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime)), self.instrument)
+			psd_name = "%s-PSD-%d0-100.hdf5" % (self.instrument, int(round(buftime,-2)))
+			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
+
+		buf.unmap(mapinfo)
+		del buf
+		return Gst.FlowReturn.OK
+
+	def prehandler(self,elem):
+		buf = elem.emit("pull-preroll")
+		del buf
+		return Gst.FlowReturn.OK
+
+	def to_hdf5(self, path, datadict):
+		tmppath = path + ".tmp"
+		f = h5py.File(tmppath, "w")
+		for k, v in datadict.items():
+			f[k] = v
+		f.close()
+		shutil.move(tmppath, path)
+
+
+
+#
+# MAIN
+#
+
+options, filenames = parse_command_line()
+
+logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
+
+# parse the generic "source" options, check for inconsistencies is done inside
+# the class init method
+gw_data_source_info = datasource.GWDataSourceInfo(options)
+
+# only support one channel
+instrument = gw_data_source_info.channel_dict.keys()[0]
+
+aggregator.makedir(os.path.join(options.out_path, instrument))
+
+#
+# build pipeline
+#
+
+if options.verbose:
+	print >>sys.stderr, "building pipeline ..."
+mainloop = GObject.MainLoop()
+pipeline = Gst.Pipeline(name="DQ")
+handler = PSDHandler(mainloop, pipeline, out_path = options.out_path, instrument = instrument)
+
+head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
+head = pipeparts.mkresample(pipeline, head, quality = 9)
+head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.sample_rate)
+head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
+head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, fft_length = options.psd_fft_length, average_samples = 64, median_samples = 7, expand_gaps = True)
+head = pipeparts.mkqueue(pipeline, head)
+head = pipeparts.mkreblock(pipeline, head)
+head = pipeparts.mkgeneric(pipeline, head, "lal_nxydump")
+sink = pipeparts.mkappsink(pipeline, head, max_buffers = 1, sync = False)
+sink.connect("new-sample", handler.bufhandler)
+sink.connect("new-preroll", handler.prehandler)
+
+#
+# process segment
+#
+
+if options.verbose:
+	print >>sys.stderr, "putting pipeline into READY state ..."
+if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter READY state")
+if gw_data_source_info.data_source not in ("lvshm", "framexmit"):# FIXME what about nds online?
+	datasource.pipeline_seek_for_gps(pipeline, *gw_data_source_info.seg)
+if options.verbose:
+	print >>sys.stderr, "putting pipeline into PLAYING state ..."
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
+if options.verbose:
+	print >>sys.stderr, "running pipeline ..."
+mainloop.run()
+
+if options.verbose:
+	print >>sys.stderr, "Shutting down"
+

@@ -64,9 +64,9 @@ def togglecomplex_test_01(pipeline, name, width, channels):
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	head = pipeparts.mktogglecomplex(pipeline, head)
-	#head = pipeparts.mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	head = pipeparts.mktogglecomplex(pipeline, head)
-	#head = pipeparts.mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s_out.dump" % name)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "%s_in.dump" % name)

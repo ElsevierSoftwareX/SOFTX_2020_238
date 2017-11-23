@@ -1,5 +1,4 @@
 dist_bin_SCRIPTS = \
-	gstlal_add_spins_to_bank \
 	gstlal_bank_splitter \
 	gstlal_compute_far_from_snr_chisq_histograms \
 	gstlal_iir_bank \
@@ -8,17 +7,26 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_calc_rank_pdfs \
 	gstlal_inspiral_coinc_extractor \
-	gstlal_inspiral_condition_data \
 	gstlal_inspiral_create_prior_diststats \
+	gstlal_inspiral_fake_diststats \
+	gstlal_inspiral_fake_zerolag_counts \
 	gstlal_inspiral_iir_bank_pipe \
+	gstlal_inspiral_injection_snr \
 	gstlal_inspiral_lvalert_background_plotter \
+	gstlal_inspiral_lvalert_generic_plot_uploader \
 	gstlal_inspiral_lvalert_omegascan \
+	gstlal_inspiral_lvalert_pastro_rate_posterior \
 	gstlal_inspiral_lvalert_psd_plotter \
+	gstlal_inspiral_lvalert_sim_equiv \
 	gstlal_inspiral_lvalert_sngls_plotter \
+	gstlal_inspiral_lvalert_snrtimeseries_plotter \
+	gstlal_inspiral_make_snr_pdf \
 	gstlal_inspiral_marginalize_likelihood \
 	gstlal_inspiral_marginalize_likelihoods_online \
 	gstlal_inspiral_pipe \
 	gstlal_inspiral_plot_background \
+	gstlal_inspiral_plot_banks \
+	gstlal_inspiral_plot_kernels \
 	gstlal_inspiral_plot_sensitivity \
 	gstlal_inspiral_plotsummary \
 	gstlal_inspiral_plot_svd_bank \
@@ -26,12 +34,13 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_recompute_online_far \
 	gstlal_inspiral_recompute_online_far_from_gracedb \
 	gstlal_inspiral_reset_likelihood \
+	gstlal_inspiral_split_injections \
 	gstlal_inspiral_svd_bank_pipe \
 	gstlal_ll_inspiral_calculate_range \
-	gstlal_ll_inspiral_create_prior_diststats \
 	gstlal_ll_inspiral_daily_page \
 	gstlal_ll_inspiral_daily_page_online \
 	gstlal_ll_inspiral_get_urls \
+	gstlal_ll_inspiral_gracedb_min_instruments \
 	gstlal_ll_inspiral_gracedb_threshold \
 	gstlal_ll_inspiral_pipe \
 	gstlal_ll_inspiral_plot_sensitivity \

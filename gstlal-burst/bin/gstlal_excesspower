@@ -119,7 +119,7 @@ if verbose:
 	print "Assembling pipeline... this is gstlal_excesspower, version code name %s\n" % __version__,
 
 # Construct the data acquisition and conditioning part of the pipeline
-head = datasource.mkbasicsrc(pipeline, gw_data_source_opts, handler.inst, verbose)
+head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_opts, handler.inst, verbose)
 
 # If we're running online, we need to set up a few things 
 if gw_data_source_opts.data_source in ("lvshm", "framexmit"):

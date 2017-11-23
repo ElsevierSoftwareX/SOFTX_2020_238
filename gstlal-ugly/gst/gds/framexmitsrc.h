@@ -90,8 +90,8 @@ struct _GstGDSFramexmitSrc {
 	pthread_t recv_thread;
 	GstFlowReturn recv_status;
 	GstBuffer *buffer;
-	GMutex *buffer_lock;
-	GCond *received_buffer;
+	GMutex buffer_lock;
+	GCond received_buffer;
 	gboolean unblocked;
 
 	/*

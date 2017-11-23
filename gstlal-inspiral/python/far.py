@@ -46,8 +46,6 @@
 #
 
 
-import bisect
-import copy
 try:
 	from fpconst import NaN, NegInf, PosInf
 except ImportError:
@@ -65,352 +63,28 @@ import random
 import warnings
 from scipy import interpolate
 from scipy import optimize
-# FIXME remove this when the LDG upgrades scipy on the SL6 systems, Debian
-# systems are already fine
-try:
-	from scipy.optimize import curve_fit
-except ImportError:
-	from gstlal.curve_fit import curve_fit
 from scipy import stats
-from scipy.special import ive
-import sqlite3
-sqlite3.enable_callback_tracebacks(True)
 import sys
 
 
-from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
-from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from glue.text_progress_bar import ProgressBar
 import lal
+from lal import rate
+from lalburst import snglcoinc
 import lalsimulation
-from pylal import rate
-from pylal import snglcoinc
 
 
-#
-# ============================================================================
-#
-#			Non-central chisquared pdf
-#
-# ============================================================================
-#
-
-#
-# FIXME this is to work around a precision issue in scipy
-# See: https://github.com/scipy/scipy/issues/1608
-#
-
-def logiv(v, z):
-	# from Abramowitz and Stegun (9.7.1), if mu = 4 v^2, then for large
-	# z:
-	#
-	# Iv(z) ~= exp(z) / (\sqrt(2 pi z)) { 1 - (mu - 1)/(8 z) + (mu - 1)(mu - 9) / (2! (8 z)^2) - (mu - 1)(mu - 9)(mu - 25) / (3! (8 z)^3) ... }
-	# Iv(z) ~= exp(z) / (\sqrt(2 pi z)) { 1 + (mu - 1)/(8 z) [-1 + (mu - 9) / (2 (8 z)) [1 - (mu - 25) / (3 (8 z)) ... ]]}
-	# log Iv(z) ~= z - .5 log(2 pi) log z + log1p((mu - 1)/(8 z) (-1 + (mu - 9)/(16 z) (1 - (mu - 25)/(24 z) ... )))
-
-	with numpy.errstate(divide = "ignore"):
-		a = numpy.log(ive(v,z))
-
-	# because this result will only be used for large z, to silence
-	# divide-by-0 complaints from inside log1p() when z is small we
-	# clip z to 1.
-	mu = 4. * v**2.
-	with numpy.errstate(divide = "ignore", invalid = "ignore"):
-		b = -math.log(2. * math.pi) / 2. * numpy.log(z)
-		z = numpy.clip(z, 1., PosInf)
-		b += numpy.log1p((mu - 1.) / (8. * z) * (-1. + (mu - 9.) / (16. * z) * (1. - (mu - 25.) / (24. * z))))
-
-	return z + numpy.where(z < 1e8, a, b)
-
-# See: http://en.wikipedia.org/wiki/Noncentral_chi-squared_distribution
-def ncx2logpdf(x, k, l):
-	return -math.log(2.) - (x+l)/2. + (k/4.-.5) * (numpy.log(x) - numpy.log(l)) + logiv(k/2.-1., numpy.sqrt(l) * numpy.sqrt(x))
-
-def ncx2pdf(x, k, l):
-	return numpy.exp(ncx2logpdf(x, k, l))
-
-
-#
-# =============================================================================
-#
-#                                Poisson Stuff
-#
-# =============================================================================
-#
-
-
-def assert_probability(f):
-	def g(*args, **kwargs):
-		p = f(*args, **kwargs)
-		if isinstance(p, numpy.ndarray):
-			assert ((0. <= p) & (p <= 1.)).all()
-		else:
-			assert 0. <= p <= 1.
-		return p
-	return g
-
-
-@assert_probability
-@numpy.vectorize
-def poisson_p_not_0(l):
-	"""
-	Return the probability that a Poisson process with a mean rate of l
-	yields a non-zero count.  = 1 - exp(-l).
-	"""
-	assert l >= 0.
-
-	# need -l everywhere
-
-	l = -l
-
-	#
-	# result is closer to 1 than to 0.  use direct evaluation.
-	#
-
-	if l < -0.69314718055994529:
-		return 1. - math.exp(l)
-
-	#
-	# result is closer to 0 than to 1.  use Taylor expansion for exp()
-	# with leading term removed to avoid having to subtract from 1 to
-	# get answer.
-	#
-	# 1 - exp x = -(x + x^2/2! + x^3/3! + ...)
-	#
-
-	s = [l]
-	term = l
-	threshold = -1e-20 * l
-	for n in itertools.count(2):
-		term *= l / n
-		s.append(term)
-		if abs(term) <= threshold:
-			# smallest term was added last, want to compute sum
-			# from smallest to largest
-			s.reverse()
-			s = -sum(s)
-			# if the sum was identically 0 then we've ended up
-			# with -0.0 which we add a special case for to make
-			# positive.
-			assert s >= 0.
-			return s if s else 0.
-
-
-@assert_probability
-def poisson_p_0(l):
-	"""
-	Return the probability that a Poisson process with a mean rate of l
-	yields a zero count.  = exp(-l).
-	"""
-	return numpy.exp(-l)
-
-
-#
-# =============================================================================
-#
-#                                Binomial Stuff
-#
-# =============================================================================
-#
-
-
-@assert_probability
-def fap_after_trials(p, m):
-	"""
-	Given the probability, p, that an event occurs, compute the
-	probability of at least one such event occuring after m independent
-	trials.
-
-	The return value is 1 - (1 - p)^m computed avoiding round-off
-	errors and underflows.  m cannot be negative but need not be an
-	integer.
-
-	Example:
-
-	>>> fap_after_trials(0.5, 1)
-	0.5
-	>>> fap_after_trials(0.066967008463192584, 10)
-	0.5
-	>>> fap_after_trials(0.0069075045629640984, 100)
-	0.5
-	>>> fap_after_trials(0.00069290700954747807, 1000)
-	0.5
-	>>> fap_after_trials(0.000069312315846428086, 10000)
-	0.5
-	>>> fap_after_trials(.000000006931471781576803, 100000000)
-	0.5
-	>>> fap_after_trials(0.000000000000000069314718055994534, 10000000000000000)
-	0.5
-	>>> "%.15g" % fap_after_trials(0.1, 21.854345326782834)
-	'0.9'
-	>>> "%.15g" % fap_after_trials(1e-17, 2.3025850929940458e+17)
-	'0.9'
-	>>> fap_after_trials(0.1, .2)
-	0.020851637639023216
-	"""
-	# when m*p is not >> 1, we can use an expansion in powers of m*p
-	# that allows us to avoid having to compute differences of
-	# probabilities (which would lead to loss of precision when working
-	# with probabilities close to 0 or 1)
-	#
-	# 1 - (1 - p)^m = m p - (m^2 - m) p^2 / 2 +
-	#	(m^3 - 3 m^2 + 2 m) p^3 / 6 -
-	#	(m^4 - 6 m^3 + 11 m^2 - 6 m) p^4 / 24 + ...
-	#
-	# the coefficient of each power of p is a polynomial in m.  if m <<
-	# 1, these polynomials can be approximated by their leading term in
-	# m
-	#
-	# 1 - (1 - p)^m ~= m p + m p^2 / 2 + m p^3 / 3 + m p^4 / 4 + ...
-	#                = -m * log(1 - p)
-	#
-	# NOTE: the ratio of the coefficients of higher-order terms in the
-	# polynomials in m to that of the leading-order term grows with
-	# successive powers of p and eventually the higher-order terms will
-	# dominate.  we assume that this does not happen until the power of
-	# p is sufficiently high that the entire term (polynomial in m and
-	# all) is negligable and the series has been terminated.
-	#
-	# if m is not << 1, then returning to the full expansion, starting
-	# at 0, the nth term in the series is
-	#
-	# -1^n * (m - 0) * (m - 1) * ... * (m - n) * p^(n + 1) / (n + 1)!
-	#
-	# if the (n-1)th term is X, the nth term in the series is
-	#
-	# X * (n - m) * p / (n + 1)
-	#
-	# this recursion relation allows us to compute successive terms
-	# without explicit evaluation of the full numerator and denominator
-	# expressions (each of which quickly overflow).
-	#
-	# for sufficiently large n the denominator dominates and the terms
-	# in the series become small and the sum eventually converges to a
-	# stable value (and if m is an integer the sum is exact in a finite
-	# number of terms).  however, if m*p >> 1 it can take many terms
-	# before the series sum stabilizes, terms in the series initially
-	# grow large and alternate in sign and an accurate result can only
-	# be obtained through careful cancellation of the large values.
-	#
-	# for large m*p we write the expression as
-	#
-	# 1 - (1 - p)^m = 1 - exp(m log(1 - p))
-	#
-	# if p is small, log(1 - p) suffers from loss of precision but the
-	# Taylor expansion of log(1 - p) converges quickly
-	#
-	# m ln(1 - p) = -m p - m p^2 / 2 - m p^3 / 3 - ...
-	#             = -m p * (1 + p / 2 + p^2 / 3 + ...)
-	#
-	# math libraries (including Python's) generally provide log1p(),
-	# which evalutes log(1 + p) accurately for small p.  we rely on
-	# this function to provide results valid both in the small-p and
-	# not small-p regimes.
-	#
-	# if p = 1, log1p() complains about an overflow error.  we trap
-	# these and return the hard-coded answer
-	#
-
-	if m <= 0.:
-		raise ValueError("m = %g must be positive" % m)
-	if not (0. <= p <= 1.):
-		raise ValueError("p = %g must be between 0 and 1 inclusively" % p)
-
-	if m * p < 4.:
-		#
-		# expansion of 1 - (1 - p)^m in powers of p
-		#
-
-		if m < 1e-8:
-			#
-			# small m approximation
-			#
-
-			try:
-				return -m * math.log1p(-p)
-			except OverflowError:
-				#
-				# p is too close to 1.  result is 1
-				#
-
-				return 1.
-
-		#
-		# general m
-		#
-
-		s = []
-		term = -1.
-		for n in itertools.count():
-			term *= (n - m) * p / (n + 1.)
-			s.append(term)
-			# 0th term is always positive
-			if abs(term) <= 1e-18 * s[0]:
-				s.reverse()
-				return sum(s)
-
-	#
-	# compute result as 1 - exp(m * log(1 - p)).  use poisson_p_not_0()
-	# to evaluate 1 - exp() with an algorithm that avoids loss of
-	# precision.
-	#
-
-	try:
-		x = m * math.log1p(-p)
-	except OverflowError:
-		#
-		# p is very close to 1.  we know p <= 1 because it's a
-		# probability, and we know that m*p >= 4 otherwise we
-		# wouldn't have followed this code path, and so because p
-		# is close to 1 and m is not small we can safely assume the
-		# anwer is 1.
-		#
-
-		return 1.
-
-	return float(poisson_p_not_0(-x))
-
-
-fap_after_trials_arr = numpy.vectorize(fap_after_trials)
-
-
-def trials_from_faps(p0, p1):
-	"""
-	Given the probabiity, p0, of an event occuring, and the
-	probability, p1, of at least one such event being observed after
-	some number of independent trials, solve for and return the number
-	of trials, m, that relates the two probabilities.  The three
-	quantities are related by p1 = 1 - (1 - p0)^m.  Generally the
-	return value is not an integer.
-
-	See also fap_after_trials().  Note that if p0 is 0 or 1 then p1
-	must be 0 or 1 respectively, and in both cases m is undefined.
-	Otherwise if p1 is 1 then inf is returned.
-	"""
-	assert 0 <= p0 <= 1	# p0 must be a valid probability
-	assert 0 <= p1 <= 1	# p1 must be a valid probability
-
-	if p0 == 0 or p0 == 1:
-		assert p0 == p1	# require valid relationship
-		# but we still can't solve for m
-		raise ValueError("m undefined")
-	if p1 == 1:
-		return PosInf
-
-	#
-	# m log(1 - p0) = log(1 - p1)
-	#
-
-	return math.log1p(-p1) / math.log1p(-p0)
+from gstlal import stats as gstlalstats
+from gstlal.stats import horizonhistory
+from gstlal.stats import inspiral_extrinsics
 
 
 #
@@ -423,308 +97,6 @@ def trials_from_faps(p0, p1):
 
 
 #
-# Horizon distance record keeping
-#
-
-
-class NearestLeafTree(object):
-	"""
-	A simple binary tree in which look-ups return the value of the
-	closest leaf.  Only float objects are supported for the keys and
-	values.  Look-ups raise KeyError if the tree is empty.
-
-	Example:
-
-	>>> x = NearestLeafTree()
-	>>> x[100.0] = 120.
-	>>> x[104.0] = 100.
-	>>> x[102.0] = 110.
-	>>> x[90.]
-	120.0
-	>>> x[100.999]
-	120.0
-	>>> x[101.001]
-	110.0
-	>>> x[200.]
-	100.0
-	>>> del x[104]
-	>>> x[200.]
-	110.0
-	>>> x.keys()
-	[100.0, 102.0]
-	>>> 102 in x
-	True
-	>>> 103 in x
-	False
-	>>> x.to_xml(u"H1").write()
-	<Array Type="real_8" Name="H1:nearestleaftree:array">
-		<Dim>2</Dim>
-		<Dim>2</Dim>
-		<Stream Delimiter=" " Type="Local">
-			100 102
-			120 110
-		</Stream>
-	</Array>
-	"""
-	def __init__(self, items = ()):
-		"""
-		Initialize a NearestLeafTree.
-
-		Example:
-
-		>>> x = NearestLeafTree()
-		>>> x = NearestLeafTree([(100., 120.), (104., 100.), (102., 110.)])
-		>>> y = {100.: 120., 104.: 100., 102.: 100.}
-		>>> x = NearestLeafTree(y.items())
-		"""
-		self.tree = list(items)
-		self.tree.sort()
-
-	def __setitem__(self, x, val):
-		"""
-		Example:
-
-		>>> x = NearestLeafTree()
-		>>> x[100.:200.] = 0.
-		>>> x[150.] = 1.
-		>>> x
-		NearestLeaftree([(100, 0), (150, 1), (200, 0)])
-		"""
-		if type(x) is slice:
-			# replace all entries in the requested range of
-			# co-ordiantes with two entries, each with the
-			# given value, one at the start of the range and
-			# one at the end of the range.  thus, after this
-			# all queries within that range will return this
-			# value.
-			if x.step is not None:
-				raise ValueError("%s: step not supported" % repr(x))
-			if x.start is None:
-				if not self.tree:
-					raise IndexError("open-ended slice not supported with empty tree")
-				x = slice(self.minkey(), x.stop)
-			if x.stop is None:
-				if not self.tree:
-					raise IndexError("open-ended slice not supported with empty tree")
-				x = slice(x.start, self.maxkey())
-			if x.stop < x.start:
-				raise ValueError("%s: bounds out of order" % repr(x))
-			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
-			hi = bisect.bisect_right(self.tree, (x.stop, PosInf))
-			self.tree[lo:hi] = ((x.start, val), (x.stop, val))
-		else:
-			# replace all entries having the same co-ordinate
-			# with this one
-			lo = bisect.bisect_left(self.tree, (x, NegInf))
-			hi = bisect.bisect_right(self.tree, (x, PosInf))
-			self.tree[lo:hi] = ((x, val),)
-
-	def __getitem__(self, x):
-		if not self.tree:
-			raise KeyError(x)
-		if type(x) is slice:
-			raise ValueError("slices not supported")
-		hi = bisect.bisect_right(self.tree, (x, PosInf))
-		try:
-			x_hi, val_hi = self.tree[hi]
-		except IndexError:
-			x_hi, val_hi = self.tree[-1]
-		if hi == 0:
-			x_lo, val_lo = x_hi, val_hi
-		else:
-			x_lo, val_lo = self.tree[hi - 1]
-		return val_lo if abs(x - x_lo) < abs(x_hi - x) else val_hi
-
-	def __delitem__(self, x):
-		"""
-		Example:
-
-		>>> x = NearestLeafTree([(100., 0.), (150., 1.), (200., 0.)])
-		>>> del x[150.]
-		>>> x
-		NearestLeafTree([(100., 0.), (200., 0.)])
-		>>> del x[:]
-		NearestLeafTree([])
-		"""
-		if type(x) is slice:
-			if x.step is not None:
-				raise ValueError("%s: step not supported" % repr(x))
-			if x.start is None:
-				if not self.tree:
-					# no-op
-					return
-				x = slice(self.minkey(), x.stop)
-			if x.stop is None:
-				if not self.tree:
-					# no-op
-					return
-				x = slice(x.start, self.maxkey())
-			if x.stop < x.start:
-				# no-op
-				return
-			lo = bisect.bisect_left(self.tree, (x.start, NegInf))
-			hi = bisect.bisect_right(self.tree, (x.stop, PosInf))
-			del self.tree[lo:hi]
-		elif not self.tree:
-			raise IndexError(x)
-		else:
-			lo = bisect.bisect_left(self.tree, (x, NegInf))
-			if self.tree[lo][0] != x:
-				raise IndexError(x)
-			del self.tree[lo]
-
-	def __nonzero__(self):
-		return bool(self.tree)
-
-	def __iadd__(self, other):
-		for x, val in other.tree:
-			self[x] = val
-		return self
-
-	def keys(self):
-		return [x for x, val in self.tree]
-
-	def values(self):
-		return [val for x, val in self.tree]
-
-	def items(self):
-		return list(self.tree)
-
-	def min(self):
-		"""
-		Return the minimum value stored in the tree.  This is O(n).
-		"""
-		if not self.tree:
-			raise ValueError("empty tree")
-		return min(val for x, val in self.tree)
-
-	def minkey(self):
-		"""
-		Return the minimum key stored in the tree.  This is O(1).
-		"""
-		if not self.tree:
-			raise ValueError("empty tree")
-		return self.tree[0][0]
-
-	def max(self):
-		"""
-		Return the maximum value stored in the tree.  This is O(n).
-		"""
-		if not self.tree:
-			raise ValueError("empty tree")
-		return max(val for x, val in self.tree)
-
-	def maxkey(self):
-		"""
-		Return the maximum key stored in the tree.  This is O(1).
-		"""
-		if not self.tree:
-			raise ValueError("empty tree")
-		return self.tree[-1][0]
-
-	def __contains__(self, x):
-		try:
-			return bool(self.tree) and self.tree[bisect.bisect_left(self.tree, (x, NegInf))][0] == x
-		except IndexError:
-			return False
-
-	def __len__(self):
-		return len(self.tree)
-
-	def __repr__(self):
-		return "NearestLeaftree([%s])" % ", ".join("(%g, %g)" % item for item in self.tree)
-
-	@classmethod
-	def from_xml(cls, xml, name):
-		return cls(map(tuple, ligolw_array.get_array(xml, u"%s:nearestleaftree" % name).array[:]))
-
-	def to_xml(self, name):
-		return ligolw_array.from_array(u"%s:nearestleaftree" % name, numpy.array(self.tree, dtype = "double"))
-
-
-class HorizonHistories(dict):
-	def __iadd__(self, other):
-		for key, history in other.iteritems():
-			try:
-				self[key] += history
-			except KeyError:
-				self[key] = copy.deepcopy(history)
-		return self
-
-	def minkey(self):
-		"""
-		Return the minimum key stored in the trees.
-		"""
-		minkeys = tuple(history.minkey() for history in self.values() if history)
-		if not minkeys:
-			raise ValueError("empty trees")
-		return min(minkeys)
-
-	def maxkey(self):
-		"""
-		Return the maximum key stored in the trees.
-		"""
-		maxkeys = tuple(history.maxkey() for history in self.values() if history)
-		if not maxkeys:
-			raise ValueError("empty trees")
-		return max(maxkeys)
-
-	def getdict(self, x):
-		return dict((key, value[x]) for key, value in self.iteritems())
-
-	def randhorizons(self):
-		"""
-		Generator yielding a sequence of random horizon distance
-		dictionaries chosen by drawing random times uniformly
-		distributed between the lowest and highest times recorded
-		in the history and returning the dictionary of horizon
-		distances for each of those times.
-		"""
-		x_min = self.minkey()
-		x_max = self.maxkey()
-		getdict = self.getdict
-		rnd = random.uniform
-		while 1:
-			yield getdict(rnd(x_min, x_max))
-
-	def all(self):
-		"""
-		Returns a list of the unique sets of horizon distances
-		recorded in the histories.
-		"""
-		# unique times for which a horizon distance measurement is
-		# available
-		all_x = set(x for value in self.values() for x in value.keys())
-
-		# the unique horizon distances from those times, expressed
-		# as frozensets of instrument/distance pairs
-		result = set(frozenset(self.getdict(x).items()) for x in all_x)
-
-		# return a list of the results converted back to
-		# dictionaries
-		return map(dict, result)
-
-	@classmethod
-	def from_xml(cls, xml, name):
-		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"%s:horizonhistories" % name]
-		try:
-			xml, = xml
-		except ValueError:
-			raise ValueError("document must contain exactly 1 HorizonHistories named '%s'" % name)
-		keys = [elem.Name.replace(u":nearestleaftree", u"") for elem in xml.getElementsByTagName(ligolw.Array.tagName) if elem.hasAttribute(u"Name") and elem.Name.endswith(u":nearestleaftree")]
-		self = cls()
-		for key in keys:
-			self[key] = NearestLeafTree.from_xml(xml, key)
-		return self
-
-	def to_xml(self, name):
-		xml = ligolw.LIGO_LW({u"Name": u"%s:horizonhistories" % name})
-		for key, value in self.items():
-			xml.appendChild(value.to_xml(key))
-		return xml
-
-
-#
 # Inspiral-specific CoincParamsDistributions sub-class
 #
 
@@ -732,17 +104,30 @@ class HorizonHistories(dict):
 class CoincParams(dict):
 	# place-holder class to allow params dictionaries to carry
 	# attributes as well
-	__slots__ = ("horizons",)
+	__slots__ = ("horizons","t_offset","coa_phase")
 
 
-class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
+class ThincaCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 	ligo_lw_name_suffix = u"gstlal_inspiral_coincparamsdistributions"
 
-	instrument_categories = snglcoinc.InstrumentCategories()
+	#
+	# Default content handler for loading CoincParamsDistributions
+	# objects from XML documents
+	#
+
+	@ligolw_array.use_in
+	@ligolw_param.use_in
+	@lsctables.use_in
+	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+		pass
 
 	# range of SNRs covered by this object
-	# FIXME:  must ensure lower boundary matches search threshold
 	snr_min = 4.
+
+	# load/initialize an SNRPDF instance for use by all instances of
+	# this class
+	SNRPDF = inspiral_extrinsics.SNRPDF.load()
+	assert SNRPDF.snr_cutoff == snr_min
 
 	# with what weight to include the denominator PDFs in the
 	# numerator.  numerator will be
@@ -752,164 +137,191 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 	#   accidental_weight * (measured denominator)
 	numerator_accidental_weight = 0.
 
-	# if two horizon distances, D1 and D2, differ by less than
-	#
-	#	| ln(D1 / D2) | <= log_distance_tolerance
-	#
-	# then they are considered to be equal for the purpose of recording
-	# horizon distance history, generating joint SNR PDFs, and so on.
-	# if the smaller of the two is < min_ratio * the larger then the
-	# smaller is treated as though it were 0.
-	# FIXME:  is this choice of distance quantization appropriate?
-	@staticmethod
-	def quantize_horizon_distances(horizon_distances, log_distance_tolerance = PosInf, min_ratio = 0.1):
-		horizon_distance_norm = max(horizon_distances.values())
-		assert horizon_distance_norm >= 0.
-		# check for no-op:  all distances are 0.
-		if horizon_distance_norm == 0.:
-			return dict.fromkeys(horizon_distances, 0.)
-		# check for no-op:  map all (non-zero) values to 1
-		if math.isinf(log_distance_tolerance):
-			return dict((instrument, 1. if horizon_distance > 0. else 0.) for instrument, horizon_distance in horizon_distances.items())
-		min_distance = min_ratio * horizon_distance_norm
-		return dict((instrument, (0. if horizon_distance < min_distance else math.exp(round(math.log(horizon_distance / horizon_distance_norm) / log_distance_tolerance) * log_distance_tolerance))) for instrument, horizon_distance in horizon_distances.items())
+	# binnings (initialized in .__init__()
+	binnings = {}
+	pdf_from_rates_func = {}
 
-	# binnings (filter funcs look-up initialized in .__init__()
-	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(3.6, 70., 600), rate.ATanLogarithmicBins(.001, 0.5, 300)))
-	binnings = {
-		"instruments": rate.NDBins((rate.LinearBins(0.5, instrument_categories.max() + 0.5, instrument_categories.max()),)),
-		"H1_snr_chi": snr_chi_binning,
-		"H2_snr_chi": snr_chi_binning,
-		"H1H2_snr_chi": snr_chi_binning,
-		"L1_snr_chi": snr_chi_binning,
-		"V1_snr_chi": snr_chi_binning,
-		"E1_snr_chi": snr_chi_binning,
-		"E2_snr_chi": snr_chi_binning,
-		"E3_snr_chi": snr_chi_binning,
-		"E0_snr_chi": snr_chi_binning
-	}
-	del snr_chi_binning
+	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2, signal_rate = 1.0, delta_t = 0.005, process_id = None, **kwargs):
+		#
+		# check input
+		#
 
-	def __init__(self, *args, **kwargs):
-		super(ThincaCoincParamsDistributions, self).__init__(*args, **kwargs)
-		self.horizon_history = HorizonHistories()
-		self.pdf_from_rates_func = {
+		assert "V1" not in instruments	# disallow Virgo from initialization FIXME:  remove after O2
+		if min_instruments < 1:
+			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
+		if min_instruments > len(instruments):
+			raise ValueError("not enough instruments (%s) to satisfy min_instruments=%d" % (", ".join(sorted(instruments)), min_instruments))
+		if delta_t < 0.:
+			raise ValueError("delta_t=%g must be >= 0" % delta_t)
+
+		# in the parent class this is a class attribute, but we use
+		# it as an instance attribute here
+		self.binnings = dict.fromkeys(("%s_snr_chi" % instrument for instrument in instruments), rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280))))
+		self.binnings.update({
+			"instruments": rate.NDBins((snglcoinc.InstrumentBins(instruments),)),
+			"singles": rate.NDBins((rate.HashableBins(instruments),))
+		})
+
+		self.pdf_from_rates_func = dict.fromkeys(("%s_snr_chi" % instrument for instrument in instruments), self.pdf_from_rates_snrchi2)
+		self.pdf_from_rates_func.update({
 			"instruments": self.pdf_from_rates_instruments,
-			"H1_snr_chi": self.pdf_from_rates_snrchi2,
-			"H2_snr_chi": self.pdf_from_rates_snrchi2,
-			"H1H2_snr_chi": self.pdf_from_rates_snrchi2,
-			"L1_snr_chi": self.pdf_from_rates_snrchi2,
-			"V1_snr_chi": self.pdf_from_rates_snrchi2,
-			"E1_snr_chi": self.pdf_from_rates_snrchi2,
-			"E2_snr_chi": self.pdf_from_rates_snrchi2,
-			"E3_snr_chi": self.pdf_from_rates_snrchi2,
-			"E0_snr_chi": self.pdf_from_rates_snrchi2,
-		}
+			"singles": lambda *args: None
+		})
+
+		# this can't be done until the binnings attribute has been
+		# populated
+		self.zero_lag_rates = dict((param, rate.BinnedArray(binning)) for param, binning in self.binnings.items())
+		self.background_rates = dict((param, rate.BinnedArray(binning)) for param, binning in self.binnings.items())
+		self.injection_rates = dict((param, rate.BinnedArray(binning)) for param, binning in self.binnings.items())
+		self.zero_lag_pdf = {}
+		self.background_pdf = {}
+		self.injection_pdf = {}
+		self.zero_lag_lnpdf_interp = {}
+		self.background_lnpdf_interp = {}
+		self.injection_lnpdf_interp = {}
+		self.process_id = process_id
+
+		# record of horizon distances for all instruments in the
+		# network
+		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in instruments)
+
+		# the minimum number of instruments required to form a
+		# candidate
+		self.min_instruments = min_instruments
+
+		# the mean instrinsic signal rate for the region of
+		# parameter space tracked by this instance.  the units are
+		# arbitrary, but must be consistent across regions of
+		# parameter space
+		self.signal_rate = signal_rate
+
+		# the coincidence window.  needed for modelling instrument
+		# combination rates
+		self.delta_t = delta_t
 
 		# set to True to include zero-lag histograms in background model
 		self.zero_lag_in_background = False
 
+	@property
+	def instruments(self):
+		return frozenset(self.horizon_history)
+
+	@staticmethod
+	def addbinnedarrays(rate_target_dict, rate_source_dict, pdf_target_dict, pdf_source_dict):
+		"""
+		For internal use.
+		"""
+		weight_target = {}
+		weight_source = {}
+		for name, binnedarray in rate_source_dict.items():
+			if name in rate_target_dict:
+				weight_target[name] = rate_target_dict[name].array.sum()
+				weight_source[name] = rate_source_dict[name].array.sum()
+				rate_target_dict[name] += binnedarray
+			else:
+				rate_target_dict[name] = binnedarray.copy()
+		for name, binnedarray in pdf_source_dict.items():
+			if name in pdf_target_dict:
+				binnedarray = binnedarray.copy()
+				binnedarray.array *= weight_source[name]
+				pdf_target_dict[name].array *= weight_target[name]
+				pdf_target_dict[name] += binnedarray
+				pdf_target_dict[name].array /= weight_source[name] + weight_target[name]
+			else:
+				pdf_target_dict[name] = binnedarray.copy()
+
 	def __iadd__(self, other):
+		if type(other) != type(self):
+			raise TypeError(other)
+
 		# NOTE:  because we use custom PDF constructions, the stock
 		# .__iadd__() method for this class will not result in
 		# valid PDFs.  the rates arrays *are* handled correctly by
 		# the .__iadd__() method, by fiat, so just remember to
 		# invoke .finish() to get the PDFs in shape afterwards
-		super(ThincaCoincParamsDistributions, self).__iadd__(other)
+
+		# FIXME: this operation is invalid for
+		# ThincaCoincParamsDistributions from different parts of
+		# the parameter space.  each ThincaCoincParamsDistributions
+		# should carry an identifier associating it with a template
+		# bank bin and this method should refuse to add instances
+		# from different bins unless some sort of --force override
+		# is enabled.  for now we rely on the pipeline's workflow
+		# code to not do the wrong thing.
+		if self.instruments != other.instruments:
+			raise ValueError("incompatible instrument sets")
+		if self.min_instruments != other.min_instruments:
+			raise ValueError("incompatible minimum number of instruments")
+		if self.delta_t != other.delta_t:
+			raise ValueError("incompatible delta_t coincidence thresholds")
+
+		self.addbinnedarrays(self.zero_lag_rates, other.zero_lag_rates, self.zero_lag_pdf, other.zero_lag_pdf)
+		self.addbinnedarrays(self.background_rates, other.background_rates, self.background_pdf, other.background_pdf)
+		self.addbinnedarrays(self.injection_rates, other.injection_rates, self.injection_pdf, other.injection_pdf)
 		self.horizon_history += other.horizon_history
+
+		#
+		# rebuild interpolators
+		#
+
+		self._rebuild_interpolators()
+
+		#
+		# done
+		#
+
 		return self
 
-	#
-	# class-level cache of pre-computed SNR joint PDFs.  structure is like
-	#
-	# 	= {
-	#		frozenset(("H1", ...)), frozenset([("H1", horiz_dist), ("L1", horiz_dist), ...]): (InterpBinnedArray, BinnedArray, age),
-	#		...
-	#	}
-	#
-	# at most max_cached_snr_joint_pdfs will be stored.  if a PDF is
-	# required that cannot be found in the cache, and there is no more
-	# room, the oldest PDF (the one with the *smallest* age) is pop()ed
-	# to make room, and the new one added with its age set to the
-	# highest age in the cache + 1.
-	#
-	# 5**3 * 4 = 5 quantizations in 3 instruments, 4 combos per
-	# quantized choice of horizon distances
-	#
+	def copy(self):
+		new = type(self)(process_id = self.process_id)
+		new += self
+		return new
 
-	max_cached_snr_joint_pdfs = int(5**3 * 4)
-	snr_joint_pdf_cache = {}
-
-	def snr_joint_pdf_keyfunc(self, instruments, horizon_distances):
+	def coinc_params(self, events, offsetvector, mode = "ranking"):
 		#
-		# key for cache:  two element tuple, first element is
-		# frozen set of instruments for which this is the PDF,
-		# second element is frozen set of (instrument, horizon
-		# distance) pairs for all instruments in the network.
-		# horizon distances are normalized to fractions of the
-		# largest among them and then the fractions aquantized to
-		# integer powers of a common factor
-		#
-		return frozenset(instruments), frozenset(self.quantize_horizon_distances(horizon_distances).items())
-
-	def get_snr_joint_pdf(self, instruments, horizon_distances, verbose = False):
-		#
-		# retrieve cached PDF, or build new one
+		# strip Virgo triggers.  FIXME:  remove after O2
 		#
 
-		key = self.snr_joint_pdf_keyfunc(instruments, horizon_distances)
-		try:
-			pdf = self.snr_joint_pdf_cache[key][0]
-		except KeyError:
-			# no entries in cache for this instrument combo and
-			# set of horizon distances
-			if self.snr_joint_pdf_cache:
-				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
-			else:
-				age = 0
-			if verbose:
-				print >>sys.stderr, "For horizon distances %s" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
-				progressbar = ProgressBar(text = "%s SNR PDF" % ", ".join(sorted(key[0])))
-			else:
-				progressbar = None
-			binnedarray = self.joint_pdf_of_snrs(key[0], dict(key[1]), progressbar = progressbar)
-			del progressbar
-			lnbinnedarray = binnedarray.copy()
-			with numpy.errstate(divide = "ignore"):
-				lnbinnedarray.array = numpy.log(lnbinnedarray.array)
-			pdf = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf)
-			self.snr_joint_pdf_cache[key] = pdf, binnedarray, age
-			# if the cache is full, delete the entry with the
-			# smallest age
-			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
-				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
-			if verbose:
-				print >>sys.stderr, "%d/%d slots in SNR PDF cache now in use" % (len(self.snr_joint_pdf_cache), self.max_cached_snr_joint_pdfs)
-		return pdf
-
-	def coinc_params(self, events, offsetvector):
-		#
-		# NOTE:  unlike the burst codes, this function is expected
-		# to work with single-instrument event lists as well, as
-		# it's output is used to populate the single-instrument
-		# background bin counts.
-		#
+		assert len(events) != 0, "no triggers in candidate"
+		events = tuple(event for event in events if event.ifo != "V1")
+		assert len(events) != 0, "no triggers from allowed instruments in candidate"
 
 		#
-		# 2D (snr, \chi^2) values.  don't allow both H1 and H2 to
-		# both contribute parameters to the same coinc.  if both
-		# have participated favour H1
+		# 2D (snr, \chi^2) values.
 		#
 
 		params = CoincParams(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events)
-		if "H2_snr_chi" in params and "H1_snr_chi" in params:
-			del params["H2_snr_chi"]
 
 		#
 		# instrument combination
 		#
 
-		params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(event.ifo for event in events),)
+		if mode == "ranking":
+			if len(events) < self.min_instruments:
+				raise ValueError("candidates require >= %d events in ranking mode" % self.min_instruments)
+			params["instruments"] = (frozenset(event.ifo for event in events),)
+		elif mode == "counting":
+			if len(events) != 1:
+				raise ValueError("only singles are allowed in counting mode")
+			# we don't require an offsetvector in counting mode
+			# because that would be nonsensical, but we need
+			# something for the code below to be happy
+			if offsetvector is None:
+				offsetvector = {events[0].ifo: 0.0}
+		else:
+			raise ValueError("invalid mode '%s'" % mode)
+
+		#
+		# record coa_phase and offset from epoch.  the epoch is
+		# chosen to be the time-slid end-time of the 0th trigger.
+		# the objective here is to allow the time-shifted end times
+		# to be converted to floats without loss of precision in
+		# such a way that singles always have an offset of 0.
+		#
+
+		params.coa_phase = dict((event.ifo, event.coa_phase) for event in events)
+		ref, ref_offset = events[0].end, offsetvector[events[0].ifo]
+		params.t_offset = dict((event.ifo, float(event.end - ref) + offsetvector[event.ifo] - ref_offset) for event in events)
 
 		#
 		# record the horizon distances.  pick one trigger at random
@@ -918,9 +330,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# horizon history is keyed by floating-point values (don't
 		# need nanosecond precision for this).  NOTE:  this is
 		# attached as a property instead of going into the
-		# dictionary to not confuse the stock lnP_noise(),
-		# lnP_signal(), and friends methods.
+		# dictionary to not confuse denominator(), numerator(),
+		# and friends methods.
 		#
+		# FIXME:  this should use .weighted_mean() to get an
+		# average over a interval
 
 		params.horizons = self.horizon_history.getdict(float(events[0].end))
 		# for instruments that provided triggers,
@@ -941,21 +355,116 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		return params
 
-	def lnP_signal(self, params):
-		# NOTE:  lnP_signal() and lnP_noise() (not shown here) both
-		# omit the factor P(horizon distance) = 1/T because it is
-		# identical in the numerator and denominator and so factors
-		# out of the ranking statistic, and because it is constant
-		# and so equivalent to an irrelevant normalization factor
-		# in the ranking statistic PDF sampler code.
+	def add_zero_lag(self, param_dict, weight = 1.0):
+		"""
+		Increment a bin in one or more of the observed data (or
+		"zero lag") histograms by weight (default 1).  The names of
+		the histograms to increment, and the parameters identifying
+		the bin in each histogram, are given by the param_dict
+		dictionary.
+		"""
+		for param, value in param_dict.items():
+			try:
+				self.zero_lag_rates[param][value] += weight
+			except IndexError:
+				# param value out of range
+				pass
 
-		# (instrument, snr) pairs sorted alphabetically by
-		# instrument name
-		snrs = sorted((name.split("_")[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
-		# retrieve the SNR PDF
-		snr_pdf = self.get_snr_joint_pdf((instrument for instrument, rho in snrs), params.horizons)
-		# evaluate it (snrs are alphabetical by instrument)
-		lnP_signal = snr_pdf(*tuple(rho for instrument, rho in snrs))
+	def add_background(self, param_dict, weight = 1.0):
+		"""
+		Increment a bin in one or more of the noise (or
+		"background") histograms by weight (default 1).  The names
+		of the histograms to increment, and the parameters
+		identifying the bin in each histogram, are given by the
+		param_dict dictionary.
+		"""
+		for param, value in param_dict.items():
+			try:
+				self.background_rates[param][value] += weight
+			except IndexError:
+				# param value out of range
+				pass
+
+	def add_injection(self, param_dict, weight = 1.0):
+		"""
+		Increment a bin in one or more of the signal (or
+		"injection") histograms by weight (default 1).  The names
+		of the histograms to increment, and the parameters
+		identifying the bin in each histogram, are given by the
+		param_dict dictionary.
+		"""
+		for param, value in param_dict.items():
+			try:
+				self.injection_rates[param][value] += weight
+			except IndexError:
+				# param value out of range
+				pass
+
+	def denominator(self, params):
+		"""
+		From a parameter value dictionary as returned by
+		self.coinc_params(), compute and return the natural
+		logarithm of the noise probability density at that point in
+		parameter space.
+
+		The .finish() method must have been invoked before this
+		method does meaningful things.  No attempt is made to
+		ensure the .finish() method has been invoked nor, if it has
+		been invoked, that no manipulations have occured that might
+		require it to be re-invoked (e.g., the contents of the
+		parameter distributions have been modified and require
+		re-normalization).
+
+		This default implementation assumes the individual PDFs
+		containined in the noise dictionary are for
+		statistically-independent random variables, and computes
+		and returns the logarithm of their product.  Sub-classes
+		that require more sophisticated calculations can override
+		this method.
+		"""
+		# evaluate dt and dphi parameters
+		lnP_dt_dphi_noise = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "noise")
+
+		# evaluate the rest
+		__getitem__ = self.background_lnpdf_interp.__getitem__
+		return lnP_dt_dphi_noise + sum(__getitem__(name)(*value) for name, value in params.items())
+
+	def numerator(self, params):
+		"""
+		From a parameter value dictionary as returned by
+		self.coinc_params(), compute and return the natural
+		logarithm of the signal probability density at that point
+		in parameter space.
+
+		The .finish() method must have been invoked before this
+		method does meaningful things.  No attempt is made to
+		ensure the .finish() method has been invoked nor, if it has
+		been invoked, that no manipulations have occured that might
+		require it to be re-invoked (e.g., the contents of the
+		parameter distributions have been modified and require
+		re-normalization).
+
+		This default implementation assumes the individual PDFs
+		containined in the signal dictionary are for
+		statistically-independent random variables, and computes
+		and returns the logarithm of their product.  Sub-classes
+		that require more sophisticated calculations can override
+		this method.
+		"""
+		# NOTE:  numerator() and denominator() both omit the factor
+		# P(horizon distance) = 1/T because it is identical in the
+		# numerator and denominator and so factors out of the
+		# ranking statistic, and because it is constant and so
+		# equivalent to an irrelevant normalization factor in the
+		# ranking statistic PDF sampler code.
+
+		# instrument-->snr mapping
+		snrs = dict((name.split("_", 1)[0], value[0]) for name, value in params.items() if name.endswith("_snr_chi"))
+		# evaluate SNR PDF
+		lnP_snr_signal = self.SNRPDF.lnP_snrs(snrs, params.horizons, self.min_instruments)
+
+		# evaluate dt and dphi parameters
+		lnP_dt_dphi_signal = inspiral_extrinsics.lnP_dt_dphi(params, self.delta_t, model = "signal")
 
 		# FIXME:  P(instruments | signal) needs to depend on
 		# horizon distances.  here we're assuming whatever
@@ -963,14 +472,18 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# probabilities to is OK.  we probably need to cache these
 		# and save them in the XML file, too, like P(snrs | signal,
 		# instruments)
-		return lnP_signal + super(ThincaCoincParamsDistributions, self).lnP_signal(params)
+		__getitem__ = self.injection_lnpdf_interp.__getitem__
+		return lnP_snr_signal + lnP_dt_dphi_signal + sum(__getitem__(name)(*value) for name, value in params.items())
 
 	def add_snrchi_prior(self, rates_dict, n, prefactors_range, df, inv_snr_pow = 4., verbose = False):
 		if verbose:
 			print >>sys.stderr, "synthesizing signal-like (SNR, \\chi^2) distributions ..."
 		if df <= 0.:
 			raise ValueError("require df >= 0: %s" % repr(df))
-		pfs = numpy.logspace(numpy.log10(prefactors_range[0]), numpy.log10(prefactors_range[1]), 100)
+		if set(n) != self.instruments:
+			raise ValueError("n must provide a count for exactly each of %s" % ", ".join(sorted(self.instruments)))
+		#pfs = numpy.logspace(numpy.log10(prefactors_range[0]), numpy.log10(prefactors_range[1]), 100)
+		pfs = numpy.linspace((prefactors_range[0]), (prefactors_range[1]), 100)
 		for instrument, number_of_events in n.items():
 			binarr = rates_dict["%s_snr_chi" % instrument]
 			if verbose:
@@ -1003,7 +516,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			for pf in pfs:
 				if progressbar is not None:
 					progressbar.increment()
-				new_binarr.array[snrindices, rcossindices] += ncx2pdf(snrchi2, df, numpy.array([pf * snrs2]).T)
+				new_binarr.array[snrindices, rcossindices] += gstlalstats.ncx2pdf(snrchi2, df, numpy.array([pf * snrs2]).T)
 
 			# Add an SNR power law in with the differentials
 			dsnrdchi2 = numpy.outer(dsnr / snr**inv_snr_pow, drcoss)
@@ -1020,6 +533,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		# extrapolated background.
 		#
 
+		if set(n) != self.instruments:
+			raise ValueError("n must provide a count for exactly each of %s" % ", ".join(sorted(self.instruments)))
 		if verbose:
 			print >>sys.stderr, "adding tilt to (SNR, \\chi^2) background PDFs ..."
 		for instrument, number_of_events in n.items():
@@ -1029,137 +544,56 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 			# storage
 			new_binarr = rate.BinnedArray(binarr.bins)
 
-			snr = new_binarr.bins[0].centres()
-			rcoss = new_binarr.bins[1].centres()
+			snrindices, rcossindices = new_binarr.bins[self.snr_min:1e10, 1e-6:1e2]
+			snr, dsnr = new_binarr.bins[0].centres()[snrindices], new_binarr.bins[0].upper()[snrindices] - new_binarr.bins[0].lower()[snrindices]
+			rcoss, drcoss = new_binarr.bins[1].centres()[rcossindices], new_binarr.bins[1].upper()[rcossindices] - new_binarr.bins[1].lower()[rcossindices]
 
-			# ignore overflows in SNR^6.  correct answer is 0
-			# when that happens.
-			with numpy.errstate(over = "ignore"):
-				psnr = numpy.exp(-(snr**2 - 6.**2)/ 2.) + (1 + 6.**6) / (1. + snr**6)
 			prcoss = numpy.ones(len(rcoss))
+			psnr = 1e-8 * snr**-6 #(1. + 10**6) / (1. + snr**6)
+			psnrdcoss = numpy.outer(numpy.exp(-(snr - 2**.5)**2/ 2.) * dsnr, numpy.exp(-(rcoss - .05)**2 / .00015*2) * drcoss)
 
-			# the bins at the edges end up with infinite volume
-			# elements.  the PDF should be 0 in those bins so
-			# we 0 their volume elements to force that result
-			dsnr_drcoss = new_binarr.bins.volumes()
-			dsnr_drcoss[~numpy.isfinite(dsnr_drcoss)] = 0.
-			new_binarr.array[:,:] = numpy.outer(psnr, prcoss) * dsnr_drcoss
-
+			#new_binarr.array[snrindices, rcossindices] = numpy.outer(psnr * dsnr, prcoss * drcoss)
+			new_binarr.array[snrindices, rcossindices] += psnrdcoss 
 			# Normalize what's left to the requested count.
-			# Give .1% of the requested events to this portion of the model
-			new_binarr.array *= 0.001 * number_of_events / new_binarr.array.sum()
+			# Give 99.999999% of the requested events to this portion of the model
+			new_binarr.array *= 0.99 * number_of_events / new_binarr.array.sum()
 			# add to raw counts
-			getattr(self, ba)["instruments"][self.instrument_categories.category(frozenset([instrument])),] += number_of_events
+			getattr(self, ba)["singles"][instrument,] += number_of_events
 			binarr += new_binarr
-
-		# Give 99.9% of the requested events to the "glitch model"
-		self.add_snrchi_prior(getattr(self, ba), dict((ifo, x * 0.999) for ifo, x in n.items()), prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, verbose = verbose)
-
-	def add_instrument_combination_counts(self, segs, verbose = False):
-		#
-		# populate instrument combination binning.  assume the
-		# single-instrument categories in the background rates
-		# instruments binning provide the background event counts
-		# for the segment lists provided.  NOTE:  we're using the
-		# counts in the single-instrument categories for input, and
-		# the output only goes into the 2-instrument and higher
-		# categories, so this procedure does not result in a loss
-		# of information and can be performed multiple times
-		# without altering the statistics of the input data.
-		#
-		# FIXME:  we need to know the coincidence window to do this
-		# correctly.  we assume 5ms.  get the correct number.
-		#
-		# FIXME:  should this be done in .finish()?  but we'd need
-		# the segment lists
-
-		if verbose:
-			print >>sys.stderr, "synthesizing background-like instrument combination probabilities ..."
-		coincsynth = snglcoinc.CoincSynthesizer(
-			eventlists = dict((instrument, self.background_rates["instruments"][self.instrument_categories.category([instrument]),]) for instrument in segs),
-			segmentlists = segs,
-			delta_t = 0.005
-		)
-		# assume the single-instrument events are being collected
-		# in several disjoint bins so that events from different
-		# instruments that occur at the same time but in different
-		# bins are not coincident.  if there are M bins for each
-		# instrument, the probability that N events all occur in
-		# the same bin is (1/M)^(N-1).  the number of bins, M, is
-		# therefore given by the (N-1)th root of the ratio of the
-		# predicted number of N-instrument coincs to the observed
-		# number of N-instrument coincs.  use the average of M
-		# measured from all instrument combinations.
-		#
-		# finding M by comparing predicted to observed zero-lag
-		# counts assumes we are in a noise-dominated regime, i.e.,
-		# that the observed relative abundances of coincs are not
-		# significantly contaminated by signals.  if signals are
-		# present in large numbers, and occur in different
-		# abundances than the noise events, averaging the apparent
-		# M over different instrument combinations helps to
-		# suppress the contamination.  NOTE:  the number of
-		# coincidence bins, M, should be very close to the number
-		# of templates (experience shows that it is not equal to
-		# the number of templates, though I don't know why).
-		livetime = get_live_time(segs)
-		N = 0
-		coincidence_bins = 0.
-		for instruments in coincsynth.all_instrument_combos:
-			predicted_count = coincsynth.rates[frozenset(instruments)] * livetime
-			observed_count = self.zero_lag_rates["instruments"][self.instrument_categories.category(instruments),]
-			if predicted_count > 0 and observed_count > 0:
-				coincidence_bins += (predicted_count / observed_count)**(1. / (len(instruments) - 1))
-				N += 1
-		assert N > 0
-		assert coincidence_bins > 0.
-		coincidence_bins /= N
-		if verbose:
-			print >>sys.stderr, "\tthere seems to be %g effective disjoint coincidence bin(s)" % coincidence_bins
-		assert coincidence_bins >= 1.
-		# convert single-instrument event rates to rates/bin
-		coincsynth.mu = dict((instrument, rate / coincidence_bins) for instrument, rate in coincsynth.mu.items())
-		# now compute the expected coincidence rates/bin, then
-		# multiply by the number of bins to get the expected
-		# coincidence rates
-		for instruments, count in coincsynth.mean_coinc_count.items():
-			self.background_rates["instruments"][self.instrument_categories.category(instruments),] = count * coincidence_bins
+		# Give 0.00000001% of the requested events to the "glitch model"
+		self.add_snrchi_prior(getattr(self, ba), dict((ifo, x * 0.01) for ifo, x in n.items()), prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
 	def add_foreground_snrchi_prior(self, n, prefactors_range = (0.01, 0.25), df = 40, inv_snr_pow = 4., verbose = False):
 		self.add_snrchi_prior(self.injection_rates, n, prefactors_range, df, inv_snr_pow = inv_snr_pow, verbose = verbose)
 
-	def populate_prob_of_instruments_given_signal(self, segs, n = 1., verbose = False):
-		#
-		# populate instrument combination binning
-		#
-
-		assert len(segs) > 1
-		assert set(self.horizon_history) <= set(segs)
-
-		# probability that a signal is detectable by each of the
-		# instrument combinations
-		P = P_instruments_given_signal(self.horizon_history)
-
-		# multiply by probability that enough instruments are on to
-		# form each of those combinations
-		#
-		# FIXME:  if when an instrument is off it has its horizon
-		# distance set to 0 in the horizon history, then this step
-		# will not be needed because the marginalization over
-		# horizon histories will already reflect the duty cycles.
-		P_live = snglcoinc.CoincSynthesizer(segmentlists = segs).P_live
-		for instruments in P:
-			P[instruments] *= sum(sorted(p for on_instruments, p in P_live.items() if on_instruments >= instruments))
-		# renormalize
-		total = sum(sorted(P.values()))
-		for instruments in P:
-			P[instruments] /= total
-		# populate binning from probabilities
-		for instruments, p in P.items():
-			self.injection_rates["instruments"][self.instrument_categories.category(instruments),] += n * p
-
 	def _rebuild_interpolators(self):
-		super(ThincaCoincParamsDistributions, self)._rebuild_interpolators()
+		"""
+		Initialize the interp dictionaries from the discretely
+		sampled PDF data.  For internal use only.
+		"""
+		self.zero_lag_lnpdf_interp.clear()
+		self.background_lnpdf_interp.clear()
+		self.injection_lnpdf_interp.clear()
+		# build interpolators
+		keys = set(self.zero_lag_rates)
+		keys.remove("instruments")
+		keys.remove("singles")
+		def mkinterp(binnedarray):
+			with numpy.errstate(invalid = "ignore"):
+				assert not (binnedarray.array < 0.).any()
+			binnedarray = binnedarray.copy()
+			with numpy.errstate(divide = "ignore"):
+				binnedarray.array = numpy.log(binnedarray.array)
+			return rate.InterpBinnedArray(binnedarray, fill_value = NegInf)
+		for key, binnedarray in self.zero_lag_pdf.items():
+			if key in keys:
+				self.zero_lag_lnpdf_interp[key] = mkinterp(binnedarray)
+		for key, binnedarray in self.background_pdf.items():
+			if key in keys:
+				self.background_lnpdf_interp[key] = mkinterp(binnedarray)
+		for key, binnedarray in self.injection_pdf.items():
+			if key in keys:
+				self.injection_lnpdf_interp[key] = mkinterp(binnedarray)
 
 		#
 		# the instrument combination "interpolators" are
@@ -1168,11 +602,10 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		def mkinterp(binnedarray):
+			binnedarray = binnedarray.copy()
 			with numpy.errstate(divide = "ignore"):
-				# need to insert an element at the start to
-				# get the binning indexes to map the
-				# correct locations in the array
-				return numpy.hstack(([NaN], numpy.log(binnedarray.array))).__getitem__
+				binnedarray.array = numpy.log(binnedarray.array)
+			return lambda *coords: binnedarray[coords]
 		if "instruments" in self.background_pdf:
 			self.background_lnpdf_interp["instruments"] = mkinterp(self.background_pdf["instruments"])
 		if "instruments" in self.injection_pdf:
@@ -1189,24 +622,20 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		if self.zero_lag_in_background and pdf_dict is self.background_pdf:
 			binnedarray.array += self.zero_lag_rates[key].array
 
-		# be sure the single-instrument categories are zeroed.
-		for category in self.instrument_categories.values():
-			binnedarray[category,] = 0
-
 		# optionally mix denominator into numerator
 		if pdf_dict is self.injection_pdf and self.numerator_accidental_weight:
-			denom = self.background_rates[key].array.copy()
+			denom = self.background_rates[key].copy()
 			if self.zero_lag_in_background:
-				denom += self.zero_lag_rates[key].array
-			for category in self.instrument_categories.values():
-				denom[category,] = 0
-			binnedarray.array += denom * (binnedarray.array.sum() / denom.sum() * self.numerator_accidental_weight)
+				denom.array += self.zero_lag_rates[key].array
+			for instrument in reduce(lambda a, b: a | b, denom.bins[0].containers):
+				denom[frozenset([instrument]),] = 0
+			binnedarray.array += denom.array * (binnedarray.array.sum() / denom.array.sum() * self.numerator_accidental_weight)
 
 		# instrument combos are probabilities, not densities.
 		with numpy.errstate(invalid = "ignore"):
 			binnedarray.array /= binnedarray.array.sum()
 
-	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = 10., chisq_kernel_width = 0.1,  sigma = 10.):
+	def pdf_from_rates_snrchi2(self, key, pdf_dict, snr_kernel_width_at_8 = 8., chisq_kernel_width = 0.08,  sigma = 10.):
 		# get the binned array we're going to process
 		binnedarray = pdf_dict[key]
 
@@ -1222,7 +651,7 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				denom += self.zero_lag_rates[key].array
 			binnedarray.array += denom * (binnedarray.array.sum() / denom.sum() * self.numerator_accidental_weight)
 
-		numsamples = binnedarray.array.sum() / 10. + 1. # Be extremely conservative and assume only 1 in 10 samples are independent.
+		numsamples = max(binnedarray.array.sum() / 10. + 1., 1e6) # Be extremely conservative and assume only 1 in 10 samples are independent, but assume there are always at least 1e7 samples.
 		# construct the density estimation kernel
 		snr_bins = binnedarray.bins[0]
 		chisq_bins = binnedarray.bins[1]
@@ -1270,74 +699,175 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 				assert not math.isnan(norm), "encountered impossible PDF:  %s is non-zero in a bin with infinite volume" % name
 				binnedarray.array[i] /= norm
 
+	def finish(self, segs, verbose = False):
+		"""
+		Populate the discrete PDF dictionaries from the contents of
+		the rates dictionaries, and then the PDF interpolator
+		dictionaries from the discrete PDFs.  The raw bin counts
+		from the rates dictionaries are copied verbatim, smoothed,
+		and converted to normalized PDFs using the bin volumes.
+		Finally the dictionary of PDF interpolators is populated
+		from the discretely sampled PDF data.
+		"""
+		#
+		# populate background instrument combination rates
+		#
+		# NOTE:  we need to know the number of templates the
+		# singles we have collected have come from, and we get this
+		# by assuming a saturated triggering rate of 1/s, and
+		# averaging the number of templates that implies across the
+		# available instruments.  FIXME:  in the future, obtain the
+		# number of templates from the bank
+		#
+
+		if verbose:
+			print >>sys.stderr, "synthesizing background-like instrument combination probabilities ..."
+		assert "V1" not in segs	# disallow Virgo.  FIXME:  remove after O2
+		self.background_rates["instruments"].array[:] = 0.
+		singles_counts = dict(zip(self.background_rates["singles"].bins[0].centres(), self.background_rates["singles"].array))
+		num_templates = int(round(sum(singles_counts[instrument] / (float(livetime) / 1.0) for instrument, livetime in abs(segs).items()) / len(segs)))
+		for instruments, count in inspiral_extrinsics.instruments_rate_given_noise(
+			singles_counts = singles_counts,
+			num_templates = num_templates,
+			segs = segs,
+			delta_t = self.delta_t,
+			min_instruments = self.min_instruments,
+		).items():
+			self.background_rates["instruments"][instruments,] = count
+
+		#
+		# populate signal instrument combination rates  =
+		# self.signal_rate * probability that a signal is
+		# detectable by each of the instrument combinations.
+		# because the horizon distance is 0'ed when an instrument
+		# is off, this marginalization over horizon distance
+		# histories also accounts for duty cycles
+		#
+
+		self.injection_rates["instruments"].array[:] = 0.
+		for instruments, p in inspiral_extrinsics.P_instruments_given_signal(
+			self.horizon_history,
+			min_instruments = self.min_instruments
+		).items():
+			self.injection_rates["instruments"][instruments,] = self.signal_rate * p
+
+		#
+		# convert raw bin counts into normalized PDFs
+		#
+
+		self.zero_lag_pdf.clear()
+		self.background_pdf.clear()
+		self.injection_pdf.clear()
+		progressbar = ProgressBar(text = "Computing Parameter PDFs", max = len(self.zero_lag_rates) + len(self.background_rates) + len(self.injection_rates)) if verbose else None
+		for key, (msg, rates_dict, pdf_dict) in itertools.chain(
+				zip(self.zero_lag_rates, itertools.repeat(("zero lag", self.zero_lag_rates, self.zero_lag_pdf))),
+				zip(self.background_rates, itertools.repeat(("background", self.background_rates, self.background_pdf))),
+				zip(self.injection_rates, itertools.repeat(("injections", self.injection_rates, self.injection_pdf)))
+		):
+			assert numpy.isfinite(rates_dict[key].array).all() and (rates_dict[key].array >= 0).all(), "%s %s counts are not valid" % (key, msg)
+			pdf_dict[key] = rates_dict[key].copy()
+			pdf_from_rates_func = self.pdf_from_rates_func[key]
+			if pdf_from_rates_func is not None:
+				pdf_from_rates_func(key, pdf_dict)
+			if progressbar is not None:
+				progressbar.increment()
+
+		#
+		# rebuild interpolators
+		#
+
+		self._rebuild_interpolators()
+
+	@classmethod
+	def get_xml_root(cls, xml, name):
+		"""
+		Sub-classes can use this in their overrides of the
+		.from_xml() method to find the root element of the XML
+		serialization.
+		"""
+		name = u"%s:%s" % (name, cls.ligo_lw_name_suffix)
+		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == name]
+		if len(xml) != 1:
+			raise ValueError("XML tree must contain exactly one %s element named %s" % (ligolw.LIGO_LW.tagName, name))
+		return xml[0]
+
 	@classmethod
 	def from_xml(cls, xml, name):
-		self = super(ThincaCoincParamsDistributions, cls).from_xml(xml, name)
-		xml = self.get_xml_root(xml, name)
-		self.horizon_history = HorizonHistories.from_xml(xml, name)
-		prefix = u"cached_snr_joint_pdf"
-		for elem in [elem for elem in xml.childNodes if elem.Name.startswith(u"%s:" % prefix)]:
-			key = ligolw_param.get_pyvalue(elem, u"key").strip().split(u";")
-			key = frozenset(lsctables.instrument_set_from_ifos(key[0].strip())), frozenset((inst.strip(), float(dist.strip())) for inst, dist in (inst_dist.strip().split(u"=") for inst_dist in key[1].strip().split(u",")))
-			binnedarray = rate.BinnedArray.from_xml(elem, prefix)
-			if self.snr_joint_pdf_cache:
-				age = max(age for ignored, ignored, age in self.snr_joint_pdf_cache.values()) + 1
-			else:
-				age = 0
-			lnbinnedarray = binnedarray.copy()
-			with numpy.errstate(divide = "ignore"):
-				lnbinnedarray.array = numpy.log(lnbinnedarray.array)
-			self.snr_joint_pdf_cache[key] = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf), binnedarray, age
-			while len(self.snr_joint_pdf_cache) > self.max_cached_snr_joint_pdfs:
-				del self.snr_joint_pdf_cache[min((age, key) for key, (ignored, ignored, age) in self.snr_joint_pdf_cache.items())[1]]
+		"""
+		In the XML document tree rooted at xml, search for the
+		serialized CoincParamsDistributions object named name, and
+		deserialize it.  The return value is a two-element tuple.
+		The first element is the deserialized
+		CoincParamsDistributions object, the second is the process
+		ID recorded when it was written to XML.
+		"""
+		# find the root element of the XML serialization
+		xml = cls.get_xml_root(xml, name)
+
+		# retrieve the process ID
+		process_id = ligolw_param.get_pyvalue(xml, u"process_id")
+
+		# create an instance
+		self = cls(
+			process_id = process_id,
+			instruments = lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(xml, u"instruments")),
+			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
+			signal_rate = ligolw_param.get_pyvalue(xml, u"signal_rate"),
+			delta_t = ligolw_param.get_pyvalue(xml, u"delta_t")
+		)
+
+		# reconstruct the BinnedArray objects
+		def reconstruct(xml, prefix, target_dict):
+			for name in [elem.Name.split(u":")[1] for elem in xml.childNodes if elem.Name.startswith(u"%s:" % prefix)]:
+				target_dict[str(name)] = rate.BinnedArray.from_xml(xml, u"%s:%s" % (prefix, name))
+		reconstruct(xml, u"zero_lag", self.zero_lag_rates)
+		reconstruct(xml, u"zero_lag_pdf", self.zero_lag_pdf)
+		reconstruct(xml, u"background", self.background_rates)
+		reconstruct(xml, u"background_pdf", self.background_pdf)
+		reconstruct(xml, u"injection", self.injection_rates)
+		reconstruct(xml, u"injection_pdf", self.injection_pdf)
+
+		# reconstruct horizon history
+		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, name)
+
+		#
+		# rebuild interpolators
+		#
+
+		self._rebuild_interpolators()
+
+		#
+		# done
+		#
+
 		return self
 
 	def to_xml(self, name):
-		xml = super(ThincaCoincParamsDistributions, self).to_xml(name)
+		"""
+		Serialize this CoincParamsDistributions object to an XML
+		fragment and return the root element of the resulting XML
+		tree.  The .process_id attribute of process will be
+		recorded in the serialized XML, and the object will be
+		given the name name.
+		"""
+		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"process_id", self.process_id))
+		def store(xml, prefix, source_dict):
+			for name, binnedarray in sorted(source_dict.items()):
+				xml.appendChild(binnedarray.to_xml(u"%s:%s" % (prefix, name)))
+		store(xml, u"zero_lag", self.zero_lag_rates)
+		store(xml, u"zero_lag_pdf", self.zero_lag_pdf)
+		store(xml, u"background", self.background_rates)
+		store(xml, u"background_pdf", self.background_pdf)
+		store(xml, u"injection", self.injection_rates)
+		store(xml, u"injection_pdf", self.injection_pdf)
+
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(self.instruments)))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"signal_rate", self.signal_rate))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"delta_t", self.delta_t))
 		xml.appendChild(self.horizon_history.to_xml(name))
-		prefix = u"cached_snr_joint_pdf"
-		for key, (ignored, binnedarray, ignored) in self.snr_joint_pdf_cache.items():
-			elem = xml.appendChild(binnedarray.to_xml(prefix))
-			elem.appendChild(ligolw_param.new_param(u"key", u"lstring", "%s;%s" % (lsctables.ifos_from_instrument_set(key[0]), u",".join(u"%s=%.17g" % inst_dist for inst_dist in sorted(key[1])))))
 		return xml
-
-	@property
-	def count_above_threshold(self):
-		"""
-		Dictionary mapping instrument combination (as a frozenset)
-		to number of zero-lag coincs observed.  An additional entry
-		with key None stores the total.
-		"""
-		count_above_threshold = dict((frozenset(self.instrument_categories.instruments(int(round(category)))), count) for category, count in zip(self.zero_lag_rates["instruments"].bins.centres()[0], self.zero_lag_rates["instruments"].array))
-		count_above_threshold[None] = sum(sorted(count_above_threshold.values()))
-		return count_above_threshold
-
-	@count_above_threshold.setter
-	def count_above_threshold(self, count_above_threshold):
-		self.zero_lag_rates["instruments"].array[:] = 0.
-		for instruments, count in count_above_threshold.items():
-			if instruments is not None:
-				self.zero_lag_rates["instruments"][self.instrument_categories.category(instruments),] = count
-
-	@property
-	def Pinstrument_noise(self):
-		P = {}
-		for category, p in zip(self.background_pdf["instruments"].bins.centres()[0], self.background_pdf["instruments"].array):
-			instruments = frozenset(self.instrument_categories.instruments(int(round(category))))
-			if len(instruments) < 2 or not p:
-				continue
-			P[instruments] = p
-		return P
-
-	@property
-	def Pinstrument_signal(self):
-		P = {}
-		for category, p in zip(self.injection_pdf["instruments"].bins.centres()[0], self.injection_pdf["instruments"].array):
-			instruments = frozenset(self.instrument_categories.instruments(int(round(category))))
-			if len(instruments) < 2 or not p:
-				continue
-			P[instruments] = p
-		return P
 
 	def random_params(self, instruments):
 		"""
@@ -1361,31 +891,42 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		random_sim_params()
 
-		The sequence is suitable for input to the
-		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
-		ratio generator.
+		The sequence is suitable for input to the .ln_lr_samples()
+		log likelihood ratio generator.
 		"""
+		if len(instruments) < self.min_instruments:
+			raise ValueError("cannot simulate candidates for < %d instruments" % self.min_instruments)
+		assert "V1" not in instruments	# disallow Virgo.  FIXME:  remove after O2
+
 		snr_slope = 0.8 / len(instruments)**3
 
 		keys = tuple("%s_snr_chi" % instrument for instrument in instruments)
-		base_params = {"instruments": (self.instrument_categories.category(instruments),)}
+		base_params = {"instruments": (frozenset(instruments),)}
 		horizongen = iter(self.horizon_history.randhorizons()).next
 		# P(horizons) = 1/livetime
-		log_P_horizons = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey())
+		# FIXME:  the dt portion is only correct for the H1L1 pair
+		log_P_horizons_dt_dphi = -math.log(self.horizon_history.maxkey() - self.horizon_history.minkey()) + inspiral_extrinsics.lnP_dt_dphi_uniform_H1L1(self.delta_t)
 		coordgens = tuple(iter(self.binnings[key].randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next for key in keys)
+		t_offsets_gen = snglcoinc.CoincSynthesizer(segmentlists = dict.fromkeys(self.instruments, None), delta_t = self.delta_t).plausible_toas(instruments)
+		random_uniform = random.uniform
+		twopi = 2. * math.pi
 		while 1:
 			seq = sum((coordgen() for coordgen in coordgens), ())
 			params = CoincParams(zip(keys, seq[0::2]))
 			params.update(base_params)
+			params.t_offset = t_offsets_gen.next()
+			params.coa_phase = dict((instrument, random_uniform(0., twopi)) for instrument in instruments)
 			params.horizons = horizongen()
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
 			# it to be (only that it be correct up to an
 			# unknown constant) and I've not checked that it is
 			# so the documentation doesn't promise that it is.
-			yield params, sum(seq[1::2], log_P_horizons)
+			# FIXME:  no, it's not normalized until the dt_dphi
+			# bit is corrected for other than H1L1
+			yield params, sum(seq[1::2], log_P_horizons_dt_dphi)
 
-	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0):
+	def random_sim_params(self, sim, horizon_distance = None, snr_min = None, snr_efficiency = 1.0, coinc_only = True):
 		"""
 		Generator that yields an endless sequence of randomly
 		generated parameter dictionaries drawn from the
@@ -1400,9 +941,8 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 
 		random_params()
 
-		The sequence is suitable for input to the
-		pylal.snglcoinc.LnLikelihoodRatio.samples() log likelihood
-		ratio generator.
+		The sequence is suitable for input to the .ln_lr_samples()
+		log likelihood ratio generator.
 
 		Bugs:
 
@@ -1410,14 +950,14 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		a placeholder, not the natural logarithm of the PDF from
 		which the sample has been drawn, as in the case of
 		random_params().  Therefore, when used in combination with
-		pylal.snglcoinc.LnLikelihoodRatio.samples(), the two
-		probability densities computed and returned by that
-		generator along with each log likelihood ratio value will
-		simply be the probability densities of the signal and noise
-		populations at that point in parameter space.  They cannot
-		be used to form an importance weighted sampler of the log
-		likelihood ratios.
+		.ln_lr_samples(), the two probability densities computed
+		and returned by that generator along with each log
+		likelihood ratio value will simply be the probability
+		densities of the signal and noise populations at that point
+		in parameter space.  They cannot be used to form an
+		importance weighted sampler of the log likelihood ratios.
 		"""
+		# FIXME need to add dt and dphi 
 		#
 		# retrieve horizon distance from history if not given
 		# explicitly.  retrieve SNR threshold from class attribute
@@ -1425,6 +965,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 
 		if horizon_distance is None:
+			# FIXME:  use .weighted_mean() to get the average
+			# distance over a period of time in case the
+			# injection's "time" falls in an off interval
 			horizon_distance = self.horizon_history[float(sim.get_time_geocent())]
 		if snr_min is None:
 			snr_min = self.snr_min
@@ -1432,12 +975,9 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 		#
 		# compute nominal SNRs
 		#
-		# FIXME:  remove LIGOTimeGPS type cast when sim is ported
-		# to swig bindings
-		#
 
 		cosi2 = math.cos(sim.inclination)**2.
-		gmst = lal.GreenwichMeanSiderealTime(lal.LIGOTimeGPS(0, sim.get_time_geocent().ns()))
+		gmst = lal.GreenwichMeanSiderealTime(sim.get_time_geocent())
 		snr_0 = {}
 		for instrument, DH in horizon_distance.items():
 			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(str(instrument)).response, sim.longitude, sim.latitude, sim.polarization, gmst)
@@ -1486,343 +1026,11 @@ class ThincaCoincParamsDistributions(snglcoinc.CoincParamsDistributions):
 					continue
 				params[key] = snr, chi2_over_snr2()
 				instruments.append(instrument)
-			if len(instruments) < 2:
+			if coinc_only and len(instruments) < self.min_instruments:
 				continue
-			params["instruments"] = (ThincaCoincParamsDistributions.instrument_categories.category(instruments),)
+			params["instruments"] = (frozenset(instruments),)
 			params.horizons = horizon_distance
 			yield params, 0.
-
-
-	@classmethod
-	def joint_pdf_of_snrs(cls, instruments, inst_horiz_mapping, n_samples = 160000, bins = rate.ATanLogarithmicBins(3.6, 1200., 170), progressbar = None):
-		"""
-		Return a BinnedArray representing the joint probability
-		density of measuring a set of SNRs from a network of
-		instruments.  The inst_horiz_mapping is a dictionary
-		mapping instrument name (e.g., "H1") to horizon distance
-		(arbitrary units).  n_samples is the number of lines over
-		which to calculate the density in the SNR space.  The axes
-		of the PDF correspond to the instruments in alphabetical
-		order.
-		"""
-		# get instrument names in alphabetical order
-		instruments = sorted(instruments)
-		# get horizon distances and responses in that same order
-		DH_times_8 = 8. * numpy.array([inst_horiz_mapping[inst] for inst in instruments])
-		resps = tuple(lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in instruments)
-
-		# get horizon distances and responses of remaining
-		# instruments (order doesn't matter as long as they're in
-		# the same order)
-		DH_times_8_other = 8. * numpy.array([dist for inst, dist in inst_horiz_mapping.items() if inst not in instruments])
-		resps_other = tuple(lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in inst_horiz_mapping if inst not in instruments)
-
-		# initialize the PDF array, and pre-construct the sequence
-		# of snr,d(snr) tuples.  since the last SNR bin probably
-		# has infinite size, we remove it from the sequence
-		# (meaning the PDF will be left 0 in that bin).
-		pdf = rate.BinnedArray(rate.NDBins([bins] * len(instruments)))
-		snr_sequence = rate.ATanLogarithmicBins(3.6, 1200., 500)
-		snr_snrlo_snrhi_sequence = numpy.array(zip(snr_sequence.centres(), snr_sequence.lower(), snr_sequence.upper())[:-1])
-
-		# compute the SNR at which to begin iterations over bins
-		assert type(cls.snr_min) is float
-		snr_min = cls.snr_min - 3.0
-		assert snr_min > 0.0
-
-		# no-op if one of the instruments that must be able to
-		# participate in a coinc is not on.  the PDF that gets
-		# returned is not properly normalized (it's all 0) but
-		# that's the correct value everywhere except at SNR-->+inf
-		# where the product of SNR * no sensitivity might be said
-		# to give a non-zero contribution, who knows.  anyway, for
-		# finite SNR, 0 is the correct value.
-		if DH_times_8.min() == 0.:
-			return pdf
-
-		# we select random uniformly-distributed right ascensions
-		# so there's no point in also choosing random GMSTs and any
-		# value is as good as any other
-		gmst = 0.0
-
-		# run the sampler the requested # of iterations.  save some
-		# symbols to avoid doing module attribute look-ups in the
-		# loop
-		if progressbar is not None:
-			progressbar.max = n_samples
-		acos = math.acos
-		random_uniform = random.uniform
-		twopi = 2. * math.pi
-		pi_2 = math.pi / 2.
-		xlal_am_resp = lal.ComputeDetAMResponse
-		# FIXME:  scipy.stats.rice.rvs broken on reference OS.
-		# switch to it when we can rely on a new-enough scipy
-		#rice_rvs = stats.rice.rvs	# broken on reference OS
-		rice_rvs = lambda x: numpy.sqrt(stats.ncx2.rvs(2., x**2.))
-		for i in xrange(n_samples):
-			# select random sky location and source orbital
-			# plane inclination and choice of polarization
-			ra = random_uniform(0., twopi)
-			dec = pi_2 - acos(random_uniform(-1., 1.))
-			psi = random_uniform(0., twopi)
-			cosi2 = random_uniform(-1., 1.)**2.
-
-			# F+^2 and Fx^2 for each instrument
-			fpfc2 = numpy.array(tuple(xlal_am_resp(resp, ra, dec, psi, gmst) for resp in resps))**2.
-			fpfc2_other = numpy.array(tuple(xlal_am_resp(resp, ra, dec, psi, gmst) for resp in resps_other))**2.
-
-			# ratio of distance to inverse SNR for each instrument
-			fpfc_factors = ((1. + cosi2)**2. / 4., cosi2)
-			snr_times_D = DH_times_8 * numpy.dot(fpfc2, fpfc_factors)**0.5
-
-			# snr * D in instrument whose SNR grows fastest
-			# with decreasing D
-			max_snr_times_D = snr_times_D.max()
-
-			# snr_times_D.min() / snr_min = the furthest a
-			# source can be and still be above snr_min in all
-			# instruments involved.  max_snr_times_D / that
-			# distance = the SNR that distance corresponds to
-			# in the instrument whose SNR grows fastest with
-			# decreasing distance --- the SNR the source has in
-			# the most sensitive instrument when visible to all
-			# instruments in the combo
-			try:
-				start_index = snr_sequence[max_snr_times_D / (snr_times_D.min() / snr_min)]
-			except ZeroDivisionError:
-				# one of the instruments that must be able
-				# to see the event is blind to it
-				continue
-
-			# min_D_other is minimum distance at which source
-			# becomes visible in an instrument that isn't
-			# involved.  max_snr_times_D / min_D_other gives
-			# the SNR in the most sensitive instrument at which
-			# the source becomes visible to one of the
-			# instruments not allowed to participate
-			if len(DH_times_8_other):
-				min_D_other = (DH_times_8_other * numpy.dot(fpfc2_other, fpfc_factors)**0.5).min() / cls.snr_min
-				try:
-					end_index = snr_sequence[max_snr_times_D / min_D_other] + 1
-				except ZeroDivisionError:
-					# all instruments that must not see
-					# it are blind to it
-					end_index = None
-			else:
-				# there are no other instruments
-				end_index = None
-
-			# if start_index >= end_index then in order for the
-			# source to be close enough to be visible in all
-			# the instruments that must see it it is already
-			# visible to one or more instruments that must not.
-			# don't need to check for this, the for loop that
-			# comes next will simply not have any iterations.
-
-			# iterate over the nominal SNRs (= noise-free SNR
-			# in the most sensitive instrument) at which we
-			# will add weight to the PDF.  from the SNR in
-			# most sensitive instrument, the distance to the
-			# source is:
-			#
-			#	D = max_snr_times_D / snr
-			#
-			# and the (noise-free) SNRs in all instruments are:
-			#
-			#	snr_times_D / D
-			#
-			# scipy's Rice-distributed RV code is used to
-			# add the effect of background noise, converting
-			# the noise-free SNRs into simulated observed SNRs
-			#
-			# number of sources b/w Dlo and Dhi:
-			#
-			#	d count \propto D^2 |dD|
-			#	  count \propto Dhi^3 - Dlo**3
-			D_Dhi_Dlo_sequence = max_snr_times_D / snr_snrlo_snrhi_sequence[start_index:end_index]
-			for snr, weight in zip(rice_rvs(snr_times_D / numpy.reshape(D_Dhi_Dlo_sequence[:,0], (len(D_Dhi_Dlo_sequence), 1))), D_Dhi_Dlo_sequence[:,1]**3. - D_Dhi_Dlo_sequence[:,2]**3.):
-				pdf[tuple(snr)] += weight
-
-			if progressbar is not None:
-				progressbar.increment()
-		# check for divide-by-zeros that weren't caught.  also
-		# finds NaNs if they're there
-		assert numpy.isfinite(pdf.array).all()
-
-		# convolve the samples with a Gaussian density estimation
-		# kernel
-		rate.filter_array(pdf.array, rate.gaussian_window(*(1.875,) * len(pdf.array.shape)))
-		# protect against round-off in FFT convolution leading to
-		# negative values in the PDF
-		numpy.clip(pdf.array, 0., PosInf, pdf.array)
-		# zero counts in bins that are below the trigger threshold.
-		# have to convert SNRs to indexes ourselves and adjust so
-		# that we don't zero the bin in which the SNR threshold
-		# falls
-		range_all = slice(None, None)
-		range_low = slice(None, pdf.bins[0][cls.snr_min])
-		for i in xrange(len(instruments)):
-			slices = [range_all] * len(instruments)
-			slices[i] = range_low
-			pdf.array[slices] = 0.
-		# convert bin counts to normalized PDF
-		pdf.to_pdf()
-		# one last sanity check
-		assert numpy.isfinite(pdf.array).all()
-		# done
-		return pdf
-
-
-def P_instruments_given_signal(horizon_history, n_samples = 500000, min_distance = 0.):
-	# FIXME:  this function computes P(instruments | signal)
-	# marginalized over time (i.e., marginalized over the history of
-	# horizon distances).  what we really want is to know P(instruments
-	# | signal, horizon distances), that is we want to leave it
-	# depending parametrically on the instantaneous horizon distances.
-	# this function takes about 30 s to evaluate, so computing it on
-	# the fly isn't practical and we'll require some sort of caching
-	# scheme.  unless somebody can figure out how to compute this
-	# explicitly without resorting to Monte Carlo integration.
-
-	if n_samples < 1:
-		raise ValueError("n_samples=%d must be >= 1" % n_samples)
-	if min_distance < 0.:
-		raise ValueError("min_distance=%g must be >= 0" % min_distance)
-
-	# get instrument names
-	names = tuple(horizon_history)
-	if not names:
-		raise ValueError("horizon_history is empty")
-	# get responses in that same order
-	resps = [lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in names]
-
-	# initialize output.  dictionary mapping instrument combination to
-	# probability (initially all 0).
-	result = dict.fromkeys((frozenset(instruments) for n in xrange(2, len(names) + 1) for instruments in iterutils.choices(names, n)), 0.0)
-
-	# we select random uniformly-distributed right ascensions so
-	# there's no point in also choosing random GMSTs and any value is
-	# as good as any other
-	gmst = 0.0
-
-	# function to spit out a choice of horizon distances drawn
-	# uniformly in time
-	rand_horizon_distances = iter(horizon_history.randhorizons()).next
-
-	# in the loop, we'll need a sequence of integers to enumerate
-	# instruments.  construct it here to avoid doing it repeatedly in
-	# the loop
-	indexes = tuple(range(len(names)))
-
-	# avoid attribute look-ups and arithmetic in the loop
-	acos = math.acos
-	numpy_array = numpy.array
-	numpy_dot = numpy.dot
-	numpy_sqrt = numpy.sqrt
-	random_uniform = random.uniform
-	twopi = 2. * math.pi
-	pi_2 = math.pi / 2.
-	xlal_am_resp = lal.ComputeDetAMResponse
-
-	# loop as many times as requested
-	successes = fails = 0
-	while successes < n_samples:
-		# retrieve random horizon distances in the same order as
-		# the instruments.  note:  rand_horizon_distances() is only
-		# evaluated once in this expression.  that's important
-		DH = numpy_array(map(rand_horizon_distances().__getitem__, names))
-
-		# select random sky location and source orbital plane
-		# inclination and choice of polarization
-		ra = random_uniform(0., twopi)
-		dec = pi_2 - acos(random_uniform(-1., 1.))
-		psi = random_uniform(0., twopi)
-		cosi2 = random_uniform(-1., 1.)**2.
-
-		# compute F+^2 and Fx^2 for each antenna from the sky
-		# location and antenna responses
-		fpfc2 = numpy_array(tuple(xlal_am_resp(resp, ra, dec, psi, gmst) for resp in resps))**2.
-
-		# 1/8 ratio of inverse SNR to distance for each instrument
-		# (1/8 because horizon distance is defined for an SNR of 8,
-		# and we've omitted that factor for performance)
-		snr_times_D_over_8 = DH * numpy_sqrt(numpy_dot(fpfc2, ((1. + cosi2)**2. / 4., cosi2)))
-
-		# the volume visible to each instrument given the
-		# requirement that a source be above the SNR threshold is
-		#
-		# V = [constant] * (8 * snr_times_D_over_8 / snr_threshold)**3.
-		#
-		# but in the end we'll only need ratios of these volumes so
-		# we can omit the proportionality constant and we can also
-		# omit the factor of (8 / snr_threshold)**3
-		#
-		# NOTE:  noise-induced SNR fluctuations have the effect of
-		# allowing sources slightly farther away than would
-		# nominally allow them to be detectable to be seen above
-		# the detection threshold with some non-zero probability,
-		# and sources close enough to be detectable to be masked by
-		# noise and missed with some non-zero probability.
-		# accounting for this effect correctly shows it to provide
-		# an additional multiplicative factor to the volume that
-		# depends only on the SNR threshold.  therefore, like all
-		# the other factors common to all instruments, it too can
-		# be ignored.
-		V_at_snr_threshold = snr_times_D_over_8**3.
-
-		# order[0] is index of instrument that can see sources the
-		# farthest, order[1] is index of instrument that can see
-		# sources the next farthest, etc.
-		order = sorted(indexes, key = V_at_snr_threshold.__getitem__, reverse = True)
-		ordered_names = tuple(names[i] for i in order)
-
-		# instrument combination and volume of space (up to
-		# irrelevant proportionality constant) visible to that
-		# combination given the requirement that a source be above
-		# the SNR threshold in that combination.  sequence of
-		# instrument combinations is left as a generator expression
-		# for lazy evaluation
-		instruments = (frozenset(ordered_names[:n]) for n in xrange(2, len(order) + 1))
-		V = tuple(V_at_snr_threshold[i] for i in order[1:])
-		if V[0] <= min_distance:
-			# fewer than two instruments are on, so no
-			# combination can see anything
-			fails += 1
-			if successes + fails >= n_samples and fails / float(successes + fails) > .90:
-				raise ValueError("convergence too slow:  success/fail ratio = %d/%d" % (successes, fails))
-			continue
-
-		# for each instrument combination, probability that a
-		# source visible to at least two instruments is visible to
-		# that combination (here is where the proportionality
-		# constant and factor of (8/snr_threshold)**3 drop out of
-		# the calculation)
-		P = tuple(x / V[0] for x in V)
-
-		# accumulate result.  p - pnext is the probability that a
-		# source (that is visible to at least two instruments) is
-		# visible to that combination of instruments and not any
-		# other combination of instruments.
-		for key, p, pnext in zip(instruments, P, P[1:] + (0.,)):
-			result[key] += p - pnext
-		successes += 1
-	for key in result:
-		result[key] /= n_samples
-
-	#
-	# make sure it's normalized
-	#
-
-	total = sum(sorted(result.values()))
-	assert abs(total - 1.) < 1e-13, "result insufficiently well normalized: %s, sum = %g" % (result, total)
-	for key in result:
-		result[key] /= total
-
-	#
-	# done
-	#
-
-	return result
 
 
 #
@@ -1854,23 +1062,20 @@ def binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, sa
 			raise ValueError("encountered NaN signal or noise model probability densities")
 		signal_rates[ln_lamb,] += exp(lnP_signal)
 		noise_rates[ln_lamb,] += exp(lnP_noise)
-	return signal_rates, noise_rates
 
 
-def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, *args, **kwargs):
+def binned_log_likelihood_ratio_rates_from_samples_wrapper(queue, signal_rates, noise_rates, samples, nsamples):
 	try:
-		queue.put(binned_log_likelihood_ratio_rates_from_samples(*args, **kwargs))
+		binned_log_likelihood_ratio_rates_from_samples(signal_rates, noise_rates, samples, nsamples)
+		queue.put((signal_rates.array, noise_rates.array))
 	except:
-		queue.put(None)
+		queue.put((None, None))
 		raise
 
 
 #
 # Class to compute ranking statistic PDFs for background-like and
 # signal-like populations
-#
-# FIXME:  this is really close to just being another subclass of
-# CoincParamsDistributions.  consider the wisdom of rewriting it to be such
 #
 
 
@@ -1886,10 +1091,10 @@ class RankingData(object):
 	}
 
 	filters = {
-		"ln_likelihood_ratio": rate.gaussian_window(8.)
+		"ln_likelihood_ratio": rate.gaussian_window(4.)
 	}
 
-	def __init__(self, coinc_params_distributions, instruments, sampler_coinc_params_distributions = None, process_id = None, nsamples = 1000000, verbose = False):
+	def __init__(self, coinc_params_distributions, instruments = None, sampler_coinc_params_distributions = None, process_id = None, nsamples = 1000000, verbose = False):
 		self.background_likelihood_rates = {}
 		self.background_likelihood_pdfs = {}
 		self.signal_likelihood_rates = {}
@@ -1899,22 +1104,30 @@ class RankingData(object):
 		self.process_id = process_id
 
 		#
-		# initialize binnings
-		#
-
-		instruments = tuple(instruments)
-		for key in [frozenset(ifos) for n in range(2, len(instruments) + 1) for ifos in iterutils.choices(instruments, n)]:
-			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
-			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
-			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
-
-		#
 		# bailout out used by .from_xml() class method to get an
 		# uninitialized instance
 		#
 
 		if coinc_params_distributions is None:
 			return
+
+		#
+		# initialize binnings
+		#
+
+		if coinc_params_distributions is not None:
+			if instruments is not None and set(instruments) != coinc_params_distributions.instruments:
+				raise ValueError("instrument set does not match coinc_params_distributions (hint:  don't supply instruments when initializing from ThincaCoincParamsDistributions)")
+			instruments = tuple(coinc_params_distributions.instruments)
+		elif instruments is None:
+			raise ValueError("must supply an instrument set when not initializing from a ThincaCoincParamsDistributions object")
+		else:
+			instruments = tuple(instruments)
+
+		for key in [frozenset(ifos) for n in range(coinc_params_distributions.min_instruments, len(instruments) + 1) for ifos in itertools.combinations(instruments, n)]:
+			self.background_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
+			self.signal_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
+			self.zero_lag_likelihood_rates[key] = rate.BinnedArray(self.binnings["ln_likelihood_ratio"])
 
 		#
 		# run importance-weighted random sampling to populate
@@ -1933,14 +1146,14 @@ class RankingData(object):
 				q,
 				self.signal_likelihood_rates[key],
 				self.background_likelihood_rates[key],
-				snglcoinc.LnLikelihoodRatio(coinc_params_distributions).samples(sampler_coinc_params_distributions.random_params(key), sampler_coinc_params_distributions),
+				coinc_params_distributions.ln_lr_samples(sampler_coinc_params_distributions.random_params(key), sampler_coinc_params_distributions),
 				nsamples = nsamples
 			))
 			p.start()
 			threads.append((p, q, key))
 		while threads:
 			p, q, key = threads.pop(0)
-			self.signal_likelihood_rates[key], self.background_likelihood_rates[key] = q.get()
+			self.signal_likelihood_rates[key].array, self.background_likelihood_rates[key].array = q.get()
 			p.join()
 			if p.exitcode:
 				raise Exception("sampling thread failed")
@@ -1948,7 +1161,7 @@ class RankingData(object):
 			print >>sys.stderr, "done computing ranking statistic PDFs"
 
 		#
-		# propogate knowledge of the background event rates through
+		# propagate knowledge of the background event rates through
 		# to the ranking statistic distributions.  this information
 		# is required so that when adding ranking statistic PDFs in
 		# ._compute_combined_rates() or our .__iadd__() method
@@ -1961,10 +1174,10 @@ class RankingData(object):
 
 		for instruments, binnedarray in self.background_likelihood_rates.items():
 			if binnedarray.array.any():
-				binnedarray.array *= coinc_params_distributions.background_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),] / binnedarray.array.sum()
+				binnedarray.array *= coinc_params_distributions.background_rates["instruments"][instruments,] / binnedarray.array.sum()
 
 		#
-		# propogate instrument combination priors through to
+		# propagate instrument combination priors through to
 		# ranking statistic histograms so that
 		# ._compute_combined_rates() and .__iadd__() combine the
 		# histograms with the correct weights.
@@ -1978,7 +1191,7 @@ class RankingData(object):
 
 		for instruments, binnedarray in self.signal_likelihood_rates.items():
 			if binnedarray.array.any():
-				binnedarray.array *= coinc_params_distributions.injection_rates["instruments"][coinc_params_distributions.instrument_categories.category(instruments),] / binnedarray.array.sum()
+				binnedarray.array *= coinc_params_distributions.injection_rates["instruments"][instruments,] / binnedarray.array.sum()
 
 		#
 		# compute combined rates
@@ -2016,7 +1229,7 @@ WHERE
 	)
 """, (coinc_def_id,)):
 			assert ln_likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
-			self.zero_lag_likelihood_rates[frozenset(lsctables.instrument_set_from_ifos(instruments))][ln_likelihood_ratio,] += 1.
+			self.zero_lag_likelihood_rates[frozenset(lsctables.instrumentsproperty.get(instruments))][ln_likelihood_ratio,] += 1.
 
 		#
 		# update combined rates.  NOTE:  this recomputes all the
@@ -2088,13 +1301,15 @@ WHERE
 				progressbar.increment()
 
 	def __iadd__(self, other):
-		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
-		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.signal_likelihood_rates, other.signal_likelihood_rates, self.signal_likelihood_pdfs, other.signal_likelihood_pdfs)
-		snglcoinc.CoincParamsDistributions.addbinnedarrays(self.zero_lag_likelihood_rates, other.zero_lag_likelihood_rates, self.zero_lag_likelihood_pdfs, other.zero_lag_likelihood_pdfs)
+		ThincaCoincParamsDistributions.addbinnedarrays(self.background_likelihood_rates, other.background_likelihood_rates, self.background_likelihood_pdfs, other.background_likelihood_pdfs)
+		ThincaCoincParamsDistributions.addbinnedarrays(self.signal_likelihood_rates, other.signal_likelihood_rates, self.signal_likelihood_pdfs, other.signal_likelihood_pdfs)
+		ThincaCoincParamsDistributions.addbinnedarrays(self.zero_lag_likelihood_rates, other.zero_lag_likelihood_rates, self.zero_lag_likelihood_pdfs, other.zero_lag_likelihood_pdfs)
 		return self
 
 	@classmethod
 	def new_with_extinction(cls, src):
+		# create a new instance with copies of the rates arrays
+		# from src
 		self = cls(None, ())
 		for key, binnedarray in src.background_likelihood_rates.items():
 			self.background_likelihood_rates[key] = binnedarray.copy()
@@ -2103,10 +1318,13 @@ WHERE
 		for key, binnedarray in src.zero_lag_likelihood_rates.items():
 			self.zero_lag_likelihood_rates[key] = binnedarray.copy()
 
-		self.finish()
-
-		# Compute the combined rates, we need them for the extinction model
+		# populate the combined rates, we need them for the
+		# extinction model (they might have already been populated
+		# in src, but this way we're sure)
 		self._compute_combined_rates()
+
+		# populate ranking statistic PDFs
+		self.finish()
 
 		# FIXME We extinct each instrument combination separately,
 		# HOWEVER, only the 'None' key is used, which is all
@@ -2115,8 +1333,14 @@ WHERE
 		# diagnostic tool.  This could change in the future once we
 		# have 3 instruments again to correct each by-instrument PDF
 		# with the survival function
+		#
+		# FIXME, leaving the comment in place above, but with single
+		# ifo searches it is possible (And easy) to not have enough
+		# data in one. For now we just extinct None
 		for key in self.background_likelihood_rates:
 
+			if key is not None:
+				continue
 			# pull out both the bg counts and the pdfs, we need 'em both
 			bgcounts_ba = self.background_likelihood_rates[key]
 			bgpdf_ba = self.background_likelihood_pdfs[key]
@@ -2124,10 +1348,16 @@ WHERE
 			zlagcounts_ba = self.zero_lag_likelihood_rates[key]
 
 			# Only model background above a ln(LR) of 3 or at the 10000 event count whatever is greater
-			likethresh = numpy.searchsorted(bgcounts_ba.bins.upper()[0], max(3, bgcounts_ba.bins.upper()[0][::-1][numpy.searchsorted(zlagcounts_ba.array[::-1].cumsum(), 10000)]))
-			bgcounts_ba.array[:likethresh] = 0.
-			bgpdf_ba.array[:likethresh] = 0.
-			zlagcounts_ba.array[:likethresh] = 0.
+			if zlagcounts_ba.array.sum() < 10000:
+				likethreshvalue = 3.
+				# Issue a warning if we have less than 10000 events
+				warnings.warn("There are less than 10000 zerolag events, extinction effects on background may not be accurately calculated.")
+			else:
+				likethreshvalue = max(3, bgcounts_ba.bins.upper()[0][::-1][numpy.searchsorted(zlagcounts_ba.array[::-1].cumsum(), 10000)])
+			likethreshindex = numpy.searchsorted(bgcounts_ba.bins.upper()[0], likethreshvalue)
+			bgcounts_ba.array[:likethreshindex] = 0.
+			bgpdf_ba.array[:likethreshindex] = 0.
+			zlagcounts_ba.array[:likethreshindex] = 0.
 
 			# safety checks
 			assert not numpy.isnan(bgcounts_ba.array).any(), "log likelihood ratio rates contains NaNs"
@@ -2141,16 +1371,12 @@ WHERE
 			drank = bgcounts_ba.bins.volumes().compress(finite_bins)
 
 			# figure out the minimum rank
-			fit_min_rank = ranks[likethresh]
+			fit_min_rank = ranks[likethreshindex]
 
 			# whittle down the arrays of counts and pdfs
 			bgcounts_ba_array = bgcounts_ba.array.compress(finite_bins)
 			bgpdf_ba_array = bgpdf_ba.array.compress(finite_bins)
 			zlagcounts_ba_array = zlagcounts_ba.array.compress(finite_bins)
-
-			# Issue a warning if we have less than 100,000 events
-			if zlagcounts_ba_array.sum() < 100000:
-				warnings.warn("There are less than 100000 coincidences, extinction effects on background may not be accurately calculated.")
 
 			def extinct(bgcounts_ba_array, bgpdf_ba_array, zlagcounts_ba_array, ranks, drank, fit_min_rank):
 				# Generate arrays of complementary cumulative counts
@@ -2185,12 +1411,12 @@ WHERE
 
 				# Fit for the ratio of unclustered to clustered triggers.
 				# Only fit N_ratio over the range of ranks decided above
-				precluster_normalization, precluster_covariance_matrix = curve_fit(
+				precluster_normalization, precluster_covariance_matrix = optimize.curve_fit(
 					extincted_counts,
 					ranks[rank_range],
 					zero_lag_compcumcount.compress(rank_range),
 					sigma = zero_lag_compcumcount.compress(rank_range)**.5,
-					p0 = [1e-4, max(zero_lag_compcumcount)]
+					p0 = [3e-4, max(zero_lag_compcumcount)]
 				)
 
 				N_ratio, total_num = precluster_normalization
@@ -2218,7 +1444,7 @@ WHERE
 		# pull out the likelihood count and PDF arrays
 		def reconstruct(xml, prefix, target_dict):
 			for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and ("_%s" % prefix) in elem.Name]:
-				ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.Name.split("_")[0]))
+				ifo_set = frozenset(lsctables.instrumentsproperty.get(ba_elem.Name.split("_")[0]))
 				target_dict[ifo_set] = rate.BinnedArray.from_xml(ba_elem, ba_elem.Name.split(":")[0])
 		reconstruct(xml, u"background_likelihood_rate", self.background_likelihood_rates)
 		reconstruct(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
@@ -2242,11 +1468,11 @@ WHERE
 
 	def to_xml(self, name):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
-		xml.appendChild(ligolw_param.new_param(u"process_id", u"ilwd:char", self.process_id))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"process_id", self.process_id))
 		def store(xml, prefix, source_dict):
 			for key, binnedarray in source_dict.items():
 				if key is not None:
-					ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
+					ifostr = lsctables.instrumentsproperty.set(key).replace(",","")
 					xml.appendChild(binnedarray.to_xml(u"%s_%s" % (ifostr, prefix)))
 		store(xml, u"background_likelihood_rate", self.background_likelihood_rates)
 		store(xml, u"background_likelihood_pdf", self.background_likelihood_pdfs)
@@ -2293,7 +1519,7 @@ class FAPFAR(object):
 		# identification threshold, and cdf=1/e at the candidate
 		# threshold, in order for FAR(threshold) * livetime to
 		# equal the actual observed number of candidates.
-		ccdf = poisson_p_not_0(ccdf)
+		ccdf = gstlalstats.poisson_p_not_0(ccdf)
 
 		# interpolator won't accept infinite co-ordinates so need
 		# to remove the last bin
@@ -2314,23 +1540,20 @@ class FAPFAR(object):
 		self.minrank = ranks[0]
 		self.maxrank = ranks[-1]
 
-	@assert_probability
+	@gstlalstats.assert_probability
 	def ccdf_from_rank(self, rank):
-		rank = max(self.minrank, min(self.maxrank, rank))
-		return float(self.ccdf_interpolator(rank))
+		return self.ccdf_interpolator(numpy.clip(rank, self.minrank, self.maxrank))
 
-	@assert_probability
 	def fap_from_rank(self, rank):
 		# implements equation (8) from Phys. Rev. D 88, 024025.
-		# arXiv:1209.0718
-		return fap_after_trials(self.ccdf_from_rank(rank), self.zero_lag_total_count)
+		# arXiv:1209.0718.
+		return gstlalstats.fap_after_trials(self.ccdf_from_rank(rank), self.zero_lag_total_count)
 
 	def rank_from_fap(self, p, tolerance = 1e-6):
 		"""
-		Inverts .fap_from_rank() using a bisection search.  This
-		function is sensitive to numerical noise for probabilities
-		that are close to 1.  The tolerance sets the absolute error
-		of the result.
+		Inverts .fap_from_rank().  This function is sensitive to
+		numerical noise for probabilities that are close to 1.  The
+		tolerance sets the absolute error of the result.
 		"""
 		assert 0. <= p <= 1., "p (%g) is not a valid probability" % p
 		lo, hi = self.minrank, self.maxrank
@@ -2347,15 +1570,16 @@ class FAPFAR(object):
 				# jackpot
 				return mid
 		return (hi + lo) / 2.
+	rank_from_fap.__get__ = numpy.vectorize(rank_from_fap, otypes = (numpy.float64,), excluded = (0, 2, 'self', 'tolerance'))
 
 	def far_from_rank(self, rank):
 		# implements equation (B4) of Phys. Rev. D 88, 024025.
 		# arXiv:1209.0718.  the return value is divided by T to
-		# convert events/experiment to events/second.
+		# convert events/experiment to events/second.  "tdp" =
 		assert self.livetime is not None, "cannot compute FAR without livetime"
 		# true-dismissal probability = 1 - single-event false-alarm
 		# probability, the integral in equation (B4)
-		log_tdp = math.log1p(-self.ccdf_from_rank(rank))
+		log_tdp = numpy.log1p(-self.ccdf_from_rank(rank))
 		return self.zero_lag_total_count * -log_tdp / self.livetime
 
 	def rank_from_far(self, rate, tolerance = 1e-6):
@@ -2377,21 +1601,25 @@ class FAPFAR(object):
 				# jackpot
 				return mid
 		return (hi + lo) / 2.
+	rank_from_far.__get__ = numpy.vectorize(rank_from_far, otypes = (numpy.float64,), excluded = (0, 2, 'self', 'tolerance'))
 
 	def assign_fapfars(self, connection):
 		# assign false-alarm probabilities and false-alarm rates
-		# FIXME:  choose function names more likely to be unique?
 		# FIXME:  abusing false_alarm_rate column to store FAP,
 		# move to a false_alarm_probability column??
-		connection.create_function("fap", 1, self.fap_from_rank)
-		connection.create_function("far", 1, self.far_from_rank)
+		def as_float(f):
+			def g(x):
+				return float(f(x))
+			return g
+		connection.create_function("fap_from_rankingstat", 1, as_float(self.fap_from_rank))
+		connection.create_function("far_from_rankingstat", 1, as_float(self.far_from_rank))
 		connection.cursor().execute("""
 UPDATE
 	coinc_inspiral
 SET
 	false_alarm_rate = (
 		SELECT
-			fap(coinc_event.likelihood)
+			fap_from_rankingstat(coinc_event.likelihood)
 		FROM
 			coinc_event
 		WHERE
@@ -2399,7 +1627,7 @@ SET
 	),
 	combined_far = (
 		SELECT
-			far(coinc_event.likelihood)
+			far_from_rankingstat(coinc_event.likelihood)
 		FROM
 			coinc_event
 		WHERE
@@ -2478,10 +1706,10 @@ def marginalize_pdf_urls(urls, require_coinc_param_data, require_ranking_stat_da
 		try:
 			in_xmldoc = ligolw_utils.load_url(url, verbose = verbose, contenthandler = ThincaCoincParamsDistributions.LIGOLWContentHandler)
 		except IOError:
-			# IOError is raised when an on-disk file is missing.
-			# urllib2.URLError is raised when a URL cannot be loaded,
-			# but this is subclassed from IOError so IOError will catch
-			# those, too.
+			# IOError is raised when an on-disk file is
+			# missing.  urllib2.URLError is raised when a URL
+			# cannot be loaded, but this is subclassed from
+			# IOError so IOError will catch those, too.
 			if not ignore_missing_files:
 				raise
 			if verbose:
@@ -2525,15 +1753,10 @@ def marginalize_pdf_urls(urls, require_coinc_param_data, require_ranking_stat_da
 #
 
 
-def get_live_time(seglistdict, verbose = False):
-	livetime = float(abs(vote((segs for instrument, segs in seglistdict.items() if instrument != "H2"), 2)))
+def get_live_time(seglistdict, min_instruments = 2, verbose = False):
+	if min_instruments < 1:
+		raise ValueError("min_instruments (=%d) must be >= 1" % min_instruments)
+	livetime = float(abs(vote((segs for instrument, segs in seglistdict.items() if instrument != "H2"), min_instruments)))
 	if verbose:
 		print >> sys.stderr, "Livetime: %.3g s" % livetime
 	return livetime
-
-
-def get_live_time_segs_from_search_summary_table(connection, program_name = "gstlal_inspiral"):
-	xmldoc = dbtables.get_xml(connection)
-	farsegs = ligolw_search_summary.segmentlistdict_fromsearchsummary(xmldoc, program_name).coalesce()
-	xmldoc.unlink()
-	return farsegs

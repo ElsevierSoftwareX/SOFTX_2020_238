@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2009,2011  Kipp Cannon
  * Copyright (C) 2014 Chad Hanna
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -30,11 +30,6 @@
 
 
 /*
- * struff from the C library
- */
-
-
-/*
  * stuff from glib/gstreamer
  */
 
@@ -55,9 +50,165 @@
 /*
  * ============================================================================
  *
- *                                 Properties
+ *                                Boilerplate
  *
  * ============================================================================
+ */
+
+
+G_DEFINE_TYPE(
+	GSTLALShift,
+	gstlal_shift,
+	GST_TYPE_ELEMENT
+);
+
+
+/*
+ * ============================================================================
+ *
+ *                                    Pads
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * Events
+ */
+
+
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALShift *shift = GSTLAL_SHIFT(parent);
+
+	/*
+	 * adjust segment events by +shift
+	 */
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_SEGMENT: {
+		GstSegment segment;
+		gst_event_copy_segment(event, &segment);
+		if(segment.format == GST_FORMAT_TIME) {
+			if(GST_CLOCK_TIME_IS_VALID(segment.start))
+				segment.start += shift->shift;
+			if(GST_CLOCK_TIME_IS_VALID(segment.stop))
+				segment.stop += shift->shift;
+		}
+		gst_event_unref(event);
+		event = gst_event_new_segment(&segment);
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	return gst_pad_event_default(pad, parent, event);
+}
+
+
+/* FIXME:  upstream queries for segments and position and so-on need to be
+ * adjusted to.  oh well, who cares */
+
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALShift *shift = GSTLAL_SHIFT(parent);
+
+	/*
+	 * adjust seek events by -shift
+	 */
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_SEEK: {
+		gdouble rate;
+		GstFormat format;
+		GstSeekFlags flags;
+		GstSeekType start_type, stop_type;
+		gint64 start, stop;
+		gst_event_parse_seek(event, &rate, &format, &flags, &start_type, &start, &stop_type, &stop);
+		gst_event_unref(event);
+
+		if(format == GST_FORMAT_TIME) {
+			if(GST_CLOCK_TIME_IS_VALID(start))
+				start -= shift->shift;
+			if(GST_CLOCK_TIME_IS_VALID(stop))
+				stop -= shift->shift;
+		}
+
+		event = gst_event_new_seek(rate, format, flags, start_type, start, stop_type, stop);
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	/*
+	 * invoke default handler
+	 */
+
+	return gst_pad_event_default(pad, parent, event);
+}
+
+
+/*
+ * chain()
+ */
+
+
+static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
+{
+	GSTLALShift *element = GSTLAL_SHIFT(parent);
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * check validity of timestamp and offsets
+	 */
+
+	if(!GST_BUFFER_PTS_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+		gst_buffer_unref(sinkbuf);
+		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/* Check for underflow */
+	if (((gint64) GST_BUFFER_PTS(sinkbuf) + element->shift) >= 0)
+		GST_BUFFER_PTS(sinkbuf) = (GstClockTime) ( (gint64) GST_BUFFER_PTS(sinkbuf) + element->shift );
+	else
+		g_error("Cannot shift buffer with time stamp %" G_GUINT64_FORMAT " by %" G_GINT64_FORMAT, GST_BUFFER_PTS(sinkbuf), element->shift);
+
+	/* Finally apply the discont flag if a new shift was detected */
+	if (element->have_discont) {
+		GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
+		element->have_discont = FALSE;
+	}
+
+	result = gst_pad_push(element->srcpad, sinkbuf);
+	if(G_UNLIKELY(result != GST_FLOW_OK))
+		GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
+
+	/*
+	 * done
+	 */
+
+done:
+	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                             GObject Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * properties
  */
 
 
@@ -112,289 +263,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 
 /*
- * ============================================================================
- *
- *                                    Pads
- *
- * ============================================================================
- */
-
-
-/*
- * getcaps()
- */
-
-
-static GstCaps *getcaps(GSTLALShift *shift, GstPad * pad, GstCaps * filter)
-{
-	GstCaps *result, *peercaps, *current_caps, *filter_caps;
-
-	/*
-	 * take filter
-	 */
-
-	filter_caps = filter ? gst_caps_ref(filter) : NULL;
-
-	/* 
-	 * If the filter caps are empty (but not NULL), there is nothing we can
-	 * do, there will be no intersection
-	 */
-
-	if (filter_caps && gst_caps_is_empty (filter_caps)) {
-		GST_WARNING_OBJECT (pad, "Empty filter caps");
-		return filter_caps;
-	}
-
-	/* get the downstream possible caps */
-	peercaps = gst_pad_peer_query_caps(shift->srcpad, filter_caps);
-
-	/* get the allowed caps on this sinkpad */
-	current_caps = gst_pad_get_pad_template_caps(pad);
-	if(!current_caps)
-		current_caps = gst_caps_new_any();
-
-	if(peercaps) {
-		/* if the peer has caps, intersect */
-		GST_DEBUG_OBJECT(shift, "intersecting peer and our caps");
-		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
-		/* neither peercaps nor current_caps are needed any more */
-		gst_caps_unref(peercaps);
-		gst_caps_unref(current_caps);
-	} else {
-		/* the peer has no caps (or there is no peer), just use the allowed caps
-		* of this sinkpad. */
-		/* restrict with filter-caps if any */
-		if (filter_caps) {
-			GST_DEBUG_OBJECT(shift, "no peer caps, using filtered caps");
-			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
-			/* current_caps are not needed any more */
-			gst_caps_unref(current_caps);
-		} else {
-			GST_DEBUG_OBJECT(shift, "no peer caps, using our caps");
-			result = current_caps;
-		}
-	}
-
-	result = gst_caps_make_writable(result);
-
-	if(filter_caps)
-		gst_caps_unref(filter_caps);
-
-	GST_LOG_OBJECT(shift, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
-
-	return result;
-}
-
-
-/*
- * setcaps()
- */
-
-
-static gboolean setcaps(GSTLALShift *shift, GstPad *pad, GstCaps *caps)
-{
-	gboolean success = TRUE;
-
-	/*
-	 * try setting caps on downstream element
-	 */
-
-	success = gst_pad_set_caps(shift->srcpad, caps);
-
-	/*
-	 * update the element metadata
-	 */
-
-	return success;
-}
-
-
-/*
- * Events
- */
-
-
-static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALShift *shift = GSTLAL_SHIFT(parent);
-	GstSegment segment;
-	GstCaps *caps;
-	GstFormat format;
-	gint64 start;
-	gint64 stop;
-
-	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_SEGMENT:
-		GST_DEBUG_OBJECT(pad, "new segment;  adjusting boundary");
-		gst_event_copy_segment(event, &segment);
-
-		if (format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(start) && GST_CLOCK_TIME_IS_VALID(stop)) {
-			start += shift->shift;
-			stop += shift->shift;
-			if (! GST_CLOCK_TIME_IS_VALID(start))
-				start = GST_CLOCK_TIME_NONE;
-			if (! GST_CLOCK_TIME_IS_VALID(stop))
-				stop = GST_CLOCK_TIME_NONE;
-		}
-		return gst_pad_push_event(shift->srcpad, gst_event_new_segment(&segment));
-
-	case GST_EVENT_CAPS:
-		gst_event_parse_caps(event, &caps);
-		gst_event_unref(event);
-		return setcaps(shift, pad, caps);
-
-	default:
-		break;
-	}
-
-	return gst_pad_event_default(pad, parent, event);
-
-}
-
-
-static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALShift *shift = GSTLAL_SHIFT(parent);
-	GstEvent *newevent = NULL;
-	GstSegment segment;
-	GstFormat format;
-	gint64 start;
-	gint64 stop;
-
-	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_SEGMENT:
-		GST_DEBUG_OBJECT(pad, "new segment;  adjusting boundary");
-		gst_event_copy_segment(event, &segment);
-
-		if (format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(start) && GST_CLOCK_TIME_IS_VALID(stop)) {
-			start += shift->shift;
-			stop += shift->shift;
-			if (! GST_CLOCK_TIME_IS_VALID(start))
-				start = GST_CLOCK_TIME_NONE;
-			if (! GST_CLOCK_TIME_IS_VALID(stop))
-				stop = GST_CLOCK_TIME_NONE;
-		}
-
-		event = gst_event_new_segment(&segment);
-		break;
-
-	default:
-		break;
-	}
-
-	/*
-	 * sink events are forwarded to src pad
-	 */
-
-	if (newevent)
-		return gst_pad_push_event(shift->sinkpad, newevent);
-	else
-		return gst_pad_push_event(shift->sinkpad, event);
-}
-
-
-static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
-{
-	gboolean res = FALSE;
-
-	switch(GST_QUERY_TYPE (query)) {
-	default:
-		res = gst_pad_query_default (pad, parent, query);
-		break;
-	}
-	return res;
-}
-
-
-static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
-{
-	GSTLALShift *shift = GSTLAL_SHIFT(parent);
-	gboolean res = TRUE;
-	GstCaps *filter, *caps;
-
-	switch(GST_QUERY_TYPE(query)) {
-	case GST_QUERY_CAPS:
-		gst_query_parse_caps(query, &filter);
-		caps = getcaps(shift, pad, filter);
-		gst_query_set_caps_result(query, caps);
-		gst_caps_unref(caps);
-		break;
-	default:
-		break;
-	}
-
-	if(G_LIKELY (query))
-		return gst_pad_query_default(pad, parent, query);
-	else
-		return res;
-}
-
-
-/*
- * chain()
- */
-
-
-static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
-{
-	GSTLALShift *element = GSTLAL_SHIFT(parent);
-	GstFlowReturn result = GST_FLOW_OK;
-
-	/*
-	 * check validity of timestamp and offsets
-	 */
-
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		gst_buffer_unref(sinkbuf);
-		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
-
-	/* Check for underflow */
-	if (((gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift) >= 0)
-		GST_BUFFER_TIMESTAMP(sinkbuf) = (GstClockTime) ( (gint64) GST_BUFFER_TIMESTAMP(sinkbuf) + element->shift );
-	else
-		g_error("Cannot shift buffer with time stamp %" G_GUINT64_FORMAT " by %" G_GINT64_FORMAT, GST_BUFFER_TIMESTAMP(sinkbuf), element->shift);
-
-	/* Finally apply the discont flag if a new shift was detected */
-	if (element->have_discont) {
-		GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
-		element->have_discont = FALSE;
-	}
-
-	result = gst_pad_push(element->srcpad, sinkbuf);
-	if(G_UNLIKELY(result != GST_FLOW_OK))
-		GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
-
-	/*
-	 * done
-	 */
-
-done:
-	return result;
-}
-
-
-/*
- * ============================================================================
- *
- *                                Type Support
- *
- * ============================================================================
- */
-
-
-/*
- * Parent class.
- */
-
-
-static GstElementClass *gstlal_shift_parent_class = NULL;
-
-
-/*
- * Instance finalize function.  See ???
+ * finalize()
  */
 
 
@@ -412,26 +281,20 @@ static void finalize(GObject *object)
 
 
 /*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ * gstlal_shift_class_init()
  */
 
 
 #define CAPS \
-	"audio/x-raw, " \
-	"rate = " GST_AUDIO_RATE_RANGE ", " \
-	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-	"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
-	"layout = (string) interleaved"
+	GST_AUDIO_CAPS_MAKE(GSTLAL_AUDIO_FORMATS_ALL) ", " \
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0"
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gstlal_shift_class_init(GSTLALShiftClass *klass)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-
-	gstlal_shift_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -480,15 +343,12 @@ static void class_init(gpointer class, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * gstlal_shift_init()
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gstlal_shift_init(GSTLALShift *element)
 {
-	GSTLALShift *element = GSTLAL_SHIFT(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -496,40 +356,21 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (src_query));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(src_event));
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->srcpad = pad;
 
 	/* internal data */
 	element->shift = 0;
 	element->have_discont = FALSE;
-}
-
-
-/*
- * gstlal_shift_get_type().
- */
-
-
-GType gstlal_shift_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALShiftClass),
-			.class_init = class_init,
-			.instance_size = sizeof(GSTLALShift),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALShift", &info, 0);
-	}
-
-	return type;
 }

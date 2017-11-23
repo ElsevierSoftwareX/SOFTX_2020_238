@@ -24,7 +24,6 @@ from optparse import OptionParser
 import sqlite3
 from time import gmtime
 
-from glue.lal import CacheEntry
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
@@ -33,9 +32,9 @@ from glue.offsetvector import offsetvector
 from glue import segments
 from gstlal import inspiral
 from gstlal import far
-from lal import UTCToGPS
-from pylal import ligolw_burca2
-from pylal import snglcoinc
+import lal
+from lal.utils import CacheEntry
+from lalburst import ligolw_burca2
 
 # FIXME Need to add entries to process and process_params tables
 
@@ -65,8 +64,7 @@ def parse_command_line():
 		#FIXME Use Ordered Dictionary when we use python 2.7
 		svd_bank_dict = {}
 		descriptions = []
-		for line in open(options.svd_bank_cache):
-			svd_bank_cache_entry = CacheEntry(line)
+		for svd_bank_cache_entry in map(CacheEntry, open(options.svd_bank_cache)):
 			if svd_bank_cache_entry.description not in descriptions:
 				descriptions.append(svd_bank_cache_entry.description)
 			svd_bank_dict.setdefault(svd_bank_cache_entry.description, []).append("{0}:{1}".format(svd_bank_cache_entry.observatory, svd_bank_cache_entry.url))
@@ -105,7 +103,7 @@ class Connections:
 		self.verbose = options.verbose
 		for n, database in enumerate(databases):
 			working_filename = dbtables.get_connection_filename(database, tmp_path = options.tmp_space, verbose = self.verbose)
-			self.connection_id_map['connection_id:%d' % n] = namedtuple('ConnectionNamedTuple', 'database, working_filename, connection, process_start_time')('%s' % database, '%s' % working_filename, sqlite3.connect(working_filename), '%d' % UTCToGPS(gmtime()))
+			self.connection_id_map['connection_id:%d' % n] = namedtuple('ConnectionNamedTuple', 'database, working_filename, connection, process_start_time')('%s' % database, '%s' % working_filename, sqlite3.connect(working_filename), '%d' % lal.UTCToGPS(gmtime()))
 
 		#
 		# Create dictionaries keyed by the connection_id value set
@@ -316,25 +314,20 @@ def get_subbank_maps(svd_banks, options):
 
 	return subbank_events_map_index, subbank_likelihood_file_map_index
 
-def get_likelihood_funcs(likelihood_files, options):
+def get_likelihood_funcs(likelihood_files, verbose = False):
 	coinc_params_distributions = None
 	seglists = segments.segmentlistdict()
 	for likelihood_file in likelihood_files:
-		this_coinc_params_distribution, _, this_seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
+		this_coinc_params_distribution, _, this_seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = verbose))
 		if coinc_params_distributions is None:
 			coinc_params_distributions = this_coinc_params_distribution
 		else:
 			coinc_params_distributions += this_coinc_params_distribution
 		seglists |= this_seglists
 
-	#
-	# Compute the probability of instruments given signal and the
-	# instrument combination counts
-	#
-	coinc_params_distributions.populate_prob_of_instruments_given_signal(segs = seglists, n = 1.0, verbose = options.verbose)
-	coinc_params_distributions.add_instrument_combination_counts(segs = seglists, verbose = options.verbose)
+	coinc_params_distributions.finish(segs = seglists, verbose = verbose)
 
-	return coinc_params_distributions.coinc_params, snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+	return coinc_params_distributions.coinc_params, coinc_params_distributions
 
 #
 # =============================================================================
@@ -363,7 +356,7 @@ for bank_id, subbank_events_map_list in sorted(subbank_events_map_index.items(),
 	# Get the correct likelihood functions from the approriate likelihood
 	# files
 	#
-	likelihood_params_func, ln_likelihood_ratio_func = get_likelihood_funcs(subbank_likelihood_file_map_index[bank_id], options)
+	likelihood_params_func, ln_likelihood_ratio_func = get_likelihood_funcs(subbank_likelihood_file_map_index[bank_id], verbose = options.verbose)
 
 	#
 	# Assign new likelihood ratios

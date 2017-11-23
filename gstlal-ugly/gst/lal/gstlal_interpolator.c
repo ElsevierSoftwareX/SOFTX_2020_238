@@ -28,16 +28,6 @@
  */
 
 
-/*
- * struff from the C library
- */
-
-
-/*
- * stuff from glib/gstreamer
- */
-
-
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <gst/gst.h>
@@ -117,12 +107,12 @@ gsl_vector_float** kernel(int half_length_at_original_rate, int f) {
 	/* the domain should be the kernel_length divided by two */
 	int c = kernel_length / 2;
 
-	gsl_vector_float **vecs = malloc(sizeof(gsl_vector_float *) * f);
+	gsl_vector_float **vecs = malloc(sizeof(*vecs) * f);
 	for (int i = 0; i < f; i++)
 		vecs[i] = gsl_vector_float_calloc(sub_kernel_length);
 
-	float *out = fftwf_malloc(sizeof(float) * kernel_length);
-	memset(out, 0, kernel_length * sizeof(float));
+	float *out = fftwf_malloc(sizeof(*out) * kernel_length);
+	memset(out, 0, kernel_length * sizeof(*out));
 
 
 	for (int i = 0; i < kernel_length; i++) {
@@ -156,6 +146,8 @@ void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint k
 
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
 	gsl_matrix_float_view input_matrix = gsl_matrix_float_view_array(input, kernel_length, channels);
+
+
 	gsl_blas_sgemv (CblasTrans, 1.0, &(input_matrix.matrix), thiskernel, 0, &(output_vector.vector));
 	return;
 }
@@ -168,7 +160,8 @@ void copy_input(float *output, gsl_vector_float *thiskernel, float *input, guint
 	 * factor. For these we can save computation and simply copy the input
 	 * samples to the output.
 	 *
-	*/
+	 */
+
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
 	gsl_vector_float_view input_vector = gsl_vector_float_view_array(input + kernel_length / 2, channels);
 	gsl_blas_scopy(&(input_vector.vector), &(output_vector.vector));
@@ -176,6 +169,7 @@ void copy_input(float *output, gsl_vector_float *thiskernel, float *input, guint
 }
 
 void resample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
+
 	/*
 	 * This function is responsible for the resampling of the input time
 	 * series.  It accomplishes the convolution by matrix multiplications
@@ -185,91 +179,92 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 	 * still be convolved even though it is silly to do so.  The input
 	 * stride is 32 samples though, so most gaps will be bigger than that.
 	 *
-	*/
+	 */
 
 	if (!nongap) {
-		memset(output, 0, sizeof(float) * blockstrideout * channels);
+		memset(output, 0, sizeof(*output) * blockstrideout * channels);
 		return;
 	}
 	guint kernel_offset, output_offset, input_offset;
 	for (guint samp = 0; samp < blockstrideout; samp++) {
 		kernel_offset = samp % factor;
 		output_offset = samp * channels;
-		input_offset = samp / factor * channels;
-		/*
-		 * The first kernel is a delta function by definition, so just
- 		 * copy the input 
-		 */
-		if (kernel_offset == 0)
-			copy_input(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
-		else
-			convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
+		input_offset = samp / factor;
+		input_offset *= channels;
+
+		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
 	}
 	return;
 }
+
 
 /*
  * gstreamer boiler plate
  */
 
+
 #define GST_CAT_DEFAULT gstlal_interpolator_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_interpolator", 0, "lal_interpolator element");
-}
-
-GST_BOILERPLATE_FULL(
+G_DEFINE_TYPE_WITH_CODE(
         GSTLALInterpolator,
         gstlal_interpolator,
-        GstBaseTransform,
         GST_TYPE_BASE_TRANSFORM,
-        additional_initializations
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_interpolator", 0, "lal_interpolator element")
 );
 
-static void gstlal_interpolator_base_init(gpointer klass){}
 
-/* Pads */
+/*
+ * Pads
+ */
+
 
 static GstStaticPadTemplate sink_template =
 	GST_STATIC_PAD_TEMPLATE ("sink",
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS ("audio/x-raw-float, "
-		"endianness = (int) BYTE_ORDER, "
-		"width = (int) 32, "
-		"rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, "
-		"channels = (int) [1, MAX]")
+	GST_STATIC_CAPS ("audio/x-raw, " \
+		"format = (string) {" GST_AUDIO_NE(F32) "}, " \
+		"rate =  (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, " \
+		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0")
 	);
+
 
 static GstStaticPadTemplate src_template =
 	GST_STATIC_PAD_TEMPLATE ("src",
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS ("audio/x-raw-float, "
-		"endianness = (int) BYTE_ORDER, "
-		"width = (int) 32, "
-		"rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, "
-		"channels = (int) [1, MAX]")
+	GST_STATIC_CAPS ("audio/x-raw, " \
+		"format = (string) {" GST_AUDIO_NE(F32) "}, " \
+		"rate =  (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, " \
+		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0")
+		
 	);
+
 
 /*
  * Virtual method protototypes
  */
 
+
 static void finalize(GObject *object);
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size);
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size);
 static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * outcaps);
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf);
-static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps);
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize);
+static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter);
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize);
 static gboolean start(GstBaseTransform *trans);
 static gboolean stop(GstBaseTransform *trans);
+
 
 /*
  * class_init()
  */
+
 
 static void gstlal_interpolator_class_init(GSTLALInterpolatorClass *klass)
 {
@@ -278,7 +273,7 @@ static void gstlal_interpolator_class_init(GSTLALInterpolatorClass *klass)
         GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
         GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
-        gst_element_class_set_details_simple(element_class, "Interpolator", "Filter/Audio", "Interpolates multichannel audio data using FFTs", "Chad Hanna <chad.hanna@ligo.org>, Patrick Brockill <brockill@uwm.edu>");
+        gst_element_class_set_details_simple(element_class, "Interpolator", "Filter/Audio", "Interpolates multichannel audio data using BLAS", "Chad Hanna <chad.hanna@ligo.org>, Kipp Cannon <kipp.cannon@ligo.org>, Patrick Brockill <brockill@uwm.edu>, Alex Pace <alexander.pace@ligo.org>");
 
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
@@ -294,7 +289,7 @@ static void gstlal_interpolator_class_init(GSTLALInterpolatorClass *klass)
 }
 
 
-static void gstlal_interpolator_init(GSTLALInterpolator *element, GSTLALInterpolatorClass *klass)
+static void gstlal_interpolator_init(GSTLALInterpolator *element)
 {
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 
@@ -302,48 +297,55 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element, GSTLALInterpol
 	element->inrate = 0;
 	element->outrate = 0;
 
-	element->factor = 0; // size of complex output to FFT
+	/* Upsample factor */
+	element->factor = 0;
 	element->kernel = NULL;
 	element->workspace = NULL;
 
-	// hardcoded kernel size
-	element->half_length = 16;
+	/* hardcoded kernel size */
+	element->half_length = 8;
 	element->kernel_length = element->half_length * 2 + 1;
 
-	// Always initialize with a discont
+	/* Always initialize with a discont */
 	element->need_discont = TRUE;
 	element->need_pretend = TRUE;
 
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 }
 
-static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps) {
+
+static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter) {
 
 	/* 
          * FIXME actually pull out the allowed rates so that we can prevent
 	 *  downsampling at the negotiation stage
 	 */
+
 	GstStructure *capsstruct;
 	gint channels;
 	capsstruct = gst_caps_get_structure (caps, 0);
 	char capsstr[256] = {0};
 
 	if (direction == GST_PAD_SINK && gst_structure_get_int (capsstruct, "channels", &channels)) {
-		sprintf(capsstr, "audio/x-raw-float, endianness = (int) BYTE_ORDER, width = (int) 32, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
+		sprintf(capsstr, "audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
 		return gst_caps_from_string(capsstr);
 	}
 
-	return gst_caps_from_string("audio/x-raw-float, endianness = (int) BYTE_ORDER, width = (int) 32, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
+	return gst_caps_from_string("audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
 
 }
+
 
 static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * outcaps) {
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR (base);
 	GstStructure *instruct, *outstruct;
 	gint inchannels, inrate, outchannels, outrate;
+	gboolean success = gst_audio_info_from_caps(&element->audio_info, outcaps);
 
 	instruct = gst_caps_get_structure (incaps, 0);
 	outstruct = gst_caps_get_structure (outcaps, 0);
+
+
 	g_return_val_if_fail(gst_structure_get_int (instruct, "channels", &inchannels), FALSE);
 	g_return_val_if_fail(gst_structure_get_int (instruct, "rate", &inrate), FALSE);
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "channels", &outchannels), FALSE);
@@ -358,8 +360,9 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->channels = inchannels;
 	element->factor = outrate / inrate;
 
-	/* Timestamp and offset bookeeping */
+        get_unit_size(base, outcaps, &(element->unitsize));
 
+	/* Timestamp and offset bookeeping */
 	element->t0 = GST_CLOCK_TIME_NONE;
         element->offset0 = GST_BUFFER_OFFSET_NONE;
         element->next_input_offset = GST_BUFFER_OFFSET_NONE;
@@ -371,8 +374,11 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 		free(element->kernel);
 	element->kernel = kernel(element->half_length, element->factor);
 
-	// Keep blockstride small to prevent GAPS from growing to be large
-	// FIXME probably this should be decoupled 
+	/*
+	 * Keep blockstride small to prevent GAPS from growing to be large
+	 * FIXME probably this should be decoupled
+	 */
+
 	element->blockstridein = 32;//element->inrate;
 	element->blocksampsin = element->blockstridein + element->kernel_length;
 	element->blockstrideout = element->blockstridein * element->factor;//element->outrate;
@@ -383,8 +389,9 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	if (element->workspace)
 		gsl_matrix_float_free(element->workspace);
 	element->workspace = gsl_matrix_float_calloc (element->blocksampsin, element->channels);
+	g_object_set(element->adapter, "unit-size", element->unitsize, NULL);
 
-	return TRUE;
+	return success;
 }
 
 
@@ -402,23 +409,14 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
-	GstStructure *str;
-	gint width, channels;
-	gboolean success = TRUE;
+	GstAudioInfo info;
+	gboolean success = gst_audio_info_from_caps(&info, caps);
 
-	str = gst_caps_get_structure(caps, 0);
-	success &= gst_structure_get_int(str, "channels", &channels);
-	success &= gst_structure_get_int(str, "width", &width);
-		
 
 	if(success) {
-		*size = width / 8 * channels;
-		element->unitsize = *size;
-		g_object_set(element->adapter, "unit-size", *size, NULL);
-		GST_INFO_OBJECT(element, "channels %d, width %d", channels, width);
+		*size = GST_AUDIO_INFO_BPF(&info);
 	}
 	else
 		GST_WARNING_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
@@ -426,9 +424,9 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 	return success;
 }
 
+
 static guint64 get_available_samples(GSTLALInterpolator *element)
 {
-	//FIXME is size here really samples, I guess so??
 	guint size;
 	g_object_get(element->adapter, "size", &size, NULL);
 	return size;
@@ -436,46 +434,52 @@ static guint64 get_available_samples(GSTLALInterpolator *element)
 
 
 static guint minimum_input_length(GSTLALInterpolator *element, guint samps) {
-	return samps / element->factor + element->kernel_length; // FIXME check this
+	return samps / element->factor + element->kernel_length;
 }
+
 
 static guint minimum_input_size(GSTLALInterpolator *element, guint size) {
 	return minimum_input_length(element, size / element->unitsize) * element->unitsize;
 }
 
+
 static guint get_output_length(GSTLALInterpolator *element, guint samps) {
+
 	/*
 	 * The output length is either a multiple of the blockstride or 0 if
 	 * there is not enough data.
 	 * 
 	*/
 
-	// Pretend that we have a half_length set of samples if we are at a discont
+	/* Pretend that we have a half_length set of samples if we are at a discont */
 	guint pretend_samps = element->need_pretend ? element->half_length : 0;
 	guint numinsamps = get_available_samples(element) + samps + pretend_samps;
 	if (numinsamps <= element->kernel_length)
 		return 0;
-	guint numoutsamps = (numinsamps - element->kernel_length) * element->factor; // FIXME check this
-	guint numblocks = numoutsamps / element->blockstrideout; //truncation
+	guint numoutsamps = (numinsamps - element->kernel_length) * element->factor;
+	guint numblocks = numoutsamps / element->blockstrideout;
 
-	return numblocks * element->blockstrideout; // Could be zero
+	/* NOTE could be zero */
+	return numblocks * element->blockstrideout;
 }
+
 
 static guint get_output_size(GSTLALInterpolator *element, guint size) {
 	return get_output_length(element, size / element->unitsize) * element->unitsize;
 }
 
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
-	guint unit_size;
-	guint other_unit_size;
+	gsize unit_size;
+	gsize other_unit_size;
 	gboolean success = TRUE;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
 	if(size % unit_size) {
-		GST_ERROR_OBJECT(element, "size not a multiple of %u", unit_size);
+		GST_ERROR_OBJECT(element, "size not a multiple of %" G_GSIZE_FORMAT, unit_size);
 		return FALSE;
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
@@ -483,22 +487,25 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 	switch(direction) {
 	case GST_PAD_SRC:
+
 		/*
 		 * number of input bytes required to produce an output
 		 * buffer of (at least) the requested size
 		 */
+
 		*othersize = minimum_input_size(element, size);
-		GST_INFO_OBJECT(element, "producing %d (bytes) buffer for request on SRC pad", *othersize);
+		GST_INFO_OBJECT(element, "producing %" G_GSIZE_FORMAT " (bytes) buffer for request on SRC pad", *othersize);
 		break;
 
 	case GST_PAD_SINK:
+
 		/*
 		 * number of output bytes to be generated by the receipt of
 		 * an input buffer of the given size.
 		 */
 
 		*othersize = get_output_size(element, size);
-		GST_INFO_OBJECT(element, "SINK pad buffer of size %d (bytes) %d (samples) provided. Transforming to size %d (bytes) %d (samples).", size, size / element->unitsize,  *othersize, *othersize / element->unitsize);
+		GST_INFO_OBJECT(element, "SINK pad buffer of size %" G_GSIZE_FORMAT " (bytes) %" G_GSIZE_FORMAT " (samples) provided. Transforming to size %" G_GSIZE_FORMAT " (bytes) %" G_GSIZE_FORMAT " (samples).", size, size / element->unitsize,  *othersize, *othersize / element->unitsize);
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -510,6 +517,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	return success;
 }
 
+
 static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
@@ -519,10 +527,10 @@ static gboolean start(GstBaseTransform *trans)
 	element->next_output_offset = GST_BUFFER_OFFSET_NONE;
 	element->need_discont = TRUE;
 	element->need_pretend = TRUE;
-	// FIXME properly handle segments
-	// element->need_new_segment = TRUE;
+	/* FIXME properly handle segments */
 	return TRUE;
 }
+
 
 static gboolean stop(GstBaseTransform *trans)
 {
@@ -532,18 +540,20 @@ static gboolean stop(GstBaseTransform *trans)
         return TRUE;
 }
 
+
 static void flush_history(GSTLALInterpolator *element) {
 	GST_INFO_OBJECT(element, "flushing adapter contents");
 	gst_audioadapter_clear(element->adapter);
 }
+
 
 static void set_metadata(GSTLALInterpolator *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
 {
 	GST_BUFFER_OFFSET(buf) = element->next_output_offset;
 	element->next_output_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_output_offset;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->outrate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->outrate) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->outrate);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info))) - GST_BUFFER_PTS(buf);
 	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -562,13 +572,15 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	guint output_length;
 	GstFlowReturn result = GST_FLOW_OK;
 	gboolean copied_nongap;
+	GstMapInfo mapinfo;
 
-	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_PTS_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
 		
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_input_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
+
 		/*
 		 * flush any previous history and clear the adapter
 		 */
@@ -579,7 +591,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * (re)sync timestamp and offset book-keeping
 		 */
 
-		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+		element->t0 = GST_BUFFER_PTS(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_output_offset = element->offset0;
 
@@ -589,11 +601,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->need_discont = TRUE;
 		element->need_pretend = TRUE;
-		GST_INFO_OBJECT(element, "A discontinuity was detected. The offset has been reset to %" G_GUINT64_FORMAT " and the timestamp has been reset to %" GST_TIME_SECONDS_FORMAT, element->offset0, element->t0);
+		/* FIXME-- clean up this debug statement */
+		/* GST_INFO_OBJECT(element, "A discontinuity was detected. The offset has been reset to %" G_GUINT64_FORMAT " and the timestamp has been reset to %" GST_TIME_SECONDS_FORMAT, element->offset0, element->t0); */
 
 	}
 	else {
-		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
+		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
 	}
 
 
@@ -601,37 +614,40 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	GST_INFO_OBJECT(element, "%s input_buffer %p spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
-	GST_INFO_OBJECT(element, "pushing %d (bytes) %d (samples) sample buffer into adapter with size %d (samples)", GST_BUFFER_SIZE(inbuf), GST_BUFFER_SIZE(inbuf) / element->unitsize, get_available_samples(element));
+	/* FIXME- clean up this debug statement */
+	/* GST_INFO_OBJECT(element, "pushing %d (bytes) %d (samples) sample buffer into adapter with size %d (samples)", GST_BUFFER_SIZE(inbuf), GST_BUFFER_SIZE(inbuf) / element->unitsize, get_available_samples(element));*/
 
 	gst_buffer_ref(inbuf);  /* don't let calling code free buffer */
 	gst_audioadapter_push(element->adapter, inbuf);
-	GST_INFO_OBJECT(element, "adapter_size %d (samples)", get_available_samples(element));
+	GST_INFO_OBJECT(element, "adapter_size %u (samples)", (guint) get_available_samples(element));
 	
-	// FIXME check the sanity of the output buffer
-
 	/*
 	 * Handle the different possiblilities
 	 */
 
-	output_length = GST_BUFFER_SIZE(outbuf) / element->unitsize;
+	output_length = gst_buffer_get_size(outbuf) / element->unitsize;
 
-	if (GST_BUFFER_SIZE(outbuf) == 0)
+	if (gst_buffer_get_size(outbuf) == 0)
 		set_metadata(element, outbuf, 0, FALSE);
 	else {
 
 
 		guint processed = 0;
-		float *output = (float *) GST_BUFFER_DATA(outbuf);
-		//memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));  // FIXME necesary?
-
-		GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length);
+		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+		float *output = (float *) mapinfo.data;
+		memset(mapinfo.data, 0, mapinfo.size);	
+ 		/* FIXME- clean up this print statement (format) */
+		/* GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length); */
 
 		while (processed < output_length) {
 
 
-			// Special case to handle discontinuities: effectively zero pad. FIXME make this more elegant
+			/* Special case to handle discontinuities: effectively
+ 			 * zero pad. FIXME make this more elegant
+			 */
+
 			if (element->need_pretend) {
-				memset(element->workspace->data, 0, sizeof(float) * element->workspace->size1 * element->workspace->size2); // FIXME necessary?
+				memset(element->workspace->data, 0, sizeof(*element->workspace->data) * element->workspace->size1 * element->workspace->size2);
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
 			}
 			else
@@ -650,6 +666,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		}
 		GST_INFO_OBJECT(element, "Processed a %d samples", processed);
 		set_metadata(element, outbuf, output_length, !copied_nongap);
+		gst_buffer_unmap(outbuf, &mapinfo);
 
 	}
 	return result;
@@ -672,6 +689,6 @@ static void finalize(GObject *object)
          * chain to parent class' finalize() method
          */
 
-        G_OBJECT_CLASS(parent_class)->finalize(object);
+        G_OBJECT_CLASS(gstlal_interpolator_parent_class)->finalize(object);
 }
 

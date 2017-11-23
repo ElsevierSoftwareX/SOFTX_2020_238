@@ -40,117 +40,37 @@
 #
 
 
-import bisect
+import time
 
 
 from glue import iterutils
 from glue import segments
 from glue.ligolw import lsctables
-from pylal import ligolw_thinca
-from pylal import snglcoinc
 import lal
-import time
+from lalinspiral import thinca
+from gstlal import snglinspiraltable
 
 
 #
 # =============================================================================
 #
-#                                Configuration
-#
-# =============================================================================
-#
-
-
-#
-# allowed instrument combinations (yes, hard-coded, just take off, eh)
-#
-
-
-allowed_instrument_combos = frozenset([frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")), frozenset(("H1H2", "L1")), frozenset(("H1H2", "L1", "V1")), frozenset(("E1", "E2")), frozenset(("E1", "E3")), frozenset(("E2", "E3")), frozenset(("E1", "E2", "E3"))])
-
-
-#
-# =============================================================================
-#
-#                      pylal.ligolw_thinca Customizations
+#                      lalinspiral.thinca Customizations
 #
 # =============================================================================
 #
 
 
 #
-# sngl_inspiral<-->sngl_inspiral comparison function
+# Custom trigger class that defines comparison the way we need
 #
 
 
-def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
-	# NOTE:  we also require the masses and spin of the two events to
-	# match, but the InspiralEventList class ensures that all event
-	# pairs that make it this far are from the same template so we
-	# don't need to explicitly test for that here.
-	return float(abs(event_a.end + offset_a - event_b.end - offset_b)) > light_travel_time + delta_t
+class SnglInspiral(snglinspiraltable.GSTLALSnglInspiral):
+	# copied from thinca.SnglInspiral
+	__slots__ = ()
 
-
-#
-# InspiralEventList customization making use of the fact that we demand
-# exact template co-incidence to increase performance.  NOTE:  the use of
-# this class defeats ligolw_thinca()'s ability to apply veto segments.  We
-# don't use that feature in StreamThinca so this isn't a problem for us,
-# but it's something to be aware of if this gets used somewhere else.
-#
-
-
-class InspiralEventList(ligolw_thinca.InspiralEventList):
-	@staticmethod
-	def template(event):
-		"""
-		Returns an immutable hashable object (it can be used as a
-		dictionary key) uniquely identifying the template that
-		produced the given event.
-		"""
-		return event.mass1, event.mass2, event.spin1x, event.spin1y, event.spin1z, event.spin2x, event.spin2y, event.spin2z
-
-	def make_index(self):
-		self.index = {}
-		for event in self:
-			self.index.setdefault(self.template(event), []).append(event)
-		for events in self.index.values():
-			events.sort(key = lambda event: event.end)
-
-	def get_coincs(self, event_a, offset_a, light_travel_time, delta_t, comparefunc):
-		#
-		# event_a's end time, with the time shift applied
-		#
-
-		end = event_a.end + offset_a - self.offset
-
-		#
-		# all events sharing event_a's template
-		#
-
-		try:
-			events = self.index[self.template(event_a)]
-		except KeyError:
-			# that template didn't produce any events in this
-			# instrument
-			return []
-
-		#
-		# extract the subset of events from this list that pass
-		# coincidence with event_a (use bisection searches for the
-		# minimum and maximum allowed end times to quickly identify
-		# a subset of the full list)
-		#
-
-		return [event_b for event_b in events[bisect.bisect_left(events, end - self.dt) : bisect.bisect_right(events, end + self.dt)] if not comparefunc(event_a, offset_a, event_b, self.offset, light_travel_time, delta_t)]
-
-
-#
-# Replace the InspiralEventList class in ligolw_thinca with ours
-#
-
-
-ligolw_thinca.InspiralEventList = InspiralEventList
+	def __cmp__(self, other):
+		return cmp(self.end, other)
 
 
 #
@@ -168,10 +88,14 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, coincidence_threshold, thinca_interval = 50.0, sngls_snr_threshold = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, min_instruments = 2, min_log_L = None, sngls_snr_threshold = None):
 		self._xmldoc = None
 		self.thinca_interval = thinca_interval	# seconds
 		self.last_coincs = {}
+		if min_instruments < 1:
+			raise ValueError("min_instruments (=%d) must be >= 1" % min_instruments)
+		self.min_instruments = min_instruments
+		self.min_log_L = min_log_L
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
 		self.coinc_params_distributions = None
@@ -192,7 +116,7 @@ class StreamThinca(object):
 			self.ln_likelihood_func = None
 			self.ln_likelihood_params_func = None
 		else:
-			self.ln_likelihood_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
+			self.ln_likelihood_func = coinc_params_distributions
 			self.ln_likelihood_params_func = coinc_params_distributions.coinc_params
 	def del_coinc_params_distributions(self):
 		self.ln_likelihood_func = None
@@ -211,6 +135,15 @@ class StreamThinca(object):
 		return 1.1 * self.coincidence_threshold + 2. * lal.REARTH_SI / lal.C_SI
 
 
+	@property
+	def discard_boundary(self):
+		"""
+		After invoking .run_coincidence(), triggers prior to this
+		time are no longer required.
+		"""
+		return self.last_boundary - self.coincidence_back_off
+
+
 	def add_events(self, xmldoc, process_id, events, boundary, fapfar = None):
 		# invalidate the coinc extractor in case all that follows
 		# is a no-op
@@ -227,6 +160,11 @@ class StreamThinca(object):
 			# so we can watch for it changing
 			assert self._xmldoc is None
 			self._xmldoc = xmldoc
+			# How far apart two singles can be and still be
+			# coincident, including time slide offsets.
+			offsetvectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
+			self.coincidence_back_off = max(map(abs, offsetvectors.values())) + self.max_dt
+			self.zero_lag_time_slide_ids = frozenset(time_slide_id for time_slide_id, offsetvector in offsetvectors.items() if not any(offsetvector.values()))
 
 		# append the new row objects to our sngl_inspiral table
 		for event in events:
@@ -288,14 +226,9 @@ class StreamThinca(object):
 		if self.last_boundary + self.thinca_interval > boundary or self.sngl_inspiral_table is None:
 			return []
 
-		# how far apart two singles can be and still be coincident,
-		# including time slide offsets.
-		offsetvectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
-		coincidence_back_off = max(map(abs, offsetvectors.values())) + self.max_dt
-
 		# we need our own copies of these other tables because
-		# sometimes ligolw_thinca wants to modify the attributes of
-		# a row object after appending it to a table, which isn't
+		# sometimes thinca wants to modify the attributes of a row
+		# object after appending it to a table, which isn't
 		# possible if the tables are SQL-based.  these do not store
 		# any state so we create them on the fly when needed
 		coinc_event_map_table = lsctables.New(lsctables.CoincMapTable)
@@ -318,21 +251,28 @@ class StreamThinca(object):
 
 		# define once-off ntuple_comparefunc() so we can pass the
 		# coincidence segment in as a default value for the seg
-		# keyword argument
-		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - coincidence_back_off, boundary - coincidence_back_off)):
-			return frozenset(event.ifo for event in events) not in allowed_instrument_combos or min(event.end for event in events) not in seg
+		# keyword argument and so that we can cut out single detector
+		# events with an SNR less than 5.  Less than SNR 5 triggers
+		# will never produce an log LR greater than 4, so we can
+		# safely discard them.
+		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - self.coincidence_back_off, boundary - self.coincidence_back_off)):
+			# False/0 = keep, True/non-0 = discard
+			if len(events) == 1 and events[0].snr < 5:
+				return True
+			if len(events) == 1 and events[0].ifo == "V1": return True	# exclude single-detector Virgo-only coincs.  FIXME:  remove after O2
+			return min(event.end for event in events) not in seg
 
-		# find coincs
-		ligolw_thinca.ligolw_thinca(
+		# find coincs.
+		thinca.ligolw_thinca(
 			xmldoc,
 			process_id = process_id,
-			coinc_definer_row = ligolw_thinca.InspiralCoincDef,
-			event_comparefunc = event_comparefunc,
+			coinc_definer_row = thinca.InspiralCoincDef,
 			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
 			likelihood_func = self.ln_likelihood_func,
 			likelihood_params_func = self.ln_likelihood_params_func,
-			max_dt = self.max_dt
+			min_log_L = self.min_log_L,
+			min_instruments = self.min_instruments
 		)
 
 		# assign the FAP and FAR if provided with the data to do so
@@ -352,7 +292,7 @@ class StreamThinca(object):
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
-		self.last_coincs = ligolw_thinca.sngl_inspiral_coincs(xmldoc)
+		self.last_coincs = thinca.sngl_inspiral_coincs(xmldoc)
 
 		# synchronize the database' coinc_event table's ID
 		# generator with ours
@@ -365,6 +305,20 @@ class StreamThinca(object):
 		xmldoc.childNodes[-1].replaceChild(real_coinc_inspiral_table, coinc_inspiral_table)
 
 		# copy triggers into real output document
+		# FIXME:  the "min log L" cut is applied inside
+		# ligolw_thinca, above, and coincs that failed it have had
+		# their singles put back into the "non-coincident singles"
+		# pile.  this creates a bias in the final ranking statistic
+		# in that it makes it appear as though singles in the part
+		# of parameter space where the min log L cut fails occur at
+		# a higher rate than they really do, making triggers that
+		# fall outside the region appear to be more rare, and thus
+		# more statistically significant, than they really are.
+		# the effect is small because coincidences are rare, it
+		# shifts the density by about 1%.  sometime before O3 we
+		# should rewrite all of this coincidence machinery with an
+		# eye to higher performance, and when we do we should be
+		# sure to get this sort of stuff right.
 		if coinc_event_map_table:
 			# figure out the IDs of triggers that have been
 			# used in coincs for the first time, and update the
@@ -375,14 +329,13 @@ class StreamThinca(object):
 			newids = set(coinc_event_map_table.getColumnByName("event_id")) - self.event_ids
 			self.event_ids |= newids
 
-			# find zero-lag coinc event IDs
-			zero_lag_time_slide_ids = set(time_slide_id for time_slide_id, offsetvector in offsetvectors.items() if not any(offsetvector.values()))
-			zero_lag_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.time_slide_id in zero_lag_time_slide_ids)
+			# find multi-instrument zero-lag coinc event IDs
+			zero_lag_multi_instrument_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.nevents >= 2 and row.time_slide_id in self.zero_lag_time_slide_ids)
 
-			# singles used in coincs but not in zero-lag
-			# coincs.  these will be added to the
-			# "non-coincident singles" list before returning
-			background_coinc_sngl_ids = set(coinc_event_map_table.getColumnByName("event_id")) - set(row.event_id for row in coinc_event_map_table if row.coinc_event_id in zero_lag_coinc_event_ids)
+			# singles used in coincs but not in zero-lag coincs
+			# with two or more instruments.  these will be added to
+			# the "non-coincident singles" list before returning
+			background_coinc_sngl_ids = set(coinc_event_map_table.getColumnByName("event_id")) - set(row.event_id for row in coinc_event_map_table if row.coinc_event_id in zero_lag_multi_instrument_coinc_event_ids)
 			background_coinc_sngls = map(index.__getitem__, background_coinc_sngl_ids)
 
 			# copy rows into target tables.
@@ -400,7 +353,7 @@ class StreamThinca(object):
 		# remove triggers that are too old to be useful from our
 		# internal sngl_inspiral table.  save any that were never
 		# used in coincidences
-		discard_boundary = self.last_boundary - coincidence_back_off
+		discard_boundary = self.discard_boundary
 		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.end < discard_boundary and row.event_id not in self.event_ids]
 		iterutils.inplace_filter(lambda row: row.end >= discard_boundary, self.sngl_inspiral_table)
 
@@ -413,7 +366,8 @@ class StreamThinca(object):
 				if event.snr >= self.sngls_snr_threshold:
 					real_sngl_inspiral_table.append(event)
 
-		# return sngls that are not coincident in zero-lag
+		# return sngls that were not used in multi-instrument
+		# zero-lag coincidences
 		return noncoinc_sngls + background_coinc_sngls
 
 

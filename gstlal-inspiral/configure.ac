@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-inspiral],[0.8.0],[gstlal-discuss@ligo.org],[gstlal-inspiral])
-AC_COPYRIGHT([Copyright (C) 2008--2015 Kipp Cannon])
+AC_INIT([gstlal-inspiral],[1.4.2],[gstlal-discuss@ligo.org],[gstlal-inspiral])
+AC_COPYRIGHT([Copyright (C) 2008--2016 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -22,6 +22,7 @@ AC_CONFIG_FILES([ \
 	lib/skymap/Makefile \
 	python/Makefile \
 	python/emcee/Makefile \
+	python/stats/Makefile \
 	gst/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
@@ -111,20 +112,25 @@ GSTLAL_DOXYGEN([$MIN_DOXYGEN_VERSION])
 AM_CONDITIONAL([COND_DOXYGEN], [test "x$HAVE_DOXYGEN" == "xyes"])
 AC_SUBST([MIN_DOXYGEN_VERSION])
 
+MIN_GTK_DOC_VERSION="1.11"
+GTK_DOC_CHECK(["$MIN_GTK_DOC_VERSION"], [--flavour no-tmpl])
+AC_SUBST([MIN_GTK_DOC_VERSION])
+
+
 #
 # Check for Python
 #
 
 
-MIN_PYTHON_VERSION="2.6"
+MIN_PYTHON_VERSION="2.7"
 AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
-# hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
-# Debian and SL6.  FIXME:  find a way to do this properly
-PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
-# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
+# hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
+# and SL6.  FIXME:  find a way to do this properly
+PYTHON_LIBS=[`echo "$PYTHON_LIBS" | sed -e "s?-L/usr/lib[^[:space:]]*??g"`]
+# hack to add missing options to PYTHON_LIBS.  sigh, what's the point of
 # AX_PYTHON_DEVEL!?
-PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
+PYTHON_LIBS="-module -avoid-version $PYTHON_LIBS"
 AC_SUBST([MIN_PYTHON_VERSION])
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
@@ -164,8 +170,8 @@ AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
 #
 
 
-AC_SUBST([GSTREAMER_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-controller-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
@@ -177,41 +183,37 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\|gstlal_\|GstLAL_\|GSTLAL_\).*"])
 
-# Check for availability of GstBaseParse class (starting in 0.10.33)
-CFLAGS_saved="$CFLAGS"
-CFLAGS="$gstreamer_CFLAGS"
-AC_COMPILE_IFELSE(
-	[AC_LANG_PROGRAM([#include <gst/base/gstbaseparse.h>])],
-	[HAVE_GSTBASEPARSE=yes
-	AC_DEFINE([HAVE_GST_BASEPARSE], [1], [Define if GstBaseParse class is available.])],
-	[HAVE_GSTBASEPARSE=no]
-)
-CFLAGS="$CFLAGS_saved"
-AM_CONDITIONAL([COND_GSTBASEPARSE], [test "x${HAVE_GSTBASEPARSE}" == "xyes"])
-
-
-#
-# Check for GStreamer Video Library
-#
-
-
-AC_SUBST([GSTREAMER_VIDEO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.32])
-PKG_CHECK_MODULES([gstreamer_video], [gstreamer-video-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}])
-AC_SUBST([gstreamer_video_CFLAGS])
-AC_SUBST([gstreamer_video_LIBS])
-
 
 #
 # Check for GStreamer Audio Library
 #
 
 
-AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_AUDIO_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE} >= ${MIN_GSTREAMER_AUDIO_VERSION}])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
+
+
+#
+# Check for GObject Introspection
+#
+
+
+AC_SUBST([MIN_GOBJECT_INTROSPECTION_VERSION], [1.30.0])
+GOBJECT_INTROSPECTION_CHECK([${MIN_GOBJECT_INTROSPECTION_VERSION}])
+AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
+AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
+AS_IF([test "x$found_introspection" = "xyes"], [
+	AC_SUBST([girdir], ["\${datadir}/gir-1.0"])
+	AC_SUBST([typelibdir], ["\${libdir}/girepository-1.0"])
+	AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gobject introspection typelib search path, you might need to add the directory
+
+	$typelibdir
+
+to your GI_TYPELIB_PATH environment variable.])
+])
 
 
 #
@@ -235,9 +237,9 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.15.2])
-AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
-AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.7.0])
+AC_SUBST([MIN_LAL_VERSION], [6.18.0])
+AC_SUBST([MIN_LALMETAIO_VERSION], [1.3.1])
+AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.7.7])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport lalinspiral >= ${MIN_LALINSPIRAL_VERSION}])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -250,10 +252,8 @@ AX_PYTHON_MODULE([lal], fatal)
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.49])
-AC_SUBST([MIN_PYLAL_VERSION], [0.9.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.54.1])
 AX_PYTHON_GLUE()
-AX_PYTHON_PYLAL()
 
 
 #
@@ -261,8 +261,8 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.10.4])
-AC_SUBST([MIN_GSTLALUGLY_VERSION], [0.9.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.2.1])
+AC_SUBST([MIN_GSTLALUGLY_VERSION], [1.3.1])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])

@@ -15,7 +15,7 @@ SEGMENTS_FILE = ../psd/segments.xml.gz
 all : dag
 
 tisi.xml:
-	ligolw_tisi --comment "NINJA2MONTH" -i H1=0:0:0 -i L1=0:0:0 -i V1=0:0:0 tisi.xml
+	lalapps_gen_timeslides --comment "NINJA2MONTH" -i H1=0:0:0 -i L1=0:0:0 -i V1=0:0:0 tisi.xml
 
 dag : web tisi.xml
 	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache $(FRAMES) --frame-segments-file ${SEGMENTS_FILE} --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),V1=$(V1_BANK_CACHE),L1=$(L1_BANK_CACHE) --cluster-sql-file $(CLUSTER_SQL_FILE) --injection-sql-file $(INJ_SQL_FILE) --web-dir $(WEBDIR) --time-slide-file tisi.xml --channel H1=LDAS-STRAIN --channel L1=LDAS-STRAIN --channel V1=h_16384Hz --vetoes vetoes.xml.gz --control-peak-time 4 --fir-stride 4 --coincidence-threshold 0.030

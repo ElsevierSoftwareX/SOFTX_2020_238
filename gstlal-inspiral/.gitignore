@@ -6,3 +6,5 @@ doc/latex/
 doc/man/
 gstlal-inspiral.spec
 lib/gstlal-inspiral.pc
+tests/*.log
+tests/*.trs

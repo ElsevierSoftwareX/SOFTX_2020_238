@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import sys
+
+
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+from gstlal import far
+
+
+process_name = u"gstlal_inspiral_fake_zerolag_counts"
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("-i", "--input", metavar = "filename", help = "Set name of input file (default = stdin).")
+	parser.add_option("-o", "--output", metavar = "filename", help = "Set name of output file (default = stdout).  May be same as input file (input will be descructively overwritten).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, urls = parser.parse_args()
+
+	paramdict = options.__dict__.copy()
+
+	required_options = []
+	missing_options = [opt for opt in required_options if getattr(options, opt) is None]
+	if missing_options:
+		raise ValueError("missing required option(s) %s" % ", ".join("--%s" % opt for opt in missing_options))
+
+	if urls:
+		raise ValueError("unrecognized options \"%s\"" % " ".join(urls))
+
+	return options, paramdict, urls
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, paramdict, urls = parse_command_line()
+
+
+#
+# load parameter distribution data
+#
+
+
+_, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.input, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
+if ranking_data is None:
+	raise ValueError("'%s' does not contain a RankingData object" % options.input)
+if options.verbose:
+	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
+
+#
+# copy background histograms to zero-lag histograms, and zero the
+# background histograms
+#
+
+
+for key in ranking_data.background_likelihood_rates:
+	if key is None:
+		# ingore the marginalized PDFs, they are not included in
+		# the on-disk version
+		continue
+	# FIXME 100.0 is a rough coincidence fraction loss, can probably do better.
+	ranking_data.zero_lag_likelihood_rates[key].array[:] = ranking_data.background_likelihood_rates[key].array / 100.0
+	ranking_data.zero_lag_likelihood_pdfs[key].array[:] = ranking_data.background_likelihood_pdfs[key].array
+	ranking_data.background_likelihood_rates[key].array[:] = ranking_data.background_likelihood_pdfs[key].array[:] = 0.
+
+
+#
+# write result
+#
+
+
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
+ranking_data.process_id = process.process_id
+far.gen_likelihood_control_doc(xmldoc, process, None, ranking_data, seglists)
+ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

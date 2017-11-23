@@ -1,0 +1,706 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2017 Sydney J. Chamberlin, Patrick Godwin, Chad Hanna, Duncan Meacher
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+
+####################
+# 
+#     preamble
+#
+####################   
+
+
+from optparse import OptionParser
+from collections import deque
+import json
+import os
+import sys
+import socket
+import resource
+import StringIO
+import threading
+import shutil
+import traceback
+
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
+import lal
+
+import numpy
+
+from gstlal import pipeio
+from gstlal import datasource
+from gstlal import idq_multirate_datasource
+from gstlal import multichannel_datasource
+from gstlal import sngltriggertable
+from gstlal import pipeparts
+from gstlal import simplehandler
+from gstlal import aggregator
+from gstlal import idq_aggregator
+from gstlal import httpinterface
+from gstlal import bottle
+from glue import iterutils
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+
+#
+# Make sure we have sufficient resources
+# We allocate far more memory than we need, so this is okay
+#
+
+def setrlimit(res, lim):
+	hard_lim = resource.getrlimit(res)[1]
+	resource.setrlimit(res, (lim if lim is not None else hard_lim, hard_lim))
+
+# set the number of processes and total set size up to hard limit and
+# shrink the per-thread stack size (default is 10 MiB)
+setrlimit(resource.RLIMIT_NPROC, None)
+setrlimit(resource.RLIMIT_AS, None)
+setrlimit(resource.RLIMIT_RSS, None)
+# FIXME:  tests at CIT show that this next tweak has no effect.  it's
+# possible that SL7 has lowered the default stack size from SL6 and we
+# don't need to do this anymore.  remove?
+setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
+
+####################
+# 
+#    functions
+#
+####################   
+
+#
+# construct sine gaussian waveforms that taper to 1e-7 at edges of window
+#
+def duration(phi, q, tolerance = 1e-7):
+        # return the duration of the waveform such that its edges will die out to tolerance of the peak.
+	# phi is the central frequency of the frequency band
+	return q/(2.*numpy.pi*phi)*numpy.log(1./tolerance)
+
+def sine_gaussian(phi, phi_0, q, time_arr):
+        # edges should be 1e-7 times peak
+	dt = time_arr[1]-time_arr[0]
+	rate = 1./dt
+	assert phi < rate/2. 
+
+	# phi is the central frequency of the sine gaussian
+	dur = duration(phi,q)
+	tau = q/(2.*numpy.pi*phi)
+	sg_vals = numpy.cos(2.*numpy.pi*phi*time_arr + phi_0)*numpy.exp(-1.*time_arr**2./tau**2.)
+
+	# normalize sine gaussians to have unit length in their vector space
+	#inner_product = numpy.sum(sg_vals*sg_vals)
+	#norm_factor = 1./(inner_product**0.5)
+
+	return sg_vals 
+
+def half_sine_gaussian(sg_arr):
+	samples = sg_arr.size/2 + 1
+
+	# only take first half of sine gaussian + peak
+	hsg_vals = sg_arr[:samples]
+	
+	# renormalize
+	inner_product = numpy.sum(hsg_vals*hsg_vals)
+	norm_factor = 1./(inner_product**0.5)
+
+	return norm_factor*hsg_vals
+
+#
+# number of tiles in frequency and Q
+#
+def N_Q(q_min, q_max, mismatch = 0.2):
+        return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
+
+def N_phi(phi_min, phi_max, q,  mismatch = 0.2):
+       return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
+
+def Qq(q_min, q_max, mismatch = 0.2):
+	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch = mismatch))
+	return [q_min*(q_max/q_min)**((0.5+q)/N_q) for q in range(int(N_q))]
+
+def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.2):
+	for q in Qq(q_min, q_max, mismatch = mismatch):
+		nphi = N_phi(phi_min, phi_max, q, mismatch = mismatch)
+		for l in range(int(nphi)):
+			yield (phi_min*(phi_max/phi_min)**((0.5+l)/nphi), q)
+
+####################
+# 
+#      classes
+#
+####################   
+
+
+class MultiChannelHandler(simplehandler.Handler):
+	"""
+	A subclass of simplehandler.Handler to be used with 
+	multiple channels.
+
+	Implements additional message handling for dealing with spectrum
+	messages and creates trigger files for use in iDQ.
+	"""
+	def __init__(self, *args, **kwargs):
+		self.lock = threading.Lock()
+		self.basis_params = kwargs.pop("basis_params")
+		self.description = kwargs.pop("description")
+		self.out_path = kwargs.pop("out_path")
+		self.instrument = kwargs.pop("instrument")
+		self.keys = kwargs.pop("keys")
+
+		# iDQ saving properties
+		self.last_save_time = None
+		self.cadence = options.cadence
+		self.tag = '%s-%s' % (self.instrument[:1], self.description)
+		# create header for trigger file
+		if options.latency:
+			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel", "latency")
+		else:
+			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "sigmasq", "chisq", "snr", "channel")
+		self.fdata = deque(maxlen = 25000)
+		self.fdata.append(self.header)
+
+		# set initialization time
+		if options.data_source in ("framexmit", "lvshm"):
+			self.init_gps_time = int(aggregator.now())
+		else:
+			self.init_gps_time = int(options.gps_start_time)
+
+		# set up ETG bottle related properties
+		self.etg_event = deque(maxlen = 20000)
+		self.etg_event_time = None
+
+		# set up bottle routes for PSDs and extracted ETG data
+		self.psds = {}
+		self.etg_data = deque(maxlen = 2000)
+		if not options.disable_web_service:
+			bottle.route("/psds.xml")(self.web_get_psd_xml)
+			bottle.route("/etg_subset")(self.web_get_etg_data)
+
+		# set up kafka related properties
+		if options.use_kafka:
+			self.etg_parition = options.etg_partition
+			self.kafka_topic = options.kafka_topic
+			self.kafka_conf = {'bootstrap.servers': options.kafka_server}
+			self.producer = Producer(self.kafka_conf)
+
+		super(MultiChannelHandler, self).__init__(*args, **kwargs)
+
+	def do_on_message(self, bus, message):
+		"""!
+		Handle application-specific message types, 
+		e.g., spectrum messages.
+		
+		@param bus: A reference to the pipeline's bus
+		@param message: A reference to the incoming message
+		"""
+		#
+		# return value of True tells parent class that we have done
+		# all that is needed in response to the message, and that
+		# it should ignore it.  a return value of False means the
+		# parent class should do what it thinks should be done
+		#
+		if message.type == Gst.MessageType.ELEMENT:
+			if message.get_structure().get_name() == "spectrum":
+				# get the channel name & psd.
+				instrument, info = message.src.get_name().split("_", 1)
+				channel, _ = info.rsplit("_", 1)
+				psd = pipeio.parse_spectrum_message(message)
+				# save psd
+				self.psds[channel] = psd
+				return True		
+		return False
+
+	def bufhandler(self, elem, sink_dict):
+		"""
+		Processes rows from a Gstreamer buffer and
+		handles conditions for file saving.
+
+		@param elem: A reference to the gstreamer element being processed
+		@param sink_dict: A dictionary containing references to gstreamer elements
+		"""
+		with self.lock:
+			buf = elem.emit("pull-sample").get_buffer()
+			buftime = int(buf.pts / 1e9)
+			channel, rate  = sink_dict[elem]
+
+			# push new etg event to queue if done processing current timestamp
+			if self.etg_event_time is None:
+				self.etg_event_time = buftime
+			if self.etg_event_time < buftime:
+				etg_subset = {'timestamp': self.etg_event_time, 'etg_data': list(self.etg_event)}
+				if options.use_kafka:
+					self.producer.produce(timestamp = self.etg_event_time, topic = self.kafka_topic, value = json.dumps(etg_subset))
+				else:
+					self.etg_data.append(etg_subset)
+				self.etg_event.clear()
+				self.etg_event_time = buftime
+
+			# set save times appropriately
+			if self.last_save_time is None:
+				self.last_save_time = buftime
+
+			# Save triggers (in ascii format) once every cadence
+			if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+				self.to_trigger_file(buftime)
+				self.fdata.clear()
+				self.fdata.append(self.header)
+				self.last_save_time = buftime
+
+			# read buffer contents
+			for i in range(buf.n_memory()):
+				memory = buf.peek_memory(i)
+				result, mapinfo = memory.map(Gst.MapFlags.READ)
+				assert result
+				# NOTE NOTE NOTE NOTE
+				# It is critical that the correct class'
+				# .from_buffer() method be used here.  This
+				# code is interpreting the buffer's
+				# contents as an array of C structures and
+				# building instances of python wrappers of
+				# those structures but if the python
+				# wrappers are for the wrong structure
+				# declaration then terrible terrible things
+				# will happen
+				if mapinfo.data:
+					if not options.trigger_end_time or (buftime >= int(options.trigger_start_time) and buftime < int(options.trigger_end_time)):
+						for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
+							self.process_row(channel, rate, buftime, row)
+				memory.unmap(mapinfo)
+
+			del buf
+			return Gst.FlowReturn.OK
+
+	def process_row(self, channel, rate, buftime, row):
+		"""
+		Given a channel, rate, and the current buffer
+		time, will process a row from a gstreamer buffer.
+		"""
+		trigger_time = row.end_time + row.end_time_ns * 1e-9
+		if options.latency:
+			latency = numpy.round(int(aggregator.now()) - buftime)
+		freq, q, duration = self.basis_params[(channel, rate)][row.channel_index]
+		start_time = trigger_time - duration
+		channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
+		# NOTE
+		# Setting stop time to trigger time for use with half sine gaussians
+		stop_time = trigger_time
+		# save iDQ compatible data
+		if options.latency:
+			self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag, latency))
+		else:
+			self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, row.sigmasq, row.chisq, row.snr, channel_tag))
+		# append row to feature vector for bottle requests
+		etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
+                           'frequency': freq, 'q': q, 'phase': row.phase, 'sigma_sq': row.sigmasq, 'chi_sq': row.chisq, 'snr': row.snr}
+		self.etg_event.append(etg_row)
+
+
+	def to_trigger_file(self, buftime = None):
+		"""
+		Dumps triggers saved in memory to disk, following an iDQ ingestion format.
+		Contains a header specifying aligned columns, along with triggers, one per row.
+		Uses the T050017 filenaming convention.
+		NOTE: This method should only be called by an instance that is locked.
+		"""
+		# Only write triggers to disk where the associated data structure has more
+		# than the header stored within.
+		if len(self.fdata) > 1 :
+			fname = '%s-%d-%d.%s' % (self.tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
+			path = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
+			fpath = os.path.join(path, fname)
+			tmpfile = fpath+"~"
+			try:
+				os.makedirs(path)
+			except OSError:
+				pass
+			with open(tmpfile, 'w') as f:
+ 				f.write(''.join(self.fdata))
+			shutil.move(tmpfile, fpath)
+			if buftime:
+				latency = numpy.round(int(aggregator.now()) - buftime)
+				print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
+
+	def gen_psd_xmldoc(self):
+		xmldoc = lal.series.make_psd_xmldoc(self.psds)
+		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_idq", {})
+		ligolw_process.set_process_end_time(process)
+		return xmldoc
+
+	def web_get_psd_xml(self):
+		with self.lock:
+			output = StringIO.StringIO()
+			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output)
+			outstr = output.getvalue()
+			output.close()
+		return outstr
+
+	def web_get_etg_data(self):
+		header = {'Content-type': 'application/json'}
+		# if queue is empty, send appropriate response
+		if not self.etg_data:
+			status = 204
+			body = json.dumps({'error': "No Content"})
+		# else, get etg data and send as JSON
+		else:
+			status = 200
+			with self.lock:
+				body = json.dumps(self.etg_data.popleft())
+		return bottle.HTTPResponse(status = status, headers = header, body = body)
+
+class LinkedAppSync(pipeparts.AppSync):
+	def __init__(self, appsink_new_buffer, sink_dict = {}):
+		super(LinkedAppSync, self).__init__(appsink_new_buffer, sink_dict.keys())
+		self.sink_dict = sink_dict	
+		self.time_ordering = 'full'
+	
+	def attach(self, appsink):
+		"""
+		connect this AppSync's signal handlers to the given appsink
+		element.  the element's max-buffers property will be set to
+		1 (required for AppSync to work).
+		"""
+		if appsink in self.appsinks:
+			raise ValueError("duplicate appsinks %s" % repr(appsink))
+		appsink.set_property("max-buffers", 1)
+		handler_id = appsink.connect("new-preroll", self.new_preroll_handler)
+		assert handler_id > 0
+		handler_id = appsink.connect("new-sample", self.new_sample_handler)
+		assert handler_id > 0
+		handler_id = appsink.connect("eos", self.eos_handler)
+		assert handler_id > 0
+		self.appsinks[appsink] = None
+		_, rate, channel = appsink.name.split("_", 2)
+		self.sink_dict.setdefault(appsink, (channel, int(rate)))
+		return appsink
+	
+	def pull_buffers(self, elem):
+		"""
+		for internal use.  must be called with lock held.
+		"""
+
+		while 1:
+			if self.time_ordering == 'full':
+				# retrieve the timestamps of all elements that
+				# aren't at eos and all elements at eos that still
+				# have buffers in them
+				timestamps = [(t, e) for e, t in self.appsinks.iteritems() if e not in self.at_eos or t is not None]
+				# if all elements are at eos and none have buffers,
+				# then we're at eos
+				if not timestamps:
+					return Gst.FlowReturn.EOS
+				# find the element with the oldest timestamp.  None
+				# compares as less than everything, so we'll find
+				# any element (that isn't at eos) that doesn't yet
+				# have a buffer (elements at eos and that are
+				# without buffers aren't in the list)
+				timestamp, elem_with_oldest = min(timestamps)
+				# if there's an element without a buffer, quit for
+				# now --- we require all non-eos elements to have
+				# buffers before proceding
+				if timestamp is None:
+					return Gst.FlowReturn.OK
+				# clear timestamp and pass element to handler func.
+				# function call is done last so that all of our
+				# book-keeping has been taken care of in case an
+				# exception gets raised
+				self.appsinks[elem_with_oldest] = None
+				self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
+	
+			elif self.time_ordering == 'partial':
+				# retrieve the timestamps of elements of a given channel
+				# that aren't at eos and all elements at eos that still
+				# have buffers in them
+				channel = self.sink_dict[elem][0]
+				timestamps = [(t, e) for e, t in self.appsinks.iteritems() if self.sink_dict[e][0] == channel and (e not in self.at_eos or t is not None)]
+				# if all elements are at eos and none have buffers,
+				# then we're at eos
+				if not timestamps:
+					return Gst.FlowReturn.EOS
+				# find the element with the oldest timestamp.  None
+				# compares as less than everything, so we'll find
+				# any element (that isn't at eos) that doesn't yet
+				# have a buffer (elements at eos and that are
+				# without buffers aren't in the list)
+				timestamp, elem_with_oldest = min(timestamps)
+				# if there's an element without a buffer, quit for
+				# now --- we require all non-eos elements to have
+				# buffers before proceding
+				if timestamp is None:
+					return Gst.FlowReturn.OK
+				# clear timestamp and pass element to handler func.
+				# function call is done last so that all of our
+				# book-keeping has been taken care of in case an
+				# exception gets raised
+				self.appsinks[elem_with_oldest] = None
+				self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
+			
+			elif self.time_ordering == 'none':
+				if not elem in self.appsinks:
+					return Gst.FlowReturn.EOS
+				if self.appsinks[elem] is None:
+					return Gst.FlowReturn.OK
+				self.appsinks[elem] = None
+				self.appsink_new_buffer(elem, self.sink_dict)
+
+###############################
+# 
+#       command line parser
+#
+###############################
+
+def parse_command_line():
+
+	parser = OptionParser(description = __doc__)
+
+	#
+	# First append the datasource common options
+	#
+
+	multichannel_datasource.append_options(parser)
+	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
+	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
+	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
+	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
+	parser.add_option("--etg-partition", metavar = "string", help = "If using Kafka, sets the partition that this ETG is assigned to.")
+	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this ETG publishes feature vector subsets to.")
+	parser.add_option("--kafka-server", metavar = "string", help = "If using Kafka, sets the server url that the kafka topic is hosted on.")
+	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
+	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
+	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
+	parser.add_option("-t", "--t-arr-factor", type = "float", default = 1.0, help = "Add scaling factor to template time array to increase number of samples. Temporary.")
+
+	parser.add_option("--trigger-start-time", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
+	parser.add_option("--trigger-end-time", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
+
+	#
+	# parse the arguments and sanity check
+	#
+
+	options, filenames = parser.parse_args()
+
+	# Sanity check the options
+
+	if options.data_source not in ("lvshm", "framexmit"):
+		if options.trigger_start_time is None:
+			options.trigger_start_time = options.gps_start_time
+		if options.trigger_end_time is None:
+			options.trigger_end_time = options.gps_end_time
+
+	return options, filenames
+
+
+####################
+# 
+#       main
+#
+####################   
+
+#  
+# parsing and setting up some core structures
+#
+
+options, filenames = parse_command_line()
+
+data_source_info = multichannel_datasource.DataSourceInfo(options)
+instrument = data_source_info.instrument
+channels = data_source_info.channel_dict.keys()
+
+# dictionary of basis parameters keyed by ifo, rate
+basis_params = {}
+
+# only load kafka library if triggers are transferred via kafka topic
+if options.use_kafka:
+	from confluent_kafka import Producer
+
+#
+# if web services serving up bottle routes are enabled,
+# create a new, empty, Bottle application and make it the
+# current default, then start http server to serve it up
+#
+
+if not options.disable_web_service:
+	bottle.default_app.push()
+	# uncomment the next line to show tracebacks when something fails
+	# in the web server
+	#bottle.app().catchall = False
+	import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
+	httpservers = httpinterface.HTTPServers(
+		# FIXME:  either switch to using avahi's native name
+		# uniquification system or adopt a naturally unique naming
+		# scheme (e.g., include a search identifier and job
+		# number).
+		service_name = "gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
+		service_properties = {},
+		verbose = options.verbose
+	)
+
+	# Set up a registry of the resources that this job provides
+	@bottle.route("/")
+	@bottle.route("/index.html")
+	def index(channel_list = channels):
+		# get the host and port to report in the links from the
+		# request we've received so that the URLs contain the IP
+		# address by which client has contacted us
+		netloc = bottle.request.urlparts[1]
+		server_address = "http://%s" % netloc
+		yield "<html><body>\n<h3>%s %s</h3>\n<p>\n" % (netloc, " ".join(sorted(channel_list)))
+		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+			# don't create links back to this page
+			if route.rule in ("/", "/index.html"):
+				continue
+			# only create links for GET methods
+			if route.method != "GET":
+				continue
+			yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
+		yield "</p>\n</body></html>"
+	# FIXME:  get service-discovery working, then don't do this
+	open("registry.txt", "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
+
+#
+# building the event loop and pipeline
+#
+
+if options.verbose:
+	print >>sys.stderr, "assembling pipeline..."
+
+mainloop = GObject.MainLoop()
+pipeline = Gst.Pipeline(sys.argv[0])
+
+# generate multiple channel sources, and link up pipeline
+head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
+src = {}
+for channel in channels:
+	# define sampling rates used
+	samp_rate = data_source_info.channel_dict[channel]['fsamp']  
+	max_samp_rate = min(2048, int(samp_rate))
+	min_samp_rate = min(32, max_samp_rate)
+	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
+	if data_source_info.latency_output:
+		head[channel] = pipeparts.mklatency(pipeline, head[channel], name = 'stage2_beforeWhitening_%s' % channel)
+	# whiten auxiliary channel data
+	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], int(samp_rate), instrument, channel_name = channel, width=32).items():
+		if data_source_info.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage3_afterWhitening_%s_%s' % (str(rate).zfill(5), channel))
+		# choose range of basis parameters for sine-gaussians
+		if data_source_info.extension == 'ini':
+			# use omicron params with .ini files
+			flow = data_source_info.channel_dict[channel]['flow']  
+			fhigh = data_source_info.channel_dict[channel]['fhigh']  
+			qhigh = data_source_info.channel_dict[channel]['qhigh']  
+		else:
+			# FIXME: don't hardcode q and frequency
+			# NOTE: as long as this fudge factor (0.8) for the high frequency cutoff is
+			#       less than the factor in the chebychev low pass cutoff in the downsampler
+			#       this should be fine
+			flow = rate/4.*0.8
+			fhigh = rate/2.*0.8
+			qhigh = options.qhigh
+		qlow = 4
+		# generate sine-gaussian templates
+		dur = max([duration(phi, q, 5e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
+		t_arr = numpy.linspace(-dur/2., dur/2., int(numpy.floor(options.t_arr_factor*dur*rate)+1))
+		phase = [0, numpy.pi/2.]
+		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 5e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
+		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
+		# uncomment to determine template durations
+		#print >>sys.stderr, len(list(half_sine_gaussian(sine_gaussian(phi, 0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = 0.2)))
+		# determine whether to do time-domain or frequency-domain convolution
+		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch) for phi_0 in phase]), time_domain = time_domain, block_stride = int(rate), latency = 0)
+		if data_source_info.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
+		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
+		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
+		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
+		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
+		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
+		if data_source_info.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage5_afterTrigger_%s_%s' % (str(rate).zfill(5), channel))
+		src[(channel, rate)] = thishead	
+
+# define structures to synchronize output streams and extract triggers from buffer
+if options.verbose:
+	print >>sys.stderr, "attaching appsinks to pipeline..."
+
+handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys())
+appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
+appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for (channel, rate) in src.keys()) 
+  
+# Allow Ctrl+C or sig term to gracefully shut down the program for online
+# sources, otherwise it will just kill it
+if data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
+	simplehandler.OneTimeSignalHandler(pipeline)
+
+# Seek
+if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter READY state")
+if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
+	datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time)
+#
+# Run pipeline
+#
+
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
+
+if options.verbose:
+	print >>sys.stderr, "running pipeline..."
+
+mainloop.run()
+
+# save remaining triggers
+handler.to_trigger_file()
+
+#
+# Shut down pipeline
+#
+
+if options.verbose:
+	print >>sys.stderr, "shutting down pipeline..."
+
+#
+# Shutdown the web interface servers and garbage collect the Bottle
+# app.  This should release the references the Bottle app's routes
+# hold to the pipeline's data (like template banks and so on).
+#
+
+if not options.disable_web_service:
+	del httpservers
+	bottle.default_app.pop()
+
+#
+# Set pipeline state to NULL and garbage collect the handler
+#
+
+if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline could not be set to NULL")
+del handler.pipeline
+del handler
+
+#
+# close program manually if data source is live
+#
+
+if options.data_source in ("lvshm", "framexmit"):
+        sys.exit(0)

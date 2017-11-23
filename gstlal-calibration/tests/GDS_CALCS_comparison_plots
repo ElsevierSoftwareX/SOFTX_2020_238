@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+
+from gwpy.timeseries import TimeSeries
+from glue import datafind
+import glob
+from math import pi
+import matplotlib as mpl; mpl.use('Agg')
+from gwpy.plotter import BodePlot
+import numpy
+from optparse import OptionParser, Option
+
+parser = OptionParser()
+
+parser.add_option("--ifo", metavar = "name", help = "Name of the IFO")
+parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time.")
+parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the GPS end time.")
+parser.add_option("--raw-frame-cache", metavar = "name", help = "Raw frame cache file")
+parser.add_option("--gds-frame-cache", metavar = "name", help = "GDS frame cache file.")
+
+options, filenames = parser.parse_args()
+
+start_time = int(options.gps_start_time)
+end_time = int(options.gps_end_time)
+
+# Grab raw data.
+data = TimeSeries.read(options.raw_frame_cache, 'H1:CAL-DELTAL_EXTERNAL_DQ', start_time,end_time)
+
+# Grab calibrated data.
+data_cal = TimeSeries.read(options.gds_frame_cache, 'H1:GDS-CALIB_STRAIN', start_time, end_time)
+
+# Make ASDs.
+asd=data.asd(4,2)
+asd_cal=data_cal.asd(4,2)
+
+# Dewhiten oaf.
+oaf = asd.filter([30]*6, [0.3]*6, 1e-12 / 3995.1)
+
+# Plot spectrum.
+plot=oaf.plot(label='H1:CAL-DELTAL\_EXTERNAL\_DQ')
+plot.gca().plot(asd_cal,label='H1:GDS-CALIB\_STRAIN')
+ax = plot.gca()
+ax.set_xlabel = 'Frequency [Hz]'
+ax.set_xlim(10, 8192)
+ax.set_ylabel = r'Strain/$\sqrt{\rm Hz}$'
+
+# Save the plot.
+plot.save('spectrum_comparison.png')
+
+# Plot ASD ratio.
+diff = asd_cal/oaf
+plot = diff.plot(label="LHO: Residual CALCS vs. GDS", xlabel = 'Frequency [Hz]', ylabel = 'Residual', logy=False)
+ax = plot.gca()
+ax.set_xlabel = 'Frequency [Hz]'
+ax.set_xlim(10,5000)
+ax.set_ylabel = 'ASD ratio'
+
+# Save the plot.
+plot.save('CALCS_GDS_residual.png')

@@ -41,6 +41,7 @@
 import sys
 import cgi
 import cgitb
+cgitb.enable()
 import os
 import bisect
 import math
@@ -60,26 +61,15 @@ import time
 import StringIO
 import base64
 import urlparse
-from gstlal import reference_psd
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import lsctables
-from glue.ligolw import param as ligolw_param
-from glue.ligolw import utils as ligolw_utils
-from lal import GPSTimeNow
-from pylal import series as lalseries
-from gstlal import far
-cgitb.enable()
 
+import lal
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from gstlal import far
 from gstlal import plotpsd
 from gstlal import plotfar
 from gstlal import plotsegments
 
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
-lsctables.use_in(LIGOLWContentHandler)
 
 def ceil10(x):
 	return 10**math.ceil(math.log10(x))
@@ -187,7 +177,7 @@ td {
 """
 
 def now():
-	#FIXME use pylal when available
+	#FIXME use lal when available
 	return time.time() - 315964785
 
 class GstlalWebSummary(object):
@@ -223,7 +213,7 @@ class GstlalWebSummary(object):
 			fname = "%s/%s/%s" % (self.directory, id, datatype)
 			if datatype == "psds":
 				try:
-					self.found[datatype][id] = lalseries.read_psd_xmldoc(ligolw_utils.load_url("%s.xml" % fname, contenthandler = LIGOLWContentHandler)) 
+					self.found[datatype][id] = lal.series.read_psd_xmldoc(ligolw_utils.load_url("%s.xml" % fname, contenthandler = lal.series.PSDContentHandler))
 				except KeyError:
 					self.missed[datatype][id] = {}
 			elif datatype == "likelihood":
@@ -253,13 +243,14 @@ class GstlalWebSummary(object):
 					self.missed[datatype][id] = numpy.array([])
 
 	def status(self):
+		valid_latency = self.valid_latency()
 		if self.oldest_data() > 1800:
 			return 2, "<em class=red>SOME DATA OLDER THAN %d seconds</em>" % self.oldest_data() 
-		if not self.found["latency_history"]:
+		if not valid_latency:
 			return 1, "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
 		if self.missed["latency_history"]:
 			return 3, "<em class=red>%s NODES ARE NOT REPORTING!</em>" % len(self.missed["latency_history"])
-		lat = [l[-1,1] for l in self.found["latency_history"].values() if l[-1,1] > 300]
+		lat = [l for l in valid_latency if l > 300]
 		if lat:
 			return 2, "<em class=red>%s NODES ARE MORE THAN 5 MIN BEHIND!</em>" % len(lat)
 		return 0, "<em class=green>OK</em>"
@@ -271,12 +262,30 @@ class GstlalWebSummary(object):
 		num, txt = self.status()
 		print >>sys.stdout, json.dumps({"nagios_shib_scraper_ver": 0.1, "status_intervals":[{"num_status": num, "txt_status": re.sub('<[^<]+?>', '', txt)}]}, sort_keys=True, indent=4, separators=(',', ': '))
 
+	def valid_latency(self):
+		out = []
+		for l in self.found["latency_history"].values():
+			if l.shape != (1,0):
+				out.append(l[-1,1])
+			else:
+				out.append(float("inf"))
+		return out
+
+	def valid_time_since_last(self):
+		out = []
+		for l in self.found["latency_history"].values():
+			if l.shape != (1,0):
+				out.append(now() - l[-1,0])
+			else:
+				out.append(float("inf"))
+			return out
+
 	def latency(self):
-		out = [l[-1,1] for l in self.found["latency_history"].values()]
+		out = self.valid_latency()
 		return "%.2f &pm; %.2f" % (numpy.mean(out), numpy.std(out))
 
 	def time_since_last(self):
-		out = [now() - l[-1,0] for l in self.found["latency_history"].values()]
+		out = self.valid_time_since_last()
 		return "%.2f &pm; %.2f" % (numpy.mean(out), numpy.std(out))
 
 	def average_up_time(self):
@@ -458,7 +467,7 @@ class GstlalWebSummary(object):
 		likelihood, ranking_data, nu = found
 		ranking_data.finish()
 		fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(nu))
-		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25))
+		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., 40.))
 		f = StringIO.StringIO()
 		fig.savefig(f, format="png")
 		out = '<img src="data:image/png;base64,' + base64.b64encode(f.getvalue()) + '"></img>'
@@ -520,13 +529,9 @@ class GstlalWebSummary(object):
 		out = ""
 		for id in self.registry:
 			likelihood, nu, nu = self.found["likelihood"][id]
-			# FIXME dont hardcode IFOs
-			instruments = (u"H1",u"L1")
-			timenow = GPSTimeNow()
-			horizon_distances = {}
-			for ifo in instruments:
-				horizon_distances[ifo] = likelihood.horizon_history[ifo][timenow]
-			fig = plotfar.plot_snr_joint_pdf(likelihood, instruments, horizon_distances, 400)
+			# FIXME dont hardcode IFOs and min_instruments
+			instruments, min_instruments = (u"H1",u"L1"), 2
+			fig = plotfar.plot_snr_joint_pdf(likelihood, instruments, likelihood.horizon_history.getdict(lal.GPSTimeNow()), min_instruments, 200.)
 			out += self.to_png(fig = fig)
 		return out
 
@@ -534,7 +539,7 @@ class GstlalWebSummary(object):
 		out = ""
 		for id in self.registry:
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
-			fig = plotfar.plot_rates(likelihood, ranking_data)
+			fig = plotfar.plot_rates(likelihood)
 			out += self.to_png(fig = fig)
 		return out
 
@@ -570,7 +575,7 @@ class GstlalWebSummary(object):
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
 			ranking_data.finish()
 			fapfar = far.FAPFAR(ranking_data)
-			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5, 25))
+			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., 40.))
 			out += self.to_png(fig = fig)
 		return out
 

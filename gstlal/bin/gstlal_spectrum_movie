@@ -42,7 +42,6 @@ from gstlal import datasource
 
 
 from glue import segments
-from pylal.datatypes import LIGOTimeGPS
 
 
 #
@@ -134,7 +133,7 @@ pipeline = Gst.Pipeline(name="spectrum-movie")
 handler = simplehandler.Handler(mainloop, pipeline)
 
 
-head = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
+head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
 head = build_pipeline(
 	pipeline,
 	head,

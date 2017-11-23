@@ -6,7 +6,7 @@ outfile=HLV-triggers-${start}-${duration}.xml.gz
 blocksize=$(shell echo "512*8*16384" | bc)
 
 coincidence: cluster
-	ligolw_tisi -i H1=0:0:1 -i L1=0:0:1 -i V1=0:0:1 >| HLV_ZERO_LAG_SLIDES.xml.gz
+	lalapps_gen_timeslides -i H1=0:0:1 -i L1=0:0:1 -i V1=0:0:1 >| HLV_ZERO_LAG_SLIDES.xml.gz
 	ligolw_add HLV_ZERO_LAG_SLIDES.xml.gz ${outfile} -o ${outfile}
 	ligolw_burca --coincidence-algorithm excesspower -t H1,L1=0 -t H1,V1=0 -t V1,L1=0 --verbose ${outfile}
 

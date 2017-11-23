@@ -139,7 +139,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"format = (string) { U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) "}, " \
+		"format = (string) { U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", S8, " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) "}, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -246,6 +246,12 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	}
 
 	othercaps = gst_caps_simplify(othercaps);
+
+	if(filter) {
+		GstCaps *intersection = gst_caps_intersect(othercaps, filter);
+		gst_caps_unref(othercaps);
+		othercaps = intersection;
+	}
 
 	return othercaps;
 }

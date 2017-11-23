@@ -253,7 +253,7 @@ static void pop_coincs(GstCollectData *collectdata, GSTLALCoinc *coinc)
 	GstBuffer* buf = gst_collect_pads_pop(collectdata->collect, collectdata);
 	if (buf)
 	{
-		data->last_end_time = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+		data->last_end_time = GST_BUFFER_PTS(buf) + GST_BUFFER_DURATION(buf);
 
 		/* Collate sngl_inspiral records from that buffer according to template. */
 		GHashTable* hash = g_hash_table_new_full(sngl_inspiral_hash, sngl_inspiral_equal, NULL, g_free);
@@ -509,7 +509,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		{
 			memcpy(GST_BUFFER_DATA(buf), outarray->data, siz);
 			g_array_free(outarray, TRUE);
-			GST_BUFFER_TIMESTAMP(buf) = timestamp;
+			GST_BUFFER_PTS(buf) = timestamp;
 			GST_BUFFER_DURATION(buf) = last_seen_time - timestamp;
 			GST_BUFFER_OFFSET(buf) = GST_BUFFER_OFFSET_NONE;
 			GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;

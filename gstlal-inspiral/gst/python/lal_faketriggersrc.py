@@ -23,17 +23,17 @@ from gstlal.pipeutil import *
 from gst.extend.pygobject import gproperty, with_construct_properties
 from random import randint
 from collections import deque
-from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
+from gstlal.snglinspiraltable import GSTLALSnglInspiral
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 import lal
 
 
-def sngl_inspiral_pylal_from_glue(glue_sngl):
-	pylal_sngl = SnglInspiralTable()
+def sngl_inspiral_from_glue(glue_sngl):
+	sngl = GSTLALSnglInspiral()
 	for key in glue_sngl.__slots__:
-		setattr(pylal_sngl, key, getattr(glue_sngl, key))
-	return pylal_sngl
+		setattr(sngl, key, getattr(glue_sngl, key))
+	return sngl
 
 
 class lal_faketriggersrc(gst.BaseSrc):
@@ -202,7 +202,7 @@ class lal_faketriggersrc(gst.BaseSrc):
 			while len(triggertimes) > 0 and triggertimes[0] < end_time:
 				triggertime = triggertimes.popleft()
 				triggertime = lal.LIGOTimeGPS(triggertime / gst.SECOND, triggertime % gst.SECOND)
-				sngl = sngl_inspiral_pylal_from_glue(template)
+				sngl = sngl_inspiral_from_glue(template)
 				sngl.ifo = instrument
 				sngl.channel = "FAKE_TRIGGER"
 				sngl.end_time = triggertime.gpsSeconds
@@ -218,10 +218,10 @@ class lal_faketriggersrc(gst.BaseSrc):
 				triggers_by_template.append(new_triggers)
 
 		ntriggers = sum([len(x) for x in triggers_by_template])
-		recordsize = len(buffer(SnglInspiralTable()))
+		recordsize = len(buffer(GSTLALSnglInspiral()))
 		gst.info('emitting %d triggers for %d templates' % (ntriggers, len(self.__templates)))
 
-		bufsize = len(buffer(SnglInspiralTable())) * ntriggers
+		bufsize = len(buffer(GSTLALSnglInspiral())) * ntriggers
 		pad = self.src_pads().next()
 		(retval, buf) = pad.alloc_buffer(0, bufsize, pad.get_property("caps")) # TODO set offset
 

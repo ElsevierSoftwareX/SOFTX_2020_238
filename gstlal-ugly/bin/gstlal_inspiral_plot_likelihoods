@@ -17,7 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import sys, os
-from pylal import rate
+from lal import rate
 os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib
 matplotlib.use('Agg')
@@ -25,7 +25,6 @@ import pylab
 import numpy
 from scipy.stats import chi2
 from glue.ligolw import utils
-from pylal import ligolw_burca_tailor
 import copy
 import itertools
 from gstlal import far

@@ -41,6 +41,12 @@ import numpy
 
 from scipy.stats import chi2
 
+import lal
+from lal.utils import CacheEntry
+
+from lalburst import snglcluster
+from lalburst import bucluster
+
 from glue import datafind
 
 from glue.ligolw import ligolw, lsctables
@@ -51,10 +57,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 
 from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
-from glue.lal import LIGOTimeGPS, Cache, CacheEntry
-
-from pylal import snglcluster
-from pylal import ligolw_bucluster
+from glue.lal import Cache
 
 from pylal import datatypes as laltypes
 from pylal.xlal.datatypes.snglburst import SnglBurst
@@ -204,7 +207,7 @@ class EPHandler(Handler):
 		Inform the handler of a specific time of interest, along with a action to take.
 		"""
 
-		self.trigger_segment = segment(map(LIGOTimeGPS, trig_seg))
+		self.trigger_segment = segment(map(lal.LIGOTimeGPS, trig_seg))
 		# TODO: Bounds checking
 		if action == "psd":
 			pass
@@ -216,7 +219,7 @@ class EPHandler(Handler):
 		Process state changes from the state vector mechanism.
 		"""
 		if segment_type == "on":
-			self.current_segment = segment(LIGOTimeGPS(timestamp) / 1e9, PosInfinity)
+			self.current_segment = segment(lal.LIGOTimeGPS(timestamp) / 1e9, PosInfinity)
 			if self.verbose:
 				print >>sys.stderr, "Starting segment #%d: %.9f" % (len(self.seglist["state"]), self.current_segment[0])
 		elif segment_type == "off":
@@ -224,7 +227,7 @@ class EPHandler(Handler):
 				print >>sys.stderr, "Got a message to end a segment, but no current segment exists. Ignoring."
 				return
 			self.seglist["state"].append(
-				segment(self.current_segment[0], LIGOTimeGPS(timestamp / 1e9))
+				segment(self.current_segment[0], lal.LIGOTimeGPS(timestamp / 1e9))
 			)
 			# Make it very clear we don't have a segment currently
 			self.current_segment = None
@@ -487,7 +490,7 @@ class EPHandler(Handler):
 	def clustering(self, value):
 		self._clustering = value
 		if len(self.triggers) > 1:
-			ligolw_bucluster.add_ms_columns_to_table(self.triggers)
+			bucluster.add_ms_columns_to_table(self.triggers)
 
 	@classmethod
 	def make_output_table(cls, add_ms_columns=False):
@@ -497,7 +500,7 @@ class EPHandler(Handler):
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
 		#if add_ms_columns:
-			#ligolw_bucluster.add_ms_columns_to_table(tbl)
+			#bucluster.add_ms_columns_to_table(tbl)
 		return tbl
 
 	def get_triggers(self, appsink):
@@ -552,8 +555,8 @@ class EPHandler(Handler):
 		# the earliest available buffer, so we guarantee that the span of
 		# triggers is always greater than file stride duration
 		if buf_ts - self.time_since_dump > self.dump_frequency or len(self.triggers) >= self.max_events:
-			trigseg = segment(LIGOTimeGPS(self.time_since_dump), LIGOTimeGPS(buf_ts))
-			outseg = segment(LIGOTimeGPS(self.time_since_dump), LIGOTimeGPS(self.time_since_dump + self.dump_frequency))
+			trigseg = segment(lal.LIGOTimeGPS(self.time_since_dump), lal.LIGOTimeGPS(buf_ts))
+			outseg = segment(lal.LIGOTimeGPS(self.time_since_dump), lal.LIGOTimeGPS(self.time_since_dump + self.dump_frequency))
 			outseg = trigseg if abs(trigseg) < abs(outseg) else outseg
 
 			subdir = utils.append_formatted_output_path(self.outdirfmt, self, mkdir=False)
@@ -599,15 +602,15 @@ class EPHandler(Handler):
 		# Pipe down unless its important
 		verbose = self.verbose and full
 		changed = True
-		ligolw_bucluster.add_ms_columns_to_table(self.triggers)
-		off = ligolw_bucluster.ExcessPowerPreFunc(self.triggers)
+		bucluster.add_ms_columns_to_table(self.triggers)
+		off = bucluster.ExcessPowerPreFunc(self.triggers)
 		while changed and self._clustering:
 			changed = snglcluster.cluster_events( 
 				events = self.triggers,
-				testfunc = ligolw_bucluster.ExcessPowerTestFunc,
-				clusterfunc = ligolw_bucluster.ExcessPowerClusterFunc,
-				sortfunc = ligolw_bucluster.ExcessPowerSortFunc,
-				bailoutfunc = ligolw_bucluster.ExcessPowerBailoutFunc,
+				testfunc = bucluster.ExcessPowerTestFunc,
+				clusterfunc = bucluster.ExcessPowerClusterFunc,
+				sortfunc = bucluster.ExcessPowerSortFunc,
+				bailoutfunc = bucluster.ExcessPowerBailoutFunc,
 				verbose = verbose
 			)
 			# If full clustering is on, ignore the number of cluster_passes
@@ -616,7 +619,7 @@ class EPHandler(Handler):
 			# If we've reached the number of requested passes, break out
 			if cluster_passes <= 0: 
 				break
-		ligolw_bucluster.ExcessPowerPostFunc(self.triggers, off)
+		bucluster.ExcessPowerPostFunc(self.triggers, off)
 
 	# FIXME: Remove flush argument, it serves no purpose
 	def write_triggers(self, filename, flush=False, seg=None):
@@ -628,15 +631,15 @@ class EPHandler(Handler):
 		output.appendChild(ligolw.LIGO_LW())
 
 		requested_segment = seg or segment(
-			LIGOTimeGPS(self.time_since_dump), 
-			LIGOTimeGPS(self.stop)
+			lal.LIGOTimeGPS(self.time_since_dump), 
+			lal.LIGOTimeGPS(self.stop)
 		)
 		print >>sys.stderr, "req seg: %s" % str(requested_segment)
 
 		# If we include start up time, indicate it in the search summary
 		self.whiten_seg = segment( 
-			LIGOTimeGPS(self.start), 
-			LIGOTimeGPS(self.start + self.whitener_offset)
+			lal.LIGOTimeGPS(self.start), 
+			lal.LIGOTimeGPS(self.start + self.whitener_offset)
 		)
 
 		analysis_segment = utils.determine_segment_with_whitening( 
@@ -675,7 +678,7 @@ class EPHandler(Handler):
 		cur_seg = None
 		if self.current_segment is not None and float(self.current_segment[0]) <= analysis_segment[1]:
 			# add the current segment
-			cur_seg = segment(self.current_segment[0], LIGOTimeGPS(analysis_segment[1]))
+			cur_seg = segment(self.current_segment[0], lal.LIGOTimeGPS(analysis_segment[1]))
 			self.seglist["state"].append(cur_seg)
 			# TODO: send the new time to handle_segment instead
 			self.current_segment = segment(cur_seg[1], PosInfinity)
@@ -824,7 +827,7 @@ def on_psd_change(elem, pspec, handler, drop_time):
 
     # Get the new one
     # FIXME: Reincorpate the kwargs
-    new_psd = laltypes.REAL8FrequencySeries(name = "PSD", f0 = 0.0, deltaF = elem.get_property("delta-f"), data = numpy.array(elem.get_property("mean-psd"))) #, epoch = laltypes.LIGOTimeGPS(0, message.timestamp), sampleUnits = laltypes.LALUnit(message.sample_units.strip()))
+    new_psd = laltypes.REAL8FrequencySeries(name = "PSD", f0 = 0.0, deltaF = elem.get_property("delta-f"), data = numpy.array(elem.get_property("mean-psd"))) #, epoch = lal.LIGOTimeGPS(0, message.timestamp), sampleUnits = laltypes.LALUnit(message.sample_units.strip()))
     handler.cur_psd = new_psd
 
     # Determine if the PSD has changed enough to warrant rebuilding the 

@@ -248,7 +248,7 @@ sink_getcaps(GstPad *pad)
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
 		GstCaps *result;
-		GValue value = {0,};
+		GValue value = G_VALUE_INIT;
 		g_value_init(&value, G_TYPE_INT);
 		GstStructure *peercaps_struct = gst_caps_steal_structure(peercaps, 0);
 		gst_structure_set_name(peercaps_struct, (const gchar *) "audio/x-raw-complex");
@@ -296,7 +296,7 @@ src_getcaps(GstPad *pad)
 			peercaps = gst_pad_peer_get_caps(otherpad);
 			if(peercaps) {
 				GstCaps *result;
-				GValue value = {0,};
+				GValue value = G_VALUE_INIT;
 				g_value_init(&value, G_TYPE_INT);
 				GstStructure *peercaps_struct = gst_caps_steal_structure(peercaps, 0);
 				gst_structure_set_name(peercaps_struct, (const gchar *) "audio/x-raw-float");
@@ -351,7 +351,7 @@ setcaps(GstPad *pad, GstCaps *caps)
 	/* create the caps appropriate for src and sink pads */
 	if(gst_pad_get_direction(pad) == GST_PAD_SINK) {
 		gint width;
-		GValue value = {0,};
+		GValue value = G_VALUE_INIT;
 		g_value_init(&value, G_TYPE_INT);
 		GstStructure *srccaps_struct = gst_caps_steal_structure(srccaps, 0);
 		gst_structure_get_int(srccaps_struct, "width", &width);
@@ -362,7 +362,7 @@ setcaps(GstPad *pad, GstCaps *caps)
 	}
 	else {
 		gint width;
-		GValue value = {0,};
+		GValue value = G_VALUE_INIT;
 		g_value_init(&value, G_TYPE_INT);
 		GstStructure *sinkcaps_struct = gst_caps_steal_structure(sinkcaps, 0);
 		gst_structure_get_int(sinkcaps_struct, "width", &width);
@@ -702,7 +702,7 @@ forward_event(GSTLALTimeSliceChiSquare *element, GstEvent *event, gboolean flush
 	gboolean ret;
 	GstIterator *it = NULL;
 	GstIteratorResult ires;
-	GValue vret = {0};
+	GValue vret = G_VALUE_INIT;
 	EventData data;
 
 	GST_LOG_OBJECT(element, "Forwarding event %p (%s)", event, GST_EVENT_TYPE_NAME(event));
@@ -918,7 +918,7 @@ request_new_pad(GstElement *gstelement, GstPadTemplate *templ, const gchar *unus
 
 	/* new pads can only be sink pads */
 	if(templ->direction != GST_PAD_SINK) {
-		g_warning("gstlal_timeslicechisq: request new pad that is not a SINK pad\n");
+		g_warning("gstlal_timeslicechisq: request new pad that is not a SINK pad");
 		goto not_sink;
 	}
 
@@ -1147,11 +1147,11 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		 * range of offsets.  we've checked above that time hasn't
 		 * gone backwards on any input buffer so gap can't be
 		 * negative. */
-		offset = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset;
+		offset = gst_util_uint64_scale_int_round(GST_BUFFER_PTS(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset;
 		offsetbytes = (guint64) offset * element->complex_unit_size;
 		inlength = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 		numbytes = inlength * element->complex_unit_size;
-		GST_LOG_OBJECT(element, "channel %p: retrieved %ld sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(inbuf)));
+		GST_LOG_OBJECT(element, "channel %p: retrieved %ld sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS(GST_BUFFER_PTS(inbuf)));
 
 		/* add to snr
 		 *
@@ -1181,12 +1181,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/* check that the number of channels and timeslices match the dimension of chifacs */
 	if (num_channels(element) != element->channels) {
 		g_mutex_unlock(element->coefficients_lock);
-		GST_ERROR_OBJECT(element, "number of channels from caps negotiation X does not match second dimension of chifacs matrix Y: X = %i, Y = %i\n", element->channels, num_channels(element));
+		GST_ERROR_OBJECT(element, "number of channels from caps negotiation X does not match second dimension of chifacs matrix Y: X = %i, Y = %i", element->channels, num_channels(element));
 		goto bad_numchannels;
 	}
 	if (num_timeslices(element) != element->padcount) {
 		g_mutex_unlock(element->coefficients_lock);
-		GST_ERROR_OBJECT(element, "number of sink pads X does not match first dimension of chifacs matrix Y: X = %i, Y = %i\n", element->padcount, num_timeslices(element));
+		GST_ERROR_OBJECT(element, "number of sink pads X does not match first dimension of chifacs matrix Y: X = %i, Y = %i", element->padcount, num_timeslices(element));
 		goto bad_numtimeslices;
 	}
 
@@ -1212,7 +1212,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		 * gone backwards on any input buffer so gap can't be
 		 * negative. */
 
-		offset = inbuf ? gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset : 0;
+		offset = inbuf ? gst_util_uint64_scale_int_round(GST_BUFFER_PTS(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset : 0;
 		inlength = inbuf ? GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf) : 0;
 
 		/* FIXME: this double loop could be optimized such that there
@@ -1240,15 +1240,15 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/* set timestamps on the output buffer */
 	element->offset = GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + outlength;
 	GST_BUFFER_OFFSET(outbuf) = earliest_input_offset;
-	GST_BUFFER_TIMESTAMP(outbuf) = output_timestamp_from_offset(element, GST_BUFFER_OFFSET (outbuf));
-	if (GST_BUFFER_OFFSET(outbuf) == 0 || GST_BUFFER_TIMESTAMP(outbuf) != element->timestamp)
+	GST_BUFFER_PTS(outbuf) = output_timestamp_from_offset(element, GST_BUFFER_OFFSET (outbuf));
+	if (GST_BUFFER_OFFSET(outbuf) == 0 || GST_BUFFER_PTS(outbuf) != element->timestamp)
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 	else
 		GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_DISCONT);
 	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + outlength;
 	element->timestamp = output_timestamp_from_offset(element, GST_BUFFER_OFFSET_END(outbuf));
 	element->offset = GST_BUFFER_OFFSET_END(outbuf);
-	GST_BUFFER_DURATION(outbuf) = element->timestamp - GST_BUFFER_TIMESTAMP(outbuf);
+	GST_BUFFER_DURATION(outbuf) = element->timestamp - GST_BUFFER_PTS(outbuf);
 
 	/* push the buffer downstream. */
 	GST_LOG_OBJECT(element, "pushing outbuf %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, outbuf, GST_BUFFER_BOUNDARIES_ARGS(outbuf));

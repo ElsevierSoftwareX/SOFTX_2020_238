@@ -18,14 +18,7 @@
 
 ## @file
 
-DIRECTORY=$1
-shift
-INJFILE=$1
-shift
-WEBDIR=$1
-shift
-
 while true ; do
-	gstlal_ll_inspiral_daily_page --directory ${DIRECTORY} --injection-file ${INJFILE} --web-dir ${WEBDIR} "$@"
+	gstlal_ll_inspiral_daily_page "$@"
 	sleep 60
 done

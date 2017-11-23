@@ -19,6 +19,16 @@
 ## @file
 # A program to recalculate likelihood values and FARs of gracedb events
 
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
 from optparse import OptionParser
 
 from glue.ligolw import array as ligolw_array
@@ -31,9 +41,8 @@ from glue import segments
 from gstlal import far
 from gstlal import lvalert_helper
 from ligo.gracedb import rest as gracedb
-from pylal import ligolw_burca2
-from pylal import ligolw_thinca
-from pylal import snglcoinc
+from lalburst import ligolw_burca2
+from lalinspiral import thinca
 
 #
 # =============================================================================
@@ -92,26 +101,25 @@ def get_likelihood_files(gid_list, gracedb):
 	fapfar = far.FAPFAR(ranking_data, far.get_live_time(seglistsdict))
 	return likelihood_files_dict, fapfar
 
-def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, options):
+def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, with_zerolag = False, verbose = False):
 	# 
 	# Get necesary information from likelihood file, add zero lag rates to
 	# background rates if necessary and then re-make discrete and
 	# interpolated PDFs
 	#
-	coinc_params_distributions = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler=ligolwcontenthandler))[0]
-	if options.with_zerolag:
-		for key, ba in coinc_params_distributions.background_rates.items():
-			ba.array += coinc_params_distributions.zero_lag_rates[key].array
-	coinc_params_distributions.finish()
+
+	coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler=ligolwcontenthandler, verbose = verbose))
+	coinc_params_distributions.zero_lag_in_background = with_zerolag
+	coinc_params_distributions.finish(segs = seglists, verbose = verbose)
 	likelihood_params_func = coinc_params_distributions.coinc_params
-	ln_likelihood_ratio_func = snglcoinc.LnLikelihoodRatio(coinc_params_distributions)
 
 	#
 	# Go through each coinc xmldoc and reassign the likelihood ratio value
 	#
+
 	for [gid, coinc_xmldoc] in list_of_gid_xmldoc_pairs:
 		print "likelihood ratio of %s before: %.6f\nFAR of %s before: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, lsctables.CoincInspiralTable.get_table(coinc_xmldoc)[0].combined_far)
-		coinc_def_id = lsctables.CoincDefTable.get_table(coinc_xmldoc).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+		coinc_def_id = lsctables.CoincDefTable.get_table(coinc_xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 		sngl_inspiral_table_index = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 		coinc_event_map_index = dict((row.coinc_event_id, []) for row in lsctables.CoincTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_def_id)
 		for row in lsctables.CoincMapTable.get_table(coinc_xmldoc):
@@ -123,9 +131,9 @@ def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, opti
 			vetoseglists = segments.segmentlistdict(), 
 			events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id], 
 			veto_func = lambda event, vetoseglists: True, # Obviously you would never veto the single gracedb event 
-			ln_likelihood_ratio_func = ln_likelihood_ratio_func, 
+			ln_likelihood_ratio_func = coinc_params_distributions,
 			likelihood_params_func = likelihood_params_func, 
-			verbose = options.verbose)
+			verbose = verbose)
 
 		print "likelihood ratio of %s after: %.6f\nFAR of %s after: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, fapfar.far_from_rank(lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood))
 
@@ -141,4 +149,4 @@ options, gid_list = parse_command_line()
 gracedb = gracedb.GraceDb(options.gracedb_service_url)
 likelihood_files_dict, fapfar = get_likelihood_files(gid_list, gracedb)
 for likelihood_file, list_of_gid_xmldoc_pairs in likelihood_files_dict.items():
-	reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, options)
+	reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, with_zerolag = options.with_zerolag, verbose = options.verbose)

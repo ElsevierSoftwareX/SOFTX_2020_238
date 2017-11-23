@@ -29,23 +29,26 @@
 
 
 import bisect
+import itertools
 import math
 import matplotlib
 import matplotlib.figure
 matplotlib.rcParams.update({
-	"font.size": 16.0,
-	"axes.titlesize": 14.0,
-	"axes.labelsize": 14.0,
-	"xtick.labelsize": 13.0,
-	"ytick.labelsize": 13.0,
+	"font.size": 12.0,
+	"axes.titlesize": 12.0,
+	"axes.labelsize": 12.0,
+	"xtick.labelsize": 12.0,
+	"ytick.labelsize": 12.0,
 	"legend.fontsize": 10.0,
 	"figure.dpi": 300,
 	"savefig.dpi": 300,
 	"text.usetex": True,
-	"path.simplify": True
+	"path.simplify": True,
+	"font.family": "serif"
 })
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
+import operator
 from optparse import OptionParser
 import os
 import scipy
@@ -53,20 +56,27 @@ import sqlite3
 import sys
 
 import lal
+from lal.utils import CacheEntry
 
+from glue import iterutils
 from glue import segments
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
-from glue import lal
-from pylal import db_thinca_rings
-from pylal import git_version
-from pylal import SimBurstUtils
 from gstlal import far
 from gstlal import inspiral_pipe
+from gstlal import gviz_api
 
 
 golden_ratio = (1. + math.sqrt(5.)) / 2.
+
+
+def to_google_json(fname, description, data):
+	json = open(fname,"w")
+	data_table = gviz_api.DataTable(description)
+	data_table.LoadData(data)
+	print >> json, data_table.ToJSon()
+	json.close()
 
 
 class SimInspiral(lsctables.SimInspiral):
@@ -96,14 +106,13 @@ class SnglInspiral(lsctables.SnglInspiral):
 	def chi(self):
 		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
 
-lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
 lsctables.SimInspiralTable.RowType = SimInspiral
 lsctables.SnglInspiralTable.RowType = SnglInspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
-__version__ = "git id %s" % git_version.id
-__date__ = git_version.date
+__version__ = "git id %s" % "FIXME"
+__date__ = "FIXME"
 
 
 #
@@ -117,12 +126,14 @@ __date__ = git_version.date
 
 def parse_command_line():
 	parser = OptionParser(
-		version = "Name: %%prog\n%s" % git_version.verbose_msg
+		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("","--input-cache", help = "Also get the list of databases to process from this LAL cache.")
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
 	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Provide an output directory")
 	parser.add_option("-f", "--format", metavar = "{\"png\",\"pdf\",\"svg\",\"eps\",...}", action = "append", default = [], help = "Set the output image format.  Can be given multiple times (default = \"png\").")
+	parser.add_option("--shrink-data-segments", metavar = "float", type = float, help = "Shrink data segments by this much (on each side). e.g. specifying 2 will shrink each datasegment by 4 seconds")
+	parser.add_option("--extend-veto-segments", metavar = "float", type = float, help = "Pad segments by this number of seconds (on both sides)")
 	parser.add_option("--segments-name", metavar = "name", default = "statevectorsegments", help = "Set the name of the segments that were analyzed (default = \"statevectorsegments\").")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the veto segments (default = \"vetoes\").")
 	parser.add_option("--plot-group", metavar = "number", action = "append", default = None, help = """Generate the given plot group.  Can be given multiple times (default = make all plot groups)
@@ -136,22 +147,26 @@ def parse_command_line():
 """)
 	parser.add_option("--far-threshold", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Path to the marginalized likelihood file.")
+	# FIXME Add check that plot group 1 being generated if these options are given
+	parser.add_option("--remove-precession", action = "store_true", help = "Ignore precessing injections when generating missed/found plots")
+	parser.add_option("--isolate-precession", action = "store_true", help = "Only make missed/found plots for precessing injections")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
 	if options.plot_group is not None:
 		options.plot_group = sorted(map(int, options.plot_group))
+
+	if (options.plot_group is None or set(options.plot_group) & set((1, 5))) and options.likelihood_file is None:
+		raise ValueError("Must provide --likelihood-file to generate plots in groups 1 and/or 5.")
+
 	if not options.format:
 		options.format = ["png"]
 
 	if not filenames:
 		filenames = []
 	if options.input_cache:
-		filenames.extend(c.path for c in map(lal.CacheEntry, open(options.input_cache)))
-
-	if options.likelihood_file is None:
-		raise ValueError("Must provide likelihood file.")
+		filenames.extend(c.path for c in map(CacheEntry, open(options.input_cache)))
 
 	return options, filenames
 
@@ -166,7 +181,7 @@ def parse_command_line():
 
 
 class CoincDatabase(object):
-	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, wiki = None, base = None, program_name = "gstlal_inspiral"):
+	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, plotsummary_json = None, base = None, program_name = "gstlal_inspiral", shrink_data_segments = None, extend_veto_segments = None):
 		"""
 		Compute and record some summary information about the
 		database.
@@ -175,6 +190,7 @@ class CoincDatabase(object):
 		self.base = base
 		self.connection = connection
 		xmldoc = dbtables.get_xml(connection)
+		self.all_segs_dict = {}
 
 		cursor = connection.cursor()
 
@@ -221,22 +237,40 @@ class CoincDatabase(object):
 			self.sc_definer_id = None
 
 		# retrieve the distinct on and participating instruments
-		self.on_instruments_combos = [frozenset(lsctables.instrument_set_from_ifos(x)) for x, in cursor.execute("SELECT DISTINCT(instruments) FROM coinc_event WHERE coinc_def_id == ?", (self.ii_definer_id,))]
-		self.participating_instruments_combos = [frozenset(lsctables.instrument_set_from_ifos(x)) for x, in cursor.execute("SELECT DISTINCT(ifos) FROM coinc_inspiral")]
+		self.on_instruments_combos = [frozenset(lsctables.instrumentsproperty.get(x)) for x, in cursor.execute("SELECT DISTINCT(instruments) FROM coinc_event WHERE coinc_def_id == ?", (self.ii_definer_id,))]
+		self.participating_instruments_combos = [frozenset(lsctables.instrumentsproperty.get(x)) for x, in cursor.execute("SELECT DISTINCT(ifos) FROM coinc_inspiral")]
 
 		# get the segment lists
 		self.seglists = ligolw_segments.segmenttable_get_by_name(xmldoc, data_segments_name).coalesce()
+		if shrink_data_segments is not None:
+			# Make sure all segments are at least long enough to be
+			# contracted (e.g. if a segment is 32 seconds long but
+			# the user is going to contract it by 17 seconds, then
+			# the end time of the segment would come before the
+			# start time of the segment. This is bad)
+			for seglist in self.seglists.values():
+				iterutils.inplace_filter(lambda s: abs(s) > 2*shrink_data_segments, seglist)
+			self.seglists.contract(shrink_data_segments)
 		self.instruments = set(self.seglists)
 		if veto_segments_name is not None:
 			self.veto_segments = ligolw_segments.segmenttable_get_by_name(xmldoc, veto_segments_name).coalesce()
+			if extend_veto_segments is not None:
+				self.veto_segments.protract(extend_veto_segments)
 		else:
 			self.veto_segments = segments.segmentlistdict()
 		self.seglists -= self.veto_segments
 
+		# get all the segments in the database to use as a summary
+		for llwsegs in ligolw_segments.LigolwSegments(xmldoc).coalesce():
+			seglists = self.all_segs_dict.setdefault(llwsegs.name, segments.segmentlistdict())
+			# FIXME:  should be populating valid segments upstream
+			seglists |= segments.segmentlistdict.fromkeys(llwsegs.instruments, llwsegs.active) #& llwsegs.valid)
+
 		# get the live time
 		if verbose:
 			print >>sys.stderr, "calculating background livetimes: ",
-		self.offset_vectors = db_thinca_rings.get_background_offset_vectors(connection)
+		# retrieve background offset vectors
+		self.offset_vectors = [offsetvector for offsetvector in dbtables.TimeSlideTable(connection = connection).as_dict().values() if any(offsetvector.values())]
 
 		if verbose:
 			print >>sys.stderr
@@ -264,21 +298,22 @@ class CoincDatabase(object):
 				for description, n in cursor.execute("SELECT description, COUNT(*) FROM coinc_definer NATURAL JOIN coinc_event GROUP BY coinc_def_id"):
 					print >>sys.stderr, "\t%s: %d" % (description, n)
 
-		if wiki:
-			wiki.write("database overview:\n\n")
+		if plotsummary_json:
+			data = []
 			for on_instruments in self.on_instruments_combos:
-				wiki.write("||zero-lag livetime for %s||%f s||\n" % ("+".join(sorted(on_instruments)), self.zerolag_livetime[on_instruments]))
-				wiki.write("||background livetime for %s ||%f s||\n" % ("+".join(sorted(on_instruments)), self.background_livetime[on_instruments]))
+				data.append(["zero-lag livetime for %s" % ("+".join(sorted(on_instruments))), str(self.zerolag_livetime[on_instruments])])
+				data.append(["background livetime for %s" % ("+".join(sorted(on_instruments))), str(self.background_livetime[on_instruments])])
 			if self.sngl_inspiral_table is not None:
-				wiki.write("||inspiral events|| %d||\n" % len(self.sngl_inspiral_table))
+				data.append(["inspiral events", str(len(self.sngl_inspiral_table))])
 			if self.sim_inspiral_table is not None:
-				wiki.write("||injections|| %d||\n" % len(self.sim_inspiral_table))
+				data.append(["injections", str(len(self.sim_inspiral_table))])
 			if self.time_slide_table is not None:
-				wiki.write("||time slides|| %d||\n" % cursor.execute("SELECT COUNT(DISTINCT(time_slide_id)) FROM time_slide").fetchone()[0])
+				data.append(["time slides", str(cursor.execute("SELECT COUNT(DISTINCT(time_slide_id)) FROM time_slide").fetchone()[0])])
 			if self.coinc_def_table is not None:
 				for description, n in cursor.execute("SELECT description, COUNT(*) FROM coinc_definer NATURAL JOIN coinc_event GROUP BY coinc_def_id"):
-					wiki.write("||%s||%d||\n" % (description, n) )
-
+					data.append([description, str(n)])
+			if self.sim_inspiral_table is None:
+				to_google_json("%s_%s" % (self.base, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
 
 #
 # =============================================================================
@@ -305,6 +340,8 @@ def roman(i, arabics = (1000,900,500,400,100,90,50,40,10,9,5,4,1), romans = ("m"
 def create_plot(x_label = None, y_label = None, width = 165.0, aspect = golden_ratio):
 	fig = matplotlib.figure.Figure()
 	FigureCanvas(fig)
+	if aspect is None:
+		aspect = golden_ratio
 	fig.set_size_inches(width / 25.4, width / 25.4 / aspect)
 	axes = fig.add_axes((0.1, 0.12, .875, .80))
 	axes.grid(True)
@@ -333,36 +370,97 @@ def create_sim_coinc_view(connection):
 
 	connection.cursor().execute("""
 CREATE TEMPORARY TABLE
-	sim_coinc_map
+	sim_coinc_map_helper
 AS
-	SELECT
-		sim_inspiral.simulation_id AS simulation_id,
-		(
-			SELECT
-				coinc_event.coinc_event_id
-			FROM
-				coinc_event_map AS a
-				JOIN coinc_event_map AS b ON (
-					b.coinc_event_id == a.coinc_event_id
-				)
-				JOIN coinc_event ON (
-					b.table_name == 'coinc_event'
-					AND b.event_id == coinc_event.coinc_event_id
-				)
-			WHERE
-				a.table_name == 'sim_inspiral'
-				AND a.event_id == sim_inspiral.simulation_id
-				AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0)
-			ORDER BY
-				coinc_event.likelihood DESC
-			LIMIT 1
-		) AS coinc_event_id
-	FROM
-		sim_inspiral
-	WHERE
-		coinc_event_id IS NOT NULL
+	SELECT a.event_id as sid,
+		coinc_event.coinc_event_id as cid,
+		coinc_event.likelihood as lr
+	FROM coinc_event_map as a
+		JOIN coinc_event_map AS b ON (b.coinc_event_id == a.coinc_event_id)
+		JOIN coinc_event ON (coinc_event.coinc_event_id == b.event_id)
+	WHERE a.table_name == 'sim_inspiral'
+		AND b.table_name == 'coinc_event'
+		AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0);
 	""")
 
+	connection.cursor().execute("CREATE INDEX IF NOT EXISTS sim_coinc_map_helper_index ON sim_coinc_map_helper (sid, cid);")
+
+	connection.cursor().execute("""
+CREATE TEMPORARY TABLE
+        sim_coinc_map
+AS
+        SELECT
+                sim_inspiral.simulation_id AS simulation_id,
+                (
+                        SELECT
+                                cid
+                        FROM
+				sim_coinc_map_helper
+                        WHERE
+                                sid = simulation_id
+                        ORDER BY
+                                lr
+			DESC
+                        LIMIT 1
+                ) AS coinc_event_id
+        FROM
+                sim_inspiral
+        WHERE
+                coinc_event_id IS NOT NULL;
+
+	""")
+
+	connection.cursor().execute("DROP INDEX sim_coinc_map_helper_index;")
+
+	contents.connection.cursor().execute("""
+CREATE TEMPORARY TABLE
+	sim_id_combined_far
+AS
+	SELECT
+		coinc_inspiral.combined_far AS far, sim_coinc_map.simulation_id AS sim_id
+	FROM
+		sim_coinc_map
+		JOIN coinc_inspiral ON ( coinc_inspiral.coinc_event_id == sim_coinc_map.coinc_event_id  )
+	""")
+
+	contents.connection.cursor().execute("""
+CREATE TEMPORARY TABLE
+	sim_id_sngl_id
+	AS
+		SELECT
+			sim_coinc_map.simulation_id AS sim_id, sngl_inspiral.event_id AS sngl_id
+		FROM
+			sim_coinc_map
+		JOIN coinc_event_map as mapA ON ( mapA.coinc_event_id == sim_coinc_map.coinc_event_id )
+		JOIN sngl_inspiral ON ( sngl_inspiral.event_id == mapA.event_id )
+	""")
+
+	contents.connection.cursor().execute("CREATE INDEX IF NOT EXISTS sim_id_combined_far_index ON sim_id_combined_far (far, sim_id)")
+	contents.connection.cursor().execute("CREATE INDEX IF NOT EXISTS sim_id_sngl_id_index ON sim_id_sngl_id (sim_id, sngl_id)")
+
+	contents.connection.cursor().execute("""
+CREATE TEMPORARY TABLE
+	sim_sngl_far
+	AS
+		SELECT
+			sim_inspiral.*,
+			sngl_inspiral.*,
+			sim_id_combined_far.far
+		FROM
+			sim_inspiral
+			JOIN sim_id_sngl_id ON (
+				sim_inspiral.simulation_id == sim_id_sngl_id.sim_id
+			)
+			JOIN sngl_inspiral ON (
+				sngl_inspiral.event_id == sim_id_sngl_id.sngl_id
+			)
+			JOIN sim_id_combined_far ON (
+				sim_id_combined_far.sim_id == sim_id_sngl_id.sim_id
+			)
+	""")
+
+	contents.connection.cursor().execute("DROP INDEX sim_id_combined_far_index")
+	contents.connection.cursor().execute("DROP INDEX sim_id_sngl_id_index")
 
 #
 # =============================================================================
@@ -397,7 +495,7 @@ SELECT
 	coinc_inspiral.ifos,
 	coinc_event.instruments,
 	(SELECT
-		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2, " ")
+		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2 || ":" || sngl_inspiral.spin1z || ":" || sngl_inspiral.spin2z, " ")
 	FROM
 		sngl_inspiral
 		JOIN coinc_event_map ON (
@@ -422,7 +520,7 @@ WHERE
 	)
 ORDER BY
 	combined_far
-LIMIT 10
+LIMIT 100
 		""").fetchall()
 
 		self.bgcandidates += contents.connection.cursor().execute("""
@@ -437,7 +535,7 @@ SELECT
 	coinc_inspiral.ifos,
 	coinc_event.instruments,
 	(SELECT
-		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2, " ")
+		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2 || ":" || sngl_inspiral.spin1z || ":" || sngl_inspiral.spin2z, " ")
 	FROM
 		sngl_inspiral
 		JOIN coinc_event_map ON (
@@ -462,7 +560,7 @@ WHERE
 	)
 ORDER BY
 	combined_far
-LIMIT 10
+LIMIT 100
 		""").fetchall()
 
 
@@ -470,7 +568,7 @@ LIMIT 10
 		for instruments, num in contents.connection.cursor().execute("""
 SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (distinct_ifos.ifos==coinc_inspiral.ifos) JOIN coinc_event ON (coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.ifos==distinct_ifos.ifos AND NOT EXISTS(SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0) GROUP BY distinct_ifos.ifos;
 """):
-			key = frozenset(lsctables.instrument_set_from_ifos(instruments))
+			key = frozenset(lsctables.instrumentsproperty.get(instruments))
 			self.num_trigs.setdefault(key,0)
 			self.num_trigs[key] += num
 
@@ -482,46 +580,50 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 		for on_instruments, livetime in contents.zerolag_livetime.items():
 			self.livetime[on_instruments] += livetime
 
-	def write_wiki_string(self, l, f, lt):
-		f.write("|| Rank || FAR (Hz) || FAP || ln &Lambda; || Combined SNR || GPS End Time || <i>M</i><sub>total</sub> / M<sub>&#x2299;</sub> || <i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub> || Participating Instruments                   || On Instruments                              ||\n")
-		f.write("||      ||          ||     ||             ||              || Instrument   || SNR                                             || &chi;<sup>2</sup>/DOF                           || <i>m</i><sub>1</sub> / M<sub>&#x2299;</sub> || <i>m</i><sub>2</sub> / M<sub>&#x2299;</sub> ||\n")
-		for rank, values in enumerate(l, 1):
-			values = tuple(values)
-			f.write('|| %d || %.2e || %.3g || %.3g || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % ((rank,) + values[:9]))
+	def write_candidate_json(self, candidates, fname):
+		data = []
+		# FIXME generalize for virgo
+		description = [
+			("Rank", "number"),
+			("FAR (Hz)", "number"),
+			("FAP", "number"),
+			("ln &Lambda;", "number"),
+			("&rho;", "number"),
+			("<i>t</i>", "number"),
+			("<i>M</i><sub>total</sub> / M<sub>&#x2299;</sub>", "number"),
+			("<i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub>", "number"),
+			("Participating<br>Instruments", "string"),
+			("On<br>Instruments", "string"),
+			("H1 &rho;", "string"),
+			("H1 &chi;<sup>2</sup>", "number"),
+			("H1 m<sub>1</sub>", "number"),
+			("H1 m<sub>2</sub>", "number"),
+			("H1 s<sub>1z</sub>", "number"),
+			("H1 s<sub>2z</sub>", "number"),
+			("L1 &rho;", "string"),
+			("L1 &chi;<sup>2</sup>", "number"),
+			("L1 m<sub>1</sub>", "number"),
+			("L1 m<sub>2</sub>", "number"),
+			("L1 s<sub>1z</sub>", "number"),
+			("L1 s<sub>2z</sub>", "number")
+		]
+		for rank, values in enumerate(candidates, 1):
+			row = [rank] + [float(v) for v in values[:7]] + list(values[7:9])
+			# values[9] is a string that is e.g., H1:4.8993754:1.0139208:2.061641:1.145543 L1:8.2582664:1.1890973:2.061641:1.145543
+			ifodict = {"H1": [-1,-1,-1,-1,-1,-1], "L1": [-1,-1,-1,-1,-1,-1]}
 			for ifo_row in values[9].split():
-				ifo_row = ifo_row.split(":")
-				ifo_row[1:] = map(float, ifo_row[1:])
-				f.write('|| || || || || || %s || %.2f || %.2f || %.2f || %.2f ||\n' % tuple(ifo_row) )
+				ifodata = ifo_row.split(":")
+				ifodict[ifodata[0]] = [float(v) for v in ifodata[1:]]
+			row.extend(ifodict["H1"])
+			row.extend(ifodict["L1"])
+			data.append(row)
+		to_google_json(fname, description, data)
 
 	def finish(self):
 		self.candidates.sort()
-		f = open(self.base+'summary_table.txt','w')
-		f.write("=== Open box loudest 10 summary table ===\n")
-		self.write_wiki_string(self.candidates[:11], f, self.livetime)
-		f.close()
-
-		f = open(self.base+'num_trigs_table.txt','w')
-		f.write("||<b>DETECTORS</b>||<b># COINC EVENTS</b>||\n")
-		for inst in self.livetime.keys(): 
-			f.write("||%s||" % ("".join(sorted(inst)),))
-			try:
-				num = self.num_trigs[inst]
-			except:
-				num = 0
-			f.write("%d||\n" % (num,))
-		f.close()
-
-		f = open(self.base+'live_time_table.txt','w')
-		f.write("||<b>DETECTORS ON</b>||<b>LIVETIME (s) (d) (yr)</b>||\n")
-		for inst in self.livetime.keys(): 
-			f.write("||%s||%.2f %.2f %.2f||\n" % ("".join(sorted(inst)), self.livetime[inst],self.livetime[inst]/86400.0,self.livetime[inst]/31556926.0))
-		f.close()
-
+		self.write_candidate_json(self.candidates[:101], self.base+'summary_table.json')
 		self.bgcandidates.sort()
-		f = open(self.base+'bgsummary_table.txt','w')
-		f.write("=== Closed box loudest 10 summary table ===\n")
-		self.write_wiki_string(self.bgcandidates[:11], f, self.livetime)
-		f.close()
+		self.write_candidate_json(self.bgcandidates[:101], self.base+'bgsummary_table.json')
 		yield None, None, None
 
 #
@@ -552,20 +654,29 @@ FROM
 			instruments = frozenset(instrument for instrument, segments in contents.seglists.items() if sim.get_time_geocent() in segments)
 			self.injections.setdefault(sim.waveform, []).append(sim)
 
+	@staticmethod
+	def marker_and_size(n):
+		if n > 2000:
+			return "ko", (10000.0 / n)**0.7
+		else:
+			return "k.", None
+
 	def finish(self):
 		for waveform, sims in self.injections.items():
-			for col1,col2,ax1,ax2,name,aspect in [
-							([sim.mass1 for sim in sims], [sim.mass2 for sim in sims], r"$M_{1}$ ($\mathrm{M}_{\odot}$)", r"$M_{2}$ ($\mathrm{M}_{\odot}$)", "sim_dist_m1_m2_%s", None),
-							([float(sim.time_geocent) for sim in sims], [math.log10(sim.distance) for sim in sims], r"Time (s)", r"$\log_{10} (\mathrm{distance} / 1\,\mathrm{Mpc})$", "sim_dist_time_distance_%s",None),
-							([sim.longitude * 12 / math.pi for sim in sims], [math.sin(sim.latitude) for sim in sims], r"RA (h)", r"$\sin \mathrm{dec}$", "sim_dist_ra_dec_%s",None),
-							([math.cos(sim.inclination) for sim in sims], [sim.polarization for sim in sims], r"$\cos $Inclination (rad)", r"Polarization (rad)", "sim_dist_inc_pol_%s",None),
-							([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"Spin 1 z", r"Spin 2 z", "sim_dist_spin1z_spin2z_%s",None)]:
-				fig, axes = create_plot(ax1,ax2, aspect = aspect)
-				axes.set_title(r"Injection Parameter Distribution (%s Injections)" % waveform)
-				if len(col1) > 2000:
-					axes.plot(col1,col2, "ko",markersize=(10000.0/len(col1))**0.7)
+			for col1, col2, ax1, ax2, name, aspect in [
+				([sim.mass1 for sim in sims], [sim.mass2 for sim in sims], r"$M_{1}$ ($\mathrm{M}_{\odot}$)", r"$M_{2}$ ($\mathrm{M}_{\odot}$)", "sim_dist_m1_m2_%s", None),
+				([float(sim.time_geocent) for sim in sims], [math.log10(sim.distance) for sim in sims], r"$\textrm{Time (s)}$", r"$\log_{10} (\mathrm{distance} / 1\,\mathrm{Mpc})$", "sim_dist_time_distance_%s", None),
+				([sim.longitude * 12 / math.pi for sim in sims], [math.sin(sim.latitude) for sim in sims], r"$\textrm{RA (h)}$", r"$\sin \mathrm{dec}$", "sim_dist_ra_dec_%s", None),
+				([math.cos(sim.inclination) for sim in sims], [sim.polarization for sim in sims], r"$\cos \mathrm{inclination}$", r"$\textrm{Polarization (rad)}$", "sim_dist_inc_pol_%s", None),
+				([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"$s1_z$", r"$s2_z$", "sim_dist_spin1z_spin2z_%s", None)
+			]:
+				fig, axes = create_plot(ax1, ax2, aspect = aspect)
+				axes.set_title(r"$\textrm{Injection Parameter Distribution (%s Injections)}$" % waveform)
+				mrkr, markersize = self.marker_and_size(len(col1))
+				if markersize is not None:
+					axes.plot(col1,col2, mrkr, markersize = markersize)
 				else:
-					axes.plot(col1,col2, "k.")
+					axes.plot(col1,col2, mrkr)
 				minx, maxx = axes.get_xlim()
 				miny, maxy = axes.get_ylim()
 				if aspect == 1:
@@ -585,14 +696,19 @@ FROM
 
 class MissedFoundPlots(object):
 	class MissedFound(object):
-		def __init__(self, on_instruments, far_thresh):
+		def __init__(self, on_instruments, far_thresh, missed_found_plots, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
 			self.on_instruments = on_instruments
 			self.far_thresh = far_thresh
 			self.found_in = {}
+			self.missed_found_plots = missed_found_plots
+			self.remove_precession = remove_precession
+			self.isolate_precession = isolate_precession
+			self.nonzero_horizon_seglistdict = nonzero_horizon_seglistdict
 
 		def add_contents(self, contents):
 			self.base = contents.base
 			zerolag_segments = contents.seglists.intersection(self.on_instruments) - contents.seglists.union(contents.instruments - self.on_instruments)
+			zerolag_segments &= self.nonzero_horizon_seglistdict.intersection(self.on_instruments)
 			for values in contents.connection.cursor().execute("""
 SELECT
 	sim_inspiral.*,
@@ -614,56 +730,126 @@ FROM
 				sim = contents.sim_inspiral_table.row_from_cols(values)
 				del sim.process_id, sim.source, sim.simulation_id
 				if sim.get_time_geocent() in zerolag_segments:
-					participating_instruments = lsctables.instrument_set_from_ifos(values[-1])
+					# any nonzero nonz spin -> precession_bool=True -> precessing injection
+					# all zero nonz spin -> precession_bool=Fales -> non precesssing injection
+					precession_bool = any(s != 0.0 for s in (sim.spin1x, sim.spin1y, sim.spin2x, sim.spin2y))
+					if self.remove_precession and precession_bool:
+						continue
+					if self.isolate_precession and not precession_bool:
+						continue
+					participating_instruments = lsctables.instrumentsproperty.get(values[-1])
 					if participating_instruments is not None:
 						participating_instruments = frozenset(participating_instruments)
-					try:
-						self.found_in[participating_instruments].append(sim)
-					except KeyError:
-						self.found_in[participating_instruments] = [sim]
+					self.found_in.setdefault(participating_instruments, []).append(sim)
 
 		def finish(self):
-			f1 = open(self.base + "injection_summary.txt", "a")
-			f2 = open(self.base + "missed_summary.txt", "a")
 			missed = self.found_in.pop(None, [])
+
+			# Define decisive distance even if there is one instrument
+			def decisive_distance(sim, instruments):
+				if len(instruments) > 1:
+					return sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1]
+				else:
+					return sim.get_eff_dist(list(instruments)[0])
+			def decisive_chirp_distance(sim, instruments):
+				if len(instruments) > 1:
+					return sorted(sim.get_chirp_eff_dist(instrument) for instrument in instruments)[1]
+				else:
+					return sim.get_chirp_eff_dist(list(instruments)[0])
+
+			def found_decisive_charsnr(sim, oninstruments, partinstruments):
+				if len(oninstruments) == 2:
+					if len(partinstruments) == 2:
+						return sorted([sim.alpha1, sim.alpha2])[0]
+					if len(partinstruments) == 1:
+						ifo, = partinstruments
+						if ifo == 'H1':
+							return sim.alpha1
+						if ifo == 'L1':
+							return sim.alpha2
+				elif len(oninstruments) == 1:
+					ifo, = oninstruments
+					if ifo == 'H1':
+						return sim.alpha1
+					if ifo == 'L1':
+						return sim.alpha2
+				else:
+					raise ValueError("More than 2 instruments not supported for injection snr calculation at this time.")
+
+			def missed_decisive_charsnr(sim, oninstruments):
+				if len(oninstruments) == 2:
+					return sorted([sim.alpha1, sim.alpha2])[0]
+				elif len(oninstruments) == 1:
+					ifo, = oninstruments
+					if ifo == 'H1':
+						return sim.alpha1
+					if ifo == 'L1':
+						return sim.alpha2
+				else:
+					raise ValueError("More than 2 instruments not supported for injection snr calculation at this time.")
+
 			for cnt, (title, x_label, x_func, y_label, y_func, filename_fragment) in enumerate((
-				(r"Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$D$ ($\mathrm{Mpc}$)", lambda sim, instruments: sim.distance, "d_vs_mchirp"),
-				(r"Decisive Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_mchirp"),
-				(r"Chirp Decisive Distance vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{chirp}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_chirp_eff_dist(instrument) for instrument in instruments)[1], "chirpdist_vs_mchirp"),
-				(r"Chirp Decisive Distance vs.\ Eta (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"$\mathrm{Decisive} D_{\mathrm{chirp}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_chirp_eff_dist(instrument) for instrument in instruments)[1], "chirpdist_vs_eta"),
-				(r"Decisive Distance vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_mtotal"),
-				(r"Decisive Distance vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_chi"),
-				(r"Decisive Distance vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", lambda sim, instruments: sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1], "deff_vs_t")
-			)):
+				(r"$\textrm{Distance vs.\ Chirp Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$D$ ($\mathrm{Mpc}$)", lambda sim, instruments: sim.distance, "d_vs_mchirp"),
+				(r"$\textrm{Decisive Distance vs.\ Chirp Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_mchirp"),
+				(r"$\textrm{Chirp Decisive Distance vs.\ Chirp Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$\mathrm{Decisive} D_{\mathrm{chirp, eff}}$ ($\mathrm{Mpc}$)", decisive_chirp_distance, "chirpdist_vs_mchirp"),
+				(r"$\textrm{Chirp Decisive Distance vs.\ Eta (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"$\mathrm{Decisive} D_{\mathrm{chirp, eff}}$ ($\mathrm{Mpc}$)", decisive_chirp_distance, "chirpdist_vs_eta"),
+				(r"$\textrm{Decisive Distance vs.\ Total Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_mtotal"),
+				(r"$\textrm{Decisive Distance vs.\ Effective Spin (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_chi"),
+				(r"$\textrm{Decisive Distance vs.\ Time (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_t")
+				)):
+
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
-				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
+				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
 					if cnt == 0:
-						f1.write("||%s||%s||FOUND: %d||\n" % ("".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)))
+						self.missed_found_plots.injection_summary_data.append(["Found", "".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)])
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
 					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, participating_instruments) for sim in sims], ".")
 				if missed:
 					if cnt == 0:
-						f1.write("||%s||%s||MISSED: %d||\n" % ("".join(sorted(self.on_instruments)), "---", len(missed)))
-						def sort_func(row):
-							#FIXME: Don't hardcode IFOs
-							return sorted([row.get_chirp_eff_dist("h1"), row.get_chirp_eff_dist("l1")])[1]
-						tmplt_list = sorted(missed, key=sort_func)
-						for rank, sim in enumerate(tmplt_list[:10], 1):
-							f2.write('|| %d || %s || %f || %f || %f || %f || %f || %f || %f ||\n' % (rank, sim.waveform, sim.time_at_instrument("H1", {"H1": 0.0}), sim.mass1, sim.spin1x, sim.spin1y, sim.spin1z, sim.distance, sim.inclination))
-							f2.write('|| || || %f || %f || %f || %f || %f || %f || %f ||\n' % (sim.time_at_instrument("L1", {"L1": 0.0}), sim.mass2, sim.spin2x, sim.spin2y, sim.spin2z, sorted([sim.get_chirp_eff_dist("h1"), sim.get_chirp_eff_dist("l1")])[1], sim.mchirp))
+						self.missed_found_plots.injection_summary_data.append(["Missed", "".join(sorted(self.on_instruments)), "---", len(missed)])
+						for rank, sim in enumerate(missed):
+							self.missed_found_plots.missed_summary_data.append(["".join(sorted(self.on_instruments)), sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, decisive_chirp_distance(sim, self.on_instruments), sim.inclination, sim.alpha1, sim.alpha2, missed_decisive_charsnr(sim, self.on_instruments)])
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
-				f1.close()
-				f2.close()
+
+
 				if legend:
 					axes.legend(legend)
 				axes.set_title(title)
 				yield fig, filename_fragment, False
 
-	def __init__(self, far_thresh):
+			for cnt, (title, x_label, x_func, y_label, filename_fragment) in enumerate((
+				(r"Decisive Characteristic SNR vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"Decisive Characteristic SNR", "dec_expsnr_vs_mchirp"),
+				(r"Decisive Characteristic SNR vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"Decisive Characteristic SNR", "dec_expsnr_vs_mtotal"),
+				(r"Decisive Characteristic SNR vs.\ Eta (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"Decisive Characteristic SNR", "dec_expsnr_vs_eta"),
+				(r"Decisive Characteristic SNR vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"Decisive Characteristic SNR", "dec_expsnr_vs_chi"),
+				(r"Decisive Characteristic SNR vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"Decisivive Characteristic SNR", "dec_expsnr_vs_t")
+			)):
+				fig, axes = create_plot(x_label, y_label)
+				legend = []
+				try:
+					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
+						legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
+						axes.semilogy([x_func(sim) for sim in sims], [found_decisive_charsnr(sim, self.on_instruments, participating_instruments) for sim in sims], ".")
+					if missed:
+						legend.append("Missed")
+						axes.semilogy([x_func(sim) for sim in missed], [missed_decisive_charsnr(sim, self.on_instruments) for sim in missed], "k.")
+					if legend:
+						axes.legend(legend)
+					axes.set_title(title)
+					yield fig, filename_fragment, False
+				except ValueError:
+					print >> sys.stderr, "Cannot create expected SNR plots, no positive values, probably the SNRs are not set"
+
+	def __init__(self, far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
 		self.far_thresh = far_thresh
 		self.plots = {}
+		self.injection_summary_data = []
+		self.missed_summary_data = []
+		self.remove_precession = remove_precession
+		self.isolate_precession = isolate_precession
+		self.nonzero_horizon_seglistdict = nonzero_horizon_seglistdict
 
 	def add_contents(self, contents):
 		self.base = contents.base
@@ -672,20 +858,16 @@ FROM
 			return
 		for on_instruments in contents.on_instruments_combos:
 			if on_instruments not in self.plots:
-				self.plots[on_instruments] = MissedFoundPlots.MissedFound(on_instruments, self.far_thresh)
+				self.plots[on_instruments] = self.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession, self.nonzero_horizon_seglistdict)
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
-		f1 = open(self.base + "injection_summary.txt", "w")
-		f1.write("||<b>ON INSTRUMENTS</b>||<b> PARTICIPATING INSTRUMENTS</b>||<b>MISSED/FOUND</b||\n")
-		f1.close()
-		f2 = open(self.base + "missed_summary.txt", "w")
-		f2.write("|| <b>Rank</b> || <b>Waveform</b> || <b>H1 End Time</b> || <b>Mass1</b> || <b>Spin1x</b> || <b>Spin1y</b> || <b>Spin1z</b> || <b>Dist (Mpc)</b> || <b>Inclination</b> ||\n")
-		f2.write("||      ||          || <b>L1 End Time</b> || <b>Mass2</b> || <b>Spin2x</b> || <b>Spin2y</b> || <b>Spin2z</b> || <b>Decisive D<sub>chirp</sub> (Mpc)</b> || <b><i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub></b> ||\n")
-		f2.close()
 		for on_instruments, plot in self.plots.items():
 			for fig, filename_fragment, is_open_box in plot.finish():
 				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box
+
+		to_google_json(self.base + "_injection_summary.json", [("Found||Missed", "string"), ("On Instruments", "string"), ("Participating Instruments", "string"), ("count", "number")], self.injection_summary_data)
+		to_google_json(self.base + "_missed_summary.json", [("On Instruments", "string"), ("Waveform", "string"), ("H1 <i>t</i>", "number"), ("L1 <i>t</i>", "number"), ("<i>m</i><sub>1</sub>", "number"), ("<i>m</i><sub>2</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>1y</sub>", "number"), ("<i>s</i><sub>1z</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("<i>s</i><sub>2y</sub>", "number"), ("<i>s</i><sub>2z</sub>", "number"), ("D (Mpc)", "number"), ("Decisive D<sub>chirp,eff</sub> (Mpc)" , "number"), ("Inclination", "number"), ("H1 &rho;", "number"), ("L1 &rho;", "number"), ("Decisive &rho;", "number")], self.missed_summary_data)
 
 
 #
@@ -698,7 +880,8 @@ FROM
 
 
 class ParameterAccuracyPlots(object):
-	def __init__(self):
+	def __init__(self, far_thresh):
+		self.far_thresh = far_thresh
 		self.sim_sngl_pairs = {}
 
 	def add_contents(self, contents):
@@ -706,40 +889,16 @@ class ParameterAccuracyPlots(object):
 			# not an injections file
 			return
 		n_simcolumns = len(contents.sim_inspiral_table.columnnames)
-		for values in contents.connection.cursor().execute("""
-SELECT
-	sim_inspiral.*,
-	sngl_inspiral.*,
-	(
-		SELECT
-			coinc_inspiral.combined_far
-		FROM
-			sim_coinc_map
-			JOIN coinc_inspiral ON (
-				coinc_inspiral.coinc_event_id == sim_coinc_map.coinc_event_id  )
-		WHERE
-			sim_coinc_map.simulation_id == sim_inspiral.simulation_id
-	)
-FROM
-	sim_inspiral
-	JOIN sim_coinc_map ON (
-		sim_coinc_map.simulation_id == sim_inspiral.simulation_id
-	)
-	JOIN coinc_event_map ON (
-		coinc_event_map.coinc_event_id == sim_coinc_map.coinc_event_id
-	)
-	JOIN sngl_inspiral ON (
-		coinc_event_map.table_name == 'sngl_inspiral'
-		AND coinc_event_map.event_id == sngl_inspiral.event_id
-	)
-	WHERE sngl_inspiral.snr > 8.0
-		"""):
-			sim = contents.sim_inspiral_table.row_from_cols(values)
-			sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
-			far = values[-1]
-			del sim.process_id, sim.source, sim.simulation_id
-			del sngl.process_id, sngl.event_id
-			self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl, far))
+
+		for values in contents.connection.cursor().execute("SELECT * FROM sim_sngl_far"):
+			if values[-1] <= self.far_thresh:
+				sim = contents.sim_inspiral_table.row_from_cols(values)
+				sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
+				far = values[-1]
+				del sim.process_id, sim.source, sim.simulation_id
+				del sngl.process_id, sngl.event_id
+				self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl, far))
+
 
 	def finish(self):
 
@@ -750,90 +909,108 @@ FROM
 			axes.hist(arr, numpy.linspace(start, end, 100))
 
 		for (waveform, instrument), pairs in self.sim_sngl_pairs.items():
-			fig, axes = create_plot(r"Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)")
+			fig, axes = create_plot(r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)")
 			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [sngl.mchirp - sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "mchirp_acc_abs_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
+			fig, axes = create_plot(r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
 			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			hist(numpy.array([sngl.mchirp - sim.mchirp for sim, sngl, far in pairs]), axes)
 			yield fig, "mchirp_acc_abs_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"(Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$) / Injected $M_{\mathrm{chirp}}$")
+			fig, axes = create_plot(r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$) / Inj. $M_{\mathrm{chirp}}$")
 			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "mchirp_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$)/ Injected $M_{\mathrm{chirp}}$", "Number")
+			fig, axes = create_plot(r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$)/ Inj. $M_{\mathrm{chirp}}$", "Number")
 			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			hist(numpy.array([(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs]), axes)
 			yield fig, "mchirp_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injected $M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", r"(Recovered $M_{\mathrm{total}}$ - Injected $M_{\mathrm{total}}$) / Injected $M_{\mathrm{total}}$")
+			fig, axes = create_plot(r"Inj. $M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$")
 			axes.set_title(r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			cb = axes.scatter([sim.mtotal for sim, sngl, far in pairs], [(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "mtotal_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $M_{\mathrm{total}}$ - Injected $M_{\mathrm{total}}$) / Injected $M_{\mathrm{total}}$", "Number")
+			fig, axes = create_plot(r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$", "Number")
 			axes.set_title(r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			hist(numpy.array([(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs]), axes)
 			yield fig, "mtotal_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injected $\eta$", r"Recovered $\eta$ - Injected $\eta$")
+			fig, axes = create_plot(r"Inj. $\eta$", r"Rec. $\eta$ - Inj. $\eta$")
 			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [sngl.eta - sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "eta_acc_abs_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Recovered $\eta$ - Injected $\eta$", "Number")
+			fig, axes = create_plot(r"Rec. $\eta$ - Inj. $\eta$", "Number")
 			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			hist(numpy.array([sngl.eta - sim.eta for sim, sngl, far in pairs]), axes)
 			yield fig, "eta_acc_abs_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injected $\eta$", r"(Recovered $\eta$ - Injected $\eta$) / Injected $\eta$")
+			fig, axes = create_plot(r"Inj. $\eta$", r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$")
 			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
 			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
 			yield fig, "eta_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $\eta$ - Injected $\eta$) / Injected $\eta$", "Number")
+			fig, axes = create_plot(r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$", "Number")
 			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
 			hist(numpy.array([(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs]), axes)
 			yield fig, "eta_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Recovered End Time - Injection End Time (s)")
+			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Rec. End Time - Injection End Time (ms)")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], [sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], "kx")
+			axes.plot([sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], [(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs], "kx")
 			yield fig, "t_acc_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Recovered End Time - Injection End Time (s)", "Number")
+			fig, axes = create_plot(r"Rec. End Time - Injection End Time (ms)", "Number")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([float(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0})) for sim, sngl, far in pairs]), axes)
+			hist(numpy.array([float(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs]), axes)
 			yield fig, "t_acc_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
+			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Rec. $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
 			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.semilogx([sim.get_eff_dist(instrument) for sim, sngl, far in pairs], [(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl, far in pairs], "kx")
 			yield fig, "deff_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$", "Number")
+			fig, axes = create_plot(r"(Rec. $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$", "Number")
 			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
 			hist(numpy.array([(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl, far in pairs]), axes)
 			yield fig, "deff_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $1/D_{\mathrm{eff}}$ - Injection $1/D_{\mathrm{eff}}$) / Injection $1/D_{\mathrm{eff}}$", "Number")
+			fig, axes = create_plot(r"(Rec. $1/D_{\mathrm{eff}}$ - Injection $1/D_{\mathrm{eff}}$) / Injection $1/D_{\mathrm{eff}}$", "Number")
 			axes.set_title(r"Fractional Effective Amplitude Accuracy in %s (%s Injections)" % (instrument, waveform))
 			hist(numpy.array([(1. / sngl.eff_distance - 1. / sim.get_eff_dist(instrument)) / (1. / sim.get_eff_dist(instrument)) for sim, sngl, far in pairs]), axes)
 			yield fig, "deff_acc_frac_inv_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injected $\chi$", r"Recovered $\chi$")
+			fig, axes = create_plot(r"Inj. $\chi$", r"Rec. $\chi$")
 			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
 			axes.plot([sim.chi for sim, sngl, far in pairs], [sngl.chi for sim, sngl, far in pairs], "kx")
 			yield fig, "chi_acc_scatter_%s_%s" % (waveform, instrument), False
+
+			if instrument == 'H1':
+				fig, axes = create_plot(r"Inj. H1 SNR", r"Rec. H1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
+				if max([sim.alpha1 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha1 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha1 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
+
+			if instrument == 'L1':
+				fig, axes = create_plot(r"Inj. L1 SNR", r"Rec. L1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
+				if max([sim.alpha2 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha2 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha2 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
 #
 # =============================================================================
@@ -920,28 +1097,18 @@ WHERE
 					self.zerolag[instrument].end_time.append(float(sngl.end))
 		else:
 			# injections file
-			for values in contents.connection.cursor().execute("""
-SELECT
-	sngl_inspiral.*,
-	sim.spin1x * sim.spin1x + sim.spin1y * sim.spin1y + sim.spin1z * sim.spin1z + sim.spin2x * sim.spin2x + sim.spin2y * sim.spin2y + sim.spin2z * sim.spin2z
-FROM
-	sim_coinc_map
-	JOIN coinc_event_map ON (
-		coinc_event_map.coinc_event_id == sim_coinc_map.coinc_event_id
-	)
-	JOIN sngl_inspiral ON (
-		coinc_event_map.table_name == 'sngl_inspiral'
-		AND coinc_event_map.event_id == sngl_inspiral.event_id
-	)
-	JOIN sim_inspiral AS sim ON sim.simulation_id == sim_coinc_map.simulation_id
-			"""):
-				sngl = contents.sngl_inspiral_table.row_from_cols(values)
+			n_simcolumns = len(contents.sim_inspiral_table.columnnames)
+			for values in contents.connection.cursor().execute("SELECT * FROM sim_sngl_far"):
+				sim = contents.sim_inspiral_table.row_from_cols(values)
+				sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
+				far = values[-1]
 				eta = sngl.mass1 * sngl.mass2 / (sngl.mass1 + sngl.mass2)**2
 				mtot = sngl.mass1 + sngl.mass2
 				chieff = (sngl.mass1 * sngl.spin1z + sngl.mass2 * sngl.spin2z) / mtot
 				instrument = sngl.ifo
 				end_time = sngl.end
-				spin = values[-1]
+				# FIXME, what should this be?
+				spin = (sim.mass1 * (sim.spin1x**2 + sim.spin1y**2 + sim.spin1z**2)**.5 + sim.mass2 * (sim.spin1x**2 + sim.spin1y**2 + sim.spin1**2)**.5 ) / (sim.mass1 + sim.mass2)
 				if end_time in contents.seglists[instrument]:
 					if instrument not in self.injections:
 						self.injections[instrument] = self.Points()
@@ -951,7 +1118,7 @@ FROM
 					self.injections[instrument].mchirp.append(mtot * eta**(3. / 5))
 					self.injections[instrument].eta.append(eta)
 					self.injections[instrument].chieff.append(chieff)
-					self.injections[instrument].spin.append((spin / 2.)**.5)
+					self.injections[instrument].spin.append(spin)
 
 	def finish(self):
 		for instrument in set(self.injections) | set(self.background) | set(self.zerolag):
@@ -963,10 +1130,7 @@ FROM
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s (Closed Box)" % instrument)
 
-			for (spinstart, spinstop) in [(0,0.1), (0.1,0.2), (0.2,0.3), (0.3,0.4), (0.4,0.5), (0.5, 0.6), (0.6, 1.0)][::-1]:
-				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
-				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
-				axes.loglog(injsnr, injchi2, '.', label = "Inj $|s|$=%.1f" % spinstart)
+			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, 'r.', label = "Inj")
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.legend(loc = "upper left")
 			axes.set_xlim((self.snr_min, None))
@@ -974,10 +1138,7 @@ FROM
 
 			fig, axes = create_plot(r"$\rho$", r"$\chi^{2}$")
 			axes.set_title(r"$\chi^{2}$ vs.\ $\rho$ in %s" % instrument)
-			for (spinstart, spinstop) in [(0,0.1), (0.1,0.2), (0.2,0.3), (0.3,0.4), (0.4,0.5), (0.5, 0.6), (0.6, 1.0)][::-1]:
-				injsnr = numpy.array([self.injections[instrument].snr[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
-				injchi2 = numpy.array([self.injections[instrument].chi2[n] for n in range(len(self.injections[instrument].snr)) if self.injections[instrument].spin[n] >= spinstart and self.injections[instrument].spin[n] < spinstop])
-				axes.loglog(injsnr, injchi2, '.', label = "Inj $|s|$=%.1f" % spinstart)
+			axes.loglog(self.injections[instrument].snr, self.injections[instrument].chi2, 'r.', label = "Inj")
 			axes.loglog(self.background[instrument].snr, self.background[instrument].chi2, "kx", label = "Background")
 			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].chi2, "bx", label = "Zero-lag")
 			axes.legend(loc = "upper left")
@@ -1013,8 +1174,8 @@ FROM
 				# background parameter distributions
 				fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\eta$")
 				axes.set_title(r"Background Events in %s (Closed Box)" % instrument)
-				coll = axes.scatter(bg_mcs, bg_etas, c = bg_snrs, linewidth = 0.2, alpha = 0.8)
-				fig.colorbar(coll, ax = axes).set_label("SNR in %s" % instrument)
+				coll = axes.scatter(bg_mcs, bg_etas, c = numpy.log10(bg_snrs), linewidth = 0.2, alpha = 0.8)
+				fig.colorbar(coll, ax = axes).set_label("log(SNR) in %s" % instrument)
 				yield fig, "bgparams_mchirp_vs_eta_vs_snr_%s" % instrument, False
 
 				# background parameter distributions
@@ -1025,15 +1186,15 @@ FROM
 				a3 = numpy.pi / (8 * (numpy.pi * flow)**(5./3) )
 				bg_tau0s = a0 * (lal.MTSUN_SI * bg_mcs)**(-5./3)
 				bg_tau3s = (a3 / bg_etas) * (bg_etas * bg_tau0s / a0)**(2./5)
-				coll = axes.scatter(bg_tau0s, bg_tau3s, c = bg_snrs, linewidth = 0.2, alpha = 0.8)
-				fig.colorbar(coll, ax=axes).set_label("SNR in %s" % instrument)
+				coll = axes.scatter(bg_tau0s, bg_tau3s, c = numpy.log10(bg_snrs), linewidth = 0.2, alpha = 0.8)
+				fig.colorbar(coll, ax=axes).set_label("log(SNR) in %s" % instrument)
 				yield fig, "bgparams_tau0_vs_tau3_vs_snr_%s" % instrument, False
 
 				# background parameter distributions
 				fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\chi_\mathrm{eff}$")
 				axes.set_title(r"Background Events in %s (Closed Box)" % instrument)
-				coll = axes.scatter(bg_mcs, bg_chieffs, c = bg_snrs, linewidth = 0.2, alpha = 0.8)
-				fig.colorbar(coll, ax=axes).set_label("SNR in %s" % instrument)
+				coll = axes.scatter(bg_mcs, bg_chieffs, c = numpy.log10(bg_snrs), linewidth = 0.2, alpha = 0.8)
+				fig.colorbar(coll, ax=axes).set_label("log(SNR) in %s" % instrument)
 				yield fig, "bgparams_mchirp_vs_chieff_vs_snr_%s" % instrument, False
 
 
@@ -1128,26 +1289,14 @@ WHERE
 			# injections file
 			for values in contents.connection.cursor().execute("""
 SELECT
-	sngl_inspiral_x.*,
-	sngl_inspiral_y.*
+        sngl_inspiral_x.*,
+        sngl_inspiral_y.*
 FROM
-	sim_coinc_map
-	JOIN coinc_event_map AS coinc_event_map_x ON (
-		coinc_event_map_x.coinc_event_id == sim_coinc_map.coinc_event_id
-	)
-	JOIN sngl_inspiral AS sngl_inspiral_x ON (
-		coinc_event_map_x.table_name == 'sngl_inspiral'
-		AND coinc_event_map_x.event_id == sngl_inspiral_x.event_id
-	)
-	JOIN coinc_event_map AS coinc_event_map_y ON (
-		coinc_event_map_y.coinc_event_id == sim_coinc_map.coinc_event_id
-	)
-	JOIN sngl_inspiral AS sngl_inspiral_y ON (
-		coinc_event_map_y.table_name == 'sngl_inspiral'
-		AND coinc_event_map_y.event_id == sngl_inspiral_y.event_id
-	)
+	sngl_inspiral AS sngl_inspiral_x
+		JOIN sim_id_sngl_id AS sim_id_sngl_id_x ON sim_id_sngl_id_x.sngl_id == sngl_inspiral_x.event_id
+		JOIN sngl_inspiral AS sngl_inspiral_y JOIN sim_id_sngl_id AS sim_id_sngl_id_y ON sim_id_sngl_id_y.sngl_id == sngl_inspiral_y.event_id
 WHERE
-	sngl_inspiral_x.ifo > sngl_inspiral_y.ifo
+	sim_id_sngl_id_x.sim_id == sim_id_sngl_id_y.sim_id AND sngl_inspiral_x.ifo > sngl_inspiral_y.ifo;
 			"""):
 				x = contents.sngl_inspiral_table.row_from_cols(values)
 				y = contents.sngl_inspiral_table.row_from_cols(values[len(contents.sngl_inspiral_table.columnnames):])
@@ -1187,14 +1336,14 @@ WHERE
 
 			fig, axes = create_plot(r"$D_{\mathrm{eff}}$ in %s" % x_instrument, r"$D_{\mathrm{eff}}$ in %s" % y_instrument, aspect = 1.0)
 			axes.set_title(r"Effective Distance in %s vs.\ %s (Closed Box)" % (y_instrument, x_instrument))
-			axes.loglog([x for x, y in points.injections_deff], [y for x, y in points.injections_deff], "rx")
+			axes.loglog([x for x, y in points.injections_deff], [y for x, y in points.injections_deff], "r.")
 			axes.loglog([x for x, y in points.background_deff], [y for x, y in points.background_deff], "kx")
 			axes.legend(("Injections", "Background"), loc = "lower right")
 			yield fig, "deff_%s_vs_%s" % (y_instrument, x_instrument), False
 
 			fig, axes = create_plot(r"$D_{\mathrm{eff}}$ in %s" % x_instrument, r"$D_{\mathrm{eff}}$ in %s" % y_instrument, aspect = 1.0)
 			axes.set_title(r"Effective Distance in %s vs.\ %s" % (y_instrument, x_instrument))
-			axes.loglog([x for x, y in points.injections_deff], [y for x, y in points.injections_deff], "rx")
+			axes.loglog([x for x, y in points.injections_deff], [y for x, y in points.injections_deff], "r.")
 			axes.loglog([x for x, y in points.background_deff], [y for x, y in points.background_deff], "kx")
 			axes.loglog([x for x, y in points.zerolag_deff], [y for x, y in points.zerolag_deff], "bx")
 			axes.legend(("Injections", "Background", "Zero-lag"), loc = "lower right")
@@ -1221,7 +1370,38 @@ def load_distributions(filenames, verbose = False):
 		seglists.extent_all()
 	except ValueError:
 		seglists[None] = lsctables.segments.segmentlist([lsctables.segments.segment(0, 0)])
-	return coinc_params_distributions.snr_min, ranking_data, seglists
+
+	# Construct segments of nonzero horizon distance times
+	nonzero_horizon_seglistdict = segments.segmentlistdict()
+	segstart = None
+	prev_time = None
+	for ifo, nearestleaftree in coinc_params_distributions.horizon_history.items():
+		seglist = segments.segmentlist()
+		for time, hdistance in nearestleaftree.items():
+			if hdistance == 0.0:
+				if segstart is not None:
+					# this is the end of a segment of nonzero horizon distances, append this segment to the seglist
+					seglist.append(segments.segment(segstart, lal.LIGOTimeGPS((time+prev_time)/2)))
+					segstart = None
+			else:
+				if segstart is None:
+					if prev_time is not None:
+						# this is the first nonzero horizon distance in a new segment of nonzero horizon distances
+						segstart = lal.LIGOTimeGPS((time+prev_time)/2)
+					else:
+						# this is the first (time, hdistance) tuple in the horizon history
+						segstart = lal.LIGOTimeGPS(time)
+			prev_time = time
+		# contract nonzero horizon distance segments by 1 second
+		# (reducing each segment length by 2 seconds) to avoid case
+		# where injections geocent end time occurs in nonzero horizon
+		# distance time but at least one observed single ifo time
+		# occurs during a zero horizon distance time; first must get
+		# rid of any segments less than 2 seconds long
+		iterutils.inplace_filter(lambda s: abs(s) > 2, seglist)
+		seglist.contract(1)
+		nonzero_horizon_seglistdict[ifo] = seglist
+	return coinc_params_distributions.snr_min, ranking_data, seglists, nonzero_horizon_seglistdict
 
 
 def sigma_region(mean, nsigma):
@@ -1370,7 +1550,7 @@ def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar, 
 	# legend
 	#
 
-	axes.legend((line1, line5, line6), (r"Noise Model", r"Time-shifted Trial", r"Observed"), loc = "upper right", handlelength = 5)
+	axes.legend((line1, line5, line6), (r"Noise Model", r"Time-shifted Trial", r"Observed"), loc = "lower left", handlelength = 5)
 
 	#
 	# adjust bounds of plot
@@ -1509,14 +1689,61 @@ WHERE
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
 				yield fig, "count_vs_lr", is_open_box
 
-		fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
-		axes.semilogy()
-		background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
-		zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
-		create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar, xlim = (5., 5. * math.ceil(max(background_stats.max(), zerolag_stats.max()) / 5.)))
-		yield fig, "count_vs_lr_fig3", True
+		# FIXME make this work from FAPFAR
+		if self.background_ln_likelihood_ratio:
+			fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
+			axes.semilogy()
+			background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
+			zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
+			create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar, xlim = (5., 5. * math.ceil(min(max(background_stats.max(), zerolag_stats.max()), 200.) / 5.)))
+			yield fig, "count_vs_lr_fig3", True
 
 
+class Segments(object):
+	def __init__(self, base):
+		self.all_segs_dict = {}
+		self.data = []
+		self.table = []
+		self.base = base
+
+	def add_contents(self, contents):
+		# only process non-injection documents
+		if contents.sim_inspiral_table is None:
+			for name, seglists in contents.all_segs_dict.items():
+				# need to use operator because Python won't
+				# allow a function call on the LHS of |=
+				# for some mystery reason.
+				operator.ior(self.all_segs_dict.setdefault(name, segments.segmentlistdict()), seglists)
+
+	def finish(self):
+		segs = reduce(segments.segmentlistdict.__or__, self.all_segs_dict.values(), segments.segmentlistdict())
+		self.extent = segs.extent_all()
+
+		for name, seglists in self.all_segs_dict.items():
+			for ifo, seglist in seglists.items():
+				for seg in seglist:
+					self.data.append(["%s: %s" % (str(ifo), str(name)), "", "%.2f-%.2f" % (float(seg[0]), float(seg[1])), float(seg[0])*1000 + 315964800000 - 17000, float(seg[1])*1000 + 315964800000 - 17000])
+
+			analyzable_instruments_set = set(segs.keys())
+			for n in range(1, 1 + len(segs)):
+				for ifo_combos in itertools.combinations(list(analyzable_instruments_set), n):
+					this = segs.intersection(ifo_combos) - segs.union(analyzable_instruments_set - set(ifo_combos))
+					if len(this) > 0:
+						#FIXME inf is not handled properly
+						start = float(this.extent()[0])
+						end = float(this.extent()[1])
+						if end == float("inf"):
+							end = 2000000000.
+						duration = end - start
+						self.table.append([name, ",".join(ifo_combos), start, end, duration])
+
+			self.table.insert(0, ["all", "all", float(self.extent[0]), float(self.extent[1]), float(abs(self.extent))])
+			f = open("%s_segments.json" % self.base, "w")
+			f.write(repr(self.data))
+			f.close()
+			to_google_json("%s_segment_table.json" % self.base, [("name","string"), ("ifos", "string"), ("start","number"), ("end", "number"), ("extent", "number")], self.table)
+
+			
 #
 # =============================================================================
 #
@@ -1539,7 +1766,10 @@ options, filenames = parse_command_line()
 #
 
 
-snr_min, ranking_data, seglists = load_distributions([options.likelihood_file], verbose = options.verbose)
+if options.likelihood_file is not None:
+	snr_min, ranking_data, seglists, nonzero_horizon_seglistdict = load_distributions([options.likelihood_file], verbose = options.verbose)
+else:
+	snr_min, ranking_data, seglists, nonzero_horizon_seglistdict = 4., None, None, None
 if ranking_data is not None:
 	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
 else:
@@ -1551,28 +1781,21 @@ else:
 #
 
 
-# how many there could be, so we know how many digits for the filenames
-max_plot_groups = None
-
-def new_plots(plots = None, far_thresh = None):
-	global max_plot_groups
+def new_plots(plots, fapfar, far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
 	l = (
 		SummaryTable(),
-		MissedFoundPlots(far_thresh = far_thresh),
-		ParameterAccuracyPlots(),
+		MissedFoundPlots(far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict),
+		ParameterAccuracyPlots(far_thresh = far_thresh),
 		BackgroundVsInjectionPlots(snr_min = snr_min),
 		BackgroundVsInjectionPlotsMulti(snr_min = snr_min),
 		RateVsThreshold(fapfar = fapfar, snr_min = snr_min),
 		InjectionParameterDistributionPlots(),
 	)
-	max_plot_groups = len(l)
 	if plots is None:
 		plots = range(len(l))
-	return [l[i] for i in plots]
+	return [(i, l[i]) for i in plots]
 
-plots = new_plots(options.plot_group, options.far_threshold)
-if options.plot_group is None:
-	options.plot_group = range(len(plots))
+plots = new_plots(options.plot_group, fapfar, options.far_threshold, options.remove_precession, options.isolate_precession, nonzero_horizon_seglistdict)
 
 
 #
@@ -1580,23 +1803,25 @@ if options.plot_group is None:
 #
 
 
-wiki = open(os.path.join(options.output_dir, "%s_%s" % (options.user_tag, "plotsummary.txt")),"w")
+seg_class = Segments(base = os.path.join(options.output_dir, options.user_tag))
 
 for n, filename in enumerate(filenames):
 	if options.verbose:
 		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
-	wiki.write("=== %d/%d: %s ===\n\n" % (n + 1, len(filenames), filename))
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki = wiki, base = os.path.join(options.output_dir, options.user_tag))
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(filename)[-1].replace(".sqlite","").replace(".tmp",""), base = os.path.join(options.output_dir, options.user_tag), extend_veto_segments = options.extend_veto_segments, shrink_data_segments = options.shrink_data_segments)
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)
-	for n, plot in zip(options.plot_group, plots):
+	seg_class.add_contents(contents)
+	for plot_group, plot in plots:
 		if options.verbose:
-			print >>sys.stderr, "adding to plot group %d ..." % n
+			print >>sys.stderr, "adding to plot group %d ..." % plot_group
 		plot.add_contents(contents)
 	connection.close()
 	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
+
+seg_class.finish()
 
 
 #
@@ -1604,22 +1829,21 @@ for n, filename in enumerate(filenames):
 #
 
 
-n = 0
-filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[1], "%s", path = options.output_dir)
+filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all(), "%s", path = options.output_dir)
 while len(plots):
-	for fig, filename_fragment, is_open_box in plots.pop(0).finish():
+	plot_group, plot = plots.pop(0)
+	for fig, filename_fragment, is_open_box in plot.finish():
 		try:
-			fig.tight_layout()
+			fig.tight_layout(rect=(0.03, 0.02, 0.98, 0.98))
 		except AttributeError:
 			# old matplotlib
 			pass
 		except ValueError:
 			# broken at UWM
 			pass
-		for format in options.format:
+		for fmt in options.format:
 			if filename_fragment and fig:
-				filename = filename_template % (options.user_tag, options.plot_group[n], filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
+				filename = filename_template % (options.user_tag, plot_group, filename_fragment, ("openbox" if is_open_box else "closedbox"), fmt)
 				if options.verbose:
 					print >>sys.stderr, "writing %s ..." % filename
 				fig.savefig(filename)
-	n += 1

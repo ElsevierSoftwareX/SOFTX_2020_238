@@ -35,12 +35,14 @@
 
 
 import sys
+import warnings
+import numpy
 from gstlal import far
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw import ligolw
-from glue.lal import LIGOTimeGPS
 from glue import segments
+from lal import LIGOTimeGPS
 from optparse import OptionParser
 
 
@@ -50,37 +52,65 @@ def parse_command_line():
 	)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--background-ranking-file", metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file.")
+
 	parser.add_option("--zerolag-ranking-file", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file.")
-	parser.add_option("--gps-start-time", metavar = "GPS", type = "int", help = "replace the live time segments with this GPS start time")
-	parser.add_option("--gps-end-time", metavar = "GPS", type = "int", help = "replace the live time segments with this GPS end time")
+	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
+	parser.add_option("--skip-seg-and-rd-reset", action = "store_true", help = "Skip adjusting the segments and ranking data. This would make the entire use of this program a no op unless --add-zerolag-to-background is used.  So you have to do that.")
+	parser.add_option("--segment-and-horizon", action = "append", help = "Append to a list of segments and horizon distances for a given instrument.  Argument specified as IFO:start:end:horizon, e.g., H1:1000000000:1000000100:120 ")
 	options, filenames = parser.parse_args()
 
 	process_params = dict(options.__dict__)
 
-	return options, process_params
+	def parse_segment_and_horizon(options = options):
+		seglistdict = segments.segmentlistdict()
+		for x in options.segment_and_horizon:
+			ifo, start, stop, horizon = x.split(":")
+			seglistdict.setdefault(ifo, segments.segmentlist()).append(segments.segment([LIGOTimeGPS(start), LIGOTimeGPS(stop)]))
+		return seglistdict
 
-options, process_params = parse_command_line()
+	if options.segment_and_horizon is None:
+		raise ValueError("--segment-and-horizon required")
+	seglistdict = parse_segment_and_horizon(options)
 
+	if options.skip_seg_and_rd_reset and not options.add_zerolag_to_background:
+		raise ValueError("if using --skip-seg-and-rd-reset you must use --add-zerolag-to-background or else this program will do nothing")
+
+	return options, process_params, seglistdict
+
+
+options, process_params, segs = parse_command_line()
+
+if options.verbose:
+	print >> sys.stderr, "Livetime: ", abs(segs.extent_all())
+	print >> sys.stderr, "Extent: ", segs.extent_all()
 
 like_cpd, like_rd, like_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+
 _, zlike_rd, zlike_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.zerolag_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
 
-# replace thae live time with the user specified live time
-new_like_segs = segments.segmentlistdict()
-new_zlike_segs = segments.segmentlistdict()
-for ifo in like_segs.keys():
-	new_like_segs[ifo]  = segments.segmentlist([segments.segment([LIGOTimeGPS(float(options.gps_start_time)), LIGOTimeGPS(float(options.gps_end_time))])])
-	new_zlike_segs[ifo] = segments.segmentlist([segments.segment([LIGOTimeGPS(float(options.gps_start_time)), LIGOTimeGPS(float(options.gps_end_time))])])
+# optionally add the zero lag SNR/chi counts to the background
+if options.add_zerolag_to_background:
+	for instrument in like_segs:
+		like_cpd.background_rates["%s_snr_chi" % instrument].array += like_cpd.zero_lag_rates["%s_snr_chi" % instrument].array
 
-# Make the observed counts match the background sample but with the correct normalization
-for instruments in zlike_rd.background_likelihood_rates:
-	zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:] / like_rd.background_likelihood_rates[instruments].array.sum() * zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() / far.get_live_time(like_segs) * far.get_live_time(new_like_segs)
-	# make the counts integers
-	zlike_rd.zero_lag_likelihood_rates[instruments].array[zlike_rd.zero_lag_likelihood_rates[instruments].array < 1.] = 0.
-	if options.verbose:
-		print >> sys.stderr, "replacing %s with %d zero lag counts" % (str(instruments), zlike_rd.zero_lag_likelihood_rates[instruments].array.sum())
-	if zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() <= 100:
-		raise ValueError("Must have greater than 100 counts in zero lag, have: %d" % zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()) 
+if not options.skip_seg_and_rd_reset:
+	# replace thae live time with the user specified live time
+	new_like_segs = segs
+	new_zlike_segs = segs
+
+	# Make the observed counts match the background sample but with the correct normalization
+	for instruments in zlike_rd.background_likelihood_rates:
+		num_zero_lag = zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() * float(abs(new_like_segs.extent_all())) / float(abs(like_segs.extent_all()))
+		if num_zero_lag <= 100 or numpy.isnan(num_zero_lag):
+			warnings.warn("found %f zero lag counts, replacing with 100" % num_zero_lag)
+			num_zero_lag = 100
+		zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:]
+		zlike_rd.zero_lag_likelihood_rates[instruments].array /= zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()
+		zlike_rd.zero_lag_likelihood_rates[instruments].array *= num_zero_lag
+		# make the counts integers
+		zlike_rd.zero_lag_likelihood_rates[instruments].array[zlike_rd.zero_lag_likelihood_rates[instruments].array < 1.] = 0.
+		if options.verbose:
+			print >> sys.stderr, "replacing %s with %f zero lag counts" % (str(instruments), zlike_rd.zero_lag_likelihood_rates[instruments].array.sum())
 
 
 # write out the background file

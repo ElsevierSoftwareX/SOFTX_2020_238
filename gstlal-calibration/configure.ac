@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-calibration],[0.5.10],[gstlal-discuss@ligo.org],[gstlal-calibration])
-AC_COPYRIGHT([Copyright (C) 2008--2015 Madeline Wade])
+AC_INIT([gstlal-calibration],[1.1.7],[gstlal-discuss@ligo.org],[gstlal-calibration])
+AC_COPYRIGHT([Copyright (C) 2008--2016 Madeline Wade])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -19,7 +19,6 @@ AC_CONFIG_FILES([ \
 	debian/control \
 	debian/Makefile \
 	gst/Makefile \
-	gst/python/Makefile \
 	gst/lal/Makefile \
 	python/Makefile \
 	tests/Makefile \
@@ -103,14 +102,13 @@ PKG_PROG_PKG_CONFIG()
 #
 
 
-AM_PATH_PYTHON([2.6],,)
+MIN_PYTHON_VERSION="2.7"
+AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
-# hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
-# Debian and SL6.  FIXME:  find a way to do this properly
-PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
-# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
-# AX_PYTHON_DEVEL!?
-PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
+# hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
+# and SL6.  FIXME:  find a way to do this properly
+PYTHON_LIBS=[`echo "$PYTHON_LIBS" | sed -e "s?-L/usr/lib[^[:space:]]*??g"`]
+AC_SUBST([MIN_PYTHON_VERSION])
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
 AC_SUBST([pkgpyexecdir], ["\${pyexecdir}/gstlal"])
@@ -149,9 +147,9 @@ AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
 #
 
 
-AC_SUBST([GSTREAMER_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.32])
-PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
+AC_SUBST([GSTREAMER_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_VERSION], [1.2.4])
+PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-controller-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
 AC_SUBST([plugindir], [${libdir}/gstreamer-${GSTREAMER_RELEASE}])
@@ -180,21 +178,11 @@ AM_CONDITIONAL([COND_GSTBASEPARSE], [test "x${HAVE_GSTBASEPARSE}" == "xyes"])
 #
 
 
-AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_AUDIO_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE} >= ${MIN_GSTREAMER_AUDIO_VERSION}])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
-
-
-#
-# Check for PyGObject
-#
-
-
-PKG_CHECK_MODULES([pygobject], [pygobject-2.0])
-AC_SUBST([pygobject_CFLAGS])
-AC_SUBST([pygobject_LIBS])
 
 
 #
@@ -218,7 +206,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.15.0])
+AC_SUBST([MIN_LAL_VERSION], [6.15.2])
 AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
@@ -230,8 +218,8 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.49])
-AC_SUBST([MIN_PYLAL_VERSION], [0.8.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.50])
+AC_SUBST([MIN_PYLAL_VERSION], [0.9.0])
 AX_PYTHON_GLUE()
 AX_PYTHON_PYLAL()
 
@@ -241,8 +229,9 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.10.3])
-AC_SUBST([MIN_GSTLALUGLY_VERSION], [0.9.2])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.0.0])
+AC_SUBST([MIN_GSTLALUGLY_VERSION], [1.0.0])
+AC_SUBST([MIN_GSTPLUGINSMATH_VERSION], [1.0.1])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])

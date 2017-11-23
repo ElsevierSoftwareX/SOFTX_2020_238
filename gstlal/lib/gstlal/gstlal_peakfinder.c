@@ -21,7 +21,7 @@ struct gstlal_peak_state *gstlal_peak_state_new(guint channels, gstlal_peak_type
 	new->samples = g_malloc0(sizeof(guint) * channels);
 	new->interpsamples = g_malloc0(sizeof(double) * channels);
 	new->num_events = 0;
-	new->pad = 0;
+	new->pad = GSTLAL_PEAK_INTERP_LENGTH;
 	new->thresh = 0;
 	new->type = type;
 
@@ -112,7 +112,7 @@ GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *state, GstPad *
         GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
 
         /* set the time stamps */
-        GST_BUFFER_TIMESTAMP(srcbuf) = time;
+        GST_BUFFER_PTS(srcbuf) = time;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	gst_buffer_map(srcbuf, &mapinfo, GST_MAP_WRITE);
@@ -198,6 +198,78 @@ int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void 
 	return 1;
 }
 
+int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
+{
+	int i, out = -1;
+	switch (state->type)
+	{
+		case GSTLAL_PEAK_FLOAT:
+		{
+			float max_val = 0;
+			/* Type casting unsigned int (guint) to int */
+			for(i = 0; i < (int)state->channels; i++)
+			{
+				if(fabsf(state->values.as_float[i]) > max_val)
+				{
+					max_val = state->values.as_float[i];
+					out = i;
+				}
+			}
+			break;
+		}
+
+		case GSTLAL_PEAK_DOUBLE:
+		{
+			double max_val = 0;
+			/* Type casting unsigned int (guint) to int */
+			for(i = 0; i < (int)state->channels; i++)
+			{
+				if(fabs(state->values.as_double[i]) > max_val)
+				{
+					max_val = state->values.as_double[i];
+					out = i;
+				}
+			}
+			break;
+		}
+
+		case GSTLAL_PEAK_COMPLEX:
+		{
+			float max_val = 0;
+			/* Type casting unsigned int (guint) to int */
+			for(i = 0; i < (int)state->channels; i++)
+			{
+				if(cabsf(state->values.as_float_complex[i]) > max_val)
+				{
+					max_val = state->values.as_float_complex[i];
+					out = i;
+				}
+			}
+			break;
+		}
+
+		case GSTLAL_PEAK_DOUBLE_COMPLEX:
+		{
+			double max_val = 0;
+			/* Type casting unsigned int (guint) to int */
+			for(i = 0; i < (int)state->channels; i++)
+			{
+				if(cabs(state->values.as_double_complex[i]) > max_val)
+				{
+					max_val = state->values.as_double_complex[i];
+					out = i;
+				}
+			}
+			break;
+		}
+
+		default:
+		g_assert(state->type < GSTLAL_PEAK_TYPE_COUNT);
+
+	}
+
+	return out;
+}
 
 /*
  * Type specific functions

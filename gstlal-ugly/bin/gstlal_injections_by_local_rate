@@ -22,9 +22,9 @@ import numpy
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw import ligolw
-from glue.lal import LIGOTimeGPS as GPS
 from glue.ligolw.utils import process
-from pylal.antenna import response
+from gstlal import reference_psd
+import lal
 import sys
 
 def uniform_dec(num):
@@ -184,9 +184,9 @@ for src in srcs:
 		row.taper = "TAPER_START"
 
 		# time parameters
-		row.set_time_geocent(GPS(float(t)))
+		row.time_geocent = float(t)
 		# shouldn't be needed as injection code recomputes these
-		row.h_end_time = row.h_end_time_ns = row.l_end_time = row.l_end_time_ns = row.v_end_time = row.v_end_time_ns = row.g_end_time = row.g_end_time_ns = row.t_end_time = row.t_end_time_ns = row.end_time_gmst = 0
+		row.h_end_time = row.h_end_time_ns = row.l_end_time = row.l_end_time_ns = row.v_end_time = row.v_end_time_ns = row.g_end_time = row.g_end_time_ns = row.t_end_time = row.t_end_time_ns = 0
 
 		# masses
 		row.mass2 = mass2[i]
@@ -204,16 +204,18 @@ for src in srcs:
 		row.polarization = pol[i]
 		# set effective distances
 		for det,s in (("H1","h"), ("L1","l"), ("V1","v"), ("G1","g"), ("T1","t")):
-			hp, hc, ha, q =  response(row.geocent_end_time, row.longitude, row.latitude, row.inclination, row.polarization, "radians", det)
-			setattr(row, "eff_dist_%s" % s, row.distance / q)
+			fp, fc = lal.ComputeDetAMResponse(
+				lal.cached_detector_by_prefix[det].response,
+				row.longitude,	# ra
+				row.latitude,	# dec
+				row.polarization,
+				lal.GreenwichMeanSiderealTime(row.time_geocent)
+			)
+			setattr(row, "eff_dist_%s" % s, row.distance / reference_psd.effective_distance_factor(row.inclination, fp, fc))
 
 		# spins
-		row.spin1x = spin1.x[i]
-		row.spin1y = spin1.y[i]
-		row.spin1z = spin1.z[i]
-		row.spin2x = spin2.x[i]
-		row.spin2y = spin2.y[i]
-		row.spin2z = spin2.z[i]
+		row.spin1 = spin1.x[i], spin1.y[i], spin1.z[i]
+		row.spin2 = spin2.x[i], spin2.y[i], spin2.z[i]
 
 		# frequencies
 		row.f_lower = options.flower

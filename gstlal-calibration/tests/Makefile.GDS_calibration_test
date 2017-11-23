@@ -1,0 +1,26 @@
+START = 1151999578
+END = 1151999678
+FILTERS = '/home/alexander.urban/src/gstlal_sl7_test/GDS_calib_test/H1GDS_1150213197.npz'
+
+# This Makefile is designed to run on the CIT cluster with SL7. You will need a recent
+# build of gstlal-calibration.
+# To make the plots target, you will need to activate the gwpy virtual environment with
+# . ~detchar/opt/gwpysoft/bin/activate
+
+all: plots
+
+H1_raw_frames.cache: 
+	gw_data_find -o H -t H1_R -s $(START) -e $(END) -l --url-type file > $@
+
+H1_segments.xml: H1_raw_frames.cache
+	gstlal_cache_to_segments H1_raw_frames.cache $@
+
+H1_hoft_GDS_frames.cache: H1_raw_frames.cache H1_segments.xml
+	gstlal_compute_strain --control-sample-rate 4096 --data-source frames --frame-cache H1_raw_frames.cache --gps-start-time $(START) --gps-end-time $(END) --frame-duration=4 --frames-per-file=1 --filters-file $(FILTERS) --ifo H1 --frame-type H1_TEST --compression-scheme=6 --compression-level=3 --filter-settle-time 10 --verbose --deltal-tst-channel-name=CAL-DELTAL_CTRL_TST_DBL_DQ --deltal-pum-channel-name=CAL-DELTAL_CTRL_PUM_DBL_DQ --deltal-uim-channel-name=CAL-DELTAL_CTRL_UIM_DBL_DQ --deltal-res-channel-name=CAL-DELTAL_RESIDUAL_DBL_DQ --darm-err-channel-name=CAL-DARM_ERR_WHITEN_OUT_DBL_DQ --darm-ctrl-channel-name=CAL-DARM_CTRL_WHITEN_OUT_DBL_DQ --no-kappaa --no-kappapu --no-kappac --no-fcc --no-dewhitening --no-dq-vector --partial-calibration --factors-from-filters-file --no-kappatst
+	ls *.gwf | lalapps_path2cache > $@
+
+plots: H1_raw_frames.cache H1_hoft_GDS_frames.cache
+	./GDS_CALCS_comparison_plots --ifo H1 --raw-frame-cache H1_raw_frames.cache --gds-frame-cache H1_hoft_GDS_frames.cache --gps-start-time $(START) --gps-end-time $(END)
+
+clean: 
+	rm H1_raw_frames.cache H1_segments.xml H1_hoft_GDS_frames.cache spectrum_comparison.png CALCS_GDS_residual.png *.gwf 

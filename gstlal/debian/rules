@@ -1,23 +1,17 @@
 #!/usr/bin/make -f
 %:
-	. /opt/lscsoft/gst/etc/gstenvironment.sh; \
 	dh $@ --with=python2
 
 override_dh_auto_configure:
-	dh_auto_configure -- --without-doxygen
+	dh_auto_configure -- --enable-gtk-doc
 
 override_dh_auto_install:
 	$(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
 	ls -lR $(CURDIR)/debian/tmp
 
 override_dh_auto_test:
-	. /opt/lscsoft/gst/etc/gstenvironment.sh; \
 	export PYTHONPATH=$$(pwd)/python; \
 	dh $@
-
-override_dh_shlibdeps:
-	. /opt/lscsoft/gst/etc/gstenvironment.sh; \
-	dh "$@" -Xlibgstaudio-0.10.so.0
 
 override_dh_python2:
 	dh_python2 --no-guessing-versions

@@ -1,0 +1,215 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017 Duncan Meacher, Alexander Pace
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+from optparse import OptionParser
+import sched, time, os, sys, subprocess, re, pwd
+import numpy as np
+
+
+class color:
+   PURPLE    = '\033[95m'
+   CYAN      = '\033[96m'
+   DARKCYAN  = '\033[36m'
+   BLUE      = '\033[94m'
+   GREEN     = '\033[92m'
+   YELLOW    = '\033[93m'
+   RED       = '\033[91m'
+   BOLD      = '\033[1m'
+   UNDERLINE = '\033[4m'
+   END       = '\033[0m'
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("-u", "--username", help = "User name.")
+	parser.add_option("-s", "--sampler", default = "top", help = "Choose sampling program to use (top or ps), default = top")
+	parser.add_option("-c", "--cpu-limit", metavar = "value", type = "float", default = 1.0, help = "cpu% to recheck jobs below")
+
+	options, filenames = parser.parse_args()
+
+	if options.username is None:
+		options.username = pwd.getpwuid(os.getuid()).pw_name
+
+	if options.sampler is None:
+		options.sampler = 'top'
+	
+	if options.sampler not in ['top','ps']:
+		print "Invalid sampler. Please specify either top or ps."
+		exit()
+
+	return options, filenames
+
+options, filenames = parse_command_line()
+
+# Run condor_q -dag -nobatch username
+command = 'condor_q -dag -nobatch ' + options.username
+cq_out  = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+cq_out  = cq_out.communicate()[0].splitlines()
+
+# Define the prefixes to search for:
+#prefixes=['gstlal_reference_psd_','gstlal_inspiral_','gstlal_inspiral_inj_']
+prefixes = ['gstlal_reference_psd_','gstlal_svd_bank_','gstlal_inspiral_injection_snr_','gstlal_inspiral_','gstlal_inspiral_inj_']
+
+# Get column width for pretty printing. Add four for the hex suffix and two 
+# for buffer.
+col_width = max(len(pref) for pref in prefixes) + 4 + 2 
+
+# Initialize the results list to zero:
+results = []
+output  = {}
+recheck = {}
+
+# If an item in the output from condor_q contains our prefix and the hex
+# regular expression, then add it to the results list. 
+for pre in prefixes:
+	results.extend([line for line in cq_out if re.search(pre+'[0-9A-F]',line) is not None])
+
+# Check to see is any matches
+if not results:
+	print color.YELLOW + "No matches found in condor_q" + color.END
+	exit()
+else:
+	print color.BOLD + "".join("job_name".ljust(col_width))+ \
+	      "".join("condor_id".ljust(18))+"pid\tcpu%\tmem%" + color.END
+
+# Loop over all jobs
+for r in results:
+	# Split up the current line: 
+	split_list = r.split()
+
+	# Get the job name:
+	job_name = split_list[1][2:]
+
+	# Get the condorID:
+	condor_id = split_list[0]
+
+	# Get job status
+	job_status = split_list[5]
+
+	if job_status == "R":
+		# Put together the command string for condor_ssh_to job. Note that the 
+		# quotes and slashes are key for the correct command to get evaluated by
+		# the interpreter:
+
+		if options.sampler == 'top':
+			sample_command = ' "top b -n 1 -p \\${_CONDOR_JOB_PIDS}"'
+
+		if options.sampler == 'ps':
+			sample_command = ' "ps u -p \\${_CONDOR_JOB_PIDS}"'
+
+		condor_ssh_command = 'condor_ssh_to_job ' + \
+				     condor_id + \
+				     sample_command
+
+		# FIXME check to see if job has completed between running condor_q
+		# and condor_ssh_to_job.
+		cstj_err = None
+		try:
+			cstj_call = subprocess.Popen(condor_ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+			cstj_output, cstj_err = cstj_call.communicate()
+			#print cstj_err
+		except cstj_err.splitlines() is not None:
+			#except cstj_err is not None:
+			print color.YELLOW + "Job completed, continuing" + color.END
+			continue
+
+		# Collect output. The syntax should be apparent from looking at which 
+		# line is being collected and which column is being pulled after the
+		# split().
+
+		if options.sampler == 'top':
+			cstj_output = cstj_output.splitlines()[-1].split()
+			pid = cstj_output[0]
+			cpu = cstj_output[8]+"%"
+			mem = cstj_output[9]+"%"
+		if options.sampler == 'ps':
+			cstj_output = cstj_output.splitlines()[1].split()
+			pid = cstj_output[1]
+			cpu = cstj_output[2]+"%"
+			mem = cstj_output[3]+"%"
+
+		print "".join(job_name.ljust(col_width)) + \
+		      "".join(condor_id.ljust(18)) +pid,'\t'+ cpu+'\t'+mem
+
+		if float(cpu[:-1]) < options.cpu_limit:
+			output.update({ job_name : [ condor_id, pid, cpu, mem] })
+
+	elif job_status == "H":
+		print "Job", job_name, condor_id, "held"
+	elif job_status == "I":
+		print "Job", job_name, condor_id, "idle"
+
+if not output:
+	print color.GREEN + "All jobs running" + color.END
+	exit()	
+else:
+	print "Jobs with cpu% less than", options.cpu_limit, "%"
+
+for name in output:
+	recheck.update({ name : float(output[name][2][:-1])})
+	print color.RED + "".join(name.ljust(col_width)) + \
+	      "".join(output[name][0].ljust(18)) +output[name][1],'\t'+ output[name][2]+'\t'+output[name][3] + color.END
+
+print "Rechecking jobs"
+
+# FIXME loop over n times to keep rechecking or get average.
+for check in recheck:
+	if options.sampler == 'top':
+		sample_command = ' "top b -n 1 -p \\${_CONDOR_JOB_PIDS}"'
+
+	if options.sampler == 'ps':
+		sample_command = ' "ps u -p \\${_CONDOR_JOB_PIDS}"'
+
+	condor_ssh_command = 'condor_ssh_to_job ' + \
+			     output[check][0] + \
+			     sample_command
+
+	# FIXME check to see if job has completed between running condor_q
+	# and condor_ssh_to_job.
+	cstj_err = None
+	try:
+		cstj_call = subprocess.Popen(condor_ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+		cstj_output, cstj_err = cstj_call.communicate()
+	except cstj_err.splitlines() is not None:
+		print color.YELLOW + "Job completed, continuing" + color.END
+		continue
+
+	if options.sampler == 'top':
+		cstj_output = cstj_output.splitlines()[-1].split()
+		pid = cstj_output[0]
+		cpu = cstj_output[8]+"%"
+		mem = cstj_output[9]+"%"
+		if float(cpu[:-1]) < options.cpu_limit:
+			print color.RED + "".join(check.ljust(col_width)) + \
+			      "".join(output[check][0].ljust(18)) +pid,'\t'+ cpu+'\t'+mem + color.END
+		else:
+			print color.GREEN + "".join(check.ljust(col_width)) + \
+			      "".join(output[check][0].ljust(18)) +pid,'\t'+ cpu+'\t'+mem + color.END
+
+	if options.sampler == 'ps':
+		cstj_output = cstj_output.splitlines()[1].split()
+		pid = cstj_output[1]
+		cpu = cstj_output[2]+"%"
+		mem = cstj_output[3]+"%"
+		if float(cpu[:-1]) < options.cpu_limit:
+			print color.RED + "".join(check.ljust(col_width)) + \
+			      "".join(output[check][0].ljust(18)) +pid,'\t'+ cpu+'\t'+mem + color.END
+		else:
+			print color.GREEN + "".join(check.ljust(col_width)) + \
+			      "".join(output[check][0].ljust(18)) +pid,'\t'+ cpu+'\t'+mem + color.END
+
+

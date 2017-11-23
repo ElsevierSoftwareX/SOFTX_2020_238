@@ -1,0 +1,826 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2010-2015  Madeline Wade, Aaron Viets, Jenne Driggers
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+"""
+This pipeline is designed to perform various cleaning operations on h(t). Currently, the possible cleaning modes include:
+- Line removal for calibration lines
+- Line removal for 60 Hz lines and harmonics
+- De-jittering as developed by Jenne Driggers
+"""
+
+import sys
+import numpy
+import time
+import resource
+
+from optparse import OptionParser, Option
+
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
+
+import lal
+
+from gstlal import pipeparts
+from gstlal import calibration_parts
+from gstlal import simplehandler
+from gstlal import datasource
+
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+from glue.ligolw.utils import segments as ligolw_segments
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+from glue import segments
+
+def write_graph(demux):
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = True)
+
+#
+# Make sure we have sufficient resources
+# We allocate far more memory than we need, so this is okay
+#
+
+def setrlimit(res, lim):
+	hard_lim = resource.getrlimit(res)[1]
+	resource.setrlimit(res, (lim if lim is not None else hard_lim, hard_lim))
+# set the number of processes and total set size up to hard limit and
+# shrink the per-thread stack size (default is 10 MiB)
+setrlimit(resource.RLIMIT_NPROC, None)
+setrlimit(resource.RLIMIT_AS, None)
+setrlimit(resource.RLIMIT_RSS, None)
+setrlimit(resource.RLIMIT_STACK, 1024*1024)
+
+def now():
+	return lal.LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
+	
+
+###################################################################################################
+############################## Program Command Line Options #######################################
+###################################################################################################
+
+parser = OptionParser(description = __doc__)
+
+# Append program specific options
+
+# These options should be used whether the pipeline runs in full calibration mode or partial calibration mode
+parser.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|lvshm]. Required.")
+parser.add_option("--raw-frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO .gwf frame files containing raw data (optional).  This is required iff --data-source=frames")
+parser.add_option("--hoft-frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO .gwf frame files containing h(t) data (optional).  This is required iff --data-source=frames")
+parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
+parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
+parser.add_option("--wings", metavar = "seconds", type = "int", help = "Number of seconds to trim off of the beginning and end of the output. Should only be used if --data-source=frames.")
+parser.add_option("--do-file-checksum", action = "store_true", help = "Set this option to turn on file checksum in the demuxer.")
+parser.add_option("--ifo", metavar = "name", help = "Name of the IFO strain to be cleaned.")
+parser.add_option("--raw-shared-memory-partition", metavar = "name", help = "Set the name of the shared memory partition to read from for raw data.  This is required iff --data-source=lvshm.")
+parser.add_option("--hoft-shared-memory-partition", metavar = "name", help = "Set the name of the shared memory partition to read from for h(t) data.  This is required iff --data-source=lvshm.")
+parser.add_option("--raw-frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments for raw data.  This can only be used if --data-source=frames")
+parser.add_option("--hoft-frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments for h(t) data.  This can only be used if --data-source=frames")
+parser.add_option("--hoft-frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables for h(t) data.  This can only be used if --frame-segments-file is given")
+parser.add_option("--raw-frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables for raw data.  This can only be used if --frame-segments-file is given")
+parser.add_option("--hoft-sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate of the h(t) channel. (Default = 16384 Hz)")
+parser.add_option("--buffer-length", metavar = "seconds", type = float, default = 1.0, help = "Set the length in seconds of buffers to be used in the pipeline (Default = 1.0)")
+parser.add_option("--frame-duration", metavar = "seconds", type = "int", default = 4, help = "Set the number of seconds for each frame. (Default = 4)")
+parser.add_option("--frames-per-file", metavar = "count", type = "int", default = 1, help = "Set the number of frames per frame file. (Default = 1)")
+parser.add_option("--frame-size", metavar = "bytes", type = "int", default = 405338, help = "Approximate size in bytes of frame file images; used when writing to shared memory.  (Default=405338)")
+parser.add_option("--compression-scheme", metavar = "scheme", type = "int", default = 256, help = "Set the compression scheme for the framecpp_channelmux element. (Default=256, no compression)")
+parser.add_option("--compression-level", metavar = "level", type = "int", default = 0, help = "Set the compression level for the framecpp_channelmux element. (Default=0)")
+parser.add_option("--write-to-shm-partition", metavar = "name", help = "Set the name of the shared memory partition to write to. If this is not provided, frames will be written to a file.")
+parser.add_option("--buffer-mode", metavar = "number", type = "int", default = 2, help = "Set the buffer mode for the lvshmsink element. (Default=2)")
+parser.add_option("--frame-type", metavar = "name", default = "TEST", help = "Set the frame type as input to the frame writing element. (Default=TEST)")
+parser.add_option("--output-path", metavar = "name", default = ".", help = "Set the output path for writing frame files. (Default=Current)")
+parser.add_option("--frequency-domain-filtering", action = "store_true", help = "Set this to perform filtering routines in the frequency domain instead of using direct convolution.")
+parser.add_option("--obs-ready-bitmask", metavar = "bitmask", type = "int", default = 4, help = "Bitmask used on ODC state vector in order to determine OBSERVATION_READY bit information. (Default=4)")
+parser.add_option("--obs-intent-bitmask", metavar = "bitmask", type = "int", default = 2, help = "Bitmask used on ODC state vector in order to determine OBSERVATION_INTENT bit information. (Default=2)")
+parser.add_option("--chan-prefix", metavar = "name", default = "GDS-", help = "Prefix for all output channel names. (Default = GDS)") 
+parser.add_option("--chan-suffix", metavar = "name", help = "Suffix for all output channel names.") 
+
+# These are debugging options
+parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+# These are options specific to the calibration procedure
+parser.add_option("--filters-file", metavar="filename", help = "Name of file containing filters (in npz format)")
+parser.add_option("--factors-from-filters-file", action = "store_true", help = "Compute the calibration factors from reference values contained in the filters file instead of from EPICS channels.")
+parser.add_option("--tst-exc-channel-name", metavar = "name", default = "SUS-ETMY_L3_CAL_LINE_OUT_DQ", help = "Set the name of the TST excitation channel.  (Default = SUS-ETMY_L3_CAL_LINE_OUT_DQ)")
+parser.add_option("--tst-exc-sample-rate", metavar = "Hz", default = 512, type = "int", help = "Sample rate for the control signals being read in. (Default = 512 Hz)")
+parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
+parser.add_option("--low-latency", action = "store_true", help = "Run the pipeline in low-latency mode. This uses minimal queueing. Otherwise, maximal queueing is used to prevent the pipeline from locking up.")
+parser.add_option("--remove-callines", action = "store_true", help = "Remove calibration lines at known freqencies from h(t) using software.")
+parser.add_option("--remove-powerlines", action = "store_true", help = "Remove 60 Hz spectral lines and some harmonics caused by power lines using witness channel PEM-EY_MAINSMON_EBAY_1_DQ.")
+parser.add_option("--powerlines-channel-name", metavar = "name", default = "PEM-EY_MAINSMON_EBAY_1_DQ", help = "Set the name of the channel used as input for 60 Hz power lines to be removed. (Default = PEM-EY_MAINSMON_EBAY_1_DQ)")
+parser.add_option("--remove-jitter-imc", action = "store_true", help = "Remove laser beam jitter using 4 IMC channels.  This can significantly reduce noise in the spectrum.")
+parser.add_option("--imc-a-pitch-channel-name", metavar = "name", default = "IMC-WFS_A_DC_PIT_OUT_DQ", help = "Set the name of one of the channels used as input from the IMC for removal of beam jitter noise. (Default = IMC-WFS_A_DC_PIT_OUT_DQ)")
+parser.add_option("--imc-b-pitch-channel-name", metavar = "name", default = "IMC-WFS_B_DC_PIT_OUT_DQ", help = "Set the name of one of the channels used as input from the IMC for removal of beam jitter noise. (Default = IMC-WFS_B_DC_PIT_OUT_DQ)")
+parser.add_option("--imc-a-yaw-channel-name", metavar = "name", default = "IMC-WFS_A_DC_YAW_OUT_DQ", help = "Set the name of one of the channels used as input from the IMC for removal of beam jitter noise. (Default = IMC-WFS_A_DC_YAW_OUT_DQ)")
+parser.add_option("--imc-b-yaw-channel-name", metavar = "name", default = "IMC-WFS_B_DC_YAW_OUT_DQ", help = "Set the name of one of the channels used as input from the IMC for removal of beam jitter noise. (Default = IMC-WFS_B_DC_YAW_OUT_DQ)")
+parser.add_option("--remove-jitter-psl", action = "store_true", help = "Remove laser beam jitter using the bullseye photodiode with 3 PSL channels.  This can significantly reduce noise in the spectrum.")
+parser.add_option("--bullseye-width-channel-name", metavar = "name", default = "PSL-DIAG_BULLSEYE_WID_OUT_DQ", help = "Set the name of one of the channels used as input from the bullseye photodiode for removal of beam jitter noise. (Default = PSL-DIAG_BULLSEYE_WID_OUT_DQ)")
+parser.add_option("--bullseye-pitch-channel-name", metavar = "name", default = "PSL-DIAG_BULLSEYE_PIT_OUT_DQ", help = "Set the name of one of the channels used as input from the bullseye photodiode for removal of beam jitter noise. (Default = PSL-DIAG_BULLSEYE_PIT_OUT_DQ)")
+parser.add_option("--bullseye-yaw-channel-name", metavar = "name", default = "PSL-DIAG_BULLSEYE_YAW_OUT_DQ", help = "Set the name of one of the channels used as input from the bullseye photodiode for removal of beam jitter noise. (Default = PSL-DIAG_BULLSEYE_YAW_OUT_DQ)")
+parser.add_option("--remove-angular-control", action = "store_true", help = "Remove noise caused by angular control.  Uses 4 ASC channels.")
+parser.add_option("--asc-dhard-pitch-channel-name", metavar = "name", default = "ASC-DHARD_P_OUT_DQ", help = "Set the name of one of the channels used as input from the ASC to remove angular control noise. (Default = ASC-DHARD_P_OUT_DQ)")
+parser.add_option("--asc-dhard-yaw-channel-name", metavar = "name", default = "ASC-DHARD_Y_OUT_DQ", help = "Set the name of one of the channels used as input from the ASC to remove angular control noise. (Default = ASC-DHARD_Y_OUT_DQ)")
+parser.add_option("--asc-chard-pitch-channel-name", metavar = "name", default = "ASC-CHARD_P_OUT_DQ", help = "Set the name of one of the channels used as input from the ASC to remove angular control noise. (Default = ASC-CHARD_P_OUT_DQ)")
+parser.add_option("--asc-chard-yaw-channel-name", metavar = "name", default = "ASC-CHARD_Y_OUT_DQ", help = "Set the name of one of the channels used as input from the ASC to remove angular control noise. (Default = ASC-CHARD_Y_OUT_DQ)")
+parser.add_option("--remove-length-control", action = "store_true", help = "Remove noise caused by length control.  Uses 3 LSC channels.")
+parser.add_option("--lsc-srcl-channel-name", metavar = "name", default = "LSC-SRCL_IN1_DQ", help = "Set the name of one of the channels used as input from the LSC to remove length control noise. (Default = LSC-SRCL_IN1_DQ)")
+parser.add_option("--lsc-mich-channel-name", metavar = "name", default = "LSC-MICH_IN1_DQ", help = "Set the name of one of the channels used as input from the LSC to remove length control noise. (Default = LSC-MICH_IN1_DQ)")
+parser.add_option("--lsc-prcl-channel-name", metavar = "name", default = "LSC-PRCL_IN1_DQ", help = "Set the name of one of the channels used as input from the LSC to remove length control noise. (Default = LSC-PRCL_IN1_DQ)")
+parser.add_option("--kappa-tst-channel-name", metavar = "name", default = "GDS-CALIB_KAPPA_TST_REAL", help = "Set the name of the channel to be used for kappa_tst. (Default = GDS-CALIB_KAPPA_TST_REAL)")
+parser.add_option("--hoft-channel-name", metavar = "name", default = "GDS-CALIB_STRAIN", help = "Set the name of the channel to be used for h(t). (Default = GDS-CALIB_STRAIN)")
+parser.add_option("--kappa-sample-rate", metavar = "Hz", default = 16, type = "int", help = "Sample rate of the kappa_tst channel (Default = 16 Hz)")
+parser.add_option("--demodulation-sample-rate", metavar = "Hz", default = 16, type = "int", help = "Sample rate to compute deomdulation of channels (Default = 16 Hz)")
+parser.add_option("--demodulation-filter-time", metavar = "s", type = int, default = 20, help = "Length in seconds of low-pass FIR filter used in demodulation of the calibration lines. (Default = 20 seconds)")
+parser.add_option("--kappatst-applied", action = "store_true", help = "Note whether or not kappa_tst was applied to input h(t) channel.")
+
+# These are all options related to the reference channels used in the calibration factors computation
+parser.add_option("--ref-channels-sr", metavar = "Hz", default = 16, help = "Set the sample rate for the reference model channels used in the calibration factors calculation. (Default = 16 Hz)")
+parser.add_option("--EP10-real", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_TST_NOLOCK_REAL", help = "Set the name of the channel containing the real part of A_tst at the ESD line used for removal of the ESD line. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_TST_REAL")
+parser.add_option("--EP10-imag", metavar = "name", default = "CAL-CS_TDEP_ESD_LINE1_REF_A_TST_NOLOCK_IMAG", help = "Set the name of the channel containing the imaginary part of A_tst at the ESD line used for removal of the ESD line. (Default = CAL-CS_TDEP_ESD_LINE1_REF_A_TST_IMAG")
+
+
+# Parse options
+
+options, filenames = parser.parse_args()
+
+# Sanity checks for command line options
+data_sources = set(("frames", "lvshm"))
+
+if options.data_source not in data_sources:
+	raise ValueError("--data-source must be one of %s" % ",".join(data_sources))
+
+if options.data_source == "frames" and (options.hoft_frame_cache or options.raw_frame_cache) is None:
+	raise ValueError("--raw-frame-cache and --hoft-frame-cache must be specified when using --data-source=frames")
+
+if options.ifo is None:
+	raise ValueError("must specify --ifo")
+
+if (options.raw_frame_segments_file or options.hoft_frame_segments_file) is not None and options.data_source != "frames":
+	raise ValueError("can only give --raw-frame-segments-file or --hoft-frame-segments-file if --data-source=frames")
+
+if options.raw_frame_segments_name is not None and options.raw_frame_segments_file is None:
+	raise ValueError("can only specify --raw-frame-segments-name if --raw-frame-segments-file is given")
+
+if options.hoft_frame_segments_name is not None and options.hoft_frame_segments_file is None:
+	raise ValueError("can only specify --hoft-frame-segments-name if --hoft-frame-segments-file is given")
+
+if options.data_source == "frames" and (options.gps_start_time is None or options.gps_end_time is None):
+	raise ValueError("must specify --gps-start-time and --gps-end-time when --data-source=frames")
+
+if options.gps_start_time is not None:
+	if options.gps_end_time is None:
+		raise ValueError("must provide both --gps-start-time and --gps-end-time")
+	if options.data_source == "lvshm" or options.data_source == "white":
+		raise ValueError("cannot set --gps-start-time or --gps-end-time with --data-source=lvshm or --data-source=white")
+	try:
+		start = lal.LIGOTimeGPS(options.gps_start_time)
+	except ValueError:
+		raise ValueError("invalid --gps-start-time %s" % options.gps_start_time)
+	try:
+		end = lal.LIGOTimeGPS(options.gps_end_time)
+	except ValueError:
+		raise ValueError("invalid --gps-end-time %s" % options.gps_end_time)
+	if start >= end:
+		raise ValueError("--gps-start-time must be < --gps-end-time: %s < %s" % (options.gps_start_time, options.gps_end_time))
+	# segment from gps start and stop time if given
+	seg = segments.segment(start, end)
+	gps_start_time = seg[0]
+	gps_end_time = seg[1]
+elif options.gps_end_time is not None:
+	raise ValueError("must provide both --gps-start-time and --gps-end-time")
+
+###################################################################################################
+######################################## Setup ####################################################
+###################################################################################################
+
+# Set up instrument and channel name info from command line options
+instrument = options.ifo
+
+# Make segment list if a frame segments file is provided, other set frame_segments to None
+if options.raw_frame_segments_file is not None:
+	# Frame segments from a user defined file
+	raw_frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.raw_frame_segments_file, contenthandler = datasource.ContentHandler), options.raw_frame_segments_name).coalesce()
+	if seg is not None:
+		# clip frame segments to seek segment if it exists (not required, just saves some meory and I/O overhead)
+		raw_frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([seg])) for instrument, seglist in raw_frame_segments.items())
+else:
+	raw_frame_segments = None
+
+if options.hoft_frame_segments_file is not None:
+	# Frame segments from a user defined file
+	hoft_frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.hoft_frame_segments_file, contenthandler = datasource.ContentHandler), options.hoft_frame_segments_name).coalesce()
+	if seg is not None:
+		# clip frame segments to seek segment if it exists (not required, just saves some meory and I/O overhead)
+		hoft_frame_segments = segments.segmentlistdict((instrument, seglist & segments.segmentlist([seg])) for instrument, seglist in hoft_frame_segments.items())
+else:
+	hoft_frame_segments = None
+
+# Set up short-cut names for each of the sample rates used throughout the pipeline and establish caps string shortcuts
+hoftsr = options.hoft_sample_rate  # Sample rate for h(t)
+kappasr = options.kappa_sample_rate # sample rate for kappa_tst
+demodulatesr = options.demodulation_sample_rate
+hoft_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr
+kappa_caps = "audio/x-raw, format=F32LE, rate=%d, channel-mask=(bitmask)0x0" % kappasr
+ref_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % options.ref_channels_sr
+tstexccaps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % options.tst_exc_sample_rate
+complex_caps = "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % demodulatesr
+integration_samples = int(options.demodulation_filter_time) * demodulatesr
+
+# Set up string for the channels suffix and prefix as provided by the user
+if options.chan_suffix is not None:
+	chan_suffix = options.chan_suffix
+else:
+	chan_suffix = ""
+chan_prefix = options.chan_prefix
+
+# If td is true we will perform filtering in the time domain (direct convolution) in all FIR filtering routines below
+td = not options.frequency_domain_filtering
+
+# If we are using EPICS from frames and removing calibration lines, we need EP10 to remove the ESD line. Otherwise, we just remove the other lines if possible.
+if (not options.factors_from_filters_file) and options.remove_callines and ((options.ifo == "H1" and options.data_source == "frames" and int(options.gps_start_time) > 1175954418) or (options.ifo == "H1" and options.data_source == "lvshm" and now() > 1175954418) or (options.ifo == "L1" and options.data_source == "frames" and int(options.gps_start_time) > 1180184418) or (options.ifo == "L1" and options.data_source == "lvshm" and now() > 1180184418)):
+	remove_esd_act_line = True
+elif not options.factors_from_filters_file:
+	remove_esd_act_line = False
+
+#
+# Load in the filters file that contains filter coefficients, etc.
+#
+
+filters = numpy.load(options.filters_file)
+
+# Read in information from filterse file
+if options.remove_callines:
+	# Read in the EP10 factor from filters file, if relevant
+	if options.factors_from_filters_file:
+		try:
+			EP10_real = float(filters["EP10_real"])
+			EP10_imag = float(filters["EP10_imag"])
+			remove_esd_act_line = True
+		except:
+			remove_esd_act_line = False
+	darm_act_line_freq = float(filters["ka_pcal_line_freq"])
+	pcal_corr_at_darm_act_freq_real = float(filters["ka_pcal_corr_re"])
+	pcal_corr_at_darm_act_freq_imag = float(filters["ka_pcal_corr_im"])
+	opt_gain_fcc_line_freq = float(filters["kc_pcal_line_freq"])
+	pcal_corr_at_opt_gain_fcc_freq_real = float(filters["kc_pcal_corr_re"])
+	pcal_corr_at_opt_gain_fcc_freq_imag = float(filters["kc_pcal_corr_im"])
+	esd_act_line_freq = float(filters["ktst_esd_line_freq"])
+	# Read in info for removing the src_pcal line
+	try:
+		src_pcal_line_freq = float(filters["src_pcal_line_freq"])
+		pcal_corr_at_src_freq_real = float(filters["src_pcal_corr_re"])
+		pcal_corr_at_src_freq_imag = float(filters["src_pcal_corr_im"])
+		if src_pcal_line_freq > 10.0:
+			remove_src_pcal_line = True
+		else:
+			remove_src_pcal_line = False
+	except:
+		remove_src_pcal_line = False
+	# Read in info for removing the high pcal line
+	try:
+		high_pcal_line_freq = float(filters["high_pcal_line_freq"])
+		pcal_corr_at_high_line_freq_real = float(filters["high_pcal_corr_re"])
+		pcal_corr_at_high_line_freq_imag = float(filters["high_pcal_corr_im"])
+		if high_pcal_line_freq > 0:
+			remove_high_pcal_line = True
+		else:
+			remove_high_pcal_line = False
+	except:
+		remove_high_pcal_line = False
+	# Read in info for removing the roaming pcal line
+	try:
+		roaming_pcal_line_freq = float(filters["roaming_pcal_line_freq"])
+		pcal_corr_at_roaming_line_real = float(filters["roaming_pcal_corr_re"])
+		pcal_corr_at_roaming_line_imag = float(filters["roaming_pcal_corr_im"])
+		if roaming_pcal_line_freq > 0.0:
+			remove_roaming_pcal_line = True
+		else:
+			remove_roaming_pcal_line = False
+	except:
+		remove_roaming_pcal_line = False
+
+# If we're removing 60 Hz lines from the spectrum, load another filter
+if options.remove_powerlines:
+	try:
+		powerlinessr = int(filters["powerlines_sr"])
+		powerlinesdelay = int(filters["powerlines_delay"])
+		powerlinesfilt = filters["powerlines_filt"]
+	except:
+		raise ValueError("Cannot remove 60 Hz lines because the filters file does contain the needed information")
+
+# If we're removing laser beam jitter noise from the spectrum, load several more filters
+if options.remove_jitter_imc:
+	try:
+		imcapitsr = int(filters["jitter_imc_a_pit_sr"])
+		imcayawsr = int(filters["jitter_imc_a_yaw_sr"])
+		imcbpitsr = int(filters["jitter_imc_b_pit_sr"])
+		imcbyawsr = int(filters["jitter_imc_b_yaw_sr"])
+		imcapitdelay = int(filters["jitter_imc_a_pit_delay"])
+		imcayawdelay = int(filters["jitter_imc_a_yaw_delay"])
+		imcbpitdelay = int(filters["jitter_imc_b_pit_delay"])
+		imcbyawdelay = int(filters["jitter_imc_b_yaw_delay"])
+		imcapitfilt = filters["jitter_imc_a_pit_filt"]
+		imcayawfilt = filters["jitter_imc_a_yaw_filt"]
+		imcbpitfilt = filters["jitter_imc_b_pit_filt"]
+		imcbyawfilt = filters["jitter_imc_b_yaw_filt"]
+	except:
+		raise ValueError("Cannot remove beam jitter using imc inputs because the filters file does contain the needed information")
+if options.remove_jitter_psl:
+	try:
+		bullseyewidsr = int(filters["jitter_bullseye_wid_sr"])
+		bullseyepitsr = int(filters["jitter_bullseye_pit_sr"])
+		bullseyeyawsr = int(filters["jitter_bullseye_yaw_sr"])
+		bullseyewiddelay = int(filters["jitter_bullseye_wid_delay"])
+		bullseyepitdelay = int(filters["jitter_bullseye_pit_delay"])
+		bullseyeyawdelay = int(filters["jitter_bullseye_yaw_delay"])
+		bullseyewidfilt = filters["jitter_bullseye_wid_filt"]
+		bullseyepitfilt = filters["jitter_bullseye_pit_filt"]
+		bullseyeyawfilt = filters["jitter_bullseye_yaw_filt"]
+	except:
+		raise ValueError("Cannot remove beam jitter using bullseye inputs because the filters file does contain the needed information")
+if options.remove_angular_control:
+	try:
+		ascdpitsr = int(filters["asc_d_pit_sr"])
+		ascdyawsr = int(filters["asc_d_yaw_sr"])
+		asccpitsr = int(filters["asc_c_pit_sr"])
+		asccyawsr = int(filters["asc_c_yaw_sr"])
+		ascdpitdelay = int(filters["asc_d_pit_delay"])
+		asccyawdelay = int(filters["asc_d_yaw_delay"])
+		asccpitdelay = int(filters["asc_c_pit_delay"])
+		ascdyawdelay = int(filters["asc_c_yaw_delay"])
+		ascdpitfilt = filters["asc_d_pit_filt"]
+		ascdyawfilt = filters["asc_d_yaw_filt"]
+		asccpitfilt = filters["asc_c_pit_filt"]
+		asccyawfilt = filters["asc_c_yaw_filt"]
+	except:
+		raise ValueError("Cannot remove angular control noise using ASC inputs because the filters file does contain the needed information")
+if options.remove_length_control:
+	try:
+		lscsrclsr = int(filters["lsc_srcl_sr"])
+		lscmichsr = int(filters["lsc_mich_sr"])
+		lscprclsr = int(filters["lsc_prcl_sr"])
+		lscsrcldelay = int(filters["lsc_srcl_delay"])
+		lscmichdelay = int(filters["lsc_mich_delay"])
+		lscprcldelay = int(filters["lsc_prcl_delay"])
+		lscsrclfilt = filters["lsc_srcl_filt"]
+		lscmichfilt = filters["lsc_mich_filt"]
+		lscprclfilt = filters["lsc_prcl_filt"]
+	except:
+		raise ValueError("Cannot remove length control noise using LSC inputs because the filters file does contain the needed information")
+
+
+# Set up queue parameters - do we need this??
+if options.low_latency:
+	queue_factor = 1
+else:
+	queue_factor = 0
+
+#FIXME: Replace long queue logic with something real
+#long_queue = queue_factor * max(float(len(reschainfilt) - 1) / hoftsr, float(len(tstfilt) - 1) / tstchainsr, float(len(pumuimfilt) - 1) / pumuimchainsr)
+long_queue = queue_factor * 16384
+short_queue = -1.0 * queue_factor
+
+#
+# Set up the appropriate channel list. In this section, we also fill a list called headkeys
+# that will be the keys for the dictionary holding each pipeline branch name, and we set up
+# a dictionary that will be populated with pipeline branch names based on the channel list.
+#
+
+hoft_head_dict = {}
+head_dict = {}
+hoft_channel_list = []
+channel_list = []
+hoft_headkeys = []
+headkeys = []
+
+# We will need to read in the h(t) channel
+hoft_channel_list.append((instrument, options.hoft_channel_name))
+hoft_headkeys.append("hoft")
+
+"""
+# FIXME: Do we need to read in the statevector? Maybe, because maybe the filter settle time is different for cleaned data... But should we really be modifying the CALIB_STATE_VECTOR? probably not...
+if not options.no_dq_vector:
+	hoft_channel_list.append((instrument, options.dq_channel_name))
+	hoft_headkeys.append("calibstatevector")
+"""
+
+if options.remove_callines:
+	if remove_esd_act_line and not options.factors_from_filters_file:
+		# EP10 is needed to remove the ESD line
+		channel_list.extend(((instrument, options.EP10_real), (instrument, options.EP10_imag)))
+		headkeys.extend(("EP10_real", "EP10_imag"))
+
+	# read in the pcal channel
+	channel_list.append((instrument, options.pcal_channel_name))
+	headkeys.append("pcal")
+
+	# read in the tst excitation channel
+	channel_list.append((instrument, options.tst_exc_channel_name))
+	headkeys.append("tstexc")
+
+	# read in kappa_tst
+	if options.kappatst_applied:
+		hoft_channel_list.append((instrument, options.kappa_tst_channel_name))
+		hoft_headkeys.append("kappa_tst")
+
+# If we are removing additional noise from the spectrum (beam jitter, angular control, 60 Hz lines, etc.), we need more channels
+if options.remove_powerlines:
+	channel_list.append((instrument, options.powerlines_channel_name))
+	headkeys.append("powerlines")
+if options.remove_jitter_imc:
+	channel_list.extend(((instrument, options.imc_a_pitch_channel_name), (instrument, options.imc_a_yaw_channel_name), (instrument, options.imc_b_pitch_channel_name), (instrument, options.imc_b_yaw_channel_name)))
+	headkeys.extend(("imc_a_pitch", "imc_a_yaw", "imc_b_pitch", "imc_b_yaw"))
+if options.remove_jitter_psl:
+	channel_list.extend(((instrument, options.bullseye_width_channel_name), (instrument, options.bullseye_pitch_channel_name), (instrument, options.bullseye_yaw_channel_name)))
+	headkeys.extend(("bullseye_width", "bullseye_pitch", "bullseye_yaw"))
+if options.remove_angular_control:
+	channel_list.extend(((instrument, options.asc_dhard_pitch_channel_name), (instrument, options.asc_dhard_yaw_channel_name), (instrument, options.asc_chard_pitch_channel_name), (instrument, options.asc_chard_yaw_channel_name)))
+	headkeys.extend(("asc_dhard_pitch", "asc_dhard_yaw", "asc_chard_pitch", "asc_chard_yaw"))
+if options.remove_length_control:
+	channel_list.extend(((instrument, options.lsc_srcl_channel_name), (instrument, options.lsc_mich_channel_name), (instrument, options.lsc_prcl_channel_name)))
+	headkeys.extend(("lsc_srcl", "lsc_mich", "lsc_prcl"))
+
+
+####################################################################################################
+####################################### Main Pipeline ##############################################
+####################################################################################################
+
+pipeline = Gst.Pipeline(name="gstlal_clean_strain")
+mainloop = GObject.MainLoop()
+handler = simplehandler.Handler(mainloop, pipeline)
+
+# 
+# Turn off debugging tools or verboseness
+#
+
+pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src # comment this line out to turn on the checktimestamps debugging
+if not options.verbose:
+	pipeparts.mkprogressreport = lambda pipeline, src, *args: src
+
+#
+# Read in data from frames or shared memory
+#
+
+if options.data_source == "lvshm": # Data is to be read from shared memory; "low-latency" mode
+	hoft_src = pipeparts.mklvshmsrc(pipeline, shm_name = options.hoft_shared_memory_partition, assumed_duration = 4)
+	raw_src = pipeparts.mklvshmsrc(pipeline, shm_name = options.raw_shared_memory_partition, assumed_duration = 1)
+elif options.data_source == "frames": # Data is to be read from frame files; "offline" mode
+	hoft_src = pipeparts.mklalcachesrc(pipeline, location = options.hoft_frame_cache, cache_dsc_regex = instrument)
+	raw_src = pipeparts.mklalcachesrc(pipeline, location = options.raw_frame_cache, cache_dsc_regex = instrument)
+
+#
+# Hook up the relevant channels to the demuxer
+#
+
+if options.data_source == "lvshm":
+	hoft_demux = pipeparts.mkframecppchanneldemux(pipeline, hoft_src, do_file_checksum = options.do_file_checksum, skip_bad_files = True, channel_list = map("%s:%s".__mod__, hoft_channel_list))
+	raw_demux = pipeparts.mkframecppchanneldemux(pipeline, raw_src, do_file_checksum = options.do_file_checksum, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+elif options.data_source == "frames":
+	hoft_demux = pipeparts.mkframecppchanneldemux(pipeline, hoft_src, do_file_checksum = options.do_file_checksum, skip_bad_files = False, channel_list = map("%s:%s".__mod__, hoft_channel_list))
+	raw_demux = pipeparts.mkframecppchanneldemux(pipeline, raw_src, do_file_checksum = options.do_file_checksum, skip_bad_files = False, channel_list = map("%s:%s".__mod__, channel_list))
+
+# Write the pipeline graph after pads have been hooked up to the demuxer
+if options.write_pipeline is not None:
+	raw_demux.connect("no-more-pads", write_graph)	
+	hoft_demux.connect("no-more-pads", write_graph)
+
+# Get everything hooked up and fill in discontinuities
+for key, chan in zip(hoft_headkeys, hoft_channel_list):
+	hoft_head_dict[key] = calibration_parts.hook_up(pipeline, hoft_demux, chan[1], instrument, options.buffer_length)
+for key, chan in zip(headkeys, channel_list):
+	head_dict[key] = calibration_parts.hook_up(pipeline, raw_demux, chan[1], instrument, options.buffer_length)
+
+# When reading from disk, clip the incoming data stream(s) to segment list if one is provided
+if options.data_source == "frames" and raw_frame_segments is not None:
+	for key in headkeys:
+		currenthead = head_dict[key]
+		head_dict[key] = calibration_parts.mkgate(pipeline, currenthead, pipeparts.mksegmentsrc(pipeline, raw_frame_segments[instrument]), 1, long_queue, long_queue)
+
+if options.data_source == "frames" and hoft_frame_segments is not None:
+	for key in hoft_headkeys:
+		currenthead = hoft_head_dict[key]
+		hoft_head_dict[key] = calibration_parts.mkgate(pipeline, currenthead, pipeparts.mksegmentsrc(pipeline, hoft_frame_segments[instrument]), 1, long_queue, long_queue)
+
+#
+# REMOVE CALIBRATION LINES
+#
+
+if options.remove_callines:
+	if not options.factors_from_filters_file:
+		EP10_real = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_real"], ref_factors_caps, "EP10_real")
+		EP10_real = calibration_parts.mkresample(pipeline, EP10_real, 0, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % demodulatesr)
+		EP10_imag = calibration_parts.caps_and_progress(pipeline, head_dict["EP10_imag"], ref_factors_caps, "EP10_imag")
+		EP10_imag = calibration_parts.mkresample(pipeline, EP10_imag, 0, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % demodulatesr)
+
+	tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
+
+	# pcal excitation channel, which will be demodulated
+	pcal = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
+	pcaltee = pipeparts.mktee(pipeline, pcal)
+	
+	# demodulate the PCAL channel and apply the PCAL correction factor at the DARM actuation line frequency
+	pcal_at_darm_act_freq = calibration_parts.demodulate(pipeline, pcaltee, darm_act_line_freq, td, complex_caps, integration_samples, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
+
+	# demodulate the TST excitation channel at the ESD actuation line frequency
+	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, complex_caps, integration_samples)
+
+	# demodulate PCAL channel and apply the PCAL correction factor at optical gain and f_cc line frequency
+	pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, complex_caps, integration_samples, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
+
+	# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
+	pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
+
+	# Reconstruct a calibrated (negative) pcal at only the ~30 Hz pcal line
+	pcaly_line1 = calibration_parts.mkresample(pipeline, pcal_at_darm_act_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "lal_demodulate", line_frequency = -1.0 * darm_act_line_freq, prefactor_real = 2.0)
+	remove_pcaly_line1, trash = calibration_parts.split_into_real(pipeline, pcaly_line1)
+	pipeparts.mkfakesink(pipeline, trash)
+
+	# Reconstruct a calibrated (negative) pcal at only the ~300 Hz pcal line
+	pcaly_line2 = calibration_parts.mkresample(pipeline, pcal_at_opt_gain_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "lal_demodulate", line_frequency = -1.0 * opt_gain_fcc_line_freq, prefactor_real = 2.0)
+	remove_pcaly_line2, trash = calibration_parts.split_into_real(pipeline, pcaly_line2)
+	pipeparts.mkfakesink(pipeline, trash)
+
+	# Add the first two components together. We will add this to h(t) to remove these lines
+	remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_pcaly_line1, long_queue], [remove_pcaly_line2, short_queue]))
+
+	if remove_esd_act_line:
+		if options.factors_from_filters_file:
+			esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
+		else:
+			# EP10 was read from the frames
+			EP10 = calibration_parts.merge_into_complex(pipeline, EP10_real, EP10_imag, long_queue, short_queue)
+			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [tstexc_at_esd_act_freq, long_queue], [EP10, short_queue]))
+		# Reconstruct a calibrated (negative) ESD injection at the ~30 Hz ESD line
+		if options.kappatst_applied:
+			# Multiply by the real part of kappa_tst
+			kappa_tst = calibration_parts.caps_and_progress(pipeline, hoft_head_dict["kappa_tst"], kappa_caps, "kappa_tst")
+			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, [esd_act_line, long_queue], [kappa_tst, short_queue]))
+		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = 2.0)
+		esd_act_line_remove, trash = calibration_parts.split_into_real(pipeline, esd_act_line_remove)
+		pipeparts.mkfakesink(pipeline, trash)
+		# Add into the total line removal stream
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, short_queue], [esd_act_line_remove, long_queue]))
+
+	if remove_high_pcal_line:
+		# Demodulate pcal at the ~1kHz pcal line
+		pcaly_line3 = calibration_parts.demodulate(pipeline, pcaltee, high_pcal_line_freq, td, complex_caps, integration_samples, pcal_corr_at_high_line_freq_real, pcal_corr_at_high_line_freq_imag)
+		# Reconstruct a calibrated (negative) pcal at only the ~1kHz pcal line
+		pcaly_line3 = calibration_parts.mkresample(pipeline, pcaly_line3, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * high_pcal_line_freq, prefactor_real = 2.0)
+		remove_pcaly_line3, trash = calibration_parts.split_into_real(pipeline, pcaly_line3)
+		pipeparts.mkfakesink(pipeline, trash)
+		# Add into the total line removal stream
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, long_queue], [remove_pcaly_line3, short_queue]))
+
+	if remove_roaming_pcal_line:
+		# Demodulate pcal at the ~3kHz pcal line
+		pcaly_line4 = calibration_parts.demodulate(pipeline, pcaltee, roaming_pcal_line_freq, td, complex_caps, integration_samples, pcal_corr_at_roaming_line_real, pcal_corr_at_roaming_line_imag)
+		# Reconstruct a calibrated (negative) pcal at only the ~3kHz pcal line
+		pcaly_line4 = calibration_parts.mkresample(pipeline, pcaly_line4, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line4 = pipeparts.mkgeneric(pipeline, pcaly_line4, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = 2.0)
+		remove_pcaly_line4, trash = calibration_parts.split_into_real(pipeline, pcaly_line4)
+		pipeparts.mkfakesink(pipeline, trash)
+		# Add into the total line removal stream
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, long_queue], [remove_pcaly_line4, short_queue]))
+
+	if remove_src_pcal_line:
+		# Reconstruct a calibrated (negative) pcal at only the ~3kHz pcal line
+		pcaly_line0 = calibration_parts.mkresample(pipeline, pcal_at_src_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		pcaly_line0 = pipeparts.mkgeneric(pipeline, pcaly_line0, "lal_demodulate", line_frequency = -1.0 * src_pcal_line_freq, prefactor_real = 2.0)
+		remove_pcaly_line0, trash = calibration_parts.split_into_real(pipeline, pcaly_line0)
+		pipeparts.mkfakesink(pipeline, trash)
+		# Add into the total line removal stream
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, long_queue], [remove_pcaly_line0, short_queue]))
+
+
+#
+# REMOVE POWER LINES
+#
+
+if options.remove_powerlines:
+	powerlines = calibration_parts.caps_and_progress(pipeline, head_dict["powerlines"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % powerlinessr, "powerlines")
+	powerlines = pipeparts.mkfirbank(pipeline, powerlines, latency = int(powerlinesdelay), fir_matrix = [powerlinesfilt[::-1]], time_domain = td)
+	powerlines = calibration_parts.mkresample(pipeline, powerlines, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	if options.remove_callines:
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, long_queue], [powerlines, short_queue]))
+	else:
+		remove_from_strain = powerlines
+
+#
+# REMOVE IMC JITTER
+#
+
+if options.remove_jitter_imc:
+	imc_a_pitch = calibration_parts.caps_and_progress(pipeline, head_dict["imc_a_pitch"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % imcapitsr, "imc_a_pitch")
+	imc_a_yaw = calibration_parts.caps_and_progress(pipeline, head_dict["imc_a_yaw"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % imcayawsr, "imc_a_yaw")
+	imc_b_pitch = calibration_parts.caps_and_progress(pipeline, head_dict["imc_b_pitch"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % imcbpitsr, "imc_b_pitch")
+        imc_b_yaw = calibration_parts.caps_and_progress(pipeline, head_dict["imc_b_yaw"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % imcbyawsr, "imc_b_yaw")
+
+	imc_a_pitch = pipeparts.mkfirbank(pipeline, imc_a_pitch, latency = int(imcapitdelay), fir_matrix = [imcapitfilt[::-1]], time_domain = td)
+	imc_a_yaw = pipeparts.mkfirbank(pipeline, imc_a_yaw, latency = int(imcayawdelay), fir_matrix = [imcayawfilt[::-1]], time_domain = td)
+	imc_b_pitch = pipeparts.mkfirbank(pipeline, imc_b_pitch, latency = int(imcbpitdelay), fir_matrix = [imcbpitfilt[::-1]], time_domain = td)
+        imc_b_yaw = pipeparts.mkfirbank(pipeline, imc_b_yaw, latency = int(imcbyawdelay), fir_matrix = [imcbyawfilt[::-1]], time_domain = td)
+
+	imc_a_pitch = calibration_parts.mkresample(pipeline, imc_a_pitch, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	imc_a_yaw = calibration_parts.mkresample(pipeline, imc_a_yaw, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	imc_b_pitch = calibration_parts.mkresample(pipeline, imc_b_pitch, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+        imc_b_yaw = calibration_parts.mkresample(pipeline, imc_b_yaw, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+
+	if options.remove_callines or options.remove_powerlines:
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, long_queue], [imc_a_pitch, long_queue], [imc_a_yaw, long_queue], [imc_b_pitch, long_queue], [imc_b_yaw, long_queue]))
+	else:
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [imc_a_pitch, long_queue], [imc_a_yaw, long_queue], [imc_b_pitch, long_queue], [imc_b_yaw, long_queue]))
+
+if options.remove_jitter_psl:
+	bullseye_width = calibration_parts.caps_and_progress(pipeline, head_dict["bullseye_width"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % bullseyewidsr, "bullseye_width")
+	bullseye_pitch = calibration_parts.caps_and_progress(pipeline, head_dict["bullseye_pitch"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % bullseyepitsr, "bullseye_pitch")
+	bullseye_yaw = calibration_parts.caps_and_progress(pipeline, head_dict["bullseye_yaw"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % bullseyeyawsr, "bullseye_yaw")
+
+	bullseye_width = pipeparts.mkfirbank(pipeline, bullseye_width, latency = int(bullseyewiddelay), fir_matrix = [bullseyewidfilt[::-1]], time_domain = td)
+	bullseye_pitch = pipeparts.mkfirbank(pipeline, bullseye_pitch, latency = int(bullseyepitdelay), fir_matrix = [bullseyepitfilt[::-1]], time_domain = td)
+	bullseye_yaw = pipeparts.mkfirbank(pipeline, bullseye_yaw, latency = int(bullseyeyawdelay), fir_matrix = [bullseyeyawfilt[::-1]], time_domain = td)
+
+	bullseye_width = calibration_parts.mkresample(pipeline, bullseye_width, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	bullseye_pitch = calibration_parts.mkresample(pipeline, bullseye_pitch, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	bullseye_yaw = calibration_parts.mkresample(pipeline, bullseye_yaw, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+
+	if options.remove_callines or options.remove_powerlines or options.remove_jitter_imc:
+                remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, long_queue], [bullseye_width, long_queue], [bullseye_pitch, long_queue], [bullseye_yaw, long_queue]))
+	else:
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [bullseye_width, long_queue], [bullseye_pitch, long_queue], [bullseye_yaw, long_queue]))
+
+#
+# REMOVE ANGULAR CONTROL
+#
+
+if options.remove_angular_control:
+	asc_dhard_pitch = calibration_parts.caps_and_progress(pipeline, head_dict["asc_dhard_pitch"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % ascdpitsr, "asc_dhard_pitch")
+	asc_dhard_yaw = calibration_parts.caps_and_progress(pipeline, head_dict["asc_dhard_yaw"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % ascdyawsr, "asc_dhard_yaw")
+	asc_chard_pitch = calibration_parts.caps_and_progress(pipeline, head_dict["asc_chard_pitch"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % asccpitsr, "asc_chard_pitch")
+	asc_chard_yaw = calibration_parts.caps_and_progress(pipeline, head_dict["asc_chard_yaw"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % asccyawsr, "asc_chard_yaw")
+
+	asc_dhard_pitch = pipeparts.mkfirbank(pipeline, asc_dhard_pitch, latency = int(ascdpitdelay), fir_matrix = [ascdpitfilt[::-1]], time_domain = td)
+	asc_dhard_yaw = pipeparts.mkfirbank(pipeline, asc_dhard_yaw, latency = int(ascdyawdelay), fir_matrix = [ascdyawfilt[::-1]], time_domain = td)
+	asc_chard_pitch = pipeparts.mkfirbank(pipeline, asc_chard_pitch, latency = int(asccpitdelay), fir_matrix = [asccpitfilt[::-1]], time_domain = td)
+	asc_chard_yaw = pipeparts.mkfirbank(pipeline, asc_chard_yaw, latency = int(asccyawdelay), fir_matrix = [asccyawfilt[::-1]], time_domain = td)
+
+	asc_dhard_pitch = calibration_parts.mkresample(pipeline, asc_dhard_pitch, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	asc_dhard_yaw = calibration_parts.mkresample(pipeline, asc_dhard_yaw, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	asc_chard_pitch = calibration_parts.mkresample(pipeline, asc_chard_pitch, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	asc_chard_yaw = calibration_parts.mkresample(pipeline, asc_chard_yaw, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+
+	if options.remove_callines or options.remove_powerlines or options.remove_jitter_imc or options.remove_jitter_psl:
+                remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, long_queue], [asc_dhard_pitch, long_queue], [asc_dhard_yaw, long_queue], [asc_chard_pitch, long_queue], [asc_chard_yaw, long_queue]))
+	else:
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [asc_dhard_pitch, long_queue], [asc_dhard_yaw, long_queue], [asc_chard_pitch, long_queue], [asc_chard_yaw, long_queue]))
+
+if options.remove_length_control:
+	lsc_srcl = calibration_parts.caps_and_progress(pipeline, head_dict["lsc_srcl"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % lscsrclsr, "lsc_srcl")
+	lsc_mich = calibration_parts.caps_and_progress(pipeline, head_dict["lsc_mich"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % lscmichsr, "lsc_mich")
+	lsc_prcl = calibration_parts.caps_and_progress(pipeline, head_dict["lsc_prcl"], "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % lscprclsr, "lsc_prcl")
+
+	lsc_srcl = pipeparts.mkfirbank(pipeline, lsc_srcl, latency = int(lscsrcldelay), fir_matrix = [lscsrclfilt[::-1]], time_domain = td)
+	lsc_mich = pipeparts.mkfirbank(pipeline, lsc_mich, latency = int(lscmichdelay), fir_matrix = [lscmichfilt[::-1]], time_domain = td)
+	lsc_prcl = pipeparts.mkfirbank(pipeline, lsc_prcl, latency = int(lscprcldelay), fir_matrix = [lscprclfilt[::-1]], time_domain = td)
+
+	lsc_srcl = calibration_parts.mkresample(pipeline, lsc_srcl, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	lsc_mich = calibration_parts.mkresample(pipeline, lsc_mich, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+	lsc_prcl = calibration_parts.mkresample(pipeline, lsc_prcl, 3, False, "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+
+	if options.remove_callines or options.remove_powerlines or options.remove_jitter_imc or options.remove_jitter_psl or options.remove_angular_control:
+                remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [remove_from_strain, long_queue], [lsc_srcl, long_queue], [lsc_mich, long_queue], [lsc_prcl, long_queue]))
+	else:
+		remove_from_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [lsc_srcl, long_queue], [lsc_mich, long_queue], [lsc_prcl, long_queue]))
+
+
+#
+# REMOVE EVERYTHING FROM THE STRAIN
+#
+
+strain = calibration_parts.caps_and_progress(pipeline, hoft_head_dict["hoft"], hoft_caps, "hoft")
+remove_from_strain = pipeparts.mkaudioamplify(pipeline, remove_from_strain, -1.0)
+cleaned_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [strain, short_queue], [remove_from_strain, long_queue]))
+
+cleaned_strain = pipeparts.mkprogressreport(pipeline, cleaned_strain, "progress_hoft_cleaned_%s" % instrument)
+
+# Put the units back to strain before writing to frames
+cleaned_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
+cleaned_strain = pipeparts.mktaginject(pipeline, cleaned_strain, cleaned_straintagstr)
+
+#
+# CREATE MUXER AND HOOK EVERYTHING UP TO IT
+#
+
+mux = pipeparts.mkframecppchannelmux(pipeline, None)
+
+if options.frame_duration is not None:
+	mux.set_property("frame-duration", options.frame_duration)
+if options.frames_per_file is not None:
+	mux.set_property("frames-per-file", options.frames_per_file)
+mux.set_property("compression-scheme", options.compression_scheme)
+mux.set_property("compression-level", options.compression_level)
+
+
+# Link the strain branch to the muxer
+strain_queue_length = short_queue
+calibration_parts.mkqueue(pipeline, cleaned_strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_STRAIN_CLEAN%s" % (instrument, chan_prefix, chan_suffix)))
+
+# FIXME: Need to addd this back in when the filter latency is sorted out from the cleaning
+"""
+# Check that all frames are long enough, that they have all of the channels by requring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
+def check_complete_frames(pad, info, (output_start, frame_duration, wings_start, wings_end)):
+	buf = info.get_buffer()
+	startts = lal.LIGOTimeGPS(0, buf.pts)
+	duration = lal.LIGOTimeGPS(0, buf.duration)
+	if not (startts % frame_duration == 0):
+		return Gst.PadProbeReturn.DROP
+	if startts < output_start:
+		return Gst.PadProbeReturn.DROP
+	if duration != frame_duration:
+		return Gst.PadProbeReturn.DROP
+	if wings_start is not None and wings_end is not None:
+		if startts < wings_start or (startts+duration) > wings_end:
+			return Gst.PadProbeReturn.DROP
+	return Gst.PadProbeReturn.OK
+if options.data_source == "frames":
+	start = int(options.gps_start_time)
+elif options.data_source == "lvshm":
+	tm = time.gmtime()
+	start = int(lal.UTCToGPS(tm))
+# start time of first frame file is the desired start time + either filter latency or kappa settling (if computing kappas), whichever is bigger
+if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
+	output_start = start + max(int(filter_settle_time), options.demodulation_filter_time + options.median_smoothing_time + options.factors_averaging_time)
+else:
+	output_start = start + int(filter_settle_time)
+"""
+
+"""
+# If the wings option is set, need to also check that frames aren't written during the requested wing time
+if options.wings is not None:
+	wings_start = int(options.gps_start_time) + options.wings
+	wings_end = int(options.gps_end_time) - options.wings
+	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), lal.LIGOTimeGPS(wings_start, 0), lal.LIGOTimeGPS(wings_end, 0)))
+else:
+	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), None, None))
+"""
+
+mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
+
+if options.write_to_shm_partition is not None:
+	pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", sync=False, async=False, shm_name = options.write_to_shm_partition, num_buffers=10, blocksize=options.frame_size*options.frame_duration*options.frames_per_file, buffer_mode=options.buffer_mode)
+else:
+	pipeparts.mkframecppfilesink(pipeline, mux, frame_type = options.frame_type, path = options.output_path, instrument = instrument) 
+
+# Run pipeline
+
+if options.write_pipeline is not None:
+	pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "NULL"), verbose = options.verbose)
+
+# Seek the pipeline when necessary
+if options.data_source == "frames":
+	if options.verbose:
+		print >>sys.stderr, "seeking GPS start and stop times ..."
+	if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+		raise RuntimeError("pipeline failed to enter READY state")
+	datasource.pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time)
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to playing ..."
+if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
+else:
+	print "set to playing successfully"
+if options.write_pipeline is not None:
+	pipeparts.write_dump_dot(pipeline, "%s.%s" %(options.write_pipeline, "PLAYING"), verbose = options.verbose)
+	
+if options.verbose:
+	print >>sys.stderr, "running pipeline ..."
+
+mainloop.run()
+
+if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline could not be set to NULL")

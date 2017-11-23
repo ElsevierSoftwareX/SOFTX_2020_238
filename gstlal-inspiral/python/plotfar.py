@@ -33,6 +33,14 @@ import matplotlib
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 300,
+	"savefig.dpi": 300,
 	"text.usetex": True
 })
 import numpy
@@ -120,7 +128,7 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	else:
 		axes.contour(x, y, z.T, levels, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
 	if event_snr is not None and event_chisq is not None:
-		axes.plot(event_snr, event_chisq / event_snr / event_snr, 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
+		axes.plot(event_snr, event_chisq / event_snr / event_snr, "ko", mfc = "None", mec = "g", ms = 14, mew=4)
 	if sngls is not None:
 		axes.plot(sngls[:,0], sngls[:,1] / sngls[:,0]**2., "b.", alpha = .2)
 	axes.loglog()
@@ -138,10 +146,11 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 		axes.set_title(r"$\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise})$ in %s" % instrument)
 	else:
 		raise ValueError(tag)
+	fig.tight_layout(pad = .8)
 	return fig
 
 
-def plot_rates(coinc_param_distributions, ranking_data = None):
+def plot_rates(coinc_param_distributions):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((6., 6.))
@@ -154,10 +163,8 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	labels = []
 	sizes = []
 	colours = []
-	for instrument, category in sorted(coinc_param_distributions.instrument_categories.items()):
-		count = coinc_param_distributions.background_rates["instruments"][category,]
-		if not count:
-			continue
+	for instrument in sorted(coinc_param_distributions.instruments):
+		count = coinc_param_distributions.background_rates["singles"][instrument,]
 		labels.append("%s\n(%d)" % (instrument, count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments((instrument,)))
@@ -168,81 +175,87 @@ def plot_rates(coinc_param_distributions, ranking_data = None):
 	labels = []
 	sizes = []
 	colours = []
-	for instruments in sorted(sorted(instruments) for instruments in coinc_param_distributions.count_above_threshold if instruments is not None):
-		count = coinc_param_distributions.background_rates["instruments"][coinc_param_distributions.instrument_categories.category(instruments),]
-		if len(instruments) < 2 or not count:
+	for instruments, count in sorted(zip(coinc_param_distributions.background_rates["instruments"].bins[0].centres(), coinc_param_distributions.background_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < coinc_param_distributions.min_instruments:
+			assert count == 0
 			continue
-		labels.append("%s\n(%d)" % (", ".join(instruments), count))
+		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments(instruments))
 	axes1.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes1.set_title("Projected Background Coincidence Counts")
+	axes1.set_title("Expected Background Candidate Counts\n(before $\ln \mathcal{L}$ cut)")
 
-	# recovered signal distribution
-	# FIXME ranking data is not even used, why is this check here?
-	if ranking_data is not None:
-		labels = []
-		sizes = []
-		colours = []
-		for instruments, fraction in sorted(coinc_param_distributions.Pinstrument_signal.items(), key = lambda (instruments, fraction): sorted(instruments)):
-			if len(instruments) < 2 or not fraction:
-				continue
-			labels.append(", ".join(sorted(instruments)))
-			sizes.append(fraction)
-			colours.append(plotutil.colour_from_instruments(instruments))
-		axes2.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-		axes2.set_title(r"Projected Recovered Signal Distribution")
+	# signal distribution
+	labels = []
+	sizes = []
+	colours = []
+	for instruments, fraction in sorted(zip(coinc_param_distributions.injection_pdf["instruments"].bins[0].centres(), coinc_param_distributions.injection_pdf["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < coinc_param_distributions.min_instruments:
+			assert fraction == 0
+			continue
+		labels.append(", ".join(sorted(instruments)))
+		sizes.append(fraction)
+		colours.append(plotutil.colour_from_instruments(instruments))
+	axes2.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
+	axes2.set_title(r"Projected Recovered Signal Distribution")
 
 	# observed counts
 	labels = []
 	sizes = []
 	colours = []
-	for instruments, count in sorted((sorted(instruments), count) for instruments, count in coinc_param_distributions.count_above_threshold.items() if instruments is not None):
-		if len(instruments) < 2 or not count:
+	for instruments, count in sorted(zip(coinc_param_distributions.zero_lag_rates["instruments"].bins[0].centres(), coinc_param_distributions.zero_lag_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < coinc_param_distributions.min_instruments:
+			assert count == 0
 			continue
-		labels.append("%s\n(%d)" % (", ".join(instruments), count))
+		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments(instruments))
 	axes3.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes3.set_title("Observed Coincidence Counts")
-	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
-	try:
-		fig.tight_layout(pad = .8)
-		return fig
-	except AttributeError:
-		return fig
+	axes3.set_title("Observed Candidate Counts\n(after $\ln \mathcal{L}$ cut)")
+	fig.tight_layout(pad = .8)
+	return fig
 
 
-def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances, max_snr, ifo_snr = {}, sngls = None):
-	if len(instruments) > 2:
-		# FIXME:  figure out how to plot 3D PDFs
-		return None
-	ignored, binnedarray, ignored = coinc_param_distributions.snr_joint_pdf_cache[coinc_param_distributions.snr_joint_pdf_keyfunc(instruments, horizon_distances)]
+def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, min_instruments, max_snr, sngls = None):
+	if len(instruments) < 1:
+		raise ValueError("len(instruments) must be >= 1")
+
+	# FIXME:  don't try to plot Virgo stuff.  remove after O2
+	instruments = set(instruments) - set(["V1"])
+	if sngls is not None:
+		for d in sngls:
+			d.pop("V1", None)
+
+	# retrieve the PDF in binned array form (not the interpolator)
+	binnedarray = snrpdf.get_snr_joint_pdf_binnedarray(instruments, horizon_distances, min_instruments)
+
+	# the range of the axes
+	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, max_snr
+	mask = binnedarray.bins[(slice(xlo, xhi),) * len(instruments)]
+
+	# axes are in alphabetical order
 	instruments = sorted(instruments)
-	horizon_distances = dict(horizon_distances)
-	fig, axes = init_plot((5, 4))
-	x = binnedarray.bins[0].centres()
-	y = binnedarray.bins[1].centres()
+
+	# sngls is a sequence of {instrument: (snr, chisq)} dictionaries,
+	# digest into co-ordinate tuples for a sngls scatter plot
+	if sngls is not None:
+		# NOTE:  the PDFs are computed subject to the constraint
+		# that the candidate is observed in precisely that set of
+		# instruments, so we need to restrict ourselves, here, to
+		# coincs that involve the combination of instruments in
+		# question otherwise we'll be overlaying a scatter plot
+		# that we don't believe to have been drawn from the PDF
+		# we're showing.
+		sngls = numpy.array([tuple(sngl[instrument][0] for instrument in instruments) for sngl in sngls if sorted(sngl) == instruments])
+
+	x = [binning.centres() for binning in binnedarray.bins]
 	z = binnedarray.array
 	if numpy.isnan(z).any():
 		warnings.warn("%s SNR PDF for %s contains NaNs" % (", ".join(instruments), ", ".join("%s=%g" % instdist for instdist in sorted(horizon_distances.items()))))
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
 
-	# sngls is a sequence of {instrument: (snr, chisq)} dictionaries,
-	# obtain the co-ordinates for a sngls scatter plot for the
-	# instruments from that.  need to handle case in which there are no
-	# singles for this instrument
-	if sngls is not None:
-		sngls = numpy.array([(sngl[instruments[0]][0], sngl[instruments[1]][0]) for sngl in sngls if sorted(sngl) == instruments])
-		if not len(sngls):
-			sngls = None
-
-	# the range of the plots
-	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, max_snr
-
-	x = x[binnedarray.bins[xlo:xhi, xlo:xhi][0]]
-	y = y[binnedarray.bins[xlo:xhi, xlo:xhi][1]]
-	z = z[binnedarray.bins[xlo:xhi, xlo:xhi]]
+	x = [coords[m] for coords, m in zip(x, mask)]
+	z = z[mask]
 
 	# one last check for craziness to make error messages more
 	# meaningful
@@ -253,31 +266,61 @@ def plot_snr_joint_pdf(coinc_param_distributions, instruments, horizon_distances
 	with numpy.errstate(divide = "ignore"):
 		z = numpy.log(z)
 
-	# FIXME:  hack to allow all-0 PDFs to be plotted.  remove when we
-	# have a version of matplotlib that doesn't crash, whatever version
-	# of matplotlib that is
-	if numpy.isinf(z).all():
-		z[:,:] = -60.
-		z[0,0] = -55.
+	if len(instruments) == 1:
+		# 1D case
+		fig, axes = init_plot((5., 5. / plotutil.golden_ratio))
 
-	norm = matplotlib.colors.Normalize(vmin = -40., vmax = max(0., z.max()))
+		# FIXME:  hack to allow all-0 PDFs to be plotted.  remove
+		# when we have a version of matplotlib that doesn't crash,
+		# whatever version of matplotlib that is
+		if numpy.isinf(z).all():
+			z[:] = -60.
+			z[0] = -55.
 
-	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
-	axes.contour(x, y, z.T, 50, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
-	if ifo_snr:
-		axes.plot(ifo_snr[instruments[0]], ifo_snr[instruments[1]], 'ko', mfc = 'None', mec = 'g', ms = 14, mew=4)
-	if sngls is not None:
-		axes.plot(sngls[:,0], sngls[:,1], "b.", alpha = .2)
-	axes.loglog()
-	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
-	#axes.set_xlim((xlo, xhi))
-	#axes.set_ylim((xlo, xhi))
-	fig.colorbar(mesh, ax = axes)
-	# co-ordinates are in alphabetical order
-	axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
-	axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
-	axes.set_title(r"$\ln P(%s)$" % ", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments))
+		axes.semilogx(x[0], z, color = "k")
+		ylo, yhi = -40., max(0., z.max())
+		if sngls is not None and len(sngls) == 1:
+			axes.axvline(sngls[0, 0])
+		axes.set_xlim((xlo, xhi))
+		axes.set_ylim((ylo, yhi))
+		axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
+		axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
+		axes.set_ylabel(r"$\ln P(\mathrm{SNR}_{\mathrm{%s}})$" % instruments[0])
 
+	elif len(instruments) == 2:
+		# 2D case
+		fig, axes = init_plot((5., 4.))
+
+		# FIXME:  hack to allow all-0 PDFs to be plotted.  remove
+		# when we have a version of matplotlib that doesn't crash,
+		# whatever version of matplotlib that is
+		if numpy.isinf(z).all():
+			z[:,:] = -60.
+			z[0,0] = -55.
+
+		norm = matplotlib.colors.Normalize(vmin = -40., vmax = max(0., z.max()))
+
+		mesh = axes.pcolormesh(x[0], x[1], z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
+		axes.contour(x[0], x[1], z.T, 50, norm = norm, colors = "k", linestyles = "-", linewidths = .5, alpha = .3)
+
+		if sngls is not None and len(sngls) == 1:
+			axes.plot(sngls[0, 0], sngls[0, 1], "ko", mfc = "None", mec = "g", ms = 14, mew=4)
+		elif sngls is not None:
+			axes.plot(sngls[:,0], sngls[:,1], "b.", alpha = .2)
+
+		axes.loglog()
+		axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
+		fig.colorbar(mesh, ax = axes)
+		# co-ordinates are in alphabetical order
+		axes.set_xlabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[0])
+		axes.set_ylabel(r"$\mathrm{SNR}_{\mathrm{%s}}$" % instruments[1])
+
+	else:
+		# FIXME:  figure out how to plot 3+D PDFs
+		return None
+
+	axes.set_title(r"$\ln P(%s | \{%s\}, \mathrm{signal})$" % (", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments), ", ".join("{D_{\mathrm{H}}}_{\mathrm{%s}}=%.3g" % item for item in sorted(horizon_distances.items()))))
+	fig.tight_layout(pad = .8)
 	return fig
 	
 
@@ -306,31 +349,32 @@ def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binned
 	ylo = max(yhi * 1e-40, ylo)
 	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
-	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
-	try:
-		fig.tight_layout(pad = .8)
-		return fig
-	except AttributeError:
-		return fig
+	fig.tight_layout(pad = .8)
+	return fig
 
-def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios = None, event_ln_likelihood_ratio = None):
+
+def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios = None, is_open_box = False, ln_likelihood_ratio_markers = None):
+	assert xlo < xhi
+
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 
-	x = numpy.linspace(xlo, xhi, 10000)
-	axes.semilogy(x, map(fapfar.fap_from_rank, x), color = "k")
+	x = numpy.linspace(xlo, xhi, int(math.ceil(xhi - xlo)) * 8)
+	axes.semilogy(x, fapfar.fap_from_rank(x), color = "k")
 
 	ylo = fapfar.fap_from_rank(xhi)
 	ylo = 10**math.floor(math.log10(ylo))
 	yhi = 10.
 
-	if zerolag_ln_likelihood_ratios is not None:
-		zerolag_ln_likelihood_ratios = numpy.array(zerolag_ln_likelihood_ratios)
-		x = zerolag_ln_likelihood_ratios[:,0]
-		y = zerolag_ln_likelihood_ratios[:,1]
-		axes.semilogy(x, y, color = "k", linestyle = "", marker = "+")
+	if observed_ln_likelihood_ratios is not None:
+		observed_ln_likelihood_ratios = numpy.array(observed_ln_likelihood_ratios)
+		x = observed_ln_likelihood_ratios[:,0]
+		y = observed_ln_likelihood_ratios[:,1]
+		axes.semilogy(x, y, color = "k", linestyle = "", marker = "+", label = r"Candidates" if is_open_box else r"Candidates (time shifted)")
+		axes.legend(loc = "upper right")
 
-	if event_ln_likelihood_ratio is not None:
-		axes.axvline(event_ln_likelihood_ratio, ylo, yhi)
+	if ln_likelihood_ratio_markers is not None:
+		for ln_likelihood_ratio in ln_likelihood_ratio_markers:
+			axes.axvline(ln_likelihood_ratio)
 
 	axes.set_xlim((xlo, xhi))
 	axes.set_ylim((ylo, yhi))
@@ -338,35 +382,33 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), zerolag_ln_likelihood_ratios 
 	axes.set_title(r"False Alarm Probability vs.\ Log Likelihood Ratio")
 	axes.set_xlabel(r"$\ln \mathcal{L}$")
 	axes.set_ylabel(r"$P(\mathrm{one\ or\ more\ candidates} \geq \ln \mathcal{L} | \mathrm{noise})$")
-	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
-	try:	
-		fig.tight_layout(pad = .8)
-		return fig
-	except AttributeError:
-		return fig
+	fig.tight_layout(pad = .8)
+	return fig
 
-def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo,thi), tbins, colours = {"H1": "r", "H2": "b", "L1": "g", "V1": "m"}):
-	tlo, thi = float(tlo), float(thi)
 
-	horizon_history = coinc_param_distributions.horizon_history
-
+def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo, thi), masses = (1.4, 1.4), tref = None):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
-	t = numpy.linspace(tlo, thi, tbins)
-	yhi = 0
-	for ifo in horizon_history.keys():
-		y = numpy.array([horizon_history[ifo][seg] for seg in t])
-		axes.plot(t, y, color = colours[ifo], label = '%s' % ifo)
-		yhi = max(y.max()+5., yhi)
-	axes.set_ylim((0,yhi))
-	axes.set_xlim((round(tlo), round(thi)))
-	axes.set_ylabel('Horizon Distance (Mpc)')
-	axes.set_xlabel('GPS Time (s)')
-	axes.set_title('Horizon Distance vs.\ Time')
-	axes.legend(loc = "lower left")
-	#FIXME: remove when we have a new enough matplotlib on all the reference platforms
-	try:	
-		fig.tight_layout(pad = .8)
-		return fig
-	except AttributeError:
-		return fig
+	axes.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1800.))
+	axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5.))
+	axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50.))
 
+	yhi = 1.
+	for instrument, history in coinc_param_distributions.horizon_history.items():
+		x = numpy.array([t for t in history.keys() if tlo <= t < thi])
+		y = list(map(history.__getitem__, x))
+		if tref is not None:
+			x -= float(tref)
+		axes.plot(x, y, color = plotutil.colour_from_instruments([instrument]), label = "%s" % instrument)
+		yhi = max(max(y), yhi)
+	if tref is not None:
+		axes.set_xlabel("Time From GPS %.2f (s)" % float(tref))
+	else:
+		axes.set_xlim((math.floor(tlo), math.ceil(thi)))
+		axes.set_xlabel("GPS Time (s)")
+	axes.set_ylim((0., math.ceil(yhi / 10.) * 10.))
+	axes.set_ylabel("Horizon Distance (Mpc)")
+	axes.set_title(r"Horizon Distance for $%.3g\,\mathrm{M}_{\odot}$--$%.3g\,\mathrm{M}_{\odot}$ vs.\ Time" % masses)
+	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
+	axes.legend(loc = "lower left")
+	fig.tight_layout(pad = .8)
+	return fig

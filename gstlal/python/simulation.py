@@ -22,8 +22,8 @@ from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
-from pylal.datatypes import LIGOTimeGPS
-
+from lal import LIGOTimeGPS
+import math
 
 ## @file
 # the simulation module
@@ -49,13 +49,13 @@ lsctables.use_in(ContentHandler)
 #
 
 ## Turn a file containing a sim inspiral into a segment list
-def sim_inspiral_to_segment_list(fname, pad=3, verbose=False):
+def sim_inspiral_to_segment_list(fname, pad=1, verbose=False):
 	"""!
 	Given an xml file create a segment list that marks the time of an
 	injection with padding
 
 	- fname: the xml file name
-	- pad: duration in seconds to pad the coalescence time when producint a segment, e.g., [tc-pad, tc+pad)
+	- pad: duration in seconds to pad the coalescence time when producing a segment, e.g., [tc-pad, tc+pad)
 	"""
 
 	# initialization
@@ -70,7 +70,7 @@ def sim_inspiral_to_segment_list(fname, pad=3, verbose=False):
 
 	for row in lsctables.SimInspiralTable.get_table(xmldoc):
 		t = LIGOTimeGPS(row.get_time_geocent())
-		seglist.append(segments.segment(t-pad, t+pad))
+		seglist.append(segments.segment(LIGOTimeGPS(int(math.floor(t-pad))), LIGOTimeGPS(int(math.ceil(t+pad)))))
 
 	# help the garbage collector
 

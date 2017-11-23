@@ -45,33 +45,25 @@ import urlparse
 import json
 
 
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
-from glue.ligolw import lsctables
+import lal
+
+
 from glue.ligolw import utils as ligolw_utils
 from gstlal import lvalert_helper
 from gstlal import plotpsd
 from ligo.gracedb import rest as gracedb
-from pylal import series as lal_series
-
-
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
-lsctables.use_in(LIGOLWContentHandler)
 
 
 plotpsd.matplotlib.rcParams.update({
-	"font.size": 8.0,
+	"font.size": 10.0,
 	"axes.titlesize": 10.0,
 	"axes.labelsize": 10.0,
 	"xtick.labelsize": 8.0,
 	"ytick.labelsize": 8.0,
 	"legend.fontsize": 8.0,
-	"figure.dpi": 175,
-	"savefig.dpi": 175,
+	"lines.linewidth": 0.75,
+	"figure.dpi": 300,
+	"savefig.dpi": 300,
 	"text.usetex": True,
 	"path.simplify": True
 })
@@ -90,7 +82,7 @@ def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = Fals
 	response = lvalert_helper.get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
 	if response is None:
 		return None
-	return lal_series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, contenthandler = LIGOLWContentHandler)[0])
+	return lal.series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, contenthandler = lal.series.PSDContentHandler)[0])
 
 
 #
@@ -104,6 +96,7 @@ def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = Fals
 
 def parse_command_line():
 	parser = OptionParser()
+	parser.add_option("--format", default = "png", help = "Set file format by selecting the extention (default = \"png\").")
 	parser.add_option("--no-upload", action = "store_true", help = "Write plots to disk.")
 	parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
 	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
@@ -111,7 +104,8 @@ def parse_command_line():
 	options, graceids = parser.parse_args()
 
 	if not graceids:
-		# FIXME:  lvalert_listen doesn't allow command-line options
+		# FIXME:  lvalert_listen doesn't allow command-line
+		# options, enable logging for online analysis
 		options.verbose = True
 
 	# can only call basicConfig once (otherwise need to switch to more
@@ -154,16 +148,35 @@ for graceid in graceids:
 	psds = get_psds(gracedb_client, graceid, ignore_404 = options.skip_404)
 	if psds is None:
 		continue
-	fig = plotpsd.plot_psds(psds, lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid), plot_width = 1024)
-	try:
-		fig.tight_layout()
-	except AttributeError:
-		# not available on old matplotlibs
-		pass
-	filename = "%s_psd.png" % graceid
+
+	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
+
+	#
+	# PSD plot
+	#
+
+	fig = plotpsd.plot_psds(psds, coinc_xmldoc, plot_width = 2400)
+	fig.tight_layout()
+
+	filename = "%s_psd.%s" % (graceid, options.format)
 	if options.no_upload:
 		logging.info("writing %s ..." % filename)
 		fig.savefig(filename)
 	else:
-		lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename, log_message = "strain spectral density plot")
+		lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename, log_message = "strain spectral density plot", tagname = "psd")
+
+	#
+	# Cumulative SNRs plot
+	#
+
+	fig = plotpsd.plot_cumulative_snrs(psds, coinc_xmldoc, plot_width = 2400)
+	fig.tight_layout()
+
+	filename = "%s_cumulative_snrs.%s" % (graceid, options.format)
+	if options.no_upload:
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
+	else:
+		lvalert_helper.upload_fig(fig, gracedb_client, graceid, filename = filename, log_message = "cumulative SNRs plot", tagname = "psd")
+
 	logging.info("finished processing %s" % graceid)

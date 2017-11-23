@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal],[0.10.4],[gstlal-discuss@ligo.org],[gstlal])
-AC_COPYRIGHT([Copyright (C) 2008--2015 Kipp Cannon])
+AC_INIT([gstlal],[1.2.1],[gstlal-discuss@ligo.org],[gstlal])
+AC_COPYRIGHT([Copyright (C) 2008--2016 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -20,8 +20,10 @@ AC_CONFIG_FILES([ \
 	lib/Makefile \
 	lib/gstlal/gstlal.pc \
 	lib/gstlal/Makefile \
+	python/__init__.py \
 	python/Makefile \
 	python/pipeparts/Makefile \
+	python/stats/Makefile \
 	gst/Makefile \
 	gst/debug/Makefile \
 	gst/gst/Makefile \
@@ -71,9 +73,10 @@ AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 # Set the library API info
 #
 #  0.0.0   Original version
+#  1.0.0   API used in 1.0.0
 
 
-AC_SUBST([LIBAPI], [0])
+AC_SUBST([LIBAPI], [1])
 AC_SUBST([LIBREL], [0])
 AC_SUBST([LIBAGE], [0])
 AC_SUBST([LIBVERSION], [${LIBAPI}:${LIBREL}:${LIBAGE}])
@@ -106,7 +109,7 @@ AM_CONDITIONAL([COND_DOXYGEN], [test "x$HAVE_DOXYGEN" == "xyes"])
 AC_SUBST([MIN_DOXYGEN_VERSION])
 
 MIN_GTK_DOC_VERSION="1.11"
-GTK_DOC_CHECK(["$MIN_GTK_DOC_VERSION"])
+GTK_DOC_CHECK(["$MIN_GTK_DOC_VERSION"], [--flavour no-tmpl])
 AC_SUBST([MIN_GTK_DOC_VERSION])
 
 
@@ -115,13 +118,24 @@ AC_SUBST([MIN_GTK_DOC_VERSION])
 #
 
 
-MIN_PYTHON_VERSION="2.6"
+MIN_PYTHON_VERSION="2.7"
 AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
-# hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
-# Debian and SL6.  FIXME:  find a way to do this properly
-PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
+# hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
+# and SL6.  FIXME:  find a way to do this properly
+PYTHON_LIBS=[`echo "$PYTHON_LIBS" | sed -e "s?-L/usr/lib[^[:space:]]*??g"`]
 AC_SUBST([MIN_PYTHON_VERSION])
+
+
+#
+# Check for Avahi and DBus Python modules
+#
+# FIXME:  make their abscence fatal by adding ", fatal" to macro argument
+#
+
+
+AX_PYTHON_MODULE(avahi)
+AX_PYTHON_MODULE(dbus)
 
 
 #
@@ -171,7 +185,7 @@ AC_DEFINE([GSTLAL_FFTWF_WISDOM_ENV], ["GSTLAL_FFTWF_WISDOM"], [Set to the name o
 
 AC_SUBST([GSTREAMER_RELEASE], [1.0])
 AC_SUBST([MIN_GSTREAMER_VERSION], [1.2.4])
-PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-controller-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
+PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-allocators-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-controller-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
 AC_SUBST([plugindir], [${libdir}/gstreamer-${GSTREAMER_RELEASE}])
@@ -181,6 +195,11 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 	
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\|gstlal_\|GstLAL_\|GSTLAL_\).*"])
+
+gstreamer_VERSION=`$PKG_CONFIG --modversion gstreamer-${GSTREAMER_RELEASE}`
+AX_COMPARE_VERSION([$gstreamer_VERSION], [ge], [1.6.0], [
+	AC_DEFINE([HAVE_GSTREAMER_1_6], [1], [Defined if gstreamer >= 1.6.x])
+])
 
 
 #
@@ -212,7 +231,8 @@ AC_SUBST([gstreamer_audio_LIBS])
 #
 
 
-GOBJECT_INTROSPECTION_CHECK([1.30.0])
+AC_SUBST([MIN_GOBJECT_INTROSPECTION_VERSION], [1.30.0])
+GOBJECT_INTROSPECTION_CHECK([${MIN_GOBJECT_INTROSPECTION_VERSION}])
 AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
 AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
 AS_IF([test "x$found_introspection" = "xyes"], [
@@ -236,12 +256,22 @@ AC_SUBST([PYGOBJECT_CFLAGS])
 AC_SUBST([PYGOBJECT_LIBS])
 #AM_CHECK_PYTHON_LIBS(, AC_MSG_ERROR([Python libs not found.]))
 
-# the file is
-#
-# /usr/lib/x86_64-linux-gnu/libpython2.7.so.1
-AC_SUBST([PYTHON_LIB_LOC], [/usr/lib/x86_64-linux-gnu])
+# on Debian the file is /usr/lib/x86_64-linux-gnu/libpython2.7.so
+# on SL7 the file is /usr/lib64/libpython2.7.so
 AC_SUBST([PYTHON_ABI_FLAGS], [])
-AC_SUBST([PYTHON_LIB_SUFFIX], [so.1])
+AC_SUBST([PYTHON_LIB_SUFFIX], [so])
+if test -a "/usr/lib/x86_64-linux-gnu/libpython2.7.so" ; then
+	AC_SUBST([PYTHON_LIB_LOC], [/usr/lib/x86_64-linux-gnu])
+elif test -a "/usr/lib64/libpython2.7.so" ; then
+	AC_SUBST([PYTHON_LIB_LOC], [/usr/lib64])
+elif test -a "/opt/local/lib/libpython2.7.dylib" ; then
+	AC_SUBST([PYTHON_LIB_LOC], [/opt/local/lib])
+	AC_SUBST([PYTHON_LIB_SUFFIX], [dylib])
+	# FIXME:  .pc file broken on macs, remove when fixed
+	PYGOBJECT_LIBS="${PYGOBJECT_LIBS} -lgmodule-2.0"
+else
+	AC_MSG_ERROR([libpython2.7.so not found])
+fi
 
 
 #
@@ -265,11 +295,11 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.15.2])
-AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
-AC_SUBST([MIN_LALSIMULATION_VERSION], [1.4.0])
-AC_SUBST([MIN_LALBURST_VERSION], [1.4.0])
-AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.7.0])
+AC_SUBST([MIN_LAL_VERSION], [6.18.0])
+AC_SUBST([MIN_LALMETAIO_VERSION], [1.3.1])
+AC_SUBST([MIN_LALSIMULATION_VERSION], [1.7.0])
+AC_SUBST([MIN_LALBURST_VERSION], [1.4.4])
+AC_SUBST([MIN_LALINSPIRAL_VERSION], [1.7.7])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport lalsimulation >= ${MIN_LALSIMULATION_VERSION} lalburst >= ${MIN_LALBURST_VERSION} lalinspiral >= ${MIN_LALINSPIRAL_VERSION}])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -297,14 +327,12 @@ AX_PYTHON_SYMBOL([lal], [LIGOTimeGPS])
 
 
 #
-# Check for glue and pylal
+# Check for glue
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.49])
-AC_SUBST([MIN_PYLAL_VERSION], [0.9.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.54.1])
 AX_PYTHON_GLUE()
-AX_PYTHON_PYLAL()
 
 
 #

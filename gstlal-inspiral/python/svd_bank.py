@@ -43,6 +43,8 @@
 import numpy
 import sys
 
+import lal
+
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import array as ligolw_array
@@ -50,7 +52,6 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import types as ligolw_types
 from glue.ligolw.utils import process as ligolw_process
-from pylal import series
 
 Attributes = ligolw.sax.xmlreader.AttributesImpl
 
@@ -59,7 +60,6 @@ from gstlal import misc as gstlalmisc
 from gstlal import templates
 
 
-# FIXME:  require calling code to provide the content handler
 class DefaultContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 ligolw_array.use_in(DefaultContentHandler)
@@ -149,8 +149,10 @@ class Bank(object):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
-		self.filter_length = max(time_slices['end'])
+		self.filter_length = time_slices['end'].max()
 		self.snr_threshold = snr_threshold
+		if logname is not None and not logname:
+			raise ValueError("logname cannot be empty if it is set")
 		self.logname = logname
 		self.bank_id = bank_id
 
@@ -179,7 +181,7 @@ class Bank(object):
 		if bank_fragment.sum_of_squares_weights is not None:
 			self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
 		else:
-			self.gate_threshold = 0
+			self.gate_threshold = 0.
 		if verbose:
 			print >>sys.stderr, "sum-of-squares threshold for false-alarm probability of %.16g:  %.16g" % (gate_fap, self.gate_threshold)
 
@@ -193,11 +195,11 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = DefaultContentHandler):
+def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = None):
 	"""!
 	Return an instance of a Bank class.
 
-	@param template_bank_filename The template bank filename containing a subbank of templates to decompose in a single inpsiral table.
+	@param template_bank_url The template bank filename or url containing a subbank of templates to decompose in a single inpsiral table.
 	@param psd A class instance of a psd.
 	@param flow The lower frequency cutoff.
 	@param ortho_gate_fap The FAP threshold for the sum of squares threshold, see http://arxiv.org/abs/1101.0584
@@ -216,7 +218,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	"""
 
 	# Open template bank file
-	bank_xmldoc = ligolw_utils.load_filename(template_bank_filename, contenthandler = contenthandler, verbose = verbose)
+	bank_xmldoc = ligolw_utils.load_url(template_bank_url, contenthandler = contenthandler, verbose = verbose)
 
 	# Get sngl inspiral table
 	bank_sngl_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
@@ -251,11 +253,11 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 
 	# FIXME: remove this when no longer needed
 	# by trigger generator element.
-	bank.set_template_bank_filename(template_bank_filename)
+	bank.set_template_bank_filename(ligolw_utils.local_path_from_url(template_bank_url))
 	return bank
 
 
-def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthandler = DefaultContentHandler, write_psd = False, verbose = False):
+def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd = False, verbose = False):
 	"""Write SVD banks to a LIGO_LW xml file."""
 
 	# Create new document
@@ -275,18 +277,20 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 		# put the bank table into the output document
 		new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
 		for row in bank.sngl_inspiral_table[clipleft:clipright]:
+			# FIXME need a proper id column
+			row.Gamma1 = int(bank.bank_id.split("_")[0])
 			new_sngl_table.append(row)
 
 		# put the possibly clipped table into the file
 		root.appendChild(new_sngl_table)
 
 		# Add root-level scalar params
-		root.appendChild(ligolw_param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
-		root.appendChild(ligolw_param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
-		root.appendChild(ligolw_param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
-		root.appendChild(ligolw_param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
-		root.appendChild(ligolw_param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
-		root.appendChild(ligolw_param.new_param('bank_id', ligolw_types.FromPyType[str], bank.bank_id))
+		root.appendChild(ligolw_param.Param.from_pyvalue('filter_length', bank.filter_length))
+		root.appendChild(ligolw_param.Param.from_pyvalue('gate_threshold', bank.gate_threshold))
+		root.appendChild(ligolw_param.Param.from_pyvalue('logname', bank.logname or ""))
+		root.appendChild(ligolw_param.Param.from_pyvalue('snr_threshold', bank.snr_threshold))
+		root.appendChild(ligolw_param.Param.from_pyvalue('template_bank_filename', bank.template_bank_filename))
+		root.appendChild(ligolw_param.Param.from_pyvalue('bank_id', bank.bank_id))
 
 		# apply clipping to autocorrelations and sigmasq
 		bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
@@ -295,10 +299,10 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 
 		# Add root-level arrays
 		# FIXME:  ligolw format now supports complex-valued data
-		root.appendChild(ligolw_array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
-		root.appendChild(ligolw_array.from_array('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
-		root.appendChild(ligolw_array.from_array('autocorrelation_mask', bank.autocorrelation_mask))
-		root.appendChild(ligolw_array.from_array('sigmasq', numpy.array(bank.sigmasq)))
+		root.appendChild(ligolw_array.Array.build('autocorrelation_bank_real', bank.autocorrelation_bank.real))
+		root.appendChild(ligolw_array.Array.build('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
+		root.appendChild(ligolw_array.Array.build('autocorrelation_mask', bank.autocorrelation_mask))
+		root.appendChild(ligolw_array.Array.build('sigmasq', numpy.array(bank.sigmasq)))
 
 		# Write bank fragments
 		for i, frag in enumerate(bank.bank_fragments):
@@ -311,19 +315,19 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 			frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
 			# Add scalar params
-			el.appendChild(ligolw_param.new_param('start', ligolw_types.FromPyType[float], frag.start))
-			el.appendChild(ligolw_param.new_param('end', ligolw_types.FromPyType[float], frag.end))
-			el.appendChild(ligolw_param.new_param('rate', ligolw_types.FromPyType[int], frag.rate))
+			el.appendChild(ligolw_param.Param.from_pyvalue('rate', frag.rate))
+			el.appendChild(ligolw_param.Param.from_pyvalue('start', frag.start))
+			el.appendChild(ligolw_param.Param.from_pyvalue('end', frag.end))
 
 			# Add arrays
-			el.appendChild(ligolw_array.from_array('chifacs', frag.chifacs))
+			el.appendChild(ligolw_array.Array.build('chifacs', frag.chifacs))
 			if frag.mix_matrix is not None:
-				el.appendChild(ligolw_array.from_array('mix_matrix', frag.mix_matrix))
-			el.appendChild(ligolw_array.from_array('orthogonal_template_bank', frag.orthogonal_template_bank))
+				el.appendChild(ligolw_array.Array.build('mix_matrix', frag.mix_matrix))
+			el.appendChild(ligolw_array.Array.build('orthogonal_template_bank', frag.orthogonal_template_bank))
 			if frag.singular_values is not None:
-				el.appendChild(ligolw_array.from_array('singular_values', frag.singular_values))
+				el.appendChild(ligolw_array.Array.build('singular_values', frag.singular_values))
 			if frag.sum_of_squares_weights is not None:
-				el.appendChild(ligolw_array.from_array('sum_of_squares_weights', frag.sum_of_squares_weights))
+				el.appendChild(ligolw_array.Array.build('sum_of_squares_weights', frag.sum_of_squares_weights))
 
 			# Add bank fragment container to root container
 			root.appendChild(el)
@@ -332,7 +336,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one here
 	if write_psd:
-		series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
+		lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
 
 	# add top level LIGO_LW to document
 	xmldoc.appendChild(lw)
@@ -341,11 +345,11 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, contenthand
 	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
 
 
-def read_banks(filename, contenthandler = DefaultContentHandler, verbose = False):
+def read_banks(filename, contenthandler, verbose = False):
 	"""Read SVD banks from a LIGO_LW xml file."""
 
 	# Load document
-	xmldoc = ligolw_utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+	xmldoc = ligolw_utils.load_url(filename, contenthandler = contenthandler, verbose = verbose)
 
 	banks = []
 
@@ -360,7 +364,7 @@ def read_banks(filename, contenthandler = DefaultContentHandler, verbose = False
 		# Read root-level scalar parameters
 		bank.filter_length = ligolw_param.get_pyvalue(root, 'filter_length')
 		bank.gate_threshold = ligolw_param.get_pyvalue(root, 'gate_threshold')
-		bank.logname = ligolw_param.get_pyvalue(root, 'logname')
+		bank.logname = ligolw_param.get_pyvalue(root, 'logname') or None
 		bank.snr_threshold = ligolw_param.get_pyvalue(root, 'snr_threshold')
 		bank.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
 		bank.bank_id = ligolw_param.get_pyvalue(root, 'bank_id')
@@ -373,12 +377,11 @@ def read_banks(filename, contenthandler = DefaultContentHandler, verbose = False
 		# Read bank fragments
 		bank.bank_fragments = []
 		for el in (node for node in root.childNodes if node.tagName == ligolw.LIGO_LW.tagName):
-			frag = BankFragment.__new__(BankFragment)
-
-			# Read scalar params
-			frag.start = ligolw_param.get_pyvalue(el, 'start')
-			frag.end = ligolw_param.get_pyvalue(el, 'end')
-			frag.rate = ligolw_param.get_pyvalue(el, 'rate')
+			frag = BankFragment(
+				rate = ligolw_param.get_pyvalue(el, 'rate'),
+				start = ligolw_param.get_pyvalue(el, 'start'),
+				end = ligolw_param.get_pyvalue(el, 'end')
+			)
 
 			# Read arrays
 			frag.chifacs = ligolw_array.get_array(el, 'chifacs').array
@@ -424,5 +427,5 @@ def svdbank_templates_mapping(filenames, contenthandler, verbose = False):
 	for n, filename in enumerate(filenames, start = 1):
 		if verbose:
 			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
-		mapping[filename] = sum((bank.sngl_inspiral_table for bank in read_banks(filename, contenthandler = contenthandler, verbose = verbose)), [])
+		mapping[filename] = sum((bank.sngl_inspiral_table for bank in read_banks(filename, contenthandler, verbose = verbose)), [])
 	return mapping

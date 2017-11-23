@@ -1,4 +1,9 @@
-# Copyright (C) 2009--2013  LIGO Scientific Collaboration
+# Copyright (C) 2009--2016  Kipp Cannon
+# Copyright (C) 2016  Chad Hanna
+# Copyright (C) 2016  Patrick Brockill
+# Copyright (C) 2016  Sarah Caudill
+# Copyright (C) 2015  Ryan Everett
+# Copyright (C) 2010  Leo Singer
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -33,12 +38,15 @@ import sys
 
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst, GstAudio
+gi.require_version('GstAudio', '1.0')
+from gi.repository import GObject
+from gi.repository import Gst
+from gi.repository import GstAudio
 GObject.threads_init()
 Gst.init(None)
 
 
-from pylal import datatypes as laltypes
+import lal
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -98,12 +106,12 @@ def repack_real_array_to_complex(arr):
 def get_unit_size(caps):
 	struct = caps[0]
 	name = struct.get_name()
-	if name in ("audio/x-raw-complex", "audio/x-raw", "audio/x-raw"):
-		assert struct["width"] % 8 == 0
-		return struct["channels"] * struct["width"] // 8
-	elif name == "video/x-raw-rgb":
-		assert struct["bpp"] % 8 == 0
-		return struct["width"] * struct["height"] * struct["bpp"] // 8
+	if name == "audio/x-raw":
+		info = GstAudio.AudioInfo()
+		info.from_caps(caps)
+		return info.bpf
+	elif name == "video/x-raw" and struct["format"] in ("RGB", "RGBA", "ARGB", "ABGR"):
+		return struct["width"] * struct["height"] * (3 if struct["format"] == "RGB" else 4)
 	raise ValueError(caps)
 
 
@@ -178,15 +186,17 @@ def parse_spectrum_message(message):
 	Parse a "spectrum" message from the lal_whiten element, return a
 	LAL REAL8FrequencySeries containing the strain spectral density.
 	"""
-	s = message.structure
-	return laltypes.REAL8FrequencySeries(
+	s = message.get_structure()
+	psd = lal.CreateREAL8FrequencySeries(
 		name = s["instrument"] if s.has_field("instrument") else "",
-		epoch = laltypes.LIGOTimeGPS(0, message.timestamp),
+		epoch = lal.LIGOTimeGPS(0, message.timestamp),
 		f0 = 0.0,
 		deltaF = s["delta-f"],
-		sampleUnits = laltypes.LALUnit(s["sample-units"].strip()),
-		data = numpy.array(s["magnitude"])
+		sampleUnits = lal.Unit(s["sample-units"].strip()),
+		length = len(s["magnitude"])
 	)
+	psd.data.data = numpy.array(s["magnitude"])
+	return psd
 
 
 #
@@ -208,7 +218,7 @@ def parse_framesrc_tags(taglist):
 	except KeyError:
 		channel_name = None
 	if "units" in taglist:
-		sample_units = laltypes.LALUnit(taglist["units"].strip())
+		sample_units = lal.Unit(taglist["units"].strip())
 	else:
 		sample_units = None
 	return {

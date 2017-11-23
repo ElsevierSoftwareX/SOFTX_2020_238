@@ -106,12 +106,12 @@ PKG_PROG_PKG_CONFIG()
 
 AM_PATH_PYTHON([2.6],,)
 AX_PYTHON_DEVEL()
-# hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
-# Debian and SL6.  FIXME:  find a way to do this properly
-PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
-# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
+# hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
+# and SL6.  FIXME:  find a way to do this properly
+PYTHON_LIBS=[`echo "$PYTHON_LIBS" | sed -e "s?-L/usr/lib[^[:space:]]*??g"`]
+# hack to add missing options to PYTHON_LIBS.  sigh, what's the point of
 # AX_PYTHON_DEVEL!?
-PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
+PYTHON_LIBS="-module -avoid-version $PYTHON_LIBS"
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
 AC_SUBST([pkgpyexecdir], ["\${pyexecdir}/gstlal"])
@@ -207,10 +207,10 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.13.0])
-AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.0])
-AC_SUBST([MIN_LALBURST_VERSION], [1.2.2])
-AC_SUBST([MIN_LALSIMULATION_VERSION], [1.2.2])
+AC_SUBST([MIN_LAL_VERSION], [6.18.0])
+AC_SUBST([MIN_LALMETAIO_VERSION], [1.3.1])
+AC_SUBST([MIN_LALBURST_VERSION], [1.4.4])
+AC_SUBST([MIN_LALSIMULATION_VERSION], [1.7.0])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalburst >= ${MIN_LALBURST_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -221,8 +221,8 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.46])
-AC_SUBST([MIN_PYLAL_VERSION], [0.5.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.54.1])
+AC_SUBST([MIN_PYLAL_VERSION], [0.13.0])
 AX_PYTHON_GLUE()
 AX_PYTHON_PYLAL()
 

@@ -35,6 +35,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 
@@ -69,7 +70,7 @@ typedef struct {
 	 * input stream
 	 */
 
-	gint rate, width;
+	GstAudioInfo audio_info;
 	GstAdapter *adapter;
 	guint zeros_in_adapter;
 
@@ -77,8 +78,8 @@ typedef struct {
 	 * filter info
 	 */
 
-	GMutex *iir_matrix_lock;
-	GCond *iir_matrix_available;
+	GMutex iir_matrix_lock;
+	GCond iir_matrix_available;
         gsl_matrix_int *delay;
         gsl_matrix_complex *a1;
         gsl_matrix_complex *b0;

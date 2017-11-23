@@ -65,7 +65,7 @@
 # =============================================================================
 #
 
-from copy import deepcopy
+
 import math
 import numpy
 import os
@@ -74,14 +74,11 @@ import sys
 import warnings
 
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require('0.10')
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 
 from glue import iterutils
@@ -95,10 +92,10 @@ from gstlal import datasource
 from gstlal import multirate_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
+from gstlal import reference_psd
 from gstlal import simplehandler
 import lal
-from pylal import series as lalseries
-from pylal.datatypes import LIGOTimeGPS
+from lal import LIGOTimeGPS
 
 
 #
@@ -134,15 +131,14 @@ from pylal.datatypes import LIGOTimeGPS
 #	"? sink N" -> lal_adder;
 #	lal_adder -> capsfilter;
 #	capsfilter -> lal_peak;
-#	lal_peak -> "mksegmentsrcgate()";
-#	"mksegmentsrcgate()" -> lal_checktimestamps;
+#	lal_peak -> lal_checktimestamps;
 #	lal_checktimestamps -> tee;
 #	tee -> "? src";
 # }
 # @enddot
 #
 #
-def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstruction_segment_list = None, seekevent = None, control_peak_samples = None):
+def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, control_peak_samples = None):
 	"""!
 	This function implements a portion of a gstreamer graph to provide a
 	control signal for deciding when to reconstruct physical SNRS
@@ -151,8 +147,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	@param rate An integer representing the target sample rate of the resulting src
 	@param verbose Make verbose
 	@param suffix Log name for verbosity
-	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
-	@param seekevent A seek event such as what would be created by seek_event_for_gps()
 	@param control_peak_samples If nonzero, this would do peakfinding on the control signal with the window specified by this parameter.  The peak finding would give a single sample of "on" state at the peak.   This will cause far less CPU to be used if you only want to reconstruct SNR around the peak of the control signal. 
 	"""
 	#
@@ -160,7 +154,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 	#
 
 	snk = pipeparts.mkadder(pipeline, None)
-	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
+	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw, rate=%d" % rate)
 
 	#
 	# Add a peak finder on the control signal sample number
@@ -168,17 +162,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, reconstructi
 
 	if control_peak_samples > 0:
 		src = pipeparts.mkpeak(pipeline, src, control_peak_samples)
-
-	#
-	# optionally add a segment src and gate to only reconstruct around
-	# injections
-	#
-	# FIXME:  set the names of these gates so their segments can be
-	# collected later?  or else propagate this segment list into the
-	# output some other way.
-
-	if reconstruction_segment_list is not None:
-		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, seekevent = seekevent, invert_output = False)
 
 	#
 	# verbosity and a tee
@@ -207,7 +190,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, zero_lag_ranking_stats_filename = None, segment_history_duration = 2592000., verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, zero_lag_ranking_stats_filename = None, segment_history_duration = LIGOTimeGPS(2592000), verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
@@ -221,7 +204,6 @@ class Handler(simplehandler.Handler):
 
 		self.tag = tag
 		self.zero_lag_ranking_stats_filename = zero_lag_ranking_stats_filename
-		self.segment_history_duration = segment_history_duration
 		self.verbose = verbose
 
 		# setup segment list collection from gates
@@ -254,15 +236,14 @@ class Handler(simplehandler.Handler):
 		else:
 			self.seglistdicts["triggersegments"] = seglistdict
 		# hook the Data class's livetime record keeping into ours
-		# so that all segments come here
+		# so that all segments come here and the Data class has all
+		# of ours
 		# FIXME:  don't do this, get rid of the Data class
 		dataclass.seglistdicts = self.seglistdicts
 
-		# create a deep copy to keep track of cumulative segments
-		self.cumulative_seglistdicts = deepcopy(self.seglistdicts)
-
-		# state of segments being collected
-		self.current_segment_start = {}
+		# create a copy to keep track of recent segment history
+		self.recent_segment_histories = self.seglistdicts.copy()
+		self.segment_history_duration = segment_history_duration
 
 		# iterate over segment types and instruments, look for the
 		# gate element that should provide those segments, and
@@ -297,18 +278,24 @@ class Handler(simplehandler.Handler):
 
 		# segment lists
 		bottle.route("/segments.xml")(self.web_get_segments_xml)
-		bottle.route("/cumulative_segments.xml")(self.web_get_cumulative_segments_xml)
+		bottle.route("/cumulative_segments.xml")(self.web_get_recent_segment_history_xml)
 
 	def do_on_message(self, bus, message):
 		"""!
-		Override the on_message method of simplehandler to handle
-		additional message types, e.g., spectrum and checkpointing messages.
+		Handle application-specific message types, e.g., spectrum
+		and checkpointing messages.
 
 		@param bus A reference to the pipeline's bus
 		@param message A reference to the incoming message
 		"""
-		if message.type == gst.MESSAGE_ELEMENT:
-			if message.structure.get_name() == "spectrum":
+		#
+		# return value of True tells parent class that we have done
+		# all that is needed in response to the message, and that
+		# it should ignore it.  a return value of False means the
+		# parent class should do what it thinks should be done
+		#
+		if message.type == Gst.MessageType.ELEMENT:
+			if message.get_structure().get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
 				# NOTE: epoch is used for the timestamp, this
 				# is the middle of the most recent FFT interval
@@ -320,70 +307,67 @@ class Handler(simplehandler.Handler):
 				# save
 				self.psds[instrument] = psd
 
+				# don't record horizon distance for Virgo.  FIXME:  remove after O2
+				if instrument == "V1": return True
+
 				# update horizon distance history
 				#
-				# FIXME:  probably need to compute these for a
-				# bunch of masses.  which ones?
-				self.dataclass.record_horizon_distance(instrument, timestamp, psd, m1 = 1.4, m2 = 1.4)
+				# FIXME:  get canonical masses from the template bank bin that we're analyzing
+				horizon_distance = reference_psd.HorizonDistance(10.0, 0.85 * (psd.f0 + (len(psd.data.data) - 1) * psd.deltaF), psd.deltaF, 1.4, 1.4)(psd, 8.0)[0]
+				assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
+				self.record_horizon_distance(instrument, float(timestamp), horizon_distance)
 				return True
-		elif message.type == gst.MESSAGE_APPLICATION:
-			if message.structure.get_name() == "CHECKPOINT":
-				# FIXME make a custom parser for CHECKPOINT messages?
-				timestamp = message.structure["timestamp"]
-				# FIXME:  the function that makes these
-				# messages uses a default value of None,
-				# and in principle could be called with
-				# other non-timestamp-like things, so this
-				# code should check that it has actually
-				# gotten a valid timestamp
-				self.checkpoint(timestamp)
+		elif message.type == Gst.MessageType.APPLICATION:
+			if message.get_structure().get_name() == "CHECKPOINT":
+				self.checkpoint(LIGOTimeGPS(0, message.timestamp))
 				return True
-		elif message.type == gst.MESSAGE_EOS:
+		elif message.type == Gst.MessageType.EOS:
 			with self.dataclass.lock:
 				# FIXME:  how to choose correct timestamp?
+				# note that EOS messages' timestamps are
+				# set to CLOCK_TIME_NONE so they can't be
+				# used for this.
 				try:
-					timestamp = self.seglistdicts["triggersegments"].extent_all()[1].ns()
+					timestamp = self.seglistdicts["triggersegments"].extent_all()[1]
 				except ValueError:
 					# no segments
 					return False
-			self.close_segments(timestamp)
+				# terminate all segments except
+				# triggersements.
+				off = segments.segmentlist([segments.segment(timestamp, segments.PosInfinity)])
+				for name, seglistdict in self.seglistdicts.items():
+					if name == "triggersegments":
+						continue
+					for seglist in seglistdict.values():
+						seglist -= off
 			return False
 		return False
 
-	def _close_segments(self, timestamp):
+	def _record_horizon_distance(self, instrument, timestamp, horizon_distance):
 		"""
-		@timestamp must be a GPS time that is guaranteed to precede
-		any possible future state transitions in all segment lists
-		being tracked.
+		timestamp can be a float or a slice with float boundaries.
 		"""
-		# close out existing segments.  the code in the loop
-		# modifies the iteration target, so iterate over a copy
-		for (segtype, instrument), start_time in list(self.current_segment_start.items()):
-			if timestamp < start_time.ns():
-				continue
-			# By construction these gates should be in the on
-			# state.  We fake a state transition to off in
-			# order to flush the segments
-			self._gatehandler(None, timestamp, (segtype, instrument, "off"))
-			# But we have to remember to put it back
-			self._gatehandler(None, timestamp, (segtype, instrument, "on"))
+		# retrieve the horizon history for this instrument
+		horizon_history = self.dataclass.coinc_params_distributions.horizon_history[instrument]
+		# NOTE:  timestamps are floats here (or float slices), not
+		# LIGOTimeGPS.  whitener should be reporting PSDs with
+		# integer timestamps so the timestamps are not naturally
+		# high precision, and, anyway, we don't need nanosecond
+		# precision for the horizon distance history.
+		horizon_history[timestamp] = horizon_distance
 
-	def close_segments(self, timestamp):
-		"""!
-		Record stop times for all open segments and start new ones.
-
-		@param timestamp the time in nanoseconds at which to mark
-		the boundary.  If this preceeds and open segment's start
-		time, that segment is not closed.
+	def record_horizon_distance(self, instrument, timestamp, horizon_distance):
+		"""
+		timestamp can be a float or a slice with float boundaries.
 		"""
 		with self.dataclass.lock:
-			self._close_segments(timestamp)
+			self._record_horizon_distance(instrument, timestamp, horizon_distance)
 
 	def checkpoint(self, timestamp):
 		"""!
 		Checkpoint, e.g., flush segments and triggers to disk.
 
-		@param timestamp the gstreamer timestamp in nanoseconds of the current buffer in order to close off open segment intervals before writing to disk
+		@param timestamp the LIGOTimeGPS timestamp of the current buffer in order to close off open segment intervals before writing to disk
 		"""
 		# FIXME:  the timestamp is used to close off open segments
 		# and so should *not* be the timestamp of the current
@@ -394,7 +378,7 @@ class Handler(simplehandler.Handler):
 		# buffer would be an especially bad choice.
 		self.flush_segments_to_disk(timestamp)
 		try:
-			self.dataclass.snapshot_output_file("%s_LLOID" % self.tag, "xml.gz", zero_lag_ranking_stats_filename = self.zero_lag_ranking_stats_filename, verbose = self.verbose)
+			self.dataclass.snapshot_output_url("%s_LLOID" % self.tag, "xml.gz", zero_lag_ranking_stats_filename = self.zero_lag_ranking_stats_filename, verbose = self.verbose)
 		except TypeError as te:
 			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
 
@@ -403,40 +387,53 @@ class Handler(simplehandler.Handler):
 		Flush segments to disk, e.g., when checkpointing or shutting
 		down an online pipeline.
 
-		@param timestamp the gstreamer timestamp in nanoseconds of the current buffer in order to close off open segment intervals before writing to disk
+		@param timestamp the LIGOTimeGPS timestamp of the current buffer in order to close off open segment intervals before writing to disk
 		"""
 		with self.dataclass.lock:
-			try:
-				# close out existing and update cumulative segments.
-				self._close_segments(timestamp)
-				self.update_cumulative_segments()
-				ext = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
-				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
-				#FIXME integrate with the Data class snapshotting directories
-				path = str(int(math.floor(ext[0])))[:5]
-				try:
-					os.mkdir(path)
-				except OSError:
-					pass
-				fname = "%s/%s-%s_SEGMENTS-%d-%d.xml.gz" % (path, "".join(sorted(instruments)), self.tag, int(math.floor(ext[0])), int(math.ceil(ext[1])) - int(math.floor(ext[0])))
-				ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
+			# make a copy of the current segmentlistdicts
+			seglistdicts = dict((key, value.copy()) for key, value in self.seglistdicts.items())
 
-				# clear the segment lists in place
-				for segtype, seglistdict in self.seglistdicts.items():
-					# FIXME:  we don't wipe the
-					# triggersegments for now.  the
-					# online pipeline needs these to
-					# accumulate forever, but that
-					# might not be what it should be
-					# doing, nor should these
-					# necessarily be the segments it
-					# uses for livetime.  figure this out
-					if segtype == "triggersegments":
-						continue
-					for seglist in seglistdict.values():
-						del seglist[:]
+			# FIXME:  in the next step we don't clip the
+			# triggersegments.  the online pipeline needs these
+			# to accumulate forever, but that might not be what
+			# it should be doing, nor should these necessarily
+			# be the segments it uses for livetime.  figure
+			# this out
+
+			# keep everything before timestamp in the current
+			# segmentlistdicts.
+			dontclip = set(("triggersegments",))
+			for seglistdict in self.seglistdicts.values():
+				seglistdict -= seglistdict.fromkeys(set(seglistdict) - dontclip, segments.segmentlist([segments.segment(timestamp, segments.PosInfinity)]))
+			# keep everything after timestamp in the copy
+			for seglistdict in seglistdicts.values():
+				seglistdict -= seglistdict.fromkeys(set(seglistdict) - dontclip, segments.segmentlist([segments.segment(segments.NegInfinity, timestamp)]))
+
+			# construct a filename for the current (clipped)
+			# segmentlistdicts
+			try:
+				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
+				start, end = segments.segmentlist(seglistdict.extent_all() for name, seglistdict in self.seglistdicts.items() if name not in dontclip).extent()
 			except ValueError:
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
+				return
+			start = int(math.floor(start))
+			duration = int(math.ceil(end)) - start
+			# FIXME integrate with the Data class snapshotting
+			# directories
+			path = str(start)[:5]
+			try:
+				os.mkdir(path)
+			except OSError:
+				pass
+			fname = os.path.join(path, "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, start, duration))
+
+			# write the current (clipped) segmentlistdicts to
+			# disk
+			ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
+
+			# continue with the (clipped) copy
+			self.seglistdicts = seglistdicts
 
 	def _gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
 		# FIXME:  this method could conceivably be patched to know
@@ -447,19 +444,59 @@ class Handler(simplehandler.Handler):
 		# artificially claiming segments to be on beyond the time
 		# when they should stop.
 		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
-		state_key = (segtype, instrument)
 
 		if self.verbose and elem is not None:
 			print >>sys.stderr, "%s: %s '%s' state transition: %s @ %s" % (elem.get_name(), instrument, segtype, new_state, str(timestamp))
 
-		# if there is a current_segment_start for this then the
-		# state transition has to be off
-		if state_key in self.current_segment_start:
-			self.seglistdicts[segtype][instrument] |= segments.segmentlist((segments.segment(self.current_segment_start.pop(state_key), timestamp),))
-		if new_state == "on":
-			self.current_segment_start[state_key] = timestamp
+		if new_state == "off":
+			# record end of segment
+			self.seglistdicts[segtype][instrument] -= segments.segmentlist((segments.segment(timestamp, segments.PosInfinity),))
+			# set the horizon distance history to 0 at
+			# on-to-off transitions of whitened h(t)
+			if segtype == "whitehtsegments":
+				if self.dataclass.coinc_params_distributions.horizon_history[instrument]:
+					self._record_horizon_distance(instrument, slice(float(timestamp), None), 0.)
+				else:
+					self._record_horizon_distance(instrument, float(timestamp), 0.)
+		elif new_state == "on":
+			# record start of new segment
+			self.seglistdicts[segtype][instrument] += segments.segmentlist((segments.segment(timestamp, segments.PosInfinity),))
+			# place a 0 in the horizon distance history at the
+			# time of an off-to-on transition so that the
+			# horizon distance queries in the interval of off
+			# state are certain to return 0.
+			#
+			# FIXME:  we're relying on the whitehtsegments gate
+			# to report state transitions *after* any potential
+			# whitener PSD messages have been generated.  this
+			# is normally guaranteed because the whitener does
+			# not generate PSD messages during gap intervals.
+			# the problem is gaps due to glitch excission,
+			# which is done using a gate that comes after the
+			# whitener.  the whitener might generate a PSD
+			# message that inserts a horizon distance into the
+			# history precisely when the glitch excission has
+			# turned off the instrument and the sensitivity
+			# should be 0. we're hoping that us zeroing the
+			# preceding "off" period will erase those entries,
+			# but that won't work if they get inserted after we
+			# do this stuff here.  it's not the end of the
+			# world if we get this wrong, it's just one way in
+			# which the horizon distance history could be
+			# somewhat inaccurate.
+			if segtype == "whitehtsegments":
+				# this if statement is checking if
+				# ~self.seglistdicts[segtype][instrument]
+				# is empty, and if not then it zeros the
+				# interval spanned by the last segment in
+				# that list, but what's done below avoids
+				# the explicit segment arithmetic
+				if len(self.seglistdicts[segtype][instrument]) > 1:
+					self._record_horizon_distance(instrument, slice(float(self.seglistdicts[segtype][instrument][-2][-1]), float(timestamp)), 0.)
+				else:
+					self._record_horizon_distance(instrument, float(timestamp), 0.)
 		else:
-			assert new_state == "off"
+			assert False, "impossible new_state '%s'" % new_state
 
 	def gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
 		"""!
@@ -495,66 +532,52 @@ class Handler(simplehandler.Handler):
 		"""
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
 
-	def update_cumulative_segments(self):
+	def update_recent_segment_history(self):
 		"""!
-		A method to update the cumulative segment list 
+		A method to update the recent segment histories
 		"""
-		# FIXME Type casts should be removed when we switch to swig bindings
-		current_gps_time = float(lal.GPSTimeNow())
-		seglist_to_drop = segments.segmentlist([segments.segment(segments.NegInfinity, LIGOTimeGPS(current_gps_time - self.segment_history_duration))])
-		for segtype, seglistdict in self.cumulative_seglistdicts.items():
+		current_gps_time = lal.GPSTimeNow()
+		interval_to_keep = segments.segmentlist([segments.segment(current_gps_time - self.segment_history_duration, current_gps_time)])
+		for segtype, seglistdict in self.recent_segment_histories.items():
 			seglistdict.extend(self.seglistdicts[segtype])
 			seglistdict.coalesce()
 			for seglist in seglistdict.values():
-				seglist -= seglist_to_drop
+				seglist &= interval_to_keep
 
-	def gen_cumulative_segments_xmldoc(self):
+	def gen_recent_segment_history_xmldoc(self):
 		"""!
-		A method to output the cumulative segment list in a valid
-		ligolw xml format.
+		Construct and return a LIGOLW XML tree containing the
+		recent segment histories.
 		"""
+		self.update_recent_segment_history()
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
-
-		# Toggle segments off and on to make sure segment information
-		# added to the cumulative segments is current This needs to be
-		# run with self.dataclass.lock, but this function is only
-		# called currently by web_get_cumulative_segments_xml, which
-		# calls with with self.dataclass.lock
-		try:
-			# FIXME Timestamp here needs to be thought about more,
-			# for the same reason mentioned _gatehandler
-			timestamp = self.seglistdicts["triggersegments"].extent_all()[1].ns()
-			self._close_segments(timestamp)
-		except ValueError:
-			# no segments
-			print >>sys.stderr, "cannot close segments before updating cumulative segments, segment info may be incomplete"
-		self.update_cumulative_segments()
 		with ligolw_segments.LigolwSegments(xmldoc, process) as ligolwsegments:
-			for segtype, seglistdict in self.cumulative_seglistdicts.items():
+			for segtype, seglistdict in self.recent_segment_histories.items():
 				ligolwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID snapshot")
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
-	def web_get_cumulative_segments_xml(self):
+	def web_get_recent_segment_history_xml(self):
 		"""!
-		provide a bottle route to get cumulative segment information via a url
+		provide a bottle route to get recent segment history
+		information via a url
 		"""
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_cumulative_segments_xmldoc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_recent_segment_history_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
 
 	def gen_psd_xmldoc(self):
-		xmldoc = lalseries.make_psd_xmldoc(self.psds)
+		xmldoc = lal.series.make_psd_xmldoc(self.psds)
 		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
@@ -562,7 +585,7 @@ class Handler(simplehandler.Handler):
 	def web_get_psd_xml(self):
 		with self.dataclass.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output, trap_signals = None)
+			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 		return outstr
@@ -604,7 +627,6 @@ class Handler(simplehandler.Handler):
 #	lal_checktimestamps4 [URL="\ref pipeparts.mkchecktimestamps()"];
 #	lal_checktimestamps5 [URL="\ref pipeparts.mkchecktimestamps()"];
 #	capsfilter [URL="\ref pipeparts.mkcapsfilter()"];
-#	lal_nofakedisconts [URL="\ref pipeparts.mknofakedisconts()"];
 #	gate [URL="\ref pipeparts.mkgate()"];
 #	"mkcontrolsnksrc()" [URL="\ref mkcontrolsnksrc()"];
 #	lal_sumsquares [URL="\ref pipeparts.mksumsquares()"];
@@ -616,20 +638,20 @@ class Handler(simplehandler.Handler):
 #	queue2 -> lal_checktimestamps3;
 #	lal_checktimestamps3 -> audioresample;
 #	audioresample -> capsfilter;
-#	capsfilter -> lal_nofakedisconts;
-#	lal_nofakedisconts -> lal_checktimestamps4;
+#	capsfilter -> lal_checktimestamps4;
 #	lal_checktimestamps4 -> "mkcontrolsnksrc()"
 #	"mkcontrolsnksrc()" -> queue3;
 #	queue3 -> gate;
 #	tee -> queue4 -> gate;
 #	gate -> lal_checktimestamps5;
-#	lal_checktimestamps5 -> matrixmixer;
+#	lal_checktimestamps5 -> "mksegmentsrcgate()";
+#	"mksegmentsrcgate()" -> matrixmixer;
 #
 # }
 # @enddot
 #
 #
-def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, block_duration, nxydump_segment = None, fir_stride = None, control_peak_time = None):
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, block_duration, nxydump_segment = None, fir_stride = None, control_peak_time = None, reconstruction_segment_list = None):
 	"""!
 	Make a single slice of one branch of the lloid graph, e.g. one instrument and one
 	template bank fragment. For details see: http://arxiv.org/abs/1107.2665
@@ -648,6 +670,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	@param nxydump_segment Not used
 	@param fir_stride The target length of output buffers from lal_firbank.  Directly effects latency.  Making this short will force time-domain convolution. Otherwise FFT convolution will be done to save CPU cycles, but at higher latency.
 	@param control_peak_time The window over which to find peaks in the control signal.  Shorter windows increase computational cost but probably also detection efficiency.
+	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
 	"""
 	logname = "%s_%.2f.%.2f" % (bank.logname, bank_fragment.start, bank_fragment.end)
 
@@ -686,53 +709,53 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		src = pipeparts.mktee(pipeline, src)	# comment-out if the tee above is uncommented
 		elem = pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights), max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare" % logname)
-		# FIXME:  the capsfilter shouldn't be needed, the adder
-		# should intersect it's downstream peer's format with the
-		# sink format
-		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
-		elem = pipeparts.mknofakedisconts(pipeline, elem)	# FIXME:  remove when resampler is patched
+		elem = pipeparts.mkresample(pipeline, elem, quality = 9)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
 
 		#
-		# use sum-of-squares aggregate as gate control for orthogonal SNRs
+		# use sum-of-squares aggregate as gate control for
+		# orthogonal SNRs
 		#
-		# FIXME This queue has to be large for the peak finder on the control
-		# signal if that element gets smarter maybe this could be made smaller
-		# It should be > 1 * control_peak_time * gst.SECOND + 4 * block_duration
+		# FIXME the queuing in this code is broken.  enabling this
+		# causes lock-ups.  there is latency in the construction of
+		# the composite detection statistic due to the need for
+		# resampling and because of the peak finding, therefore the
+		# source stream going into the gate needs to be queued
+		# until the composite detection statistic can catch up, but
+		# we don't know by how much (what we've got here doesn't
+		# work).  there should not be a need to buffer the control
+		# stream at all, nor is there a need for the queuing to
+		# accomodate different latencies for different SNR slices,
+		# but we do require that all elements correctly modify
+		# segments events to reflect their latency and the actual
+		# time stamps of the data stream they will produce.  it
+		# might be that not all elements are doing that correctly.
 		#
-		# FIXME for an unknown reason there needs to be an extra large
-		# queue in this part of the pipeline in order to prevent
-		# lock-ups.  Fortunately this is buffering up relatively
-		# lightweight data, i.e., before reconstruction
-		#
-		# FIXME since peakfinding is done, or control is based on
-		# injections only, we ignore the bank.gate_threshold parameter
-		# and just use 1e-100
+		# FIXME we ignore the bank.gate_threshold parameter and
+		# just use 1e-100.  this change was made when peak finding
+		# was put into the composite detector
 
 		src = pipeparts.mkgate(
 			pipeline,
-			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 12 * block_duration),
+			pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * int((2. * control_peak_time + float(abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * Gst.SECOND)),
 			threshold = 1e-100,
 			attack_length = gate_attack_length,
 			hold_length = gate_hold_length,
-			control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * (2 * control_peak_time + (abs(gate_attack_length) + abs(gate_hold_length)) / bank_fragment.rate) * gst.SECOND + 12 * block_duration)
+			control = control_src
 		)
 		src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
-	else:
-		#
-		# buffer orthogonal SNRs / or actual SNRs if SVD is not
-		# used.  the queue upstream of the sum-of-squares gate
-		# plays this role if that feature has been enabled
-   		#
-		# FIXME:  teach the collectpads object not to wait for
-		# buf  fers on pads whose segments have not yet been reached
-		# by the input on the other pads.  then this large queue
-		# buffer will not be required because streaming can begin
-		# through the downstream adders without waiting for input
-		# from all upstream elements.
 
-		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration)
+	#
+	# optionally add a segment src and gate to only reconstruct around
+	# injections
+	#
+	# FIXME:  set the names of these gates so their segments can be
+	# collected later?  or else propagate this segment list into the
+	# output some other way.
+
+	if reconstruction_segment_list is not None:
+		src = datasource.mksegmentsrcgate(pipeline, src, reconstruction_segment_list, invert_output = False)
 
 	#
 	# reconstruct physical SNRs
@@ -754,10 +777,12 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	return src
 
 
-def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_duration, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, snrslices = None):
+def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_duration, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, snrslices = None, reconstruction_segment_list = None):
 	"""!
 	Build the pipeline fragment that creates the SnrSlices associated with
 	different sample rates from hoft.
+
+	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
 	"""
 	#
 	# parameters
@@ -802,7 +827,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * gst.SECOND),
+			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * Gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc,
@@ -811,7 +836,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			block_duration,
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
-			control_peak_time = control_peak_time
+			control_peak_time = control_peak_time,
+			reconstruction_segment_list = reconstruction_segment_list
 		))
 
 	#
@@ -866,9 +892,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# head of the stream at this sample rate
 			#
 
-			branch_heads[rate] = pipeparts.mkadder(pipeline, (pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration) for head in heads))
-			# FIXME capsfilter shouldn't be needed remove when adder is fixed
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw-float, rate=%d" % rate)
+			branch_heads[rate] = pipeparts.mkadder(pipeline, heads)
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_snr_adder" % (logname, rate))
 		else:
 			#
@@ -883,11 +907,17 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 		#
 
 		if rate in next_rate:
-			# Note quality = 1 requires that the template slices
-			# are padded such that the Nyquist frequency is 1.5
-			# times the highest frequency of the time slice
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw-float, rate=%d" % next_rate[rate])
-			branch_heads[rate] = pipeparts.mknofakedisconts(pipeline, branch_heads[rate])	# FIXME:  remove when resampler is patched
+			# NOTE: quality = 1 requires that the template
+			# slices are padded such that the Nyquist frequency
+			# is 1.5 times the highest frequency of the time
+			# slice.  NOTE: the adder (that comes downstream of
+			# this) isn't quite smart enough to negotiate a
+			# common format among its upstream peers so the
+			# capsfilter is still required.
+			# NOTE uncomment this line to restore audioresample for
+			# upsampling
+			#branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw, rate=%d" % next_rate[rate])
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, branch_heads[rate]), "audio/x-raw, rate=%d" % next_rate[rate])
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_to_%d_snr_resampler" % (logname, rate, next_rate[rate]))
 
 		#
@@ -913,7 +943,6 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 
 	snr, = branch_heads.values()	# make sure we've summed down to one stream
 	return pipeparts.mktogglecomplex(pipeline, snr)
-	#return pipeparts.mkcapsfilter(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % output_rate)), "audio/x-raw-complex, rate=%d" % output_rate)
 
 
 def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duration):
@@ -946,7 +975,7 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duratio
 	# create timeslicechisq element and add chifacs as a property
 	#
 
-	chisq = gst.element_factory_make("lal_timeslicechisq")
+	chisq = Gst.ElementFactory.make("lal_timeslicechisq", None)
 	pipeline.add(chisq)
 
 	#
@@ -992,7 +1021,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = gst.SECOND, reconstruction_segment_list = None):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 2, block_duration = Gst.SECOND, reconstruction_segment_list = None):
 	"""!
 	The multiple instrument, multiple bank LLOID algorithm
 	"""
@@ -1014,24 +1043,24 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 	hoftdicts = {}
 	for instrument in detectors.channel_dict:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates())
-		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		assert psd_fft_length % 4 == 0, "psd_fft_length (= %g) must be multiple of 4" % psd_fft_length
-		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = psd_fft_length / 4, width = 32)
+		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = psd_fft_length / 4, width = 32, statevector = statevector, dqvector = dqvector)
 
 	#
 	# build gate control branches
 	#
 
-	if control_peak_time > 0 or reconstruction_segment_list is not None:
+	if control_peak_time > 0:
 		control_branch = {}
 		for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			if instrument != "H2":
-				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, reconstruction_segment_list = reconstruction_segment_list, seekevent = detectors.seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, control_peak_samples = control_peak_time * max(bank.get_rates()))
 				#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
-
 	else:
 		control_branch = None
+
 	#
 	# construct trigger generators
 	#
@@ -1061,7 +1090,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 			nxydump_segment = nxydump_segment,
 			control_peak_time = control_peak_time,
 			fir_stride = fir_stride,
-			snrslices = snrslices
+			snrslices = snrslices,
+			reconstruction_segment_list = reconstruction_segment_list
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
 		# uncomment this tee if the diagnostic sinks below are
@@ -1087,4 +1117,3 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 
 	assert any(triggersrcs.values())
 	return triggersrcs
-

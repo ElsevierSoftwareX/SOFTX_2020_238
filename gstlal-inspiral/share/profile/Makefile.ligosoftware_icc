@@ -58,7 +58,7 @@ env.sh :
 	echo 'LAL_PATH=${PWD}/opt' >> $@
 	echo 'DEPENDENCIES_PATH=${PWD}/dep' >> $@
 	echo 'INSTALL_FILES_PATH=${PWD}/install' >> $@
-	echo 'export CFLAGS="-O3 -march=native -lfftw3f -lfftw3 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings"' >> $@
+	echo 'export CFLAGS="-O3 -march=native -lm -lfftw3f -lfftw3 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -lpthread -Wno-write-strings"' >> $@
 	echo 'export LDFLAGS="-L${MKLROOT}/lib/intel64"' >> $@
 	echo 'export CC="icc"' >> $@
 	echo 'export CXX="icpc"' >> $@

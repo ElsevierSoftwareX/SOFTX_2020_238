@@ -1,3 +1,4 @@
+# FIXME:  remove libgsl0 deps when we can rely on a new-enough debian
 Source: gstlal
 Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
 Section: lscsoft
@@ -5,48 +6,63 @@ Priority: optional
 Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
- debhelper (>= 8),
+ debhelper (>= 9),
+ doxygen (>= @MIN_DOXYGEN_VERSION@),
  fakeroot,
+ gobject-introspection (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
+ graphviz,
  gtk-doc-tools (>= @MIN_GTK_DOC_VERSION@),
- liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
- liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
- libfftw3-dev (>= 3),
- gstlal-dep (>= 2.2) | gstenvironment,
  lal-dev (>= @MIN_LAL_VERSION@),
  lal-python (>= @MIN_LAL_VERSION@),
  lalburst-dev (>= @MIN_LALBURST_VERSION@),
  lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@),
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  lalsimulation-dev (>= @MIN_LALSIMULATION_VERSION@),
- libgsl0-dev (>= 1.9),
- libxml2-dev,
+ libfftw3-dev (>= 3),
+ libgirepository1.0-dev (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
+ libgsl-dev (>= 1.9) | libgsl0-dev (>= 1.9),
+ libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
+ libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
+ liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
  pkg-config,
  python-all-dev (>= @MIN_PYTHON_VERSION@),
- python-gobject-dev,
+ python-gi-dev,
  python-numpy-dev
 
 Package: gstlal
 Architecture: any
-Replaces: gstlal-ugly (<< 0.4.0)
-Breaks: gstlal-ugly (<< 0.4.0)
+Replaces: gstlal-ugly (<< 0.99.0), gstlal-dep
+Breaks: gstlal-ugly (<< 0.99.0), gstlal-dep
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
- gstlal-dep (>= 2.2) | gstenvironment,
- libfftw3-3,
- liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
+ avahi-daemon,
+ gir1.2-glib-2.0,
+ gir1.2-gstreamer-1.0 (>= @MIN_GSTREAMER_VERSION@),
+ gir1.2-gst-plugins-base-1.0 (>= @MIN_GSTREAMER_VERSION@),
+ gstreamer1.0-plugins-base (>= @MIN_GSTREAMER_VERSION@),
+ gstreamer1.0-plugins-good (>= @MIN_GSTREAMER_VERSION@),
+ gstreamer1.0-plugins-bad,
+ gstreamer1.0-plugins-ugly,
+ gstreamer1.0-tools (>= @MIN_GSTREAMER_VERSION@),
  lal (>= @MIN_LAL_VERSION@),
  lal-python (>= @MIN_LAL_VERSION@),
  lalburst (>= @MIN_LALBURST_VERSION@),
  lalinspiral (>= @MIN_LALINSPIRAL_VERSION@),
  lalmetaio (>= @MIN_LALMETAIO_VERSION@),
  lalsimulation (>= @MIN_LALSIMULATION_VERSION@),
- libgsl0ldbl (>= 1.9),
- libxml2,
+ libavahi-glib1,
+ libfftw3-3,
+ libgirepository-1.0-1 (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
+ libgsl2 (>= 1.9) | libgsl0ldbl (>= 1.9),
+ libgstreamer1.0-0 (>= @MIN_GSTREAMER_VERSION@),
+ libgstreamer-plugins-base1.0-0 (>= @MIN_GSTREAMER_VERSION@),
+ liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
  python (>= @MIN_PYTHON_VERSION@),
+ python-avahi,
+ python-gi,
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-segments (>= @MIN_GLUE_VERSION@),
- python-gobject,
+ python-gst-1.0,
  python-numpy,
- python-pylal (>= @MIN_PYLAL_VERSION@),
  python-scipy
 Description: GStreamer for GW data analysis (core stable parts)
  This package provides a variety of GStreamer elements for
@@ -61,18 +77,16 @@ Package: gstlal-dev
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
  gstlal (= ${binary:Version}),
- gstlal-dep (>= 2.2) | gstenvironment,
  lal-dev (>= @MIN_LAL_VERSION@),
  lalburst-dev (>= @MIN_LALBURST_VERSION@),
  lalinspiral-dev (>= @MIN_LALINSPIRAL_VERSION@),
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  lalsimulation-dev (>= @MIN_LALSIMULATION_VERSION@),
  libfftw3-dev (>= 3),
- libgsl0-dev (>= 1.9),
- liborc-0.4-0 (>=1:@MIN_ORC_VERSION@),
- liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
- python-all-dev (>= @MIN_PYTHON_VERSION@),
- python-gobject-dev
+ libgsl-dev (>= 1.9) | libgsl0-dev (>= 1.9),
+ libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
+ libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
+ python-all-dev (>= @MIN_PYTHON_VERSION@)
 Description: Files and documentation needed for compiling gstlal based plugins and programs.
  This package contains the files needed for building gstlal-based plugins
  and programs.

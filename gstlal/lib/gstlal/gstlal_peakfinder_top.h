@@ -68,6 +68,8 @@ GstBuffer *gstlal_new_buffer_from_peak(struct gstlal_peak_state *input, GstPad *
 int gstlal_peak_over_window(struct gstlal_peak_state *state, const void *data, guint64 length);
 int gstlal_series_around_peak(struct gstlal_peak_state *state, void *data, void *outputmat, guint n);
 
+/* Find maximum SNR value from all channels */
+int gstlal_peak_max_over_channels(struct gstlal_peak_state *state);
 
 /*
  * Type specific declarations

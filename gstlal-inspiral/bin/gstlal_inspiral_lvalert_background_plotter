@@ -30,20 +30,19 @@
 
 
 import json
+import urlparse
 import logging
 from optparse import OptionParser
 import os
 import sys
 
 os.environ["MPLCONFIGDIR"] = "/tmp"
-import matplotlib
-matplotlib.use('Agg')
 
 
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from ligo.gracedb import rest as gracedb
-from pylal.ligolw_thinca import InspiralCoincDef
+from lalinspiral.thinca import InspiralCoincDef
 
 
 from gstlal import far
@@ -74,14 +73,19 @@ def parse_command_line():
 	options, gid_list = parser.parse_args()
 
 	if not gid_list:
-		lvalert_data = json.loads(sys.stdin.read())
-		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
-		logging.info("lvalert data: %s" % repr(lvalert_data))
-		filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
-		if filename not in (u"ranking_data.xml.gz",):
-			logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
-			sys.exit()
-		gid_list = [str(lvalert_data["uid"])]
+		# FIXME:  lvalert_listen doesn't allow command-line
+		# options, enable logging for online analysis
+		options.verbose = True
+
+	# can only call basicConfig once (otherwise need to switch to more
+	# complex logging configuration)
+	if options.verbose:
+		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+	else:
+		logging.basicConfig(format = "%(asctime)s:%(message)s")
+
+	if options.no_upload and options.output_path is None:
+		raise ValueError("--no-upload without setting --ouput-path disables all output")
 
 	return options, gid_list
 
@@ -104,34 +108,18 @@ def get_files(gracedb_client, graceid, ranking_data_filename = "ranking_data.xml
 	# NOTE:  do not invoke .finish() on coinc_param_distributions!  the
 	# PDFs are uploaded to gracedb in the desired state.
 	coinc_param_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ranking_data_xmldoc)
+	if coinc_param_distributions is None:
+		raise ValueError("failed to extract CoincParams object from '%s'" % ranking_data_filename)
 	ranking_data.finish()
 
-	# FIXME Is this livetime correct?
-	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
+	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists, min_instruments = coinc_param_distributions.min_instruments))
 
 	return coinc_xmldoc, coinc_param_distributions, ranking_data, fapfar
 
 
 def plot_snrchisq(instrument, coinc_param_distributions, plot_type, max_snr, snrchisq = None):
-	if snrchisq is None:
-		snr, chisq = None, None
-	else:
-		snr, chisq = snrchisq
-
-	fig = plotfar.plot_snr_chi_pdf(coinc_param_distributions, instrument, plot_type, max_snr, event_snr = snr, event_chisq = chisq)
-	# FIXME For some reason the tight_layout() function in the
-	# current version of matplotlib at UWM, 1.1.1rc2, causes the
-	# color bar to overlap with the plot. Not including
-	# tight_layout causes the bottom of the letters in the SNR
-	# label to be cut off, but that is preferable. Once matplotlib
-	# gets updated the code should be tested with the below lines
-	# not commented out
-	#try:
-	#	fig.tight_layout()
-	#except AttributeError:
-	#	# not in old matplotlibs
-	#	pass
-	return fig
+	snr, chisq = snrchisq if snrchisq is not None else (None, None)
+	return plotfar.plot_snr_chi_pdf(coinc_param_distributions, instrument, plot_type, max_snr, event_snr = snr, event_chisq = chisq)
 
 
 #
@@ -149,6 +137,17 @@ def plot_snrchisq(instrument, coinc_param_distributions, plot_type, max_snr, snr
 
 
 options, gid_list = parse_command_line()
+
+
+if not gid_list:
+	lvalert_data = json.loads(sys.stdin.read())
+	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+	logging.info("lvalert data: %s" % repr(lvalert_data))
+	filename = os.path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+	if filename not in (u"ranking_data.xml.gz",):
+		logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
+		sys.exit()
+	gid_list = [str(lvalert_data["uid"])]
 
 
 #
@@ -177,8 +176,6 @@ for gid in gid_list:
 		raise ValueError("candidate is not an inspiral<-->inspiral coincidence")
 	offsetvector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id]
 	sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
-	# the instruments that were being analyzed
-	instruments, = [row.instruments for row in lsctables.ProcessTable.get_table(coinc_xmldoc) if row.process_id == coinc_event.process_id]
 
 
 	#
@@ -187,7 +184,7 @@ for gid in gid_list:
 
 
 	for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
-		for instrument in instruments:
+		for instrument in coinc_param_distributions.instruments:
 			if instrument in sngl_inspirals:
 				# place marker on plot
 				fig = plot_snrchisq(instrument, coinc_param_distributions, plot_type, options.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
@@ -198,39 +195,50 @@ for gid in gid_list:
 			if not options.no_upload:
 				lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
 			if options.output_path is not None:
-				fig.savefig(os.path.join(options.output_path, filename))
+				filename = os.path.join(options.output_path, filename)
+				logging.info("writing %s ..." % filename)
+				fig.savefig(filename)
 
 
 	# function returns None if it can't make a plot, e.g., if there are
 	# more than 2 instruments involved (don't know how to make 3D PDF
 	# plots yet)
-	fig = plotfar.plot_snr_joint_pdf(coinc_param_distributions, sngl_inspirals.keys(), coinc_param_distributions.horizon_history.getdict(coinc_inspiral.end), options.max_snr, ifo_snr = dict((row.ifo, row.snr) for row in sngl_inspirals.values()))
+	fig = plotfar.plot_snr_joint_pdf(coinc_param_distributions.SNRPDF, sngl_inspirals.keys(), coinc_param_distributions.horizon_history.getdict(coinc_inspiral.end), coinc_param_distributions.min_instruments, options.max_snr, sngls = [dict((row.ifo, (row.snr, row.chisq / row.chisq_dof)) for row in sngl_inspirals.values())])
 	if fig is not None:
-		# FIXME Add fig.tight_layout() once the version of
-		# matplotlib at UWM has been updated
 		filename = "%s_%s_jointsnr_pdf.png" % (gid, "_".join(sorted(sngl_inspirals.keys())))
 		if not options.no_upload:
 			lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "%s SNR PDF" % ", ".join(sorted(sngl_inspirals.keys())), tagname = "background")
 		if options.output_path is not None:
-			fig.savefig(os.path.join(options.output_path, filename))
+			filename = os.path.join(options.output_path, filename)
+			logging.info("writing %s ..." % filename)
+			fig.savefig(filename)
 
 
-	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (-5.,max(25., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), event_ln_likelihood_ratio = coinc_event.likelihood)
-	try:
-		fig.tight_layout()
-	except AttributeError:
-		# not in old matplotlibs
-		pass
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
 	filename = "%s_likehoodratio_ccdf.png" % gid
 	if not options.no_upload:
 		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
 	if options.output_path is not None:
-		fig.savefig(os.path.join(options.output_path, filename))
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
 
 
-	fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_inspiral.end - 14400., coinc_inspiral.end), 241)
+	fig = plotfar.plot_horizon_distance_vs_time(coinc_param_distributions, (coinc_inspiral.end - 14400., coinc_inspiral.end), tref = coinc_inspiral.end)
 	filename = "%s_horizon_distances.png" % gid
 	if not options.no_upload:
 		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
 	if options.output_path is not None:
-		fig.savefig(os.path.join(options.output_path, filename))
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
+
+
+	fig = plotfar.plot_rates(coinc_param_distributions)
+	filename = "%s_rates.png" % gid
+	if not options.no_upload:
+		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Instrument combo rates", tagname = "background")
+	if options.output_path is not None:
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)

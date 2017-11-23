@@ -25,22 +25,33 @@
 
 
 import sys
+import os
 import optparse
 import math
+import numpy
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import GObject, Gst, GstAudio
 GObject.threads_init()
 Gst.init(None)
+
+import lal
 
 from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import datasource
+
+# a macro to switch between a conventional whitener and a fir whitener below
+try:
+	if int(os.environ["GSTLAL_FIR_WHITEN"]):
+		FIR_WHITENER = True
+	else:
+		FIR_WHITENER = False
+except KeyError as e:
+	print >> sys.stderr, "You must set the environment variable GSTLAL_FIR_WHITEN to either 0 or 1.  1 enables causal whitening. 0 is the traditional acausal whitening filter"
+	raise
 
 ## 
 # @file
@@ -83,7 +94,6 @@ from gstlal import datasource
 #	capsfilter1 [URL="\ref pipeparts.mkcapsfilter()"];
 #	audioresample [URL="\ref pipeparts.mkresample()"];
 #	capsfilter2 [URL="\ref pipeparts.mkcapsfilter()"];
-#	nofakedisconts [URL="\ref pipeparts.mknofakedisconts()"];
 #	reblock [URL="\ref pipeparts.mkreblock()"];
 #	whiten [URL="\ref pipeparts.mkwhiten()"];
 #	audioconvert [URL="\ref pipeparts.mkaudioconvert()"];
@@ -92,17 +102,14 @@ from gstlal import datasource
 #	tee [URL="\ref pipeparts.mktee()"];
 #	audioamplifyr1 [URL="\ref pipeparts.mkaudioamplify()"];
 #	capsfilterr1 [URL="\ref pipeparts.mkcapsfilter()"];
-#	nofakediscontsr1 [URL="\ref pipeparts.mknofakedisconts()"];
 #	htgater1 [URL="\ref datasource.mkhtgate()", label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
 #	tee1 [URL="\ref pipeparts.mktee()"];
 #	audioamplifyr2 [URL="\ref pipeparts.mkaudioamplify()"];
 #	capsfilterr2 [URL="\ref pipeparts.mkcapsfilter()"];
-#	nofakediscontsr2 [URL="\ref pipeparts.mknofakedisconts()"];
 #	htgater2 [URL="\ref datasource.mkhtgate()", label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
 #	tee2 [URL="\ref pipeparts.mktee()"];
 #	audioamplify_rn [URL="\ref pipeparts.mkaudioamplify()"];
 #	capsfilter_rn [URL="\ref pipeparts.mkcapsfilter()"];
-#	nofakedisconts_rn [URL="\ref pipeparts.mknofakedisconts()"];
 #	htgate_rn [URL="\ref datasource.mkhtgate()", style=filled, color=lightgrey, label="htgate() \n [iff ht gate specified]"];
 #	tee [URL="\ref pipeparts.mktee()"];
 #
@@ -110,8 +117,7 @@ from gstlal import datasource
 #
 #	"?" -> capsfilter1 -> audioresample;
 #	audioresample -> capsfilter2;
-#	capsfilter2 -> nofakedisconts;
-#	nofakedisconts -> reblock;
+#	capsfilter2 -> reblock;
 #	reblock -> whiten;
 #	whiten -> audioconvert;
 #	audioconvert -> capsfilter3;
@@ -120,25 +126,22 @@ from gstlal import datasource
 #
 #	tee -> audioamplifyr1 [label="Rate 1"];
 #	audioamplifyr1 -> capsfilterr1;
-#	capsfilterr1 -> nofakediscontsr1;
-#	nofakediscontsr1 -> htgater1;
+#	capsfilterr1 -> htgater1;
 #	htgater1 -> tee1 -> "? 1";
 #
 #	tee -> audioamplifyr2 [label="Rate 2"];
 #	audioamplifyr2 -> capsfilterr2;
-#	capsfilterr2 -> nofakediscontsr2;
-#	nofakediscontsr2 -> htgater2;
+#	capsfilterr2 -> htgater2;
 #	htgater2 -> tee2 -> "? 2";
 #
 #	tee ->  audioamplify_rn [label="Rate N"];
 #	audioamplify_rn -> capsfilter_rn;
-#	capsfilter_rn -> nofakedisconts_rn;
-#	nofakedisconts_rn -> htgate_rn;
+#	capsfilter_rn -> htgate_rn;
 #	htgate_rn -> tee_n -> "? 3";
 #
 # }
 # @enddot
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = float("inf"), veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True, statevector = None, dqvector = None):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -171,7 +174,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	quality = 9
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max(rates))
 	head = pipeparts.mkresample(pipeline, head, quality = quality)
-	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
 
 	#
@@ -190,13 +192,66 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# construct whitener.
 	#
 
-	head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
-	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, width=%d, rate=%d, channels=1" % (width, max(rates)))
+	if FIR_WHITENER:
+		# For now just hard code these acceptable inputs until we have
+		# it working well in all situations or appropriate assertions
+		psd = None
+		head = pipeparts.mktee(pipeline, head)
+		psd_fft_length = 16
+		zero_pad = 0
+		# because we are not asking the whitener to reassemble an
+		# output time series (that we care about) we drop the
+		# zero-padding in this code path.  the psd_fft_length is
+		# reduced to account for the loss of the zero padding to
+		# keep the Hann window the same as implied by the
+		# user-supplied parameters.
+		whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head, max_size_time = 2 * psd_fft_length * Gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+		pipeparts.mkfakesink(pipeline, whiten)
 
-	# make the buffers going downstream smaller, this can really help with
-	# RAM
-	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
+		# high pass filter
+		kernel = reference_psd.one_second_highpass_kernel(max(rates), cutoff = 12)
+		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
+		head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = max(rates), time_domain = False, latency = (len(kernel) - 1) // 2)
+
+		# FIXME at some point build an initial kernel from a reference psd
+		psd_fir_kernel = reference_psd.PSDFirKernel()
+		fir_matrix = numpy.zeros((1, 1 + max(rates) * psd_fft_length), dtype=numpy.float64)
+		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, block_stride = max(rates), time_domain = False, latency = 0)
+
+		def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
+			psd_data = numpy.array(whiten.get_property("mean-psd"))
+			psd = lal.CreateREAL8FrequencySeries(
+				name = "psd",
+				epoch = lal.LIGOTimeGPS(0),
+				f0 = 0.0,
+				deltaF = whiten.get_property("delta-f"),
+				sampleUnits = lal.Unit(whiten.get_property("psd-units")),
+				length = len(psd_data)
+			)
+			psd.data.data = psd_data
+			kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
+			kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
+			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
+		whiten.connect_after("notify::mean-psd", set_fir_psd, head, psd_fir_kernel)
+
+		# Gate after gaps
+		# FIXME the -max(rates) extra padding is for the high pass
+		# filter: NOTE it also needs to be big enough for the
+		# downsampling filter, but that is typically smaller than the
+		# HP filter (192 samples at Qual 9)
+		if statevector:
+			head = pipeparts.mkgate(pipeline, head, control = statevector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
+		if dqvector:
+			head = pipeparts.mkgate(pipeline, head, control = dqvector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
+		# Drop initial data to let the PSD settle
+		head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max(rates))
+		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
+		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
+	else:
+		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+		# make the buffers going downstream smaller, this can
+		# really help with RAM
+		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
 
 	if psd is None:
 		# use running average PSD
@@ -216,16 +271,31 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		# whitener.
 		#
 
-		def psd_resolution_changed(elem, pspec, psd):
+		def psd_units_or_resolution_changed(elem, pspec, psd):
+			# make sure units are set, compute scale factor
+			units = lal.Unit(elem.get_property("psd-units"))
+			if units == lal.DimensionlessUnit:
+				return
+			scale = float(psd.sampleUnits / units)
 			# get frequency resolution and number of bins
 			delta_f = elem.get_property("delta-f")
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
-			# interpolate and install PSD
+			# interpolate, rescale, and install PSD
 			psd = reference_psd.interpolate_psd(psd, delta_f)
-			elem.set_property("mean-psd", psd.data[:n])
+			elem.set_property("mean-psd", psd.data.data[:n] * scale)
+		whiten.connect_after("notify::f-nyquist", psd_units_or_resolution_changed, psd)
+		whiten.connect_after("notify::delta-f", psd_units_or_resolution_changed, psd)
+		whiten.connect_after("notify::psd-units", psd_units_or_resolution_changed, psd)
 
-		whiten.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
-		whiten.connect_after("notify::delta-f", psd_resolution_changed, psd)
+	#
+	# convert to desired precision
+	#
+
+	head = pipeparts.mkaudioconvert(pipeline, head)
+	if width == 64:
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
+	else:
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
@@ -233,7 +303,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	#
 
 	if veto_segments is not None:
-		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, seekevent=seekevent, invert_output=True)
+		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, invert_output=True)
 
 	#
 	# optional gate on whitened h(t) amplitude.  attack and hold are
@@ -288,7 +358,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		else:
 			head[rate] = head[max(rates)]
 		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw, rate=%d" % rate)
-		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate])	# FIXME:  remove when resampler is patched
 		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
 
 		head[rate] = pipeparts.mktee(pipeline, head[rate])

@@ -96,7 +96,7 @@ typedef struct {
 
 	int rate;
 
-	GMutex *bank_lock;
+	GMutex bank_lock;
 	char *bank_filename;
 	gchar *instrument;
 	gchar *channel_name;

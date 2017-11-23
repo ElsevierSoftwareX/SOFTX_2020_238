@@ -86,3 +86,13 @@ def upload_file(gracedb_client, graceid, filename, log_message = "A file", tagna
 	response = gracedb_client.writeLog(graceid, log_message, filename = filename, filecontents = io.FileIO(filename).readall(), tagname = tagname)
 	if response.status != httplib.CREATED:
 		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
+
+
+def upload_xmldoc(gracedb_client, graceid, filename, xmldoc, log_message = "A file", tagname = None):
+	logging.info("uploading \"%s\" for %s" % (filename, graceid))
+	output = StringIO.StringIO()
+	ligolw_utils.write_fileobj(xmldoc, output, gz = filename.endswith(".gz"))
+	response = gracedb_client.writeLog(graceid, log_message, filename = filename, filecontents = output.getvalue(), tagname = tagname)
+	output.close()
+	if response.status != httplib.CREATED:
+		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))

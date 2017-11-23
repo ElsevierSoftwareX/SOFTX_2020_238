@@ -251,8 +251,8 @@ while true; do
 		DROP INDEX tmpindex; 
 		DROP TABLE _idmap_;' ${TMP_LIGOLW_XML_GZ}
 
-		ligolw_inspinjfind --verbose --revert ${TMP_LIGOLW_XML_GZ}
-		ligolw_inspinjfind --verbose ${TMP_LIGOLW_XML_GZ}
+		lalapps_inspinjfind --verbose --revert ${TMP_LIGOLW_XML_GZ}
+		lalapps_inspinjfind --verbose ${TMP_LIGOLW_XML_GZ}
 
 		# Try to generate the sqlite database, but if something goes
 		# wrong then delete the database and try again. This should fix

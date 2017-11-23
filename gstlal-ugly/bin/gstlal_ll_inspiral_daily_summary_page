@@ -1,16 +1,16 @@
 #!/usr/bin/python
 
+import heapq
 import sys, glob, os, time
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw import table
 from glue import segments
-from glue import lal
-from glue import iterutils
-from pylal import rate
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from glue.lal import Cache
 import lal
+from lal import LIGOTimeGPS
+from lal import rate
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -24,7 +24,7 @@ class ContentHandler(ligolw.PartialLIGOLWContentHandler):
 lsctables.use_in(ContentHandler)
 
 def glob_trigger_files(path, seg):
-	cache = lal.Cache.from_urls(glob.glob(os.path.join(path, '*-*_LLOID-*.xml.gz')))
+	cache = Cache.from_urls(glob.glob(os.path.join(path, '*-*_LLOID-*.xml.gz')))
 	return cache.sieve(segment = seg)
 
 def now():
@@ -113,7 +113,7 @@ path = sys.argv[1]
 
 print >> out, "<h1>LLOID analysis covering %s, %s</h1><br>" % (str(analysis_segment), path)
 
-ifars = iterutils.Highest(max = 100)
+ifars = []
 
 for c in glob_trigger_files(path, analysis_segment):
 
@@ -126,7 +126,12 @@ for c in glob_trigger_files(path, analysis_segment):
 			triggerSNR[(event.mchirp, event.end_time, event.snr)] += 1
 		if event.end_time in analysis_segment and 1. / event.combined_far < 1.e15 and 1. / event.combined_far > 1.:
 			triggerIFAR[(event.mchirp, event.end_time, 1. / event.combined_far)] += 1
-		ifars.append((1. / event.combined_far, event.end_time + 1e-9 * event.end_time_ns, event.ifos, event.mchirp, event.mass, event.snr))
+		record = (1. / event.combined_far, event.end_time + 1e-9 * event.end_time_ns, event.ifos, event.mchirp, event.mass, event.snr)
+		if len(ifars) < 100:
+			heapq.heappush(ifars, record)
+		else:
+			heapq.heappushpop(ifars, record)
+ifars.sort(reverse = True)
 
 print >> out, '<div id="accordion">'
 for n, (mchirp_start, mchirp_end) in enumerate(zip(triggerSNR.bins[0].lower(), triggerSNR.bins[0].upper())):

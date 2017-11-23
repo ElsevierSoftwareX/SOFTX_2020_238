@@ -70,7 +70,6 @@ for ifo in ('H1', 'L1'):
 			"quality": 9,
 			"gap-aware": True,
 		},
-		"lal_nofakedisconts",
 		"capsfilter",
 		{
 			"caps": gst.Caps("audio/x-raw-float,rate=4096"),
@@ -89,7 +88,6 @@ for ifo in ('H1', 'L1'):
 			"average-samples": 64,
 			"mean-psd": psd.data,
 		},
-		"lal_nofakedisconts",
 		"audiochebband",
 		{
 			"lower-frequency": 45,

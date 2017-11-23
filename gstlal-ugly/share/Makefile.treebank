@@ -1,0 +1,126 @@
+#SMALL TEST CASE
+M1bi=1.75
+M1bf=3.5
+M2bi=1.75
+M2bf=3.5
+S1bi=0
+S1bf=0
+S2bi=0
+S2bf=0
+
+FLOW = 30
+MM=0.97
+SBMM=0.97
+
+M1i=2.0
+M1f=2.75
+M2i=2.0
+M2f=2.75
+#S1i = 0
+#S1f = .85
+S1i = 0
+S1f = 0
+
+# Number of templates (tiles):  392711
+# real	28m40.822s
+# user	54m0.220s
+# sys	0m10.480s
+all: BNS_treebank.xml.gz NSBH1_treebank.xml.gz NSBH2_treebank.xml.gz BBH1_treebank.xml.gz BBH2_treebank.xml.gz
+	ligolw_add --output spin_treebank.xml.gz $^ --verbose
+
+
+###
+### FIRST PART OF BBH REGION
+###
+
+BBH1_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 30.00 --max-mass2 30.00  --min-mass2 2.00 --min-mass1 2.00 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.985 --max-spin1z 0.985 --min-spin2z -0.985 --max-spin2z 0.985 --output-name $@ --max-mtotal 100 --max-q 20
+
+
+###
+### SECOND PART OF BBH REGION
+###
+
+BBH2_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 99.0 --max-mass2 99.0  --min-mass2 2.0 --min-mass1 30.0 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.985 --max-spin1z 0.985 --min-spin2z -0.985 --max-spin2z 0.985 --output-name $@ --max-mtotal 100 --max-q 20
+
+
+###
+### BNS REGION
+###
+
+BNS_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant TaylorF2  --max-mass1 2.00 --max-mass2 2.00  --min-mass2 1.00 --min-mass1 1.00 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.0 --max-spin1z 0.0 --min-spin2z -0.0 --max-spin2z 0.0 --output-name $@ --max-mtotal 100 --max-q 20
+
+BNS_treebank.h5: BNS_treebank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow $(FLOW) --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag treebank
+
+BNS_sbank.xml.gz:
+	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min 1 --mass1-max 2 --mass2-min 1 --mass2-max 2 --flow $(FLOW) --reference-psd  psd_for_treebank.xml.gz --instrument H1 --spin1-min 0 --spin1-max 0 --checkpoint 50 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned-spin --output-filename $@ --match-min $(SBMM) --fhigh-max 1024 --spin2-max 0 --spin2-min 0
+
+
+###
+### FIRST PART OF NSBH REGION
+###
+
+NSBH1_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 15.0 --max-mass2 2.00 --min-mass2 1.00 --min-mass1 2.00 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.985 --max-spin1z 0.985 --min-spin2z -0.0 --max-spin2z 0.0 --output-name $@ --max-mtotal 100 --max-q 20
+
+
+###
+### SECOND PART OF NSBH REGION
+###
+
+NSBH2_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 40.0 --max-mass2 2.00 --min-mass2 1.00 --min-mass1 15.00 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.985 --max-spin1z 0.985 --min-spin2z -0.0 --max-spin2z 0.0 --output-name $@ --max-mtotal 100 --max-q 20
+
+
+###
+### NONSPIN FULL REGION
+###
+
+#Writing output document
+#Number of leaf nodes:  37807
+#Number of templates (tiles):  37735
+#Expected number  23465.4884539
+
+#real	6m7.837s
+#user	5m36.844s
+#sys	0m1.176s
+
+nonspin_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant IMRPhenomD  --max-mass1 99.0 --max-mass2 99.0  --min-mass2 1.0 --min-mass1 1.0 --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z -0.0 --max-spin1z 0.0 --min-spin2z -0.0 --max-spin2z 0.0 --output-name $@ --max-mtotal 100 --max-q 20 
+
+
+# > 80 minutes
+# > 31,000 templates
+# Jon, can you finish this one?
+nonspin_sbank.xml.gz:
+	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min 1 --mass1-max 99 --mass2-min 1 --mass2-max 99 --flow $(FLOW) --reference-psd  psd_for_treebank.xml.gz --instrument H1 --spin1-min 0 --spin1-max 0 --checkpoint 50 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned-spin --output-filename $@ --match-min $(SBMM) --fhigh-max 1024 --spin2-max 0 --spin2-min 0
+
+
+###
+### Used for doing quick tests
+###
+
+test_treebank.xml.gz:
+	gstlal_inspiral_treebank --verbose --approximant TaylorF2  --max-mass1 $(M1bf) --max-mass2 $(M2bf)  --min-mass2 $(M2bi) --min-mass1 $(M1bi) --min-match $(MM) --flow $(FLOW) --psd-file psd_for_treebank.xml.gz --min-spin1z $(S1bi) --max-spin1z $(S1bf) --min-spin2z $(S2bi) --max-spin2z $(S2bf) --output-name $@
+
+test_sbank.xml.gz:
+	# This produces 1269 templates
+	lalapps_cbc_sbank --verbose --approximant IMRPhenomD --mass1-min $(M1bi) --mass1-max $(M1bf) --mass2-min $(M2bi) --mass2-max $(M2bf) --flow $(FLOW) --reference-psd  psd_for_treebank.xml.gz --instrument H1 --spin1-min $(S1bi) --spin1-max $(S1bf) --checkpoint 50 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned-spin --output-filename $@ --match-min $(SBMM) --fhigh-max 1024 --spin2-max $(S2bf) --spin2-min $(S2bi)
+
+HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml:
+	lalapps_inspinj --aligned --max-mass1 $(M1f) --max-mass2 $(M2f)  --min-mass2 $(M2i) --min-mass1 $(M1i) --m-distr componentMass --max-spin1 $(S1f) --max-spin2 0.0 --time-step 10 --taper-injection startend --gps-end-time 1000010000 --min-distance 10000 --max-distance 1000000 --waveform TaylorF2 --polarization uniform --gps-start-time 1000000000 --l-distr random --d-distr volume --i-distr uniform --max-inc 179.99 --min-spin2 0.0 --min-spin1 $(S1i) --enable-spin  --f-lower $(FLOW) --seed 1234 --output HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+
+treebank.h5: test_treebank.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx TaylorF2 --verbose --flow $(FLOW) --template-approx TaylorF2 --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag treebank
+
+sbank.h5:  H1-SBANK_SMALL-0-999999999.xml.gz HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml
+	lalapps_cbc_sbank_sim --template-bank $< --injection-file HL-INJECTIONS_1234_IMRPD-1000000000-10000.xml --injection-approx IMRPhenomD --verbose --flow $(FLOW) --template-approx IMRPhenomD --cache-waveforms --reference-psd psd.xml.gz --instrument=H1 --user-tag sbank
+
+banksim_match_vs_injm1.png: treebank.h5
+	lalapps_cbc_sbank_plot_sim $<
+
+clean :
+	  rm  *BBH*_treebank.xml.gz *BNS_treebank.xml.gz *NSBH*_treebank.xml.gz *spin_treebank.xml.gz

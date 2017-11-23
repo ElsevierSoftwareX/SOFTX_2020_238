@@ -29,13 +29,10 @@ unittest for the gstlal GstLALAdder class
 __author__       = "Karsten Wiesner <karsten.wiesner@ligo.org>"
 __copyright__    = "Copyright 2013, Karsten Wiesner"
 
-# The following snippet is taken from 
-# http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import pygtk
-pygtk.require("2.0")
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import GObject
+from gi.repository import Gst
 GObject.threads_init()
 Gst.init(None)
 
@@ -113,8 +110,7 @@ class TestGstLALAdder(unittest.TestCase):
                                          num_buffers = self.num_of_buffers, 
                                          name= "InputA")
 	capsfilt_a = pipeparts.mkcapsfilter(self.pipeline, src_a, 
-        "audio/x-raw, width={0}, rate={1}".format(self.bits_per_sample, 
-                                                        self.sample_rate))
+        "audio/x-raw, rate={1}".format(self.sample_rate))
         tee_a = pipeparts.mktee(self.pipeline, capsfilt_a)
         if(self.quiet==False): 
             pipeparts.mknxydumpsink(self.pipeline, pipeparts.mkqueue(self.pipeline, 
@@ -128,8 +124,7 @@ class TestGstLALAdder(unittest.TestCase):
                                          name= "InputB", 
                                          timestamp_offset= self.timestamp_offs_B)
 	capsfilt_b = pipeparts.mkcapsfilter(self.pipeline, src_b,
-        "audio/x-raw, width={0}, rate={1}".format(self.bits_per_sample, 
-                                                        self.sample_rate))
+        "audio/x-raw, rate={1}".format(self.sample_rate))
         tee_b = pipeparts.mktee(self.pipeline, capsfilt_b)
         if(self.quiet==False):               
             pipeparts.mknxydumpsink(self.pipeline, pipeparts.mkqueue(self.pipeline, 

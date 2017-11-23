@@ -37,6 +37,7 @@
 #include <gstlal/gstaudioadapter.h>
 #include <lal/LIGOMetadataTables.h>
 #include <gsl/gsl_matrix.h>
+#include <gsl/gsl_matrix_float.h>
 
 G_BEGIN_DECLS
 
@@ -86,8 +87,14 @@ typedef struct {
 	gsl_matrix_complex *autocorrelation_matrix;
 	gsl_matrix_int *autocorrelation_mask;
 	gsl_vector *autocorrelation_norm;
+	/*
+	 * FIXME: currently we only support including SNR snippets in single
+	 * precision mode
+	 */
+	gsl_matrix_complex_float_view snr_matrix_view;
+	GstClockTimeDiff difftime;
 	
-	GMutex *bank_lock;
+	GMutex bank_lock;
 } GSTLALItac;
 
 

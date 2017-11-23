@@ -83,6 +83,10 @@ class lal_skymaprenderer(matplotlibhelper.BaseMatplotlibTransform):
 		self.cax, kw = matplotlib.colorbar.make_axes(self.axes)
 
 
+	def do_set_caps(self, incaps, outcaps):
+		self.size = outcaps['width'], outcaps['height']
+		self.fmt = outcaps['fmt']
+
 
 	def do_transform(self, inbuf, outbuf):
 		#
@@ -126,7 +130,7 @@ class lal_skymaprenderer(matplotlibhelper.BaseMatplotlibTransform):
 
 
 		# Render to output buffer
-		matplotlibhelper.render(self.figure, outbuf)
+		matplotlibhelper.render(self.figure, outbuf, self.size, self.fmt)
 
 
 		# Set buffer metadata

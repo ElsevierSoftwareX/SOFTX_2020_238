@@ -1,13 +1,13 @@
 EXTRA_DIST =
 CLEANFILES =
 
-pkginclude_HEADERS = gstlal.h gstlal_debug.h gstlal_marshal.h gstlal_tags.h gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstaudioadapter.h gstlalcollectpads.h gstlal_peakfinder.h gstlal_autocorrelation_chi2.h gstlal_gps_clock.h gstlal_frhistory.h
+pkginclude_HEADERS = gstlal.h gstlal_debug.h gstlal_marshal.h gstlal_tags.h gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstaudioadapter.h gstlalcollectpads.h gstlal_peakfinder.h gstlal_autocorrelation_chi2.h gstlal_gps_clock.h gstlal_frhistory.h gstlal_audio_info.h
 pkgconfig_DATA = gstlal.pc
 lib_LTLIBRARIES = libgstlal.la libgstlaltags.la libgstlaltypes.la
 
-libgstlal_la_SOURCES = gstlal.c gstlal.h gstlal_debug.h gstlal_fftw.c gstlal_marshal.c gstlal_marshal.h gstlal_cdf_weighted_chisq_P.c gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstlal_segments.c gstlal_peakfinder.h gstlal_peakfinder.c gstlal_autocorrelation_chi2.h gstlal_autocorrelation_chi2.c
+libgstlal_la_SOURCES = gstlal.c gstlal.h gstlal_debug.h gstlal_fftw.c gstlal_marshal.c gstlal_marshal.h gstlal_cdf_weighted_chisq_P.c gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstlal_segments.c gstlal_peakfinder.h gstlal_peakfinder.c gstlal_autocorrelation_chi2.h gstlal_autocorrelation_chi2.c gstlal_audio_info.c
 libgstlal_la_CFLAGS = $(AM_CFLAGS) $(FFTW_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
-libgstlal_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(FFTW_LIBS) $(GSL_LIBS) $(LAL_LIBS) $(gstreamer_LIBS)
+libgstlal_la_LDFLAGS = -version-info $(LIBVERSION) $(AM_LDFLAGS) $(FFTW_LIBS) $(GSL_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS)
 
 libgstlaltags_la_SOURCES = gstlal_tags.c gstlal_tags.h
 libgstlaltags_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)

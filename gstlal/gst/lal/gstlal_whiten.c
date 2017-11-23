@@ -1,7 +1,7 @@
 /*
  * PSD Estimation and whitener
  *
- * Copyright (C) 2008-2015  Kipp Cannon, Chad Hanna, Drew Keppel
+ * Copyright (C) 2008-2016  Kipp Cannon, Chad Hanna, Drew Keppel
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -160,6 +160,7 @@ G_DEFINE_TYPE_WITH_CODE(
 #define DEFAULT_AVERAGE_SAMPLES 32
 #define DEFAULT_MEDIAN_SAMPLES 9
 #define DEFAULT_PSDMODE GSTLAL_PSDMODE_RUNNING_AVERAGE
+#define DEFAULT_PSD_UNITS "s"
 
 
 /*
@@ -408,9 +409,10 @@ static void free_workspace(GSTLALWhiten *element)
 
 static gboolean contains_nan(const COMPLEX16FrequencySeries *fseries)
 {
-	unsigned i;
-	for(i = 0; i < fseries->data->length; i++)
-		if(isnan(fseries->data->data[i]))
+	const COMPLEX16 *data = fseries->data->data;
+	const COMPLEX16 *end = fseries->data->data + fseries->data->length;
+	for(; data < end; data++)
+		if(isnan(creal(*data)) || isnan(cimag(*data)))
 			return TRUE;
 	return FALSE;
 }
@@ -651,7 +653,7 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd, 
 
 	GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_NONE;
 	GST_BUFFER_OFFSET_END(buffer) = GST_BUFFER_OFFSET_NONE;
-	GST_BUFFER_TIMESTAMP(buffer) = XLALGPSToINT8NS(&psd->epoch);
+	GST_BUFFER_PTS(buffer) = XLALGPSToINT8NS(&psd->epoch);
 	GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
 
 	result = gst_pad_push(psd_pad, buffer);
@@ -671,8 +673,8 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 	GST_BUFFER_OFFSET(buf) = element->next_offset_out;
 	element->next_offset_out += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_offset_out;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->sample_rate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->sample_rate) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->sample_rate);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->sample_rate) - GST_BUFFER_PTS(buf);
 	if(element->need_discont) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -1151,7 +1153,10 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event)
 			}
 
 			g_free(units);
-			element->sample_units = sample_units;
+			if(XLALUnitCompare(&element->sample_units, &sample_units)) {
+				element->sample_units = sample_units;
+				g_object_notify(G_OBJECT(element), "psd-units");
+			}
 		}
 
 		break;
@@ -1314,9 +1319,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * (re)sync timestamp and offset book-keeping
 		 */
 
-		g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
+		g_assert(GST_BUFFER_PTS_IS_VALID(inbuf));
 		g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
-		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+		element->t0 = GST_BUFFER_PTS(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_offset_out = GST_BUFFER_OFFSET(inbuf);
 
@@ -1333,7 +1338,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		zero_output_history(element);
 	} else if(!gst_audioadapter_is_empty(element->input_queue))
-		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(inbuf), ==, gst_audioadapter_expected_timestamp(element->input_queue));
+		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->input_queue));
 	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
@@ -1393,6 +1398,7 @@ enum property {
 	ARG_DELTA_F,
 	ARG_F_NYQUIST,
 	ARG_MEAN_PSD,
+	ARG_PSD_UNITS,
 	ARG_SIGMA_SQUARED,
 	ARG_SPECTRAL_CORRELATION,
 	ARG_EXPAND_GAPS
@@ -1537,6 +1543,14 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		else
 			g_value_take_boxed(value, g_value_array_new(0));
 		break;
+
+	case ARG_PSD_UNITS: {
+		LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(element->sample_units);
+		char units[LALUnitTextSize];
+		XLALUnitAsString(units, sizeof(units), &psd_units);
+		g_value_set_string(value, units);
+		break;
+	}
 
 	case ARG_SIGMA_SQUARED:
 		if(element->hann_window)
@@ -1785,6 +1799,17 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_PSD_UNITS,
+		g_param_spec_string(
+			"psd-units",
+			"PSD units",
+			"LAL unit string giving units for PSD samples.",
+			DEFAULT_PSD_UNITS,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_SIGMA_SQUARED,
 		g_param_spec_double(
 			"sigma-squared",
@@ -1835,6 +1860,7 @@ static void gstlal_whiten_init(GSTLALWhiten *element)
 	g_signal_connect(G_OBJECT(element), "notify::f-nyquist", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 	g_signal_connect(G_OBJECT(element), "notify::zero-pad", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 	g_signal_connect(G_OBJECT(element), "notify::delta-f", G_CALLBACK(rebuild_workspace_and_reset), NULL);
+	g_signal_connect(G_OBJECT(element), "notify::psd-units", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 
 	element->mean_psd_pad = NULL;
 

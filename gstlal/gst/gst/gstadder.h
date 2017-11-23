@@ -29,6 +29,20 @@
 
 G_BEGIN_DECLS
 
+#define GstAdderPad GstLALAdderPad
+#define GstAdderPadClass GstLALAdderPadClass
+#define gst_adder_pad_get_type gstlal_adder_pad_get_type
+#define GstAdder GstLALAdder
+#define GstAdderClass GstLALAdderClass
+#define gst_adder_get_type gstlal_adder_get_type
+
+enum gst_adder_mixmode_t {
+  GST_ADDER_MIXMODE_SUM = 1,
+  GST_ADDER_MIXMODE_PROD,
+};
+
+#define GST_ADDER_MIXMODE_TYPE (gst_adder_mixmode_get_type())
+
 #define GST_TYPE_ADDER            (gstlal_adder_get_type())
 #define GST_ADDER(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ADDER,GstAdder))
 #define GST_IS_ADDER(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ADDER))
@@ -62,6 +76,7 @@ struct _GstAdder {
    * output buffer is stored in the .position filed of segment */
   GstSegment      segment;
   gboolean        synchronous;
+  enum gst_adder_mixmode_t mixmode;
   guint64         offset;
 
   /* sink event handling */
@@ -85,7 +100,7 @@ struct _GstAdderClass {
   GstElementClass parent_class;
 };
 
-GType    gstlal_adder_get_type (void);
+GType    gst_adder_get_type (void);
 
 #define GST_TYPE_ADDER_PAD            (gst_adder_pad_get_type())
 #define GST_ADDER_PAD(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ADDER_PAD,GstAdderPad))

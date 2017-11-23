@@ -71,6 +71,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal_nxydump.h>
 
 
@@ -102,11 +103,13 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 /*
  * the maximum number of characters it takes to print the value for one
  * channel including delimeter, sign characters, etc.;  double-precision
- * floats in "%.16g" format can be upto 23 characters, plus 1 tab character
- * between columns.  all other data types require fewer characters
+ * floats in "%.16g" format can be upto 23 characters;  double-precision
+ * complex floats are two of those plus a "+I";  also there is 1 tab
+ * character between columns.  all other data types require fewer
+ * characters
  */
 
-#define MAX_CHARS_PER_COLUMN (23 + 1)
+#define MAX_CHARS_PER_COLUMN (2*23 + 2 + 1)
 
 /*
  * newline is "CRLF"
@@ -156,6 +159,22 @@ static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 length,
  */
 
 
+static int printsample_double_complex(char *location, const void **sample)
+{
+  double re = *(*(const double **) sample)++;
+  double im = *(*(const double **) sample)++;
+  return sprintf(location, "\t%.16g+I%.16g", re, im);
+}
+
+
+static int printsample_float_complex(char *location, const void **sample)
+{
+  float re = *(*(const float **) sample)++;
+  float im = *(*(const float **) sample)++;
+  return sprintf(location, "\t%.8g+I%.8g", (double) re, (double) im);
+}
+
+
 static int printsample_double(char *location, const void **sample)
 {
   return sprintf(location, "\t%.16g", *(*(const double **) sample)++);
@@ -203,18 +222,11 @@ static int printsample_uint8(char *location, const void **sample)
   return sprintf(location, "\t%u", (unsigned) *(*(const guint8 **) sample)++);
 }
 
-/*
- * Given a function printsample which moves through the samples,
- * print a text version to "out". Update "out"s length accordingly.
- */
+
 static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
-    const void *samples, int (*printsample) (char *, const void **),
+    const void * samples, int (*printsample) (char *, const void **),
     int channels, int rate, guint64 length)
 {
-  /*
-   * location shows the head where we are currently writing into
-   * the output buffer
-   */
   char *location;
   GstMapInfo mapinfo;
   
@@ -224,7 +236,7 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
   g_assert(printsample != NULL);
 
   gst_buffer_map(out, &mapinfo, GST_MAP_WRITE);
-  location = (char*) mapinfo.data;
+  location = (char *) mapinfo.data;
 
   for(offset = 0; offset < length; offset++) {
     /*
@@ -267,7 +279,6 @@ static GstFlowReturn print_samples(GstBuffer * out, GstClockTime timestamp,
    * Record the actual size of the buffer, but don't bother
    * realloc()ing.  Note that the final size excludes the \0
    * terminator.
-   * FIXME, might do something else for performance
    */
 
   gst_buffer_set_size(out, (guint8 *) location - mapinfo.data);
@@ -294,11 +305,10 @@ static GstStaticPadTemplate sink_factory =
     GST_STATIC_PAD_TEMPLATE(GST_BASE_TRANSFORM_SINK_NAME,
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS("audio/x-raw, "
-        "rate = " GST_AUDIO_RATE_RANGE ", " \
-        "channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-	"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", S8, " GST_AUDIO_NE(S16) ", "  GST_AUDIO_NE(S32) ", U8, " GST_AUDIO_NE(U16) ", "  GST_AUDIO_NE(U32) "}, "
-	"layout = (string) interleaved")
+    GST_STATIC_CAPS(
+        GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", S8, " GST_AUDIO_NE(S16) ", "  GST_AUDIO_NE(S32) ", U8, " GST_AUDIO_NE(U16) ", "  GST_AUDIO_NE(U32) "}") ", " \
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0")
     );
 
 
@@ -310,7 +320,8 @@ GST_STATIC_PAD_TEMPLATE(GST_BASE_TRANSFORM_SRC_NAME,
     );
 
 
-G_DEFINE_TYPE_WITH_CODE(GstTSVEnc,
+G_DEFINE_TYPE_WITH_CODE(
+    GstTSVEnc,
     gst_tsvenc,
     GST_TYPE_BASE_TRANSFORM,
     GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_nxydump", 0,
@@ -350,10 +361,10 @@ static gboolean get_unit_size(GstBaseTransform * trans, GstCaps * caps,
     *size = 1;
   } else {
     GstAudioInfo info;
-    success = gst_audio_info_from_caps(&info, caps);
+    success = gstlal_audio_info_from_caps(&info, caps);
 
     if(success)
-      *size = GST_AUDIO_INFO_WIDTH(&info) / 8 * GST_AUDIO_INFO_CHANNELS(&info);
+      *size = GST_AUDIO_INFO_BPF(&info);
     else
       GST_WARNING_OBJECT(trans, "unable to parse caps %" GST_PTR_FORMAT, caps);
   }
@@ -370,8 +381,6 @@ static gboolean get_unit_size(GstBaseTransform * trans, GstCaps * caps,
 static GstCaps *transform_caps(GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps *filter)
 {
-  /* FIXME: GstCaps *filter new in 1.0 but not used here yet */ 
-
   /*
    * always return the template caps of the other pad
    */
@@ -379,21 +388,26 @@ static GstCaps *transform_caps(GstBaseTransform * trans,
   switch (direction) {
     case GST_PAD_SRC:
       caps =
-          gst_caps_copy(gst_pad_get_pad_template_caps
-          (GST_BASE_TRANSFORM_SINK_PAD(trans)));
+          gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans));
       break;
 
     case GST_PAD_SINK:
       caps =
-          gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD
-              (trans)));
+          gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans));
       break;
 
-    case GST_PAD_UNKNOWN:
+    default:
       GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL),
-          ("invalid direction GST_PAD_UNKNOWN"));
+          ("invalid direction"));
       caps = GST_CAPS_NONE;
+      gst_caps_ref(caps);
       break;
+  }
+
+  if(filter) {
+    GstCaps *intersection = gst_caps_intersect(caps, filter);
+    gst_caps_unref(caps);
+    caps = intersection;
   }
 
   return caps;
@@ -455,7 +469,7 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
 {
   GstTSVEnc *element = GST_TSVENC(trans);
   int (*printsample) (char *, const void **);
-  gboolean success = gst_audio_info_from_caps(&(element->audio_info), incaps);
+  gboolean success = gstlal_audio_info_from_caps(&element->audio_info, incaps);
 
   element->printsample = NULL;  /* in case it doesn't get set */
 
@@ -463,39 +477,45 @@ static gboolean set_caps(GstBaseTransform * trans, GstCaps * incaps,
    * Parse the format
    */
 
-  switch (GST_AUDIO_INFO_FORMAT(&(element->audio_info))) {
-    case GST_AUDIO_FORMAT_U8 :
-       printsample = printsample_uint8;
-       break;
-    case GST_AUDIO_FORMAT_U16 :
-       printsample = printsample_uint16;
-       break;
-    case GST_AUDIO_FORMAT_U32 :
-       printsample = printsample_uint32;
-       break;
-    case GST_AUDIO_FORMAT_S8 :
-       printsample = printsample_int8;
-       break;
-    case GST_AUDIO_FORMAT_S16 :
-       printsample = printsample_int16;
-       break;
-    case GST_AUDIO_FORMAT_S32 :
-       printsample = printsample_int32;
-       break;
-    case GST_AUDIO_FORMAT_F32 :
-       printsample = printsample_float;
-       break;
-    case GST_AUDIO_FORMAT_F64 :
-       printsample = printsample_double;
-       break;
-    default:
-       success = FALSE;
-       break;
-  }
+  if(success)
+    switch(GST_AUDIO_INFO_FORMAT(&element->audio_info)) {
+      case GST_AUDIO_FORMAT_U8 :
+        printsample = printsample_uint8;
+        break;
+      case GST_AUDIO_FORMAT_U16 :
+        printsample = printsample_uint16;
+        break;
+      case GST_AUDIO_FORMAT_U32 :
+        printsample = printsample_uint32;
+        break;
+      case GST_AUDIO_FORMAT_S8 :
+        printsample = printsample_int8;
+        break;
+      case GST_AUDIO_FORMAT_S16 :
+        printsample = printsample_int16;
+        break;
+      case GST_AUDIO_FORMAT_S32 :
+        printsample = printsample_int32;
+        break;
+      case GST_AUDIO_FORMAT_F32 :
+        printsample = printsample_float;
+        break;
+      case GST_AUDIO_FORMAT_F64 :
+        printsample = printsample_double;
+        break;
+      case GST_AUDIO_FORMAT_Z64 :
+        printsample = printsample_float_complex;
+        break;
+      case GST_AUDIO_FORMAT_Z128 :
+        printsample = printsample_double_complex;
+        break;
+      default:
+        success = FALSE;
+        break;
+    }
 
   if(success) {
-    element->unit_size = GST_AUDIO_INFO_WIDTH(&(element->audio_info))
-        / 8 * GST_AUDIO_INFO_CHANNELS(&(element->audio_info));
+    element->unit_size = GST_AUDIO_INFO_BPF(&element->audio_info);
     element->printsample = printsample;
   } else
     GST_ERROR_OBJECT(element,
@@ -536,13 +556,13 @@ static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
    * of this buffer, clipped to the buffer edges.
    */
 
-  if(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf)) {
+  if(GST_BUFFER_PTS_IS_VALID(inbuf)) {
     start =
-        timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(inbuf), length,
-        GST_AUDIO_INFO_RATE(&(element->audio_info)), element->start_time);
+        timestamp_to_sample_clipped(GST_BUFFER_PTS(inbuf), length,
+        GST_AUDIO_INFO_RATE(&element->audio_info), element->start_time);
     stop =
-        timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(inbuf), length,
-        GST_AUDIO_INFO_RATE(&(element->audio_info)), element->stop_time);
+        timestamp_to_sample_clipped(GST_BUFFER_PTS(inbuf), length,
+        GST_AUDIO_INFO_RATE(&element->audio_info), element->stop_time);
   } else {
     /* don't know the buffer's start time, go ahead and process
      * the whole thing */
@@ -567,22 +587,22 @@ static GstFlowReturn transform(GstBaseTransform * trans, GstBuffer * inbuf,
      */
 
     GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-    /*
-     * This was previously:
-     * GST_BUFFER_SIZE(outbuf) = 0;
-     */
     gst_buffer_set_size(outbuf, 0);
-    
+
   } else {
       GstMapInfo mapinfo;
       gst_buffer_map(inbuf, &mapinfo, GST_MAP_READ);
 
       result =
           print_samples(outbuf,
-		GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start,
-		      GST_SECOND, GST_AUDIO_INFO_RATE(&(element->audio_info))),
-		mapinfo.data + start * element->unit_size, /* previously was: GST_BUFFER_DATA(inbuf) + start * element->unit_size, */
-		element->printsample, GST_AUDIO_INFO_CHANNELS(&(element->audio_info)), GST_AUDIO_INFO_RATE(&(element->audio_info)), stop - start);
+                GST_BUFFER_PTS(inbuf) + gst_util_uint64_scale_int_round(start,
+                GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)),
+                mapinfo.data + start * element->unit_size,
+                element->printsample,
+                GST_AUDIO_INFO_CHANNELS(&element->audio_info),
+                GST_AUDIO_INFO_RATE(&element->audio_info),
+                stop - start
+          );
 
       gst_buffer_unmap(inbuf, &mapinfo);
   }

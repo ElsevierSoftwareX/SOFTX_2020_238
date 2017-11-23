@@ -249,7 +249,18 @@ WHERE
 DELETE FROM
 	sngl_inspiral
 WHERE
-	event_id NOT IN (
+	sngl_inspiral.snr < (
+		SELECT
+			-- if they aren't all the same err on the size of
+			-- saving disk space
+			MAX(value)
+		FROM
+			process_params
+		WHERE
+			program == "gstlal_inspiral"
+			AND param == "--singles-threshold"
+	)
+	AND event_id NOT IN (
 		SELECT
 			event_id
 		FROM

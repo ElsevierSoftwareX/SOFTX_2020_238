@@ -24,21 +24,18 @@ __author__ = 'Chad Hanna <chad.hanna@ligo.org>'
 
 
 ##############################################################################
-# import standard modules and append the lalapps prefix to the python path
-import sys, os, copy, math
-import subprocess, socket, tempfile
+# import standard modules
+import sys, os, subprocess, socket, tempfile
 
 ##############################################################################
 # import the modules we need to build the pipeline
-from glue import iterutils
 from glue import pipeline
-from glue import lal
-from glue.ligolw import lsctables
 from glue import segments
-import glue.ligolw.utils as utils
+import glue.ligolw.utils as ligolw_utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal import datasource
+from lal.utils import CacheEntry
 
 def which(prog):
 	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
@@ -164,7 +161,7 @@ class gstlal_reference_psd_node(pipeline.CondorDAGNode):
 		path = os.getcwd()
 		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, instrument, gps_start_time, gps_end_time)
 		self.add_var_opt("write-psd",output_name)
-		dag.output_cache.append(lal.CacheEntry(instrument, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (output_name,)))
+		dag.output_cache.append(CacheEntry(instrument, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (output_name,)))
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
@@ -310,7 +307,7 @@ try: os.mkdir("logs")
 except: pass
 dag = bank_DAG("recolor_pipe")
 
-seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segment_file), "datasegments").coalesce()
+seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.segment_file), "datasegments").coalesce()
 breakupsegs(seglists, options.min_segment_length)
 
 psdJob = gstlal_reference_psd_job()

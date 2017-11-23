@@ -354,7 +354,7 @@ struct gstlal_segment_list *gstlal_segment_list_from_g_value_array(GValueArray *
 GValueArray *g_value_array_from_gstlal_segment(struct gstlal_segment seg)
 {
 	GValueArray *va = g_value_array_new(2);
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	g_value_init(&v, G_TYPE_UINT64);
 	g_value_set_uint64(&v, seg.start);
 	g_value_array_append(va, &v);
@@ -382,7 +382,7 @@ GValueArray *g_value_array_from_gstlal_segment_list(struct gstlal_segment_list *
 {
 	gint i;
 	GValueArray *va = g_value_array_new(seglist->length);
-	GValue v = {0,};
+	GValue v = G_VALUE_INIT;
 	g_value_init(&v, G_TYPE_VALUE_ARRAY);
 
 	for(i = 0; i < seglist->length; i++) {

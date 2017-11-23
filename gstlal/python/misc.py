@@ -76,7 +76,7 @@ def max_stat_thresh(coeffs, fap, samp_tol=100.0):
 	out = numpy.zeros(num)
 	for c in coeffs: out += c*scipy.randn(num)**2
 	out.sort()
-	return out[-int(samp_tol)]
+	return float(out[-int(samp_tol)])
 
 
 #
@@ -86,4 +86,4 @@ def max_stat_thresh(coeffs, fap, samp_tol=100.0):
 
 
 def ss_coeffs(S, amp=5.5):
-	return S**2 / (S**2 + len(S) / amp**2 )
+	return S**2. / (S**2. + len(S) / amp**2. )

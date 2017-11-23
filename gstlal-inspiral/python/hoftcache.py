@@ -32,13 +32,11 @@ import sys
 import tempfile
 
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-gobject.threads_init()
-import pygst
-pygst.require("0.10")
-import gst
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
 
 
 from gstlal import datasource
@@ -57,10 +55,10 @@ from gstlal import simplehandler
 
 class tempcache(list):
 	"""
-	List-like object to hold lal.CacheEntry objects, and run
-	os.unlink() on the .path of each as they are removed from the list
-	or when the list is garbage collected.  All errors during file
-	removal are ignored.
+	List-like object to hold CacheEntry objects, and run os.unlink() on
+	the .path of each as they are removed from the list or when the
+	list is garbage collected.  All errors during file removal are
+	ignored.
 
 	Note that there is no way to remove a CacheEntry from this list
 	without the file it represents being deleted.  If, after adding a
@@ -71,7 +69,7 @@ class tempcache(list):
 
 	Example:
 
-	>>> from glue.lal import CacheEntry
+	>>> from lal.utils import CacheEntry
 	>>> # create a cache, and add an entry
 	>>> cache = tempcache()
 	>>> cache.append(CacheEntry("- - - - file://localhost/tmp/blah.txt"))
@@ -116,7 +114,7 @@ class Handler(simplehandler.Handler):
 		self.cache = tempcache()
 
 	def do_on_message(self, bus, message):
-		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "GstMultiFileSink":
+		if message.type == Gst.MessageType.ELEMENT and message.get_structure().get_name() == "GstMultiFileSink":
 			self.cache.append(pipeparts.framecpp_filesink_cache_entry_from_mfs_message(message))
 			return True
 		return False
@@ -132,18 +130,17 @@ class Handler(simplehandler.Handler):
 
 
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
-
 	if gw_data_source_info.data_source == "frames":
 		if instrument == "V1":
 			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = "V")
 		else:
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
 		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
 		# allow frame reading and decoding to occur in a diffrent thread
-		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * gst.SECOND)
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_pad("sink"))
+		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * Gst.SECOND)
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_static_pad("sink"))
 		# FIXME:  remove this when pipeline can handle disconts
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 	else:
@@ -160,11 +157,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	if gw_data_source_info.injection_filename is not None:
 		src = pipeparts.mkinjections(pipeline, src, gw_data_source_info.injection_filename)
 		# let the injection code run in a different thread than the whitener, etc.,
-		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = gst.SECOND * 64)
-
-	# seek the pipeline
-	# FIXME:  remove
-	datasource.do_seek(pipeline, gw_data_source_info.seekevent)
+		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = Gst.SECOND * 64)
 
 
 	return src
@@ -200,16 +193,16 @@ def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir
 
 		if sample_rate is not None:
 			# make sure we're *down*sampling
-			src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % sample_rate)
+			src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % sample_rate)
 			src = pipeparts.mkresample(pipeline, src, quality = 9)
-			src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % sample_rate)
+			src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=%d" % sample_rate)
 
 		#
 		# pack into frame files for output
 		#
 
 		src = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, channel_name): src}, frame_duration = frame_duration, frames_per_file = frames_per_file)
-		for pad in src.sink_pads():
+		for pad in src.sinkpads:
 			if channel_comment is not None:
 				pad.set_property("comment", channel_comment)
 			pad.set_property("pad-type", "FrProcData")
@@ -231,8 +224,8 @@ def cache_hoft(data_source_info, channel_comment = "cached h(t) for inspiral sea
 	#
 
 
-	mainloop = gobject.MainLoop()
-	pipeline = gst.Pipeline("pipeline")
+	mainloop = GObject.MainLoop()
+	pipeline = Gst.Pipeline(name="pipeline")
 	handler = Handler(mainloop, pipeline)
 
 
@@ -244,13 +237,15 @@ def cache_hoft(data_source_info, channel_comment = "cached h(t) for inspiral sea
 
 
 	#
-	# run pipeline
+	# seek and run pipeline
 	#
 
-
+	if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+		raise RuntimeError("pipeline did not enter ready state")
+	datasource.pipeline_seek_for_gps(pipeline, *data_source_info.seg)
 	if verbose:
 		print >>sys.stderr, "setting pipeline state to playing ..."
-	if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+	if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline did not enter playing state")
 
 	if verbose:

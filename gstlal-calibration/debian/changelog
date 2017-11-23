@@ -1,3 +1,156 @@
+gstlal-calibration (1.1.7-1) unstable; urgency=low
+
+  * Added sinc filter in resampler to reduce excess noise in kappas
+  * Simplified calculation of SRC detuning parameters
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sat, 06 May 2017 16:28:34 -0500
+
+gstlal-calibration (1.1.6-1) unstable; urgency=low
+
+  * Bug fix for upsampling zeros
+  * Bug fix for reading EP10 from frames
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Fri, 14 Apr 2017 11:02:16 -0500
+
+gstlal-calibration (1.1.5-1) unstable; urgency=low
+
+  * Bug fix for time immediately before and after data dropouts
+  * New algorithm to compute SRC detuning parameters
+  * Addition of channels GDS-CALIB_F_S, GDS-CALIB_SRC_Q_INVERSE
+  * Improved queueing using low-latency option
+  * Addition of option --cancel-callines to remove calibration lines
+  * New element lal_resmaple
+  * New element lal_complexfirbank
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Fri, 07 Apr 2017 22:59:55 -0500
+
+gstlal-calibration (1.1.4-1) unstable; urgency=low
+
+  * Bug fix in NOGATE channels
+  * Removed gating of kappas with the observation-ready bit
+  * Removed all audiorate and reblock elements
+  * Pipeline no longer exits on non-zero dataValid flags
+  * Added options --buffer-length and --low-latency, rearranged queues
+  * Removed option --different-control-whitening
+  * Changed calculation of filter-settle-time
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Tue, 07 Feb 2017 10:43:45 -0600
+
+gstlal-calibration (1.1.3-1) unstable; urgency=low
+
+  * Added queues before gates to prevent pipeline from hanging.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Thu, 15 Dec 2016 14:54:48 -0600
+
+gstlal-calibration (1.1.2-1) unstable; urgency=low
+
+  * Bug fix to allow offline version of GDS pipeline to produce output
+    with recent updates
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sun, 11 Dec 2016 15:55:13 -0600
+
+gstlal-calibration (1.1.1-1) unstable; urgency=low
+
+  * Second bug fix to make primary and redundant pipelines produce
+    identical output.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Wed, 07 Dec 2016 11:26:43 -0600
+
+gstlal-calibration (1.1.0-1) unstable; urgency=low
+
+  * Bug fix to make primary and redundant pipelines produce identical
+    output.
+  * Added DARM line coherence gating to kappa_tst.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sat, 03 Dec 2016 09:23:45 -0600
+
+gstlal-calibration (1.0.9-1) unstable; urgency=low
+
+  * Changed calib_state_vector calculation to better accommodate changes
+    in kappa smoothing.
+  * Added check for overflow input to pipeline.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sat, 26 Nov 2016 13:39:09 -0600
+
+gstlal-calibration (1.0.8-1) unstable; urgency=low
+
+  * Addition of option --kappas-default-to-median to replace rejected
+    kappas with last good median instead of default
+  * Bug fix to prevent/reduce latencies due to bad dataValid flags
+  * Addition of option --demodulation-filter-settle-time to allow filter to
+    settle before accepting computed kappas.
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sun, 20 Nov 2016 14:55:49 -0600
+
+gstlal-calibration (1.0.7-1) unstable; urgency=low
+
+  * Bug fixes to demodulation routine
+  * Addition of six new channels to h(t) frames (non-gated kappa channels)
+  * Removal of two channels from h(t) frames (deprecated kappa_a channels)
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 04 Nov 2016 13:22:00 +0000
+
+gstlal-calibration (1.0.5-1) unstable; urgency=low
+  
+  * Potential bug fix for discontinuities leading to production of overlapping
+    frame files
+  * Fix typo in lal_smoothkappas element with isinf() parentheses
+  * Bug fix for Debian package build
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 06 Oct 2016 15:27:00 +0900
+
+gstlal-calibration (1.0.4-1) unstable; urgency=low
+
+  * Bug fix for coherence gating
+  * Explicit check on frame start time
+  * More debugging messages related to discontinuities
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 06 Oct 2016 15:27:00 +0900
+
+gstlal-calibration (1.0.3-1) unstable; urgency=low
+
+  * Quick patch for underflow exceptions causing large latencies
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 30 Sept 2016 20:36:00 +0900
+
+gstlal-calibration (1.0.2-1) unstable; urgency=low
+
+  * Bug fix for how one of kappa state vector bits is calculated
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Wed, 16 Sept 2016 23:48:00 +0900
+
+gstlal-calibration (1.0.1-1) unstable; urgency=low
+
+  * Fix to how pipeline deals with discontinuities
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Wed, 16 Sept 2016 13:12:00 +0900
+
+gstlal-calibration (1.0.0-1) unstable; urgency=low
+
+  * Updates to pipeline to run with kappas
+  * Updated CALIB_STATE_VECTOR definition
+  * Update to kappa smoothing routine
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Wed, 06 Jul 2016 16:22:00 +0900
+
+gstlal-calibration (0.99.1-1) unstable; urgency=low
+
+  * More packaging related adjustments
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 06 Jul 2016 16:22:00 +0900
+
+gstlal-calibration (0.99.0-2) unstable; urgency=low
+
+  * A few updates to the .spec file for dependencies
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Sat, 02 Jul 2016 14:03:00 -0500
+
+gstlal-calibration (0.99-1) unstable; urgency=low
+
+  * First iteration of gstreamer-1.x calibration package
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 01 Jul 2016 00:00:00 -0500
+
 gstlal-calibration (0.5.10-1) unstable; urgency=low
 
   * Update to smoothing routine for factors to use median method

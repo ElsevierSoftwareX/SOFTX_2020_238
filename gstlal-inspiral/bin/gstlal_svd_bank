@@ -30,17 +30,14 @@
 
 
 from optparse import OptionParser
-import uuid
 
 
-from glue.lal import CacheEntry
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
+import lal.series
+from lal.utils import CacheEntry
 from glue.ligolw import utils as ligolw_utils
-from pylal import series as lalseries
 from gstlal import svd_bank
 from gstlal.far import ThincaCoincParamsDistributions
+
 
 ## @file gstlal_svd_bank
 # This program will create svd bank files; see gstlal_svd_bank for more information
@@ -49,7 +46,7 @@ from gstlal.far import ThincaCoincParamsDistributions
 # 
 # - Typical use
 #
-# 		$ gstlal_svd_bank --reference-psd reference_psd.xml --samples-min 1024 --bank-id 0 --snr-threshold 4.0 --ortho-gate-fap 0.5 --flow 40.0 --template-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --svd-tolerance 0.9995 --write-svd-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/svd_0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --samples-max-64 4096 --clipleft 0 --autocorrelation-length 351 --samples-max-256 1024 --clipright 20 --samples-max 4096
+# 		$ gstlal_svd_bank --reference-psd reference_psd.xml --samples-min 1024 --bank-id 0 --ortho-gate-fap 0.5 --flow 40.0 --template-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --svd-tolerance 0.9995 --write-svd-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/svd_0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml --samples-max-64 4096 --clipleft 0 --autocorrelation-length 351 --samples-max-256 1024 --clipright 20 --samples-max 4096
 #
 # - Please add more!
 #
@@ -61,7 +58,6 @@ from gstlal.far import ThincaCoincParamsDistributions
 #	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
 #	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
 #	+ `--ortho-gate-fap` [probability]: Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).
-#	+ `--snr-threshold` [SNR]: Set the SNR threshold (default = 4.0).  Currently this cannot be changed. 
 #	+ `--write-svd-bank` [filename]: Set the filename in which to save the template bank (required).
 #	+ `--verbose`: Be verbose (optional).
 #	+ `--clipleft` [int]: Remove poorly reconstructable templates from the left edge of each sub-bank.
@@ -91,13 +87,6 @@ from gstlal.far import ThincaCoincParamsDistributions
 # @image html svd.png
 
 
-
-class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
-
-
 #
 #
 # =============================================================================
@@ -117,7 +106,6 @@ parser.add_option("--reference-psd", metavar = "filename", help = "Load the spec
 parser.add_option("--template-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
 parser.add_option("--template-bank-cache", metavar = "filename", help = "Provide a cache file with the names of the LIGO light-weight XML file from which to load the template bank.")
 parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 0.5, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 0.5).")
-parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold (default = 4.0). Currently this cannot be changed.")
 parser.add_option("--write-svd-bank", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--clipleft", type = "int", metavar = "N", action = "append", help = "Remove N poorly reconstructable templates from the left edge of each sub-bank. Required")
@@ -127,7 +115,7 @@ parser.add_option("--samples-min", type = "int", default = 1024, help = "The min
 parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048")
 parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
-parser.add_option("--bank-id", metavar = "id", action = "append", help = "Set a string to be used as the globally unique ID for each bank (default = generate a UUID).")
+parser.add_option("--bank-id", metavar = "id", action = "append", help = "Set a string to be used as the globally unique ID for each bank, required.  IDs should be of the form <int>ID_<int>N where N is for the sub bank in each file and this option must be given N times")
 parser.add_option("--write-psd", action = "store_true", default = False, help = "Write the PSD used to actually whiten the templates after interpolating and conditioning.  It will be inserted into the svd bank file.")
 
 options, filenames = parser.parse_args()
@@ -135,23 +123,17 @@ options, filenames = parser.parse_args()
 if options.template_bank_cache:
 	options.template_bank.extend([CacheEntry(line).url for line in open(options.template_bank_cache)])
 
-required_options = ("reference_psd", "template_bank", "write_svd_bank", "clipleft", "clipright")
+required_options = ("reference_psd", "template_bank", "write_svd_bank", "clipleft", "clipright", "bank_id")
 
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
 	raise ValueError("missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options)))
-
-if options.bank_id is None:
-	options.bank_id = [str(uuid.uuid4()) for t in options.template_bank]
 
 if not (len(options.template_bank) == len(options.clipleft) == len(options.clipright) == len(options.bank_id)):
 	raise ValueError("must give --template-bank, --clipright and --clipleft options in equal amounts")
 
 if not options.autocorrelation_length % 2:
 	raise ValueError("--autocorrelation-length must be odd")
-
-if options.snr_threshold != ThincaCoincParamsDistributions.snr_min:
-	raise ValueError("--snr-threshold must be %f" % ThincaCoincParamsDistributions.snr_min)
 
 
 #
@@ -163,7 +145,7 @@ if options.snr_threshold != ThincaCoincParamsDistributions.snr_min:
 # =============================================================================
 #
 
-psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=LIGOLWContentHandler))
+psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=lal.series.PSDContentHandler))
 
 svd_bank.write_bank(
 	options.write_svd_bank,
@@ -172,7 +154,7 @@ svd_bank.write_bank(
 		psd,
 		options.flow,
 		options.ortho_gate_fap,
-		options.snr_threshold,
+		ThincaCoincParamsDistributions.snr_min,
 		options.svd_tolerance,
 		padding = options.padding,
 		identity_transform = options.identity_transform,
@@ -182,7 +164,8 @@ svd_bank.write_bank(
 		samples_max_256 = options.samples_max_256,
 		samples_max_64 = options.samples_max_64, 
 		samples_max = options.samples_max,
-		bank_id = bank_id
+		bank_id = bank_id,
+		contenthandler = svd_bank.DefaultContentHandler
 	) for (template_bank, bank_id) in zip(options.template_bank, options.bank_id)],
 	options.clipleft,
 	options.clipright,

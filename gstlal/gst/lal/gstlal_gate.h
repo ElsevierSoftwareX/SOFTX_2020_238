@@ -59,12 +59,12 @@ struct _GSTLALGate {
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
-	GMutex *control_lock;
+	GMutex control_lock;
 	gboolean control_eos;
 	gboolean sink_eos;
 	GstClockTime t_sink_head;
 	GArray *control_segments;
-	GCond *control_queue_head_changed;
+	GCond control_queue_head_changed;
 	gdouble (*control_sample_func)(const gpointer, guint64);
 
 	gboolean emit_signals;

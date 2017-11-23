@@ -41,6 +41,8 @@ pygst.require('0.10')
 import gst
 from optparse import OptionParser
 
+import lal
+
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
@@ -50,19 +52,9 @@ from gstlal import inspiral
 from gstlal import datasource
 
 from glue import segments
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-from glue.ligolw import lsctables
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
-
-from pylal.datatypes import LIGOTimeGPS
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 
 __author__ = "Madeline Wade <madeline.wade@ligo.org>"
 
@@ -168,10 +160,12 @@ class COHhandler(simplehandler.Handler):
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
 
 	def build_default_psd(self, srate, filter_length):
-		psd = REAL8FrequencySeries()
-		psd.deltaF = float(srate)/filter_length
-		psd.data = numpy.ones(filter_length/2 + 1)
-		psd.f0 = 0.0
+		psd = lal.CreateREAL8FrequencySeries(
+			f0 = 0.0,
+			deltaF = float(srate)/filter_length,
+			length = filter_length/2 + 1
+		)
+		psd.data.data = numpy.ones(filter_length/2 + 1)
 		return psd
 
 	def add_cohnull_bin(self, elem):
@@ -188,34 +182,40 @@ class COHhandler(simplehandler.Handler):
 		self.cohnullbin.set_property("H2-latency", self.H2_latency)		
 		
 	def update_psd1(self, elem):
-		self.psd1 = REAL8FrequencySeries(
+		data = numpy.array(elem.get_property("mean-psd"))
+		self.psd1 = lal.CreateREAL8FrequencySeries(
 			name = "PSD1",
 			f0 = 0.0,
 			deltaF = elem.get_property("delta-f"),
-			data = numpy.array(elem.get_property("mean-psd"))
+			length = len(data)
 		)
+		self.psd1.data.data = data
 		self.psd1_change = 1
 
 	def update_psd2(self, elem):
-		self.psd2 = REAL8FrequencySeries(
+		data = numpy.array(elem.get_property("mean-psd"))
+		self.psd2 = lal.CreateREAL8FrequencySeries(
 			name = "PSD2",
 			f0 = 0.0,
 			deltaF = elem.get_property("delta-f"),
-			data = numpy.array(elem.get_property("mean-psd"))
+			length = len(data)
 		)
+		self.psd2.data.data = data
 		self.psd2_change = 1
 	
 	def fixed_filters(self, psd1, psd2):
-		self.psd1 = REAL8FrequencySeries(
+		self.psd1 = lal.CreateREAL8FrequencySeries(
 			name = "PSD1",
 			f0 = 0.0,
 			deltaF = psd1.deltaF,
-			data = psd1.data)
-		self.psd2 = REAL8FrequencySeries(
+			length = len(psd1.data.data))
+		self.psd1.data.data = psd1.data.data
+		self.psd2 = lal.CreateREAL8FrequencySeries(
 			name = "PSD2",
 			f0 = 0.0,
 			deltaF = psd2.deltaF,
-			data = psd2.data)
+			length = len(psd2.data.data))
+		self.psd2.data.data = psd2.data.data
 		self.H1_impulse, self.H1_latency, self.H2_impulse, self.H2_latency, self.srate = coherent_null.psd_to_impulse_response(self.psd1, self.psd2)
 
 	def segment_sighandler(self, elem, timestamp, segment_type):
@@ -256,7 +256,7 @@ class COHhandler(simplehandler.Handler):
 #
 
 if options.reference_psd is not None:
-	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
+	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
 	psd1 = psd["H1"]
 	psd2 = psd["H2"]
 if options.write_psd is not None:
@@ -293,7 +293,7 @@ if options.reference_psd is not None or options.write_psd is not None:
 # H1 branch
 #
 
-H1head = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H1", verbose = options.verbose)
+H1head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H1", verbose = options.verbose)
 
 H1head = pipeparts.mkreblock(pipeline, H1head)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=[%d,MAX]" % handler.srate)
@@ -313,7 +313,7 @@ if options.track_psd is not None:
 # H2 branch
 #
 
-H2head = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H2", verbose = options.verbose)
+H2head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, "H2", verbose = options.verbose)
 
 H2head = pipeparts.mkreblock(pipeline, H2head)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=[%d,MAX]" % handler.srate)

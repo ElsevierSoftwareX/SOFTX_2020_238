@@ -77,8 +77,15 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
-/* FIXME:  uncomment when we can rely on >= 1.6 */
-/*#include <gst/allocators/gstfdmemory.h>*/
+#ifdef HAVE_GSTREAMER_1_6
+#include <gst/allocators/gstfdmemory.h>
+#else
+/* FIXME:  remove when we can rely on having 1.6 */
+#define HAVE_MMAP
+#include "gstfdmemory.h"
+#include "gstfdmemory.c"
+#undef GST_CAT_DEFAULT
+#endif
 
 
 #include <lal/XLALError.h>
@@ -87,22 +94,6 @@
 
 #include <gstlal/gstlal_debug.h>
 #include <gstlal_cachesrc.h>
-
-
-/*
- * ============================================================================
- *
- *                     Pull in gst_fd_allocator from 1.6
- *
- *                 FIXME:  remove when we can rely on >= 1.6
- *
- * ============================================================================
- */
-
-
-#include "gstfdmemory.h"
-#include "gstfdmemory.c"
-#undef GST_CAT_DEFAULT
 
 
 /*
@@ -285,11 +276,12 @@ G_DEFINE_TYPE_WITH_CODE(GstLALCacheSrc, gstlal_cachesrc, GST_TYPE_BASE_SRC, addi
 
 static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, guint64 offset, size_t size, GstBuffer **buf)
 {
+	GstBaseSrcClass *basesrc_class = GST_BASE_SRC_CLASS(G_OBJECT_GET_CLASS(basesrc));
 	GstMapInfo mapinfo;
 	size_t read_offset;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	*buf = gst_buffer_new_allocate(NULL, size, NULL);
+	basesrc_class->alloc(basesrc, offset, size, buf);
 	if(!buf) {
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -316,6 +308,7 @@ static GstFlowReturn read_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 	GST_BUFFER_OFFSET_END(*buf) = offset + size;
 
 done:
+	close(fd);
 	return result;
 }
 
@@ -328,13 +321,18 @@ static GstFlowReturn mmap_buffer(GstBaseSrc *basesrc, const char *path, int fd, 
 
 	*buf = gst_buffer_new();
 	if(!*buf) {
+		close(fd);
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
+	/* takes ownership of fd, but only on success.  allocator closes
+	 * file when GstMemory is deallocated, but if this operation fails
+	 * we must do it ourselves. */
 	memory = gst_fd_allocator_alloc(element->fdallocator, fd, size, GST_MEMORY_FLAG_READONLY | GST_FD_MEMORY_FLAG_KEEP_MAPPED | GST_FD_MEMORY_FLAG_MAP_PRIVATE);
 	if(!memory) {
-		/*GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("mmap('%s') failed: %s", path, strerror(errno)));*/
+		GST_ELEMENT_ERROR(basesrc, RESOURCE, READ, (NULL), ("gst_fd_allocator_alloc('%s') failed", path));
 		gst_buffer_unref(*buf);
+		close(fd);
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -367,13 +365,13 @@ static GstClockTime cache_entry_end_time(GstLALCacheSrc *element, guint i)
 }
 
 
-static char *cache_entry_src(GstLALCacheSrc *element, guint i)
+static const char *cache_entry_src(GstLALCacheSrc *element, guint i)
 {
 	return element->cache->list[i].src;
 }
 
 
-static char *cache_entry_dsc(GstLALCacheSrc *element, guint i)
+static const char *cache_entry_dsc(GstLALCacheSrc *element, guint i)
 {
 	return element->cache->list[i].dsc;
 }
@@ -448,6 +446,7 @@ static guint time_to_index(GstLALCacheSrc *element, GstClockTime t)
 static gboolean start(GstBaseSrc *basesrc)
 {
 	GstLALCacheSrc *element = GSTLAL_CACHESRC(basesrc);
+	gboolean result = TRUE;
 
 	g_return_val_if_fail(element->location != NULL, FALSE);
 	g_return_val_if_fail(element->cache == NULL, FALSE);
@@ -458,7 +457,8 @@ static gboolean start(GstBaseSrc *basesrc)
 	if(!element->cache) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("error reading '%s': %s", element->location, XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
-		return FALSE;
+		result = FALSE;
+		goto done;
 	}
 	GST_DEBUG_OBJECT(element, "loaded '%s': %d item(s) in cache", element->location, element->cache->length);
 
@@ -467,7 +467,8 @@ static gboolean start(GstBaseSrc *basesrc)
 		XLALClearErrno();
 		XLALDestroyCache(element->cache);
 		element->cache = NULL;
-		return FALSE;
+		result = FALSE;
+		goto done;
 	}
 	GST_DEBUG_OBJECT(element, "%d item(s) remain in cache after sieve", element->cache->length);
 
@@ -478,14 +479,21 @@ static gboolean start(GstBaseSrc *basesrc)
 		XLALClearErrno();
 		XLALDestroyCache(element->cache);
 		element->cache = NULL;
-		return FALSE;
+		result = FALSE;
+		goto done;
 	}
 
 	element->last_index = 0;
 	element->index = 0;
 	element->need_discont = TRUE;
 
-	return TRUE;
+done:
+	/* FIXME:  documentation says this needs to be called when start()
+	 * is overridden but doing so causes frequent lock-ups in our
+	 * applications and I can't find any examples in gstreamer's own
+	 * code where an element calls this so ... !?  it's commented out */
+	/*gst_base_src_start_complete(basesrc, result ? GST_FLOW_OK : GST_FLOW_ERROR);*/
+	return result;
 }
 
 
@@ -608,11 +616,35 @@ next:
 		goto done;
 	}
 
+	/* these functions take ownership of fd;  we do not close.
+	 *
+	 * NOTE regarding offset.  the offset passed to us by the base
+	 * class is only meaningful if this element's format, as set by
+	 * gst_base_src_set_format() in the init method, is BYTES.  if we
+	 * can seek by byte count, then the base class will keep a running
+	 * total count of bytes for us and pass the current count to our
+	 * create() method.  we operate with format TIME, so we just get
+	 * passed -1 all the time.  we could keep a count of bytes
+	 * ourselves to populate the buffer offsets, but it's really only
+	 * practical to keep a running total of the count of bytes we've
+	 * pushed, not the true offset from the start of the stream.  we
+	 * don't know the input file sizes so we can't really associate an
+	 * arbitrary file's start time with a byte offset.  we could run
+	 * through the cache at the start and figure out all the file sizes
+	 * but the LAL cache can be large, include many things that will
+	 * never be read at all, and point to fail-over copies of files
+	 * that might live on slow file systems so we don't want to stat
+	 * every entry in it for the fun of it.  we can keep a record of
+	 * the sizes of the objects as we load them, which would allow a
+	 * backwards seek to have the offset updated properly, but forward
+	 * seeks would not be supported.  so we give up.  all buffers get
+	 * pushed down stream with offsets [0, size).
+	 */
+
 	if(element->use_mmap)
-		result = mmap_buffer(basesrc, path, fd, offset, statinfo.st_size, buf);
+		result = mmap_buffer(basesrc, path, fd, 0, statinfo.st_size, buf);
 	else
-		result = read_buffer(basesrc, path, fd, offset, statinfo.st_size, buf);
-	close(fd);
+		result = read_buffer(basesrc, path, fd, 0, statinfo.st_size, buf);
 	if(result != GST_FLOW_OK)
 		goto done;
 
@@ -622,9 +654,9 @@ next:
 	 * need to check for nonsensical ->last_index value.
 	 */
 
-	GST_BUFFER_TIMESTAMP(*buf) = cache_entry_start_time(element, element->index);
+	GST_BUFFER_PTS(*buf) = cache_entry_start_time(element, element->index);
 	GST_BUFFER_DURATION(*buf) = cache_entry_duration(element, element->index);
-	if(element->need_discont || GST_BUFFER_TIMESTAMP(*buf) != cache_entry_end_time(element, element->last_index)) {
+	if(element->need_discont || GST_BUFFER_PTS(*buf) != cache_entry_end_time(element, element->last_index)) {
 		GST_BUFFER_FLAG_SET(*buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
@@ -948,10 +980,7 @@ static void gstlal_cachesrc_class_init(GstLALCacheSrcClass *klass)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_from_string(
-				"application/x-igwd-frame, " \
-				"framed = (boolean) true"
-			)
+			GST_CAPS_ANY
 		)
 	);
 

@@ -93,7 +93,7 @@ static guint samples_remaining(GstBuffer *buf, guint skip)
 static GstClockTime expected_timestamp(GstAudioAdapter *adapter)
 {
 	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
-	return GST_BUFFER_TIMESTAMP_IS_VALID(buf) ? GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) : GST_CLOCK_TIME_NONE;
+	return GST_BUFFER_PTS_IS_VALID(buf) ? GST_BUFFER_PTS(buf) + GST_BUFFER_DURATION(buf) : GST_CLOCK_TIME_NONE;
 }
 
 
@@ -201,15 +201,22 @@ void gst_audioadapter_clear(GstAudioAdapter *adapter)
  * #GstBuffer's contents it must gst_buffer_ref() it before calling this
  * function.  The #GstBuffer's timestamp, duration, offset and offset end
  * must all be valid.
+ *
+ * Gap buffers need not have any data in them, but the size of all others
+ * must no smaller than (offset end - offset) * unit size.  If larger, the
+ * additional data will be ignored.
  */
 
 
 void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf)
 {
-	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
+	g_assert(GST_BUFFER_PTS_IS_VALID(buf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(buf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(buf));
+	g_assert_cmpuint(GST_BUFFER_OFFSET(buf), <=, GST_BUFFER_OFFSET_END(buf));
+	if(!GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP))
+		g_assert_cmpuint((GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf)) * adapter->unit_size, <=, gst_buffer_get_size(buf));
 	g_queue_push_tail(adapter->queue, buf);
 	adapter->size += GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 	g_object_notify(G_OBJECT(adapter), "size");
@@ -383,15 +390,7 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint sa
 		memset(dst, 0, n * adapter->unit_size);
 		_copied_gap = TRUE;
 	} else {
-		GstMapInfo mapinfo;
-		/*
-		 * FIXME: this could maybe be map_range, but have to figure out
-		 * how to use it first.  It appears that the index and length are not in bytes
-		 * but in memory blocks.
-		 */
-		gst_buffer_map(buf, &mapinfo, GST_MAP_READ);
-		memcpy(dst, mapinfo.data + (adapter->skip * adapter->unit_size), n * adapter->unit_size);
-		gst_buffer_unmap(buf, &mapinfo);
+		gst_buffer_extract(buf, adapter->skip * adapter->unit_size, dst, n * adapter->unit_size);
 		_copied_nongap = TRUE;
 	}
 	dst += n * adapter->unit_size;
@@ -405,15 +404,7 @@ void gst_audioadapter_copy_samples(GstAudioAdapter *adapter, void *dst, guint sa
 			memset(dst, 0, n * adapter->unit_size);
 			_copied_gap = TRUE;
 		} else {
-			GstMapInfo mapinfo;
-			/*
-			 * FIXME: this could maybe be map_range, but have to figure out
-			 * how to use it first.  It appears that the index and length are not in bytes
-			 * but in memory blocks.
-			 */
-			gst_buffer_map(buf, &mapinfo, GST_MAP_READ);
-			memcpy(dst, mapinfo.data, n * adapter->unit_size);
-			gst_buffer_unmap(buf, &mapinfo);
+			gst_buffer_extract(buf, 0, dst, n * adapter->unit_size);
 			_copied_nongap = TRUE;
 		}
 		dst += n * adapter->unit_size;
@@ -440,11 +431,13 @@ done:
  * depending on how the number of samples requested aligns with #GstBuffer
  * boundaries).
  *
- * All metadata from the original #GstBuffer objects is preserved,
- * including the #GstBufferFlags, etc..
+ * The #GstBufferFlags on each buffer are preserved, and the offsets are
+ * set and/or adjusted appropriated, but the timestamps and durations are
+ * undefined.
  *
  * Returns: #GList of #GstBuffers.  Calling code owns a reference to each
- * #GstBuffer in the list;  call gst_buffer_unref() on each when done.
+ * #GstBuffer in the list --- call gst_buffer_unref() on each when done ---
+ * but they are not necessarily writable, the references might be shared.
  */
 
 
@@ -460,13 +453,14 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 	if(g_queue_is_empty(adapter->queue) || !samples)
 		goto done;
 
-	buf = GST_BUFFER((head = g_queue_peek_head_link(adapter->queue))->data);
+	head = g_queue_peek_head_link(adapter->queue);
+	buf = GST_BUFFER(head->data);
 	n = samples_remaining(buf, adapter->skip);
 	if(adapter->skip || samples < n) {
 		GstBuffer *newbuf;
 		n = MIN(samples, n);
 
-		newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_META, adapter->skip * adapter->unit_size, n * adapter->unit_size);
+		newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_MEMORY | GST_BUFFER_COPY_TIMESTAMPS, adapter->skip * adapter->unit_size, n * adapter->unit_size);
 
 		GST_BUFFER_OFFSET(newbuf) = GST_BUFFER_OFFSET(buf) + adapter->skip;
 		GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf) + n;
@@ -482,7 +476,7 @@ GList *gst_audioadapter_get_list_samples(GstAudioAdapter *adapter, guint samples
 		buf = GST_BUFFER(head->data);
 		n = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 		if(samples < n) {
-			GstBuffer *newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_META, 0, samples * adapter->unit_size);
+			GstBuffer *newbuf = gst_buffer_copy_region(buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_MEMORY | GST_BUFFER_COPY_TIMESTAMPS, 0, samples * adapter->unit_size);
 			GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf) + samples;
 
 			result = g_list_append(result, newbuf);

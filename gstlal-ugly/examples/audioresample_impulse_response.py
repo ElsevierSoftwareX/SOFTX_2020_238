@@ -75,14 +75,11 @@ for bank_fragment in bank.bank_fragments:
 		"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": 4 * int(math.ceil(bank.filter_length)) * gst.SECOND},
 		"audioamplify", {"clipping-method": 3, "amplification": 1/math.sqrt(pipeparts.audioresample_variance_gain(downsample_quality, source_rate, bank_fragment.rate))},
 		"audioresample", {"quality": downsample_quality},
-		"lal_nofakedisconts", {"silent": True},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % bank_fragment.rate)},
 		"lal_firbank", {"latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank},
-		"lal_nofakedisconts", {"silent": True},
 		"lal_reblock",
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
 		"audioresample", {"quality": upsample_quality},
-		"lal_nofakedisconts", {"silent": True},
 		snr_elems[0],
 	)
 

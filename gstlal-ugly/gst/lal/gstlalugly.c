@@ -50,15 +50,16 @@
 
 
 #include <gstlal/gstlal_tags.h>
-#include <gstlal_multiplier.h>
 #include <gstlal_iirbank.h>
 #include <gstlal_interpolator.h>
-#include <gstlal_mean.h>
-#include <gstlal_specgram.h>
+#include <gstlal_tdwhiten.h>
+/*#include <gstlal_specgram.h>
 #include <gstlal_pad.h>
-#include <gstlal_trim.h>
+#include <gstlal_trim.h>*/
 #include <gstlal_bitvectorgen.h>
 #include <audioratefaker.h>
+#include <gstlal_trigger.h>
+#include <gstlal_latency.h>
 
 
 /*
@@ -76,15 +77,16 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
-		{"lal_multiplier", GSTLAL_TYPE_MULTIPLIER},
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
 		{"lal_interpolator", GSTLAL_INTERPOLATOR_TYPE},
-		{"lal_mean", GSTLAL_MEAN_TYPE},
-		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},
-		{"lal_pad", GST_TYPE_LALPAD},
-		{"lal_trim", GST_TYPE_LALTRIM},
+		{"lal_tdwhiten", GSTLAL_TDWHITEN_TYPE},
+		/*{"lal_specgram", GSTLAL_SPECGRAM_TYPE},*/
+		/*{"lal_pad", GST_TYPE_LALPAD},
+		{"lal_trim", GST_TYPE_LALTRIM},*/
 		{"lal_bitvectorgen", GSTLAL_BITVECTORGEN_TYPE},
 		{"audioratefaker", GST_TYPE_AUDIO_RATE_FAKER},
+		{"lal_trigger", GSTLAL_TRIGGER_TYPE},
+		{"lal_latency", GSTLAL_LATENCY_TYPE},
 		{NULL, 0},
 	};
 
@@ -121,4 +123,4 @@ static gboolean plugin_init(GstPlugin *plugin)
  */
 
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "gstlalugly", "Various bits of the LIGO Algorithm Library wrapped in gstreamer elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, gstlalugly, "Various bits of the LIGO Algorithm Library wrapped in gstreamer elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")

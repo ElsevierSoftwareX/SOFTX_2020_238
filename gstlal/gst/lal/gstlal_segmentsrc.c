@@ -74,8 +74,10 @@
  */
 
 #include <gstlal/gstlal.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal_segmentsrc.h>
 
+#undef GST_CAT_DEFAULT
 
 /*
  * ============================================================================
@@ -99,11 +101,16 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
     )
 );
 
-G_DEFINE_TYPE(
-    GSTLALSegmentSrc,
-    gstlal_segmentsrc,
-    GST_TYPE_BASE_SRC
-);
+#define GST_CAT_DEFAULT gstlal_segmentsrc_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+static void additional_initializations(GType type)
+{
+    GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_segmentsrc", 0, "lal_segmentsrc element");
+}
+
+
+G_DEFINE_TYPE_WITH_CODE(GSTLALSegmentSrc, gstlal_segmentsrc, GST_TYPE_BASE_SRC, additional_initializations(g_define_type_id));
 
 enum property {
     ARG_SEGMENT_LIST = 1,
@@ -128,8 +135,8 @@ enum property {
 static int mark_segments(GSTLALSegmentSrc *element, GstBuffer *buffer, GstMapInfo *info)
 {
     guint8 *data;
-    GstClockTime start = GST_BUFFER_TIMESTAMP(buffer);
-    GstClockTime stop = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+    GstClockTime start = GST_BUFFER_PTS(buffer);
+    GstClockTime stop = GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer);
     gint i;
 
     data = info->data;
@@ -196,7 +203,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      */
 
     GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + numsamps;
-    GST_BUFFER_TIMESTAMP(*buffer) = start;
+    GST_BUFFER_PTS(*buffer) = start;
     GST_BUFFER_DURATION(*buffer) = stop - start;
 
     /*
@@ -206,6 +213,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     mark_segments(element, *buffer, &info);
     if(element->offset == 0)
         GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+
+    GST_DEBUG_OBJECT(element, "pushing buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(*buffer));
 
     element->offset += numsamps;
 
@@ -380,10 +389,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            g_mutex_lock(element->segment_matrix_lock);
+            g_mutex_lock(&element->segment_matrix_lock);
             gstlal_segment_list_free(element->seglist);
             element->seglist = gstlal_segment_list_from_g_value_array(g_value_get_boxed(value));
-            g_mutex_unlock(element->segment_matrix_lock);
+            g_mutex_unlock(&element->segment_matrix_lock);
             break;
         case ARG_INVERT_OUTPUT:
             element->invert_output = g_value_get_boolean(value);
@@ -411,11 +420,11 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            g_mutex_lock(element->segment_matrix_lock);
+            g_mutex_lock(&element->segment_matrix_lock);
             if(element->seglist)
                 g_value_take_boxed(value, g_value_array_from_gstlal_segment_list(element->seglist));
             /* FIXME:  else? */
-            g_mutex_unlock(element->segment_matrix_lock);
+            g_mutex_unlock(&element->segment_matrix_lock);
             break;
         case ARG_INVERT_OUTPUT:
             g_value_set_boolean(value, element->invert_output);
@@ -445,8 +454,7 @@ static void finalize(GObject *object)
 
     gstlal_segment_list_free(element->seglist);
     element->seglist = NULL;
-    g_mutex_free(element->segment_matrix_lock);
-    element->segment_matrix_lock = NULL;
+    g_mutex_clear(&element->segment_matrix_lock);
 
     /*
      * chain to parent class' finalize() method
@@ -558,6 +566,6 @@ static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src)
     segment_src->seglist = NULL;
     segment_src->rate = 0;
     segment_src->offset = 0;
-    segment_src->segment_matrix_lock = g_mutex_new();
+    g_mutex_init(&segment_src->segment_matrix_lock);
     gst_base_src_set_format(GST_BASE_SRC(segment_src), GST_FORMAT_TIME);
 }

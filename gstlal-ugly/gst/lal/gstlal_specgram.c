@@ -158,8 +158,8 @@ static void set_metadata(GSTLALSpecgram *element, GstBuffer *buf, guint64 outsam
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->outrate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->outrate) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->outrate);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->outrate) - GST_BUFFER_PTS(buf);
 	if(element->need_discont) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -518,7 +518,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		/* (re)sync timestamp and offset book-keeping */
 
-		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+		element->t0 = GST_BUFFER_PTS(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_out_offset = element->offset0;
 

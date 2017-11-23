@@ -1,0 +1,182 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2012--2016  Kipp Cannon, Chad Hanna, Drew Keppel, Cody Messick
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import json
+import logging
+import numpy
+import matplotlib
+from matplotlib import figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 10.0,
+	"ytick.labelsize": 10.0,
+	"legend.fontsize": 10.0,
+	"figure.dpi": 600,
+	"savefig.dpi": 600,
+	"text.usetex": True
+})
+from optparse import OptionParser
+from os import path
+import sys
+import urlparse
+
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
+from gstlal import inspiral
+from gstlal import lvalert_helper
+from gstlal import svd_bank
+from lal import series as lalseries
+from ligo.gracedb import rest as gracedb
+
+
+# 
+# # Content handler
+#
+@lsctables.use_in
+@ligolw_array.use_in
+@ligolw_param.use_in
+class ligolwcontenthandler(ligolw.LIGOLWContentHandler):
+	pass
+
+#
+# # Command line
+#
+def parse_command_line():
+	parser = OptionParser()
+
+	parser.add_option("--gracedb-service-url", metavar = "URL", default = gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--output-path", metavar = "PATH", help = "Write local copies of the plots to this directory (default = dont).")
+	parser.add_option("--no-upload", action = "store_true", help = "Disable upload of plots to gracedb, e.g., for testing new plots.")
+
+	options, gid_list = parser.parse_args()
+
+
+	if not gid_list:
+		# FIXME:  lvalert_listen doesn"t allow command-line
+		# options, enable logging for online analysis
+		options.verbose = True
+		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+
+		lvalert_data = json.loads(sys.stdin.read())
+		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+		logging.info("lvalert data: %s" % repr(lvalert_data))
+		filename = path.split(urlparse.urlparse(lvalert_data["file"]).path)[-1]
+		if filename not in (u"psd.xml.gz",):
+			logging.info("filename is not 'psd.xml.gz'.  skipping")
+			sys.exit()
+		gid_list = [str(lvalert_data["uid"])]
+
+	elif options.verbose:
+		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+
+	else:
+		logging.basicConfig(format = "%(asctime)s:%(message)s")
+
+	if options.no_upload and options.output_path is None:
+		raise ValueError("--no-upload without setting --ouput-path disables all output")
+
+	return options, gid_list
+				
+options, gid_list = parse_command_line()
+
+gracedb_client = gracedb.GraceDb(options.gracedb_service_url)
+
+for gid in gid_list:
+
+	#
+	# # Download and parse the coinc document for the time series and svd bank information
+	#
+	xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
+	#xmldoc = ligolw_utils.load_filename(coinc_xmldoc, contenthandler=ligolwcontenthandler)
+
+	# create two dicts keyed by event id: the first dict contains
+	# COMPLEX8TimeSeries which contain the snr time series, the second dict
+	# contains a tuple with the ifo and template number
+	timeseries_ligolw_dict = dict((ligolw_param.get_pyvalue(elem, u"event_id"), lalseries.parse_COMPLEX8TimeSeries(elem)) for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"COMPLEX8TimeSeries")
+	eventid_ifoGamma0_dict = dict((row.event_id, (row.ifo, row.Gamma0)) for row in lsctables.SnglInspiralTable.get_table(xmldoc)) 
+
+	# Parse the bank files
+	# NOTE This assumes --svd-bank will also be provided once in the ProcessParamsTable
+	banks = inspiral.parse_bank_files(inspiral.parse_svdbank_string([row.value for row in lsctables.ProcessParamsTable.get_table(xmldoc) if row.param == "--svd-bank"].pop()), verbose=True)
+
+
+	#
+	# # Find the template (to retrieve the autocorrelation later)
+	#
+	banknum = None
+	for i, bank in enumerate(banks.values()[0]):
+		for j, row in enumerate(bank.sngl_inspiral_table):
+			# The templates should all have the same Gamma0, so just grab one
+			if row.Gamma0 == eventid_ifoGamma0_dict.values()[0][-1]:
+				banknum = i
+				tmpltnum = j
+				break
+		if banknum is not None:
+			break
+
+	if banknum is None:
+		raise ValueError("The svd banks in the process params table do not contain the template the event was found with")
+
+
+	#
+	# # Plot the time series and the expected snr
+	#
+	fig = figure.Figure()
+	FigureCanvas(fig)
+
+	for i, (eventid, complex8timeseries) in enumerate(timeseries_ligolw_dict.items()):
+		ifo = eventid_ifoGamma0_dict[eventid][0]
+		complex_snr_timeseries = complex8timeseries.data.data
+		autocorr_length = complex8timeseries.data.length
+		time = numpy.linspace(float(complex8timeseries.epoch), float(complex8timeseries.epoch)+(autocorr_length-1)*complex8timeseries.deltaT, autocorr_length)
+
+		peakoffset = numpy.argmax((complex_snr_timeseries * complex_snr_timeseries.conjugate()).real)
+		phase = numpy.angle(complex_snr_timeseries[peakoffset])
+		snr = (complex_snr_timeseries * numpy.exp(-1.j * phase)).real
+		snrsigma = numpy.sqrt(2)
+		peaktime = time[peakoffset]
+		time -= peaktime
+		maxsnr = snr.max()
+		auto = banks[ifo][banknum].autocorrelation_bank[tmpltnum]
+
+		ax = fig.add_subplot(len(timeseries_ligolw_dict.items()),1,i+1)
+		ax.fill_between(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]-snrsigma, snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]+snrsigma, color="0.75")
+		ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], "k", label = r"$\mathrm{Measured}\,\rho(t)$")
+		ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], auto.real*maxsnr, "b--", label = r"$\mathrm{Scaled\,Autocorrelation}$")
+		ax.set_ylabel(r"$\mathrm{%s}\,\rho(t)$" % ifo)
+		ax.set_xlabel(r"$\mathrm{Time\,from\,%f}$" % peaktime)
+		ax.legend(loc="best")
+		ax.grid()
+		
+	fig.tight_layout()
+	filename = "%s_snrtimeseries.png" % gid
+
+	if not options.no_upload:
+		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "SNR time series", tagname = "background")
+
+	if options.output_path is not None:
+		filename = path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)

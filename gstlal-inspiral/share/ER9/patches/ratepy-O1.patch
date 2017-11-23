@@ -1,0 +1,19 @@
+diff --git a/pylal/pylal/rate.py b/pylal/pylal/rate.py
+index 1bb9ab5..48f3cd3 100644
+--- a/pylal/pylal/rate.py
++++ b/pylal/pylal/rate.py
+@@ -51,12 +51,14 @@ import random
+ import scipy
+ __numpy__version__ = tuple(map(int, numpy.__version__.strip().split(".")))
+ __scipy__version__ = tuple(map(int, scipy.__version__.strip().split(".")))
++'''
+ if __scipy__version__ >= (0, 9) and __numpy__version__ >= (1, 7):
+ 	from scipy.interpolate import interp1d, interp2d, LinearNDInterpolator
+ else:
+ 	# pre scipy/numpy 0.9/1.7 had busted/missing interpolation code.
+ 	# replacements are provided below
+ 	pass
++'''
+ from scipy.signal import signaltools
+ 
+ 

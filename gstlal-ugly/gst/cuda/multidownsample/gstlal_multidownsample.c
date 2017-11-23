@@ -297,8 +297,8 @@ static GstPad *get_src_pad(GstlalMultiDownsample *element, const guint8 current_
 static void set_metadata(GstPad *srcpad, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 		PadState *pad_state = (PadState *) gst_pad_get_element_private(srcpad);
-		if(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf)){
-			GST_BUFFER_TIMESTAMP(outbuf) = GST_BUFFER_TIMESTAMP(inbuf);
+		if(GST_BUFFER_PTS_IS_VALID(inbuf)){
+			GST_BUFFER_PTS(outbuf) = GST_BUFFER_PTS(inbuf);
 			GST_BUFFER_DURATION(outbuf) = 0 ;
 			GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET_END(outbuf) = pad_state->next_offset;
 		}else{

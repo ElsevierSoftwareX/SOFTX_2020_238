@@ -1,0 +1,77 @@
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=
+GROUP_USER=
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+
+# A web directory for output
+WEBDIR=
+
+# necessary for shell inj_cache_map.txt 
+SHELL:=/bin/bash
+
+#######################
+# Merger Directories  #
+#######################
+
+ORIGINAL_ANALYSIS_DIR=
+ORIGINAL_INJ_DIR=
+NEW_NONINJ_DIR=
+NEW_INJ_DIR=
+NEW_CALC_RANK_DIR=
+
+# number of files per background bin only needs to be set to a value other than
+# 1 if starting with output of an analysis before the naming convention update
+# (commit 5efd78fee6b371c999f510d07be33ec64f385695)
+NUM_FILES_PER_BACKGROUND_BIN=1
+
+# replace example list
+INJECTIONS := U_dVdzo1pz_bns_normal_high_spin_injections_v1.xml.gz U_dVdzo1pz_bns_normal_low_spin_injections_v1.xml.gz U_dVdzo1pz_bns_uniform_low_spin_injections_v1.xml.gz
+INJECTION_STR = $(shell j=1; TMPSTR=""; for INJ in $(INJECTIONS); do TMPSTR="$${TMPSTR} --injections-for-merger $${INJ} --inj-lloid-cache inj_lloid_$${j}.cache" && j=$$((j+1)); done && echo $${TMPSTR})
+
+
+############
+# Workflow #
+############
+
+all : dag
+
+
+plots :
+	mkdir plots
+
+$(WEBDIR) : $(MAKEFILE_LIST)
+	mkdir -p $(WEBDIR)/OPEN-BOX
+	cp $(MAKEFILE_LIST) $@
+
+dag : segments.xml.gz vetoes.xml.gz tisi.xml plots $(WEBDIR) lloid.cache rank_pdfs.cache inj_cache_map.txt
+	gstlal_inspiral_pipe  --frame-segments-file segments.xml.gz  --vetoes vetoes.xml.gz  --frame-segments-name datasegments   --web-dir $(WEBDIR)  --time-slide-file tisi.xml  --inj-time-slide-file tisi.xml  --lloid-cache lloid.cache  --rank-pdf-cache rank_pdfs.cache  --injections-for-merger U_dVdzo1pz_bns_normal_high_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_1.cache  --injections-for-merger U_dVdzo1pz_bns_normal_low_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_2.cache  --injections-for-merger U_dVdzo1pz_bns_uniform_low_spin_injections_v1.xml.gz  --inj-lloid-cache inj_lloid_3.cache  --num-files-per-background-bin $(NUM_FILES_PER_BACKGROUND_BIN) $(CONDOR_COMMANDS)  
+	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
+
+inj_cache_map.txt : $(INJECTIONS)
+	-rm $@
+	j=1; for INJ in $(INJECTIONS); do ls $(NEW_INJ_DIR)/*LLOID_$${INJ/\.xml*/}* | lalapps_path2cache > inj_lloid_$${j}.cache && echo inj_lloid_$${j}.cache: $${INJ} >> $@ && j=$$((j+1)); done
+
+
+segments.xml.gz : 
+	cp $(ORIGINAL_ANALYSIS_DIR)/$@ .
+
+vetoes.xml.gz : 
+	cp $(ORIGINAL_ANALYSIS_DIR)/$@ .
+
+tisi.xml :
+	cp $(ORIGINAL_ANALYSIS_DIR)/$@ .
+
+lloid.cache :
+	ls $(NEW_NONINJ_DIR)/*.sqlite | lalapps_path2cache > $@
+
+rank_pdfs.cache :
+	ls $(NEW_CALC_RANK_DIR)/*.xml.gz | lalapps_path2cache > $@
+
+clean:
+	-rm -rvf *.sub *.dag* *.sh logs *.sqlite plots *.html Images *.css *.js *.cache
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_* rm_intermediate_merger_products
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -rf *_split_bank*
+	-rm -rf nogaps.xml segdb.xml
+	-rm -rf bank_aligned_spin.xml.gz

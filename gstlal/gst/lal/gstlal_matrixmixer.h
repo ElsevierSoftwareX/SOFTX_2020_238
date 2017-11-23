@@ -58,8 +58,8 @@ typedef struct _GSTLALMatrixMixerClass GSTLALMatrixMixerClass;
 struct _GSTLALMatrixMixer {
 	GstBaseTransform element;
 
-	GMutex *mixmatrix_lock;
-	GCond *mixmatrix_available;
+	GMutex mixmatrix_lock;
+	GCond mixmatrix_available;
 	gsl_matrix *mixmatrix_d;
 	gsl_matrix_float *mixmatrix_s;
 	gsl_matrix_complex_view mixmatrix_cd;

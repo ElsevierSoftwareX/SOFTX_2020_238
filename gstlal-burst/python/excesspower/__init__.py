@@ -24,12 +24,8 @@ from optparse import OptionParser, OptionGroup
 import ConfigParser
 from ConfigParser import SafeConfigParser
 
-from pylal import datatypes as laltypes
-
-from glue.ligolw import ligolw
+import lal
 from glue.ligolw import utils as ligolw_utils
-
-from pylal.series import read_psd_xmldoc
 
 from parts import EPHandler
 
@@ -194,10 +190,7 @@ def process_options(options, gw_data_source_opts, pipeline, mainloop):
     if cfg.has_option("cache", "reference-psd"):
         psdfile = cfg.get("cache", "reference-psd")
         try:
-            #FIXME: This will continue to complain about the ContentHandler, but
-            # the parsing fails if provided with one.
-            #handler.psd = read_psd_xmldoc(ligolw_utils.load_filename(psdfile, contenthandler = ligolw.LIGOLWContentHandler))[handler.inst]
-            handler.psd = read_psd_xmldoc(ligolw_utils.load_filename(psdfile))[handler.inst]
+            handler.psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(psdfile, contenthandler = lal.series.PSDContentHandler))[handler.inst]
             print "Reference PSD for instrument %s from file %s loaded" % (handler.inst, psdfile)
             # Reference PSD disables caching (since we already have it)
             handler.cache_psd = None

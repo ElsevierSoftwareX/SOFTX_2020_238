@@ -33,17 +33,12 @@ import sqlite3
 import sys
 
 
-from glue import lal
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
+from lal.utils import CacheEntry
+
+
 from glue.ligolw import dbtables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
-
-
-class XMLContentHandler(ligolw.LIGOLWContentHandler):
-	pass
-lsctables.use_in(XMLContentHandler)
 
 
 #
@@ -99,14 +94,14 @@ if options.segments_file.lower().endswith(".sqlite"):
 		print >>sys.stderr, "reading %s ..." % options.segments_file
 	seglists = ligolw_segments.segmenttable_get_by_name(dbtables.get_xml(sqlite3.connect(options.segments_file)), options.segments_name).coalesce()
 else:
-	seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, contenthandler = XMLContentHandler, verbose = options.verbose), options.segments_name).coalesce()
+	seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.segments_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.segments_name).coalesce()
 
 
 for filename in filenames:
 	if options.verbose:
 		print >>sys.stderr, "loading %s ..." % (filename or "stdin")
 	for line in open(filename) if filename else sys.stdin:
-		seglists -= lal.CacheEntry(line).segmentlistdict
+		seglists -= CacheEntry(line).segmentlistdict
 
 
 #

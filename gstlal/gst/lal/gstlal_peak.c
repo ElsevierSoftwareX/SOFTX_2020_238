@@ -33,6 +33,10 @@
  */
 
 
+#include <math.h>
+#include <string.h>
+
+
 /*
  * stuff from glib/gstreamer
  */
@@ -42,27 +46,28 @@
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
 #include <gst/base/gstadapter.h>
-#include <math.h>
-#include <string.h>
+
 
 /*
  * our own stuff
  */
+
 
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_peakfinder.h>
 #include <gstlal/gstaudioadapter.h>
 #include <gstlal_peak.h>
 
+
 static guint64 output_num_samps(GSTLALPeak *element)
 {
-	return (guint64) element->n;
+	return element->n;
 }
 
 
 static guint64 output_num_bytes(GSTLALPeak *element)
 {
-	return (guint64) output_num_samps(element) * element->adapter->unit_size;
+	return output_num_samps(element) * element->adapter->unit_size;
 }
 
 
@@ -74,6 +79,7 @@ static int reset_time_and_offset(GSTLALPeak *element)
 	element->next_output_timestamp = GST_CLOCK_TIME_NONE;
 	return 0;
 }
+
 
 static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 {
@@ -342,6 +348,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			res = setcaps(peak, pad, caps);
 			gst_event_unref(event);
 			event = NULL;
+			break;
 		default:
 			break;
 	}
@@ -361,7 +368,7 @@ static void update_state(GSTLALPeak *element, GstBuffer *srcbuf)
 {
 	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
 	gint samples = GST_BUFFER_OFFSET_END(srcbuf) - GST_BUFFER_OFFSET(srcbuf);
-	GST_BUFFER_TIMESTAMP(srcbuf) = gst_util_uint64_scale_int_round(element->samples_since_last_discont, GST_SECOND, element->rate) + element->timestamp_at_last_discont;
+	GST_BUFFER_PTS(srcbuf) = gst_util_uint64_scale_int_round(element->samples_since_last_discont, GST_SECOND, element->rate) + element->timestamp_at_last_discont;
 	GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int_round(samples, GST_SECOND, element->rate);
 	element->next_output_timestamp = gst_util_uint64_scale_int_round(element->samples_since_last_discont + samples, GST_SECOND, element->rate) + element->timestamp_at_last_discont;;
 	element->samples_since_last_discont += samples;
@@ -384,13 +391,13 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
 	if (!element->data)
-		element->data = malloc(maxsize);
+		element->data = g_malloc(maxsize);
 
 	/*
 	 * check validity of timestamp and offsets
 	 */
 
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+	if(!GST_BUFFER_PTS_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
 		gst_buffer_unref(sinkbuf);
 		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
 		result = GST_FLOW_ERROR;
@@ -405,8 +412,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-		element->timestamp_at_last_discont = GST_BUFFER_TIMESTAMP(sinkbuf);
-		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
+		element->timestamp_at_last_discont = GST_BUFFER_PTS(sinkbuf);
+		element->next_output_timestamp = GST_BUFFER_PTS(sinkbuf);
 	}
 
 	/* put the incoming buffer into an adapter, handles gaps */
@@ -482,7 +489,7 @@ static void finalize(GObject *object)
 	g_object_unref(element->adapter);
 	if (element->maxdata)
 		gstlal_peak_state_free(element->maxdata);
-	if (!element->data)
+	if (element->data)
 		g_free(element->data);  
 	G_OBJECT_CLASS(gstlal_peak_parent_class)->finalize(object);
 }
@@ -494,11 +501,9 @@ static void finalize(GObject *object)
 
 
 #define CAPS \
-	"audio/x-raw, " \
-	"rate = " GST_AUDIO_RATE_RANGE ", " \
-	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-	"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
-	"layout = (string) interleaved"
+	GST_AUDIO_CAPS_MAKE("{" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}") ", " \
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0"
 
 
 static void class_init(gpointer class, gpointer class_data)

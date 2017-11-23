@@ -28,7 +28,7 @@
  * Cannon, J.  Creighton, B. Sathyaprakash.
  *
  * Completed Actions:
- * - removed 64-bit support for control stream:  not possibleto specify 
+ * - removed 64-bit support for control stream:  not possibleto specify
  * threshold to that precision
  * - Why not signal control_queue_head_changed on receipt of NEW_SEGMENT? not needed.
  *
@@ -71,6 +71,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal_gate.h>
 
@@ -287,6 +288,18 @@ static void control_flush(GSTLALGate *element)
 }
 
 
+static void control_flush_upto(GSTLALGate *element, GstClockTime t)
+{
+	guint i;
+
+	for(i = 0; i < element->control_segments->len && control_get_tstop(element, i) <= t; i++);
+	if(i) {
+		GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
+		g_array_remove_range(element->control_segments, 0, i);
+	}
+}
+
+
 /*
  * wait for the control segments to span the interval needed to decide the
  * state of [timestamp,timestamp+duration).  must be called with the
@@ -314,21 +327,17 @@ static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, Gs
 	 * wait loop
 	 */
 
-	g_mutex_lock(element->control_lock);
+	g_mutex_lock(&element->control_lock);
 	element->t_sink_head = tmax;
-	g_cond_broadcast(element->control_queue_head_changed);
+	g_cond_broadcast(&element->control_queue_head_changed);
 	while(1) {
-		guint i;
-
 		/*
-		 * flush old segments.
+		 * flush old segments.  do this in the loop so that we can
+		 * clear out newly received yet useless buffers as they
+		 * arrive
 		 */
 
-		for(i = 0; i < element->control_segments->len && control_get_tstop(element, i) <= tmin; i++);
-		if(i) {
-			GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
-			g_array_remove_range(element->control_segments, 0, i);
-		}
+		control_flush_upto(element, tmin);
 
 		/*
 		 * has head advanced far enough, or are we at EOS?
@@ -351,9 +360,9 @@ static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, Gs
 		 */
 
 		GST_DEBUG_OBJECT(element, "waiting for control to advance to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmax));
-		g_cond_wait(element->control_queue_head_changed, element->control_lock);
+		g_cond_wait(&element->control_queue_head_changed, &element->control_lock);
 	}
-	g_mutex_unlock(element->control_lock);
+	g_mutex_unlock(&element->control_lock);
 }
 
 
@@ -495,9 +504,611 @@ static void stop(GSTLALGate *element, guint64 timestamp, void *data)
 /*
  * ============================================================================
  *
- *                                 Properties
+ *                                Control Pad
  *
  * ============================================================================
+ */
+
+
+/*
+ * control_setcaps()
+ */
+
+
+static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
+{
+	gdouble (*control_sample_func)(const gpointer, guint64) = NULL;
+	GstAudioInfo info;
+	gboolean success = gstlal_audio_info_from_caps(&info, caps);
+
+	/*
+	 * parse the format
+	 */
+
+	if(success) {
+		switch(GST_AUDIO_INFO_FORMAT(&info)) {
+		case GST_AUDIO_FORMAT_U8:
+			control_sample_func = control_sample_uint8;
+			break;
+		case GST_AUDIO_FORMAT_U16:
+			control_sample_func = control_sample_uint16;
+			break;
+		case GST_AUDIO_FORMAT_U32:
+			control_sample_func = control_sample_uint32;
+			break;
+		case GST_AUDIO_FORMAT_S8:
+			control_sample_func = control_sample_int8;
+			break;
+		case GST_AUDIO_FORMAT_S16:
+			control_sample_func = control_sample_int16;
+			break;
+		case GST_AUDIO_FORMAT_S32:
+			control_sample_func = control_sample_int32;
+			break;
+		case GST_AUDIO_FORMAT_F32:
+			control_sample_func = control_sample_float32;
+			break;
+		case GST_AUDIO_FORMAT_F64:
+			control_sample_func = control_sample_float64;
+			break;
+		case GST_AUDIO_FORMAT_Z64:
+			control_sample_func = control_sample_complex64;
+			break;
+		case GST_AUDIO_FORMAT_Z128:
+			control_sample_func = control_sample_complex128;
+			break;
+		default:
+			success = FALSE;
+			break;
+		}
+	}
+
+	/*
+	 * update element
+	 */
+
+	if(success) {
+		g_mutex_lock(&gate->control_lock);
+		gate->control_sample_func = control_sample_func;
+		gate->control_rate = GST_AUDIO_INFO_RATE(&info);
+		g_mutex_unlock(&gate->control_lock);
+	} else
+		GST_ERROR_OBJECT(gate, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
+
+	/*
+	 * done.
+	 */
+
+	return success;
+}
+
+
+/*
+ * chain()
+ */
+
+
+static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *controlbuf)
+{
+	GSTLALGate *element = GSTLAL_GATE(parent);
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * check validity of timestamp and offsets
+	 */
+
+	if(!(GST_BUFFER_PTS_IS_VALID(controlbuf) && GST_BUFFER_DURATION_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_IS_VALID(controlbuf) && GST_BUFFER_OFFSET_END_IS_VALID(controlbuf))) {
+		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(controlbuf)));
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+	GST_DEBUG_OBJECT(pad, "have buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, controlbuf, GST_BUFFER_BOUNDARIES_ARGS(controlbuf));
+
+	/*
+	 * wait until this buffer is needed
+	 */
+
+	g_mutex_lock(&element->control_lock);
+	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_PTS(controlbuf) < element->t_sink_head) || !element->control_segments->len)) {
+		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(controlbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_PTS(controlbuf) >= element->t_sink_head);
+		g_cond_wait(&element->control_queue_head_changed, &element->control_lock);
+	}
+
+	/*
+	 * if we're at eos on sink pad, discard
+	 */
+
+	if(element->sink_eos) {
+		GST_DEBUG_OBJECT(pad, "sink is at end-of-stream, discarding buffer");
+		g_mutex_unlock(&element->control_lock);
+		goto done;
+	}
+
+	/*
+	 * digest buffer into segments of contiguous state:  TRUE = at or
+	 * above threshold, FALSE = below threshold.
+	 */
+
+
+	if(GST_BUFFER_FLAG_IS_SET(controlbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(controlbuf)) {
+		control_add_segment(element, GST_BUFFER_PTS(controlbuf), GST_BUFFER_PTS(controlbuf) + GST_BUFFER_DURATION(controlbuf), FALSE);
+	} else {
+		GstMapInfo info;
+		guint buffer_length = GST_BUFFER_OFFSET_END(controlbuf) - GST_BUFFER_OFFSET(controlbuf);
+		guint segment_start;
+		guint segment_length;
+		g_assert_cmpuint(GST_BUFFER_OFFSET_END(controlbuf), >=, GST_BUFFER_OFFSET(controlbuf));
+
+		gst_buffer_map(controlbuf, &info, GST_MAP_READ);
+		for(segment_start = 0; segment_start < buffer_length; segment_start += segment_length) {
+			/* state for this segment */
+			gboolean state = element->control_sample_func(info.data, segment_start) >= element->threshold;
+			for(segment_length = 1; segment_start + segment_length < buffer_length; segment_length++)
+				if(state != (element->control_sample_func(info.data, segment_start + segment_length) >= element->threshold))
+					/* state has changed */
+					break;
+			control_add_segment(element, GST_BUFFER_PTS(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start, buffer_length), GST_BUFFER_PTS(controlbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(controlbuf), segment_start + segment_length, buffer_length), state);
+		}
+		gst_buffer_unmap(controlbuf, &info);
+	}
+	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(controlbuf));
+	g_cond_broadcast(&element->control_queue_head_changed);
+	g_mutex_unlock(&element->control_lock);
+
+	/*
+	 * done
+	 */
+
+done:
+	gst_buffer_unref(controlbuf);
+	return result;
+}
+
+
+/*
+ * event()
+ */
+
+
+static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALGate *element = GSTLAL_GATE(parent);
+	gboolean success = TRUE;
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_STREAM_START:
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing control queue");
+		g_mutex_lock(&element->control_lock);
+		element->control_eos = FALSE;
+		control_flush(element);
+		g_mutex_unlock(&element->control_lock);
+		break;
+
+	case GST_EVENT_EOS:
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag");
+		g_mutex_lock(&element->control_lock);
+		element->control_eos = TRUE;
+		g_cond_broadcast(&element->control_queue_head_changed);
+		g_mutex_unlock(&element->control_lock);
+		break;
+
+	case GST_EVENT_CAPS: {
+		GstCaps *caps;
+		gst_event_parse_caps(event, &caps);
+		success = control_setcaps(element, pad, caps);
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	/*
+	 * events on arriving on control pad are not forwarded
+	 */
+
+	gst_event_unref(event);
+	return success;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                  Sink Pad
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * chain()
+ */
+
+
+static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
+{
+	GSTLALGate *element = GSTLAL_GATE(parent);
+	guint64 sinkbuf_length;
+	guint64 start, length;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * check validity of timestamp and offsets
+	 */
+
+	if(!(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
+		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	sinkbuf_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+
+	if(GST_BUFFER_IS_DISCONT(sinkbuf))
+		element->need_discont = TRUE;
+
+	/*
+	 * wait for control queue to span the necessary interval
+	 */
+
+	GST_DEBUG_OBJECT(element->sinkpad, "got buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	g_assert_cmpuint(sinkbuf_length, ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), element->rate, GST_SECOND));
+	control_get_interval(element, GST_BUFFER_PTS(sinkbuf), GST_BUFFER_DURATION(sinkbuf));
+
+	/*
+	 * is input zero size or already a gap?  then push it as is
+	 */
+
+	if(G_UNLIKELY(!sinkbuf_length)) {
+		/*
+		 * is a discontinuity pending?
+		 */
+
+		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
+			sinkbuf = gst_buffer_make_writable(sinkbuf);
+			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
+		}
+		element->need_discont = FALSE;
+
+		/*
+		 * push buffer
+		 */
+
+		GST_DEBUG_OBJECT(element->srcpad, "pushing reused zero-length buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
+		sinkbuf = NULL;
+		goto done;
+	} else if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
+		/*
+		 * tell the world about state changes
+		 */
+
+		if(element->emit_signals && FALSE != element->last_state)
+			g_signal_emit(G_OBJECT(element), signals[SIGNAL_STOP], 0, GST_BUFFER_PTS(sinkbuf), NULL);
+		element->last_state = FALSE;
+
+		if(element->leaky) {
+			/*
+			 * discard buffer.  skipping an interval of
+			 * non-zero length so next buffer must be a
+			 * discont
+			 */
+
+			element->need_discont = TRUE;
+			GST_DEBUG_OBJECT(element->srcpad, "discarding gap buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+			goto done;
+		}
+
+		/*
+		 * is a discontinuity pending?
+		 */
+
+		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
+			sinkbuf = gst_buffer_make_writable(sinkbuf);
+			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
+		}
+		element->need_discont = FALSE;
+
+		/*
+		 * push buffer
+		 */
+
+		GST_DEBUG_OBJECT(element->srcpad, "pushing reused gap buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
+		sinkbuf = NULL;
+		goto done;
+	}
+
+	/*
+	 * loop over the contents of the input buffer.
+	 */
+
+	for(start = 0; start < sinkbuf_length; start += length) {
+		GstBuffer *srcbuf;
+		GstClockTime timestamp;
+		gboolean state;
+
+		/*
+		 * find the next interval of continuous control state
+		 */
+
+		g_mutex_lock(&element->control_lock);
+		state = control_get_state(element, timestamp_add_offset(GST_BUFFER_PTS(sinkbuf), (gint64) start - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_PTS(sinkbuf), (gint64) start + element->attack_length, element->rate));
+		for(length = 1; start + length < sinkbuf_length; length++) {
+			if(state != control_get_state(element, timestamp_add_offset(GST_BUFFER_PTS(sinkbuf), (gint64) (start + length) - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_PTS(sinkbuf), (gint64) (start + length) + element->attack_length, element->rate)))
+				break;
+		}
+		g_mutex_unlock(&element->control_lock);
+
+		/*
+		 * if the output state has changed, tell the world about it
+		 */
+
+		timestamp = GST_BUFFER_PTS(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
+		if(element->emit_signals && state != element->last_state)
+			g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
+		element->last_state = state;
+
+		/*
+		 * if the output is a gap and we're in leaky mode, discard
+		 * it.  next buffer must be a discont because we know the
+		 * gap has non-zero length
+		 */
+
+		if(!state && element->leaky) {
+			element->need_discont = TRUE;
+			continue;
+		}
+
+		/*
+		 * output is a buffer of non-zero length.  if it's the
+		 * entire input buffer then re-use it otherwise create a
+		 * subbuffer from it
+		 */
+
+		if(length == sinkbuf_length) {
+			GST_DEBUG_OBJECT(element, "reusing input buffer %p", sinkbuf);
+			srcbuf = sinkbuf;
+			sinkbuf = NULL;
+		} else {
+			GST_DEBUG_OBJECT(element, "creating sub-buffer from samples [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", start, start + length);
+			srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_MEMORY | GST_BUFFER_COPY_TIMESTAMPS, start * element->unit_size, length * element->unit_size);
+			if(!srcbuf) {
+				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
+				result = GST_FLOW_ERROR;
+				goto done;
+			}
+
+			/*
+			 * set offset, and timestamps
+			 */
+
+			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
+			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
+			GST_BUFFER_PTS(srcbuf) = timestamp;
+			GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_PTS(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start + length, sinkbuf_length) - GST_BUFFER_PTS(srcbuf);
+		}
+
+		/*
+		 * is a discontinuity pending?
+		 */
+
+		if(!!element->need_discont != !!GST_BUFFER_IS_DISCONT(srcbuf)) {
+			srcbuf = gst_buffer_make_writable(srcbuf);
+			if(element->need_discont)
+				GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
+			else
+				GST_BUFFER_FLAG_UNSET(srcbuf, GST_BUFFER_FLAG_DISCONT);
+		}
+		element->need_discont = FALSE;
+
+		/*
+		 * if control input was below threshold then flag buffer as
+		 * silence.
+		 */
+
+		if(!state) {
+			srcbuf = gst_buffer_make_writable(srcbuf);
+			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
+		}
+
+		/*
+		 * push buffer down stream
+		 */
+
+		GST_DEBUG_OBJECT(element->srcpad, "pushing buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, srcbuf, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+		result = gst_pad_push(element->srcpad, srcbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK)) {
+			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
+			goto done;
+		}
+	}
+
+	/*
+	 * done
+	 */
+
+done:
+	/* need to check that we haven't discarded it or re-used sinkbuf as
+	 * srcbuf */
+	if(sinkbuf)
+		gst_buffer_unref(sinkbuf);
+
+	/* only one of two outcomes:  OK or ERROR */
+	return result == GST_FLOW_OK ? result : GST_FLOW_ERROR;
+}
+
+
+/*
+ * event()
+ */
+
+
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	GSTLALGate *element = GSTLAL_GATE(parent);
+	gboolean success = TRUE;
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_STREAM_START:
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag");
+		g_mutex_lock(&element->control_lock);
+		element->t_sink_head = GST_CLOCK_TIME_NONE;
+		element->sink_eos = FALSE;
+		element->last_state = -1;	/* force signal on initial state */
+		element->need_discont = TRUE;
+		g_mutex_unlock(&element->control_lock);
+		break;
+
+	case GST_EVENT_EOS:
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag and flushing control queue");
+		g_mutex_lock(&element->control_lock);
+		element->sink_eos = TRUE;
+		control_flush(element);
+		g_cond_broadcast(&element->control_queue_head_changed);
+		g_mutex_unlock(&element->control_lock);
+		break;
+
+	case GST_EVENT_CAPS: {
+		GstCaps *caps;
+		GstAudioInfo info;
+		gst_event_parse_caps(event, &caps);
+		success = gstlal_audio_info_from_caps(&info, caps);
+		if(success) {
+			gint old_rate = element->rate;
+			element->rate = GST_AUDIO_INFO_RATE(&info);
+			element->unit_size = GST_AUDIO_INFO_BPF(&info);
+			if(element->rate != old_rate)
+				g_signal_emit(parent, signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
+		} else
+			GST_ERROR_OBJECT(element, "caps not supported: %" GST_PTR_FORMAT, caps);
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	/*
+	 * sink events are forwarded to src pad
+	 */
+
+	if(!success)
+		gst_event_unref(event);
+	else
+		success = gst_pad_event_default(pad, parent, event);
+
+	return success;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Source Pad
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * src_event()
+ *
+ * upstream events should be forwarded through both the sink and control
+ * pads.
+ */
+
+
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
+{
+	gboolean success = TRUE;
+	/* each push_event() consumes one reference, so we need an extra */
+	gst_event_ref(event);
+	success &= gst_pad_push_event(GSTLAL_GATE(parent)->controlpad, event);
+	success &= gst_pad_push_event(GSTLAL_GATE(parent)->sinkpad, event);
+	return success;
+}
+
+
+/*
+ * src_query()
+ *
+ * queries are referred to the sink pad's peer for the answer
+ */
+
+
+static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+{
+	return gst_pad_peer_query(GSTLAL_GATE(parent)->sinkpad, query);
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                            GstElement Overrides
+ *
+ * ============================================================================
+ */
+
+
+static GstStateChangeReturn change_state(GstElement *base, GstStateChange transition)
+{
+	GSTLALGate *element = GSTLAL_GATE(base);
+	GstStateChangeReturn result = GST_STATE_CHANGE_SUCCESS;
+
+	/*
+	 * do upwards transitions before parent class
+	 */
+
+	/* nothing */
+
+	/*
+	 * now do parent class
+	 */
+
+	result = GST_ELEMENT_CLASS(gstlal_gate_parent_class)->change_state(base, transition);
+	if(result == GST_STATE_CHANGE_FAILURE)
+		return result;
+
+	/*
+	 * do downwards transitions after parent class
+	 */
+
+	switch(transition) {
+	case GST_STATE_CHANGE_PAUSED_TO_READY:
+		g_mutex_lock(&element->control_lock);
+		element->sink_eos = TRUE;
+		element->control_eos = TRUE;
+		control_flush(element);
+		g_cond_broadcast(&element->control_queue_head_changed);
+		g_mutex_unlock(&element->control_lock);
+		break;
+
+	default:
+		break;
+	}
+
+	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                              GObject Methods
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * properties
  */
 
 
@@ -586,7 +1197,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_LEAKY:
 		g_value_set_boolean(value, element->leaky);
 		break;
-	
+
 	case ARG_INVERT:
 		g_value_set_boolean(value, element->invert_control);
 		break;
@@ -598,690 +1209,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	GST_OBJECT_UNLOCK(element);
 }
-
-
-/*
- * ============================================================================
- *
- *                                Control Pad
- *
- * ============================================================================
- */
-
-
-/*
- * setcaps()
- */
-
-
-static gboolean control_setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
-{
-	gdouble (*control_sample_func)(const gpointer, guint64) = NULL;
-	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
-	gint rate = GST_AUDIO_INFO_RATE(&info);
-	GstAudioFormat format = GST_AUDIO_INFO_FORMAT(&info); 
-	const gchar *name = GST_AUDIO_INFO_NAME(&info);
-
-	/*
-	 * parse the format
-	 */
-
-	switch (format) {
-		case GST_AUDIO_FORMAT_U8 :
-			control_sample_func = control_sample_uint8;
-			break;
-		case GST_AUDIO_FORMAT_U16 :
-			control_sample_func = control_sample_uint16;
-			break;
-		case GST_AUDIO_FORMAT_U32 :
-			control_sample_func = control_sample_uint32;
-			break;
-		case GST_AUDIO_FORMAT_S8 :
-			control_sample_func = control_sample_int8;
-			break;
-		case GST_AUDIO_FORMAT_S16 :
-			control_sample_func = control_sample_int16;
-			break;
-		case GST_AUDIO_FORMAT_S32 :
-			control_sample_func = control_sample_int32;
-			break;
-		case GST_AUDIO_FORMAT_F32 :
-			control_sample_func = control_sample_float32;
-			break;
-		case GST_AUDIO_FORMAT_F64 :
-			control_sample_func = control_sample_float64;
-			break;
-		default:
-			/*
-			 * Handle the complex types which are "special" formats
-			 */
-			if (!strncmp(name, "Z64", 3)) {
-				control_sample_func = control_sample_complex64;
-				break;
-			}
-			if (!strncmp(name, "Z128", 4)) {
-				control_sample_func = control_sample_complex128;
-				break;
-			}
-			success = FALSE;
-			break;
-	}
-
-	/*
-	 * update element
-	 */
-
-	if(success) {
-		g_mutex_lock(gate->control_lock);
-		gate->control_sample_func = control_sample_func;
-		gate->control_rate = rate;
-		g_mutex_unlock(gate->control_lock);
-	} else
-		GST_ERROR_OBJECT(gate, "unable to parse and/or accept caps %" GST_PTR_FORMAT, caps);
-
-	/*
-	 * done.
-	 */
-
-	return success;
-}
-
-
-/*
- * chain()
- */
-
-
-static GstFlowReturn control_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
-{
-	GSTLALGate *element = GSTLAL_GATE(parent);
-	GstFlowReturn result = GST_FLOW_OK;
-	GstMapInfo info;
-
-	gst_buffer_map(sinkbuf, &info, GST_MAP_READ);
-
-	/*
-	 * check validity of timestamp and offsets
-	 */
-
-	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
-		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
-	GST_DEBUG_OBJECT(pad, "have buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-
-	/*
-	 * wait until this buffer is needed
-	 */
-
-	g_mutex_lock(element->control_lock);
-	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_sink_head) || !element->control_segments->len)) {
-		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp (%" GST_TIME_SECONDS_FORMAT ") >= t_sink_head (%" GST_TIME_SECONDS_FORMAT ") = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(sinkbuf)), GST_TIME_SECONDS_ARGS(element->t_sink_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_sink_head);
-		g_cond_wait(element->control_queue_head_changed, element->control_lock);
-	}
-
-	/*
-	 * if we're at eos on sink pad, discard
-	 */
-
-	if(element->sink_eos) {
-		GST_DEBUG_OBJECT(pad, "sink is at end-of-stream, discarding buffer");
-		g_mutex_unlock(element->control_lock);
-		goto done;
-	}
-
-	/*
-	 * digest buffer into segments of contiguous state:  TRUE = at or
-	 * above threshold, FALSE = below threshold.
-	 */
-
-	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(sinkbuf)) {
-		control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(sinkbuf) + GST_BUFFER_DURATION(sinkbuf), FALSE);
-	} else {
-		guint buffer_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
-		guint segment_start;
-		guint segment_length;
-		g_assert_cmpuint(GST_BUFFER_OFFSET_END(sinkbuf), >, GST_BUFFER_OFFSET(sinkbuf));
-
-		for(segment_start = 0; segment_start < buffer_length; segment_start += segment_length) {
-			/* state for this segment */
-			gboolean state = element->control_sample_func(info.data, segment_start) >= element->threshold;
-			for(segment_length = 1; segment_start + segment_length < buffer_length; segment_length++)
-				if(state != (element->control_sample_func(info.data, segment_start + segment_length) >= element->threshold))
-					/* state has changed */
-					break;
-			control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start + segment_length, buffer_length), state);
-		}
-	}
-	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-	g_cond_broadcast(element->control_queue_head_changed);
-	g_mutex_unlock(element->control_lock);
-
-	/*
-	 * done
-	 */
-
-done:
-	gst_buffer_unmap(sinkbuf, &info);
-	gst_buffer_unref(sinkbuf);
-	return result;
-}
-
-
-/*
- * event()
- */
-
-
-static gboolean control_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALGate *element = GSTLAL_GATE(parent);
-	GstCaps *caps;
-	gboolean res = TRUE;
-
-	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_SEGMENT:
-		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing control queue");
-		g_mutex_lock(element->control_lock);
-		element->control_eos = FALSE;
-		control_flush(element);
-		g_mutex_unlock(element->control_lock);
-		break;
-
-	case GST_EVENT_EOS:
-		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag");
-		g_mutex_lock(element->control_lock);
-		element->control_eos = TRUE;
-		g_cond_broadcast(element->control_queue_head_changed);
-		g_mutex_unlock(element->control_lock);
-		break;
-
-	case GST_EVENT_CAPS:
-		gst_event_parse_caps(event, &caps);
-		res = control_setcaps(element, pad, caps);
-
-	default:
-		break;
-	}
-
-	/*
-	 * events on arriving on control pad are not forwarded
-	 */
-
-	gst_event_unref(event);
-	return res;
-}
-
-
-/*
- * ============================================================================
- *
- *                                  Sink Pad
- *
- * ============================================================================
- */
-
-
-/*
- * getcaps()
- */
-
-
-static GstCaps *getcaps(GSTLALGate *gate, GstPad *pad, GstCaps *filter)
-{
-	GstCaps *result, *peercaps, *current_caps, *filter_caps;
-
-	/* take filter */
-	filter_caps = filter ? gst_caps_ref(filter) : NULL;
-
-	/* 
-	 * If the filter caps are empty (but not NULL), there is nothing we can
-	 * do, there will be no intersection
-	 */
-	if (filter_caps && gst_caps_is_empty (filter_caps)) {
-		GST_WARNING_OBJECT (pad, "Empty filter caps");
-		return filter_caps;
-	}
-
-	/* get the downstream possible caps */
-	peercaps = gst_pad_peer_query_caps(gate->srcpad, filter_caps);
-
-	/* get the allowed caps on this sinkpad */
-	current_caps = gst_pad_get_pad_template_caps(pad);
-	if (!current_caps)
-			current_caps = gst_caps_new_any();
-
-	if (peercaps) {
-		/* if the peer has caps, intersect */
-		GST_DEBUG_OBJECT(gate, "intersecting peer and our caps");
-		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
-		/* neither peercaps nor current_caps are needed any more */
-		gst_caps_unref(peercaps);
-		gst_caps_unref(current_caps);
-	}
-	else {
-		/* the peer has no caps (or there is no peer), just use the allowed caps
-		* of this sinkpad. */
-		/* restrict with filter-caps if any */
-		if (filter_caps) {
-			GST_DEBUG_OBJECT(gate, "no peer caps, using filtered caps");
-			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
-			/* current_caps are not needed any more */
-			gst_caps_unref(current_caps);
-		}
-		else {
-			GST_DEBUG_OBJECT(gate, "no peer caps, using our caps");
-			result = current_caps;
-		}
-	}
-
-	result = gst_caps_make_writable (result);
-
-	if (filter_caps)
-		gst_caps_unref (filter_caps);
-
-	GST_LOG_OBJECT (gate, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
-
-	return result;
-}
-
-
-static gboolean setcaps(GSTLALGate *gate, GstPad *pad, GstCaps *caps)
-{
-	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
-	gint rate = GST_AUDIO_INFO_RATE(&info);
-	gint width = GST_AUDIO_INFO_WIDTH(&info);
-	gint channels = GST_AUDIO_INFO_CHANNELS(&info);
-
-	/*
-	 * try setting caps on downstream element
-	 */
-
-	if(success)
-		success = gst_pad_set_caps(gate->srcpad, caps);
-
-	/*
-	 * update the element metadata
-	 */
-
-	if(success) {
-		gint old_rate = gate->rate;
-		gate->rate = rate;
-		gate->unit_size = width / 8 * channels;
-		if(gate->rate != old_rate)
-			g_signal_emit(G_OBJECT(gate), signals[SIGNAL_RATE_CHANGED], 0, gate->rate, NULL);
-	}
-
-	/*
-	 * done
-	 */
-
-	return success;
-}
-
-
-/*
- * chain()
- */
-
-
-static GstFlowReturn sink_chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
-{
-	GSTLALGate *element = GSTLAL_GATE(parent);
-	guint64 sinkbuf_length;
-	guint64 start, length;
-	GstFlowReturn result = GST_FLOW_OK;
-
-	/*
-	 * check validity of timestamp and offsets
-	 */
-
-	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
-		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
-
-	sinkbuf_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
-
-	if(GST_BUFFER_IS_DISCONT(sinkbuf))
-		element->need_discont = TRUE;
-
-	/*
-	 * wait for control queue to span the necessary interval
-	 */
-
-	GST_DEBUG_OBJECT(element->sinkpad, "got buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-	g_assert_cmpuint(sinkbuf_length, ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), element->rate, GST_SECOND));
-	control_get_interval(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_DURATION(sinkbuf));
-
-	/*
-	 * is input zero size or already a gap?  then push it as is
-	 */
-
-	if(G_UNLIKELY(!sinkbuf_length)) {
-		/*
-		 * is a discontinuity pending?
-		 */
-
-		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
-			sinkbuf = gst_buffer_make_writable(sinkbuf);
-			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
-		}
-		element->need_discont = FALSE;
-
-		/*
-		 * push buffer
-		 */
-
-		GST_DEBUG_OBJECT(element->srcpad, "pushing reused zero-length buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-		result = gst_pad_push(element->srcpad, sinkbuf);
-		sinkbuf = NULL;
-		goto done;
-	} else if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
-		/*
-		 * tell the world about state changes
-		 */
-
-		if(element->emit_signals && FALSE != element->last_state)
-			g_signal_emit(G_OBJECT(element), signals[SIGNAL_STOP], 0, GST_BUFFER_TIMESTAMP(sinkbuf), NULL);
-		element->last_state = FALSE;
-
-		if(element->leaky) {
-			/*
-			 * discard buffer.  skipping an interval of
-			 * non-zero length so next buffer must be a
-			 * discont
-			 */
-
-			element->need_discont = TRUE;
-			GST_DEBUG_OBJECT(element->srcpad, "discarding gap buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-			goto done;
-		}
-
-		/*
-		 * is a discontinuity pending?
-		 */
-
-		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
-			sinkbuf = gst_buffer_make_writable(sinkbuf);
-			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
-		}
-		element->need_discont = FALSE;
-
-		/*
-		 * push buffer
-		 */
-
-		GST_DEBUG_OBJECT(element->srcpad, "pushing reused gap buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-		result = gst_pad_push(element->srcpad, sinkbuf);
-		sinkbuf = NULL;
-		goto done;
-	}
-
-	/*
-	 * loop over the contents of the input buffer.
-	 */
-
-	for(start = 0; start < sinkbuf_length; start += length) {
-		GstBuffer *srcbuf;
-		GstClockTime timestamp;
-		gboolean state;
-
-		/*
-		 * find the next interval of continuous control state
-		 */
-
-		g_mutex_lock(element->control_lock);
-		state = control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) start - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) start + element->attack_length, element->rate));
-		for(length = 1; start + length < sinkbuf_length; length++) {
-			if(state != control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) + element->attack_length, element->rate)))
-				break;
-		}
-		g_mutex_unlock(element->control_lock);
-
-		/*
-		 * if the output state has changed, tell the world about it
-		 */
-
-		timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
-		if(element->emit_signals && state != element->last_state)
-			g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
-		element->last_state = state;
-
-		/*
-		 * if the output is a gap and we're in leaky mode, discard
-		 * it.  next buffer must be a discont because we know the
-		 * gap has non-zero length
-		 */
-
-		if(!state && element->leaky) {
-			element->need_discont = TRUE;
-			continue;
-		}
-
-		/*
-		 * output is a buffer of non-zero length.  if it's the
-		 * entire input buffer then re-use it otherwise create a
-		 * subbuffer from it
-		 */
-
-		if(length == sinkbuf_length) {
-			GST_DEBUG_OBJECT(element, "reusing input buffer %p", sinkbuf);
-			srcbuf = sinkbuf;
-			sinkbuf = NULL;
-		} else {
-			GST_DEBUG_OBJECT(element, "creating sub-buffer from samples [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", start, start + length);
-			srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_META | GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_MEMORY, start * element->unit_size, length * element->unit_size);
-			if(!srcbuf) {
-				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
-				result = GST_FLOW_ERROR;
-				goto done;
-			}
-
-			/*
-			 * set flags, caps, offset, and timestamps.
-			 */
-
-			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
-			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
-			GST_BUFFER_TIMESTAMP(srcbuf) = timestamp;
-			GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start + length, sinkbuf_length) - GST_BUFFER_TIMESTAMP(srcbuf);
-		}
-
-		/*
-		 * is a discontinuity pending?
-		 */
-
-		if(!!element->need_discont != !!GST_BUFFER_IS_DISCONT(srcbuf)) {
-			srcbuf = gst_buffer_make_writable(srcbuf);
-			if(element->need_discont)
-				GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-			else
-				GST_BUFFER_FLAG_UNSET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-		}
-		element->need_discont = FALSE;
-
-		/*
-		 * if control input was below threshold then flag buffer as
-		 * silence.
-		 */
-
-		if(!state) {
-			srcbuf = gst_buffer_make_writable(srcbuf);
-			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
-		}
-
-		/*
-		 * push buffer down stream
-		 */
-
-		GST_DEBUG_OBJECT(element->srcpad, "pushing buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, srcbuf, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-		result = gst_pad_push(element->srcpad, srcbuf);
-		if(G_UNLIKELY(result != GST_FLOW_OK)) {
-			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
-			goto done;
-		}
-	}
-
-	/*
-	 * done
-	 */
-
-done:
-	/* need to check that we haven't discarded it or re-used sinkbuf as
-	 * srcbuf */
-	if(sinkbuf)
-		gst_buffer_unref(sinkbuf);
-	return result;
-}
-
-
-/*
- * event()
- */
-
-
-static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALGate *element = GSTLAL_GATE(parent);
-	GstCaps *caps;
-	gboolean res = TRUE;
-
-	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_SEGMENT:
-		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag");
-		g_mutex_lock(element->control_lock);
-		element->t_sink_head = GST_CLOCK_TIME_NONE;
-		element->sink_eos = FALSE;
-		element->last_state = -1;	/* force signal on initial state */
-		element->need_discont = TRUE;
-		g_mutex_unlock(element->control_lock);
-		break;
-
-	case GST_EVENT_EOS:
-		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag and flushing control queue");
-		g_mutex_lock(element->control_lock);
-		element->sink_eos = TRUE;
-		control_flush(element);
-		g_cond_broadcast(element->control_queue_head_changed);
-		g_mutex_unlock(element->control_lock);
-		break;
-
-	case GST_EVENT_CAPS:
-		gst_event_parse_caps(event, &caps);
-		res = setcaps(element, pad, caps);
-		break;
-
-	default:
-		break;
-	}
-
-	/*
-	 * sink events are forwarded to src pad
-	 */
-
-	return (res && gst_pad_event_default(pad, parent, event));
-}
-
-
-/*
- * query()
- */
-
-
-static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
-{
-	GSTLALGate *gate = GSTLAL_GATE(parent);
-	gboolean res = TRUE;
-	GstCaps *filter, *caps;
-
-	switch (GST_QUERY_TYPE (query)) 
-	{
-		case GST_QUERY_CAPS:
-			gst_query_parse_caps (query, &filter);
-			caps = getcaps(gate, pad, filter);
-			gst_query_set_caps_result (query, caps);
-			gst_caps_unref (caps);
-			break;
-		default:
-			break;
-	}
-
-	if (G_LIKELY (query))
-		return gst_pad_query_default (pad, parent, query);
-	else
-		return res;
-
-  return res;
-}
-
-
-/*
- * ============================================================================
- *
- *                                 Source Pad
- *
- * ============================================================================
- */
-
-
-/*
- * event()
- *
- * push event on control and sink pads.  the default event handler just
- * picks one of the two at random, but we should send it to both.
- */
-
-
-static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALGate *gate = GSTLAL_GATE(parent);
-	gboolean result = TRUE;
-	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
-
-	switch (GST_EVENT_TYPE (event))
-	{	
-		default:
-			/* just forward the rest for now */
-			GST_DEBUG_OBJECT(gate, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
-			gst_pad_event_default(pad, parent, event);
-			break;
-	}
-
-	return result;
-}
-
-
-/*
- * query()
- */
-
-
-static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
-{
-	gboolean res = FALSE;
-
-	switch (GST_QUERY_TYPE (query))
-	{
-		default:
-			res = gst_pad_query_default (pad, parent, query);
-			break;
-	}
-	return res;
-}
-
-
-/*
- * ============================================================================
- *
- *                              GObject Methods
- *
- * ============================================================================
- */
 
 
 /*
@@ -1299,12 +1226,10 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
-	g_mutex_free(element->control_lock);
-	element->control_lock = NULL;
+	g_mutex_clear(&element->control_lock);
 	g_array_unref(element->control_segments);
 	element->control_segments = NULL;
-	g_cond_free(element->control_queue_head_changed);
-	element->control_queue_head_changed = NULL;
+	g_cond_clear(&element->control_queue_head_changed);
 
 	G_OBJECT_CLASS(gstlal_gate_parent_class)->finalize(object);
 }
@@ -1316,12 +1241,9 @@ static void finalize(GObject *object)
 
 
 #define CAPS \
-	"audio/x-raw, " \
-	"rate = " GST_AUDIO_RATE_RANGE ", " \
-	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-	"channel-mask = (bitmask) 0, " \
+	GST_AUDIO_CAPS_MAKE("{ S8, " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}") ", " \
 	"layout = (string) interleaved, " \
-	"format = (string) {" GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}"
+	"channel-mask = (bitmask) 0"
 
 
 static void gstlal_gate_class_init(GSTLALGateClass *klass)
@@ -1332,6 +1254,8 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	element_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 
 	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
 	klass->start = GST_DEBUG_FUNCPTR(start);
@@ -1357,9 +1281,9 @@ static void gstlal_gate_class_init(GSTLALGateClass *klass)
 				"audio/x-raw, " \
 				"rate = " GST_AUDIO_RATE_RANGE ", " \
 				"channels = (int) 1, " \
-				"channel-mask = (bitmask) 0, " \
+				"format = (string) { S8, " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
 				"layout = (string) interleaved, " \
-				"format = (string) {" GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}"
+				"channel-mask = (bitmask) 0"
 			)
 		)
 	);
@@ -1529,7 +1453,9 @@ static void gstlal_gate_init(GSTLALGate *element)
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(sink_chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 
 	/* src pad */
@@ -1539,12 +1465,12 @@ static void gstlal_gate_init(GSTLALGate *element)
 	element->srcpad = pad;
 
 	/* internal data */
-	element->control_lock = g_mutex_new();
+	g_mutex_init(&element->control_lock);
 	element->control_eos = FALSE;
 	element->sink_eos = FALSE;
 	element->t_sink_head = GST_CLOCK_TIME_NONE;
 	element->control_segments = g_array_new(FALSE, FALSE, sizeof(struct control_segment));
-	element->control_queue_head_changed = g_cond_new();
+	g_cond_init(&element->control_queue_head_changed);
 	element->control_sample_func = NULL;
 	element->last_state = -1;	/* force signal on initial state */
 	element->rate = 0;

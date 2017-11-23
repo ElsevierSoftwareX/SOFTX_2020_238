@@ -62,7 +62,7 @@ struct _GSTLALSumSquares {
 
 	gint channels;
 
-	GMutex *weights_lock;
+	GMutex weights_lock;
 	double *weights;
 	void *weights_native;
 

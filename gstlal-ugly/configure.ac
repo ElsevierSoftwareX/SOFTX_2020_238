@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-ugly],[0.9.2],[gstlal-discuss@ligo.org],[gstlal-ugly])
-AC_COPYRIGHT([Copyright (C) 2008--2015 Kipp Cannon])
+AC_INIT([gstlal-ugly],[1.3.1],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_COPYRIGHT([Copyright (C) 2008--2016 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -17,8 +17,12 @@ AC_CONFIG_FILES([ \
 	gstlal-ugly.spec \
 	debian/control \
 	debian/Makefile \
+	lib/gstlal-ugly.pc \
+	lib/Makefile \
 	python/Makefile \
 	share/Makefile \
+	share/vis/Makefile \
+	share/dataserver/Makefile \
 	gst/Makefile \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
@@ -76,10 +80,9 @@ AC_SUBST([pkgdatadir],["\${datadir}/gstlal"])
 # Set the library API info
 #
 #  0.0.0   Original version
-#  1.0.0   0.2.0 release (sngl_burst.h api changed)
 
 
-AC_SUBST([LIBAPI], [1])
+AC_SUBST([LIBAPI], [0])
 AC_SUBST([LIBREL], [0])
 AC_SUBST([LIBAGE], [0])
 AC_SUBST([LIBVERSION], [${LIBAPI}:${LIBREL}:${LIBAGE}])
@@ -111,21 +114,25 @@ GSTLAL_DOXYGEN([$MIN_DOXYGEN_VERSION])
 AM_CONDITIONAL([COND_DOXYGEN], [test "x$HAVE_DOXYGEN" == "xyes"])
 AC_SUBST([MIN_DOXYGEN_VERSION])
 
+MIN_GTK_DOC_VERSION="1.11"
+GTK_DOC_CHECK(["$MIN_GTK_DOC_VERSION"], [--flavour no-tmpl])
+AC_SUBST([MIN_GTK_DOC_VERSION])
+
 
 #
 # Check for Python
 #
 
 
-MIN_PYTHON_VERSION="2.6"
+MIN_PYTHON_VERSION="2.7"
 AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
-# hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
-# Debian and SL6.  FIXME:  find a way to do this properly
-PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
-# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
+# hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
+# and SL6.  FIXME:  find a way to do this properly
+PYTHON_LIBS=[`echo "$PYTHON_LIBS" | sed -e "s?-L/usr/lib[^[:space:]]*??g"`]
+# hack to add missing options to PYTHON_LIBS.  sigh, what's the point of
 # AX_PYTHON_DEVEL!?
-PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
+PYTHON_LIBS="-module -avoid-version $PYTHON_LIBS"
 AC_SUBST([MIN_PYTHON_VERSION])
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
@@ -263,7 +270,8 @@ AC_SUBST([gstreamer_audio_LIBS])
 #
 
 
-GOBJECT_INTROSPECTION_CHECK([1.30.0])
+AC_SUBST([MIN_GOBJECT_INTROSPECTION_VERSION], [1.30.0])
+GOBJECT_INTROSPECTION_CHECK([${MIN_GOBJECT_INTROSPECTION_VERSION}])
 AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
 AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
 AS_IF([test "x$found_introspection" = "xyes"], [
@@ -296,11 +304,9 @@ CFLAGS="$old_CFLAGS"
 #
 # Check for framecpp
 #
-# FIXME:  this isn't really optional any more.  make its absence an error
-#
 
 
-AC_SUBST([MIN_FRAMECPP_VERSION], [2.3.3])
+AC_SUBST([MIN_FRAMECPP_VERSION], [2.5.0])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
@@ -326,11 +332,7 @@ AS_IF([test "x${HAVE_FRAMECPP}" == "xyes"], [
 	AX_COMPARE_VERSION([$framecpp_VERSION], [ge], [2.0.0], [
 		AC_DEFINE([HAVE_FRAMECPP_2x], [1], [Defined if framecpp >= 2.x])
 	])
-	# FIXME:  the "-std=c++0x" option is here as a temporary hack until
-	# we can find a way to get the autoconf macros to configure the
-	# cxxflags for us.  note that in later versions of g++ the flag
-	# should be -std=c++11 (c++0x is deprecated)
-	framecpp_CXXFLAGS="${framecpp_CFLAGS} -std=c++0x -D__STDC_CONSTANT_MACROS"
+	framecpp_CXXFLAGS="${framecpp_CFLAGS} -D__STDC_CONSTANT_MACROS"
 ])
 AC_SUBST([framecpp_CFLAGS])
 AC_SUBST([framecpp_CXXFLAGS])
@@ -345,7 +347,7 @@ AS_IF([test "x$HAVE_FRAMECPP" != "xyes"], [AC_MSG_ERROR([framecpp not found])])
 #
 
 
-AC_SUBST([MIN_GDS_VERSION], [2.17.0])
+AC_SUBST([MIN_GDS_VERSION], [2.18.0])
 AC_ARG_WITH(
 	[gds],
 	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],
@@ -392,8 +394,8 @@ AC_SUBST([gds_framexmit_LIBS])
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.15.2])
-AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
+AC_SUBST([MIN_LAL_VERSION], [6.18.0])
+AC_SUBST([MIN_LALMETAIO_VERSION], [1.3.1])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -406,10 +408,8 @@ AX_PYTHON_MODULE([lal], fatal)
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.49])
-AC_SUBST([MIN_PYLAL_VERSION], [0.9.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.54.1])
 AX_PYTHON_GLUE()
-AX_PYTHON_PYLAL()
 
 
 #
@@ -417,7 +417,7 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.10.4])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.2.1])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
@@ -482,6 +482,53 @@ AS_IF([test "x$with_cuda" != "xno"], [
 ])
 AC_DEFINE([HAVE_CUDA], [test "x${HAVE_CUDA}" == "xyes"], [Defined if you have cuda])
 AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
+
+
+#
+# Check for webdir, this enables installation of web visualation tools
+#
+
+
+AC_ARG_WITH(
+	[webdir],
+	[AS_HELP_STRING([--with-webdir], [specify location of directory for web visualization tools. [$HOME/public_html]])],
+	[],
+	[with_webdir=no]
+)
+AS_IF([test "x$with_webdir" != "xno"], [
+	AC_MSG_WARN([copying web visualization tools to $with_webdir])
+	AC_SUBST([WEBDEST],["$with_webdir"])
+	HAVE_WEBDIR="yes"
+],[
+	AC_MSG_WARN([disabling installation of web visualization tools])
+	HAVE_WEBDIR="no"
+])
+AC_DEFINE([HAVE_WEBDIR], [test "x{HAVE_WEBDIR}" == "xyes"], [Defined if you are enabling web visualiation])
+AM_CONDITIONAL([COND_WEBDIR], [test "x${HAVE_WEBDIR}" == "xyes"])
+
+
+#
+# Check for dataserver, this enables installation of data server for web
+# visualization
+#
+
+
+AC_ARG_WITH(
+	[dataserver],
+	[AS_HELP_STRING([--with-dataserver], [specify location of directory for data server tools [$HOME/public_html/cgi-bin]])],
+	[],
+	[with_dataserver=no]
+)
+AS_IF([test "x$with_dataserver" != "xno"], [
+	AC_MSG_WARN([copying data server tools to $with_dataserver])
+	AC_SUBST([DATASRVDEST],["$with_dataserver"])
+	HAVE_DATASERVER="yes"
+],[
+	AC_MSG_WARN([disabling installation of data server tools])
+	HAVE_DATASERVER="no"
+])
+AC_DEFINE([HAVE_DATASERVER], [test "x{HAVE_DATASERVER}" == "xyes"], [Defined if you are enabling web data server])
+AM_CONDITIONAL([COND_DATASERVER], [test "x${HAVE_DATASERVER}" == "xyes"])
 
 
 #

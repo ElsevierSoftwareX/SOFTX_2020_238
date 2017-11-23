@@ -50,11 +50,13 @@
 
 
 #include <gstlal/gstlal_tags.h>
+/*
 #include <gstlal_coinc.h>
 #include <gstlal_skymap.h>
 #include <gstlal_triggergen.h>
 #include <gstlal_timeslicechisq.h>
 #include <gstlal_blcbc_triggergen.h>
+*/
 #include <gstlal_itac.h>
 
 
@@ -73,11 +75,11 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
-		{"lal_coinc", GSTLAL_COINC_TYPE},
+		/*{"lal_coinc", GSTLAL_COINC_TYPE},
 		{"lal_skymap", GSTLAL_SKYMAP_TYPE},
 		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
 		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},
-		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},
+		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},*/
 		{"lal_itac", GSTLAL_ITAC_TYPE},
 		{NULL, 0},
 	};
@@ -99,7 +101,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
+		if(!gst_element_register(plugin, element->name, GST_RANK_SECONDARY, element->type))
 			return FALSE;
 
 	/*
@@ -115,4 +117,4 @@ static gboolean plugin_init(GstPlugin *plugin)
  */
 
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "gstlalinspiral", "Various bits of the LIGO Algorithm Library wrapped in gstreamer elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, gstlalinspiral, "Various bits of the LIGO Algorithm Library wrapped in gstreamer elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")

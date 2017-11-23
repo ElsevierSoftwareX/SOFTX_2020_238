@@ -23,7 +23,6 @@ import subprocess
 import os
 import re
 import json
-from pylal.datatypes import LIGOTimeGPS
 import sys
 import tempfile
 import urllib
@@ -32,6 +31,7 @@ import logging
 import time
 from optparse import OptionParser
 import lal
+from lal import LIGOTimeGPS
 from glue.ligolw import ligolw
 from glue.ligolw import table
 from glue.ligolw import lsctables

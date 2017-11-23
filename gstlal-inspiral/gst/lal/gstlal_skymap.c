@@ -407,7 +407,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		GstBuffer* buf = gst_collect_pads_pop(pads, (GstCollectData*)data);
 		if (buf)
 		{
-			data->last_end_time = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+			data->last_end_time = GST_BUFFER_PTS(buf) + GST_BUFFER_DURATION(buf);
 
 			if (data == (GstSkymapCollectData*)(skymap->coinc_collectdata))
 			{
@@ -647,7 +647,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					g_free(skymap->wanalysis.log_skymap);
 
 					/* FIXME: set buffer metadata here.  We probably only want to set the timestamp, and leave all the other fields blank. */
-					GST_BUFFER_TIMESTAMP(outbuf) = min_start_time;
+					GST_BUFFER_PTS(outbuf) = min_start_time;
 					GST_BUFFER_DURATION(outbuf) = max_stop_time - min_start_time;
 					GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET_NONE;
 					GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_NONE;

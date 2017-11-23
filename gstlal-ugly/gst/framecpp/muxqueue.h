@@ -87,8 +87,8 @@ struct _FrameCPPMuxQueue {
 	GstAudioAdapter object;
 
 	/*< private >*/
-	GMutex *lock;
-	GCond *activity;
+	GMutex lock;
+	GCond activity;
 	gboolean flushing;
 	gint rate;
 	GstClockTime max_size_time;
@@ -104,7 +104,7 @@ struct _FrameCPPMuxQueue {
  */
 
 
-#define FRAMECPP_MUXQUEUE_GETLOCK(queue) (queue->lock)
+#define FRAMECPP_MUXQUEUE_GETLOCK(queue) (&queue->lock)
 #define FRAMECPP_MUXQUEUE_LOCK(queue) g_mutex_lock(FRAMECPP_MUXQUEUE_GETLOCK(queue))
 #define FRAMECPP_MUXQUEUE_UNLOCK(queue) g_mutex_unlock(FRAMECPP_MUXQUEUE_GETLOCK(queue))
 

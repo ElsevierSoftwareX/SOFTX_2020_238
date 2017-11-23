@@ -110,205 +110,47 @@ G_DEFINE_TYPE_WITH_CODE(
 /*
  * ============================================================================
  *
- *                                    Pads
+ *                                  Sink Pad
  *
  * ============================================================================
  */
 
 
 /*
- * getcaps()
+ * sink_event()
  */
-
-
-static GstCaps *getcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *filter)
-{
-	GstCaps *result, *peercaps, *current_caps, *filter_caps;
-
-	/*
-	 * take filter
-	 */
-
-	filter_caps = filter ? gst_caps_ref(filter) : NULL;
-
-	/* 
-	 * If the filter caps are empty (but not NULL), there is nothing we can
-	 * do, there will be no intersection
-	 */
-
-	if(filter_caps && gst_caps_is_empty (filter_caps)) {
-		GST_WARNING_OBJECT (pad, "Empty filter caps");
-		return filter_caps;
-	}
-
-	/* get the downstream possible caps */
-	peercaps = gst_pad_peer_query_caps(reblock->srcpad, filter_caps);
-
-	/* get the allowed caps on this sinkpad */
-	current_caps = gst_pad_get_pad_template_caps(pad);
-	if(!current_caps)
-			current_caps = gst_caps_new_any();
-
-	if(peercaps) {
-		/* if the peer has caps, intersect */
-		GST_DEBUG_OBJECT(reblock, "intersecting peer and our caps");
-		result = gst_caps_intersect_full(peercaps, current_caps, GST_CAPS_INTERSECT_FIRST);
-		/* neither peercaps nor current_caps are needed any more */
-		gst_caps_unref(peercaps);
-		gst_caps_unref(current_caps);
-	} else {
-		/* the peer has no caps (or there is no peer), just use the
-		 * allowed caps of this sinkpad.  restrict with filter-caps
-		 * if any */
-		if (filter_caps) {
-			GST_DEBUG_OBJECT(reblock, "no peer caps, using filtered caps");
-			result = gst_caps_intersect_full(filter_caps, current_caps, GST_CAPS_INTERSECT_FIRST);
-			/* current_caps are not needed any more */
-			gst_caps_unref(current_caps);
-		} else {
-			GST_DEBUG_OBJECT(reblock, "no peer caps, using our caps");
-			result = current_caps;
-		}
-	}
-
-	result = gst_caps_make_writable(result);
-
-	if (filter_caps)
-		gst_caps_unref(filter_caps);
-
-	GST_LOG_OBJECT (reblock, "getting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME(pad), result);
-
-	return result;
-}
-
-
-/*
- * setcaps()
- */
-
-
-static gboolean setcaps(GSTLALReblock *reblock, GstPad *pad, GstCaps *caps)
-{
-	GstAudioInfo info;
-	gboolean success = TRUE;
-
-	/*
-	 * parse caps
-	 * NOTE: rate, width and channels must be present
-	 */
-
-	success &= gst_audio_info_from_caps(&info, caps);
-
-	/*
-	 * try setting caps on downstream element
-	 */
-
-	if(success)
-		success = gst_pad_set_caps(reblock->srcpad, caps);
-
-	/*
-	 * update the element metadata
-	 */
-
-	if(success) {
-		reblock->rate = GST_AUDIO_INFO_RATE(&info);
-		reblock->unit_size = GST_AUDIO_INFO_BPF(&info);
-	}
-
-	/*
-	 * done
-	 */
-
-	return success;
-}
-
-
-/*
- * ============================================================================
- *
- *                                Event and Query
- *
- * ============================================================================
- */
-
-
-static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
-{
-	gboolean res = FALSE;
-
-	switch(GST_QUERY_TYPE (query)) {
-	default:
-		res = gst_pad_query_default(pad, parent, query);
-		break;
-	}
-	return res;
-}
-
-
-static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
-{
-	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
-	gboolean result = TRUE;
-	GST_DEBUG_OBJECT (pad, "Got %s event on src pad", GST_EVENT_TYPE_NAME(event));
-
-	switch(GST_EVENT_TYPE(event)) {
-	default:
-		/* just forward the rest for now */
-		GST_DEBUG_OBJECT(reblock, "forward unhandled event: %s", GST_EVENT_TYPE_NAME (event));
-		gst_pad_event_default(pad, parent, event);
-		break;
-	}
-
-	return result;
-}
-
-
-static gboolean sink_query(GstPad *pad, GstObject *parent, GstQuery * query)
-{
-	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
-	gboolean res = TRUE;
-	GstCaps *filter, *caps;
-
-	switch(GST_QUERY_TYPE(query)) {
-	case GST_QUERY_CAPS:
-		gst_query_parse_caps(query, &filter);
-		caps = getcaps(reblock, pad, filter);
-		gst_query_set_caps_result(query, caps);
-		gst_caps_unref(caps);
-		break;
-	default:
-		break;
-	}
-
-	if(G_LIKELY(query))
-		return gst_pad_query_default(pad, parent, query);
-	else
-		return res;
-}
 
 
 static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	GSTLALReblock *reblock = GSTLAL_REBLOCK(parent);
-	gboolean res = TRUE;
-	GstCaps *caps;
+	gboolean success = TRUE;
 
-	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
+	GST_DEBUG_OBJECT(pad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME(event));
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_CAPS:
+	case GST_EVENT_CAPS: {
+		GstCaps *caps;
+		GstAudioInfo info;
 		gst_event_parse_caps(event, &caps);
-		res = setcaps(reblock, pad, caps);
-		gst_event_unref(event);
-		event = NULL;
+		success = gst_audio_info_from_caps(&info, caps);
+		if(success) {
+			reblock->rate = GST_AUDIO_INFO_RATE(&info);
+			reblock->unit_size = GST_AUDIO_INFO_BPF(&info);
+		}
+		break;
+	}
+
 	default:
 		break;
 	}
 
-	if(G_LIKELY(event))
-		return gst_pad_event_default(pad, parent, event);
+	if(!success)
+		gst_event_unref(event);
 	else
-		return res;
+		success = gst_pad_event_default(pad, parent, event);
+
+	return success;
 }
 
 
@@ -331,7 +173,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	 * valid metadata, push down stream
 	 */
 
-	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) || GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
+	if(!(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) || GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
 		GST_DEBUG_OBJECT(element, "pushing verbatim");
 		/* consumes reference */
 		result = gst_pad_push(element->srcpad, sinkbuf);
@@ -364,7 +206,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		if(length - offset < block_length)
 			block_length = length - offset;
 
-		srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_META | GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_MEMORY, offset * element->unit_size, block_length * element->unit_size);
+		srcbuf = gst_buffer_copy_region(sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_MEMORY | GST_BUFFER_COPY_TIMESTAMPS, offset * element->unit_size, block_length * element->unit_size);
 		if(G_UNLIKELY(!srcbuf)) {
 			GST_ERROR_OBJECT(element, "failure creating sub-buffer");
 			result = GST_FLOW_ERROR;
@@ -377,8 +219,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + offset;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + block_length;
-		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset, length);
-		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset + block_length, length) - GST_BUFFER_TIMESTAMP(srcbuf);
+		GST_BUFFER_PTS(srcbuf) = GST_BUFFER_PTS(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset, length);
+		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_PTS(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), offset + block_length, length) - GST_BUFFER_PTS(srcbuf);
 
 		/*
 		 * only the first subbuffer of a buffer flagged as a
@@ -493,11 +335,9 @@ static void finalize(GObject *object)
 
 
 #define CAPS \
-	"audio/x-raw, " \
-	"rate = " GST_AUDIO_RATE_RANGE ", " \
-	"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-	"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
-	"layout = (string) interleaved"
+	GST_AUDIO_CAPS_MAKE(GSTLAL_AUDIO_FORMATS_ALL) ", " \
+	"layout = (string) interleaved, " \
+	"channel-mask = (bitmask) 0"
 
 
 static void gstlal_reblock_class_init(GSTLALReblockClass *klass)
@@ -563,15 +403,18 @@ static void gstlal_reblock_init(GSTLALReblock *element)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(sink_query));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR (src_query));
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR (src_event));
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->srcpad = pad;
 
 	/* internal data */

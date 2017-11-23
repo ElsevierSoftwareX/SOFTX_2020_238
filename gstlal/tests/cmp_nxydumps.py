@@ -66,6 +66,11 @@ def load_file(fobj, transients = (0.0, 0.0)):
 	return lines
 
 
+def max_abs_sample(lines):
+	# return the largest of the absolute values of the samples
+	return max(max(abs(x) for x in line[1:]) for line in lines)
+
+
 def identify_gaps(lines, timestamp_fuzz = default_timestamp_fuzz, sample_fuzz = default_sample_fuzz, flags = COMPARE_FLAGS_DEFAULT):
 	# assume the smallest interval bewteen samples indicates the true
 	# sample rate, and correct for possible round-off by assuming true
@@ -76,16 +81,18 @@ def identify_gaps(lines, timestamp_fuzz = default_timestamp_fuzz, sample_fuzz = 
 	# convert to absolute fuzz (but don't waste time with this if we
 	# don't need it)
 	if flags & COMPARE_FLAGS_ZERO_IS_GAP:
-		sample_fuzz *= max(max(abs(x) for x in line[1:]) for line in lines)
+		sample_fuzz *= max_abs_sample(lines)
 
 	gaps = segments.segmentlist()
 	for i, line in enumerate(lines):
 		if i and (line[0] - lines[i - 1][0]) - dt > timestamp_fuzz * 2:
+			# clock skip.  interpret missing timestamps as a
+			# gap
 			gaps.append(segments.segment((lines[i - 1][0] + dt, line[0])))
 		if flags & COMPARE_FLAGS_ZERO_IS_GAP and all(abs(x) <= sample_fuzz for x in line[1:]):
-			# all samples are 0
-			gaps.append(segments.segment((line[0], lines[i + 1][0] if i + 1 < len(lines) else line[0] + (line[0] - lines[i - 1][0]))))
-	return gaps.coalesce()
+			# all samples are "0".  the current sample is a gap
+			gaps.append(segments.segment((line[0], lines[i + 1][0] if i + 1 < len(lines) else line[0] + dt)))
+	return gaps.protract(timestamp_fuzz).coalesce()
 
 
 def compare_fobjs(fobj1, fobj2, transients = (0.0, 0.0), timestamp_fuzz = default_timestamp_fuzz, sample_fuzz = default_sample_fuzz, flags = COMPARE_FLAGS_DEFAULT):
@@ -112,7 +119,7 @@ def compare_fobjs(fobj1, fobj2, transients = (0.0, 0.0), timestamp_fuzz = defaul
 		assert not difference, "gap discrepancy: 1 ^ 2 = %s" % str(difference)
 
 	# convert relative sample fuzz to absolute
-	sample_fuzz *= max(max(abs(x) for x in line[1:]) for line in itertools.chain(lines1, lines2))
+	sample_fuzz *= max_abs_sample(itertools.chain(lines1, lines2))
 
 	lines1 = iter(lines1)
 	lines2 = iter(lines2)

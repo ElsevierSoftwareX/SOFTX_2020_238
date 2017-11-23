@@ -1,13 +1,36 @@
-%define gstreamername gstreamer_lscsoft
+%define gstreamername gstreamer1
 
 Name: @PACKAGE_NAME@
 Version: @PACKAGE_VERSION@
-Release: 1.lscsoft
+Release: 1%{?dist}
 Summary: GSTLAL Calibration
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: gstlal >= @MIN_GSTLAL_VERSION@ gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@ python >= 2.6 glue >= @MIN_GLUE_VERSION@ glue-segments >= @MIN_GLUE_VERSION@ python-pylal >= @MIN_PYLAL_VERSION@ %{gstreamername} >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy scipy lal >= @MIN_LAL_VERSION@ lalmetaio >= @MIN_LALMETAIO_VERSION@
-BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+
+Requires: gstlal >= @MIN_GSTLAL_VERSION@
+Requires: gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@
+Requires: python >= @MIN_PYTHON_VERSION@
+Requires: glue >= @MIN_GLUE_VERSION@
+Requires: glue-segments >= @MIN_GLUE_VERSION@
+Requires: python-pylal >= @MIN_PYLAL_VERSION@
+Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
+Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
+Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
+Requires: python-%{gstreamername}
+Requires: numpy
+Requires: scipy
+Requires: lal >= @MIN_LAL_VERSION@
+Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
+Requires: gst-plugins-math >= @MIN_GSTPLUGINSMATH_VERSION@
+
+BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@
+BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
+BuildRequires: fftw-devel >= 3
+BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
+BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
+BuildRequires: lal-devel >= @MIN_LAL_VERSION@
+BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+
 Conflicts: gstlal-ugly < 0.6.0
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
@@ -22,7 +45,6 @@ This package contains the plugins and shared libraries required to run the gstla
 
 
 %build
-. /opt/lscsoft/gst/gstenvironment.sh
 %configure
 %{__make}
 
@@ -63,11 +85,5 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %files
 %defattr(-,root,root)
 %{_bindir}/*
-%{_libdir}/gstreamer-0.10/python/*
-%{_libdir}/gstreamer-0.10/libgstlalcalibration.a
-%{_libdir}/gstreamer-0.10/libgstlalcalibration.so
-%{_libdir}/gstreamer-0.10/libgstlaldeinterleave.a
-%{_libdir}/gstreamer-0.10/libgstlaldeinterleave.so
-%{_libdir}/gstreamer-0.10/libgstlalinterleave.a
-%{_libdir}/gstreamer-0.10/libgstlalinterleave.so
+%{_libdir}/gstreamer-*/libgstlalcalibration.*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal

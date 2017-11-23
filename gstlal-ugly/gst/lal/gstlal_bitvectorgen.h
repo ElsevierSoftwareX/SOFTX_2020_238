@@ -32,6 +32,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 
 
@@ -65,18 +66,16 @@ struct _GSTLALBitVectorGen {
 	GstBaseTransform element;
 
 	gint rate;
-	guint64 mask;
+	guint32 mask;
 	gdouble (*get_input_func)(void **);
-	void (*set_output_func)(void **, guint64);
+	void (*set_output_func)(void **, guint32);
 
 	gboolean emit_signals;
 	gint last_state;
 	gdouble threshold;
-	gint64 attack_length;
-	gint64 hold_length;
 	gboolean invert_control;
 	gboolean nongap_is_control;
-	guint64 bit_vector;
+	guint32 bit_vector;
 };
 
 

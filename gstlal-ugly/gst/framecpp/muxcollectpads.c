@@ -28,8 +28,12 @@
  */
 
 
+#include <stdlib.h>
+
+
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 #include <gstlal/gstlal_debug.h>
@@ -40,7 +44,7 @@
 
 #ifndef GST_BUFFER_LIST_BOUNDARIES_FORMAT
 #define GST_BUFFER_LIST_BOUNDARIES_FORMAT ".d[%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ") = offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")"
-#define GST_BUFFER_LIST_BOUNDARIES_ARGS(list) 0, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(GST_BUFFER(g_list_first(list)->data))), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(GST_BUFFER(g_list_last(list)->data)) + GST_BUFFER_DURATION(GST_BUFFER(g_list_last(list)->data))), GST_BUFFER_OFFSET(GST_BUFFER(g_list_first(list)->data)), GST_BUFFER_OFFSET_END(GST_BUFFER(g_list_last(list)->data))
+#define GST_BUFFER_LIST_BOUNDARIES_ARGS(list) 0, GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(GST_BUFFER(g_list_first(list)->data))), GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(GST_BUFFER(g_list_last(list)->data)) + GST_BUFFER_DURATION(GST_BUFFER(g_list_last(list)->data))), GST_BUFFER_OFFSET(GST_BUFFER(g_list_first(list)->data)), GST_BUFFER_OFFSET_END(GST_BUFFER(g_list_last(list)->data))
 #endif /* GST_BUFFER_SLIST_BOUNDARIES_FORMAT */
 
 
@@ -53,7 +57,7 @@
  */
 
 
-GST_BOILERPLATE(FrameCPPMuxCollectPads, framecpp_muxcollectpads, GstObject, GST_TYPE_OBJECT);
+G_DEFINE_TYPE(FrameCPPMuxCollectPads, framecpp_muxcollectpads, GST_TYPE_OBJECT);
 
 
 /*
@@ -66,6 +70,7 @@ GST_BOILERPLATE(FrameCPPMuxCollectPads, framecpp_muxcollectpads, GstObject, GST_
 
 
 #define DEFAULT_MAX_SIZE_TIME GST_SECOND
+#define DEFAULT_CLIP_TO_SEGMENTS TRUE
 
 
 /*
@@ -95,21 +100,28 @@ static guint signals[NUM_SIGNALS] = {0, };
  */
 
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *buffer)
+static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buffer)
 {
 	FrameCPPMuxCollectPadsData *data = gst_pad_get_element_private(pad);
 	FrameCPPMuxCollectPads *collectpads = data->collect;
-	GstFlowReturn result;
+	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert(GST_IS_FRAMECPP_MUXCOLLECTPADS(collectpads));
 
 	if(data->eos || data->segment.format == GST_FORMAT_UNDEFINED) {
 		GST_ERROR_OBJECT(pad, "recieved buffer after EOS or with segment format not defined");
 		gst_buffer_unref(buffer);
-		result = GST_FLOW_UNEXPECTED;
+		result = GST_FLOW_EOS;
 	} else {
 		GST_DEBUG_OBJECT(pad, "received buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
-		result = framecpp_muxqueue_push(data->queue, buffer) ? GST_FLOW_OK : GST_FLOW_ERROR;
+		if(collectpads->clip_to_segments) {
+			gint rate, bpf;
+			GST_DEBUG_OBJECT(pad, "clipping to [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", collectpads->segment.start, collectpads->segment.stop);
+			g_object_get(data->queue, "rate", &rate, "size", &bpf, NULL);
+			buffer = gst_audio_buffer_clip(buffer, &collectpads->segment, rate, bpf);
+		}
+		if(buffer)
+			result = framecpp_muxqueue_push(data->queue, buffer) ? GST_FLOW_OK : GST_FLOW_ERROR;
 	}
 
 	return result;
@@ -167,10 +179,18 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 		FrameCPPMuxCollectPadsData *data = collectdatalist->data;
 
 		/*
+		 * check if this pad has already received a segment event
+		 */
+		GstEvent *segment_event = gst_pad_get_sticky_event (data->pad, GST_EVENT_SEGMENT, 0);
+		if(segment_event == NULL)
+			continue;
+		gst_event_unref(segment_event);
+
+		/*
 		 * all pads must have segments
 		 */
 
-		if(data->segment.format == GST_FORMAT_UNDEFINED || data->segment.start == -1) {
+		if(data->segment.format == GST_FORMAT_UNDEFINED || data->segment.start == GST_CLOCK_TIME_NONE) {
 			GST_DEBUG_OBJECT(collectpads, "%" GST_PTR_FORMAT ": segment not known", data->pad);
 			success = FALSE;
 			goto done;
@@ -181,7 +201,8 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 		 */
 
 		if(collectpads->segment.format == GST_FORMAT_UNDEFINED) {
-			collectpads->segment = data->segment;	/* FIXME:  is this OK? */
+			/* src --> dst */
+			gst_segment_copy_into(&data->segment, &collectpads->segment);
 			continue;
 		}
 
@@ -202,7 +223,7 @@ static gboolean update_segment(FrameCPPMuxCollectPads *collectpads)
 		GST_DEBUG_OBJECT(collectpads, "%" GST_PTR_FORMAT ": have segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", data->pad, data->segment.start, data->segment.stop);
 		if(collectpads->segment.start > data->segment.start)
 			collectpads->segment.start = data->segment.start;
-		if(data->segment.stop == -1 || (collectpads->segment.stop != -1 && collectpads->segment.stop < data->segment.stop))
+		if(data->segment.stop == GST_CLOCK_TIME_NONE || (collectpads->segment.stop != GST_CLOCK_TIME_NONE && collectpads->segment.stop < data->segment.stop))
 			collectpads->segment.stop = data->segment.stop;
 	}
 
@@ -221,7 +242,7 @@ done:
 }
 
 
-static gboolean event(GstPad *pad, GstEvent *event)
+static gboolean event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
 	FrameCPPMuxCollectPadsData *data = gst_pad_get_element_private(pad);
 	FrameCPPMuxCollectPads *collectpads = data->collect;
@@ -242,23 +263,29 @@ static gboolean event(GstPad *pad, GstEvent *event)
 	 */
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT: {
-		gboolean update;
-		gdouble rate, applied_rate;
-		GstFormat format;
-		gint64 start, stop, position;
-		gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
-		gst_event_unref(event);
-		g_assert(format != GST_FORMAT_UNDEFINED);
-		GST_LOG_OBJECT(pad, "new segment [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT ")", start, stop);
+	case GST_EVENT_SEGMENT: {
+		const GstSegment *segment;
+
+		/* gives pointer to GstEvent's copy.  do not unref GstEvent
+		 * until we don't need the GstSegment anymore */
+		gst_event_parse_segment(event, &segment);
+
+		g_assert(segment->format != GST_FORMAT_UNDEFINED);
+		GST_LOG_OBJECT(pad, "new segment [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT ")", segment->start, segment->stop);
+
+		/* store this sticky event for use in update_segments */
+		success &= (gst_pad_store_sticky_event(pad, event) == GST_FLOW_OK);
 
 		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(collectpads);
-		gst_segment_set_newsegment_full(&data->segment, update, rate, applied_rate, format, start, stop, position);
+		gst_segment_copy_into(segment, &(data->segment));
 		data->eos = FALSE;
 		success &= update_segment(collectpads);
 		FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(collectpads);
+
+		gst_event_unref(event);
+
 		if(success && event_func)
-			success &= event_func(pad, gst_event_new_new_segment_full(update, collectpads->segment.rate, collectpads->segment.applied_rate, collectpads->segment.format, collectpads->segment.start, collectpads->segment.stop, collectpads->segment.time));
+			success &= event_func(pad, parent, gst_event_new_segment(&(collectpads->segment)));
 		break;
 	}
 
@@ -267,7 +294,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		if(all_pads_are_flushing(collectpads)) {
 			GST_LOG_OBJECT(collectpads, "all sink pads are flushing");
 			if(event_func)
-				success &= event_func(pad, event);
+				success &= event_func(pad, parent, event);
 		} else
 			gst_event_unref(event);
 		break;
@@ -276,7 +303,7 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		framecpp_muxqueue_set_flushing(data->queue, FALSE);
 		GST_LOG_OBJECT(collectpads, "not all sink pads are flushing");
 		if(event_func)
-			success &= event_func(pad, event);
+			success &= event_func(pad, parent, event);
 		else
 			gst_event_unref(event);
 		break;
@@ -287,14 +314,22 @@ static gboolean event(GstPad *pad, GstEvent *event)
 		if(all_pads_are_at_eos(collectpads)) {
 			GST_LOG_OBJECT(collectpads, "all sink pads are at EOS");
 			if(event_func)
-				success &= event_func(pad, event);
+				success &= event_func(pad, parent, event);
 		} else
 			gst_event_unref(event);
 		break;
+	case GST_EVENT_STREAM_START:
+		/* store this sticky event so that it appears before the segment event */
+		success &= (gst_pad_store_sticky_event(pad, event) == GST_FLOW_OK);
 
+		if(event_func)
+			success &= event_func(pad, parent, event);
+		else
+			gst_event_unref(event);
+		break;
 	default:
 		if(event_func)
-			success &= event_func(pad, event);
+			success &= event_func(pad, parent, event);
 		else
 			gst_event_unref(event);
 		break;
@@ -499,7 +534,7 @@ gboolean framecpp_muxcollectpads_remove_pad(FrameCPPMuxCollectPads *collectpads,
 	GST_OBJECT_LOCK(pad);
 	data = gst_pad_get_element_private(pad);
 	if(data->destroy_notify)
-		data->destroy_notify(data);
+		data->destroy_notify(data->appdata);
 	gst_pad_set_element_private(pad, NULL);
 	GST_OBJECT_UNLOCK(pad);
 	if(!collectpads->started)
@@ -713,9 +748,9 @@ void framecpp_muxcollectpads_buffer_list_boundaries(GList *list, GstClockTime *t
 
 	g_assert(list != NULL);
 
-	*t_start = GST_BUFFER_TIMESTAMP(GST_BUFFER(g_list_first(list)->data));
+	*t_start = GST_BUFFER_PTS(GST_BUFFER(g_list_first(list)->data));
 	last = GST_BUFFER(g_list_last(list)->data);
-	*t_end = GST_BUFFER_TIMESTAMP(last) + GST_BUFFER_DURATION(last);
+	*t_end = GST_BUFFER_PTS(last) + GST_BUFFER_DURATION(last);
 
 	g_assert_cmpuint(*t_start, <=, *t_end);
 }
@@ -724,16 +759,6 @@ void framecpp_muxcollectpads_buffer_list_boundaries(GList *list, GstClockTime *t
 /**
  * Join contiguous buffers in the buffer list into single buffers.  Returns
  * the new list.
- */
-
-/*
- * FIXME:  this is an easy implementation, but calling gst_buffer_merge()
- * for every pair of adjacent buffers results in many more malloc()s and
- * memcpy()s than required.  for example, if the entire list can be merged
- * into a single buffer then there should be a single malloc and each byte
- * of every buffer should be copied into the new region, and that's it.
- * but this implementation does a new malloc for every buffer, and then
- * recopies all previously copied bytes into the new buffer.
  */
 
 GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_gaps)
@@ -748,7 +773,7 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 		 * safety checks
 		 */
 
-		g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(this_buf));
+		g_assert(GST_BUFFER_PTS_IS_VALID(this_buf));
 		g_assert(GST_BUFFER_DURATION_IS_VALID(this_buf));
 
 		while((next = g_list_next(this))) {
@@ -758,14 +783,14 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 			 * safety checks
 			 */
 
-			g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(next_buf));
+			g_assert(GST_BUFFER_PTS_IS_VALID(next_buf));
 			g_assert(GST_BUFFER_DURATION_IS_VALID(next_buf));
 
 			/*
 			 * allow 1 ns of timestamp mismatch
 			 */
 
-			if(llabs(GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(this_buf) + GST_BUFFER_DURATION(this_buf), GST_BUFFER_TIMESTAMP(next_buf))) > 1)
+			if(llabs(GST_CLOCK_DIFF(GST_BUFFER_PTS(this_buf) + GST_BUFFER_DURATION(this_buf), GST_BUFFER_PTS(next_buf))) > 1)
 				break;
 
 			/*
@@ -773,7 +798,7 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 			 * non-gaps
 			 */
 
-			if(distinct_gaps && GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) != GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
+			if(distinct_gaps && (GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) != GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP)))
 				break;
 
 			/*
@@ -787,37 +812,15 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 			}
 
 			/*
-			 * _merge() can't handle one or the other buffers
-			 * having zero size, so we need to put those in as
-			 * special cases
+			 * merge the two buffers
 			 */
 
-			if(GST_BUFFER_DURATION(this_buf) && GST_BUFFER_DURATION(next_buf)) {
-				/* _merge() and _join() do not copy caps
-				 * and flags, so we have to do it
-				 * ourselves, so we have to use _merge() to
-				 * keep the source buffers around */
-				this->data = gst_buffer_make_metadata_writable(gst_buffer_merge(this_buf, next_buf));
-				gst_buffer_copy_metadata(this->data, this_buf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
-				if(!GST_BUFFER_FLAG_IS_SET(this_buf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_FLAG_IS_SET(next_buf, GST_BUFFER_FLAG_GAP))
-					GST_BUFFER_FLAG_UNSET(this->data, GST_BUFFER_FLAG_GAP);
-				gst_buffer_unref(this_buf);
-				gst_buffer_unref(next_buf);
-				this_buf = this->data;
-			} else if(!GST_BUFFER_DURATION(next_buf)) {
-				/*
-				 * next_buf is zero length, just drop it
-				 */
-
-				gst_buffer_unref(next_buf);
-			} else {
-				/*
-				 * this_buf is zero length but next_buf
-				 * isn't, replace this with next
-				 */
-
-				gst_buffer_unref(this_buf);
-				this->data = this_buf = next_buf;
+			{
+			GstClockTime end_time = GST_BUFFER_PTS(next_buf) + GST_BUFFER_DURATION(next_buf);
+			guint64 offset_end = GST_BUFFER_OFFSET_END(next_buf);
+			this_buf = this->data = gst_buffer_append(this_buf, next_buf);
+			GST_BUFFER_DURATION(this_buf) = end_time - GST_BUFFER_PTS(this_buf);
+			GST_BUFFER_OFFSET_END(this_buf) = offset_end;
 			}
 		}
 	}
@@ -836,7 +839,8 @@ GList *framecpp_muxcollectpads_buffer_list_join(GList *list, gboolean distinct_g
 
 
 enum property {
-	ARG_MAX_SIZE_TIME = 1
+	ARG_MAX_SIZE_TIME = 1,
+	ARG_CLIP_TO_SEGMENTS
 };
 
 
@@ -859,6 +863,10 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 		break;
 	}
 
+	case ARG_CLIP_TO_SEGMENTS:
+		collectpads->clip_to_segments = g_value_get_boolean(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -879,6 +887,10 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 		g_value_set_uint64(value, collectpads->max_size_time);
 		break;
 
+	case ARG_CLIP_TO_SEGMENTS:
+		g_value_set_boolean(value, collectpads->clip_to_segments);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -892,13 +904,10 @@ static void dispose(GObject *object)
 {
 	FrameCPPMuxCollectPads *collectpads = FRAMECPP_MUXCOLLECTPADS(object);
 
-/* FIXME:  this segfaults.  why?
 	while(collectpads->pad_list)
 		framecpp_muxcollectpads_remove_pad(collectpads, ((FrameCPPMuxCollectPadsData *) collectpads->pad_list->data)->pad);
-*/
-	collectpads->pad_list = NULL;
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(framecpp_muxcollectpads_parent_class)->dispose(object);
 }
 
 
@@ -906,16 +915,9 @@ static void finalize(GObject *object)
 {
 	FrameCPPMuxCollectPads *collectpads = FRAMECPP_MUXCOLLECTPADS(object);
 
-	g_mutex_free(collectpads->pad_list_lock);
-	collectpads->pad_list_lock = NULL;
+	g_mutex_clear(&collectpads->pad_list_lock);
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-static void framecpp_muxcollectpads_base_init(gpointer klass)
-{
-	/* no-op */
+	G_OBJECT_CLASS(framecpp_muxcollectpads_parent_class)->finalize(object);
 }
 
 
@@ -939,6 +941,17 @@ static void framecpp_muxcollectpads_class_init(FrameCPPMuxCollectPadsClass *klas
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_CLIP_TO_SEGMENTS,
+		g_param_spec_boolean(
+			"clip-to-segments",
+			"Clip to segments",
+			"Clip each stream to its segment.",
+			DEFAULT_CLIP_TO_SEGMENTS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
 
 	signals[SIGNAL_COLLECTED] = g_signal_new(
 		"collected",
@@ -959,9 +972,9 @@ static void framecpp_muxcollectpads_class_init(FrameCPPMuxCollectPadsClass *klas
 }
 
 
-static void framecpp_muxcollectpads_init(FrameCPPMuxCollectPads *collectpads, FrameCPPMuxCollectPadsClass *klass)
+static void framecpp_muxcollectpads_init(FrameCPPMuxCollectPads *collectpads)
 {
-	collectpads->pad_list_lock = g_mutex_new();
+	g_mutex_init(&collectpads->pad_list_lock);
 	collectpads->pad_list = NULL;
 	gst_segment_init(&collectpads->segment, GST_FORMAT_UNDEFINED);
 	collectpads->started = FALSE;

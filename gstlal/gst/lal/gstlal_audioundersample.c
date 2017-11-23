@@ -65,6 +65,7 @@
 #include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal/gstlal.h>
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal_audioundersample.h>
 
 
@@ -78,7 +79,7 @@
 
 
 #define DEFINE_UNDERSAMPLE_FUNC(size) \
-static guint64 undersample_ ## size(const gint ## size *src, gint ## size *dst, guint64 dst_size, guint cadence) \
+static guint64 undersample_ ## size(const gint ## size *src, gint ## size *dst, gsize dst_size, gsize cadence) \
 { \
 	const gint ## size *dst_end; \
  \
@@ -94,7 +95,7 @@ DEFINE_UNDERSAMPLE_FUNC(32)
 DEFINE_UNDERSAMPLE_FUNC(64)
 
 
-static guint64 undersample_other(const gint8 *src, gint8 *dst, guint64 dst_size, gint unit_size, guint cadence)
+static guint64 undersample_other(const gint8 *src, gint8 *dst, gsize dst_size, gint unit_size, gsize cadence)
 {
 	const gint8 *dst_end;
 
@@ -106,7 +107,7 @@ static guint64 undersample_other(const gint8 *src, gint8 *dst, guint64 dst_size,
 }
 
 
-static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, guint cadence, guint64 *remainder)
+static guint64 undersample(const void *src, gsize src_size, void *dst, gsize dst_size, gint unit_size, gsize cadence, guint64 *remainder)
 {
 	g_assert_cmpuint(src_size % unit_size, ==, 0);
 	g_assert_cmpuint(dst_size % unit_size, ==, 0);
@@ -154,8 +155,8 @@ static void set_metadata(GSTLALAudioUnderSample *element, GstBuffer *buf, guint6
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate_out);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate_out) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate_out);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate_out) - GST_BUFFER_PTS(buf);
 	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -181,11 +182,9 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw, " \
-		"rate = " GST_AUDIO_RATE_RANGE ", " \
-		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-		"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
-		"layout = (string) interleaved"
+		GST_AUDIO_CAPS_MAKE(GSTLAL_AUDIO_FORMATS_ALL) ", " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -195,11 +194,9 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw, " \
-		"rate = " GST_AUDIO_RATE_RANGE ", " \
-		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
-		"format = (string) " GSTLAL_AUDIO_FORMATS_ALL ", " \
-		"layout = (string) interleaved"
+		GST_AUDIO_CAPS_MAKE(GSTLAL_AUDIO_FORMATS_ALL) ", " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
 
@@ -230,7 +227,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 	GstAudioInfo info;
 	gboolean success = TRUE;
 
-	success &= gst_audio_info_from_caps(&info, caps);
+	success &= gstlal_audio_info_from_caps(&info, caps);
 
 	if(success)
 		*size = GST_AUDIO_INFO_BPF(&info);
@@ -309,6 +306,12 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
 		gst_caps_unref(caps);
 		return GST_CAPS_NONE;
+	}
+
+	if(filter) {
+		GstCaps *intersection = gst_caps_intersect(caps, filter);
+		gst_caps_unref(caps);
+		caps = intersection;
 	}
 
 	return caps;
@@ -482,7 +485,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
-		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+		element->t0 = GST_BUFFER_PTS(inbuf);
 		element->offset0 = element->next_out_offset = gst_util_uint64_scale_ceil(GST_BUFFER_OFFSET(inbuf), element->rate_out, element->rate_in);
 		element->need_discont = TRUE;
 		element->remainder = 0;

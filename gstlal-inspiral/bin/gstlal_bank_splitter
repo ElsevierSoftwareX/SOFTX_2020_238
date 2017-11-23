@@ -22,16 +22,16 @@
 import itertools
 import os
 from optparse import OptionParser
-from pylal import spawaveform
+from gstlal import spawaveform
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
-from lal import MSUN_SI
-from glue import lal as gluelal
 from gstlal import templates
 from gstlal import inspiral_pipe
 from gstlal import chirptime
+import lal
+from lal.utils import CacheEntry
 
 ## @file gstlal_bank_splitter
 #
@@ -102,6 +102,7 @@ def group_templates(templates, n, overlap = 0):
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
+	parser.add_option("--output-full-bank-file-with-ids", metavar = "path", default = "gstlal_bank.xml.gz", help = "Set the path to output the bank fil with ids assigned.  Default is gstlal_bank.xml.gz")
 	parser.add_option("--output-cache", metavar = "file", help = "Set the file name for the output cache.")
 	parser.add_option("--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required). It will be rounded to make all sub banks approximately the same size.")
 	parser.add_option("--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
@@ -112,12 +113,18 @@ def parse_command_line():
 	parser.add_option("--approximant", type = "string", action = "append", help = "Must specify an approximant given as mchirp_min:mchirp_max:string")
 	parser.add_option("--f-low", type = "float", metavar = "frequency", help = "Lower frequency cutoff. Required")
 	parser.add_option("--group-by-chi", type = "int", metavar = "N", default = 1, help = "group templates into N groups of chi - helps with SVD. Default 1")
+	parser.add_option("--write-svd-caches", action = "store_true", help = "output a cache file of cache files, each of which correspond to the banks meant to be in a single SVD bank (disabled by default)")
+	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per SVD bank. can be given as a list like 1,2,3,4 then it will split up the bank into N groups with M banks each. (required if --write-svd-caches invoked)") # FIXME The second half of this help message is incomprehensible
+	parser.add_option("--template-id-start-index", metavar = "int", type = "int", default = 0, help = "Starting index for template ID. Default 0")
 	options, filenames = parser.parse_args()
 
 	required_options = ("n", "instrument", "sort_by", "output_cache", "approximant", "f_low")
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
+
+	if options.write_svd_caches and not options.num_banks:
+		raise ValueError, "missing --num-banks, required if invoking --write-svd-caches"
 
 	if options.overlap % 2:
 		raise ValueError("overlap must be even")
@@ -131,24 +138,32 @@ def parse_command_line():
 		approximants.append((float(mn), float(mx), appxstring))
 	options.approximant = approximants
 
+	if options.num_banks:
+		options.num_banks = [int(v) for v in options.num_banks.split(",")]
+
+
 	return options, filenames[0]
 
 options, filename = parse_command_line()
 
 def assign_approximant(mchirp, approximants = options.approximant):
-	for appx in approximants:
-		if mchirp >= appx[0] and mchirp < appx[1]:
-			return appx[2]
+	for lo, hi, appx in approximants:
+		if lo <= mchirp < hi:
+			return appx
 	raise ValueError("Valid approximant not given for this chirp mass")
-	
 
-output_cache_file = open(options.output_cache, "w")
-bank_count = 0
 
 outputrows = []
 
 xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+
+# assign ids and write out the full template bank with ids assigned
+for nrow, row in enumerate(sngl_inspiral_table):
+	row.Gamma0 = nrow + options.template_id_start_index
+# FIXME
+#process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
+ligolw_utils.write_filename(xmldoc, options.output_full_bank_file_with_ids, gz = options.output_full_bank_file_with_ids.endswith('gz'), verbose = options.verbose)
 
 # Bin by Chi
 sngl_inspiral_table.sort(key = lambda row: spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z))
@@ -157,7 +172,7 @@ for chirows in group_templates(sngl_inspiral_table, len(sngl_inspiral_table) / o
 	def sort_func(row, column = options.sort_by):
 		return getattr(row, column)
 
-	chirows.sort(key=sort_func)
+	chirows.sort(key=sort_func, reverse = True if options.sort_by == "template_duration" else False)
 
 	for numrow, rows in enumerate(group_templates(chirows, options.n, options.overlap)):
 		assert len(rows) >= options.n/2, "There are too few templates in this chi interval.  Requested %d: have %d" % (options.n, len(rows))
@@ -172,53 +187,73 @@ for chirows in group_templates(sngl_inspiral_table, len(sngl_inspiral_table) / o
 def sort_func((row, rows), column = options.sort_by):
 	return getattr(row, column)
 
-outputrows.sort(key=sort_func)
+outputrows.sort(key=sort_func, reverse = True if options.sort_by == "template_duration" else False)
+svd_caches = []
 
-for bank_count, (_, rows) in enumerate(outputrows):
-	# just choose the first row to get mchirp
-	# FIXME this could certainly be better
-	approximant = assign_approximant(rows[0].mchirp) 
+with open(options.output_cache, "w") as output_cache_file:
 
-	# Make an output document
-	xmldoc = ligolw.Document()
-	lw = xmldoc.appendChild(ligolw.LIGO_LW())
-	sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable)
-	lw.appendChild(sngl_inspiral_table)
-	# Override the approximant
-	options.approximant = approximant
-	# store the process params
-	process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
+	for bank_count, (_, rows) in enumerate(outputrows):
+		# just choose the first row to get mchirp
+		# FIXME this could certainly be better
+		approximant = assign_approximant(rows[0].mchirp)
 
-	for row in rows:
-		# Chirptime uses SI
-		m1_SI, m2_SI = MSUN_SI * row.mass1, MSUN_SI * row.mass2
-		# Find the total spin magnitudes
-		spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
+		# Make an output document
+		xmldoc = ligolw.Document()
+		lw = xmldoc.appendChild(ligolw.LIGO_LW())
+		sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable)
+		lw.appendChild(sngl_inspiral_table)
+		# Override the approximant
+		options.approximant = approximant
+		# store the process params
+		process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
 
-		if approximant in templates.gstlal_IMR_approximants:
-			# make sure to go a factor of 2 above the ringdown frequency for safety
-			row.f_final = 2 * chirptime.ringf(m1_SI + m2_SI, chirptime.overestimate_j_from_chi(max(spin1, spin2)))
+		for row in rows:
+			# Chirptime uses SI
+			m1_SI, m2_SI = lal.MSUN_SI * row.mass1, lal.MSUN_SI * row.mass2
+			# Find the total spin magnitudes
+			spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
+
+			if approximant in templates.gstlal_IMR_approximants:
+				# make sure to go a factor of 2 above the ringdown frequency for safety
+				row.f_final = 2 * chirptime.ringf(m1_SI + m2_SI, chirptime.overestimate_j_from_chi(max(spin1, spin2)))
+			else:
+				# otherwise choose a suitable high frequency
+				# NOTE not SI
+				row.f_final = spawaveform.ffinal(row.mass1, row.mass2, 'bkl_isco')
+
+			# Override the high frequency with the max if appropriate
+			if options.max_f_final and (row.f_final > options.max_f_final):
+				row.f_final = options.max_f_final
+			row.process_id = process.process_id
+
+
+			# Record the conservative template duration
+			row.template_duration = chirptime.imr_time(options.f_low, m1_SI, m2_SI, spin1, spin2, f_max = row.f_final)
+
+			# Make sure ifo and total mass is stored
+			row.ifo = options.instrument
+			row.mtotal = row.mass1 + row.mass2
+
+		sngl_inspiral_table[:] = rows
+		output = inspiral_pipe.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
+		if not options.write_svd_caches:
+			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
 		else:
-			# otherwise choose a suitable high frequency
-			# NOTE not SI
-			row.f_final = spawaveform.ffinal(row.mass1, row.mass2, 'bkl_isco')
+			svd_caches.append((bank_count, "%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output))))
+		ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 
-		# Override the high frequency with the max if appropriate
-		if options.max_f_final and (row.f_final > options.max_f_final):
-			row.f_final = options.max_f_final
-		row.process_id = process.process_id
+	if options.write_svd_caches:
+		cache_path = os.path.join(options.output_path, "cache")
+		try:
+			os.mkdir(cache_path)
+		except OSError:
+			# cache directory already exists
+			pass
 
+		for svd_cache_group in inspiral_pipe.group(svd_caches, options.num_banks):
+			output = inspiral_pipe.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_SPLIT_BANK" % (svd_cache_group[0][0], svd_cache_group[-1][0]), (0, 0), ".cache", path = cache_path)
+			with open(output, 'w') as svd_cache:
+				for bank_count, split_bank_cache_entry in svd_cache_group:
+					svd_cache.write(split_bank_cache_entry)
 
-		# Record the conservative template duration
-		row.template_duration = chirptime.imr_time(options.f_low, m1_SI, m2_SI, spin1, spin2, f_max = row.f_final)
-
-		# Make sure ifo and total mass is stored
-		row.ifo = options.instrument
-		row.mtotal = row.mass1 + row.mass2
-
-	sngl_inspiral_table[:] = rows
-	output = inspiral_pipe.T050017_filename(options.instrument, "GSTLAL_SPLIT_BANK_%04d" % bank_count, 0, 0, ".xml.gz", path = options.output_path)
-	output_cache_file.write("%s\n" % gluelal.CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
-	ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
-
-output_cache_file.close()
+			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))

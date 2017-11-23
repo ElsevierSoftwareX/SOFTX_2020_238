@@ -46,6 +46,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -73,6 +74,7 @@
  */
 
 
+#include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_frhistory.h>
 #include <gstlal/gstlal_tags.h>
@@ -95,13 +97,12 @@
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
-static void additional_initializations(GType type)
-{
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channelmux", 0, "framecpp_channelmux element");
-}
-
-
-GST_BOILERPLATE_FULL(GstFrameCPPChannelMux, framecpp_channelmux, GstElement, GST_TYPE_ELEMENT, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GstFrameCPPChannelMux,
+	framecpp_channelmux,
+	GST_TYPE_ELEMENT,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channelmux", 0, "framecpp_channelmux element")
+);
 
 
 /*
@@ -173,14 +174,14 @@ static void update_instruments(GstFrameCPPChannelMux *mux)
 	g_hash_table_remove_all(mux->instruments);
 
 	while(TRUE) {
-		GstPad *pad;
+		GValue item = G_VALUE_INIT;
 		gchar *instrument = NULL;
-		switch(gst_iterator_next(it, (void **) &pad)) {
+		switch(gst_iterator_next(it, &item)) {
 		case GST_ITERATOR_OK:
-			g_object_get(pad, "instrument", &instrument, NULL);
+			g_object_get(g_value_get_object(&item), "instrument", &instrument, NULL);
 			if(instrument)
 				g_hash_table_replace(mux->instruments, instrument, instrument);
-			gst_object_unref(pad);
+			g_value_reset(&item);
 			break;
 
 		case GST_ITERATOR_RESYNC:
@@ -212,10 +213,10 @@ typedef struct _framecpp_channelmux_appdata {
 } framecpp_channelmux_appdata;
 
 
-static void framecpp_channelmux_appdata_free(framecpp_channelmux_appdata *appdata)
+static void framecpp_channelmux_appdata_free(gpointer appdata)
 {
 	if(appdata)
-		delete[] appdata->dims;
+		delete[] ((framecpp_channelmux_appdata *) appdata)->dims;
 	g_free(appdata);
 }
 
@@ -233,7 +234,7 @@ static framecpp_channelmux_appdata *get_appdata(FrameCPPMuxCollectPadsData *data
 
 static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
 {
-	GstTagList *tag_list = gst_tag_list_new();
+	GstTagList *tag_list = gst_tag_list_new_empty();
 	GHashTableIter it;
 	gchar *instrument;
 
@@ -255,6 +256,7 @@ static GstTagList *get_srcpad_tag_list(GstFrameCPPChannelMux *mux)
 static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstClockTime gwf_t_start, GstClockTime gwf_t_end)
 {
 	GstBuffer *outbuf = NULL;
+	GstMapInfo mapinfo;	/* used for input and output buffers */
 	GstFlowReturn result = GST_FLOW_OK;
 
 	g_assert_cmpuint(gwf_t_start, <=, gwf_t_end);
@@ -288,11 +290,11 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			while(g_hash_table_iter_next(&it, (void **) &instrument, NULL)) {
 				if(!strcmp(instrument, "H1"))
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_H1, gpstime));
-				if(!strcmp(instrument, "H2"))
+				else if(!strcmp(instrument, "H2"))
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_H2, gpstime));
-				if(!strcmp(instrument, "L1"))
+				else if(!strcmp(instrument, "L1"))
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_L1, gpstime));
-				if(!strcmp(instrument, "V1"))
+				else if(!strcmp(instrument, "V1"))
 					frame->RefDetectProc().append(FrameCPP::GetDetector(FrameCPP::DETECTOR_LOCATION_V1, gpstime));
 				else
 					GST_WARNING_OBJECT(mux, "not adding FrDetector for unknown instrument '%s'", instrument);
@@ -355,9 +357,11 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 				switch(frpad->pad_type) {
 				case GST_FRPAD_TYPE_FRADCDATA: {
-					FrameCPP::FrAdcData adc_data(GST_PAD_NAME(data->pad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, 0.0, timeOffset, frpad->datavalid, frpad->phase);
+					FrameCPP::FrAdcData adc_data(GST_PAD_NAME(frpad), frpad->channel_group, frpad->channel_number, frpad->nbits, appdata->rate, frpad->bias, frpad->slope, frpad->units, 0.0, timeOffset, frpad->datavalid, frpad->phase);
 					adc_data.AppendComment(frpad->comment);
-					GST_LOG_OBJECT(data->pad, "appending FrAdcData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					GST_LOG_OBJECT(frpad, "appending FrAdcData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					if(frpad->history->n_values)
+						GST_WARNING_OBJECT(frpad, "ignoring FrHistory on this pad: not valid for FrAdcData");
 					if(!frame->GetRawData()) {
 						FrameCPP::FrameH::rawData_type rawData(new FrameCPP::FrameH::rawData_type::element_type);
 						frame->SetRawData(rawData);
@@ -368,17 +372,31 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 				}
 
 				case GST_FRPAD_TYPE_FRPROCDATA: {
-					/* FIXME:  history */
-					FrameCPP::FrProcData proc_data(GST_PAD_NAME(data->pad), frpad->comment, 1, 0, timeOffset, (double) GST_CLOCK_DIFF(frame_t_start, frame_t_end) / GST_SECOND - timeOffset, 0.0, 0.0, appdata->rate / 2.0, 0.0);
-					GST_LOG_OBJECT(data->pad, "appending FrProcData spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)), GST_TIME_SECONDS_ARGS(frame_t_end));
+					FrameCPP::FrProcData proc_data(GST_PAD_NAME(frpad), frpad->comment, 1, 0, timeOffset, (double) GST_CLOCK_DIFF(frame_t_start, frame_t_end) / GST_SECOND - timeOffset, 0.0, 0.0, appdata->rate / 2.0, 0.0);
+					GST_LOG_OBJECT(frpad, "appending FrProcData spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)), GST_TIME_SECONDS_ARGS(frame_t_end));
+
+					/*
+					 * add channel-level FrHistory objects
+					 */
+
+					for(i = 0; i < frpad->history->n_values; i++) {
+						GstLALFrHistory *history = GSTLAL_FRHISTORY(g_value_get_boxed(g_value_array_get_nth(frpad->history, i)));
+						gchar *str = gstlal_frhistory_to_string(history);
+						GST_LOG_OBJECT(frpad, "FrHistory: %s", str);
+						g_free(str);
+						proc_data.RefHistory().append(FrameCPP::FrHistory(gstlal_frhistory_get_name(history), gstlal_frhistory_get_timestamp(history) / GST_SECOND, gstlal_frhistory_get_comment(history)));
+					}
+
 					frame->RefProcData().append(proc_data);
 					container = &(frame->RefProcData().back()->RefData());
 					break;
 				}
 
 				case GST_FRPAD_TYPE_FRSIMDATA: {
-					FrameCPP::FrSimData sim_data(GST_PAD_NAME(data->pad), frpad->comment, appdata->rate, 0.0, 0.0, timeOffset);
-					GST_LOG_OBJECT(data->pad, "appending FrSimData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					FrameCPP::FrSimData sim_data(GST_PAD_NAME(frpad), frpad->comment, appdata->rate, 0.0, 0.0, timeOffset);
+					GST_LOG_OBJECT(frpad, "appending FrSimData starting at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_t_start + (GstClockTime) round(timeOffset * GST_SECOND)));
+					if(frpad->history->n_values)
+						GST_WARNING_OBJECT(frpad, "ignoring FrHistory on this pad: not valid for FrSimData");
 					frame->RefSimData().append(sim_data);
 					container = &(frame->RefSimData().back()->RefData());
 					break;
@@ -396,7 +414,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 
 				for(; buffer_list; buffer_list = g_list_delete_link(buffer_list, buffer_list)) {
 					GstBuffer *buffer = GST_BUFFER(buffer_list->data);
-					GstClockTime buffer_t_start = GST_BUFFER_TIMESTAMP(buffer);
+					GstClockTime buffer_t_start = GST_BUFFER_PTS(buffer);
 					GstClockTime buffer_t_end = buffer_t_start + GST_BUFFER_DURATION(buffer);
 
 					/*
@@ -411,7 +429,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					 * information.
 					 */
 
-					g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
+					g_assert(GST_BUFFER_PTS_IS_VALID(buffer));
 					g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
 					g_assert_cmpuint(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer), ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buffer), appdata->rate, GST_SECOND));
 					if(llabs(frame_t_start - buffer_t_start) <= 1)
@@ -426,10 +444,12 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 					 * build FrVect, append to channel
 					 */
 
-					GST_LOG_OBJECT(data->pad, "appending FrVect [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_t_start), GST_TIME_SECONDS_ARGS(buffer_t_end));
+					GST_LOG_OBJECT(frpad, "appending FrVect [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(buffer_t_start), GST_TIME_SECONDS_ARGS(buffer_t_end));
 					appdata->dims[0].SetNx(GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer));
 					appdata->dims[0].SetStartX((double) GST_CLOCK_DIFF(frame_t_start, buffer_t_start) / GST_SECOND - timeOffset);
-					container->append(FrameCPP::FrVect(GST_PAD_NAME(data->pad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, GST_BUFFER_DATA(buffer), frpad->units));
+					gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
+					container->append(FrameCPP::FrVect(GST_PAD_NAME(frpad), appdata->type, appdata->nDims, appdata->dims, FrameCPP::BYTE_ORDER_HOST, mapinfo.data, frpad->units));
+					gst_buffer_unmap(buffer, &mapinfo);
 					gst_buffer_unref(buffer);
 				}
 			}
@@ -451,20 +471,29 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 		ofs.Close();
 
 		/* FIXME:  can this be done without a memcpy()? */
-		result = gst_pad_alloc_buffer(mux->srcpad, mux->next_out_offset, obuf->str().length(), GST_PAD_CAPS(mux->srcpad), &outbuf);
-		if(result != GST_FLOW_OK) {
+		outbuf = gst_buffer_new_allocate(NULL, obuf->str().length(), NULL);
+		if(!outbuf) {
 			GST_ELEMENT_ERROR(mux, CORE, PAD, (NULL), ("gst_pad_alloc_buffer() failed (%s)", gst_flow_get_name(result)));
+			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		memcpy(GST_BUFFER_DATA(outbuf), &(obuf->str()[0]), GST_BUFFER_SIZE(outbuf));
+		if(!gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE)) {
+			GST_ELEMENT_ERROR(mux, RESOURCE, WRITE, (NULL), ("buffer cannot be mapped for write"));
+			gst_buffer_unref(outbuf);
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		memcpy(mapinfo.data, &(obuf->str()[0]), mapinfo.size);
 		if(mux->need_discont) {
 			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 			mux->need_discont = FALSE;
 		}
-		GST_BUFFER_TIMESTAMP(outbuf) = gwf_t_start;
+		GST_BUFFER_PTS(outbuf) = gwf_t_start;
 		GST_BUFFER_DURATION(outbuf) = gwf_t_end - gwf_t_start;
-		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + GST_BUFFER_SIZE(outbuf);
+		GST_BUFFER_OFFSET(outbuf) = mux->next_out_offset;
+		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + mapinfo.size;
 		mux->next_out_offset = GST_BUFFER_OFFSET_END(outbuf);
+		gst_buffer_unmap(outbuf, &mapinfo);
 	} catch(const std::exception& Exception) {
 		GST_ELEMENT_ERROR(mux, STREAM, ENCODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
 		result = GST_FLOW_ERROR;
@@ -528,7 +557,7 @@ static GstFlowReturn flush(GstFrameCPPChannelMux *mux)
 	if(mux->need_tag_list) {
 		update_instruments(mux);
 		if(g_hash_table_size(mux->instruments))
-			gst_element_found_tags(GST_ELEMENT(mux), get_srcpad_tag_list(mux));
+			gst_pad_push_event(mux->srcpad, gst_event_new_tag(get_srcpad_tag_list(mux)));
 		else
 			GST_DEBUG_OBJECT(mux, "not pushing tags:  no instruments");
 		mux->need_tag_list = FALSE;
@@ -574,14 +603,17 @@ typedef struct {
 } EventData;
 
 
-static gboolean forward_src_event_func(GstPad *pad, GValue *ret, EventData *data)
+static gboolean forward_src_event_func(const GValue *item, GValue *ret, gpointer user_data)
 {
+	GstPad *pad = GST_PAD_CAST(g_value_get_object(item));
+	EventData *data = (EventData *) user_data;
+
 	gst_event_ref(data->event);
 	if(!gst_pad_push_event(pad, data->event)) {
 		/* quick hack to unflush the pads. ideally we need  a way
 		 * to just unflush this single collect pad */
 		if(data->flush)
-			gst_pad_send_event(pad, gst_event_new_flush_stop());
+			gst_pad_send_event(pad, gst_event_new_flush_stop(FALSE));
 	} else {
 		g_value_set_boolean(ret, TRUE);
 	}
@@ -593,7 +625,7 @@ static gboolean forward_src_event_func(GstPad *pad, GValue *ret, EventData *data
 static gboolean forward_src_event(GstFrameCPPChannelMux *mux, GstEvent *event, gboolean flush)
 {
 	GstIterator *it;
-	GValue vret = {0};
+	GValue vret = G_VALUE_INIT;
 	EventData data = {
 		event,
 		flush
@@ -605,7 +637,7 @@ static gboolean forward_src_event(GstFrameCPPChannelMux *mux, GstEvent *event, g
 
 	it = gst_element_iterate_sink_pads(GST_ELEMENT(mux));
 	while(TRUE) {
-		switch(gst_iterator_fold(it, (GstIteratorFoldFunction) forward_src_event_func, &vret, &data)) {
+		switch(gst_iterator_fold(it, forward_src_event_func, &vret, &data)) {
 		case GST_ITERATOR_RESYNC:
 			gst_iterator_resync(it);
 			g_value_set_boolean(&vret, TRUE);
@@ -634,9 +666,9 @@ done:
  */
 
 
-static gboolean src_event(GstPad *pad, GstEvent *event)
+static gboolean src_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(parent);
 	gboolean success;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -669,7 +701,228 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 		break;
 	}
 
-	gst_object_unref(GST_OBJECT(mux));
+	return success;
+}
+
+
+/*
+ * src_query()
+ */
+
+
+static void src_query_start_stop(GstFrameCPPChannelMux *mux, GstClockTime *start, GstClockTime *stop)
+{
+	FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(mux->collect);
+	if(mux->collect->segment.format == GST_FORMAT_TIME && GST_CLOCK_TIME_IS_VALID(mux->collect->segment.start) && GST_CLOCK_TIME_IS_VALID(mux->collect->segment.stop)) {
+		*start = mux->collect->segment.start;
+		*stop = mux->collect->segment.stop;
+	} else {
+		*start = 0;
+		*stop = GST_CLOCK_TIME_NONE;
+	}
+	FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(mux->collect);
+}
+
+
+static gboolean src_query_get_position(GstFrameCPPChannelMux *mux, GstClockTime *pos)
+{
+	GstIterator *it = gst_element_iterate_sink_pads(GST_ELEMENT_CAST(mux));
+	gboolean success = TRUE;
+	*pos = -1;	/* max */
+
+	/*
+	 * report the minimum of the positions reported by all upstream
+	 * peers
+	 */
+
+	while(TRUE) {
+		GValue item = G_VALUE_INIT;
+		GstIteratorResult ires = gst_iterator_next(it, &item);
+
+		switch(ires) {
+		case GST_ITERATOR_OK: {
+			GstPad *pad = GST_PAD(g_value_get_object(&item));
+			GstClockTime this_pos;
+			success = gst_pad_query_position(pad, GST_FORMAT_TIME, (gint64 *) &this_pos);
+			g_value_reset(&item);
+			if(!success)
+				goto done;
+			if(this_pos < *pos)
+				*pos = this_pos;
+			break;
+		}
+
+		case GST_ITERATOR_RESYNC:
+			gst_iterator_resync(it);
+			*pos = -1;	/* max */
+			break;
+
+		default:
+			success = FALSE;
+#if __GNUC__ >= 7
+			__attribute__ ((fallthrough));
+#endif
+done:
+		case GST_ITERATOR_DONE:
+			gst_iterator_free(it);
+			g_value_reset(&item);
+			return success;
+		}
+	}
+}
+
+
+
+static gboolean src_query(GstPad *pad, GstObject *parent, GstQuery *query)
+{
+	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(parent);
+	GstClockTime frame_file_duration = mux->frame_duration * mux->frames_per_file;
+	gboolean success = TRUE;
+
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_POSITION: {
+		GstFormat format;
+		GstClockTime pos;
+		gst_query_parse_position(query, &format, NULL);
+		if(format != GST_FORMAT_TIME) {
+			GST_ERROR_OBJECT(mux, "position query format %d not supported", format);
+			success = FALSE;
+			break;
+		}
+		success = src_query_get_position(mux, &pos);
+		if(!success)
+			break;
+		GST_DEBUG_OBJECT(mux, "query:  position = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(pos));
+		gst_query_set_position(query, format, pos);
+		break;
+	}
+
+	case GST_QUERY_DURATION:
+		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(mux->collect);
+		if(GST_CLOCK_TIME_IS_VALID(mux->collect->segment.start) && GST_CLOCK_TIME_IS_VALID(mux->collect->segment.stop))
+			gst_query_set_duration(query, mux->collect->segment.format, mux->collect->segment.stop - mux->collect->segment.start);
+		else
+			gst_query_set_duration(query, GST_FORMAT_TIME, GST_CLOCK_TIME_NONE);
+		FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(mux->collect);
+		break;
+
+	case GST_QUERY_LATENCY:
+		/* FIXME:  this isn't right, need to combine with latency
+		 * of upstream peers, and need to set live to true if
+		 * appropriate */
+		gst_query_set_latency(query, FALSE, 0, frame_file_duration);
+		break;
+
+	case GST_QUERY_SEEKING: {
+		GstClockTime start, stop;
+		src_query_start_stop(mux, &start, &stop);
+		gst_query_set_seeking(query, GST_FORMAT_TIME, TRUE, start, stop);
+		break;
+	}
+
+	case GST_QUERY_SEGMENT:
+		FRAMECPP_MUXCOLLECTPADS_PADS_LOCK(mux->collect);
+		gst_query_set_segment(query, mux->collect->segment.rate, mux->collect->segment.format, mux->collect->segment.start, mux->collect->segment.stop);
+		FRAMECPP_MUXCOLLECTPADS_PADS_UNLOCK(mux->collect);
+		break;
+
+	case GST_QUERY_CONVERT: {
+		GstClockTime start, stop;
+		GstFormat src_format, dst_format;
+		gint64 src_value, dst_value;
+		gst_query_parse_convert(query, &src_format, &src_value, &dst_format, NULL);
+		src_query_start_stop(mux, &start, &stop);
+		/* convert all formats to time */
+		switch(src_format) {
+		case GST_FORMAT_TIME:
+			if(GST_CLOCK_TIME_IS_VALID(src_value) && (GstClockTime) src_value < start)
+				src_value = start;
+			break;
+
+		case GST_FORMAT_BUFFERS:
+			if(src_value != -1) {
+				/* 1 file per buffer */
+				src_value = start + src_value * frame_file_duration;
+				/* clip to start of that file */
+				if(src_value % frame_file_duration) {
+					src_value -= src_value % frame_file_duration;
+					if((GstClockTime) src_value < start)
+						src_value = start;
+				}
+			}
+			break;
+
+		default:
+			GST_ERROR_OBJECT(mux, "convert query source format not supported");
+			success = FALSE;
+			break;
+		}
+		if(!success)
+			break;
+		/* convert time to dstination format */
+		switch(dst_format) {
+		case GST_FORMAT_TIME:
+			dst_value = src_value;
+			break;
+
+		case GST_FORMAT_BUFFERS:
+			if(src_value == -1)
+				dst_value = -1;
+			else {
+				/* NOTE:  must leave as two separate
+				 * statements to deny compiler the option
+				 * of re-arranging the algebra.  we rely on
+				 * integer arithmetic's rounding rules to
+				 * give us the correct result */
+				dst_value = src_value / frame_file_duration;
+				dst_value -= start / frame_file_duration;
+			}
+			break;
+
+		default:
+			GST_ERROR_OBJECT(mux, "convert query destination format not supported");
+			success = FALSE;
+			break;
+		}
+		if(!success)
+			break;
+		gst_query_set_convert(query, src_format, src_value, dst_format, dst_value);
+		break;
+	}
+
+	case GST_QUERY_FORMATS:
+		gst_query_set_formats(query, 2, GST_FORMAT_TIME, GST_FORMAT_BUFFERS);
+		break;
+
+	case GST_QUERY_SCHEDULING:
+		/* element is, in principle, seekable but sequential access
+		 * is recommended.  only push mode is supported (I think) */
+		gst_query_set_scheduling(query, (GstSchedulingFlags) (GST_SCHEDULING_FLAG_SEEKABLE | GST_SCHEDULING_FLAG_SEQUENTIAL), 1, -1, 0);
+		gst_query_add_scheduling_mode(query, GST_PAD_MODE_PUSH);
+		break;
+
+	/* nonsensical queries */
+	case GST_QUERY_BUFFERING:
+	case GST_QUERY_JITTER:
+	case GST_QUERY_URI:
+		GST_ERROR_OBJECT(pad, "unhandled query");
+		success = FALSE;
+		break;
+
+	/* hope the default handler can do these */
+	case GST_QUERY_ALLOCATION:
+	case GST_QUERY_ACCEPT_CAPS:
+	case GST_QUERY_CAPS:
+	case GST_QUERY_CONTEXT:
+	case GST_QUERY_DRAIN:
+	case GST_QUERY_RATE:
+	default:
+		success = gst_pad_query_default(pad, parent, query);
+		break;
+	}
+
+	if(!success)
+		GST_ERROR_OBJECT(mux, "query failed");
 	return success;
 }
 
@@ -684,100 +937,81 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
 
 
 /*
- * get informed of a sink pad's caps
+ * get informed of a sink pad's caps.  this is called with the
+ * FrameCPPMuxCollectPads lock held.
  */
 
 
-static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
+static gboolean sink_setcaps(GstPad *pad, GstObject *parent, GstCaps *caps)
 {
-	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
 	FrameCPPMuxCollectPadsData *data = framecpp_muxcollectpads_get_data(pad);
 	framecpp_channelmux_appdata *appdata = get_appdata(data);
-	GstStructure *structure;
+	GstAudioInfo info;
 	FrameCPP::FrVect::data_types_type type;
-	int width, channels, rate;
-	const gchar *media_type;
 	gboolean success = TRUE;
 
 	/*
 	 * parse caps
 	 */
 
-	structure = gst_caps_get_structure(caps, 0);
-	media_type = gst_structure_get_name(structure);
-	success &= gst_structure_get_int(structure, "width", &width);
-	success &= gst_structure_get_int(structure, "channels", &channels);
-	success &= gst_structure_get_int(structure, "rate", &rate);
-	if(!success)
-		GST_ERROR_OBJECT(pad, "cannot parse width, channels, and/or rate from %" GST_PTR_FORMAT, caps);
-	if(!strcmp(media_type, "audio/x-raw-int")) {
-		gboolean is_signed;
-		success &= gst_structure_get_boolean(structure, "signed", &is_signed);
-		switch(width) {
-		case 8:
-			type = is_signed ? FrameCPP::FrVect::FR_VECT_C : FrameCPP::FrVect::FR_VECT_1U;
+	success &= gstlal_audio_info_from_caps(&info, caps);
+	if(success) {
+		switch(GST_AUDIO_INFO_FORMAT(&info)) {
+		case GST_AUDIO_FORMAT_S8:
+			type = FrameCPP::FrVect::FR_VECT_C;
 			break;
-		case 16:
-			type = is_signed ? FrameCPP::FrVect::FR_VECT_2S : FrameCPP::FrVect::FR_VECT_2U;
+		case GST_AUDIO_FORMAT_U8:
+			type = FrameCPP::FrVect::FR_VECT_1U;
 			break;
-		case 32:
-			type = is_signed ? FrameCPP::FrVect::FR_VECT_4S : FrameCPP::FrVect::FR_VECT_4U;
+		case GST_AUDIO_FORMAT_S16:
+			type = FrameCPP::FrVect::FR_VECT_2S;
 			break;
-		case 64:
-			type = is_signed ? FrameCPP::FrVect::FR_VECT_8S : FrameCPP::FrVect::FR_VECT_8U;
+		case GST_AUDIO_FORMAT_U16:
+			type = FrameCPP::FrVect::FR_VECT_2U;
 			break;
-		default:
-			GST_ERROR_OBJECT(pad, "unsupported width %d", width);
-			success = FALSE;
+		case GST_AUDIO_FORMAT_S32:
+			type = FrameCPP::FrVect::FR_VECT_4S;
 			break;
-		}
-	} else if(!strcmp(media_type, "audio/x-raw-float")) {
-		switch(width) {
-		case 32:
+		case GST_AUDIO_FORMAT_U32:
+			type = FrameCPP::FrVect::FR_VECT_4U;
+			break;
+		/* FIXME no longer natively supported by gstreamer */
+		/*case GST_AUDIO_FORMAT_S64:
+			type = FrameCPP::FrVect::FR_VECT_8S;
+			break;
+		case GST_AUDIO_FORMAT_U64:
+			type = FrameCPP::FrVect::FR_VECT_8U;
+			break;*/
+		case GST_AUDIO_FORMAT_F32:
 			type = FrameCPP::FrVect::FR_VECT_4R;
 			break;
-		case 64:
+		case GST_AUDIO_FORMAT_F64:
 			type = FrameCPP::FrVect::FR_VECT_8R;
 			break;
-		default:
-			GST_ERROR_OBJECT(pad, "unsupported width %d", width);
-			success = FALSE;
-			break;
-		}
-	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
-		switch(width) {
-		case 64:
+		case GST_AUDIO_FORMAT_Z64:
 			type = FrameCPP::FrVect::FR_VECT_8C;
 			break;
-		case 128:
+		case GST_AUDIO_FORMAT_Z128:
 			type = FrameCPP::FrVect::FR_VECT_16C;
 			break;
 		default:
-			GST_ERROR_OBJECT(pad, "unsupported width %d", width);
+			GST_ERROR_OBJECT(pad, "unsupported format %" GST_PTR_FORMAT, caps);
 			success = FALSE;
 			break;
 		}
-	} else {
-		GST_ERROR_OBJECT(pad, "unsupported media type %s", media_type);
-		success = FALSE;
 	}
 
 	if(success) {
-		GObject *queue;
-		GST_OBJECT_LOCK(mux->collect);
-		queue = G_OBJECT(data->queue);
 		FRAMECPP_MUXQUEUE_LOCK(data->queue);
 		/* FIXME:  flush queue on format change */
 		appdata->type = type;
-		appdata->dims[0].SetDx(1.0 / (double) rate);
-		appdata->rate = rate;
-		appdata->unit_size = width / 8 * channels;
-		g_object_set(queue, "rate", appdata->rate, "unit-size", appdata->unit_size, NULL);
+		appdata->dims[0].SetDx(1.0 / (double) GST_AUDIO_INFO_RATE(&info));
+		appdata->rate = GST_AUDIO_INFO_RATE(&info);
+		appdata->unit_size = GST_AUDIO_INFO_BPF(&info);
+		g_object_set(G_OBJECT(data->queue), "rate", appdata->rate, "unit-size", appdata->unit_size, NULL);
 		FRAMECPP_MUXQUEUE_UNLOCK(data->queue);
-		GST_OBJECT_UNLOCK(mux->collect);
 	}
 
-	gst_object_unref(GST_OBJECT(mux));
 	return success;
 }
 
@@ -787,14 +1021,23 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
  */
 
 
-static gboolean sink_event(GstPad *pad, GstEvent *event)
+static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 {
-	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(gst_pad_get_parent(pad));
+	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(parent);
 	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT:
+	case GST_EVENT_SEGMENT:
 		mux->need_discont = TRUE;
+		break;
+
+	case GST_EVENT_CAPS:
+		GstCaps *caps;
+		gst_event_parse_caps(event, &caps);
+		sink_setcaps(pad, parent, caps);
+		/* do not formward */
+		gst_event_unref(event);
+		goto done;
 		break;
 
 	case GST_EVENT_TAG: {
@@ -858,7 +1101,6 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	gst_pad_push_event(mux->srcpad, event);
 
 done:
-	gst_object_unref(GST_OBJECT(mux));
 	return success;
 }
 
@@ -883,8 +1125,9 @@ static void notify_instrument_handler(GObject *object, GParamSpec *pspec, gpoint
  * already in use
  */
 
+/* FIXME:  should the caps be used somehow? */
 
-static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const gchar *name)
+static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const gchar *name, const GstCaps *caps)
 {
 	GstFrameCPPChannelMux *mux = FRAMECPP_CHANNELMUX(element);
 	FrameCPPMuxCollectPadsData *data;
@@ -897,7 +1140,6 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	pad = gst_frpad_new_from_template(templ, name);
 	if(!pad)
 		goto no_pad;
-	gst_pad_set_setcaps_function(GST_PAD(pad), GST_DEBUG_FUNCPTR(sink_setcaps));
 	g_signal_connect(G_OBJECT(pad), "notify::instrument", G_CALLBACK(notify_instrument_handler), NULL);
 
 	/*
@@ -907,7 +1149,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	 */
 
 	GST_OBJECT_LOCK(mux->collect);
-	data = framecpp_muxcollectpads_add_pad(mux->collect, GST_PAD(pad), (FrameCPPMuxCollectPadsDataDestroyNotify) GST_DEBUG_FUNCPTR(framecpp_channelmux_appdata_free));
+	data = framecpp_muxcollectpads_add_pad(mux->collect, GST_PAD(pad), GST_DEBUG_FUNCPTR(framecpp_channelmux_appdata_free));
 	if(!data)
 		goto could_not_add_to_collectpads;
 	framecpp_muxcollectpads_set_event_function(data, GST_DEBUG_FUNCPTR(sink_event));
@@ -916,6 +1158,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 		goto could_not_create_appdata;
 	get_appdata(data)->nDims = 1;
 	get_appdata(data)->dims = new FrameCPP::Dimension[get_appdata(data)->nDims];
+	gst_object_ref(pad);	/* we need to return a reference */
 	if(!gst_element_add_pad(element, GST_PAD(pad)))
 		goto could_not_add_to_element;
 	GST_OBJECT_UNLOCK(mux->collect);
@@ -952,7 +1195,6 @@ static void release_pad(GstElement *element, GstPad *pad)
 
 	GST_OBJECT_LOCK(mux->collect);
 	framecpp_muxcollectpads_remove_pad(mux->collect, pad);
-	gst_element_remove_pad(element, pad);
 	GST_OBJECT_UNLOCK(mux->collect);
 
 	mux->need_tag_list = TRUE;
@@ -984,7 +1226,7 @@ static void collected_handler(FrameCPPMuxCollectPads *collectpads, GstClockTime 
 	if(mux->need_tag_list) {
 		update_instruments(mux);
 		if(g_hash_table_size(mux->instruments))
-			gst_element_found_tags(GST_ELEMENT(mux), get_srcpad_tag_list(mux));
+			gst_pad_push_event(mux->srcpad, gst_event_new_tag(get_srcpad_tag_list(mux)));
 		else
 			GST_DEBUG_OBJECT(mux, "not pushing tags:  no instruments");
 		mux->need_tag_list = FALSE;
@@ -1033,7 +1275,7 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 		break;
 	}
 
-	result = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
+	result = GST_ELEMENT_CLASS(framecpp_channelmux_parent_class)->change_state(element, transition);
 
 	return result;
 }
@@ -1161,7 +1403,7 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 
 
 /*
- * Instance finalize function.  See ???
+ * Instance finalize function.
  */
 
 
@@ -1180,7 +1422,7 @@ static void finalize(GObject * object)
 	g_value_array_free(element->frame_history);
 	element->frame_history = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
+	G_OBJECT_CLASS(framecpp_channelmux_parent_class)->finalize(object);
 }
 
 
@@ -1194,51 +1436,14 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_REQUEST,
 	GST_STATIC_CAPS(
-		"audio/x-raw-float, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) {32, 64}; "\
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 8, " \
-			"depth = (int) [1, 8], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 16, " \
-			"depth = (int) [1, 16], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 32, " \
-			"depth = (int) [1, 32], " \
-			"signed = (boolean) {true, false};" \
-		"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"channels = (int) 1, " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) 64, " \
-			"depth = (int) [1, 64], " \
-			"signed = (boolean) {true, false};" \
+		"audio/x-raw, " \
+		"rate = " GST_AUDIO_RATE_RANGE ", " \
+		"channels = (int) 1, " \
+		"format = (string) { U8, " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(U32) ", " GST_AUDIO_NE(U64) ", S8, " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(S64) ", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) "}, " \
+		"layout = (string) interleaved, " \
+		"channel-mask = (bitmask) 0"
 	)
 );
-
-
-/*
- * base_init()
- */
-
-
-static void framecpp_channelmux_base_init(gpointer klass)
-{
-}
 
 
 /*
@@ -1391,7 +1596,7 @@ static void framecpp_channelmux_class_init(GstFrameCPPChannelMuxClass *klass)
  */
 
 
-static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux, GstFrameCPPChannelMuxClass *kclass)
+static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux)
 {
 	gst_element_create_all_pads(GST_ELEMENT(mux));
 
@@ -1402,8 +1607,9 @@ static void framecpp_channelmux_init(GstFrameCPPChannelMux *mux, GstFrameCPPChan
 
 	/* configure src pad */
 	mux->srcpad = gst_element_get_static_pad(GST_ELEMENT(mux), "src");
-	/*gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(src_query));*/ /* FIXME:  implement */
+	gst_pad_set_query_function(mux->srcpad, GST_DEBUG_FUNCPTR(src_query));
 	gst_pad_set_event_function(mux->srcpad, GST_DEBUG_FUNCPTR(src_event));
+	gst_pad_use_fixed_caps(mux->srcpad);
 
 	/* configure collect pads.  max-size-time will get set when our
 	 * properties are initialized */

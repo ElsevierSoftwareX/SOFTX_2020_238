@@ -33,8 +33,9 @@
  */
 
 
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -66,10 +67,9 @@
  */
 
 
-GST_BOILERPLATE(
+G_DEFINE_TYPE(
         FRAMECPPFilesink,
         framecpp_filesink,
-        GstBin,
         GST_TYPE_BIN
 );
 
@@ -100,7 +100,7 @@ GST_BOILERPLATE(
 
 /*
  * convert a string of the form "H1,V1,H2" into a string of the form "HV".
- * the return value must freed with g_free() when no longer needed.
+ * the return value must be freed with g_free() when no longer needed.
  */
 
 
@@ -150,8 +150,9 @@ static gchar *observatory_from_instruments(const gchar *instruments)
  */
 
 
-static gboolean probeEventHandler(GstPad *pad, GstEvent *event, gpointer data) {
+static GstPadProbeReturn probeEventHandler(GstPad *pad, GstPadProbeInfo *info, gpointer data) {
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
+    GstEvent *event = GST_EVENT(info->data);
     GstTagList *tag_list;
     gchar *instrumentList = NULL;
     gchar *observatoryString = NULL;
@@ -170,40 +171,37 @@ static gboolean probeEventHandler(GstPad *pad, GstEvent *event, gpointer data) {
     gst_object_unref(element);
     g_free(instrumentList);
     g_free(observatoryString);
-    return TRUE;
+    return GST_PAD_PROBE_OK;
 }
 
-static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data) {
+static GstPadProbeReturn probeBufferHandler(GstPad *pad, GstPadProbeInfo *info, gpointer data) {
     FRAMECPPFilesink *element = FRAMECPP_FILESINK(gst_pad_get_parent(pad));
+    GstBuffer *buffer = GST_BUFFER(info->data);
     guint timestamp, end_time, duration;
     gchar *filename, *location;
-    gboolean success = TRUE;
 
     g_assert(gst_pad_is_linked(pad));
 
     /* Buffer looks good, else die. */
-    g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buffer));
+    g_assert(GST_BUFFER_PTS_IS_VALID(buffer));
     g_assert(GST_BUFFER_DURATION_IS_VALID(buffer));
 
     /* Set the element timestamp property */
-    element->timestamp = GST_BUFFER_TIMESTAMP(buffer);
+    element->timestamp = GST_BUFFER_PTS(buffer);
     g_object_notify(G_OBJECT(element), "timestamp");
 
     if (!(element->instrument)) {
         /* Instrument should have come from via the stream, hence STREAM error. */
         GST_ELEMENT_ERROR(element, STREAM, TYPE_NOT_FOUND, (NULL), ("instrument not set in framecpp_filesink element."));
-        /* Returning false will result in the buffer being dropped.*/
-        success = FALSE;
         goto done;
     } else if (!(element->frame_type)) {
         /* frame_type is an input parameter, hence RESOURCE error. */
         GST_ELEMENT_ERROR(element, RESOURCE, NOT_FOUND, (NULL), ("frame_type not set in framecpp_filesink element."));
-        success = FALSE;
         goto done;
     }
 
-    timestamp = GST_BUFFER_TIMESTAMP(buffer)/GST_SECOND;
-    end_time = gst_util_uint64_scale_ceil(GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
+    timestamp = GST_BUFFER_PTS(buffer)/GST_SECOND;
+    end_time = gst_util_uint64_scale_ceil(GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer), 1, GST_SECOND);
     duration = end_time - timestamp;
     /* The interval indicated by the filename should "cover" the actual 
     data interval. */
@@ -222,7 +220,7 @@ static gboolean probeBufferHandler(GstPad *pad, GstBuffer *buffer, gpointer data
 
 done:
     gst_object_unref(element);
-    return success;
+    return GST_PAD_PROBE_OK;
 }
 
 
@@ -317,7 +315,7 @@ static void dispose(GObject *object)
         element->mfs = NULL;
     }
 
-    G_OBJECT_CLASS(parent_class)->dispose(object);
+    G_OBJECT_CLASS(framecpp_filesink_parent_class)->dispose(object);
 }
 
 
@@ -337,7 +335,7 @@ static void finalize(GObject *object)
     g_free(element->path);
     element->path = NULL;
 
-    G_OBJECT_CLASS(parent_class)->finalize(object);
+    G_OBJECT_CLASS(framecpp_filesink_parent_class)->finalize(object);
 }
 
 
@@ -355,16 +353,6 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
             "framed = (boolean) true" 
         )
 );
-
-
-/*
- * base_init()
- */
-
-
-static void framecpp_filesink_base_init(gpointer gclass)
-{
-}
 
 
 /*
@@ -429,7 +417,7 @@ static void framecpp_filesink_class_init(FRAMECPPFilesinkClass *klass)
  */
 
 
-static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkClass *kclass)
+static void framecpp_filesink_init(FRAMECPPFilesink *element)
 {
     gboolean retval;
 
@@ -454,8 +442,8 @@ static void framecpp_filesink_init(FRAMECPPFilesink *element, FRAMECPPFilesinkCl
     gst_object_unref(sink);
 
     /* add event and buffer probes */
-    gst_pad_add_event_probe(sink_ghost, G_CALLBACK(probeEventHandler), NULL);
-    gst_pad_add_buffer_probe(sink_ghost, G_CALLBACK(probeBufferHandler), NULL); 
+    gst_pad_add_probe(sink_ghost, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, probeEventHandler, NULL, NULL);
+    gst_pad_add_probe(sink_ghost, GST_PAD_PROBE_TYPE_BUFFER, probeBufferHandler, NULL, NULL);
 }
 
 

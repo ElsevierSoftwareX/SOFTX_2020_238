@@ -233,6 +233,16 @@ with open(sys.argv[1]) as f:
             line = mod_line
             modded = True
 
+        (mod_line, mod_num) = re.subn(r'MESSAGE_ELEMENT', r'MessageType.ELEMENT', line)
+        if mod_num != 0:
+            line = mod_line
+            modded = True
+
+        (mod_line, mod_num) = re.subn(r'MESSAGE_APPLICATION', r'MessageType.APPLICATION', line)
+        if mod_num != 0:
+            line = mod_line
+            modded = True
+
 
         # SEEK_FLAG_FLUSH
         # Replace something like this:

@@ -1,4 +1,4 @@
-SUBDIRS = pipeparts
+SUBDIRS = pipeparts stats
 
 AM_CPPFLAGS = -I$(top_srcdir)/lib
 
@@ -15,6 +15,7 @@ pkgpython_PYTHON = \
 	dagparts.py \
 	datasource.py \
 	elements.py \
+	httpinterface.py \
 	matplotlibhelper.py \
 	misc.py \
 	multirate_datasource.py \
@@ -23,6 +24,7 @@ pkgpython_PYTHON = \
 	plotpsd.py \
 	plotutil.py \
 	reference_psd.py \
+	servicediscovery.py \
 	simplehandler.py \
 	simulation.py
 
@@ -31,4 +33,4 @@ pkgpyexec_LTLIBRARIES = _misc.la
 _misc_la_SOURCES = misc.c
 _misc_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
 _misc_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlal.la
-_misc_la_LDFLAGS = $(AM_LDFLAGS) $(PYTHON_LDFLAGS) -module -avoid-version
+_misc_la_LDFLAGS = $(AM_LDFLAGS) $(PYTHON_LIBS) -module -avoid-version

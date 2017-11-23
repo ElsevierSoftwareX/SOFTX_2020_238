@@ -84,7 +84,7 @@ typedef struct {
 
 	gboolean unblocked;
 	pthread_t create_thread;
-	GMutex *create_thread_lock;
+	GMutex create_thread_lock;
 	gboolean need_new_segment;
 	GstClockTime next_timestamp;
 

@@ -23,12 +23,7 @@ import os
 import sys
 import copy
 
-import pygtk
-pygtk.require('2.0')
-import pygst
-pygst.require('0.10')
-
-from gstlal.svd_bank import read_banks
+from gstlal import svd_bank
 import numpy
 import cgi
 import cgitb
@@ -60,7 +55,7 @@ print """
 """
 
 
-for bank in read_banks(form.getlist("url")[0]):
+for bank in svd_bank.read_banks(form.getlist("url")[0], svd_bank.DefaultContentHandler):
 
 	# get the template number
 	tmps = bank.bank_fragments[0].mix_matrix.shape[1] / 2

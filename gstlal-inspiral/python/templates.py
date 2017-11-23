@@ -39,16 +39,16 @@
 #
 
 
-import numpy
 import math
-
+import numpy
 import sys
-from pylal import datatypes as laltypes
-from pylal import lalfft
-from pylal import spawaveform
+
+
+import lal
 import lalsimulation as lalsim
+
+
 from gstlal import chirptime
-from lal import MSUN_SI
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -64,10 +64,32 @@ __date__ = "FIXME"
 # =============================================================================
 #
 
-gstlal_FD_approximants = set(('IMRPhenomC', 'SEOBNRv2_ROM_DoubleSpin', 'TaylorF2', 'TaylorF2RedSpin', 'TaylorF2RedSpinTidal'))
-gstlal_TD_approximants = set(('TaylorT1', 'TaylorT2', 'TaylorT3', 'TaylorT4', 'EOBNRv2'))
+
+gstlal_FD_approximants = set((
+	'IMRPhenomC',
+	'SEOBNRv4_ROM',
+	'SEOBNRv2_ROM_DoubleSpin',
+	'TaylorF2',
+	'TaylorF2RedSpin',
+	'TaylorF2RedSpinTidal'
+))
+gstlal_TD_approximants = set((
+	'EOBNRv2',
+	'TaylorT1',
+	'TaylorT2',
+	'TaylorT3',
+	'TaylorT4'
+))
+gstlal_IMR_approximants = set((
+	'EOBNRv2',
+	'IMRPhenomC',
+	'SEOBNRv4_ROM',
+	'SEOBNRv2_ROM_DoubleSpin'
+))
 gstlal_approximants = gstlal_FD_approximants | gstlal_TD_approximants
-gstlal_IMR_approximants = set(('IMRPhenomC', 'SEOBNRv2_ROM_DoubleSpin', 'EOBNRv2'))
+
+assert gstlal_IMR_approximants <= gstlal_approximants, "gstlal_IMR_approximants contains values not listed in gstlal_approximants"
+
 
 def gstlal_valid_approximant(appx_str):
 	try:
@@ -78,51 +100,6 @@ def gstlal_valid_approximant(appx_str):
 		raise ValueError("Approximant not currently supported by gstlal, but is supported by lalsimulation: %s. Please consider preparing a patch" % appx_str)
 
 
-def add_quadrature_phase(fseries, n):
-	"""
-	From the Fourier transform of a real-valued function of time,
-	compute and return the Fourier transform of the complex-valued
-	function of time whose real component is the original time series
-	and whose imaginary component is the quadrature phase of the real
-	part.  fseries is a LAL COMPLEX16FrequencySeries and n is the
-	number of samples in the original time series.
-	"""
-	#
-	# prepare output frequency series
-	#
-
-	out_fseries = laltypes.COMPLEX16FrequencySeries(
-		name = fseries.name,
-		epoch = fseries.epoch,
-		f0 = fseries.f0,	# caution: only 0 is supported
-		deltaF = fseries.deltaF,
-		sampleUnits = fseries.sampleUnits
-	)
-
-	#
-	# positive frequencies include Nyquist if n is even
-	#
-
-	have_nyquist = not (n % 2)
-
-	#
-	# shuffle frequency bins
-	#
-
-	positive_frequencies = fseries.data
-	positive_frequencies[0] = 0	# set DC to zero
-	if have_nyquist:
-		positive_frequencies[-1] = 0	# set Nyquist to 0
-	zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
-	if have_nyquist:
-		# complex transform never includes positive Nyquist
-		positive_frequencies = positive_frequencies[:-1]
-
-	out_fseries.data = numpy.concatenate((zeros, 2 * positive_frequencies[1:]))
-
-	return out_fseries
-
-
 class QuadraturePhase(object):
 	"""
 	A tool for generating the quadrature phase of a real-valued
@@ -131,21 +108,67 @@ class QuadraturePhase(object):
 	Example:
 
 	>>> import numpy
-	>>> from pylal.datatypes import REAL8TimeSeries
+	>>> import lal
 	>>> q = QuadraturePhase(128) # initialize for 128-sample templates
-	>>> inseries = REAL8TimeSeries(deltaT = 1.0 / 128, data = numpy.cos(numpy.arange(128, dtype = "double") * 2 * numpy.pi / 128)) # one cycle of cos(t)
+	>>> inseries = lal.CreateREAL8TimeSeries(deltaT = 1.0 / 128, length = 128)
+	>>> inseries.data.data = numpy.cos(numpy.arange(128, dtype = "double") * 2 * numpy.pi / 128) # one cycle of cos(t)
 	>>> outseries = q(inseries) # output has cos(t) in real part, sin(t) in imaginary part
 	"""
-
 	def __init__(self, n):
 		"""
 		Initialize.  n is the size, in samples, of the templates to
 		be processed.  This is used to pre-allocate work space.
 		"""
 		self.n = n
-		self.fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(n, 1)
-		self.revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(n, 1)
-		self.in_fseries = lalfft.prepare_fseries_for_real8tseries(laltypes.REAL8TimeSeries(deltaT = 1.0, data = numpy.zeros((n,), dtype = "double")))
+		self.fwdplan = lal.CreateForwardREAL8FFTPlan(n, 1)
+		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(n, 1)
+		self.in_fseries = lalfft.prepare_fseries_for_real8tseries(lal.CreateREAL8TimeSeries(deltaT = 1.0, length = n))
+
+
+	@staticmethod
+	def add_quadrature_phase(fseries, n):
+		"""
+		From the Fourier transform of a real-valued function of
+		time, compute and return the Fourier transform of the
+		complex-valued function of time whose real component is the
+		original time series and whose imaginary component is the
+		quadrature phase of the real part.  fseries is a LAL
+		COMPLEX16FrequencySeries and n is the number of samples in
+		the original time series.
+		"""
+		#
+		# positive frequencies include Nyquist if n is even
+		#
+
+		have_nyquist = not (n % 2)
+
+		#
+		# shuffle frequency bins
+		#
+
+		positive_frequencies = numpy.array(fseries.data.data) # work with copy
+		positive_frequencies[0] = 0	# set DC to zero
+		zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
+		if have_nyquist:
+			# complex transform never includes positive Nyquist
+			positive_frequencies = positive_frequencies[:-1]
+
+		#
+		# prepare output frequency series
+		#
+
+		out_fseries = lal.CreateCOMPLEX16FrequencySeries(
+			name = fseries.name,
+			epoch = fseries.epoch,
+			f0 = fseries.f0,	# caution: only 0 is supported
+			deltaF = fseries.deltaF,
+			sampleUnits = fseries.sampleUnits,
+			length = len(zeros) + len(positive_frequencies) - 1
+		)
+		out_fseries.data.data = numpy.concatenate((zeros, 2 * positive_frequencies[1:]))
+
+		return out_fseries
+
 
 	def __call__(self, tseries):
 		"""
@@ -159,14 +182,14 @@ class QuadraturePhase(object):
 		# transform to frequency series
 		#
 
-		lalfft.XLALREAL8TimeFreqFFT(self.in_fseries, tseries, self.fwdplan)
+		lal.REAL8TimeFreqFFT(self.in_fseries, tseries, self.fwdplan)
 
 		#
 		# transform to complex time series
 		#
 
-		tseries = laltypes.COMPLEX16TimeSeries(data = numpy.zeros((self.n,), dtype = "cdouble"))
-		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, add_quadrature_phase(self.in_fseries, self.n), self.revplan)
+		tseries = lal.CreateCOMPLEX16TimeSeries(length = self.n)
+		lal.COMPLEX16FreqTimeFFT(tseries, self.add_quadrature_phase(self.in_fseries, self.n), self.revplan)
 
 		#
 		# done
@@ -176,21 +199,28 @@ class QuadraturePhase(object):
 
 
 def normalized_autocorrelation(fseries, revplan):
-	data = fseries.data
-	fseries = laltypes.COMPLEX16FrequencySeries(
+	data = fseries.data.data
+	fseries = lal.CreateCOMPLEX16FrequencySeries(
 		name = fseries.name,
 		epoch = fseries.epoch,
 		f0 = fseries.f0,
 		deltaF = fseries.deltaF,
 		sampleUnits = fseries.sampleUnits,
-		data = data * numpy.conj(data)
+		length = len(data)
 	)
-	tseries = laltypes.COMPLEX16TimeSeries(
-		data = numpy.empty((len(data),), dtype = "cdouble")
+	fseries.data.data = data * numpy.conj(data)
+	tseries = lal.CreateCOMPLEX16TimeSeries(
+		name = "timeseries",
+		epoch = fseries.epoch,
+		f0 = fseries.f0,
+		deltaT = 1. / (len(data)*fseries.deltaF),
+		length = len(data),
+		sampleUnits = lal.DimensionlessUnit
 	)
-	lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
-	data = tseries.data
-	tseries.data = data / data[0]
+	tseries.data.data = numpy.empty((len(data),), dtype = "cdouble")
+	lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+	data = tseries.data.data
+	tseries.data.data = data / data[0]
 	return tseries
 	
 
@@ -248,10 +278,7 @@ def time_slices(
 	# Remove too-small and too-big sample rates base on input params.
 	sample_rate_min = ceil_pow_2( 2 * padding * flow )
 	sample_rate_max = ceil_pow_2( 2 * fhigh )
-	while allowed_rates[-1] < sample_rate_min:
-		allowed_rates.pop(-1)
-	while allowed_rates[0] > sample_rate_max:
-		allowed_rates.pop(0)
+	allowed_rates = [rate for rate in allowed_rates if sample_rate_min <= rate <= sample_rate_max]
 
 	#
 	# FIND TIMES WHEN THESE SAMPLE RATES ARE OK TO USE
@@ -294,7 +321,7 @@ def time_slices(
 		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 
-		longest_chirp = max(chirptime.imr_time(this_flow, row.mass1*MSUN_SI ,row.mass2*MSUN_SI, row.spin1z, row.spin2z) for row in sngl_inspiral_rows)
+		longest_chirp = max(chirptime.imr_time(this_flow, row.mass1 * lal.MSUN_SI, row.mass2 * lal.MSUN_SI, row.spin1z, row.spin2z) for row in sngl_inspiral_rows)
 
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.

@@ -43,6 +43,8 @@
 
 
 #include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -95,31 +97,25 @@ static GstURIType uri_get_type(GType type)
 }
 
 
-/* 1.0:  this becomes static const gchar *const * */
-static gchar **uri_get_protocols(GType type)
+static const gchar *const *uri_get_protocols(GType type)
 {
-	/* 1.0:  this becomes
 	static const gchar *protocols[] = {URI_SCHEME, NULL};
-	*/
-	static gchar *protocols[] = {(gchar *) URI_SCHEME, NULL};
 
 	return protocols;
 }
 
 
-/* 1.0:  this becomes static gchar * */
-static const gchar *uri_get_uri(GstURIHandler *handler)
+static gchar *uri_get_uri(GstURIHandler *handler)
 {
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(handler);
 
-	/* 1.0:  this won't be a memory leak */
 	return g_strdup_printf(URI_SCHEME "://%s:%d", element->group, element->port);
 }
 
 
-/* 1.0:  this gets a GError ** argument */
-static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri)
+static gboolean uri_set_uri(GstURIHandler *handler, const gchar *uri, GError **err)
 {
+	/* FIXME:  report errors via GError argument */
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(handler);
 	gchar *scheme = g_uri_parse_scheme(uri);
 	gchar group[strlen(uri)];
@@ -143,10 +139,8 @@ static void uri_handler_init(gpointer g_iface, gpointer iface_data)
 
 	iface->get_uri = GST_DEBUG_FUNCPTR(uri_get_uri);
 	iface->set_uri = GST_DEBUG_FUNCPTR(uri_set_uri);
-	/* 1.0:  this is ->get_type */
-	iface->get_type_full = GST_DEBUG_FUNCPTR(uri_get_type);
-	/* 1.0:  this is ->get_protocols */
-	iface->get_protocols_full = GST_DEBUG_FUNCPTR(uri_get_protocols);
+	iface->get_type = GST_DEBUG_FUNCPTR(uri_get_type);
+	iface->get_protocols = GST_DEBUG_FUNCPTR(uri_get_protocols);
 }
 
 
@@ -176,7 +170,12 @@ static void additional_initializations(GType type)
 }
 
 
-GST_BOILERPLATE_FULL(GstGDSFramexmitSrc, gds_framexmitsrc, GstPushSrc, GST_TYPE_PUSH_SRC, additional_initializations);
+G_DEFINE_TYPE_WITH_CODE(
+	GstGDSFramexmitSrc,
+	gds_framexmitsrc,
+	GST_TYPE_PUSH_SRC,
+	additional_initializations(g_define_type_id)
+);
 
 
 /*
@@ -248,6 +247,12 @@ static GstClockTime GPSNow(void)
  */
 
 
+static void delete_wrapper(void *data)
+{
+	delete [] (char*) data;
+}
+
+
 static void *receive_thread(void *arg)
 {
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(arg);
@@ -263,33 +268,36 @@ static void *receive_thread(void *arg)
 
 		len = FRAMERCV(element)->receive(data, 0, &sequence, &timestamp, &duration);
 		if(len < 0) {
-			free(data);
 			GST_ELEMENT_ERROR(element, RESOURCE, FAILED, (NULL), ("framexmit::frameRecv.receive() failed"));
-			g_mutex_lock(element->buffer_lock);
+			delete_wrapper(data);
+			g_mutex_lock(&element->buffer_lock);
 			element->recv_status = GST_FLOW_ERROR;
-			g_cond_signal(element->received_buffer);
-			g_mutex_unlock(element->buffer_lock);
+			g_cond_signal(&element->received_buffer);
+			g_mutex_unlock(&element->buffer_lock);
 			break;
 		}
 		GST_DEBUG_OBJECT(element, "recieved %d byte buffer (seq. #%u) for [%u s, %u s)", len, sequence, timestamp, timestamp + duration);
 
-		buffer = gst_buffer_new();
-		gst_buffer_set_caps(buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(GST_BASE_SRC(element))));
-		GST_BUFFER_DATA(buffer) = GST_BUFFER_MALLOCDATA(buffer) = (guint8 *) data;
-		GST_BUFFER_SIZE(buffer) = len;
-		GST_BUFFER_TIMESTAMP(buffer) = timestamp * GST_SECOND;
+		buffer = gst_buffer_new_wrapped_full(
+			GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS,
+			data,
+			len,
+			0, len,
+			data, delete_wrapper
+		);
+		GST_BUFFER_PTS(buffer) = timestamp * GST_SECOND;
 		GST_BUFFER_DURATION(buffer) = duration * GST_SECOND;
 		GST_BUFFER_OFFSET(buffer) = sequence;
 		GST_BUFFER_OFFSET_END(buffer) = sequence + 1;
 
-		g_mutex_lock(element->buffer_lock);
+		g_mutex_lock(&element->buffer_lock);
 		if(element->buffer) {
 			GST_WARNING_OBJECT(element, "receive thread overrun, dropping %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(element->buffer));
 			gst_buffer_unref(element->buffer);
 		}
 		element->buffer = buffer;
-		g_cond_signal(element->received_buffer);
-		g_mutex_unlock(element->buffer_lock);
+		g_cond_signal(&element->received_buffer);
+		g_mutex_unlock(&element->buffer_lock);
 	}
 
 	return NULL;
@@ -342,6 +350,11 @@ static gboolean start(GstBaseSrc *object)
 	element->next_timestamp = GST_CLOCK_TIME_NONE;
 
 done:
+	/* FIXME:  documentation says this needs to be called when start()
+	 * is overridden but doing so causes frequent lock-ups in our
+	 * applications and I can't find any examples in gstreamer's own
+	 * code where an element calls this so ... !?  it's commented out */
+	/*gst_base_src_start_complete(object, success ? GST_FLOW_OK : GST_FLOW_ERROR);*/
 	return success;
 }
 
@@ -358,12 +371,12 @@ static gboolean stop(GstBaseSrc *object)
 
 	success &= pthread_cancel(element->recv_thread) == 0;
 	success &= pthread_join(element->recv_thread, NULL) == 0;
-	g_mutex_lock(element->buffer_lock);
+	g_mutex_lock(&element->buffer_lock);
 	if(element->buffer) {
 		gst_buffer_unref(element->buffer);
 		element->buffer = NULL;
 	}
-	g_mutex_unlock(element->buffer_lock);
+	g_mutex_unlock(&element->buffer_lock);
 
 	FRAMERCV(element)->close();
 	delete FRAMERCV(element);
@@ -386,10 +399,10 @@ static gboolean unlock(GstBaseSrc *basesrc)
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(basesrc);
 	gboolean success = TRUE;
 
-	g_mutex_lock(element->buffer_lock);
+	g_mutex_lock(&element->buffer_lock);
 	element->unblocked = TRUE;
-	g_cond_signal(element->received_buffer);
-	g_mutex_unlock(element->buffer_lock);
+	g_cond_signal(&element->received_buffer);
+	g_mutex_unlock(&element->buffer_lock);
 
 	return success;
 }
@@ -405,9 +418,9 @@ static gboolean unlock_stop(GstBaseSrc *basesrc)
 	GstGDSFramexmitSrc *element = GDS_FRAMEXMITSRC(basesrc);
 	gboolean success = TRUE;
 
-	g_mutex_lock(element->buffer_lock);
+	g_mutex_lock(&element->buffer_lock);
 	element->unblocked = FALSE;
-	g_mutex_unlock(element->buffer_lock);
+	g_mutex_unlock(&element->buffer_lock);
 
 	return success;
 }
@@ -430,20 +443,20 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 */
 
 try_again:
-	g_mutex_lock(element->buffer_lock);
+	g_mutex_lock(&element->buffer_lock);
 	timeout = FALSE;
 	t_before = GST_CLOCK_TIME_NONE;
 	while(!element->buffer && !element->unblocked && !timeout && element->recv_status == GST_FLOW_OK) {
-		GTimeVal timeout_time;
-		g_get_current_time(&timeout_time);
-		g_time_val_add(&timeout_time, element->wait_time * G_USEC_PER_SEC);
 		t_before = GPSNow();
 		GST_DEBUG_OBJECT(element, "waiting for data at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(t_before));
-		timeout = !g_cond_timed_wait(element->received_buffer, element->buffer_lock, element->wait_time < 0 ? NULL : &timeout_time);
+		if(element->wait_time >= 0)
+			timeout = !g_cond_wait_until(&element->received_buffer, &element->buffer_lock, g_get_monotonic_time() + element->wait_time * G_TIME_SPAN_SECOND);
+		else
+			g_cond_wait(&element->received_buffer, &element->buffer_lock);
 	}
 	*buffer = element->buffer;
 	element->buffer = NULL;
-	g_mutex_unlock(element->buffer_lock);
+	g_mutex_unlock(&element->buffer_lock);
 
 	/*
 	 * if no data, try to guess cause
@@ -468,7 +481,7 @@ try_again:
 
 		else if(element->unblocked) {
 			GST_DEBUG_OBJECT(element, "reason: application invoked unlock()");
-			result = GST_FLOW_UNEXPECTED;
+			result = GST_FLOW_EOS;
 			goto done;
 		}
 
@@ -484,16 +497,15 @@ try_again:
 			g_assert(GST_CLOCK_TIME_IS_VALID(t_before));
 
 			*buffer = gst_buffer_new();
-			gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
-			GST_BUFFER_TIMESTAMP(*buffer) = t_before;
+			GST_BUFFER_PTS(*buffer) = t_before;
 			if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
-				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
+				GST_BUFFER_PTS(*buffer) -= element->max_latency;
 			GST_BUFFER_DURATION(*buffer) = 0;
 			GST_BUFFER_OFFSET(*buffer) = GST_BUFFER_OFFSET_NONE;
 			GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
 
-			GST_DEBUG_OBJECT(element, "created 0-length heartbeat buffer with timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
-			if(GST_CLOCK_TIME_IS_VALID(element->next_timestamp) && GST_BUFFER_TIMESTAMP(*buffer) < element->next_timestamp) {
+			GST_DEBUG_OBJECT(element, "created 0-length heartbeat buffer with timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(*buffer)));
+			if(GST_CLOCK_TIME_IS_VALID(element->next_timestamp) && GST_BUFFER_PTS(*buffer) < element->next_timestamp) {
 				GST_LOG_OBJECT(element, "timestamp reversal.  trying again to wait for data.");
 				gst_buffer_unref(*buffer);
 				*buffer = NULL;
@@ -518,18 +530,18 @@ try_again:
 	 * check for disconts
 	 */
 
-	if(!GST_CLOCK_TIME_IS_VALID(element->next_timestamp) || GST_BUFFER_TIMESTAMP(*buffer) != element->next_timestamp) {
+	if(!GST_CLOCK_TIME_IS_VALID(element->next_timestamp) || GST_BUFFER_PTS(*buffer) != element->next_timestamp) {
 		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
-		GST_WARNING_OBJECT(element, "discontinuity @ %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
+		GST_WARNING_OBJECT(element, "discontinuity @ %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_PTS(*buffer)));
 	}
-	element->next_timestamp = GST_BUFFER_TIMESTAMP(*buffer) + GST_BUFFER_DURATION(*buffer);
+	element->next_timestamp = GST_BUFFER_PTS(*buffer) + GST_BUFFER_DURATION(*buffer);
 
 	/*
 	 * update latency
 	 */
 
 	if(!timeout) {
-		element->max_latency = GST_CLOCK_DIFF(GST_BUFFER_TIMESTAMP(*buffer), GPSNow());
+		element->max_latency = GST_CLOCK_DIFF(GST_BUFFER_PTS(*buffer), GPSNow());
 		element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
 	}
 	GST_DEBUG_OBJECT(element, "latency = [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(element->min_latency), GST_TIME_SECONDS_ARGS(element->max_latency));
@@ -539,7 +551,7 @@ try_again:
 	 */
 
 	if(element->need_new_segment) {
-		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_TIMESTAMP(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_TIMESTAMP(*buffer));
+		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_PTS(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_PTS(*buffer));
 		element->need_new_segment = FALSE;
 	}
 
@@ -583,7 +595,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 #endif
 
 	default:
-		success = GST_BASE_SRC_CLASS(parent_class)->query(basesrc, query);
+		success = GST_BASE_SRC_CLASS(gds_framexmitsrc_parent_class)->query(basesrc, query);
 		break;
 	}
 
@@ -716,26 +728,14 @@ static void finalize(GObject *object)
 		gst_buffer_unref(element->buffer);
 		element->buffer = NULL;
 	}
-	g_mutex_free(element->buffer_lock);
-	element->buffer_lock = NULL;
-	g_cond_free(element->received_buffer);
-	element->received_buffer = NULL;
+	g_mutex_clear(&element->buffer_lock);
+	g_cond_clear(&element->received_buffer);
 	g_free(element->iface);
 	element->iface = NULL;
 	g_free(element->group);
 	element->group = NULL;
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * base_init()
- */
-
-
-static void gds_framexmitsrc_base_init(gpointer klass)
-{
+	G_OBJECT_CLASS(gds_framexmitsrc_parent_class)->finalize(object);
 }
 
 
@@ -845,7 +845,7 @@ static void gds_framexmitsrc_class_init(GstGDSFramexmitSrcClass *klass)
  */
 
 
-static void gds_framexmitsrc_init(GstGDSFramexmitSrc *element, GstGDSFramexmitSrcClass *klass)
+static void gds_framexmitsrc_init(GstGDSFramexmitSrc *element)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 
@@ -857,8 +857,8 @@ static void gds_framexmitsrc_init(GstGDSFramexmitSrc *element, GstGDSFramexmitSr
 	 */
 
 	element->buffer = NULL;
-	element->buffer_lock = g_mutex_new();
-	element->received_buffer = g_cond_new();
+	g_mutex_init(&element->buffer_lock);
+	g_cond_init(&element->received_buffer);
 	element->unblocked = FALSE;
 
 	/*

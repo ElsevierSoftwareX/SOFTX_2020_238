@@ -70,6 +70,7 @@ typedef struct _GSTLALInterpolatorClass GSTLALInterpolatorClass;
 struct _GSTLALInterpolator {
 	GstBaseTransform element;
 
+	GstAudioInfo audio_info;
         GstAudioAdapter *adapter;
 
 	gint inrate;
@@ -87,7 +88,7 @@ struct _GSTLALInterpolator {
 	gboolean need_pretend;
 
 	/* Variables to control the size of transforms */
-	guint unitsize;
+	gsize unitsize;
 	guint blocksampsin;
 	guint blocksampsout;
 	guint blockstridein;

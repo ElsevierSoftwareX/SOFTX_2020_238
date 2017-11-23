@@ -19,13 +19,10 @@
 ## @file
 # A program to plot the sensitivity of a gstlal inspiral search, e.g., VT
 
+import math
 import numpy
 
-try:
-  import sqlite3
-except ImportError:
-  # pre 2.5.x
-  from pysqlite2 import dbapi2 as sqlite3
+import sqlite3
 
 import matplotlib
 matplotlib.use("agg")
@@ -33,10 +30,10 @@ from matplotlib import pyplot
 
 import os
 import sys
-import copy
 from optparse import OptionParser
 
 from gstlal import inspiral_pipe
+from gstlal import plotutil
 
 from glue import segments
 from glue.ligolw import ligolw
@@ -45,22 +42,33 @@ from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import array as ligolw_array
 from glue import segmentsUtils
-from glue.lal import CacheEntry
 from glue import iterutils
 
 import lal
+from lal import rate
+from lal.utils import CacheEntry
 
-from pylal import rate
-from pylal import imr_utils
-from pylal import git_version
+from gstlal import imr_utils
 
 __author__ = "Stephen Privitera <sprivite@caltech.edu>, Chad Hanna <channa@perimeterinstitute.ca>, Kipp Cannon <kipp.cannon@ligo.org>"
-__version__ = "git id %s" % git_version.id
-__date__ = git_version.date
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
 
 pyplot.rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
 matplotlib.rcParams.update({"text.usetex": True})
 
+
+def source_type_distance_chirp_mass_bins_from_sims(sims, distbins = 200):
+    """
+    Given a list of the injections, guess at the chirp mass and distance
+    bins.
+    """
+    dist_mchirp_vals = map(imr_utils.sim_to_distance_chirp_mass_bins_function, sims)
+
+    distances = [tup[0] for tup in dist_mchirp_vals]
+
+    return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.8, 2.0, 4.5, 45., 450])])
+    #return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.8, 1.74, 8.07, 14.92, 21.77, 100.0, 218.00, 450.0])])
 
 def chirp_mass(m1,m2):
     m1 = numpy.array(m1)
@@ -118,12 +126,12 @@ class upper_limit(object):
                 self.total_injections.setdefault(inst,[])
 
                 # get sim-far relationships
-                found, total, missed = imr_utils.get_min_far_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
+                found, total, missed = imr_utils.get_min_far_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral")
                 self.found_injections_fars[inst] += found
                 self.total_injections[inst] += total
 
                 # get sim-snr relationships
-                found, total, missed = imr_utils.get_max_snr_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral:table")
+                found, total, missed = imr_utils.get_max_snr_inspiral_injections(connection, segments = self.zero_lag_segments[inst], table_name="coinc_inspiral")
                 self.found_injections_snrs[inst] += found
 
             dbtables.discard_connection_filename(f, working_filename, verbose = self.opts.verbose)
@@ -132,16 +140,22 @@ class upper_limit(object):
         # symmetrize between m1-m2
         for instr in self.instruments:
             self.total_injections[instr] = imr_utils.symmetrize_sims(self.total_injections[instr], "mass1", "mass2")
+            self.total_injections[instr] = self.filter_injections(self.total_injections[instr])
             self.found_injections_fars[instr] = self.filter_injections(self.found_injections_fars[instr])
             self.found_injections_snrs[instr] = self.filter_injections(self.found_injections_snrs[instr])
+
+            if self.opts.verbose:
+                print >>sys.stdout,"\nInstruments: %s" % instr
+                print >>sys.stdout,"Number of found injections: %d" % len(self.found_injections_fars[instr])
+                print >>sys.stdout,"Number of total injections: %d" % len(self.total_injections[instr])
 
 
     def get_on_instruments(self,connection):
         '''
         Retrieve the sets of instruments which were on during the search.
         '''
-	for inst in connection.cursor().execute("""SELECT DISTINCT(ifos) FROM search_summary"""):
-        	inst =  frozenset(lsctables.instrument_set_from_ifos(inst[0]))
+	for inst in connection.cursor().execute("""SELECT DISTINCT(ifos) FROM process WHERE ifos NOTNULL""").fetchall():
+        	inst =  frozenset(lsctables.instrumentsproperty.get(inst[0]))
         	if not inst in self.instruments:
          		self.instruments.append(inst)
 
@@ -158,8 +172,8 @@ class upper_limit(object):
         # naming. these may extend beyond the actual analyzed
         # segments because of vetoes.
         #
-        start_time = int( connection.cursor().execute('SELECT MIN(start_time) FROM segment').fetchone()[0] )
-        end_time = int( connection.cursor().execute('SELECT MAX(end_time) FROM segment').fetchone()[0] )
+        start_time = int( connection.cursor().execute('SELECT MIN(start_time + 1e-9 * start_time_ns) FROM segment').fetchone()[0] )
+        end_time = int( connection.cursor().execute('SELECT MAX(end_time + 1e-9 * end_time_ns) FROM segment').fetchone()[0] )
         if not self.start_time or start_time < self.start_time:
             self.start_time = start_time
         if not self.end_time or end_time < self.end_time:
@@ -172,7 +186,7 @@ class upper_limit(object):
             ifos |= inst
 
         # retrieve single-ifo segments
-        segs = imr_utils.get_segments( connection, dbtables.get_xml(connection), "%s:table" % opts.coinc_table_name, opts.live_time_program, opts.veto_segments_name, opts.data_segments_name)
+        segs = imr_utils.get_segments( connection, dbtables.get_xml(connection), opts.coinc_table_name, opts.live_time_program, opts.veto_segments_name, opts.data_segments_name)
 
         for ifo in ifos:
             self.segments.setdefault(ifo,segments.segmentlist())
@@ -235,6 +249,9 @@ class upper_limit(object):
         if bin_type == "Mass_Ratio":
             self.bins = imr_utils.guess_distance_mass_ratio_bins_from_sims(self.total_injections[inst], qbins = opts.mass_bins, distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_mass_ratio_bins_function
+        if bin_type == "Source_Type":
+            self.bins = source_type_distance_chirp_mass_bins_from_sims(self.total_injections[inst], distbins = opts.dist_bins)
+            self.sim_to_bins = imr_utils.sim_to_distance_chirp_mass_bins_function
 
         return self.bins, self.sim_to_bins
 
@@ -246,7 +263,13 @@ class upper_limit(object):
         '''
         for inst in self.instruments:
             newinjs = []
-            for far, sim in sims:
+            for sim_params in sims:
+
+                if type(sim_params) == tuple:
+                    far, sim = sim_params
+                else:
+                    sim = sim_params
+
                 # exclude simulations from certain waveform families
                 if sim.waveform in self.opts.exclude_sim_type:
                     continue
@@ -257,6 +280,11 @@ class upper_limit(object):
                 if self.opts.max_mass_ratio and not (1.0/self.opts.max_mass_ratio <= sim.mass1/sim.mass2 <= self.opts.max_mass_ratio):
                     continue
 
+                # Exclude precessing waveforms if requested
+                if self.opts.remove_precession:
+                    if any(s != 0.0 for s in (sim.spin1x, sim.spin1y, sim.spin2x, sim.spin2y)):
+                        continue
+
                 # symmetrize in m1-m2
                 if sim.mass1 > sim.mass2:
                     m1 = sim.mass1
@@ -265,7 +293,10 @@ class upper_limit(object):
                     sim.mass2 = m1
 
                 # passed all constraint tests, we can use it
-                newinjs.append((far,sim))
+                if type(sim_params) == tuple:
+                    newinjs.append((far,sim))
+                else:
+                    newinjs.append(sim)
 
         return newinjs
 
@@ -278,7 +309,7 @@ def parse_command_line():
 The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a CBC search from input databases containing triggers from simulation experiments. These triggers need to be ranked by false alarm rate, the detection statistic used in S6 searches. Then injections which register a trigger louder than the loudest event, by false alarm rate, are considered found. All others are considered missed. The efficiency of detecting an event depends on the source parameters, such as its component masses, distance, spin, inclination, sky position, etc. However, lalapps_cbc_svim only considers the dependency of the efficiency on distance and mass, marginalizing over the other parameters. Injections are binned in distance and mass and the estimated efficiency is integrated over distance to convert the efficiency into a physical volume.
 '''
 
-    parser = OptionParser(version = git_version.verbose_msg, usage = description)
+    parser = OptionParser(version = __version__, usage = description)
 
     # FAR range and resolution
     parser.add_option("--xaxis-points", default = 50, type = "int", help = "Specify the number of FARs/SNRs for which to compute the search volume.")
@@ -289,7 +320,7 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--max-snr", default = 15, type = "float", help = "Specify the maximum SNR for volume calculation.")
 
     # Input data options
-    parser.add_option("--include-play", default = False, action = "store_true", help = "Include playground data in computing the livetime and volume.")
+    parser.add_option("--include-play", default = True, action = "store_true", help = "Include playground data in computing the livetime and volume.")
     parser.add_option("--zero-lag-database", default = [], action = "append", help = "Name of database containing the zero lag segments and triggers.")
     parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers.")
     parser.add_option("--live-time-program", default = "gstlal_inspiral", metavar = "name", help = "Set the name of the program whose rings will be extracted from the search_summary table.  Default = \"gstlal_inspiral\".")
@@ -313,12 +344,13 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--dist-bins", default = 50, metavar = "integer", type = "int", help = "Space distance bins evenly and specify the number of distance bins to use.")
 
     # injection filters
-    parser.add_option("--min-mtotal", metavar = "m", type = 'float', default = 2.0, help = "Specify the minimum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
-    parser.add_option("--max-mtotal", metavar = "m", type = 'float', default = 100.0, help = "Specify the maximum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
-    parser.add_option("--min-mass", metavar = "MM", type = 'float', default = 1.0, help = "Specify the minimum component mass to consider among the injections found in the DB. This filters all injectionswith any component lighter than MM.")
-    parser.add_option("--max-mass", metavar = "MM", type = 'float', default = 99.0, help = "Specify the maximum mass to consider among the injections found in the DB. This filters all injections with any component heavier than MM.")
+    parser.add_option("--min-mtotal", metavar = "m", type = 'float', default = 0.0, help = "Specify the minimum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
+    parser.add_option("--max-mtotal", metavar = "m", type = 'float', default = float("Inf"), help = "Specify the maximum total mass to consider among the injections found in the DB. This filters all injections outside this total mass range.")
+    parser.add_option("--min-mass", metavar = "MM", type = 'float', default = 0.0, help = "Specify the minimum component mass to consider among the injections found in the DB. This filters all injectionswith any component lighter than MM.")
+    parser.add_option("--max-mass", metavar = "MM", type = 'float', default = float("Inf"), help = "Specify the maximum mass to consider among the injections found in the DB. This filters all injections with any component heavier than MM.")
     parser.add_option("--max-mass-ratio", metavar = "q", type = 'float', default = None, help = "Specify the maximum allowed mass ratio. Should be >= 1.")
     parser.add_option("--exclude-sim-type", default = [], action = "append", metavar = "SIM", help = "When computing the search volume, exclude injections made using the SIM waveform family. Example: SpinTaylorthreePointFivePN. Use this option multiple times to exclude more than one injection type.")
+    parser.add_option("--remove-precession", action = "store_true", help = "Exclude precessing injections when plotting sensitivity.")
 
     # more options
     # Bin injections in mass by m1-m2
@@ -333,8 +365,11 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     # aligned spin
     parser.add_option("--bin-by-aligned-spin", default = False, action = "store_true", help = "Bin injections by aligned spin parameter when estimating the search efficiency.")
 
-    # aligned spin
+    # mass ratio
     parser.add_option("--bin-by-mass-ratio", default = False, action = "store_true", help = "Bin injections by mass ratio when estimating the search efficiency.")
+
+    # bin by source type
+    parser.add_option("--bin-by-source-type", default = False, action = "store_true", help = "Bin injections by source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0")
 
     opts, filenames = parser.parse_args()
     opts.injection_database.extend(filenames)
@@ -350,6 +385,8 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
         opts.bin_types.append("Aligned_Spin")
     if opts.bin_by_mass_ratio:
         opts.bin_types.append("Mass_Ratio")
+    if opts.bin_by_source_type:
+        opts.bin_types.append("Source_Type")
 
     if opts.max_mass_ratio and (opts.max_mass_ratio < 1):
         raise ValueError, "The maximum mass ratio must be >=1!"
@@ -441,20 +478,20 @@ for bin_type in opts.bin_types:
         for j in range(len(bins[1:])):
             xml = ligolw.LIGO_LW({u"Name": u"mass%d_bins:%s" % (j+1,bin_type)})
             edges = tuple( numpy.concatenate((l,u[-1:])) for l,u in zip(bins.lower(), bins.upper()) )
-            xml.appendChild(ligolw_array.from_array(u"array", edges[j+1]))
+            xml.appendChild(ligolw_array.Array.build(u"array", edges[j+1]))
             child.appendChild(xml)
 
         # write out fars/snrs/livetime
         xml = ligolw.LIGO_LW({u"Name": u"far_bins:%s" % (bin_type,)})
-        xml.appendChild(ligolw_array.from_array(u"array", fars))
+        xml.appendChild(ligolw_array.Array.build(u"array", fars))
         child.appendChild(xml)
 
         xml = ligolw.LIGO_LW({u"Name": u"snr_bins:%s" % (bin_type,)})
-        xml.appendChild(ligolw_array.from_array(u"array", snrs))
+        xml.appendChild(ligolw_array.Array.build(u"array", snrs))
         child.appendChild(xml)
 
         xml = ligolw.LIGO_LW({u"Name": u"livetime:%s" % (bin_type,)})
-        xml.appendChild(ligolw_array.from_array(u"array", numpy.array([UL.livetime[instr]])))
+        xml.appendChild(ligolw_array.Array.build(u"array", numpy.array([UL.livetime[instr]])))
         child.appendChild(xml)
 
         #
@@ -490,15 +527,15 @@ for bin_type in opts.bin_types:
             # write volume and volume errors array to xml
             #
             xml = ligolw.LIGO_LW({u"Name": u"volume_lo_by_far_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol_lo.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol_lo.array))
             child.appendChild(xml)
 
             xml = ligolw.LIGO_LW({u"Name": u"volume_by_far_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol.array))
             child.appendChild(xml)
 
             xml = ligolw.LIGO_LW({u"Name": u"volume_hi_by_far_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol_hi.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol_hi.array))
             child.appendChild(xml)
 
             #
@@ -521,15 +558,15 @@ for bin_type in opts.bin_types:
             # write volume and volume errors array to xml
             #
             xml = ligolw.LIGO_LW({u"Name": u"volume_lo_by_snr_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol_lo.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol_lo.array))
             child.appendChild(xml)
 
             xml = ligolw.LIGO_LW({u"Name": u"volume_by_snr_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol.array))
             child.appendChild(xml)
 
             xml = ligolw.LIGO_LW({u"Name": u"volume_hi_by_snr_%d:%s" % (k, bin_type,)})
-            xml.appendChild(ligolw_array.from_array(u"array", vol_hi.array))
+            xml.appendChild(ligolw_array.Array.build(u"array", vol_hi.array))
             child.appendChild(xml)
 
         #
@@ -545,10 +582,14 @@ for bin_type in opts.bin_types:
         # plotting in a separate code
         #
         fig_far, fig_far_range, fig_snr, fig_eff = pyplot.figure(), pyplot.figure(), pyplot.figure(), pyplot.figure()
-        ax_far = fig_far.add_axes([0.15, 0.15, 0.7, 0.7])
-        ax_far_range = fig_far_range.add_axes([0.15, 0.15, 0.7, 0.7])
-        ax_snr = fig_snr.add_axes([0.15, 0.15, 0.7, 0.7])
-        ax_eff = fig_eff.add_axes([0.15, 0.15, 0.7, 0.7])
+        fig_far.set_size_inches((8., 8. / plotutil.golden_ratio))
+        fig_far_range.set_size_inches((8., 8. / plotutil.golden_ratio))
+        fig_snr.set_size_inches((8., 8. / plotutil.golden_ratio))
+        fig_eff.set_size_inches((8., 8. / plotutil.golden_ratio))
+        ax_far = fig_far.gca()
+        ax_far_range = fig_far_range.gca()
+        ax_snr = fig_snr.gca()
+        ax_eff = fig_eff.gca()
 
         # plot the volume/range versus far/snr for each bin
         mbins = rate.NDBins(bins[1:])
@@ -563,26 +604,30 @@ for bin_type in opts.bin_types:
             if bin_type == "Mass_Ratio":
                 label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
             if bin_type == "Total_Mass":
-                label = "$M_\mathrm{total} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
-            if bin_type == "Chirp_Mass":
-                label = "$M_\mathrm{chirp} \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0])
+                label = "$M_\mathrm{total} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
+            if bin_type == "Chirp_Mass" or bin_type == "Source_Type":
+                label = "$M_\mathrm{chirp} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
             if bin_type == "Mass1_Mass2":
                 if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
                     continue
-                label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] M_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
+                label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
             labels.append(label)
 
+            # NOTE create regular plots, and define log x,y scales below
+            #      since otherwise, fill_between allocates too many blocks and crashes
             # sensitivity vs far
             center = numpy.array([v[mmid] for v in vols_far])
+            if (center == 0).all():
+                continue
             lo = numpy.array([v[mmid] for v in vols_lo_far])
             hi = numpy.array([v[mmid] for v in vols_hi_far])
             line, = ax_far.plot( fars, center, label=label, linewidth=2 )
             ax_far.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
 
             # range vs far
-            center = (center/(4*3.14*UL.livetime[instr]/3))**(1./3)
-            lo = (lo/(4*3.14*UL.livetime[instr]/3))**(1./3)
-            hi = (hi/(4*3.14*UL.livetime[instr]/3))**(1./3)
+            center = (center/(4*math.pi*UL.livetime[instr]/3))**(1./3)
+            lo = (lo/(4*math.pi*UL.livetime[instr]/3))**(1./3)
+            hi = (hi/(4*math.pi*UL.livetime[instr]/3))**(1./3)
             line, = ax_far_range.plot( fars, center, label=label, linewidth=2 )
             ax_far_range.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
 
@@ -603,20 +648,22 @@ for bin_type in opts.bin_types:
             ax_eff.fill_between(ds, lo, hi, alpha=0.5, color=line.get_color())
 
         # sensitivity vs far
+        ax_far.set_xlabel("Combined FAR (Hz)")
+        ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
+        ax_far.set_xscale("log")
+        ax_far.set_yscale("log")
+        ax_far.set_xlim([min(fars), max(fars)])
+        ax_far.invert_xaxis()
+        ax_far.legend(loc="lower left")
+        ax_far.grid()
+
         vol_tix = ax_far.get_yticks()
         tx = ax_far.twinx() # map volume to distance
         tx.set_yticks(vol_tix)
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
+        tx.set_yscale("log")
+        tx.set_ylim(ax_far.get_ylim())
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
         tx.set_ylabel("Range (Mpc)")
-
-        ax_far.set_xlabel("Combined FAR (Hz)")
-        ax_far.set_ylabel("Volume (Mpc$^3$ yr)")
-        ax_far.set_yticklabels( ["%.1e" % (float(k)) for k in ax_far.get_yticks()] )
-        ax_far.set_xscale("log")
-        ax_far.set_xlim([min(fars), max(fars)])
-        ax_far.invert_xaxis()
-        ax_far.legend(loc="upper right")
-        ax_far.grid()
 
         # range vs far
         ax_far_range.set_xlabel("Combined FAR (Hz)")
@@ -624,48 +671,57 @@ for bin_type in opts.bin_types:
         ax_far_range.set_xscale("log")
         ax_far_range.set_xlim([min(fars), max(fars)])
         ax_far_range.invert_xaxis()
-        ax_far_range.legend(loc="upper right")
+        ax_far_range.legend(loc="lower left")
         ax_far_range.grid()
 
         # sensitivity vs snr
+        ax_snr.set_xlabel("Network SNR")
+        ax_snr.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
+        ax_snr.set_yscale("log")
+        ax_snr.set_xlim([min(snrs), max(snrs)])
+        ax_snr.set_ylim(ymin=0)
+        ax_snr.legend(loc="lower left")
+        ax_snr.grid()
+
         vol_tix = ax_snr.get_yticks()
         tx = ax_snr.twinx() # map volume to distance
         tx.set_yticks(vol_tix)
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*3.14*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
+        tx.set_yscale("log")
+        tx.set_ylim(ax_snr.get_ylim())
+        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
         tx.set_ylabel("Range (Mpc)")
-
-        ax_snr.set_xlabel("Network SNR")
-        ax_snr.set_ylabel("Volume (Mpc$^3$ yr)")
-        ax_snr.set_xlim([min(snrs), max(snrs)])
-        ax_snr.set_ylim(ymin=0)
-        ax_snr.legend(loc="upper right")
-        ax_snr.grid()
 
         # efficiency vs distance
         ax_eff.set_xlabel("Distance (Mpc)")
         ax_eff.set_ylabel("Efficiency")
+        ax_eff.set_xscale("log")
         ax_eff.legend(loc="upper right")
         ax_eff.grid()
 
         ax_snr.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
         ax_far.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
         ax_far_range.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
-        ax_eff.set_title("%s Observing (FAR $<$ %.2eHz)" % ("".join(sorted(list(instr))), opts.fiducial_far))
+        ax_eff.set_title("%s Observing ($\mathrm{FAR} < %s\,\mathrm{Hz}$)" % ("".join(sorted(list(instr))), plotutil.latexnumber("%.2e" % opts.fiducial_far)))
+
+        fig_far.tight_layout(pad = .8)
+        fig_far_range.tight_layout(pad = .8)
+        fig_snr.tight_layout(pad = .8)
+        fig_eff.tight_layout(pad = .8)
 
         # save and close figures
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_far.savefig(tag)
         pyplot.close(fig_far)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_far_range.savefig(tag)
         pyplot.close(fig_far_range)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_snr.savefig(tag)
         pyplot.close(fig_snr)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), UL.start_time, UL.end_time, ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_eff.savefig(tag)
         pyplot.close(fig_eff)
 
