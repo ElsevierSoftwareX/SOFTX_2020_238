@@ -50,7 +50,6 @@ import sys
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue import segments
 from lal.utils import CacheEntry
 
@@ -113,7 +112,6 @@ options, urls = parse_command_line()
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_marginalize_likelihood", options.__dict__)
-search_summary = ligolw_search_summary.append_search_summary(xmldoc, process)
 
 
 #
@@ -171,7 +169,5 @@ if distributions is not None:
 if ranking_data is not None:
 	ranking_data.process_id = process.process_id
 far.gen_likelihood_control_doc(xmldoc, process, distributions, ranking_data, seglists)
-search_summary.instruments = seglists.keys()
-search_summary.in_segment = search_summary.out_segment = seglists.extent_all()
 ligolw_process.set_process_end_time(process)
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

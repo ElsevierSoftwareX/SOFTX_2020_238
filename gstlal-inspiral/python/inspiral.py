@@ -799,7 +799,6 @@ class Data(object):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
-		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglistdicts["triggersegments"].keys(), inseg = self.seglistdicts["triggersegments"].extent_all(), outseg = self.seglistdicts["triggersegments"].extent_all())
 		# FIXME:  now that we've got all kinds of segment lists
 		# being collected, decide which of them should go here.
 		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, self.ranking_data, self.seglistdicts["triggersegments"])
@@ -818,7 +817,6 @@ class Data(object):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
-		search_summary = ligolw_search_summary.append_search_summary(xmldoc, process, ifos = self.seglistdicts["triggersegments"].keys(), inseg = self.seglistdicts["triggersegments"].extent_all(), outseg = self.seglistdicts["triggersegments"].extent_all())
 		# FIXME:  now that we've got all kinds of segment lists
 		# being collected, decide which of them should go here.
 		far.gen_likelihood_control_doc(xmldoc, process, None, self.zero_lag_ranking_stats, self.seglistdicts["triggersegments"])
