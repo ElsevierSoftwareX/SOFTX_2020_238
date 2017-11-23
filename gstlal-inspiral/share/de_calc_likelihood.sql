@@ -42,18 +42,6 @@ WHERE
 	);
 
 DELETE FROM
-	search_summary
-WHERE
-	process_id IN (
-	SELECT
-		process_id
-	FROM
-		process
-	WHERE
-		program == "gstlal_inspiral_calc_likelihood"
-	);
-
-DELETE FROM
 	process
 WHERE
 	program == "gstlal_inspiral_calc_likelihood";
