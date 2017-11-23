@@ -305,6 +305,20 @@ class StreamThinca(object):
 		xmldoc.childNodes[-1].replaceChild(real_coinc_inspiral_table, coinc_inspiral_table)
 
 		# copy triggers into real output document
+		# FIXME:  the "min log L" cut is applied inside
+		# ligolw_thinca, above, and coincs that failed it have had
+		# their singles put back into the "non-coincident singles"
+		# pile.  this creates a bias in the final ranking statistic
+		# in that it makes it appear as though singles in the part
+		# of parameter space where the min log L cut fails occur at
+		# a higher rate than they really do, making triggers that
+		# fall outside the region appear to be more rare, and thus
+		# more statistically significant, than they really are.
+		# the effect is small because coincidences are rare, it
+		# shifts the density by about 1%.  sometime before O3 we
+		# should rewrite all of this coincidence machinery with an
+		# eye to higher performance, and when we do we should be
+		# sure to get this sort of stuff right.
 		if coinc_event_map_table:
 			# figure out the IDs of triggers that have been
 			# used in coincs for the first time, and update the
