@@ -335,6 +335,9 @@ class ratebinlist(segments.segmentlist):
 			return i - 1
 		raise IndexError(item)
 
+	def density_at(self, x):
+		return self[self.find(x)].density
+
 	def __ior__(self, other):
 		if other is self:
 			self[:] = (ratebin(seg, count = 2 * seg.count) for seg in self)
@@ -477,10 +480,9 @@ class triggerrates(segments.segmentlistdict):
 		d = {}
 		for key, value in self.items():
 			try:
-				i = value.find(x)
+				d[key] = value.density_at(x)
 			except IndexError:
 				continue
-			d[key] = value[i].density
 		return d
 
 	def random_uniform(self):
