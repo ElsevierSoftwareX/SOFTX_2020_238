@@ -75,14 +75,15 @@ class RankingData(object):
     # xml_chisq_min = -1.2
     # xml_chisq_step = 0.0173
     # xml_chisq_nbin = 299
-    # FIXME: bin prop hard-coded
-    step_x = (3.0-0.54)/299
-    self.snr_lowbounds = np.linspace(0.54-step_x/2, 3.0-step_x/2, 300)
-    step_y = (3.0+1.2)/299
-    self.chisq_lowbounds = np.linspace(-1.2-step_y/2, 3.0-step_y/2, 300)
+    # FIXME: bin prop hard-coded, check the gst/cuda/cohfar/background_stats.h for the values
+    self.step_snr = (3.0-0.54)/299
+    self.snr_min = 0.54 - self.step_snr/2.
+    self.step_chisq = (4.0+1.2)/299
+    self.chisq_min = -1.2 - self.step_chisq/2.
+    self.nbin = 300
     step_rank = 30.0/299
-    self.rank_bounds = np.linspace(-30.0-step_rank/2, 0+step_rank/2, 301)
-    self.rank_centers = np.linspace(-30.0, 0, 300)
+    self.rank_bounds = np.linspace(-30.0-step_rank/2., 0+step_rank/2., 301)
+    self.rank_centers = np.linspace(-30.0, 0., 300)
     rank_map_name = "background_rank:%s_rank_map:array" % ifos
     rank_pdf_name = "background_rank:%s_rank_pdf:array" % ifos
     rank_rates_name = "background_rank:%s_rank_rates:array" % ifos
@@ -135,10 +136,11 @@ class FAPFAR(object):
     self.count_zlag_rates()
 
     self.nzlag = self.zlag_rates.sum()
+
     extinct_pdf = self.extinct(self.ranking_stats.rank_rates, self.ranking_stats.rank_pdf, self.zlag_rates, self.ranking_stats.rank_centers)
     drank = self.ranking_stats.rank_bounds[3] - self.ranking_stats.rank_bounds[2]
-    self.rank_center_min = min(self.ranking_stats.rank_centers)
-    self.rank_center_max = max(self.ranking_stats.rank_centers)
+    self.min_rank = min(self.ranking_stats.rank_centers)
+    self.max_rank = max(self.ranking_stats.rank_centers)
 
     # cumulative distribution function and its complement.
     # it's numerically better to recompute the ccdf by
@@ -147,7 +149,7 @@ class FAPFAR(object):
     weights = extinct_pdf * drank
     cdf = weights.cumsum()
     cdf /= cdf[-1]
-    ccdf = weights[::-1].cumsum()[::-1]
+    ccdf = cdf.cumsum()[::-1]
     ccdf /= ccdf[0]
 
     # cdf boundary condition:  cdf = 1/e at the ranking
@@ -173,27 +175,28 @@ class FAPFAR(object):
   def count_zlag_rates(self):
     # use the far field for tempory rank assignment
     self.connection.create_function("rank_from_features", 2, self.rank_from_features)
-    self.connection.cursor().execute(""" UPDATE postcoh SET
+    cur = self.connection.cursor()
+    cur.execute(""" UPDATE postcoh SET
   far =  rank_from_features(cohsnr, cmbchisq)
   """)
     # count the rate of rank in a given range
+    self.connection.commit()
     try:
         import sqlite3
         use_sqlite3 = True
     except ImportError:
         use_sqlite3 = False
-    cur = self.connection.cursor()
     for irank, rank_min in enumerate(self.ranking_stats.rank_bounds):
       if irank < len(self.ranking_stats.rank_bounds) -1:
         rank_max = self.ranking_stats.rank_bounds[irank+1]
         if use_sqlite3:
             cur.execute(""" SELECT COUNT(*) FROM 
-            postcoh WHERE far >= ? and far < ?""", (rank_min, rank_max)
+            postcoh WHERE far > ? and far <= ?""", (rank_min, rank_max)
             )
             self.zlag_rates[irank] = cur.fetchone()[0]
         else:
             cur.execute(""" SELECT COUNT(*) FROM 
-            postcoh WHERE far >= %s and far < %s""", (rank_min, rank_max)
+            postcoh WHERE far > %s and far <= %s""", (rank_min, rank_max)
             )
             self.zlag_rates[irank] = cur.fetchone()[0]
 
@@ -201,8 +204,8 @@ class FAPFAR(object):
     # Generate arrays of complementary cumulative counts
     # for background events (monte carlo, pre clustering)
     # and zero lag events (observed, post clustering)
-    zero_lag_compcumcount = zlagcounts_ba_array[::-1].cumsum()[::-1]
-    bg_compcumcount = bgcounts_ba_array[::-1].cumsum()[::-1]
+    zero_lag_compcumcount = zlagcounts_ba_array.cumsum()
+    bg_compcumcount = bgcounts_ba_array.cumsum()
 
     # Fit for the number of preclustered, independent coincs by
     # only considering the observed counts safely in the bulk of
@@ -223,12 +226,12 @@ class FAPFAR(object):
     bg_pdf_interp = interpolate.interp1d(ranks, bgpdf_ba_array)
 
     def extincted_counts(x, N_ratio):
-      out = max(zero_lag_compcumcount) * (1. - np.exp(-obs_counts(x) * N_ratio))
+      out = max(zero_lag_compcumcount) * (1. - np.exp(+obs_counts(x) * N_ratio))
       out[~np.isfinite(out)] = 0.
       return out
 
     def extincted_pdf(x, N_ratio):
-      out = np.exp(np.log(N_ratio) - obs_counts(x) * N_ratio + np.log(bg_pdf_interp(x)))
+      out = np.exp(np.log(N_ratio) + obs_counts(x) * N_ratio + np.log(bg_pdf_interp(x)))
       out[~np.isfinite(out)] = 0.
       return out
 
@@ -250,8 +253,8 @@ class FAPFAR(object):
   def rank_from_features(self, snr, chisq):
     lgsnr = np.log10(snr)
     lgchisq = np.log10(chisq)
-    snr_idx = np.abs(self.ranking_stats.snr_lowbounds - lgsnr).argmin()
-    chisq_idx = np.abs(self.ranking_stats.chisq_lowbounds - lgchisq).argmin()
+    snr_idx = min(max(int((lgsnr - self.ranking_stats.snr_min)/self.ranking_stats.step_snr), 0), self.ranking_stats.nbin-1) 
+    chisq_idx = min(max(int((lgchisq - self.ranking_stats.chisq_min)/self.ranking_stats.step_chisq), 0), self.ranking_stats.nbin-1) 
     return self.ranking_stats.rank_map[chisq_idx, snr_idx]
   
   def fap_from_features(self, snr, chisq):
@@ -259,7 +262,7 @@ class FAPFAR(object):
     # implements equation (B4) of Phys. Rev. D 88, 024025.
     # arXiv:1209.0718.  the return value is divided by T to
     # convert events/experiment to events/second.
-    rank = max(self.rank_center_min, min(self.rank_center_max, rank))
+    rank = max(self.min_rank, min(self.max_rank, rank))
     fap = float(self.ccdf_interpolator(rank))
     return fap_after_trials(fap, self.nzlag)
   
@@ -267,30 +270,26 @@ class FAPFAR(object):
   def assign_fars_sql(self, connection):
     # assign false-alarm rates
     # FIXME:  choose a function name more likely to be unique?
-    connection.create_function("far_from_snr_chisq_extinct", 2, self.far_from_snr_chisq)
+    connection.create_function("far_from_rank", 2, self.far_from_rank)
     connection.cursor().execute("""
 UPDATE
   postcoh
 SET
-  far =  far_from_snr_chisq_extinct(cohsnr, cmbchisq)
+  far =  far_from_rank(far)
 """)
 
   # FIXME: see Kipp's code to adjust fap for clustered zerolag
-  def far_from_snr_chisq_extinct(self, snr, chisq):
-    lgsnr = np.log10(snr)
-    lgchisq = np.log10(chisq)
-    snr_idx = max(min((lgsnr - self.ranking_stats.snr_lowbounds[0])/ self.ranking_stats.snr_lowbounds[1], self.ranking_stats.snr_lowbounds[2]), 0)
-    chisq_idx = max(min((lgchisq - self.ranking_stats.chisq_lowbounds[0] )/ self.ranking_stats.chisq_lowbounds[1], self.ranking_stats.chisq_lowbounds[2]), 0)
+  def far_from_rank(self, rank):
     # implements equation (B4) of Phys. Rev. D 88, 024025.
     # arXiv:1209.0718.  the return value is divided by T to
     # convert events/experiment to events/second.
-    #assert self.livetime is not None, "cannot compute FAR without livetime"
-    #rank = max(self.minrank, min(self.maxrank, rank))
+    assert self.livetime is not None, "cannot compute FAR without livetime"
+    rank = max(self.minrank, min(self.maxrank, rank))
     # true-dismissal probability = 1 - single-event false-alarm
     # probability, the integral in equation (B4)
     #tdp = float(self.cdf_interpolator(rank))
   
-    tdp = self.ranking_stats.fap_kde[chisq_idx, snr_idx]
+    tdp = float(self.cdf_interpolator(rank))
     try:
       log_tdp = math.log(tdp)
     except ValueError:
@@ -299,7 +298,7 @@ SET
     if log_tdp >= -1e-9:
       # rare event:  avoid underflow by using log1p(-FAP)
       log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
-    #return self.nzlag * -log_tdp / self.livetime
+    return self.nzlag * -log_tdp / self.livetime
 
 
 
