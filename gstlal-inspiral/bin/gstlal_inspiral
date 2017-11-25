@@ -146,7 +146,7 @@
 #	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..
 #	+ `--likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided).
 #	+ `--reference-likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided).
-#	+ `--zero-lag-ranking-stat-file` [filename]: Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingData object.  The counts will be added to the file.  Optional.  Can be given multiple times.
+#	+ `--zerolag-rankingstatpdf-filename` [filename]: Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingStatPDF object.  The counts will be added to the file.  Optional.  Can be given multiple times.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.
 #	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data.  This is required for online operation (when --data-source is framexmit or lvshm) and is forbidden for offline operation (all other data sources).
 #	+ `--gracedb-far-threshold` (float): False alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent.
@@ -297,7 +297,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-file", metavar = "filename", action = "append", default = [], help = "Set the name of the likelihood ratio data file to use for ranking events (either --likelihood-file or --reference-likelihood-file must be provided)")
 	parser.add_option("--likelihood-file-cache", metavar = "filename", help = "Cache file for likelihood ratio data to use for ranking events")
 	parser.add_option("--reference-likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use for ranking events (--data-source must be lvshm or framexmit) (--likelihood-snapshot-interval must provided) (either --likelihood-file or --reference-likelihood-file must be provided)")
-	parser.add_option("--zero-lag-ranking-stat-file", metavar = "filename", action = "append", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingData object.  The counts will be added to the file.  Optional.  Can be given multiple times.")
+	parser.add_option("--zerolag-rankingstatpdf-filename", metavar = "filename", action = "append", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingStatPDF object.  The counts will be added to the file.  Optional.  Can be given multiple times.")
 	parser.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.")
 	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data.  This is required for online operation (when --data-source is framexmit or lvshm) and is forbidden for offline operation (all other data sources).")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
@@ -489,8 +489,8 @@ def parse_command_line():
 		# the injections are now present in the data so we don't want to do them twice
 		detectors.injection_filename = None
 
-	if options.zero_lag_ranking_stat_file is None and likelihood_url_namedtuples_list:
-		options.zero_lag_ranking_stat_file = [None] * len(likelihood_url_namedtuples_list)
+	if options.zerolag_rankingstatpdf_filename is None and likelihood_url_namedtuples_list:
+		options.zerolag_rankingstatpdf_filename = [None] * len(likelihood_url_namedtuples_list)
 
 	# we're done
 	return options, filenames, process_params, svd_banks, detectors, likelihood_url_namedtuples_list
@@ -565,7 +565,6 @@ else:
 
 offsetvectors = lsctables.TimeSlideTable.get_table(ligolw_utils.load_filename(options.time_slide_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)).as_dict().values()
 all_instruments = reduce(lambda a, b: a | set(b), offsetvectors, set())
-all_instruments -= set(("V1",))	# hide Virgo. FIXME:  remove after O2
 if len(all_instruments) < options.min_instruments:
 	raise ValueError("--time-slide-file \"%s\" names %s but we need at least %d instruments" % (options.time_slide_file, ", ".join(sorted(all_instruments)), options.min_instruments))
 
@@ -591,7 +590,7 @@ else:
 #
 
 
-for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtuple, zero_lag_ranking_stats_file, ht_gate_threshold) in enumerate(zip(svd_banks, options.output, likelihood_url_namedtuples_list, options.zero_lag_ranking_stat_file, options.ht_gate_threshold)):
+for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtuple, zerolag_rankingstatpdf_filename, ht_gate_threshold) in enumerate(zip(svd_banks, options.output, likelihood_url_namedtuples_list, options.zerolag_rankingstatpdf_filename, options.ht_gate_threshold)):
 	#
 	# Checkpointing only supported for gzip files in offline analysis
 	# FIXME Implement a means by which to check for sqlite file
@@ -729,28 +728,21 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 
 	if options.data_source in ("lvshm", "framexmit"):
-		filename = likelihood_url_namedtuple[0] if likelihood_url_namedtuple[0] is not None else likelihood_url_namedtuple[1]
-		coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(filename, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-		if set(seglists) != set(detectors.channel_dict):
-			raise ValueError("segment lists in \"%s\" are for instruments %s but we need %s" % (filename, ", ".join(sorted(seglists)), ", ".join(sorted(detectors.channel_dict))))
-		if coinc_params_distributions is None:
+		filename = likelihood_url_namedtuple.likelihood_url
+		if filename is None:
+			filename = likelihood_url_namedtuple.reference_likelihood_url
+		assert filename is not None
+		rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(filename, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+		if rankingstat is None:
 			raise ValueError("\"%s\" does not contain parameter distribution data" % filename)
-		if coinc_params_distributions.delta_t != options.coincidence_threshold:
-			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (filename, coinc_params_distributions.delta_t, options.coincidence_threshold))
-		if coinc_params_distributions.min_instruments != options.min_instruments:
-			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (filename, coinc_params_distributions.min_instruments, options.min_instruments))
-		if coinc_params_distributions.instruments != all_instruments:
-			raise ValueError("\"%s\" is for %s but we need %s" % (filename, ", ".join(sorted(coinc_params_distributions.instruments)), ", ".join(sorted(all_instruments))))
+		if rankingstat.delta_t != options.coincidence_threshold:
+			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (filename, rankingstat.denominator.delta_t, options.coincidence_threshold))
+		if rankingstat.min_instruments != options.min_instruments:
+			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (filename, rankingstat.denominator.min_instruments, options.min_instruments))
+		if rankingstat.instruments != all_instruments:
+			raise ValueError("\"%s\" is for %s but we need %s" % (filename, ", ".join(sorted(rankingstat.instruments)), ", ".join(sorted(all_instruments))))
 	else:
-		coinc_params_distributions, seglists = far.ThincaCoincParamsDistributions(instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments), segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in detectors.channel_dict)
-		if "V1" in seglists: del seglists["V1"]	# drop Virgo FIXME:  remove after O2
-
-	if zero_lag_ranking_stats_file is None:
-		zero_lag_ranking_stats = None
-	else:
-		_, zero_lag_ranking_stats, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(zero_lag_ranking_stats_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-		if zero_lag_ranking_stats is None:
-			raise ValueError("\"%s\" does not contain ranking statistic PDF data" % zero_lag_ranking_stat_file)
+		rankingstat = far.RankingStat(instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
 
 
 	#
@@ -761,18 +753,23 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 	if options.verbose:
 		print >>sys.stderr, "initializing output document ..."
 	output = inspiral.Data(
-		url = output_url or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.instrumentsproperty.set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
-		process_params = process_params,
+		inspiral.CoincsDocument(
+			url = output_url or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.instrumentsproperty.set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
+			process_params = process_params,
+			comment = options.comment,
+			instruments = rankingstat.instruments,
+			seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
+			offsetvectors = offsetvectors,
+			injection_filename = options.injections,
+			tmp_path = options.tmp_space,
+			replace_file = True,
+			verbose = options.verbose
+		),
 		pipeline = pipeline,
-		seg = detectors.seg or segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)), # online data doesn't have a segment so make it all possible time
-		coinc_params_distributions = coinc_params_distributions,
-		zero_lag_ranking_stats = zero_lag_ranking_stats,
-		marginalized_likelihood_file = options.marginalized_likelihood_file,
+		rankingstat = rankingstat,
+		zerolag_rankingstatpdf_filename = zerolag_rankingstatpdf_filename,
+		rankingstatpdf_filename = options.marginalized_likelihood_file,
 		likelihood_url_namedtuple = likelihood_url_namedtuple,
-		injection_filename = options.injections,
-		offsetvectors = offsetvectors,
-		comment = options.comment,
-		tmp_path = options.tmp_space,
 		likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
 		thinca_interval = options.thinca_interval,
 		min_log_L = options.min_log_L,
@@ -791,10 +788,8 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 	handler = lloidparts.Handler(mainloop, pipeline,
 		output,
-		instruments = coinc_params_distributions.instruments,
+		instruments = rankingstat.instruments,
 		tag = options.job_tag,
-		seglistdict = seglists,
-		zero_lag_ranking_stats_filename = zero_lag_ranking_stats_file,
 		verbose = options.verbose
 	)
 
@@ -814,23 +809,6 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 	if options.write_pipeline is not None:
 		pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 		pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
-
-	#
-	# put a 0 into all horizon histories at the boundaries of the
-	# analysis segment so that queries for horizon distance at times
-	# outside the segment and for horizon distance for instruments for
-	# which there is no data report 0.  NOTE:  if this job is
-	# contiguous with another job then this makes it seem like there is
-	# a 0 in the horizon distance history at the boundary between them
-	# when that is probably not correct.  because it's a single sample
-	# it shouldn't lead to significant problems, but this is something
-	# to be aware of.
-	#
-
-	if detectors.seg:
-		for instrument in coinc_params_distributions.instruments:
-			handler.record_horizon_distance(instrument, float(detectors.seg[0]), 0.0)
-			handler.record_horizon_distance(instrument, float(detectors.seg[1]), 0.0)
 
 
 	#

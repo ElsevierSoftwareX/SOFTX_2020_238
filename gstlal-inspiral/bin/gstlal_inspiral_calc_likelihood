@@ -47,7 +47,7 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import segments
-from lalburst import ligolw_burca2
+from lalburst import calc_likelihood
 from lalinspiral import thinca
 from gstlal import far
 from lal.utils import CacheEntry
@@ -136,36 +136,28 @@ options, paramdict, urls = parse_command_line()
 #
 
 
-coincparamsdistributions, _, seglists = far.marginalize_pdf_urls(options.likelihood_urls, require_coinc_param_data = True, require_ranking_stat_data = False, verbose = options.verbose)
-if options.verbose:
-	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
+rankingstat, _ = far.marginalize_pdf_urls(options.likelihood_urls, require_ranking_stat = True, require_ranking_stat_pdf = False, verbose = options.verbose)
+
 
 #
-# rebuild event parameter PDFs (+= method has not constructed these
-# correctly, and we might have added additional priors to the histograms),
-# then initialize likeihood ratio evaluator
+# include zero-lag candidates in ranking statistic denominator if requested
 #
 
 
 if options.add_zerolag_to_background:
-	coincparamsdistributions.zero_lag_in_background = True
-coincparamsdistributions.finish(segs = seglists, verbose = options.verbose)
+	rankingstat.denominator.lnzerolagdensity = rankingstat.zerolag
 
 
 #
-# initialize a RankingData object in which to collect ranking statistic
-# histograms if requested
+# apply density estimation kernels, etc.
 #
 
 
-if options.write_rates is not None:
-	ranking_data = far.RankingData(None, instruments = seglists.keys())
-else:
-	ranking_data = None
+rankingstat.finish()
 
 
 #
-# iterate over files
+# iterate over candidate files
 #
 
 
@@ -183,7 +175,7 @@ for n, url in enumerate(urls, 1):
 	if options.verbose:
 		print >>sys.stderr, "%d/%d:" % (n, len(urls)),
 	try:
-		xmldoc = ligolw_utils.load_url(url, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose)
+		xmldoc = ligolw_utils.load_url(url, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose)
 	except Exception as e:
 		if options.verbose:
 			print >>sys.stderr, "failed to load '%s': %s.  trying to continue with remaining files" % (url, str(e))
@@ -208,7 +200,7 @@ for n, url in enumerate(urls, 1):
 		xmldoc.unlink()
 		continue
 
-	process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
+	process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict, ifos = rankingstat.instruments)
 
 	if options.verbose:
 		print >>sys.stderr, "indexing document ...",
@@ -234,15 +226,14 @@ for n, url in enumerate(urls, 1):
 	# run likelihood ratio calculation.
 	#
 
-	ligolw_burca2.assign_likelihood_ratios_xml(
+	calc_likelihood.assign_likelihood_ratios_xml(
 		xmldoc = xmldoc,
 		coinc_def_id = coinc_def_id,
 		offset_vectors = offset_vectors,
 		vetoseglists = vetoseglists,
 		events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id],
 		veto_func = sngl_inspiral_veto_func,
-		ln_likelihood_ratio_func = coincparamsdistributions,
-		likelihood_params_func = coincparamsdistributions.coinc_params,
+		ln_likelihood_ratio_func = rankingstat.ln_lr_from_triggers,
 		verbose = options.verbose
 	)
 

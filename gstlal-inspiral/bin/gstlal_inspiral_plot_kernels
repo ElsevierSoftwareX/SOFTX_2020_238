@@ -93,8 +93,8 @@ options, filenames = parse_command_line()
 #
 
 
-#coinc_params_distributions, ranking_data, seglists = far.marginalize_pdf_urls(filenames, require_coinc_param_data = False, require_ranking_stat_data = False, verbose = options.verbose)
-coinc_params_distributions = far.ThincaCoincParamsDistributions(instruments = frozenset(("H1",)), min_instruments = 1)
+#rankingstat, rankingstatpdf, _ = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = False, verbose = options.verbose)
+rankingstat = far.RankingStat(instruments = frozenset(("H1",)), min_instruments = 1)
 
 
 #
@@ -104,13 +104,8 @@ coinc_params_distributions = far.ThincaCoincParamsDistributions(instruments = fr
 
 for x in 1.5**numpy.arange(4, 13):
 	for y in 3.**numpy.arange(-8, 0):
-		coinc_params_distributions.background_rates["H1_snr_chi"][x, y] = 1e8
-coinc_params_distributions.background_rates["singles"]["H1",] = coinc_params_distributions.background_rates["H1_snr_chi"].array.sum()
-coinc_params_distributions.horizon_history["H1"][0.] = 1.
-coinc_params_distributions.finish(
-	segments.segmentlistdict(
-		{"H1": segments.segmentlist([segments.segment(0., 1.)])}
-	), verbose = True)
+		rankingstat.background_rates["H1_snr_chi"][x, y] = 1e8
+rankingstat.finish()
 
 
 #
@@ -118,8 +113,8 @@ coinc_params_distributions.finish(
 #
 
 
-if coinc_params_distributions is not None:
-	fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, "H1", "background_pdf", options.max_snr)
+if rankingstat is not None:
+	fig = plotfar.plot_snr_chi_pdf(rankingstat, "H1", "background_pdf", options.max_snr)
 	plotname = "coinc_params_binning%s" % options.output_format
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
@@ -127,9 +122,8 @@ if coinc_params_distributions is not None:
 
 
 # ranking statistic PDFs and CCDFs
-#for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
-#	fig = plotfar.plot_likelihood_ratio_pdf(ranking_data, instruments, (options.min_log_lambda, options.max_log_lambda), "Noise", binnedarray_string = "background_likelihood_pdfs")
-#	plotname = "coinc_params_binning%s" % options.output_format
-#	if options.verbose:
-#		print >>sys.stderr, "writing %s" % plotname
-#	fig.savefig(plotname)
+#fig = plotfar.plot_likelihood_ratio_pdf(rankingstatpdf, (options.min_log_lambda, options.max_log_lambda), "Noise", which = "noise")
+#plotname = "coinc_params_binning%s" % options.output_format
+#if options.verbose:
+#	print >>sys.stderr, "writing %s" % plotname
+#fig.savefig(plotname)

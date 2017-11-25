@@ -100,23 +100,21 @@ golden_ratio = (1. + math.sqrt(5.)) / 2.
 
 def lvalert_load_ranking_data(gracedb_client, graceid, ln_likelihood_ratio_threshold, filename = "ranking_data.xml.gz", ignore_404 = False, verbose = False):
         response = lvalert_helper.get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
-        ranking_data_xmldoc = ligolw_utils.load_fileobj(response, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler)[0]
-        coinc_param_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ranking_data_xmldoc)
+        ranking_data_xmldoc = ligolw_utils.load_fileobj(response, contenthandler = far.RankingStat.LIGOLWContentHandler)[0]
+        _, rankingstatpdf = far.parse_likelihood_control_doc(ranking_data_xmldoc)
 
 	# affect the zeroing of the PDFs below threshold by hacking the
-	# histograms before running .finish().  do the indexing ourselves
-	# to not 0 the bin @ threshold
+	# histograms.  do the indexing ourselves to not 0 the bin @
+	# threshold
 	if ln_likelihood_ratio_threshold is not None:
-		for binnedarray in ranking_data.background_likelihood_rates.values():
-			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
-		for binnedarray in ranking_data.signal_likelihood_rates.values():
-			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
-		for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
-			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		rankingstatpdf.noise_lr_lnpdf.array[:rankingstatpdf.noise_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		rankingstatpdf.noise_lr_lnpdf.normalize()
+		rankingstatpdf.signal_lr_lnpdf.array[:rankingstatpdf.signal_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		rankingstatpdf.signal_lr_lnpdf.normalize()
+		rankingstatpdf.zero_lag_lr_lnpdf.array[:rankingstatpdf.zero_lag_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		rankingstatpdf.zero_lag_lr_lnpdf.normalize()
 
-	ranking_data.finish(verbose = verbose)
-
-        return ranking_data
+        return rankingstatpdf
 
 def lvalert_event_ln_likelihood_ratio_endtime_mass(gracedb_client, graceid, ignore_404 = False):
         coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
@@ -303,12 +301,12 @@ def plot_rates(rv, credible_intervals = None):
 		pass
 	return fig
 
-def get_ln_f_over_b(ranking_data, ln_likelihood_ratios):
+def get_ln_f_over_b(rankingstatpdf, ln_likelihood_ratios):
         if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
                 raise ValueError("NaN log likelihood ratio encountered")
 
-        f = ranking_data.signal_likelihood_pdfs[None]
-        b = ranking_data.background_likelihood_pdfs[None]
+        f = rankingstatpdf.signal_likelihood_pdfs[None]
+        b = rankingstatpdf.background_likelihood_pdfs[None]
         ln_f_over_b = numpy.array([numpy.log(f[ln_lr,])-numpy.log(b[ln_lr,]) for ln_lr in ln_likelihood_ratios])
         if numpy.isnan(numpy.exp(ln_f_over_b)).any():
                 raise ValueError("NaN encountered in ranking statistic PDF ratios")
@@ -351,7 +349,7 @@ trigger_databases = build_trigger_database(options.trigger_database_glob)
 
 for graceid in graceids:
         #load ranking statistic PDFs and compute event log likelihood ratio
-        ranking_data = lvalert_load_ranking_data(gracedb_client, graceid, options.threshold, ignore_404 = options.skip_404, verbose = options.verbose)
+        rankingstatpdf = lvalert_load_ranking_data(gracedb_client, graceid, options.threshold, ignore_404 = options.skip_404, verbose = options.verbose)
         event_ln_likelihood_ratio, event_endtime, event_mass = lvalert_event_ln_likelihood_ratio_endtime_mass(gracedb_client, graceid, ignore_404 = options.skip_404)
 
         # load search results
@@ -366,8 +364,8 @@ for graceid in graceids:
         if options.verbose:
                 print >> sys.stderr, "calculating rate posteriors using %d likelihood ratios ..." % len(zerolag_ln_likelihood_ratios)
         txt_file.write("calculating rate posteriors using %d likelihood ratios ...\n" % len(zerolag_ln_likelihood_ratios))
-        ln_f_over_b = get_ln_f_over_b(ranking_data, zerolag_ln_likelihood_ratios)
-        event_ln_f_over_b = get_ln_f_over_b(ranking_data, [event_ln_likelihood_ratio])
+        ln_f_over_b = get_ln_f_over_b(rankingstatpdf, zerolag_ln_likelihood_ratios)
+        event_ln_f_over_b = get_ln_f_over_b(rankingstatpdf, [event_ln_likelihood_ratio])
         if options.verbose:
                 print >> sys.stderr, "adding event to zerolag events"
         txt_file.write("adding event to zerolag events\n")

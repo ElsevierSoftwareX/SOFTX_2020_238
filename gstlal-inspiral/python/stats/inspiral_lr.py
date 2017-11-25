@@ -277,9 +277,10 @@ class LnSignalDensity(LnLRDensity):
 		# evaluate dt and dphi parameters
 		lnP += inspiral_extrinsics.lnP_dt_dphi_signal(snrs, phase, dt, horizons, self.delta_t)
 
-		# evalute the (snr, \chi^2 | snr) PDFs
-		interps = self.interps
-		return lnP + sum(interps["snr_chi"](*value) for name, value in kwargs.items() if name.endswith("_snr_chi"))
+		# evalute the (snr, \chi^2 | snr) PDFs (same for all
+		# instruments)
+		interp = self.interps["snr_chi"]
+		return lnP + sum(interp(*value) for name, value in kwargs.items() if name.endswith("_snr_chi"))
 
 	def __iadd__(self, other):
 		super(LnSignalDensity, self).__iadd__(other)

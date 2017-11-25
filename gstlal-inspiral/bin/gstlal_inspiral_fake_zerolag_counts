@@ -97,11 +97,11 @@ options, paramdict, urls = parse_command_line()
 #
 
 
-_, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.input, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
-if ranking_data is None:
-	raise ValueError("'%s' does not contain a RankingData object" % options.input)
+_, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.input, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose))
+if rankingstatpdf is None:
+	raise ValueError("'%s' does not contain a RankingStatPDF object" % options.input)
 if options.verbose:
-	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
+	print >>sys.stderr, "total livetime:  %s s" % str(abs(rankingstatpdf.segments))
 
 #
 # copy background histograms to zero-lag histograms, and zero the
@@ -109,15 +109,11 @@ if options.verbose:
 #
 
 
-for key in ranking_data.background_likelihood_rates:
-	if key is None:
-		# ingore the marginalized PDFs, they are not included in
-		# the on-disk version
-		continue
-	# FIXME 100.0 is a rough coincidence fraction loss, can probably do better.
-	ranking_data.zero_lag_likelihood_rates[key].array[:] = ranking_data.background_likelihood_rates[key].array / 100.0
-	ranking_data.zero_lag_likelihood_pdfs[key].array[:] = ranking_data.background_likelihood_pdfs[key].array
-	ranking_data.background_likelihood_rates[key].array[:] = ranking_data.background_likelihood_pdfs[key].array[:] = 0.
+# FIXME 100.0 is a rough coincidence fraction loss, can probably do better.
+rankingstatpdf.zero_lag_lr_lnpdf.array[:] = rankingstatpdf.noise_lr_lnpdf.array / 100.0
+rankingstatpdf.zero_lag_lr_lnpdf.normalize()
+rankingstatpdf.noise_lr_lnpdf.array[:] = 0.
+rankingstatpdf.noise_lr_lnpdf.normalize()
 
 
 #
@@ -128,6 +124,5 @@ for key in ranking_data.background_likelihood_rates:
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
-ranking_data.process_id = process.process_id
-far.gen_likelihood_control_doc(xmldoc, process, None, ranking_data, seglists)
+far.gen_likelihood_control_doc(xmldoc, None, rankingstatpdf)
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

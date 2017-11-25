@@ -23,7 +23,7 @@
 #
 #	+ `--likelihood-cache` [filename]: Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
 #	+ `--verbose`: Be verbose.
-#	+ `--ranking-stat-samples` [N] (int): Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 1000000).
+#	+ `--ranking-stat-samples` [N] (int): Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 2^24).
 #	+ `--output` [filename]: Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.
 
 #
@@ -35,7 +35,6 @@
 #
 
 
-import copy
 from optparse import OptionParser
 import sys
 
@@ -67,7 +66,7 @@ def parse_command_line():
 	)
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--ranking-stat-samples", metavar = "N", default = 10000000, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 10000000).")
+	parser.add_option("--ranking-stat-samples", metavar = "N", default = 2**24, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 2^24).")
 	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
 	parser.add_option("--output", metavar = "filename", help = "Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.")
 	options, urls = parser.parse_args()
@@ -107,25 +106,26 @@ options, urls, paramdict = parse_command_line()
 #
 
 
-coincparamsdistributions, _, seglists = far.marginalize_pdf_urls(urls, require_coinc_param_data = True, require_ranking_stat_data = False, verbose = options.verbose)
-
-if options.verbose:
-	print >>sys.stderr, "total livetime:\n\t%s" % ",\n\t".join("%s = %s s" % (instrument, str(abs(segs))) for instrument, segs in seglists.items())
+rankingstat, _ = far.marginalize_pdf_urls(urls, require_ranking_stat = True, require_ranking_stat_pdf = False, verbose = options.verbose)
 
 
 #
-# rebuild event parameter PDFs (+= method has not constructed these
-# correctly)
+# invoke .finish() to apply density estimation kernels and correct the
+# normalization.  preserve the original, raw data, so we can write it do
+# disk later with the ranking stat PDF obtained from it.  if we wish to
+# draw samples from a population that includes the zero-lag, then we also
+# construct a separate, sampler, PDF object.
 #
 
 
+lr_rankingstat = rankingstat.copy()
+lr_rankingstat.finish()
 if options.add_zerolag_to_background:
-	sampler_coincparamsdistributions = copy.deepcopy(coincparamsdistributions)
-	sampler_coincparamsdistributions.zero_lag_in_background = True
-	sampler_coincparamsdistributions.finish(segs = seglists, verbose = options.verbose)
+	sampler_rankingstat = rankingstat.copy()
+	sampler_rankingstat.denominator.lnzerolagdensity = sampler_rankingstat.zerolag
+	sampler_rankingstat.finish()
 else:
-	sampler_coincparamsdistributions = None
-coincparamsdistributions.finish(segs = seglists, verbose = options.verbose)
+	sampler_rankingstat = None
 
 
 #
@@ -133,7 +133,7 @@ coincparamsdistributions.finish(segs = seglists, verbose = options.verbose)
 #
 
 
-ranking_data = far.RankingData(coincparamsdistributions, sampler_coinc_params_distributions = sampler_coincparamsdistributions, nsamples = options.ranking_stat_samples, verbose = options.verbose)
+rankingstatpdf = far.RankingStatPDF(lr_rankingstat, sampler_rankingstat = sampler_rankingstat, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
 #
@@ -143,7 +143,7 @@ ranking_data = far.RankingData(coincparamsdistributions, sampler_coinc_params_di
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_rank_pdfs", paramdict = paramdict)
-far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, ranking_data, seglists)
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_calc_rank_pdfs", paramdict = paramdict, ifos = rankingstat.instruments)
+far.gen_likelihood_control_doc(xmldoc, rankingstat, rankingstatpdf)
 ligolw_process.set_process_end_time(process)
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

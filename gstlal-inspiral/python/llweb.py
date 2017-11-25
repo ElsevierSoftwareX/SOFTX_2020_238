@@ -218,7 +218,7 @@ class GstlalWebSummary(object):
 					self.missed[datatype][id] = {}
 			elif datatype == "likelihood":
 				try:
-					self.found[datatype][id] = far.parse_likelihood_control_doc(ligolw_utils.load_filename("%s.xml" % fname, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+					self.found[datatype][id] = far.parse_likelihood_control_doc(ligolw_utils.load_filename("%s.xml" % fname, contenthandler = far.RankingStat.LIGOLWContentHandler))
 				except KeyError:
 					self.missed[datatype][id] = {}
 			elif datatype == "cumulative_segments":
@@ -229,7 +229,7 @@ class GstlalWebSummary(object):
 			elif datatype == "marginalized_likelihood":
 				fname = "%s/%s" % (self.directory, datatype)
 				try:
-					self.found[datatype] = far.parse_likelihood_control_doc(ligolw_utils.load_filename("%s.xml.gz" % fname, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+					self.found[datatype] = far.parse_likelihood_control_doc(ligolw_utils.load_filename("%s.xml.gz" % fname, contenthandler = far.RankingStat.LIGOLWContentHandler))
 				except KeyError:
 					self.missed[datatype] = {}
 			else:
@@ -465,8 +465,7 @@ class GstlalWebSummary(object):
 
 	def plot_likelihood_ccdf(self, found, missed):
 		likelihood, ranking_data, nu = found
-		ranking_data.finish()
-		fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(nu))
+		fapfar = far.FAPFAR(ranking_data)
 		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., 40.))
 		f = StringIO.StringIO()
 		fig.savefig(f, format="png")
@@ -573,7 +572,6 @@ class GstlalWebSummary(object):
 		out = ""
 		for id in self.registry:
 			likelihood, ranking_data, nu = self.found["likelihood"][id]
-			ranking_data.finish()
 			fapfar = far.FAPFAR(ranking_data)
 			fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., 40.))
 			out += self.to_png(fig = fig)

@@ -137,21 +137,19 @@ def parse_command_line():
 def load_ranking_data(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
 	if not filenames:
 		raise ValueError("no likelihood files!")
-	_, ranking_data, _ = far.marginalize_pdf_urls(filenames, require_coinc_param_data = False, require_ranking_stat_data = True, verbose = verbose)
+	_, rankingstatpdf = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = True, verbose = verbose)
 	# affect the zeroing of the PDFs below threshold by hacking the
-	# histograms before running .finish().  do the indexing ourselves
-	# to not 0 the bin @ threshold
+	# histograms.  do the indexing ourselves to not 0 the bin @
+	# threshold
 	if ln_likelihood_ratio_threshold is not None:
-		for binnedarray in ranking_data.background_likelihood_rates.values():
-			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
-		for binnedarray in ranking_data.signal_likelihood_rates.values():
-			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
-		for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
-			binnedarray.array[:binnedarray.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		rankingstatpdf.noise_lr_lnpdf.array[:rankingstatpdf.noise_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		rankingstatpdf.noise_lr_lnpdf.normalize()
+		rankingstatpdf.signal_lr_lnpdf.array[:rankingstatpdf.signal_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		rankingstatpdf.signal_lr_lnpdf.normalize()
+		rankingstatpdf.zero_lag_lr_lnpdf.array[:rankingstatpdf.zero_lag_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+		rankingstatpdf.zero_lag_lr_lnpdf.normalize()
 
-	ranking_data.finish(verbose = verbose)
-
-	return ranking_data
+	return rankingstatpdf
 
 
 def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):

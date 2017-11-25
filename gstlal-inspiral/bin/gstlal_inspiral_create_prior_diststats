@@ -22,7 +22,7 @@
 # ### Command line interface
 	
 #			("-v", "--verbose", action = "store_true", help = "Be verbose.")
-#			("-s", "--synthesize-injection-count", metavar = "N", default = 1e8, type = "int", help = "Synthesize an injection distribution with N injections. default 1e8")
+#			("-s", "--synthesize-numerator", action = "store_true", help = "Synthesize a numerator (SNR, \\chi^2) distribution.")
 #			("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 #			("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
 #			("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
@@ -68,7 +68,7 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 1e8, type = "int", help = "Synthesize an injection distribution with N injections. default 1e8")
+	parser.add_option("-s", "--synthesize-numerator", action = "store_true", help = "Synthesize a numerator (SNR, \\chi^2) distribution.")
 	# FIXME:  default must be identical to gstlal_inspiral's default
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	# FIXME:  default must be identical to gstlal_inspiral's default
@@ -127,13 +127,13 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_pri
 #
 
 
-coincparamsdistributions = far.ThincaCoincParamsDistributions(instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
+rankingstat = far.RankingStat(instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
 
 if options.background_prior > 0:
-	coincparamsdistributions.add_background_prior(n = dict((ifo, options.background_prior) for ifo in options.instrument), verbose = options.verbose)
+	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior)
 
-if options.synthesize_injection_count > 0:
-	coincparamsdistributions.add_foreground_snrchi_prior(n = dict((ifo, options.synthesize_injection_count) for ifo in options.instrument), df = 40, verbose = options.verbose)
+if options.synthesize_numerator:
+	rankingstat.numerator.add_signal_model(df = 40)
 
 
 #
@@ -141,7 +141,7 @@ if options.synthesize_injection_count > 0:
 #
 
 
-far.gen_likelihood_control_doc(xmldoc, process, coincparamsdistributions, None, {}, comment = u"background and signal priors (no real data)")
+far.gen_likelihood_control_doc(xmldoc, rankingstat, None)
 
 
 #

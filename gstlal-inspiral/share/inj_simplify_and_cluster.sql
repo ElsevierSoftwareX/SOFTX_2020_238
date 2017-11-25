@@ -48,7 +48,6 @@ UPDATE time_slide SET process_id = (SELECT new FROM _idmap_ WHERE old == process
 
 DELETE FROM process WHERE process_id IN (SELECT old FROM _idmap_ WHERE old != new);
 DELETE FROM process_params WHERE process_id NOT IN (SELECT process_id FROM process);
-DELETE FROM search_summary WHERE process_id NOT IN (SELECT process_id FROM process);
 
 DROP INDEX tmpindex;
 DROP TABLE _idmap_;

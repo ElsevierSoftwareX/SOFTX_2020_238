@@ -110,26 +110,25 @@ options, process_params, filenames = parse_command_line()
 #
 
 
-coinc_params_distributions, ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_bins_file, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))
-if coinc_params_distributions is None:
+rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_bins_file, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose))
+if rankingstat is None:
 	raise ValueError("\"%s\" does not contain event parameter PDFs" % options.background_bins_file)
-if ranking_data is None:
+if rankingstatpdf is None:
 	raise ValueError("\"%s\" does not contain likelihood ratio PDFs" % options.background_bins_file)
 
 
 #
-# Count the number of above-threshold events.  FIXME:  don't do this.
-# write stand-alone tool to collect zero-lag counts and have this program
-# require that as input data.  also, below, don't write any ranking
-# statistic output file from this program.
+# Histogram zero-lag likelihood ratios to construct extinction model.
+# FIXME:  don't do this here.  write stand-alone tool to collect zero-lag
+# counts and have this program require that as input data.  also, below,
+# don't write any ranking statistic output file from this program.
 #
 
 
 if options.verbose:
 	print >>sys.stderr, "beginning count of above-threshold events"
 
-for binnedarray in ranking_data.zero_lag_likelihood_rates.values():
-	binnedarray.array[:] = 0.
+rankingstatpdf.zero_lag_lr_lnpdf.array[:] = 0.
 
 for n, filename in enumerate(options.non_injection_db, start = 1):
 	#
@@ -149,7 +148,7 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	xmldoc = dbtables.get_xml(connection)
 	coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	xmldoc.unlink()
-	ranking_data.collect_zero_lag_rates(connection, coinc_def_id)
+	rankingstatpdf.collect_zero_lag_rates(connection, coinc_def_id)
 
 	#
 	# done
@@ -160,21 +159,20 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 
 
 #
+# Apply density estimation to zero-lag rates
+#
+
+
+rankingstatpdf.density_estimate_zero_lag_rates()
+
+
+#
 # Now generate new ranking statistic PDFs by applying the clustering
-# extinction model.
+# extinction model, and then initialize the FAP & FAR assignment machine
 #
 
 
-extincted_ranking_data = far.RankingData.new_with_extinction(ranking_data)[0]
-extincted_ranking_data.finish(verbose = options.verbose)
-
-
-#
-# Initialize the FAP & FAR assignment machine
-#
-
-
-fapfar = far.FAPFAR(extincted_ranking_data, livetime = far.get_live_time(seglists))
+fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 
 
 #
@@ -228,9 +226,8 @@ if options.verbose:
 
 
 #
-# Write parameter and ranking statistic distribution file but with zero-lag
-# counts replaced with count-above-threshold and background and signal PDFs
-# replaced with result of clustering extinction model
+# Write parameter and ranking statistic distribution file now with zero-lag
+# counts populated.
 #
 # FIXME:  do not write this output file, rely on stand-alone tool to
 # collect zero-lag counts before running this program, and make that
@@ -240,8 +237,8 @@ if options.verbose:
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_compute_far_from_snr_chisq_histograms", {})
-far.gen_likelihood_control_doc(xmldoc, process, coinc_params_distributions, ranking_data, seglists)
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_compute_far_from_snr_chisq_histograms", {}, ifos = rankingstat.instruments)
+far.gen_likelihood_control_doc(xmldoc, rankingstat, rankingstatpdf)
 ligolw_process.set_process_end_time(process)
 
 outname = "post_%s" % options.background_bins_file

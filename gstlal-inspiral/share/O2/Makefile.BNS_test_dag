@@ -1,7 +1,7 @@
 # condor commands
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
 ACCOUNTING_TAG=ligo.dev.o2.cbc.bbh.gstlaloffline
-GROUP_USER=duncan.meacher
+GROUP_USER=kipp.cannon
 CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
 
 ############################
@@ -57,7 +57,7 @@ APPROXIMANT2 = $(MCHIRP_SPLIT):1000.0:SEOBNRv4_ROM
 # The detectors to analyze
 IFOS = H1 L1
 # Minimum number of detecors working to use
-MIN_IFOS = 2
+MIN_IFOS = 1
 # The GPS start time for analysis (O1)
 START = 1127000000
 # The GPS end time for analysis (O1, start + 1000000s)
@@ -134,7 +134,7 @@ SEGMENT_MIN_LENGTH = 512
 
 # Vetoes file names
 # Obtain veto definer from here: https://code.pycbc.phy.syr.edu/detchar/veto-definitions/tree/master/cbc/ER8
-VETODEF = $(HOME)/local/src/gstlal/gstlal-inspiral/share/O1/H1L1-CBC_VETO_DEFINER_C02_O1_1126051217-11203200.xml
+VETODEF = $(HOME)/Development/gstlal/gstlal-inspiral/share/O2/H1L1-CBC_VETO_DEFINER_C02_O1_1126051217-11203200.xml
 vetoes_suffix := _vetoes.xml
 VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
 
@@ -173,7 +173,7 @@ L1PRIORRANGE=60
 # Get some basic definitions.  NOTE this comes from the share directory probably. #
 ###################################################################################
 
-include $(HOME)/local/src/gstlal/gstlal-inspiral/share/Makefile.offline_analysis_rules
+include $(HOME)/local/share/gstlal/Makefile.offline_analysis_rules
 
 ############
 # Workflow #
@@ -217,6 +217,8 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		--min-instruments $(MIN_IFOS) \
 		--reference-likelihood-file reference_likelihood_file.xml.gz
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
+	sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=1;?" *.sub
+	python ~/noretries.py trigger_pipe.dag
 
 reference_likelihood_file.xml.gz:
 	gstlal_inspiral_fake_diststats \
@@ -368,12 +370,16 @@ L1_frame.cache:
 
 clean:
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+	-rm -vf *_tisi.xml
 	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
 	-rm -vf segments.xml.gz tisi.xml H1-*.xml H1_*.xml L1-*.xml L1_*xml V1-*.xml V1_*xml ?_injections.xml ????-*_split_bank-*.xml vetoes.xml.gz
 	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf reference_likelihood_file.xml.gz
 	-rm -vf tisi0.xml tisi1.xml
 	-rm -rf *_split_bank*
 	-rm -rf nogaps.xml segdb.xml
 	-rm -rf bank_aligned_spin.xml.gz
 	-rm -rf CAT1*.xml.gz
-
+	-rm -rvf lalapps_inspinjfind
+	-rm -rvf rm_intermediate_merger_products
+	-rm -rvf cp

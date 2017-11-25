@@ -84,14 +84,14 @@ if options.verbose:
 	print >> sys.stderr, "Livetime: ", abs(segs.extent_all())
 	print >> sys.stderr, "Extent: ", segs.extent_all()
 
-like_cpd, like_rd, like_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+like_cpd, like_rd = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_ranking_file, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
 
-_, zlike_rd, zlike_segs = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.zerolag_ranking_file, verbose = options.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
+_, zlike_rd = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.zerolag_ranking_file, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
 
 # optionally add the zero lag SNR/chi counts to the background
+# FIXME:  this is busted.  needs to be updated following the re-write
 if options.add_zerolag_to_background:
-	for instrument in like_segs:
-		like_cpd.background_rates["%s_snr_chi" % instrument].array += like_cpd.zero_lag_rates["%s_snr_chi" % instrument].array
+	raise ValueError("not implemented")
 
 if not options.skip_seg_and_rd_reset:
 	# replace thae live time with the user specified live time
@@ -99,30 +99,27 @@ if not options.skip_seg_and_rd_reset:
 	new_zlike_segs = segs
 
 	# Make the observed counts match the background sample but with the correct normalization
-	for instruments in zlike_rd.background_likelihood_rates:
-		num_zero_lag = zlike_rd.zero_lag_likelihood_rates[instruments].array.sum() * float(abs(new_like_segs.extent_all())) / float(abs(like_segs.extent_all()))
-		if num_zero_lag <= 100 or numpy.isnan(num_zero_lag):
-			warnings.warn("found %f zero lag counts, replacing with 100" % num_zero_lag)
-			num_zero_lag = 100
-		zlike_rd.zero_lag_likelihood_rates[instruments].array[:] = like_rd.background_likelihood_rates[instruments].array[:]
-		zlike_rd.zero_lag_likelihood_rates[instruments].array /= zlike_rd.zero_lag_likelihood_rates[instruments].array.sum()
-		zlike_rd.zero_lag_likelihood_rates[instruments].array *= num_zero_lag
-		# make the counts integers
-		zlike_rd.zero_lag_likelihood_rates[instruments].array[zlike_rd.zero_lag_likelihood_rates[instruments].array < 1.] = 0.
-		if options.verbose:
-			print >> sys.stderr, "replacing %s with %f zero lag counts" % (str(instruments), zlike_rd.zero_lag_likelihood_rates[instruments].array.sum())
+	num_zero_lag = zlike_rd.zero_lag_lr_lnpdf.array.sum() * float(abs(new_like_segs)) / float(abs(like_rd.segments))
+	if num_zero_lag <= 100 or numpy.isnan(num_zero_lag):
+		warnings.warn("found %f zero lag counts, replacing with 100" % num_zero_lag)
+		num_zero_lag = 100
+	zlike_rd.zero_lag_lr_lnpdf.array[:] = like_rd.noise_lr_lnpdf.array[:]
+	zlike_rd.zero_lag_lr_lnpdf.array *= num_zero_lag / zlike_rd.zero_lag_lr_lnpdf.array.sum()
+	# make the counts integers
+	if options.verbose:
+		print >> sys.stderr, "replacing with %f zero lag counts" % zlike_rd.zero_lag_lr_lnpdf.array.sum()
 
 
 # write out the background file
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], ifos = like_segs.keys(), paramdict = process_params)
-far.gen_likelihood_control_doc(xmldoc, process, like_cpd, like_rd, new_like_segs, comment = u"reset background")
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], ifos = like_cpd.instruments, paramdict = process_params)
+far.gen_likelihood_control_doc(xmldoc, like_cpd, like_rd)
 ligolw_utils.write_filename(xmldoc, options.background_ranking_file, gz = options.background_ranking_file.endswith(".gz"), verbose = options.verbose)
 
 # write out the zerolag file
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], ifos = zlike_segs.keys(), paramdict = process_params)
-far.gen_likelihood_control_doc(xmldoc, process, None, zlike_rd, new_zlike_segs, comment = u"reset zerolag")
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], ifos = like_cpd.instruments, paramdict = process_params)
+far.gen_likelihood_control_doc(xmldoc, None, zlike_rd)
 ligolw_utils.write_filename(xmldoc, options.zerolag_ranking_file, gz = options.zerolag_ranking_file.endswith(".gz"), verbose = options.verbose)

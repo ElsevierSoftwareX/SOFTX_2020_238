@@ -31,32 +31,16 @@
 
 from optparse import OptionParser
 
-from glue.ligolw import array as ligolw_array
 from glue.ligolw import lsctables
-from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.ligolw import LIGOLWContentHandler
 from glue.ligolw.utils import process as ligolw_process
 from glue import segments
 from gstlal import far
 from gstlal import lvalert_helper
 from ligo.gracedb import rest as gracedb
-from lalburst import ligolw_burca2
+from lalburst import calc_likelihood
 from lalinspiral import thinca
 
-#
-# =============================================================================
-#
-#                                Content Handler
-#
-# =============================================================================
-#
-
-class ligolwcontenthandler(LIGOLWContentHandler):
-	pass
-ligolw_array.use_in(LIGOLWContentHandler)
-ligolw_param.use_in(LIGOLWContentHandler)
-lsctables.use_in(LIGOLWContentHandler)
 
 #
 # =============================================================================
@@ -96,10 +80,8 @@ def get_likelihood_files(gid_list, gracedb):
 	if len(marg_files_dict.keys()) > 1:
 		raise ValueError("the gracedb events specified have different marginalized likelihood files, all specified events need to come from the same analysis and thus share the same marginalized likelihood file")
 	
-	ranking_data, seglistsdict = far.parse_likelihood_control_doc(ligolw_utils.load_filename(marg_files_dict.keys()[0], contenthandler = ligolwcontenthandler))[1:]
-	ranking_data.finish()
-	fapfar = far.FAPFAR(ranking_data, far.get_live_time(seglistsdict))
-	return likelihood_files_dict, fapfar
+	_, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(marg_files_dict.keys()[0], contenthandler = far.RankingStat.LIGOLWContentHandler))
+	return likelihood_files_dict, far.FAPFAR(rankingstatpdf.new_with_extinction())
 
 def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, with_zerolag = False, verbose = False):
 	# 
@@ -108,10 +90,10 @@ def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, with
 	# interpolated PDFs
 	#
 
-	coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler=ligolwcontenthandler, verbose = verbose))
-	coinc_params_distributions.zero_lag_in_background = with_zerolag
-	coinc_params_distributions.finish(segs = seglists, verbose = verbose)
-	likelihood_params_func = coinc_params_distributions.coinc_params
+	rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = verbose))
+	if with_zerolag:
+		rankingstat.denominator.lnzerolagdensity = rankingstat.zerolag
+	rankingstat.finish()
 
 	#
 	# Go through each coinc xmldoc and reassign the likelihood ratio value
@@ -125,14 +107,13 @@ def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, with
 		for row in lsctables.CoincMapTable.get_table(coinc_xmldoc):
 			coinc_event_map_index[row.coinc_event_id].append(sngl_inspiral_table_index[row.event_id])
 
-		ligolw_burca2.assign_likelihood_ratios_xml(coinc_xmldoc, 
+		calc_likelihood.assign_likelihood_ratios_xml(coinc_xmldoc, 
 			coinc_def_id = coinc_def_id, 
 			offset_vectors = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict(), 
 			vetoseglists = segments.segmentlistdict(), 
 			events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id], 
 			veto_func = lambda event, vetoseglists: True, # Obviously you would never veto the single gracedb event 
-			ln_likelihood_ratio_func = coinc_params_distributions,
-			likelihood_params_func = likelihood_params_func, 
+			ln_likelihood_ratio_func = rankingstat.ln_lr_from_triggers,
 			verbose = verbose)
 
 		print "likelihood ratio of %s after: %.6f\nFAR of %s after: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, fapfar.far_from_rank(lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood))

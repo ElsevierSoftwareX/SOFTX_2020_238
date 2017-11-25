@@ -27,7 +27,7 @@ cp -v \
 	/home/gstlalcbc/observing/1/offline/1128299417-1129383017-run3-rerun/H1L1-ALL_LLOID-1128299417-1083600.sqlite \
 	.
 
-gstlal_inspiral_marginalize_likelihood --verbose --require-ranking-stat-data --output marginalized_likelihood.xml.gz \
+gstlal_inspiral_marginalize_likelihood --verbose --require-ranking-stat-pdf --output marginalized_likelihood.xml.gz \
 	/home/gstlalcbc/observing/1/offline/1126051217-1127271617-run1/marginalized_likelihood.xml.gz \
 	/home/gstlalcbc/observing/1/offline/1127271617-1128299417-run2-2/marginalized_likelihood.xml.gz \
 	/home/gstlalcbc/observing/1/offline/1128299417-1129383017-run3-rerun/marginalized_likelihood.xml.gz

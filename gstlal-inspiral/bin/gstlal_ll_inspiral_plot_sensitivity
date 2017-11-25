@@ -61,9 +61,7 @@ def parse_command_line():
 
 	found_inj, missed_inj, seglistdicts, seg_bins = plotsensitivity.parse_sensitivity_docs(database[0], options.cumulative_segment_file, options.simdb_query_end_time)
 
-	horizon_history = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.marginalized_likelihood_file, contenthandler=far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = options.verbose))[0].horizon_history
-
-	return options, horizon_history, found_inj, missed_inj, seglistdicts, seg_bins
+	return options, found_inj, missed_inj, seglistdicts, seg_bins
 
 #
 # =============================================================================
@@ -77,7 +75,9 @@ def parse_command_line():
 # Parse command line
 #
 
-options, horizon_history, found_inj, missed_inj, seglistdicts, seg_bins = parse_command_line()
+options, found_inj, missed_inj, seglistdicts, seg_bins = parse_command_line()
+
+horizon_history = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.marginalized_likelihood_file, contenthandler=far.RankingStat.LIGOLWContentHandler, verbose = options.verbose))[0].numerator.horizon_history
 
 #
 # Plot

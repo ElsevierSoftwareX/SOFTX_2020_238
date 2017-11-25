@@ -190,7 +190,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", seglistdict = None, zero_lag_ranking_stats_filename = None, segment_history_duration = LIGOTimeGPS(2592000), verbose = False):
+	def __init__(self, mainloop, pipeline, dataclass, instruments, tag = "", segment_history_duration = LIGOTimeGPS(2592000), verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being controlled by this handler
@@ -203,7 +203,6 @@ class Handler(simplehandler.Handler):
 		self.dataclass = dataclass
 
 		self.tag = tag
-		self.zero_lag_ranking_stats_filename = zero_lag_ranking_stats_filename
 		self.verbose = verbose
 
 		# setup segment list collection from gates
@@ -230,11 +229,6 @@ class Handler(simplehandler.Handler):
 		# dictionary mapping segtype to segmentlist dictionary
 		# mapping instrument to segment list
 		self.seglistdicts = dict((segtype, segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)) for segtype in gate_suffix)
-		# add a "triggersegments" entry
-		if seglistdict is None:
-			self.seglistdicts["triggersegments"] = segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in instruments)
-		else:
-			self.seglistdicts["triggersegments"] = seglistdict
 		# hook the Data class's livetime record keeping into ours
 		# so that all segments come here and the Data class has all
 		# of ours
@@ -307,9 +301,6 @@ class Handler(simplehandler.Handler):
 				# save
 				self.psds[instrument] = psd
 
-				# don't record horizon distance for Virgo.  FIXME:  remove after O2
-				if instrument == "V1": return True
-
 				# update horizon distance history
 				#
 				# FIXME:  get canonical masses from the template bank bin that we're analyzing
@@ -328,18 +319,17 @@ class Handler(simplehandler.Handler):
 				# set to CLOCK_TIME_NONE so they can't be
 				# used for this.
 				try:
-					timestamp = self.seglistdicts["triggersegments"].extent_all()[1]
+					# seconds
+					timestamp = self.dataclass.rankingstat.segmentlists.extent_all()[1]
 				except ValueError:
 					# no segments
 					return False
-				# terminate all segments except
-				# triggersements.
-				off = segments.segmentlist([segments.segment(timestamp, segments.PosInfinity)])
-				for name, seglistdict in self.seglistdicts.items():
-					if name == "triggersegments":
-						continue
-					for seglist in seglistdict.values():
-						seglist -= off
+				# convert to integer nanoseconds
+				timestamp = LIGOTimeGPS(timestamp).ns()
+				# terminate all segments
+				for segtype, seglistdict in self.seglistdicts.items():
+					for instrument in seglistdict:
+						self._gatehandler(None, timestamp, (segtype, instrument, "off"))
 			return False
 		return False
 
@@ -348,7 +338,7 @@ class Handler(simplehandler.Handler):
 		timestamp can be a float or a slice with float boundaries.
 		"""
 		# retrieve the horizon history for this instrument
-		horizon_history = self.dataclass.coinc_params_distributions.horizon_history[instrument]
+		horizon_history = self.dataclass.rankingstat.numerator.horizon_history[instrument]
 		# NOTE:  timestamps are floats here (or float slices), not
 		# LIGOTimeGPS.  whitener should be reporting PSDs with
 		# integer timestamps so the timestamps are not naturally
@@ -378,7 +368,7 @@ class Handler(simplehandler.Handler):
 		# buffer would be an especially bad choice.
 		self.flush_segments_to_disk(timestamp)
 		try:
-			self.dataclass.snapshot_output_url("%s_LLOID" % self.tag, "xml.gz", zero_lag_ranking_stats_filename = self.zero_lag_ranking_stats_filename, verbose = self.verbose)
+			self.dataclass.snapshot_output_url("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
 		except TypeError as te:
 			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
 
@@ -393,27 +383,19 @@ class Handler(simplehandler.Handler):
 			# make a copy of the current segmentlistdicts
 			seglistdicts = dict((key, value.copy()) for key, value in self.seglistdicts.items())
 
-			# FIXME:  in the next step we don't clip the
-			# triggersegments.  the online pipeline needs these
-			# to accumulate forever, but that might not be what
-			# it should be doing, nor should these necessarily
-			# be the segments it uses for livetime.  figure
-			# this out
-
 			# keep everything before timestamp in the current
 			# segmentlistdicts.
-			dontclip = set(("triggersegments",))
 			for seglistdict in self.seglistdicts.values():
-				seglistdict -= seglistdict.fromkeys(set(seglistdict) - dontclip, segments.segmentlist([segments.segment(timestamp, segments.PosInfinity)]))
+				seglistdict -= seglistdict.fromkeys(seglistdict, segments.segmentlist([segments.segment(timestamp, segments.PosInfinity)]))
 			# keep everything after timestamp in the copy
 			for seglistdict in seglistdicts.values():
-				seglistdict -= seglistdict.fromkeys(set(seglistdict) - dontclip, segments.segmentlist([segments.segment(segments.NegInfinity, timestamp)]))
+				seglistdict -= seglistdict.fromkeys(seglistdict, segments.segmentlist([segments.segment(segments.NegInfinity, timestamp)]))
 
 			# construct a filename for the current (clipped)
 			# segmentlistdicts
 			try:
 				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
-				start, end = segments.segmentlist(seglistdict.extent_all() for name, seglistdict in self.seglistdicts.items() if name not in dontclip).extent()
+				start, end = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
 			except ValueError:
 				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
 				return
@@ -454,7 +436,7 @@ class Handler(simplehandler.Handler):
 			# set the horizon distance history to 0 at
 			# on-to-off transitions of whitened h(t)
 			if segtype == "whitehtsegments":
-				if self.dataclass.coinc_params_distributions.horizon_history[instrument]:
+				if self.dataclass.rankingstat.numerator.horizon_history[instrument]:
 					self._record_horizon_distance(instrument, slice(float(timestamp), None), 0.)
 				else:
 					self._record_horizon_distance(instrument, float(timestamp), 0.)
@@ -578,7 +560,7 @@ class Handler(simplehandler.Handler):
 
 	def gen_psd_xmldoc(self):
 		xmldoc = lal.series.make_psd_xmldoc(self.psds)
-		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {})
+		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", {}, ifos = self.psds)
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 

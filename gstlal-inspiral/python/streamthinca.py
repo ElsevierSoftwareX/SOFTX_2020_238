@@ -98,7 +98,7 @@ class StreamThinca(object):
 		self.min_log_L = min_log_L
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
-		self.coinc_params_distributions = None
+		self.rankingstat = None
 
 		# the \Delta t window not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
@@ -111,17 +111,14 @@ class StreamThinca(object):
 		self.event_ids = set()
 
 
-	def set_coinc_params_distributions(self, coinc_params_distributions):
-		if coinc_params_distributions is None:
+	def set_rankingstat(self, rankingstat):
+		if rankingstat is None:
 			self.ln_likelihood_func = None
-			self.ln_likelihood_params_func = None
 		else:
-			self.ln_likelihood_func = coinc_params_distributions
-			self.ln_likelihood_params_func = coinc_params_distributions.coinc_params
-	def del_coinc_params_distributions(self):
+			self.ln_likelihood_func = rankingstat.ln_lr_from_triggers
+	def del_rankingstat(self):
 		self.ln_likelihood_func = None
-		self.ln_likelihood_params_func = None
-	coinc_params_distributions = property(None, set_coinc_params_distributions, del_coinc_params_distributions, "ThincaCoincParamsDistributions instance with which to compute likelihood ratio values.")
+	rankingstat = property(None, set_rankingstat, del_rankingstat, "RankingStat instance with which to compute likelihood ratio values.")
 
 
 	@property
@@ -144,7 +141,7 @@ class StreamThinca(object):
 		return self.last_boundary - self.coincidence_back_off
 
 
-	def add_events(self, xmldoc, process_id, events, boundary, fapfar = None):
+	def add_events(self, xmldoc, process_id, events, boundary, seglists, fapfar = None):
 		# invalidate the coinc extractor in case all that follows
 		# is a no-op
 		self.last_coincs = {}
@@ -172,10 +169,10 @@ class StreamThinca(object):
 			self.sngl_inspiral_table.append(event)
 
 		# run coincidence, return non-coincident sngls.
-		return self.run_coincidence(xmldoc, process_id, boundary, fapfar = fapfar)
+		return self.run_coincidence(xmldoc, process_id, boundary, seglists, fapfar = fapfar)
 
 
-	def run_coincidence(self, xmldoc, process_id, boundary, fapfar = None):
+	def run_coincidence(self, xmldoc, process_id, boundary, seglists, fapfar = None):
 		"""
 		boundary = the time up-to which the trigger list can be
 		assumed to be complete.
@@ -259,7 +256,6 @@ class StreamThinca(object):
 			# False/0 = keep, True/non-0 = discard
 			if len(events) == 1 and events[0].snr < 5:
 				return True
-			if len(events) == 1 and events[0].ifo == "V1": return True	# exclude single-detector Virgo-only coincs.  FIXME:  remove after O2
 			return min(event.end for event in events) not in seg
 
 		# find coincs.
@@ -269,10 +265,10 @@ class StreamThinca(object):
 			coinc_definer_row = thinca.InspiralCoincDef,
 			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
+			seglists = seglists,
 			likelihood_func = self.ln_likelihood_func,
-			likelihood_params_func = self.ln_likelihood_params_func,
-			min_log_L = self.min_log_L,
-			min_instruments = self.min_instruments
+			min_instruments = self.min_instruments,
+			min_log_L = self.min_log_L
 		)
 
 		# assign the FAP and FAR if provided with the data to do so
@@ -371,7 +367,7 @@ class StreamThinca(object):
 		return noncoinc_sngls + background_coinc_sngls
 
 
-	def flush(self, xmldoc, process_id, fapfar = None):
+	def flush(self, xmldoc, process_id, seglists, fapfar = None):
 		# invalidate the coinc extractor in case run_coincidence()
 		# is a no-op.
 		self.last_coincs = {}
@@ -379,7 +375,7 @@ class StreamThinca(object):
 		# coincidence.  don't bother unless .add_events() has been
 		# called since the last flush()
 		if self._xmldoc is not None:
-			noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), fapfar = fapfar)
+			noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), seglists, fapfar = fapfar)
 		else:
 			noncoinc_sngls = []
 

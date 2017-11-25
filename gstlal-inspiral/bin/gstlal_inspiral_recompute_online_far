@@ -58,7 +58,7 @@ options, filenames = parse_command_line()
 #
 
 
-global_ranking, procid = far.RankingData.from_xml(ligolw_utils.load_filename(options.background_bins_file[0], contenthandler = far.ThincaCoincParams.LIGOLWContentHandler, verbose = options.verbose))
+global_ranking, procid = far.RankingStatPDF.from_xml(ligolw_utils.load_filename(options.background_bins_file[0], contenthandler = far.ThincaCoincParams.LIGOLWContentHandler, verbose = options.verbose))
 
 global_ranking.compute_joint_cdfs()
 

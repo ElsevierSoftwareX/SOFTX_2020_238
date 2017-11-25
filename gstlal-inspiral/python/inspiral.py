@@ -90,7 +90,6 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import ligolw_sqlite
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import time_slide as ligolw_time_slide
 import lal
@@ -346,11 +345,6 @@ class CoincsDocument(object):
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
 		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"gstlal_inspiral", process_params, comment = comment, ifos = instruments)
-		self.search_summary = ligolw_search_summary.append_search_summary(self.xmldoc, self.process,
-			lalwrapper_cvs_tag = None,	# FIXME
-			lal_cvs_tag = None,	# FIXME
-			inseg = seg
-		)
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = self.sngl_inspiral_columns))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
@@ -406,8 +400,8 @@ class CoincsDocument(object):
 			# to find exactly the one correct entry in the
 			# database
 
-			(self.process.process_id,), = (self.search_summary.process_id,), = self.connection.cursor().execute("SELECT process_id FROM process WHERE program == ? AND node == ? AND username == ? AND unix_procid == ? AND start_time == ?", (self.process.program, self.process.node, self.process.username, self.process.unix_procid, self.process.start_time)).fetchall()
-			self.process.process_id = self.search_summary.process_id = ilwd.ilwdchar(self.process.process_id)
+			(self.process.process_id,), = self.connection.cursor().execute("SELECT process_id FROM process WHERE program == ? AND node == ? AND username == ? AND unix_procid == ? AND start_time == ?", (self.process.program, self.process.node, self.process.username, self.process.unix_procid, self.process.start_time)).fetchall()
+			self.process.process_id = ilwd.ilwdchar(self.process.process_id)
 		else:
 			self.connection = self.working_filename = None
 
@@ -431,20 +425,6 @@ class CoincsDocument(object):
 		return self.process.process_id
 
 
-	@property
-	def search_summary_outseg(self):
-		return self.search_summary.out_segment
-
-
-	def add_to_search_summary_outseg(self, seg):
-		out_segs = segments.segmentlist([self.search_summary_outseg])
-		if out_segs == [None]:
-			# out segment not yet initialized
-			del out_segs[:]
-		out_segs |= segments.segmentlist([seg])
-		self.search_summary.out_segment = out_segs.extent()
-
-
 	def get_next_sngl_id(self):
 		return self.sngl_inspiral_table.get_next_id()
 
@@ -454,13 +434,9 @@ class CoincsDocument(object):
 		ligolw_process.set_process_end_time(self.process)
 
 		if self.connection is not None:
-			seg = self.search_summary_outseg
-			# record the final state of the search_summary and
-			# process rows in the database
+			# record the final state of the process row in the
+			# database
 			cursor = self.connection.cursor()
-			if seg is not None:
-				cursor.execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].gpsSeconds, seg[0].gpsNanoSeconds, seg[1].gpsSeconds, seg[1].gpsNanoSeconds, self.search_summary.process_id))
-			cursor.execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
 			cursor.execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
 			cursor.close()
 			self.connection.commit()
@@ -470,25 +446,21 @@ class CoincsDocument(object):
 			dbtables.put_connection_filename(ligolw_utils.local_path_from_url(self.url), self.working_filename, verbose = verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
-			self.search_summary.nevents = len(self.sngl_inspiral_table)
 			ligolw_utils.write_url(self.xmldoc, self.url, gz = (self.url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 
 class Data(object):
-	def __init__(self, url, process_params, pipeline, seg, coinc_params_distributions, offsetvectors, zero_lag_ranking_stats = None, marginalized_likelihood_file = None, likelihood_url_namedtuple = None, injection_filename = None, comment = None, tmp_path = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", replace_file = True, upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_filename = None, rankingstatpdf_filename = None, likelihood_url_namedtuple = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
 
 		self.lock = threading.Lock()
+		self.coincs_document = coincs_document
 		self.pipeline = pipeline
 		self.verbose = verbose
 		self.upload_auxiliary_data_to_gracedb = upload_auxiliary_data_to_gracedb
-		# None to disable likelihood ratio assignment, otherwise a filename
-		self.marginalized_likelihood_file = marginalized_likelihood_file
-		self.likelihood_url_namedtuple = likelihood_url_namedtuple
 		# None to disable periodic snapshots, otherwise seconds
-		# set to 1.0 to disable background data decay
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
 		self.likelihood_snapshot_timestamp = None
 		# gracedb far threshold
@@ -498,6 +470,12 @@ class Data(object):
 		self.gracedb_search = gracedb_search
 		self.gracedb_pipeline = gracedb_pipeline
 		self.gracedb_service_url = gracedb_service_url
+
+		#
+		# seglistsdicts is populated the pipeline handler.
+		#
+
+		self.seglistdicts = None
 
 		#
 		# setup bottle routes
@@ -513,7 +491,7 @@ class Data(object):
 		bottle.route("/far_history.txt")(self.web_get_far_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
 		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
-		bottle.route("/zero_lag_ranking_stats.xml")(self.web_get_zero_lag_ranking_stats_file)
+		bottle.route("/zerolag_rankingstatpdf.xml")(self.web_get_zero_lag_ranking_stats_file)
 		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
 		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
 		bottle.route("/gracedb_min_instruments.txt", method = "GET")(self.web_get_gracedb_min_instruments)
@@ -522,10 +500,10 @@ class Data(object):
 		bottle.route("/sngls_snr_threshold.txt", method = "POST")(self.web_set_sngls_snr_threshold)
 
 		#
-		# initialize document to hold coincs and segments
+		# all triggers up to this index have had their SNR time
+		# series deleted to save memory
 		#
 
-		self.coincs_document = CoincsDocument(url, process_params, comment, coinc_params_distributions.instruments, seg, offsetvectors, injection_filename = injection_filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 		self.snr_time_series_cleanup_index = 0
 
 		#
@@ -533,43 +511,95 @@ class Data(object):
 		#
 
 		self.stream_thinca = streamthinca.StreamThinca(
-			coincidence_threshold = coinc_params_distributions.delta_t,
+			coincidence_threshold = rankingstat.delta_t,
 			thinca_interval = thinca_interval,	# seconds
-			min_instruments = coinc_params_distributions.min_instruments,
-			min_log_L = min_log_L,
+			min_instruments = rankingstat.min_instruments,
+			#min_log_L = min_log_L,	# FIXME: temporarily disabled until dataless ranking stat implementation is complete
 			sngls_snr_threshold = sngls_snr_threshold
 		)
 
 		#
-		# setup likelihood ratio book-keeping.  seglistsdicts to be
-		# populated the pipeline handler.  zero_lag_ranking_stats
-		# is a RankingData object that is used to accumulate a
-		# histogram of the likelihood ratio values assigned to
-		# zero-lag candidates.  this is required to implement the
-		# extinction model for low-significance events during
-		# online running but otherwise is optional.  ranking_data
-		# contains the RankingData object used to initialize the
+		# setup likelihood ratio book-keeping.
+		#
+		# in online mode, if reference_likelihood_url is set then
+		# on each snapshot interval, and before providing stream
+		# thinca with its ranking statistic information, the
+		# current rankingstat object is replaced with the contents
+		# of that file.  this is intended to be used by trigger
+		# generator jobs on the injection branch of an online
+		# analysis to import ranking statistic information from
+		# their non-injection cousins instead of using whatever
+		# statistics they've collected internally.
+		# reference_likelihood_url is not used when running
+		# offline.  NOTE:  historically this option was used to
+		# provide the name of the file from which ranking statistic
+		# information was loaded for the purpose of implementing
+		# the --min-log-L cut when running offline, but that is now
+		# accomplished with an internal virtual ranking statistic
+		# object.
+		#
+		# likelihood_url provides the name of the file to which the
+		# internally-collected ranking statistic information is to
+		# be written whenever output is written to disk.  if set to
+		# None, then only the trigger file will be written, no
+		# ranking statistic information will be written.  normally
+		# it is set to a non-null value, but, again, injection jobs
+		# might be configured to disable ranking statistic output
+		# since they produce nonsense.
+		#
+
+		if likelihood_url_namedtuple is not None:
+			self.reference_likelihood_url = likelihood_url_namedtuple.reference_likelihood_url
+			self.likelihood_url = likelihood_url_namedtuple.likelihood_url
+		else:
+			self.reference_likelihood_url = None
+			self.likelihood_url = None
+		self.rankingstat = rankingstat
+
+		#
+		# zero_lag_ranking_stats is a RankingStatPDF object that is
+		# used to accumulate a histogram of the likelihood ratio
+		# values assigned to zero-lag candidates.  this is required
+		# to implement the extinction model for low-significance
+		# events during online running but otherwise is optional.
+		#
+
+		if zerolag_rankingstatpdf_filename is None:
+			self.zerolag_rankingstatpdf = None
+		else:
+			_, self.zerolag_rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(zerolag_rankingstatpdf_filename, verbose = verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+			if self.zerolag_rankingstatpdf is None:
+				raise ValueError("\"%s\" does not contain ranking statistic PDF data" % zerolag_rankingstatpdf_filename)
+		self.zerolag_rankingstatpdf_filename = zerolag_rankingstatpdf_filename
+
+		#
+		# rankingstatpdf contains the RankingStatPDF object (loaded
+		# from rankingstatpdf_filename) used to initialize the
 		# FAPFAR object for on-the-fly FAP and FAR assignment.
 		# except to initialize the FAPFAR object it is not used for
 		# anything, but is retained so that it can be exposed
-		# through the web interface for diagnostic purposed and
-		# uploaded to gracedb with candidates.
+		# through the web interface for diagnostic purposes and
+		# uploaded to gracedb with candidates.  the extinction
+		# model is applied to initialize the FAPFAR object but the
+		# original is retained for upload to gracedb, etc.
 		#
 
-		self.coinc_params_distributions = coinc_params_distributions
-		self.ranking_data = None
-		self.seglistdicts = None
-		self.zero_lag_ranking_stats = zero_lag_ranking_stats
+		# None to disable
+		self.rankingstatpdf_filename = rankingstatpdf_filename
+		self.rankingstatpdf = None
 		self.fapfar = None
 
-		# We are not in an online mode, but we still want to assign LRs
-		# from a reference likelihood file to be able to apply an LR
-		# threshold
+		#
+		# if we are not in online mode but we need to compute LRs
+		# to apply an LR threshold, then enable LR assignment using
+		# the dataless ranking statistic variant
+		#
 
-		if self.likelihood_snapshot_interval is None and self.likelihood_url_namedtuple.reference_likelihood_url is not None:
-			thinca_coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.likelihood_url_namedtuple.reference_likelihood_url, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-			thinca_coinc_params_distributions.finish(segs = seglists, verbose = self.verbose)
-			self.stream_thinca.coinc_params_distributions = thinca_coinc_params_distributions
+		# FIXME:  temporarily disabled until dataless ranking stat is working
+		#if self.likelihood_snapshot_interval is None and min_log_L is not None:
+		#	dataless_rankingstat = far.DatalessRankingStat(instruments = rankingstat.instruments, min_instruments = rankingstat.min_instruments, delta_t = rankingstat.delta_t)
+		#	dataless_rankingstat.finish()
+		#	self.stream_thinca.rankingstat = dataless_rankingstat
 
 		#
 		# Fun output stuff
@@ -613,13 +643,17 @@ class Data(object):
 			# FIXME:  ugly way to get the instrument
 			instrument = elem.get_name().split("_", 1)[0]
 
-			# update search_summary out segment and our
-			# livetime
+			# extract segment.  move the segment's upper
+			# boundary to include all triggers.  ARGH the 1 ns
+			# offset is needed for the respective trigger to be
+			# "in" the segment (segments are open from above)
+			# FIXME:  is there another way?
 			buf_timestamp = LIGOTimeGPS(0, buf.pts)
-			buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
-			if instrument != "V1":	# ignore V1 segments.  FIXME:  remove after O2 (and outdent contents of conditional)
-				self.coincs_document.add_to_search_summary_outseg(buf_seg)
-				self.seglistdicts["triggersegments"][instrument] |= segments.segmentlist((buf_seg,))
+			buf_seg = segments.segment(buf_timestamp, max((buf_timestamp + LIGOTimeGPS(0, buf.duration),) + tuple(event.end + 0.000000001 for event in events)))
+			buf_is_gap = bool(buf.mini_object.flags & Gst.BufferFlags.GAP)
+			if buf_is_gap:
+				# sanity check that gap buffers are empty
+				assert not events
 
 			# safety check end times.  OK for end times to be
 			# past end of buffer, but we cannot allow triggr
@@ -629,9 +663,12 @@ class Data(object):
 			# trigger list is complete upto this buffer's time
 			# stamp.
 			assert all(event.end >= buf_timestamp for event in events)
+			# we have extended the buf_seg above to enclose the
+			# triggers, make sure that worked
+			assert all(event.end in buf_seg for event in events)
 
 			# Find max SNR sngles
-			if events and events[0].ifo != "V1":	# but not V1.  FIXME:  remove after O2
+			if events:
 				max_snr_event = max(events, key = lambda t: t.snr)
 				self.ifo_snr_history[max_snr_event.ifo].append((float(max_snr_event.end), max_snr_event.snr))
 
@@ -650,73 +687,88 @@ class Data(object):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 
 				# if a reference likelihood file is given,
-				# overwrite coinc_params_distributions with its
-				# contents.  in either case, invoke .finish()
-				# to re-populate the PDF arrays from the raw
-				# counts
-				# FIXME There is currently no guarantee that
-				# the reference_likelihood_file on disk will
-				# have updated since the last snapshot, but for
-				# our purpose it should not have that large of
-				# an effect. The data loaded should never be
-				# older than the snapshot before last
-				if self.likelihood_url_namedtuple.reference_likelihood_url is not None:
-					params_before = self.coinc_params_distributions.instruments, self.coinc_params_distributions.min_instruments, self.coinc_params_distributions.delta_t
-					self.coinc_params_distributions, _, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.likelihood_url_namedtuple.reference_likelihood_url, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))
-					params_after  = self.coinc_params_distributions.instruments, self.coinc_params_distributions.min_instruments, self.coinc_params_distributions.delta_t
-					if params_before != params_after:
-						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.likelihood_url_namedtuple.reference_likelihood_url)
-					self.coinc_params_distributions.finish(segs = seglists, verbose = self.verbose)
-				else:
-					self.coinc_params_distributions.finish(segs = self.seglistdicts["triggersegments"], verbose = self.verbose)
+				# overwrite rankingstat with its contents.
+				# FIXME There is currently no guarantee
+				# that the reference_likelihood_file on
+				# disk will have updated since the last
+				# snapshot, but for our purpose it should
+				# not have that large of an effect. The
+				# data loaded should never be older than
+				# the snapshot before last
+				if self.reference_likelihood_url is not None:
+					params_before = self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t
+					self.rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.reference_likelihood_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+					if params_before != (self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t):
+						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.reference_likelihood_url)
 
 				# post a checkpoint message.
 				# FIXME:  make sure this triggers
-				# self.snapshot_output_url() to be
-				# invoked.  lloidparts takes care of that
-				# for now, but spreading the program logic
-				# around like that isn't a good idea, this
-				# code should be responsible for it
-				# somehow, no?  NOTE:
-				# self.snapshot_output_url() does not
-				# write the coinc_params_distributions
-				# object to disk if a reference likelihood
-				# file is given, so the the thing that was
-				# just read in is not written back out
-				# again.  see the comment in that function
-				# about turning it into two handlers and
-				# only hooking up which ones are needed.
+				# self.snapshot_output_url() to be invoked.
+				# lloidparts takes care of that for now,
+				# but spreading the program logic around
+				# like that isn't a good idea, this code
+				# should be responsible for it somehow, no?
+				# NOTE: self.snapshot_output_url() writes
+				# the current rankingstat object to the
+				# location identified by .likelihood_url,
+				# so if that is either not set or at least
+				# set to a different name than
+				# .reference_likelihood_url the file that
+				# has just been loaded above will not be
+				# overwritten.
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 
-				if self.marginalized_likelihood_file is not None:
+				if self.rankingstatpdf_filename is not None:
 					# enable streamthinca's likelihood
 					# ratio assignment using our own,
 					# local, parameter distribution
 					# data
-					self.stream_thinca.coinc_params_distributions = self.coinc_params_distributions
+				# FIXME:  this won't work, because this
+				# object only has horizon distance and
+				# trigger rate information up to the
+				# current point in time.  it cannot be used
+				# to rank candidates collected after this
+				# time, which is exactly what we intend to
+				# do with it.  to fix this, I anticipate
+				# writing an "online" variant of the
+				# ranking statistic class that
+				# frankensteins together the snr and \chi^2
+				# densities from one rankingstat instance
+				# with the horizons and trigger rate
+				# densities from another
+					rankingstat = self.rankingstat.copy()
+					rankingstat.finish()
+					self.stream_thinca.rankingstat = rankingstat
 
 					# read the marginalized likelihood
 					# ratio distributions that have
 					# been updated asynchronously and
 					# initialize a FAP/FAR assignment
 					# machine from it.
-					self.ranking_data, seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler))[1:]
-					if self.ranking_data is None:
-						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.marginalized_likelihood_file)
-					self.ranking_data = self.ranking_data.new_with_extinction(self.ranking_data)[0]
-					self.ranking_data.finish(verbose = self.verbose)
-					self.fapfar = far.FAPFAR(self.ranking_data, livetime = far.get_live_time(seglists))
+					_, self.rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.rankingstatpdf_filename, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+					if self.rankingstatpdf is None:
+						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.rankingstatpdf_filename)
+					self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())
 
-			# add triggers to total trigger counts.  this needs
+			# add triggers to trigger rate record.  this needs
 			# to be done without any cuts on coincidence, etc.,
 			# so that the total trigger count agrees with the
 			# total livetime from the SNR buffers.  we assume
 			# the density of real signals is so small that this
-			# count is not sensitive to their presence
-			singles = self.coinc_params_distributions.background_rates["singles"]
-			for event in events:
-				if event.ifo == "V1": continue	# skip V1.  FIXME:  remove after O2
-				singles[event.ifo,] += 1
+			# count is not sensitive to their presence.  NOTE:
+			# this is not true locally.  a genuine signal, if
+			# loud, can significantly increase the local
+			# density of triggers, therefore the trigger rate
+			# measurement machinery must take care to average
+			# the rate over a sufficiently long period of time
+			# that the rate estimates are insensitive to the
+			# presence of signals.  the current implementation
+			# averages over whole science segments.  NOTE: this
+			# must be done before running stream thinca (below)
+			# so that the "how many instruments were on test"
+			# is aware of this buffer.
+			if not buf_is_gap:
+				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg), len(events))
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
@@ -734,18 +786,19 @@ class Data(object):
 			# contaminating our noise model, so it's not
 			# necessary for this test to be super precisely
 			# defined.
-			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
-				if event.ifo == "V1": continue	# skip Virgo.	FIXME:  remove after O2
-				if len(self.seglistdicts["whitehtsegments"].keys_at(event.end)) > 1:
-					self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
+			ratebinlists = self.rankingstat.denominator.triggerrates.values()
+			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, self.rankingstat.segmentlists, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
+				if sum(event.end in ratebins for ratebins in ratebinlists) > 1:
+					self.rankingstat.denominator.increment(event)
 			self.coincs_document.commit()
 
 			# update zero-lag coinc bin counts in
-			# coinc_params_distributions.
+			# rankingstat.
 			if self.stream_thinca.last_coincs:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					if coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
-						self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)))
+						for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id):
+							self.rankingstat.zerolag.increment(event)
 
 			# Cluster last coincs before recording number of zero
 			# lag events or sending alerts to gracedb
@@ -761,12 +814,10 @@ class Data(object):
 			# post "clustering"
 			# FIXME proper clustering is really needed (see
 			# above)
-			if self.stream_thinca.last_coincs and self.zero_lag_ranking_stats is not None:
+			if self.stream_thinca.last_coincs and self.zerolag_rankingstatpdf is not None:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					if coinc_event.likelihood is not None and coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
-						instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
-						instruments -= frozenset(("V1",)) # never claim Virgo participated or was on.	FIXME:  remove after O2
-						self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
+						self.zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc_event.likelihood,] += 1
 
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
@@ -797,10 +848,8 @@ class Data(object):
 		# the --likelihood-file that was loaded.
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
-		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
-		# FIXME:  now that we've got all kinds of segment lists
-		# being collected, decide which of them should go here.
-		far.gen_likelihood_control_doc(xmldoc, process, self.coinc_params_distributions, self.ranking_data, self.seglistdicts["triggersegments"])
+		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {}, ifos = self.rankingstat.instruments)
+		far.gen_likelihood_control_doc(xmldoc, self.rankingstat, self.rankingstatpdf)
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
@@ -815,10 +864,8 @@ class Data(object):
 	def __get_zero_lag_ranking_stats_xmldoc(self):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
-		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {})
-		# FIXME:  now that we've got all kinds of segment lists
-		# being collected, decide which of them should go here.
-		far.gen_likelihood_control_doc(xmldoc, process, None, self.zero_lag_ranking_stats, self.seglistdicts["triggersegments"])
+		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {}, ifos = self.rankingstat.instruments)
+		far.gen_likelihood_control_doc(xmldoc, None, self.zerolag_rankingstatpdf)
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
@@ -835,18 +882,19 @@ class Data(object):
 		# non-coincident sngls.  add them to the distribution.  as
 		# above in appsink_new_buffer() we skip singles collected
 		# during times when only one instrument was one.
-		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, fapfar = self.fapfar):
-			if event.ifo == "V1": continue	# skip Virgo.	FIXME:  remove after O2
-			if len(self.seglistdicts["whitehtsegments"].keys_at(event.end)) > 1:
-				self.coinc_params_distributions.add_background(self.coinc_params_distributions.coinc_params((event,), None, mode = "counting"))
+		ratebinlists = self.rankingstat.denominator.triggerrates.values()
+		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, self.rankingstat.segmentlists, fapfar = self.fapfar):
+			if sum(event.end in ratebins for ratebins in ratebinlists) > 1:
+				self.rankingstat.denominator.increment(event)
 		self.coincs_document.commit()
 
-		# update zero-lag bin counts in coinc_params_distributions
+		# update zero-lag bin counts in rankingstat
 		if self.stream_thinca.last_coincs:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
 				if not any(offset_vector.values()):
-					self.coinc_params_distributions.add_zero_lag(self.coinc_params_distributions.coinc_params(self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id), offset_vector))
+					for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id):
+						self.rankingstat.zerolag.increment(event)
 
 		# Cluster last coincs before recording number of zero
 		# lag events or sending alerts to gracedb
@@ -861,12 +909,10 @@ class Data(object):
 		# Add events to the observed likelihood histogram post
 		# "clustering"
 		# FIXME proper clustering is really needed (see above)
-		if self.stream_thinca.last_coincs and self.zero_lag_ranking_stats is not None:
+		if self.stream_thinca.last_coincs and self.zerolag_rankingstatpdf is not None:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				if coinc_event.likelihood is not None and coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
-					instruments = frozenset(self.stream_thinca.last_coincs.coinc_inspiral_index[coinc_event_id].instruments)
-					instruments -= frozenset(("V1",)) # never claim Virgo participated or was on.	FIXME:  remove after O2
-					self.zero_lag_ranking_stats.zero_lag_likelihood_rates[instruments][coinc_event.likelihood,] += 1
+					self.zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc_event.likelihood,] += 1
 
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
@@ -915,8 +961,8 @@ class Data(object):
 			# fake a filename for end-user convenience
 			#
 
-			observatories = "".join(sorted(set(instrument[0] for instrument in self.seglistdicts["triggersegments"])))
-			instruments = "".join(sorted(self.seglistdicts["triggersegments"]))
+			observatories = "".join(sorted(set(instrument[0] for instrument in self.rankingstat.instruments)))
+			instruments = "".join(sorted(self.rankingstat.instruments))
 			description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_search)
 			end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].end)
 			filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
@@ -988,7 +1034,7 @@ class Data(object):
 			if self.verbose:
 				print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 			psddict = {}
-			for instrument in self.seglistdicts["triggersegments"]:
+			for instrument in self.rankingstat.instruments:
 				elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
 				data = numpy.array(elem.get_property("mean-psd"))
 				psddict[instrument] = lal.CreateREAL8FrequencySeries(
@@ -1218,13 +1264,13 @@ class Data(object):
 	def write_output_url(self, url = None, description = "", verbose = False):
 		with self.lock:
 			self.__write_output_url(url = url, verbose = verbose)
-			if self.likelihood_url_namedtuple.likelihood_url: 
-				self.__write_likelihood_url(self.likelihood_url_namedtuple.likelihood_url, description, verbose = verbose)
+			if self.likelihood_url is not None:
+				self.__write_likelihood_url(self.likelihood_url, description, verbose = verbose)
 
 			# can't be used anymore
 			del self.coincs_document
 
-	def snapshot_output_url(self, description, extension, zero_lag_ranking_stats_filename = None, verbose = False):
+	def snapshot_output_url(self, description, extension, verbose = False):
 		with self.lock:
 			coincs_document = self.coincs_document.get_another()
 			# We require the likelihood file to have the same name
@@ -1233,10 +1279,10 @@ class Data(object):
 			fname = self.T050017_filename(description, extension)
 			fname = os.path.join(subdir_from_T050017_filename(fname), fname)
 			self.__write_output_url(url = fname, verbose = verbose)
-			if self.likelihood_url_namedtuple.likelihood_url:
-				self.__write_likelihood_url(self.likelihood_url_namedtuple.likelihood_url, description, snapshot = True, verbose = verbose)
-			if zero_lag_ranking_stats_filename is not None:
-				self.__write_zero_lag_ranking_stats_file(zero_lag_ranking_stats_filename, verbose = verbose)
+			if self.likelihood_url is not None:
+				self.__write_likelihood_url(self.likelihood_url, description, snapshot = True, verbose = verbose)
+			if self.zerolag_rankingstatpdf is not None:
+				self.__write_zero_lag_ranking_stats_file(self.zerolag_rankingstatpdf_filename, verbose = verbose)
 
 			# can't be used anymore
 			del self.coincs_document

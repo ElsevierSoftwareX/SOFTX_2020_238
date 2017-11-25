@@ -80,82 +80,15 @@ __all__ = [
 #
 
 
-def instruments_rate_given_noise(singles_counts, num_templates, segs, delta_t, min_instruments = 2):
-	"""
-	Models the expected number of background coincidence events.  Most
-	of the work is performed by lalburst.snglcoinc.CoincSynthesizer.
-	The output of that code is corrected using the assumption that the
-	events whose total counts are provided as input to this function
-	are occuring in distinct "bins" (= templates) and that they can
-	only form a coincidence if they are in the same bin.
-
-	Example:
-
-	>>> from glue.segments import *
-	>>> singles_counts = {"H1": 33000, "L1": 35000, "V1": 55000}
-	>>> num_templates = 1000
-	>>> seglists = segmentlistdict({"H1": segmentlist([segment(0, 30)]), "L1": segmentlist([segment(10, 50)]), "V1": segmentlist([segment(20, 70)])})
-	>>> instruments_rate_given_noise(singles_counts, num_templates, seglists, 0.005, min_instruments = 1)
-	{frozenset(['V1']): 52420.355265761136, frozenset(['H1']): 31658.502382616472, frozenset(['V1', 'H1']): 763.5030405229143, frozenset(['L1']): 32623.729803299546, frozenset(['V1', 'L1']): 1798.275619839839, frozenset(['V1', 'H1', 'L1']): 17.866073876116275, frozenset(['H1', 'L1']): 560.128502984505}
-
-	Works for zero counts
-
-	>>> singles_counts = {"H1": 0, "L1": 0, "V1": 0}
-	>>> inspiral_extrinsics.instruments_rate_given_noise(singles_counts, num_templates, seglists, 0.005, min_instruments = 1)
-	{frozenset(['V1']): 0.0, frozenset(['H1']): 0.0, frozenset(['V1', 'H1']): 0.0, frozenset(['L1']): 0.0, frozenset(['V1', 'L1']): 0.0, frozenset(['V1', 'H1', 'L1']): 0.0, frozenset(['H1', 'L1']): 0.0}
-	"""
-	if set(singles_counts) != set(segs):
-		raise ValueError("singles_counts (%s) and segs (%s) must be for the same instruments" % (", ".join(sorted(singles_counts)), ", ".join(sorted(segs))))
-
-	#
-	# convert counts per observation to counts per template per
-	# observation
-	#
-
-	singles_counts = dict((key, count / float(num_templates)) for key, count in singles_counts.items())
-
-	if max(singles_counts[instrument] / (float(livetime) / delta_t) for instrument, livetime in abs(segs).items()) >= 1:
-		raise ValueError("triggers per coincidence window must be << 1")
-
-	#
-	# initialize the CoincSynthesizer object
-	#
-
-	coincsynth = snglcoinc.CoincSynthesizer(
-		eventlists = singles_counts,
-		segmentlists = segs,
-		delta_t = delta_t,
-		min_instruments = min_instruments
-	)
-
-	# now compute the expected coincidence rates/template/instrument
-	# combo, then multiply by the number of templates to get the
-	# expected coincidence rate/instrument combination.
-
-	return dict((instruments, count * num_templates) for instruments, count in coincsynth.mean_coinc_count.items())
-
-
-def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instruments = 2, min_distance = 0.):
+def P_instruments_given_signal(horizon_distances, n_samples = 500000, min_instruments = 2, min_distance = 0.):
 	"""
 	Example:
 
-	>>> from gstlal.stats.horizonhistory import *
-	>>> hist = HorizonHistories({"H1": NearestLeafTree([(0., 120.)]), "L1": NearestLeafTree([(0., 120.)])})
-	>>> P_instruments_given_signal(hist)
+	>>> P_instruments_given_signal({"H1": 120., "L1": 120.})
 	{frozenset(['H1', 'L1']): 1.0}
-	>>> P_instruments_given_signal(hist, min_instruments = 1)
+	>>> P_instruments_given_signal({"H1": 120., "L1": 120.}, min_instruments = 1)
 	{frozenset(['L1']): 0.25423904879460091, frozenset(['H1', 'L1']): 0.49116512120682387, frozenset(['H1']): 0.25459582999857527}
 	"""
-	# FIXME:  this function computes P(instruments | signal)
-	# marginalized over time (i.e., marginalized over the history of
-	# horizon distances).  what we really want is to know P(instruments
-	# | signal, horizon distances), that is we want to leave it
-	# depending parametrically on the instantaneous horizon distances.
-	# this function takes about 30 s to evaluate, so computing it on
-	# the fly isn't practical and we'll require some sort of caching
-	# scheme.  unless somebody can figure out how to compute this
-	# explicitly without resorting to Monte Carlo integration.
-
 	if n_samples < 1:
 		raise ValueError("n_samples=%d must be >= 1" % n_samples)
 	if min_distance < 0.:
@@ -164,26 +97,30 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instrume
 		raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
 
 	# get instrument names
-	names = tuple(horizon_history)
-	if not names:
-		raise ValueError("horizon_history is empty")
-	# get responses in that same order
+	names = tuple(horizon_distances.keys())
+	# get the horizon distances in that same order
+	DH = numpy.array(tuple(horizon_distances.values()))
+	# get detecor responses in that same order
 	resps = [lalsimulation.DetectorPrefixToLALDetector(str(inst)).response for inst in names]
 
 	# initialize output.  dictionary mapping instrument combination to
 	# probability (initially all 0).
-	result = dict.fromkeys((frozenset(instruments) for n in xrange(min_instruments, len(names) + 1) for instruments in itertools.combinations(names, n)), 0.0)
+	result = dict.fromkeys((frozenset(instruments) for n in range(min_instruments, len(names) + 1) for instruments in itertools.combinations(names, n)), 0.0)
 	if not result:
-		raise ValueError("not enough instruments in horizon_history to satisfy min_instruments")
+		raise ValueError("not enough instruments in horizon_distances to satisfy min_instruments")
+
+	# check for no-op
+	if (DH != 0.).sum() < min_instruments:
+		# not enough instruments are on to form a coinc with the
+		# minimum required instruments.  this is not considered an
+		# error condition, return all probabilities = 0.  NOTE:
+		# result is not normalizable.
+		return result
 
 	# we select random uniformly-distributed right ascensions so
 	# there's no point in also choosing random GMSTs and any value is
 	# as good as any other
 	gmst = 0.0
-
-	# function to spit out a choice of horizon distances drawn
-	# uniformly in time
-	rand_horizon_distances = iter(horizon_history.randhorizons()).next
 
 	# in the loop, we'll need a sequence of integers to enumerate
 	# instruments.  construct it here to avoid doing it repeatedly in
@@ -203,11 +140,6 @@ def P_instruments_given_signal(horizon_history, n_samples = 500000, min_instrume
 	# loop as many times as requested
 	successes = fails = 0
 	while successes < n_samples:
-		# retrieve random horizon distances in the same order as
-		# the instruments.  note:  rand_horizon_distances() is only
-		# evaluated once in this expression.  that's important
-		DH = numpy_array(map(rand_horizon_distances().__getitem__, names))
-
 		# select random sky location and source orbital plane
 		# inclination and choice of polarization
 		ra = random_uniform(0., twopi)
@@ -458,35 +390,14 @@ class SNRPDF(object):
 		# compute P(instruments | horizon distances, signal)
 		#
 
-		class fake_horizon_histories(dict):
-			# fake horizon distance history to pass to
-			# P_instruments_given_signal().  will be removed
-			# when all users of P_instruments_given_signal()
-			# are ported to the SNRPDF cache object and
-			# P_instruments_given_signal()'s signature can be
-			# changed to accept a fixed horizon distance
-			# dictionary
-			def randhorizons(self):
-				while 1:
-					yield self
-
-			# report names of on instruments
-			@property
-			def on_instruments(self):
-				return frozenset(key for key, value in self.items() if value != 0.)
-
 		if verbose:
 			print >>sys.stderr, "For horizon distances %s:" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
 
-		horizon_histories = fake_horizon_histories(self.quantized_horizon_distances(self.quantize_horizon_distances(horizon_distances).items()))
-		if len(horizon_histories.on_instruments) < min_instruments:
-			# not enough instruments are on to form a coinc
-			# with the minimum required instruments.  by-pass
-			# P_instruments_given_signal() because it crashes
-			# in this case
-			P_instruments = dict.fromkeys((frozenset(instruments) for n in xrange(min_instruments, len(horizon_distances) + 1) for instruments in itertools.combinations(horizon_distances, n)), 0.0)
-		else:
-			P_instruments = P_instruments_given_signal(horizon_histories, min_instruments = min_instruments, n_samples = 1000000)
+		P_instruments = P_instruments_given_signal(
+			self.quantized_horizon_distances(self.quantize_horizon_distances(horizon_distances).items()),
+			min_instruments = min_instruments,
+			n_samples = 1000000
+		)
 
 		if verbose:
 			for key_value in sorted((",".join(sorted(key)), value) for key, value in P_instruments.items()):
@@ -868,57 +779,49 @@ def lnP_dt_dphi_uniform_H1L1(coincidence_window_extension):
 	return -math.log((snglcoinc.light_travel_time("H1", "L1") + coincidence_window_extension) * (2. * math.pi))
 
 
-def lnP_dt_dphi_uniform(params, coincidence_window_extension):
+def lnP_dt_dphi_uniform(coincidence_window_extension):
 	# NOTE Currently hardcoded for H1L1
 	# NOTE this is future proofed so that in > 2 ifo scenarios, the
 	# appropriate length can be chosen for the uniform dt distribution
 	return lnP_dt_dphi_uniform_H1L1(coincidence_window_extension)
 
 
-def lnP_dt_dphi(params, coincidence_window_extension, model = "noise"):
+def lnP_dt_dphi_signal(snrs, phase, dt, horizons, coincidence_window_extension):
 	# Return P(dt, dphi|{rho_{IFO}}, signal)
-	if model == "noise":
-		# FIXME Insert actual noise models
-		return lnP_dt_dphi_uniform(params["instruments"], coincidence_window_extension)
+	# FIXME Insert actual signal models
+	if sorted(dt.keys()) == ("H1", "L1"):
+		delta_t = float(dt["H1"] - dt["L1"])
+		delta_phi = (phase["H1"] - phase["L1"]) % (2*math.pi)
+		combined_snr = math.sqrt(snrs["H1"]**2. + snrs["L1"]**2.)
+		if horizons["H1"] != 0 and horizons["L1"] != 0:
+			# neither are zero, proceed as normal
+			H1_snr_over_horizon = snrs["H1"] / horizons["H1"]
+			L1_snr_over_horizon = snrs["L1"] / horizons["L1"]
 
-	elif model == "signal":
-		# FIXME Insert actual signal models
-		if sorted(params.t_offset.keys()) == ["H1", "L1"]:
-			delta_t = float(params.t_offset["H1"] - params.t_offset["L1"])
-			delta_phi = (params.coa_phase["H1"] - params.coa_phase["L1"]) % (2*math.pi)
-			combined_snr = math.sqrt(params["H1_snr_chi"][0]**2. + params["L1_snr_chi"][0]**2.)
-			if params.horizons["H1"] != 0 and params.horizons["L1"] != 0:
-				# neither are zero, proceed as normal
-				H1_snr_over_horizon = params["H1_snr_chi"][0] / params.horizons["H1"]
-				L1_snr_over_horizon = params["L1_snr_chi"][0] / params.horizons["L1"]
-
-			elif params.horizons["H1"] == params.horizons["L1"]:
-				# both are zero, treat as equal
-				H1_snr_over_horizon = params["H1_snr_chi"][0]
-				L1_snr_over_horizon = params["L1_snr_chi"][0]
-
-			else:
-				# one of them is zero, treat snr_ratio as 0, which will get changed to 0.33 in lnP_dt_signal
-				# FIXME is this the right thing to do?
-				return lnP_dt_signal(abs(delta_t), 0.33) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
-
-			if H1_snr_over_horizon > L1_snr_over_horizon:
-				snr_ratio = L1_snr_over_horizon / H1_snr_over_horizon
-
-			else:
-				snr_ratio = H1_snr_over_horizon / L1_snr_over_horizon
-
-			return lnP_dt_signal(abs(delta_t), snr_ratio) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
+		elif horizons["H1"] == horizons["L1"]:
+			# both are zero, treat as equal
+			H1_snr_over_horizon = snrs["H1"]
+			L1_snr_over_horizon = snrs["L1"]
 
 		else:
-			# IFOs != {H1,L1} case, thus just return uniform
-			# distribution so that dt/dphi terms dont affect
-			# likelihood ratio
-			# FIXME Work out general N detector case
-			return lnP_dt_dphi_uniform(params["instruments"], coincidence_window_extension)
+			# one of them is zero, treat snr_ratio as 0, which will get changed to 0.33 in lnP_dt_signal
+			# FIXME is this the right thing to do?
+			return lnP_dt_signal(abs(delta_t), 0.33) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
+
+		if H1_snr_over_horizon > L1_snr_over_horizon:
+			snr_ratio = L1_snr_over_horizon / H1_snr_over_horizon
+
+		else:
+			snr_ratio = H1_snr_over_horizon / L1_snr_over_horizon
+
+		return lnP_dt_signal(abs(delta_t), snr_ratio) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
 
 	else:
-		raise ValueError("invalid data model '%s'" % mode)
+		# IFOs != {H1,L1} case, thus just return uniform
+		# distribution so that dt/dphi terms dont affect
+		# likelihood ratio
+		# FIXME Work out general N detector case
+		return lnP_dt_dphi_uniform(coincidence_window_extension)
 
 
 #

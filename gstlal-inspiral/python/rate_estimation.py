@@ -274,7 +274,7 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 	return centres[mode_index], lower[li], upper[ri]
 
 
-def f_over_b(ranking_data, ln_likelihood_ratios):
+def f_over_b(rankingstatpdf, ln_likelihood_ratios):
 	"""
 	For each sample of the ranking statistic, evaluate the ratio of the
 	signal ranking statistic PDF to background ranking statistic PDF.
@@ -290,12 +290,11 @@ def f_over_b(ranking_data, ln_likelihood_ratios):
 	# for each sample of the ranking statistic, evaluate the ratio of
 	# the signal ranking statistic PDF to background ranking statistic
 	# PDF.
-	# FIXME:  use InterpBinnedArrays for this
 	#
 
-	f = ranking_data.signal_likelihood_pdfs[None]
-	b = ranking_data.background_likelihood_pdfs[None]
-	f_over_b = numpy.array([f[ln_lr,] / b[ln_lr,] for ln_lr in ln_likelihood_ratios])
+	f = rankingstatpdf.signal_lr_lnpdf.mkinterp()
+	b = rankingstatpdf.noise_lr_lnpdf.mkinterp()
+	f_over_b = numpy.array([math.exp(f(ln_lr) - b(ln_lr)) for ln_lr in ln_likelihood_ratios])
 	# safety checks
 	if numpy.isnan(f_over_b).any():
 		raise ValueError("NaN encountered in ranking statistic PDF ratios")
@@ -318,9 +317,9 @@ def f_over_b(ranking_data, ln_likelihood_ratios):
 #
 
 
-def maximum_likelihood_rates(ranking_data, ln_likelihood_ratios):
+def maximum_likelihood_rates(rankingstatpdf, ln_likelihood_ratios):
 	# initialize posterior PDF for rates
-	log_posterior = LogPosterior(numpy.log(f_over_b(ranking_data, ln_likelihood_ratios)))
+	log_posterior = LogPosterior(numpy.log(f_over_b(rankingstatpdf, ln_likelihood_ratios)))
 
 	# going to use a minimizer to find the max, so need to flip
 	# function upside down
@@ -348,7 +347,7 @@ def binned_rates_from_samples(samples):
 	return binnedarray
 
 
-def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = 400000):
+def calculate_rate_posteriors(rankingstatpdf, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = 400000):
 	"""
 	FIXME:  document this
 	"""
@@ -365,8 +364,8 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	# PDF.
 	#
 
-	if ranking_data is not None:
-		ln_f_over_b = numpy.log(f_over_b(ranking_data, ln_likelihood_ratios))
+	if rankingstatpdf is not None:
+		ln_f_over_b = numpy.log(f_over_b(rankingstatpdf, ln_likelihood_ratios))
 	elif nsample > 0:
 		raise ValueError("must supply ranking data to run MCMC sampler")
 	else:
@@ -479,7 +478,7 @@ def calculate_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = 
 	return Rf_pdf, Rb_pdf
 
 
-def calculate_alphabetsoup_rate_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, nsample = 400000):
+def calculate_alphabetsoup_rate_posteriors(rankingstatpdf, ln_likelihood_ratios, progressbar = None, nsample = 400000):
 	"""
 	FIXME:  document this
 	"""
@@ -496,7 +495,7 @@ def calculate_alphabetsoup_rate_posteriors(ranking_data, ln_likelihood_ratios, p
 	# PDF.
 	#
 
-	ln_f_over_b = numpy.log(f_over_b(ranking_data, ln_likelihood_ratios))
+	ln_f_over_b = numpy.log(f_over_b(rankingstatpdf, ln_likelihood_ratios))
 
 	#
 	# initialize MCMC chain.  try loading a chain from a chain file if
@@ -636,7 +635,7 @@ def ln_double_fac_table(N):
 	return lnfac(2. * m) + lnfac(2. * n) - lnfac(m) - lnfac(n) - N * math.log(2.)
 
 
-def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = 400000):
+def calculate_psignal_posteriors(rankingstatpdf, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = 400000):
 	"""
 	FIXME:  document this
 	"""
@@ -653,8 +652,8 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 	# PDF.
 	#
 
-	if ranking_data is not None:
-		ln_f_over_b = numpy.log(f_over_b(ranking_data, ln_likelihood_ratios))
+	if rankingstatpdf is not None:
+		ln_f_over_b = numpy.log(f_over_b(rankingstatpdf, ln_likelihood_ratios))
 	elif nsample > 0:
 		raise ValueError("must supply ranking data to run MCMC sampler")
 	else:
@@ -713,7 +712,7 @@ def calculate_psignal_posteriors(ranking_data, ln_likelihood_ratios, progressbar
 	return p_signal
 
 
-def calculate_psignal_posteriors_from_rate_samples(ranking_data, ln_likelihood_ratios, nsample = 100000, progressbar = None):
+def calculate_psignal_posteriors_from_rate_samples(rankingstatpdf, ln_likelihood_ratios, nsample = 100000, progressbar = None):
 	"""
 	FIXME:  document this
 	"""
@@ -723,7 +722,7 @@ def calculate_psignal_posteriors_from_rate_samples(ranking_data, ln_likelihood_r
 	# PDF.
 	#
 
-	f_on_b = f_over_b(ranking_data, ln_likelihood_ratios)
+	f_on_b = f_over_b(rankingstatpdf, ln_likelihood_ratios)
 
 	#
 	# run MCMC sampler to generate (foreground rate, background rate)

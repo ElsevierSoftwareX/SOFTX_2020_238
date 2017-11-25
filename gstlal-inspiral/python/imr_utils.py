@@ -187,7 +187,6 @@ def get_segments(connection, xmldoc, table_name, live_time_program, veto_segment
 	if table_name == dbtables.lsctables.CoincInspiralTable.tableName:
 		if live_time_program == "gstlal_inspiral":
 			segs = ligolw_segments.segmenttable_get_by_name(xmldoc, data_segments_name).coalesce()
-			segs &= ligolw_search_summary.segmentlistdict_fromsearchsummary(xmldoc, live_time_program).coalesce()
 		elif live_time_program == "thinca":
 			segs = db_thinca_rings.get_thinca_zero_lag_segments(connection, program_name = live_time_program).coalesce()
 		else:

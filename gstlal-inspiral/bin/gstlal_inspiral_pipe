@@ -552,7 +552,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		# the time being.   
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = [],
-				opts = {"instrument":instrument_set, "synthesize-injection-count":10000000, "background-prior":1, "min-instruments":options.min_instruments},
+				opts = {"instrument":instrument_set, "synthesize-numerator":"", "background-prior":1, "min-instruments":options.min_instruments},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		# Create a file that has the priors *and* all of the diststats
@@ -582,14 +582,14 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		rankpdf_nodes.append(calcranknode)
 		rankpdf_zerolag_nodes.append(calcrankzerolagnode)
 		
-		# Break up the likelihood jobs into chunks to process fewer files, e.g, 250
+		# Break up the likelihood jobs into chunks to process fewer files, e.g, 32
 		likelihood_nodes.setdefault(None,[]).append(
 			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
 				parent_nodes = [diststats_per_bin_node],
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 				input_files = {"likelihood-url":diststats_per_bin_node.output_files["output"]},
 				input_cache_files = {"input-cache":chunked_inputs}
-				) for chunked_inputs in chunks(inputs, 250)]
+				) for chunked_inputs in chunks(inputs, 32)]
 			)
 
 	# then injections
@@ -605,14 +605,14 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				likelihood_url = margnodes[bgbin_index].output_files["output"]
 			else:
 				likelihood_url = diststats[0]
-			# Break up the likelihood jobs into chunks to process fewer files, e.g., 250
+			# Break up the likelihood jobs into chunks to process fewer files, e.g., 32
 			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
 				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
 					parent_nodes = parents,
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_files = {"likelihood-url":likelihood_url},
 					input_cache_files = {"input-cache":chunked_inputs}
-					) for chunked_inputs in chunks(inputs, 250)]
+					) for chunked_inputs in chunks(inputs, 32)]
 				)
 
 	
@@ -983,7 +983,6 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 		if rankpdf_zerolag_nodes:
 			margzerolagout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin_zerolag[n:n+margnum]], '.xml.gz', path = marginalizeWithZerolagJob.output_path))
 			margzerolagnodes.append(inspiral_pipe.generic_node(marginalizeWithZerolagJob, dag, parent_nodes = parents_zerolag,
-				opts = {"add-zerolag-to-background":""},
 				output_files = {"output":margzerolagout[-1]},
 				input_cache_files = {"likelihood-cache":margin_zerolag[n:n+margnum]},
 				input_cache_file_name = os.path.basename(margzerolagout[-1]).replace('.xml.gz','.cache')
@@ -1007,7 +1006,6 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 		marginalized_likelihood_file = margnode.output_files["output"]
 
 		margnode = inspiral_pipe.generic_node(marginalizeWithZerolagJob, dag, parent_nodes = margzerolagnodes,
-			opts = {"add-zerolag-to-background":""},
 			output_files = {"output":"marginalized_likelihood_with_zerolag.xml.gz"},
 			input_cache_files = {"likelihood-cache":margzerolagout},
 			input_cache_file_name = "marginalized_likelihood_with_zerolag.cache"
@@ -1264,8 +1262,8 @@ else:
 	horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
 	createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"1", "want_graceful_removal":"True", "kill_sig":"15"}))
-	calcRankPDFsWithZerolagJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", tag_base = "gstlal_inspiral_calc_rank_pdfs_with_zerolag", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"1", "want_graceful_removal":"True", "kill_sig":"15"}))
+	calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"}))
+	calcRankPDFsWithZerolagJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", tag_base = "gstlal_inspiral_calc_rank_pdfs_with_zerolag", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"}))
 	calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	marginalizeWithZerolagJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", tag_base = "gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))

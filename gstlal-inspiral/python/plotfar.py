@@ -56,13 +56,14 @@ def init_plot(figsize):
 	return fig, axes
 
 
-def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, snr_max, dynamic_range_factor = 1e-10, event_snr = None, event_chisq = None, sngls = None):
-	key = "%s_snr_chi" % instrument
-	if binnedarray_string == "LR":
-		binnedarray = getattr(coinc_param_distributions, "injection_pdf")[key]
-	else:
-		binnedarray = getattr(coinc_param_distributions, binnedarray_string)[key]
-	tag = {"background_pdf":"Noise", "injection_pdf":"Signal", "zero_lag_pdf":"Candidates", "LR":"LR"}[binnedarray_string]
+def plot_snr_chi_pdf(rankingstat, instrument, which, snr_max, event_snr = None, event_chisq = None, sngls = None):
+	# also checks that which is an allowed value
+	tag = {
+		"background_pdf": "Noise",
+		"injection_pdf": "Signal",
+		"zero_lag_pdf": "Candidates",
+		"LR": "LR"
+	}[which]
 
 	# sngls is a sequence of {instrument: (snr, chisq)} dictionaries,
 	# obtain the co-ordinates for a sngls scatter plot for this
@@ -73,56 +74,60 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 		if not len(sngls):
 			sngls = None
 
-	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
+	if which == "background_pdf":
+		# a ln PDF object
+		binnedarray = rankingstat.denominator.densities["%s_snr_chi" % instrument]
+	elif which == "injection_pdf":
+		# a ln PDF object.  numerator has only one, same for all
+		# instruments
+		binnedarray = rankingstat.numerator.densities["snr_chi"]
+	elif which == "zero_lag_pdf":
+		# a ln PDF object
+		binnedarray = rankingstat.zerolag.densities["%s_snr_chi" % instrument]
+	elif which == "LR":
+		num = rankingstat.numerator.densities["snr_chi"]
+		den = rankingstat.denominator.densities["%s_snr_chi" % instrument]
+		assert num.bins == den.bins
+		binnedarray = num.count.copy()
+		with numpy.errstate(invalid = "ignore"):
+			binnedarray.array[:,:] = num.at_centres() - den.at_centres()
+		binnedarray.array[num.count.array == 0] = float("-inf")
+	else:
+		raise ValueError("invalid which (%s)" % which)
+
 	# the last bin can have a centre at infinity, and its value is
 	# always 0 anyway so there's no point in trying to include it
 	x = binnedarray.bins[0].centres()[:-1]
 	y = binnedarray.bins[1].centres()[:-1]
-	z = binnedarray.array[:-1,:-1]
-	# FIXME make the LR factor returned by a method of this class instead?
-	if binnedarray_string == "LR":
-		denom_binnedarray = coinc_param_distributions.background_pdf[key]
-		assert (denom_binnedarray.bins[0].centres()[:-1] == x).all()
-		assert (denom_binnedarray.bins[1].centres()[:-1] == y).all()
-		# note:  don't do this in-place
-		z = z / denom_binnedarray.array[:-1,:-1]
+	z = binnedarray.at_centres()[:-1,:-1]
 	if numpy.isnan(z).any():
-		warnings.warn("%s PDF contains NaNs" % instrument)
+		warnings.warn("%s %s contains NaNs" % (instrument, which))
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
-	if not z.any():
-		warnings.warn("%s PDF is 0, skipping" % instrument)
-		return None
 
 	# the range of the plots
-	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, snr_max
+	xlo, xhi = rankingstat.snr_min, snr_max
 	ylo, yhi = .0001, 1.
 
 	x = x[binnedarray.bins[xlo:xhi, ylo:yhi][0]]
 	y = y[binnedarray.bins[xlo:xhi, ylo:yhi][1]]
 	z = z[binnedarray.bins[xlo:xhi, ylo:yhi]]
 
-	# because it's usually more convenient to display the natural log
-	# of the likelihood ratio, it's helpful to plot that here.  if we
-	# relied on a logarithmic colour bar we end up with power-of-10
-	# contours instead of power-of-e contours, so we can't do that.
-	with numpy.errstate(divide = "ignore"):
-		z = numpy.log(z)
-
-	if binnedarray_string == "LR":
+	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
+	if which == "LR":
 		norm = matplotlib.colors.Normalize(vmin = -80., vmax = +200.)
 		levels = numpy.linspace(-80., +200, 141)
-	elif binnedarray_string == "background_pdf":
+	elif which == "background_pdf":
 		norm = matplotlib.colors.Normalize(vmin = -30., vmax = z.max())
 		levels = 50
-	elif binnedarray_string == "injection_pdf":
+	elif which == "injection_pdf":
 		norm = matplotlib.colors.Normalize(vmin = -60., vmax = z.max())
 		levels = 50
-	else:	# binnedarray_string == "zero_lag_pdf":
+	else:	# which == "zero_lag_pdf":
 		norm = matplotlib.colors.Normalize(vmin = -30., vmax = z.max())
 		levels = 50
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
-	if binnedarray_string == "LR":
+	if which == "LR":
 		cs = axes.contour(x, y, z.T, levels, norm = norm, colors = "k", linewidths = .5, alpha = .3)
 		axes.clabel(cs, [-20., -10., 0., +10., +20.], fmt = "%g", fontsize = 8)
 	else:
@@ -150,7 +155,7 @@ def plot_snr_chi_pdf(coinc_param_distributions, instrument, binnedarray_string, 
 	return fig
 
 
-def plot_rates(coinc_param_distributions):
+def plot_rates(rankingstat):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((6., 6.))
@@ -159,12 +164,15 @@ def plot_rates(coinc_param_distributions):
 	axes2 = fig.add_subplot(2, 2, 3)
 	axes3 = fig.add_subplot(2, 2, 4)
 
+	# FIXME: this plot is broken since rewrite
+	return fig
+
 	# singles counts
 	labels = []
 	sizes = []
 	colours = []
-	for instrument in sorted(coinc_param_distributions.instruments):
-		count = coinc_param_distributions.background_rates["singles"][instrument,]
+	for instrument in sorted(rankingstat.instruments):
+		count = rankingstat.background_rates["singles"][instrument,]
 		labels.append("%s\n(%d)" % (instrument, count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments((instrument,)))
@@ -175,8 +183,8 @@ def plot_rates(coinc_param_distributions):
 	labels = []
 	sizes = []
 	colours = []
-	for instruments, count in sorted(zip(coinc_param_distributions.background_rates["instruments"].bins[0].centres(), coinc_param_distributions.background_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
-		if len(instruments) < coinc_param_distributions.min_instruments:
+	for instruments, count in sorted(zip(rankingstat.background_rates["instruments"].bins[0].centres(), rankingstat.background_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < rankingstat.denominator.min_instruments:
 			assert count == 0
 			continue
 		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
@@ -189,8 +197,8 @@ def plot_rates(coinc_param_distributions):
 	labels = []
 	sizes = []
 	colours = []
-	for instruments, fraction in sorted(zip(coinc_param_distributions.injection_pdf["instruments"].bins[0].centres(), coinc_param_distributions.injection_pdf["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
-		if len(instruments) < coinc_param_distributions.min_instruments:
+	for instruments, fraction in sorted(zip(rankingstat.injection_pdf["instruments"].bins[0].centres(), rankingstat.injection_pdf["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < rankingstat.denominator.min_instruments:
 			assert fraction == 0
 			continue
 		labels.append(", ".join(sorted(instruments)))
@@ -203,8 +211,8 @@ def plot_rates(coinc_param_distributions):
 	labels = []
 	sizes = []
 	colours = []
-	for instruments, count in sorted(zip(coinc_param_distributions.zero_lag_rates["instruments"].bins[0].centres(), coinc_param_distributions.zero_lag_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
-		if len(instruments) < coinc_param_distributions.min_instruments:
+	for instruments, count in sorted(zip(rankingstat.zero_lag_rates["instruments"].bins[0].centres(), rankingstat.zero_lag_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
+		if len(instruments) < rankingstat.denominator.min_instruments:
 			assert count == 0
 			continue
 		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
@@ -220,17 +228,11 @@ def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, min_instruments, 
 	if len(instruments) < 1:
 		raise ValueError("len(instruments) must be >= 1")
 
-	# FIXME:  don't try to plot Virgo stuff.  remove after O2
-	instruments = set(instruments) - set(["V1"])
-	if sngls is not None:
-		for d in sngls:
-			d.pop("V1", None)
-
 	# retrieve the PDF in binned array form (not the interpolator)
 	binnedarray = snrpdf.get_snr_joint_pdf_binnedarray(instruments, horizon_distances, min_instruments)
 
 	# the range of the axes
-	xlo, xhi = far.ThincaCoincParamsDistributions.snr_min, max_snr
+	xlo, xhi = far.RankingStat.snr_min, max_snr
 	mask = binnedarray.bins[(slice(xlo, xhi),) * len(instruments)]
 
 	# axes are in alphabetical order
@@ -324,31 +326,39 @@ def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, min_instruments, 
 	return fig
 	
 
-def plot_likelihood_ratio_pdf(ranking_data, instruments, (xlo, xhi), tag, binnedarray_string = "background_likelihood_pdfs"):
-	pdf = getattr(ranking_data, binnedarray_string)[instruments]
-	if binnedarray_string == "background_likelihood_pdfs":
-		zerolag_pdf = ranking_data.zero_lag_likelihood_pdfs[instruments]
-	else:
-		zerolag_pdf = None
-
+def plot_likelihood_ratio_pdf(rankingstatpdf, (xlo, xhi), title, which = "noise"):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
-	axes.semilogy(pdf.bins[0].centres(), pdf.array, color = "k")
-	if zerolag_pdf is not None:
-		axes.semilogy(zerolag_pdf.bins[0].centres(), zerolag_pdf.array, color = "k", linestyle = "--")
-	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
-	if instruments is None:
-		axes.set_title(r"%s Log Likelihood Ratio PDF" % tag)
+
+	extincted = rankingstatpdf.new_with_extinction()
+
+	if which == "noise":
+		lnpdf = rankingstatpdf.noise_lr_lnpdf
+		extinctedlnpdf = extincted.noise_lr_lnpdf
+		zerolag_lnpdf = rankingstatpdf.zero_lag_lr_lnpdf
+	elif which == "signal":
+		lnpdf = rankingstatpdf.signal_lr_lnpdf
+		extinctedlnpdf = extincted.signal_lr_lnpdf
+		zerolag_lnpdf = None
 	else:
-		axes.set_title(r"%s %s Log Likelihood Ratio PDF" % (", ".join(sorted(instruments)), tag))
+		raise ValueError("invalid which (%s)" % which)
+
+	axes.semilogy(lnpdf.bins[0].centres(), numpy.exp(lnpdf.at_centres()), color = "r", label = "%s model without extinction" % title)
+	axes.semilogy(extinctedlnpdf.bins[0].centres(), numpy.exp(extinctedlnpdf.at_centres()), color = "k", label = "%s model with extinction" % title)
+	if zerolag_lnpdf is not None:
+		axes.semilogy(zerolag_lnpdf.bins[0].centres(), numpy.exp(zerolag_lnpdf.at_centres()), color = "k", linestyle = "--", label = "Observed candidate density")
+
+	axes.grid(which = "major", linestyle = "-", linewidth = 0.2)
+	axes.set_title(r"Ranking Statistic Distribution Density Model for %s" % title)
 	axes.set_xlabel(r"$\ln \mathcal{L}$")
-	axes.set_ylabel(r"$P(\ln \mathcal{L} | \mathrm{%s})$" % tag.lower())
-	yhi = pdf[xlo:xhi,].max()
-	ylo = pdf[xlo:xhi,].min()
-	if zerolag_pdf is not None:
-		yhi = max(yhi, zerolag_pdf[xlo:xhi,].max())
+	axes.set_ylabel(r"$P(\ln \mathcal{L} | \mathrm{%s})$" % which)
+	yhi = math.exp(lnpdf[xlo:xhi,].max())
+	ylo = math.exp(lnpdf[xlo:xhi,].min())
+	if zerolag_lnpdf is not None:
+		yhi = max(yhi, math.exp(zerolag_lnpdf[xlo:xhi,].max()))
 	ylo = max(yhi * 1e-40, ylo)
 	axes.set_ylim((10**math.floor(math.log10(ylo) - .5), 10**math.ceil(math.log10(yhi) + .5)))
 	axes.set_xlim((xlo, xhi))
+	axes.legend(loc = "lower left", handlelength = 3)
 	fig.tight_layout(pad = .8)
 	return fig
 
@@ -386,14 +396,14 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios
 	return fig
 
 
-def plot_horizon_distance_vs_time(coinc_param_distributions, (tlo, thi), masses = (1.4, 1.4), tref = None):
+def plot_horizon_distance_vs_time(rankingstat, (tlo, thi), masses = (1.4, 1.4), tref = None):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	axes.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1800.))
 	axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5.))
 	axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50.))
 
 	yhi = 1.
-	for instrument, history in coinc_param_distributions.horizon_history.items():
+	for instrument, history in rankingstat.horizon_history.items():
 		x = numpy.array([t for t in history.keys() if tlo <= t < thi])
 		y = list(map(history.__getitem__, x))
 		if tref is not None:

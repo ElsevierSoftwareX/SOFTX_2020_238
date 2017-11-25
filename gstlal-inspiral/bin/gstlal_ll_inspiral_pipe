@@ -425,7 +425,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
 		output_files = {"output":"not_used.xml.gz",
 				"likelihood-file":likefile,
-				"zero-lag-ranking-stat-file":zerolikefile,
+				"zerolag-rankingstatpdf-filename":zerolikefile,
 			}
 		)
 

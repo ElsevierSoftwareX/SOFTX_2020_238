@@ -49,7 +49,7 @@ exit
 # marginalize ranking statistic PDFs over template bank bin and run number
 #
 
-gstlal_inspiral_marginalize_likelihood --verbose --require-ranking-stat-data --output marginalized_likelihood.xml.gz gstlal_inspiral_calc_rank_pdfs/*.xml.gz 
+gstlal_inspiral_marginalize_likelihood --verbose --require-ranking-stat-pdf --output marginalized_likelihood.xml.gz gstlal_inspiral_calc_rank_pdfs/*.xml.gz
 
 #
 # collect the databases from the "16 days as ranked" result

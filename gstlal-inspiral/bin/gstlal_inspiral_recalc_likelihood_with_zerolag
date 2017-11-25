@@ -34,7 +34,7 @@ from gstlal import inspiral
 from gstlal import far
 import lal
 from lal.utils import CacheEntry
-from lalburst import ligolw_burca2
+from lalburst import calc_likelihood
 
 # FIXME Need to add entries to process and process_params tables
 
@@ -239,19 +239,18 @@ class Connections:
 				coinc_event_id == ?
 			""", [(self.tmp_coinc_def_id, coinc_event_id) for coinc_event_id in self.coinc_event_definitions[connection_id].keys()])
 
-	def assign_new_likelihoods(self, ln_likelihood_ratio_func, likelihood_params_func):
+	def assign_new_likelihoods(self, ln_likelihood_ratio_func):
 		for connection_id, ConnectionNamedTuple in self.connection_id_map.items():
 			if not self.coinc_event_definitions[connection_id]:
 				continue
 
-			ligolw_burca2.assign_likelihood_ratios(ConnectionNamedTuple.connection,
+			calc_likelihood.assign_likelihood_ratios(ConnectionNamedTuple.connection,
 				coinc_def_id = self.tmp_coinc_def_id,
 				offset_vectors = self.offset_vectors[connection_id],
 				vetoseglists = segments.segmentlistdict(),
 				events_func = lambda _, coinc_event_id: self.coinc_event_map_index[connection_id][coinc_event_id],
 				veto_func = lambda event, vetoseglists: True, # Obviously you would never veto any of the events in the database
 				ln_likelihood_ratio_func = ln_likelihood_ratio_func, 
-				likelihood_params_func = likelihood_params_func, 
 				verbose = self.verbose)
 
 	
@@ -315,19 +314,17 @@ def get_subbank_maps(svd_banks, options):
 	return subbank_events_map_index, subbank_likelihood_file_map_index
 
 def get_likelihood_funcs(likelihood_files, verbose = False):
-	coinc_params_distributions = None
-	seglists = segments.segmentlistdict()
+	rankingstat = None
 	for likelihood_file in likelihood_files:
-		this_coinc_params_distribution, _, this_seglists = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler = far.ThincaCoincParamsDistributions.LIGOLWContentHandler, verbose = verbose))
-		if coinc_params_distributions is None:
-			coinc_params_distributions = this_coinc_params_distribution
+		this_rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_filename(likelihood_file, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = verbose))
+		if rankingstat is None:
+			rankingstat = this_rankingstat
 		else:
-			coinc_params_distributions += this_coinc_params_distribution
-		seglists |= this_seglists
+			rankingstat += this_rankingstat
 
-	coinc_params_distributions.finish(segs = seglists, verbose = verbose)
+	rankingstat.finish()
 
-	return coinc_params_distributions.coinc_params, coinc_params_distributions
+	return rankingstat.ln_lr_from_triggers
 
 #
 # =============================================================================
@@ -356,12 +353,12 @@ for bank_id, subbank_events_map_list in sorted(subbank_events_map_index.items(),
 	# Get the correct likelihood functions from the approriate likelihood
 	# files
 	#
-	likelihood_params_func, ln_likelihood_ratio_func = get_likelihood_funcs(subbank_likelihood_file_map_index[bank_id], verbose = options.verbose)
+	ln_likelihood_ratio_func = get_likelihood_funcs(subbank_likelihood_file_map_index[bank_id], verbose = options.verbose)
 
 	#
 	# Assign new likelihood ratios
 	#
-	connections.assign_new_likelihoods(ln_likelihood_ratio_func, likelihood_params_func)
+	connections.assign_new_likelihoods(ln_likelihood_ratio_func)
 
 	#
 	# Return the coinc_def_id's back to their original value

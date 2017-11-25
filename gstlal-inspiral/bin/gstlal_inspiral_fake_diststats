@@ -140,41 +140,36 @@ if options.verbose:
 # FIXME what should zero lag be? Right now we set them to be the same
 #
 
-n_trigs = dict(((ifo, float(abs(seg)) * num_templates) for ifo, seg in segs.items())) 
+n_trigs = float(abs(segs.extent_all())) * num_templates
 
 #
-# Initialize an empty ThincaCoincParamsDistributions class
+# Initialize an empty RankingStat class
 #
 
-diststats = far.ThincaCoincParamsDistributions(instruments = set(segs), delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
+diststats = far.RankingStat(instruments = set(segs), delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
 
 #
 # Add background, zero_lag and injection prior distributions in the SNR and chi-squared plane
 # 
 
 # This a guess at a mass dependent snr chisq prior
-diststats.add_background_prior(n = n_trigs, prefactors_range = ((1. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3., ba = "background_rates", verbose = options.verbose)
+diststats.denominator.add_noise_model(number_of_events = n_trigs, prefactors_range = ((1. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3.)
 
 # fill in the background to the requested amount
-for instrument, number_of_events in n_trigs.items():
-	diststats.background_rates["singles"][instrument,] = number_of_events
+for instrument, seglist in segs.items():
 	if options.verbose:
-		print "setting number of singles events in %s to %d" % (instrument, number_of_events)
-
-diststats.add_foreground_snrchi_prior(n = dict(((ifo, 1e12) for ifo, seg in segs.items())), prefactors_range = tuple(float(x) for x in options.injection_prefactors.split(",")), df = 40, verbose = options.verbose)
+		print "setting number of singles events in %s to %d" % (instrument, n_trigs)
+	mean_rate = n_trigs / float(abs(seglist))
+	for seg in seglist:
+		# I/O code requires counts to be integers
+		diststats.denominator.triggerrates[instrument].add_ratebin(seg, int(round(float(abs(seg)) * mean_rate)))
+diststats.numerator.add_signal_model(prefactors_range = tuple(float(x) for x in options.injection_prefactors.split(",")), df = 40)
 
 #
 # Update the horizon distance history with our fake, user provided horizon history
 #
 
-diststats.horizon_history.update(horizon_history)
-
-
-#
-# Wrap it up
-#
-
-diststats.finish(segs = segs, verbose = options.verbose)
+diststats.numerator.horizon_history.update(horizon_history)
 
 #
 # Prep an output XML file
@@ -183,5 +178,5 @@ diststats.finish(segs = segs, verbose = options.verbose)
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_ll_inspiral_create_prior_diststats", ifos = options.instruments, paramdict = process_params)
-far.gen_likelihood_control_doc(xmldoc, process, diststats, None, segs, comment = u"background and signal priors (no real data)")
+far.gen_likelihood_control_doc(xmldoc, diststats, None)
 ligolw_utils.write_filename(xmldoc, options.output, gz = options.output.endswith(".gz"), verbose = options.verbose)

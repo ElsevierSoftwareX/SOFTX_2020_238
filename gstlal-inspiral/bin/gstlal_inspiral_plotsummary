@@ -1360,22 +1360,13 @@ WHERE
 
 
 def load_distributions(filenames, verbose = False):
-	coinc_params_distributions, ranking_data, seglists = far.marginalize_pdf_urls(filenames, require_coinc_param_data = False, require_ranking_stat_data = False, verbose = verbose)
-	# FIXME signal PDFs are still not right.
-	ranking_data, _ = ranking_data.new_with_extinction(ranking_data)
-	ranking_data.finish(verbose = verbose)
-	# FIXME:  hack to fake some segments so we can generate file names
-	# if the input files didn't provide segment information
-	try:
-		seglists.extent_all()
-	except ValueError:
-		seglists[None] = lsctables.segments.segmentlist([lsctables.segments.segment(0, 0)])
+	rankingstat, rankingstatpdf = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = False, verbose = verbose)
 
 	# Construct segments of nonzero horizon distance times
 	nonzero_horizon_seglistdict = segments.segmentlistdict()
 	segstart = None
 	prev_time = None
-	for ifo, nearestleaftree in coinc_params_distributions.horizon_history.items():
+	for ifo, nearestleaftree in rankingstat.numerator.horizon_history.items():
 		seglist = segments.segmentlist()
 		for time, hdistance in nearestleaftree.items():
 			if hdistance == 0.0:
@@ -1401,7 +1392,7 @@ def load_distributions(filenames, verbose = False):
 		iterutils.inplace_filter(lambda s: abs(s) > 2, seglist)
 		seglist.contract(1)
 		nonzero_horizon_seglistdict[ifo] = seglist
-	return coinc_params_distributions.snr_min, ranking_data, seglists, nonzero_horizon_seglistdict
+	return rankingstat.snr_min, rankingstatpdf, nonzero_horizon_seglistdict
 
 
 def sigma_region(mean, nsigma):
@@ -1460,22 +1451,25 @@ def create_rate_vs_ifar_plot(axes, zerolag_stats, expected_count_x, expected_cou
 	axes.set_ylim(ylim)
 
 
-def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box, xlim = (None, None)):
+def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box):
 	axes.semilogy()
 
 	#
 	# plot limits and expected counts
 	#
 
-	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
-	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
-	expected_count_y = [fapfar.far_from_rank(x) * fapfar.livetime for x in expected_count_x]
-	ylim = 0.001, (10.**math.ceil(math.log10(expected_count_y[bisect.bisect_left(expected_count_x, xlim[0])])) if xlim[0] is not None else None)
+	def expected_count(lr):
+		return fapfar.far_from_rank(lr) * fapfar.livetime
+
+	xlim = max(zerolag_stats.min(), fapfar.minrank), max(2. * math.ceil(zerolag_stats.max() / 2.), 30.)
+	ylim = 0.001, 10.**math.ceil(math.log10(expected_count(xlim[0])))
 
 	#
 	# expected count curve
 	#
 
+	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
+	expected_count_y = map(expected_count, expected_count_x)
 	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
 
 	#
@@ -1512,23 +1506,26 @@ def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box, xlim = (No
 	axes.set_ylim(ylim)
 
 
-def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar, xlim = (None, None)):
+def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar):
 	#
 	# plot limits and expected counts
 	#
 
-	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
-	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
-	expected_count_y = [fapfar.far_from_rank(x) * fapfar.livetime for x in expected_count_x]
-	ylim = 10.**math.floor(math.log10(expected_count_y[-1])), 10.**math.ceil(math.log10(expected_count_y[0]))
+	def expected_count(lr):
+		return fapfar.far_from_rank(lr) * fapfar.livetime
 
-	axes.set_position((0.10, 0.1, .875, .80))
+	xlim = max(zerolag_stats.min(), fapfar.minrank), 2. * math.ceil(min(max(zerolag_stats.max(), background_stats.max()), 200.) / 2.)
+	ylim = 10.**math.floor(math.log10(expected_count(zerolag_stats.max()))), 10.**math.ceil(math.log10(expected_count(xlim[0])))
+
+	axes.set_position((0.10, 0.12, .88, .78))
 	axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold", position = (0.5, 1.05))
 
 	#
 	# expected count curve
 	#
 
+	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
+	expected_count_y = map(expected_count, expected_count_x)
 	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
 
 	#
@@ -1543,7 +1540,6 @@ def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar, 
 	#
 
 	N = numpy.arange(1., len(zerolag_stats) + 1., dtype = "double")
-	#line6, = axes.plot(zerolag_stats, N, "r+")
 	line6, = axes.plot(zerolag_stats.repeat(2)[1:], N.repeat(2)[:-1], 'r', linewidth = 1)
 
 	#
@@ -1632,8 +1628,8 @@ FROM
 		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
 	)
 WHERE
-	coinc_event.likelihood >= 0.
-		"""):
+	coinc_event.likelihood >= ?
+		""", (self.fapfar.minrank,)):
 			if is_background:
 				self.background_ln_likelihood_ratio.append(ln_likelihood_ratio)
 				self.background_far.append(far)
@@ -1682,20 +1678,19 @@ WHERE
 				fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
 				# ln(L) in ascending order
 				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
-				create_rate_vs_lnL_plot(axes, zerolag_stats, self.fapfar, is_open_box, xlim = (5., 30.))
+				create_rate_vs_lnL_plot(axes, zerolag_stats, self.fapfar, is_open_box)
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
 				yield fig, "count_vs_lr", is_open_box
 
-		# FIXME make this work from FAPFAR
 		if self.background_ln_likelihood_ratio:
 			fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
 			axes.semilogy()
 			background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
 			zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
-			create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar, xlim = (5., 5. * math.ceil(min(max(background_stats.max(), zerolag_stats.max()), 200.) / 5.)))
+			create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar)
 			yield fig, "count_vs_lr_fig3", True
 
 
@@ -1767,11 +1762,11 @@ options, filenames = parse_command_line()
 
 
 if options.likelihood_file is not None:
-	snr_min, ranking_data, seglists, nonzero_horizon_seglistdict = load_distributions([options.likelihood_file], verbose = options.verbose)
+	snr_min, rankingstatpdf, nonzero_horizon_seglistdict = load_distributions([options.likelihood_file], verbose = options.verbose)
 else:
-	snr_min, ranking_data, seglists, nonzero_horizon_seglistdict = 4., None, None, None
-if ranking_data is not None:
-	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
+	snr_min, rankingstatpdf, nonzero_horizon_seglistdict = 4., None, None
+if rankingstatpdf is not None:
+	fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 else:
 	fapfar = None
 

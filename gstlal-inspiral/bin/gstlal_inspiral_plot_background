@@ -33,7 +33,6 @@
 #	+ `--add-zerolag-to-background`: Add zerolag events to background before populating coincident parameter PDF histograms.
 #	+ `--user-tag` [tag]: Set the adjustable component of the description fields in the output filenames (default = "ALL").
 #	+ `--plot-snr-snr-pdfs`: Plot the full cache of snr-snr-pdfs.
-#	+ `--dont-apply-extinction`: Don't apply the extinction model.
 #	+ `--verbose`: Be verbose.
 
 
@@ -153,7 +152,6 @@ def parse_command_line():
 	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms.")
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the adjustable component of the description fields in the output filenames (default = \"ALL\").")
 	parser.add_option("--plot-snr-snr-pdfs", action = "store_true", help = "Plot the full cache of snr-snr-pdfs.")
-	parser.add_option("--dont-apply-extinction", action = "store_true", help = "Don't apply the extinction model.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -184,23 +182,21 @@ def parse_command_line():
 
 
 def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
-	coinc_params_distributions, ranking_data, seglists = far.marginalize_pdf_urls(filenames, require_coinc_param_data = False, require_ranking_stat_data = False, verbose = verbose)
-	if coinc_params_distributions is not None:
+	rankingstat, rankingstatpdf = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = False, verbose = verbose)
+	seg = None
+	if rankingstat is not None:
+		try:
+			seg = rankingstat.segmentlists.extent_all()
+		except ValueError:
+			pass
 		if options.add_zerolag_to_background:
-			coinc_params_distributions.zero_lag_in_background = True
-		coinc_params_distributions.finish(segs = seglists, verbose = verbose)
-	if ranking_data is not None and not options.dont_apply_extinction:
-		# FIXME signal PDFs are still not right.
-		ranking_data, _ = ranking_data.new_with_extinction(ranking_data)
-	if ranking_data is not None:
-		ranking_data.finish(verbose = verbose)
-	# FIXME:  hack to fake some segments so we can generate file names
-	# if the input files didn't provide segment information
-	try:
-		seglists.extent_all()
-	except ValueError:
-		seglists[None] = lsctables.segments.segmentlist([lsctables.segments.segment(0, 0)])
-	return coinc_params_distributions, ranking_data, seglists
+			rankingstat.denominator.lnzerolagdensity = rankingstat.zerolag
+		rankingstat.finish()
+	if rankingstatpdf is not None:
+		seg = rankingstatpdf.segments.extent()
+	# the segment is only used to construct T050017-style filenames, so
+	# just fake one if there's no livetime information
+	return rankingstat, rankingstatpdf, (seg if seg is not None else (0, 0))
 
 
 def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
@@ -302,21 +298,17 @@ options, filenames = parse_command_line()
 #
 
 
-coinc_params_distributions, ranking_data, seglists = load_distributions(filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
-if ranking_data is not None:
-	fapfar = far.FAPFAR(ranking_data, livetime = far.get_live_time(seglists))
-else:
-	fapfar = None
+rankingstat, rankingstatpdf, seg = load_distributions(filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
 
 
 if options.database:
-	background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, background_sngls, zerolag_sngls = load_search_results(options.database, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+	timeslide_ln_lr, zerolag_ln_lr, timeslide_sngls, zerolag_sngls = load_search_results(options.database, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
 	if options.scatter_log_lambdas is not None:
-		sngls = [sngl for sngl in background_sngls + zerolag_sngls if sngl.ln_likelihood_ratio in options.scatter_log_lambdas]
+		sngls = [sngl for sngl in timeslide_sngls + zerolag_sngls if sngl.ln_likelihood_ratio in options.scatter_log_lambdas]
 	else:
 		sngls = None
 else:
-	background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios, sngls = None, None, None
+	timeslide_ln_lr, zerolag_ln_lr, sngls = None, None, None
 
 
 #
@@ -325,9 +317,9 @@ else:
 
 
 # SNR and \chi^2
-for instrument in coinc_params_distributions.instruments:
+for instrument in rankingstat.instruments:
 	for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
-		fig = plotfar.plot_snr_chi_pdf(coinc_params_distributions, instrument, snr_chi_type, options.max_snr, sngls = sngls)
+		fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, snr_chi_type, options.max_snr, sngls = sngls)
 		if fig is None:
 			continue
 		plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_SNRCHI2" % (options.user_tag, snr_chi_type.upper()), seg, options.output_format, path = options.output_dir)
@@ -337,7 +329,7 @@ for instrument in coinc_params_distributions.instruments:
 
 
 # candidate rates
-fig = plotfar.plot_rates(coinc_params_distributions)
+fig = plotfar.plot_rates(rankingstat)
 plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_RATES" % options.user_tag, seg, options.output_format, path = options.output_dir)
 if options.verbose:
 	print >>sys.stderr, "writing %s" % plotname
@@ -346,11 +338,11 @@ fig.savefig(plotname)
 
 # SNR PDFs
 if options.plot_snr_snr_pdfs:
-	for (instruments, horizon_distances) in sorted(coinc_params_distributions.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
-		# they're stored as a frozen set of quantized key/value pairs, need
-		# to unquantize them and get a dictionary back
-		horizon_distances = coinc_params_distributions.SNRPDF.quantized_horizon_distances(horizon_distances)
-		fig = plotfar.plot_snr_joint_pdf(coinc_params_distributions.SNRPDF, instruments, horizon_distances, coinc_params_distributions.min_instruments, options.max_snr, sngls = sngls)
+	for (instruments, horizon_distances) in sorted(rankingstat.numerator.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
+		# they're stored as a frozen set of quantized key/value
+		# pairs, need to unquantize them and get a dictionary back
+		horizon_distances = rankingstat.numerator.SNRPDF.quantized_horizon_distances(horizon_distances)
+		fig = plotfar.plot_snr_joint_pdf(rankingstat.numerator.SNRPDF, instruments, horizon_distances, rankingstat.min_instruments, options.max_snr, sngls = sngls)
 		if fig is not None:
 			plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), seg, options.output_format, path = options.output_dir)
 			if options.verbose:
@@ -359,27 +351,29 @@ if options.plot_snr_snr_pdfs:
 
 
 # ranking statistic PDFs and CCDFs
-if ranking_data is not None:
-	for instruments, binnedarray in ranking_data.background_likelihood_pdfs.items():
-		fig = plotfar.plot_likelihood_ratio_pdf(ranking_data, instruments, (options.min_log_lambda, options.max_log_lambda), "Noise", binnedarray_string = "background_likelihood_pdfs")
-		plotname = inspiral_pipe.T050017_filename(instruments or "COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_PDF" % options.user_tag, seglists.extent_all, options.output_format, path = options.output_dir)
+if rankingstatpdf is not None:
+	fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
+
+	for Title, which, NAME in (("Noise", "noise", "NOISE"), ("Signal", "signal", "SIGNAL")):
+		fig = plotfar.plot_likelihood_ratio_pdf(rankingstatpdf, (options.min_log_lambda, options.max_log_lambda), Title, which = which)
+		plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_LIKELIHOOD_RATIO_PDF" % (options.user_tag, NAME), seg, options.output_format, path = options.output_dir)
 		if options.verbose:
 			print >>sys.stderr, "writing %s" % plotname
 		fig.savefig(plotname)
 
-	if zerolag_ln_likelihood_ratios is not None:
-		xhi = max(zerolag_ln_likelihood_ratios + background_ln_likelihood_ratios)[0]
+	if zerolag_ln_lr is not None:
+		xhi = max(zerolag_ln_lr + timeslide_ln_lr)[0]
 		xhi = 5. * math.ceil(xhi / 5.)
 		xhi = max(xhi, options.max_log_lambda)
 	else:
 		xhi = options.max_log_lambda
-	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = zerolag_ln_likelihood_ratios, is_open_box = True)
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = zerolag_ln_lr, is_open_box = True)
 	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_openbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
-	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = background_ln_likelihood_ratios, is_open_box = False)
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = timeslide_ln_lr, is_open_box = False)
 	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_closedbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
