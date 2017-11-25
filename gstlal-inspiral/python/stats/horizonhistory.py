@@ -492,7 +492,7 @@ class HorizonHistories(dict):
 		# dictionaries
 		return map(dict, result)
 
-	def functional_integral(self, *args, **kwargs):
+	def functional_integral_dict(self, *args, **kwargs):
 		"""
 		Return a dictionary of the result of invoking
 		.functional_integral() on each of the histories.  args and
@@ -502,7 +502,7 @@ class HorizonHistories(dict):
 		"""
 		return dict((key, value.functional_integral(*args, **kwargs)) for key, value in self.items())
 
-	def weighted_mean(self, *args, **kwargs):
+	def weighted_mean_dict(self, *args, **kwargs):
 		"""
 		Return a dictionary of the result of invoking
 		.weighted_mean() on each of the histories.  args and kwargs
