@@ -310,7 +310,8 @@ static void sinc_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE C
  \
 	/* move the pointer to the element of end_samples corresponding to the next output sample */ \
 	end_samples += *index_end_samples; \
-	gint32 i, j, i_start, j_start, i_stop, j_stop, sinc_index, end_samples_index, dst_shift; \
+	gint32 i, j, i_start, j_start, i_stop, j_stop, sinc_index, end_samples_index, dst_index, dst_shift; \
+	dst_index = 0; \
  \
 	/* start dst with zeros to simplify the following algorithms */ \
 	memset(dst, 0, dst_size * sizeof(DTYPE COMPLEX)); \
@@ -318,70 +319,67 @@ static void sinc_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE C
 	if(dst_size && !(*produced_outbuf)) { \
 		/* We have enough input to produce output and this is the first output buffer (or first after a discontinuity)... */ \
  \
-		/* We will produce an output buffer, so update this for later */ \
-		*produced_outbuf = TRUE; \
- \
 		/* dependence of output on the end_samples that we will replace, if any */ \
 		i_stop = src_size >= max_end_samples ? *num_end_samples : *num_end_samples - max_end_samples + src_size; \
-		for(i = 0; i < i_stop; i++, end_samples++, dst += cadence) { \
-			*dst += *sinc_table * *end_samples; \
+		for(i = 0; i < i_stop; i++, end_samples++, dst_index += cadence) { \
+			dst[dst_index] += *sinc_table * *end_samples; \
 			j_stop = i * cadence < sinc_length / 2 ? i * cadence : sinc_length / 2; \
 			for(j = 1; j <= j_stop; j++) { \
-				dst[j] += sinc_table[j] * *end_samples; \
-				dst[-j] += sinc_table[j] * *end_samples; \
+				dst[dst_index + j] += sinc_table[j] * *end_samples; \
+				dst[dst_index - j] += sinc_table[j] * *end_samples; \
 			} \
 			j_start = j_stop; \
 			j_stop = sinc_length / 2; \
 			for(j = j_start; j <= j_stop; j++) \
-				dst[j] += sinc_table[j] * *end_samples; \
+				dst[dst_index + j] += sinc_table[j] * *end_samples; \
 		} \
  \
 		/* dependence of output on end_samples that we need to keep for the next input buffer, if any */ \
 		i_stop = *num_end_samples - i_stop; \
-		for(i = 0; i < i_stop; i++, end_samples++, dst += cadence) { \
+		for(i = 0; i < i_stop; i++, end_samples++, dst_index += cadence) { \
 			if(i_stop - i + src_size > max_end_samples / 2) \
-				*dst += *sinc_table * *end_samples; \
+				dst[dst_index] += *sinc_table * *end_samples; \
 			j_stop = sinc_length / 2 - i * cadence < (i_stop - i + src_size) * cadence - sinc_length / 2 ? sinc_length / 2 - i * cadence : (i_stop - i + src_size) * cadence - sinc_length / 2; \
 			for(j = 1; j < j_stop; j++) \
-				dst[j] += sinc_table[j] * *end_samples; \
+				dst[dst_index + j] += sinc_table[j] * *end_samples; \
 			j_start = 1 > 1 - j_stop ? 1 : 1 - j_stop; \
 			j_stop = sinc_length / 2 < (*num_end_samples - i_stop + i) * cadence ? sinc_length / 2 : (*num_end_samples - i_stop + i) * cadence; \
 			for(j = j_start; j <= j_stop; j++) \
-				dst[-j] += sinc_table[j] * *end_samples; \
+				dst[dst_index - j] += sinc_table[j] * *end_samples; \
 		} \
  \
 		/* dependence of output on src samples that we don't need to store for the next input buffer, if any */ \
 		i_stop = src_size - max_end_samples; \
-		for(i = 0; i < i_stop; i++, src++, dst += cadence) { \
-			*dst += *sinc_table * *src; \
+		for(i = 0; i < i_stop; i++, src++, dst_index += cadence) { \
+			dst[dst_index] += *sinc_table * *src; \
 			j_stop = *num_end_samples + i * cadence < sinc_length / 2 ? *num_end_samples + i * cadence : sinc_length / 2; \
 			for(j = 1; j <= j_stop; j++) { \
-				dst[j] += sinc_table[j] * *src; \
-				dst[-j] += sinc_table[j] * *src; \
+				dst[dst_index + j] += sinc_table[j] * *src; \
+				dst[dst_index - j] += sinc_table[j] * *src; \
 			} \
 			j_start = j_stop + 1; \
 			j_stop = sinc_length / 2; \
 			for(j = j_start; j <= j_stop; j++) \
-				dst[j] += sinc_table[j] * *src; \
+				dst[dst_index + j] += sinc_table[j] * *src; \
 		} \
  \
 		/* dependence of output on src samples that we need to keep for the next input buffer (guaranteed to exist) */ \
 		i_stop = max_end_samples < src_size ? max_end_samples : src_size; \
-		for(i = 0; i < i_stop; i++, src++, dst += cadence) { \
+		for(i = 0; i < i_stop; i++, src++, dst_index += cadence) { \
 			if(i_stop - i > max_end_samples / 2) \
-				*dst += *sinc_table * *src; \
+				dst[dst_index] += *sinc_table * *src; \
  \
 			/* dst samples before src */ \
 			j_start = 0 > (max_end_samples / 2 - i_stop + i) * cadence + (max_end_samples % 2 ? cadence / 2 : 0) ? 1 : (max_end_samples / 2 - i_stop + i) * cadence + (max_end_samples % 2 ? cadence / 2 : 0) + 1; \
 			j_stop = (*num_end_samples + (src_size > max_end_samples ? src_size - max_end_samples : 0) + i) * cadence; \
 			j_stop = j_stop < sinc_length / 2 ? j_stop : sinc_length / 2; \
 			for(j = j_start; j <= j_stop; j++) \
-				dst[-j] += sinc_table[j] * *src; \
+				dst[dst_index - j] += sinc_table[j] * *src; \
  \
 			/* dst samples after src */ \
 			j_stop = sinc_length / 2 - (max_end_samples < src_size ? i : max_end_samples - src_size + i) * cadence; \
 			for(j = 1; j < j_stop; j++) \
-				dst[j] += sinc_table[j] * *src; \
+				dst[dst_index + j] += sinc_table[j] * *src; \
 		} \
 	} else if(dst_size) { \
 		/* We have enough input to produce output and this is not the first output buffer after a discontinuity */ \
@@ -402,49 +400,53 @@ static void sinc_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE C
 		dst += dst_shift; \
 		i_start = i_stop; \
 		i_stop = max_end_samples; \
-		for(i = i_start; i < i_stop; i++, dst += cadence) { \
+		for(i = i_start; i < i_stop; i++, dst_index += cadence) { \
 			end_samples_index = i + *index_end_samples < max_end_samples ? i : i - max_end_samples; \
 			if(max_end_samples + src_size - i > max_end_samples / 2) \
-				*dst += *sinc_table * end_samples[end_samples_index]; \
+				dst[dst_index] += *sinc_table * end_samples[end_samples_index]; \
 			j_stop = dst_size - dst_shift - (i - i_start) * cadence <= sinc_length / 2 ? dst_size - dst_shift - (i - i_start) * cadence - 1 : sinc_length / 2; \
 			j_stop = j_stop < dst_shift + (i - i_start) * cadence ? j_stop : dst_shift + (i - i_start) * cadence; \
 			for(j = 1; j <= j_stop; j++) { \
-				dst[j] += sinc_table[j] * end_samples[end_samples_index]; \
-				dst[-j] += sinc_table[j] * end_samples[end_samples_index]; \
+				dst[dst_index + j] += sinc_table[j] * end_samples[end_samples_index]; \
+				dst[dst_index - j] += sinc_table[j] * end_samples[end_samples_index]; \
 			} \
 			/* handle remaining "one-sided" dependence */ \
 			j_start = j_stop >= 0 ? j_stop + 1 : -j_stop; \
 			if(j_stop == dst_shift + (i - i_start) * cadence) { \
 				j_stop = dst_size - dst_shift - (i - i_start) * cadence <= sinc_length / 2 ? dst_size - dst_shift - (i - i_start) * cadence - 1 : sinc_length / 2; \
 				for(j = j_start; j <= j_stop; j++) \
-					dst[j] += sinc_table[j] * end_samples[end_samples_index]; \
+					dst[dst_index + j] += sinc_table[j] * end_samples[end_samples_index]; \
 			} else { \
 				j_stop = sinc_length / 2 < dst_shift + (i - i_start) * cadence ? sinc_length / 2 : dst_shift + (i - i_start) * cadence; \
 				for(j = j_start; j <= j_stop; j++) \
-					dst[-j] += sinc_table[j] * end_samples[end_samples_index]; \
+					dst[dst_index - j] += sinc_table[j] * end_samples[end_samples_index]; \
 			} \
 		} \
  \
 		/* dependence of output on src samples */ \
-		for(i = 0; i < src_size; i++, src++, dst += cadence) { \
+		for(i = 0; i < src_size; i++, src++, dst_index += cadence) { \
 			if(src_size - i > max_end_samples / 2) \
-				*dst += *sinc_table * *src; \
+				dst[dst_index] += *sinc_table * *src; \
 			j_stop = dst_size - dst_shift - (max_end_samples / 2 + i) * cadence <= sinc_length / 2 ? dst_size - dst_shift - (max_end_samples / 2 + i) * cadence - 1 : sinc_length / 2; \
 			for(j = 1; j <= j_stop; j++) { \
-				dst[j] += sinc_table[j] * *src; \
-				dst[-j] += sinc_table[j] * *src; \
+				dst[dst_index + j] += sinc_table[j] * *src; \
+				dst[dst_index - j] += sinc_table[j] * *src; \
 			} \
 			j_start = j_stop >= -j_stop ? j_stop + 1 : -j_stop; \
 			j_stop = sinc_length / 2; \
 			for(j = j_start; j <= j_stop; j++) \
-				dst[-j] += sinc_table[j] * *src; \
+				dst[dst_index - j] += sinc_table[j] * *src; \
 		} \
  \
 	} \
  \
 	/* move end_samples pointer back to beginning */ \
-	if(dst_size) \
+	if(dst_size && *produced_outbuf) \
+		end_samples -= *index_end_samples; \
+	else if(dst_size) { \
 		end_samples -= index_end_samples[1] + 1; \
+		*produced_outbuf = TRUE; \
+	} \
 	/* find new locations in end_samples where oldest and newest sample will be stored */ \
 	index_end_samples[1] = (index_end_samples[1] + src_size) % max_end_samples; \
 	if(dst_size) \
