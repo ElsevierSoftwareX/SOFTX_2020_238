@@ -502,6 +502,70 @@ class HorizonHistories(dict):
 		"""
 		return dict((key, value.functional_integral(*args, **kwargs)) for key, value in self.items())
 
+	def functional_integral(self, (lo, hi), w = lambda f: max(f.values())):
+		"""
+		Given the function f(x) = self.getdict(x), compute
+
+		\int_{lo}^{hi} w(f(x)) dx
+
+		The arguments are the lo and hi bounds and the functional
+		w(f).  The default functional is w(f) = max(f.values()).
+
+		Example:
+
+		>>> x = HorizonHistories({
+		...	"H1": NearestLeafTree([(100., 0.), (150., 2.), (200., 0.)]),
+		...	"L1": NearestLeafTree([(100., 0.), (150., 20.), (200., 0.)]),
+		... })
+		>>> x.functional_integral((130., 170.))
+		800.0
+		>>> x.functional_integral((100., 150.))
+		500.0
+		>>> x.functional_integral((300., 500.))
+		0.0
+		>>> x.functional_integral((100., 150.), lambda f: f**3)
+		200.0
+		"""
+		if not self or not all(self.values()):
+			raise ValueError("empty tree or no trees")
+		if lo < hi:
+			swapped = False
+		elif lo == hi:
+			return NaN if math.isinf(w(self.getdict(lo))) else 0.
+		else:
+			# lo > hi. remove a factor of -1 from the integral
+			lo, hi = hi, lo
+			swapped = True
+		# now we are certain that lo < hi and that there is at
+		# least one entry in the tree
+
+		# construct an array of (x,y) pairs such that f(x) = y and
+		# continues to equal y until the next x.  ensure the 0th
+		# and last entries in the array are the left and right
+		# edges of the integration domain.
+
+		samples = sorted(set(x for value in self.values() for x in value.keys()))
+		i = bisect.bisect_right(samples, lo)
+		j = bisect.bisect_right(samples, hi)
+		if i > 0:
+			i -= 1
+		samples = samples[i:j+1]
+		samples = [((a + b) / 2., self.getdict(b)) for a, b in zip(samples[:-1], samples[1:])]
+		if not samples:
+			samples = [(lo, self.getdict(lo))]
+		elif samples[0][0] > lo:
+			samples.insert(0, (lo, self.getdict(lo)))
+		else:
+			samples[0] = lo, self.getdict(lo)
+		if samples[-1][0] < hi:
+			samples.append((hi, self.getdict(hi)))
+		else:
+			samples[-1] = hi, self.getdict(hi)
+
+		# return the integral
+		result = sum((b_key - a_key) * w(a_val) for (a_key, a_val), (b_key, b_val) in zip(samples[:-1], samples[1:]))
+		return -result if swapped else result
+
 	def weighted_mean_dict(self, *args, **kwargs):
 		"""
 		Return a dictionary of the result of invoking
