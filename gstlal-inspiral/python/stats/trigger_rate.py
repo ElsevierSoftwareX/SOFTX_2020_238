@@ -395,12 +395,26 @@ class ratebinlist(segments.segmentlist):
 		raise NotImplementedError
 
 	def coalesce(self):
-		if self:
-			# sort is not needed but helps the reduce() go
-			# faster if the .__ior__ implementation is
-			# tail-optimized
-			self.sort()
-			self[:] = reduce(lambda a, b: a | ratebinlist([b]), self[1:], ratebinlist([self[0]]))
+		"""
+		Sort the elements of the list into ascending order, and merge
+		continuous segments into single segments.  Segmentlist is
+		modified in place.  This operation is O(n log n).
+		"""
+		self.sort()
+		i = j = 0
+		n = len(self)
+		while j < n:
+			lo, hi = self[j]
+			count = self[j].count
+			j += 1
+			while j < n and hi >= self[j][0]:
+				hi = max(hi, self[j][1])
+				count += self[j].count
+				j += 1
+			if lo != hi:
+				self[i] = ratebin(lo, hi, count = count)
+				i += 1
+		del self[i : ]
 		return self
 
 	@classmethod
