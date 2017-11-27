@@ -269,10 +269,11 @@ class LnSignalDensity(LnLRDensity):
 		# overall scale:  ln L = 0 is not a special value, as it
 		# would be if the numerator and denominator were both
 		# normalized properly.
-		horizon = sorted(horizons.values())[-self.min_instruments] / 150.
-		if not horizon:
-			return float("-inf")
-		lnP += 3. * math.log(sorted(horizons.values())[-self.min_instruments] / 150.)
+		# FIXME:  disabled for now
+		#horizon = sorted(horizons.values())[-self.min_instruments] / 150.
+		#if not horizon:
+		#	return float("-inf")
+		#lnP += 3. * math.log(sorted(horizons.values())[-self.min_instruments] / 150.)
 
 		# evaluate dt and dphi parameters
 		lnP += inspiral_extrinsics.lnP_dt_dphi_signal(snrs, phase, dt, horizons, self.delta_t)
@@ -320,6 +321,8 @@ class LnSignalDensity(LnLRDensity):
 		parameter sets the nominal signal rate in units of Gpc^-3
 		a^-1.
 		"""
+		# FIXME: disabled for now
+		return 1.
 		# FIXME:  this needs to understand a mass distribution
 		# model and what part of the mass space this numerator PDF
 		# is for
