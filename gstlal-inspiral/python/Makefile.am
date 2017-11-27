@@ -10,7 +10,6 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	cbc_template_fir.py \
-	cbc_template_iir.py \
 	chirptime.py \
 	far.py \
 	hoftcache.py \
@@ -27,7 +26,6 @@ pkgpython_PYTHON = \
 	rate_estimation.py \
 	snglinspiraltable.py \
 	spawaveform.py \
-	spiirparts.py \
 	streamthinca.py \
 	svd_bank.py \
 	templates.py \
