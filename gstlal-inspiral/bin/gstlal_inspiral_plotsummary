@@ -1399,14 +1399,18 @@ def sigma_region(mean, nsigma):
 	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))
 
 
-def create_rate_vs_ifar_plot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, None)):
+def create_rate_vs_ifar_plot(axes, zerolag_stats, fapfar, is_open_box):
+	expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 100)
+	expected_count_x = fapfar.livetime / expected_count_y
+
 	axes.loglog()
 
 	#
 	# determine plot limits
 	#
 
-	xlim = (max(zerolag_stats.min(), xlim[0]) if xlim[0] is not None else xlim[0]), (2.**math.ceil(math.log(zerolag_stats.max(), 2.)) if xlim[1] is None else xlim[1])
+	xlim = (fapfar.livetime / fapfar.count_above_threshold, fapfar.livetime / 1e-4)
+	xlim = max(zerolag_stats.min(), xlim[0]), max(2.**math.ceil(math.log(zerolag_stats.max(), 2.)), xlim[1])
 	ylim = 0.001, (10.**math.ceil(math.log10(expected_count_y[::-1][bisect.bisect_right(expected_count_x[::-1], xlim[0])])) if xlim[0] is not None else None)
 
 	#
@@ -1665,9 +1669,7 @@ WHERE
 				fig, axes = create_plot(r"Inverse False-Alarm Rate (s)", r"Number of Events")
 				# fars in ascending order --> ifars in descending order
 				zerolag_stats = 1. / numpy.array(sorted(fars))
-				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
-				expected_count_x = self.fapfar.livetime / expected_count_y
-				create_rate_vs_ifar_plot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (300., 2000. * self.fapfar.livetime))
+				create_rate_vs_ifar_plot(axes, zerolag_stats, self.fapfar, is_open_box)
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
