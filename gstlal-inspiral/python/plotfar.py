@@ -122,9 +122,11 @@ def plot_snr_chi_pdf(rankingstat, instrument, which, snr_max, event_snr = None, 
 	elif which == "injection_pdf":
 		norm = matplotlib.colors.Normalize(vmin = -60., vmax = z.max())
 		levels = 50
-	else:	# which == "zero_lag_pdf":
+	elif which == "zero_lag_pdf":
 		norm = matplotlib.colors.Normalize(vmin = -30., vmax = z.max())
 		levels = 50
+	else:
+		raise ValueError("invalid which (%s)" % which)
 
 	mesh = axes.pcolormesh(x, y, z.T, norm = norm, cmap = "afmhot", shading = "gouraud")
 	if which == "LR":
