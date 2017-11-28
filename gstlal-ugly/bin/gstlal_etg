@@ -614,7 +614,7 @@ for channel in channels:
 			#       less than the factor in the chebychev low pass cutoff in the downsampler
 			#       this should be fine
 			flow = rate/4.*0.8
-		    # NOTE: Omicron uses fhigh = fnyquist/(1.+(11.)**0.5/qlow) which is approx. fnyquist*0.55. We use different waveforms but this is plausibly okay padding for us too
+			# NOTE: Omicron uses fhigh = fnyquist/(1.+(11.)**0.5/qlow) which is approx. fnyquist*0.55. We use different waveforms but this is plausibly okay padding for us too
 			fhigh = rate/2.*0.55
 			qhigh = options.qhigh
 		qlow = 4
