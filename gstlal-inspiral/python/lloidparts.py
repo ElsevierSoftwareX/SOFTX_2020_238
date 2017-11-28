@@ -291,21 +291,36 @@ class Handler(simplehandler.Handler):
 		if message.type == Gst.MessageType.ELEMENT:
 			if message.get_structure().get_name() == "spectrum":
 				# get the instrument, psd, and timestamp.
-				# NOTE: epoch is used for the timestamp, this
-				# is the middle of the most recent FFT interval
-				# used to obtain this PSD
+				# the "stability" is a measure of the
+				# fraction of the configured averaging
+				# timescale has been used to yield this
+				# measurement.
+				# NOTE: epoch is used for the timestamp,
+				# this is the middle of the most recent FFT
+				# interval used to obtain this PSD
 				instrument = message.src.get_name().split("_")[-1]
 				psd = pipeio.parse_spectrum_message(message)
 				timestamp = psd.epoch
+				stability = float(message.src.get_property("n-samples")) / message.src.get_property("average-samples")
 
 				# save
 				self.psds[instrument] = psd
 
-				# update horizon distance history
-				#
-				# FIXME:  get canonical masses from the template bank bin that we're analyzing
-				horizon_distance = reference_psd.HorizonDistance(10.0, 0.85 * (psd.f0 + (len(psd.data.data) - 1) * psd.deltaF), psd.deltaF, 1.4, 1.4)(psd, 8.0)[0]
-				assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
+				# update horizon distance history.  if the
+				# whitener's average is not satisfactorily
+				# converged, claim the horizon distance is
+				# 0 (equivalent to claiming the instrument
+				# to be off at this time).  this has the
+				# effect of vetoing candidates from these
+				# times.
+				if stability > 0.3:
+					# FIXME:  get canonical masses from
+					# the template bank bin that we're
+					# analyzing
+					horizon_distance = reference_psd.HorizonDistance(10.0, 0.85 * (psd.f0 + (len(psd.data.data) - 1) * psd.deltaF), psd.deltaF, 1.4, 1.4)(psd, 8.0)[0]
+					assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
+				else:
+					horizon_distance = 0.
 				self.record_horizon_distance(instrument, float(timestamp), horizon_distance)
 				return True
 		elif message.type == Gst.MessageType.APPLICATION:

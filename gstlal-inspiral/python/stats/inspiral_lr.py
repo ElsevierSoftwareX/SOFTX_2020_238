@@ -272,15 +272,15 @@ class LnSignalDensity(LnLRDensity):
 		if len(snrs) < self.min_instruments:
 			return float("-inf")
 
-		# evaluate SNR PDF.  use volume-weighted average horizon
-		# distance over duration of event to estimate sensitivity
+		# use volume-weighted average horizon distance over
+		# duration of event to estimate sensitivity
 		assert all(segments.values()), "encountered trigger with duration = 0"
 		horizons = dict((instrument, (self.horizon_history[instrument].functional_integral(map(float, seg), lambda d: d**3.) / float(abs(seg)))**(1./3.)) for instrument, seg in segments.items())
-		lnP = self.SNRPDF.lnP_instruments(snrs.keys(), horizons, self.min_instruments) + self.SNRPDF.lnP_snrs(snrs, horizons, self.min_instruments)
 
-		# P(t) \propto volume within which a signal will produce a
-		# candidate \propto cube of distance to which the mininum
-		# required number of instruments can see (I think).  we
+		# compute P(t).  P(t) \propto volume within which a signal
+		# will produce a candidate * number of trials \propto cube
+		# of distance to which the mininum required number of
+		# instruments can see (I think) * number of templates.  we
 		# measure the distance in multiples of 150 Mpc just to get
 		# a number that will be, typically, a little closer to 1,
 		# in lieu of properly normalizating this factor.  we can't
@@ -297,11 +297,13 @@ class LnSignalDensity(LnLRDensity):
 		# overall scale:  ln L = 0 is not a special value, as it
 		# would be if the numerator and denominator were both
 		# normalized properly.
-		# FIXME:  disabled for now
-		#horizon = sorted(horizons.values())[-self.min_instruments] / 150.
-		#if not horizon:
-		#	return float("-inf")
-		#lnP += 3. * math.log(sorted(horizons.values())[-self.min_instruments] / 150.)
+		horizon = sorted(horizons.values())[-self.min_instruments] / 150.
+		if not horizon:
+			return float("-inf")
+		lnP = 3. * math.log(horizon) + math.log(len(self.template_ids))
+
+		# multiply by P(instruments | t) * P(SNRs | t, instruments).
+		lnP += self.SNRPDF.lnP_instruments(snrs.keys(), horizons, self.min_instruments) + self.SNRPDF.lnP_snrs(snrs, horizons, self.min_instruments)
 
 		# evaluate dt and dphi parameters
 		lnP += inspiral_extrinsics.lnP_dt_dphi_signal(snrs, phase, dt, horizons, self.delta_t)
@@ -349,16 +351,14 @@ class LnSignalDensity(LnLRDensity):
 		parameter sets the nominal signal rate in units of Gpc^-3
 		a^-1.
 		"""
-		# FIXME: disabled for now
-		return 1.
 		# FIXME:  this needs to understand a mass distribution
 		# model and what part of the mass space this numerator PDF
 		# is for
 		seg = (self.horizon_history.minkey(), self.horizon_history.maxkey())
 		V_times_t = self.horizon_history.functional_integral(seg, lambda horizons: sorted(horizons.values())[-self.min_instruments]**3.)
-		# Mpc**3 --> Gpc**3
-		V_times_t *= 1e-9
-		return V_times_t * rate
+		# Mpc**3 --> Gpc**3, seconds --> years
+		V_times_t *= 1e-9 / (86400. * 365.25)
+		return V_times_t * rate * len(self.template_ids)
 
 	def random_sim_params(self, sim, horizon_distance = None, snr_efficiency = 1.0, coinc_only = True):
 		"""
