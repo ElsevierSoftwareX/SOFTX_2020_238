@@ -205,7 +205,7 @@ def smooth_kappas_no_coherence_test(pipeline, head, var, expected, N, Nav, defau
 	pipeparts.mknxydumpsink(pipeline, head, "smooth_kappatst.txt")
 	return head
 
-def compute_kappa_bits(pipeline, smoothR, smoothI, dqR, dqI, expected_real, expected_imag, real_ok_var, imag_ok_var, queue_length1, queue_length2, status_out_smooth = 1, status_out_median = 1, starting_rate=16, ending_rate=16):
+def compute_kappa_bits(pipeline, smoothR, smoothI, dqR, dqI, expected_real, expected_imag, real_ok_var, imag_ok_var, min_samples, queue_length1, queue_length2, status_out_smooth = 1, status_out_median = 1, starting_rate=16, ending_rate=16):
 
 	smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [expected_real - real_ok_var, expected_real, expected_real, expected_real + real_ok_var], insert_gap = True, remove_gap = False)
 	smoothRInRange = pipeparts.mkbitvectorgen(pipeline, smoothRInRange, nongap_is_control = True, bit_vector = status_out_smooth)
@@ -222,7 +222,7 @@ def compute_kappa_bits(pipeline, smoothR, smoothI, dqR, dqI, expected_real, expe
 		smoothIInRange = pipeparts.mkgeneric(pipeline, smoothIInRange, "lal_logicalundersample", required_on = status_out_smooth, status_out = status_out_smooth)
 		smoothIInRange = pipeparts.mkcapsfilter(pipeline, smoothIInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % ending_rate)
 
-	smoothInRange = pipeparts.mkgate(pipeline, mkqueue(pipeline, smoothRInRangetee, queue_length1), threshold = status_out_smooth * 2, control = mkqueue(pipeline, mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, smoothIInRange, queue_length2), mkqueue(pipeline, smoothRInRangetee, queue_length1))), queue_length2))
+	smoothInRange = pipeparts.mkgate(pipeline, mkqueue(pipeline, smoothRInRangetee, queue_length1), threshold = status_out_smooth * 2, control = mkqueue(pipeline, mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, smoothIInRange, queue_length2), mkqueue(pipeline, smoothRInRangetee, queue_length1))), queue_length2), attack_length = -min_samples)
 	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 	smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % ending_rate)
 
@@ -235,7 +235,7 @@ def compute_kappa_bits(pipeline, smoothR, smoothI, dqR, dqI, expected_real, expe
 
 	return smoothInRange, medianUncorrupt
 
-def compute_kappa_bits_only_real(pipeline, smooth, dq, expected, ok_var, status_out_smooth = 1, status_out_median = 1, starting_rate=16, ending_rate=16):
+def compute_kappa_bits_only_real(pipeline, smooth, dq, expected, ok_var, min_samples, status_out_smooth = 1, status_out_median = 1, starting_rate=16, ending_rate=16):
 
 	smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [expected - ok_var, expected, expected, expected + ok_var], insert_gap = True, remove_gap = False)
 	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
@@ -243,6 +243,9 @@ def compute_kappa_bits_only_real(pipeline, smooth, dq, expected, ok_var, status_
 	if starting_rate != ending_rate:
 		smoothInRange = pipeparts.mkgeneric(pipeline, smoothInRange, "lal_logicalundersample", required_on = status_out_smooth, status_out = status_out_smooth)
 		smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % ending_rate)
+	smoothInRangetee = pipeparts.mktee(pipeline, smoothInRange)
+        smoothInRange = pipeparts.mkgate(pipeline, mkqueue(pipeline, smoothInRangetee, 0), threshold = status_out_smooth, control = mkqueue(pipeline, smoothInRangetee, 0), attack_length = -min_samples)
+        smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 
 	medianUncorrupt = pipeparts.mkbitvectorgen(pipeline, dq, threshold = 1, bit_vector = status_out_median)
 	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % starting_rate)

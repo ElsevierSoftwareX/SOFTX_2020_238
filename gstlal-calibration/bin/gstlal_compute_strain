@@ -1285,37 +1285,37 @@ if not options.no_dq_vector:
 	# KAPPATST BITS BRANCH
 	#
 	if not options.no_kappatst:
-		ktstSmoothInRange, ktstMedianUncorrupt = calibration_parts.compute_kappa_bits(pipeline, smooth_ktstRtee, smooth_ktstItee, smooth_ktstRdq, smooth_ktstIdq, options.expected_kappatst_real, options.expected_kappatst_imag, options.kappatst_real_ok_var, options.kappatst_imag_ok_var, long_queue, short_queue, status_out_smooth = 2048, status_out_median = 4096, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		ktstSmoothInRange, ktstMedianUncorrupt = calibration_parts.compute_kappa_bits(pipeline, smooth_ktstRtee, smooth_ktstItee, smooth_ktstRdq, smooth_ktstIdq, options.expected_kappatst_real, options.expected_kappatst_imag, options.kappatst_real_ok_var, options.kappatst_imag_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, long_queue, short_queue, status_out_smooth = 2048, status_out_median = 4096, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# KAPPAPU BITS BRANCH
 	#
 	if not options.no_kappapu:
-		kpuSmoothInRange, kpuMedianUncorrupt = calibration_parts.compute_kappa_bits(pipeline, smooth_kpuRtee, smooth_kpuItee, smooth_kpuRdq, smooth_kpuIdq, options.expected_kappapu_real, options.expected_kappapu_imag, options.kappapu_real_ok_var, options.kappapu_imag_ok_var, long_queue, short_queue, status_out_smooth = 8192, status_out_median = 16384, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		kpuSmoothInRange, kpuMedianUncorrupt = calibration_parts.compute_kappa_bits(pipeline, smooth_kpuRtee, smooth_kpuItee, smooth_kpuRdq, smooth_kpuIdq, options.expected_kappapu_real, options.expected_kappapu_imag, options.kappapu_real_ok_var, options.kappapu_imag_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, long_queue, short_queue, status_out_smooth = 8192, status_out_median = 16384, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# KAPPAC BITS BRANCH
 	#
 	if not options.no_kappac:
-		kcSmoothInRange, kcMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_kctee, smooth_kcdq, options.expected_kappac, options.kappac_ok_var, status_out_smooth = 131072, status_out_median = 262144, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		kcSmoothInRange, kcMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_kctee, smooth_kcdq, options.expected_kappac, options.kappac_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, status_out_smooth = 131072, status_out_median = 262144, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# FCC BITS BRANCH
 	#
 	if not options.no_fcc:
-		fccSmoothInRange, fccMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, smooth_fccdq, fcc_default, options.fcc_ok_var, status_out_smooth = 524288, status_out_median = 1048576, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		fccSmoothInRange, fccMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, smooth_fccdq, fcc_default, options.fcc_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples + options.fcc_averaging_time * options.compute_factors_sr, status_out_smooth = 524288, status_out_median = 1048576, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# FS BITS BRANCH
 	#
 	if not options.no_fs:
-		fsSmoothInRange, fsMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, smooth_fsdq, options.expected_fs, options.fs_ok_var, status_out_smooth = 67108864, status_out_median = 134217728, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		fsSmoothInRange, fsMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, smooth_fsdq, options.expected_fs, options.fs_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, status_out_smooth = 67108864, status_out_median = 134217728, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# SRCQ BITS BRANCH
 	#
 	if not options.no_srcQ:
-		srcQSmoothInRange, srcQMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, smooth_srcQdq, options.expected_srcQ, options.srcQ_ok_var, status_out_smooth = 268435456, status_out_median = 536870912, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		srcQSmoothInRange, srcQMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, smooth_srcQdq, options.expected_srcQ, options.srcQ_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, status_out_smooth = 268435456, status_out_median = 536870912, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# COHERENCE BITS BRANCH
@@ -1360,6 +1360,9 @@ if not options.no_dq_vector:
 	if options.apply_kappac:
 		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [higherbits, short_queue], [kcSmoothInRange, long_queue]))
 		htok_threshold += 131072
+	if options.update_fcc:
+		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [higherbits, short_queue], [fccSmoothInRange, long_queue]))
+		htok_threshold += 524288
 	higherbitstee = pipeparts.mktee(pipeline, higherbits)
 
 	# Now calculate h(t)-OK bit
@@ -1408,7 +1411,10 @@ if not options.no_dq_vector:
 		else:
 			calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [calibstatevector, short_queue], [kcMedianUncorrupt, long_queue]))
 	if not options.no_fcc:
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [calibstatevector, short_queue], [fccSmoothInRange, long_queue], [fccMedianUncorrupt, long_queue]))
+		if not options.update_fcc:
+			calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [calibstatevector, short_queue], [fccSmoothInRange, long_queue], [fccMedianUncorrupt, long_queue]))
+		else:
+			calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [calibstatevector, short_queue], [fccMedianUncorrupt, long_queue]))
 	if not options.no_fs:
 		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [calibstatevector, short_queue], [fsSmoothInRange, long_queue], [fsMedianUncorrupt, long_queue]))
 	if not options.no_srcQ:
