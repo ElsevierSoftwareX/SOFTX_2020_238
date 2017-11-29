@@ -723,7 +723,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 
 	#
-	# Load likelihood ratio data, assume injections are present!
+	# Load/Initialize ranking statistic data
 	#
 
 

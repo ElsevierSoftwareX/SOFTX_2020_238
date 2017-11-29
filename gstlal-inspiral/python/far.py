@@ -164,8 +164,16 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		# between triggers, and in such a way that singles always
 		# have a time-shifted offset-from-epoch of 0.
 		#
-		# for the time spanned by the event, because we use
-		# exact-match coincidence, all durations are identical
+		# for the time spanned by the event, we need a segment for
+		# every instrument whether or not it provided a trigger,
+		# and reflecting the offset vector that was considered when
+		# this candidate was formed (the ranking statistic needs to
+		# know when it was we were looking for triggers in the
+		# instruments that failed to provide them).  for
+		# instruments that do not provide a trigger, we time-shift
+		# the reference trigger's interval under the assumption
+		# that because we use exact-match coincidence the interval
+		# is the same for all instruments.
 		#
 
 		reference = min(events, key = lambda event: event.end)
