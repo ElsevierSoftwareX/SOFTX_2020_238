@@ -127,19 +127,6 @@ L1_CHANNEL=GDS-CALIB_STRAIN
 #L1_CHANNEL=
 CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 
-#######################################################
-# Set ranges and times for reference likelihood files #
-#######################################################
-
-# NOTE needed to make 10000s duration to get sufficient zero lag triggers
-H1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-15000")
-H1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)-5000")
-L1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-10000")
-L1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
-H1PRIORRANGE=60
-L1PRIORRANGE=80
-# L1 was typically more sensitive than H1 during O2 (at least chunk 1)
-
 ###################################################################################
 # Get some basic definitions.  NOTE this comes from the share directory probably. #
 ###################################################################################
@@ -158,7 +145,7 @@ SNR_sed : gstlal_inspiral_injection_snr.sub
 	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=${MKLROOT}/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
 
 # Run inspiral pipe to produce dag
-dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) reference_likelihood_file.xml.gz
+dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
 	gstlal_inspiral_pipe \
 		--data-source frames \
 		--gps-start-time $(START) \
@@ -184,22 +171,12 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		$(ADDITIONAL_DAG_OPTIONS) \
 		$(CONDOR_COMMANDS) \
 		--ht-gate-threshold-linear 0.8:15.0-45.0:100.0 \
-		--min-log-L 3.5 \
+		--min-log-L -50.0 \
 		--singles-threshold 100.0 \
 		--request-cpu 2 \
 		--request-memory 5GB \
-		--min-instruments $(MIN_IFOS) \
-		--reference-likelihood-file reference_likelihood_file.xml.gz
+		--min-instruments $(MIN_IFOS)
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
-
-# Produce refrence likelihood file
-reference_likelihood_file.xml.gz :
-	gstlal_inspiral_fake_diststats \
-		--segment-and-horizon=H1:$(H1PRIORSTART):$(H1PRIORSTOP):$(H1PRIORRANGE) \
-		--segment-and-horizon=L1:$(L1PRIORSTART):$(L1PRIORSTOP):$(L1PRIORRANGE) \
-		--output $@ \
-		--min-instruments $(MIN_IFOS) \
-		--verbose
 
 # Produce split banks
 %_split_bank.cache : gstlal_bank.xml.gz

@@ -257,26 +257,19 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		return xml
 
 
-# FIXME: this is not finished.  when complete, make sure its use in
-# inspiral.py is still correct
 class DatalessRankingStat(RankingStat):
+	# NOTE:  .__iadd__(), .copy() and I/O are forbidden, but these
+	# operations will be blocked by the .numerator and .denominator
+	# instances, no need to add extra code here to prevent these
+	# operations
 	def __init__(self, *args, **kwargs):
-		super(DatalessRankingStat, self).__init__(*args, **kwargs)
-		self.numerator = inspiral_lr.DatalessLnSignalDensity(instruments = self.numerator.instruments, delta_t = self.numerator.delta_t, min_instruments = self.numerator.min_instruments)
-		self.denominator = inspiral_lr.DatalessLnNoiseDensity(instruments = self.denominator.instruments, delta_t = self.denominator.delta_t, min_instruments = self.denominator.min_instruments)
+		self.numerator = inspiral_lr.DatalessLnSignalDensity(*args, **kwargs)
+		self.denominator = inspiral_lr.DatalessLnNoiseDensity(*args, **kwargs)
 
-	#
-	# do not allow I/O.  the on-disk representation would be
-	# indistinguishable from a genuine ranking statistic object, and
-	# could lead to accidents
-	#
-
-	@classmethod
-	def from_xml(cls, *args, **kwargs):
-		raise NotImplementedError
-
-	def to_xml(self, *args, **kwargs):
-		raise NotImplementedError
+	def finish(self):
+		# no zero-lag
+		self.numerator.finish()
+		self.denominator.finish()
 
 
 #

@@ -484,24 +484,34 @@ class DatalessLnSignalDensity(LnSignalDensity):
 
 	Used, for example, to implement low-significance candidate culls,
 	etc.
+
+	Assumes all available instruments are on and have the same horizon
+	distance, and assess candidates based only on SNR and \chi^2
+	distributions.
 	"""
-
-	#
-	# assume all instruments have this horizon distance, all the time
-	#
-
-	class FixedHorizon(object):
-		def __getitem__(self, item):
-			return 100.0
-
 	def __init__(self, *args, **kwargs):
 		super(DatalessLnSignalDensity, self).__init__(*args, **kwargs)
-		# replace horizon_history's contents with our FixedHorizon
-		# hack
-		for key in self.horizon_history:
-			self.horizon_history[key] = self.FixedHorizon()
+		# so we're ready to go!
+		self.add_signal_model()
+
+	def __call__(self, segments, snrs, phase, dt, **kwargs):
+		# evaluate P(t) \propto number of templates
+		lnP = math.log(len(self.template_ids))
+
+		# evaluate SNR PDF.  assume all instruments have 100 Mpc
+		# horizon distance
+		horizons = dict.fromkeys(segments, 100.)
+		lnP += self.SNRPDF.lnP_instruments(snrs.keys(), horizons, self.min_instruments) + self.SNRPDF.lnP_snrs(snrs, horizons, self.min_instruments)
+
+		# evalute the (snr, \chi^2 | snr) PDFs (same for all
+		# instruments)
+		interp = self.interps["snr_chi"]
+		return lnP + sum(interp(*value) for name, value in kwargs.items() if name.endswith("_snr_chi"))
 
 	def __iadd__(self, other):
+		raise NotImplementedError
+
+	def increment(self, *args, **kwargs):
 		raise NotImplementedError
 
 	def copy(self):
@@ -641,25 +651,29 @@ class LnNoiseDensity(LnLRDensity):
 		# extrapolated background.
 		#
 
+		# pick a canonical PDF to definine the binning (we assume
+		# they're all the same and only compute this array once to
+		# save time
+		lnpdf = self.densities.values()[0]
+		arr = numpy.zeros_like(lnpdf.array)
+
+		snrindices, rcossindices = lnpdf.bins[self.snr_min:1e10, 1e-6:1e2]
+		snr, dsnr = lnpdf.bins[0].centres()[snrindices], lnpdf.bins[0].upper()[snrindices] - lnpdf.bins[0].lower()[snrindices]
+		rcoss, drcoss = lnpdf.bins[1].centres()[rcossindices], lnpdf.bins[1].upper()[rcossindices] - lnpdf.bins[1].lower()[rcossindices]
+
+		prcoss = numpy.ones(len(rcoss))
+		psnr = 1e-8 * snr**-6 #(1. + 10**6) / (1. + snr**6)
+		psnrdcoss = numpy.outer(numpy.exp(-(snr - 2**.5)**2/ 2.) * dsnr, numpy.exp(-(rcoss - .05)**2 / .00015*2) * drcoss)
+		arr[snrindices, rcossindices] = psnrdcoss
+
+		# normalize to the requested count.  give 99% of the
+		# requested events to this portion of the model
+		arr *= 0.99 * number_of_events / arr.sum()
+
 		for lnpdf in self.densities.values():
-			# will need to normalize results so need new
-			# storage
-			arr = numpy.zeros_like(lnpdf.array)
-
-			snrindices, rcossindices = lnpdf.bins[self.snr_min:1e10, 1e-6:1e2]
-			snr, dsnr = lnpdf.bins[0].centres()[snrindices], lnpdf.bins[0].upper()[snrindices] - lnpdf.bins[0].lower()[snrindices]
-			rcoss, drcoss = lnpdf.bins[1].centres()[rcossindices], lnpdf.bins[1].upper()[rcossindices] - lnpdf.bins[1].lower()[rcossindices]
-
-			prcoss = numpy.ones(len(rcoss))
-			psnr = 1e-8 * snr**-6 #(1. + 10**6) / (1. + snr**6)
-			psnrdcoss = numpy.outer(numpy.exp(-(snr - 2**.5)**2/ 2.) * dsnr, numpy.exp(-(rcoss - .05)**2 / .00015*2) * drcoss)
-			arr[snrindices, rcossindices] = psnrdcoss 
-
-			# normalize to the requested count.  give 99% of
-			# the requested events to this portion of the model
-			lnpdf.array += arr * (0.99 * number_of_events / arr.sum())
-			# give 1% of the requested events to the "glitch
-			# model"
+			# add in the 99% noise model
+			lnpdf.array += arr
+			# add 1% from the "glitch model"
 			inspiral_extrinsics.NumeratorSNRCHIPDF.add_signal_model(lnpdf, n = 0.01 * number_of_events, prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, snr_min = self.snr_min)
 			# re-normalize
 			lnpdf.normalize()
@@ -785,13 +799,55 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 
 	Used, for example, to implement low-significance candidate culls,
 	etc.
-	"""
 
+	Assumes all available instruments are on and have the same horizon
+	distance, and assess candidates based only on SNR and \chi^2
+	distributions.
+	"""
 	def __init__(self, *args, **kwargs):
 		super(DatalessLnNoiseDensity, self).__init__(*args, **kwargs)
+		# this a guess at a mass dependent snr chisq prior.  10
+		# *million* events gets the density estimation kernel to be
+		# a sensible size.
+		# FIXME:  initialize from template information instead of
+		# guessing mchirp.
+		mchirp = 0.8
+		self.add_noise_model(number_of_events = 10000000, prefactors_range = ((1. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3.)
+
+	def __call__(self, segments, snrs, phase, dt, **kwargs):
+		# assume all instruments are on, 1 trigger per second per
+		# template
+		triggers_per_second_per_template = dict.fromkeys(segments, 1.)
+
+		# P(t | noise) = (candidates per unit time @ t) / total
+		# candidates.  by not normalizing by the total candidates
+		# the return value can only ever be proportional to the
+		# probability density, but we avoid the problem of the
+		# ranking statistic definition changing on-the-fly while
+		# running online, allowing candidates collected later to
+		# have their ranking statistics compared meaningfully to
+		# the values assigned to candidates collected earlier, when
+		# the total number of candidates was smaller.
+		lnP = math.log(sum(self.coinc_rates.strict_coinc_rates(**triggers_per_second_per_template).values()) * len(self.template_ids))
+
+		# P(instruments | t, noise)
+		lnP += self.coinc_rates.lnP_instruments(**triggers_per_second_per_template)[frozenset(snrs)]
+
+		# evaluate the SNR, \chi^2 factors
+		interps = self.interps
+		return lnP + sum(interps[name](*value) for name, value in kwargs.items() if name in interps)
 
 	def random_params(self):
 		# won't work
+		raise NotImplementedError
+
+	def __iadd__(self, other):
+		raise NotImplementedError
+
+	def increment(self, *args, **kwargs):
+		raise NotImplementedError
+
+	def copy(self):
 		raise NotImplementedError
 
 	def to_xml(self, name):

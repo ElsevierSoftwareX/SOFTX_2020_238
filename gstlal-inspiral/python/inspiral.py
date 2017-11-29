@@ -514,7 +514,7 @@ class Data(object):
 			coincidence_threshold = rankingstat.delta_t,
 			thinca_interval = thinca_interval,	# seconds
 			min_instruments = rankingstat.min_instruments,
-			#min_log_L = min_log_L,	# FIXME: temporarily disabled until dataless ranking stat implementation is complete
+			min_log_L = min_log_L,
 			sngls_snr_threshold = sngls_snr_threshold
 		)
 
@@ -595,11 +595,15 @@ class Data(object):
 		# the dataless ranking statistic variant
 		#
 
-		# FIXME:  temporarily disabled until dataless ranking stat is working
-		#if self.likelihood_snapshot_interval is None and min_log_L is not None:
-		#	dataless_rankingstat = far.DatalessRankingStat(instruments = rankingstat.instruments, min_instruments = rankingstat.min_instruments, delta_t = rankingstat.delta_t)
-		#	dataless_rankingstat.finish()
-		#	self.stream_thinca.rankingstat = dataless_rankingstat
+		if self.likelihood_snapshot_interval is None and min_log_L is not None:
+			dataless_rankingstat = far.DatalessRankingStat(
+				template_ids = rankingstat.template_ids,
+				instruments = rankingstat.instruments,
+				min_instruments = rankingstat.min_instruments,
+				delta_t = rankingstat.delta_t
+			)
+			dataless_rankingstat.finish()
+			self.stream_thinca.rankingstat = dataless_rankingstat
 
 		#
 		# Fun output stuff

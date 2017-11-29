@@ -152,7 +152,7 @@ dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.s
 		--injection-file $(NSBHINJFILE) \
 		--injection-file $(BBHINJFILE) \
 		--time-slide-file tisi.xml
-		#--min-log-L 2 \
+		#--min-log-L -50.0 \
 
 ll_simplify_and_cluster.sql:
 	wget http://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify_and_cluster.sql
