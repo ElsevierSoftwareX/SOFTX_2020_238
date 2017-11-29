@@ -210,7 +210,7 @@ parser.add_option("--low-latency", action = "store_true", help = "Run the pipeli
 parser.add_option("--update-fcc", action = "store_true", help = "Update the cavity pole filter with time.")
 parser.add_option("--fcc-filter-duration", metavar = "seconds", default = 1.0, type = float, help = "Duration of the cavity pole FIR filter. (Default = 0.01 seconds)")
 parser.add_option("--fcc-averaging-time", metavar = "seconds", type = float, default = 60, help = "Length of time (in seconds) between when cavity pole FIR filter is updated.  The computed cavity pole values are averaged between the update intervals in order to obtain the cavity pole value used to compute the new FIR filter. (Default = 60 seconds)")
-parser.add_option("--fcc-filter-taper-length", metavar = "samples", type = int, default = 16384, help = "Number of samples to be used when tapering old filter and ramping in new filter. (Default = 16384)")
+parser.add_option("--fcc-filter-taper-length", metavar = "samples", type = int, default = 32768, help = "Number of samples to be used when tapering old filter and ramping in new filter. (Default = 32768)")
 
 # These are all options related to the reference channels used in the calibration factors computation
 parser.add_option("--ref-channels-sr", metavar = "Hz", default = 16, help = "Set the sample rate for the reference model channels used in the calibration factors calculation. (Default = 16 Hz)")
