@@ -110,9 +110,7 @@ options, process_params, filenames = parse_command_line()
 #
 
 
-rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_bins_file, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose))
-if rankingstat is None:
-	raise ValueError("\"%s\" does not contain event parameter PDFs" % options.background_bins_file)
+_, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.background_bins_file, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose))
 if rankingstatpdf is None:
 	raise ValueError("\"%s\" does not contain likelihood ratio PDFs" % options.background_bins_file)
 
@@ -237,8 +235,8 @@ if options.verbose:
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_compute_far_from_snr_chisq_histograms", {}, ifos = rankingstat.instruments)
-far.gen_likelihood_control_doc(xmldoc, rankingstat, rankingstatpdf)
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_compute_far_from_snr_chisq_histograms", process_params)
+far.gen_likelihood_control_doc(xmldoc, None, rankingstatpdf)
 ligolw_process.set_process_end_time(process)
 
 outname = "post_%s" % options.background_bins_file

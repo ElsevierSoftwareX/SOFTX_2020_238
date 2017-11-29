@@ -614,6 +614,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 			print >>sys.stderr, "Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_url))
 			pass
 
+
 	#
 	# create a new, empty, Bottle application and make it the current
 	# default, then start http server(s) to serve it up
@@ -673,6 +674,8 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 
 
 	banks = inspiral.parse_bank_files(svd_bank_url_dict, verbose = options.verbose)
+	# FIXME:  don't use Gamma0, switch to a proper column
+	template_ids = reduce(lambda a, b: a | b, (frozenset(bank.sngl_inspiral_table.getColumnByName("Gamma0")) for banklist in banks.values() for bank in banklist))
 
 	# Choose to optionally reconstruct segments around injections (not
 	# blind injections!)
@@ -741,8 +744,12 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (filename, rankingstat.denominator.min_instruments, options.min_instruments))
 		if rankingstat.instruments != all_instruments:
 			raise ValueError("\"%s\" is for %s but we need %s" % (filename, ", ".join(sorted(rankingstat.instruments)), ", ".join(sorted(all_instruments))))
+		if rankingstat.template_ids is None:
+			rankingstat.template_ids = template_ids
+		elif rankingstat.template_ids != template_ids:
+			raise ValueError("\"%s\" is for the wrong templates")
 	else:
-		rankingstat = far.RankingStat(instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
+		rankingstat = far.RankingStat(template_ids = template_ids, instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
 
 
 	#

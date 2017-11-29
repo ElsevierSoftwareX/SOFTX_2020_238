@@ -560,6 +560,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		# be needed to compute the likelihood
 		diststats_per_bin_node = inspiral_pipe.generic_node(marginalizeJob, dag,
 			parent_nodes = [priornode] + parents,
+			opts = {"marginalize":"ranking-stat"},
 			input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
 			output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = marginalizeJob.output_path)},
 			input_cache_file_name = inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.cache')
@@ -975,6 +976,7 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 	for i,n in enumerate(range(0, len(margin), margnum)):
 		margout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz', path = marginalizeJob.output_path))
 		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = parents,
+			opts = {"marginalize":"ranking-stat-pdf"},
 			output_files = {"output":margout[-1]}, 
 			input_cache_files = {"likelihood-cache":margin[n:n+margnum]},
 			input_cache_file_name = os.path.basename(margout[-1]).replace('.xml.gz','.cache')
@@ -983,6 +985,7 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 		if rankpdf_zerolag_nodes:
 			margzerolagout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin_zerolag[n:n+margnum]], '.xml.gz', path = marginalizeWithZerolagJob.output_path))
 			margzerolagnodes.append(inspiral_pipe.generic_node(marginalizeWithZerolagJob, dag, parent_nodes = parents_zerolag,
+				opts = {"marginalize":"ranking-stat-pdf"},
 				output_files = {"output":margzerolagout[-1]},
 				input_cache_files = {"likelihood-cache":margin_zerolag[n:n+margnum]},
 				input_cache_file_name = os.path.basename(margzerolagout[-1]).replace('.xml.gz','.cache')
@@ -998,6 +1001,7 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 
 	else:
 		margnode = inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = margnodes,
+			opts = {"marginalize":"ranking-stat-pdf"},
 			output_files = {"output":"marginalized_likelihood.xml.gz"},
 			input_cache_files = {"likelihood-cache":margout},
 			input_cache_file_name = "marginalized_likelihood.cache"
@@ -1006,6 +1010,7 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 		marginalized_likelihood_file = margnode.output_files["output"]
 
 		margnode = inspiral_pipe.generic_node(marginalizeWithZerolagJob, dag, parent_nodes = margzerolagnodes,
+			opts = {"marginalize":"ranking-stat-pdf"},
 			output_files = {"output":"marginalized_likelihood_with_zerolag.xml.gz"},
 			input_cache_files = {"likelihood-cache":margzerolagout},
 			input_cache_file_name = "marginalized_likelihood_with_zerolag.cache"

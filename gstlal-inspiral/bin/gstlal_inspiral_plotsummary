@@ -696,19 +696,27 @@ FROM
 
 class MissedFoundPlots(object):
 	class MissedFound(object):
-		def __init__(self, on_instruments, far_thresh, missed_found_plots, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
+		def __init__(self, on_instruments, far_thresh, missed_found_plots, remove_precession, isolate_precession, snr_segments):
 			self.on_instruments = on_instruments
 			self.far_thresh = far_thresh
 			self.found_in = {}
 			self.missed_found_plots = missed_found_plots
 			self.remove_precession = remove_precession
 			self.isolate_precession = isolate_precession
-			self.nonzero_horizon_seglistdict = nonzero_horizon_seglistdict
+			self.snr_segments = snr_segments
 
 		def add_contents(self, contents):
 			self.base = contents.base
 			zerolag_segments = contents.seglists.intersection(self.on_instruments) - contents.seglists.union(contents.instruments - self.on_instruments)
-			zerolag_segments &= self.nonzero_horizon_seglistdict.intersection(self.on_instruments)
+			# why is this intersection being done?
+			# FIXME:  why are "found" injections split up by
+			# what instruments recovered them at all?  what is
+			# going on?  this pipeline hasn't organized results
+			# by instrument combination in at least a decade, I
+			# have no idea why this code was written this way.
+			# OMG I hate found/missed plots!  they're *so*
+			# stupid.
+			zerolag_segments &= self.snr_segments
 			for values in contents.connection.cursor().execute("""
 SELECT
 	sim_inspiral.*,
@@ -842,14 +850,14 @@ FROM
 				except ValueError:
 					print >> sys.stderr, "Cannot create expected SNR plots, no positive values, probably the SNRs are not set"
 
-	def __init__(self, far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
+	def __init__(self, far_thresh, remove_precession, isolate_precession, snr_segments):
 		self.far_thresh = far_thresh
 		self.plots = {}
 		self.injection_summary_data = []
 		self.missed_summary_data = []
 		self.remove_precession = remove_precession
 		self.isolate_precession = isolate_precession
-		self.nonzero_horizon_seglistdict = nonzero_horizon_seglistdict
+		self.snr_segments = snr_segments
 
 	def add_contents(self, contents):
 		self.base = contents.base
@@ -858,7 +866,7 @@ FROM
 			return
 		for on_instruments in contents.on_instruments_combos:
 			if on_instruments not in self.plots:
-				self.plots[on_instruments] = self.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession, self.nonzero_horizon_seglistdict)
+				self.plots[on_instruments] = self.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession, self.snr_segments)
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
@@ -1359,42 +1367,6 @@ WHERE
 #
 
 
-def load_distributions(filenames, verbose = False):
-	rankingstat, rankingstatpdf = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = False, verbose = verbose)
-
-	# Construct segments of nonzero horizon distance times
-	nonzero_horizon_seglistdict = segments.segmentlistdict()
-	segstart = None
-	prev_time = None
-	for ifo, nearestleaftree in rankingstat.numerator.horizon_history.items():
-		seglist = segments.segmentlist()
-		for time, hdistance in nearestleaftree.items():
-			if hdistance == 0.0:
-				if segstart is not None:
-					# this is the end of a segment of nonzero horizon distances, append this segment to the seglist
-					seglist.append(segments.segment(segstart, lal.LIGOTimeGPS((time+prev_time)/2)))
-					segstart = None
-			else:
-				if segstart is None:
-					if prev_time is not None:
-						# this is the first nonzero horizon distance in a new segment of nonzero horizon distances
-						segstart = lal.LIGOTimeGPS((time+prev_time)/2)
-					else:
-						# this is the first (time, hdistance) tuple in the horizon history
-						segstart = lal.LIGOTimeGPS(time)
-			prev_time = time
-		# contract nonzero horizon distance segments by 1 second
-		# (reducing each segment length by 2 seconds) to avoid case
-		# where injections geocent end time occurs in nonzero horizon
-		# distance time but at least one observed single ifo time
-		# occurs during a zero horizon distance time; first must get
-		# rid of any segments less than 2 seconds long
-		iterutils.inplace_filter(lambda s: abs(s) > 2, seglist)
-		seglist.contract(1)
-		nonzero_horizon_seglistdict[ifo] = seglist
-	return rankingstat.snr_min, rankingstatpdf, nonzero_horizon_seglistdict
-
-
 def sigma_region(mean, nsigma):
 	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))
 
@@ -1764,9 +1736,10 @@ options, filenames = parse_command_line()
 
 
 if options.likelihood_file is not None:
-	snr_min, rankingstatpdf, nonzero_horizon_seglistdict = load_distributions([options.likelihood_file], verbose = options.verbose)
+	rankingstatpdf = far.marginalize_pdf_urls([options.likelihood_file], which = "RankingStatPDF", verbose = options.verbose)
 else:
-	snr_min, rankingstatpdf, nonzero_horizon_seglistdict = 4., None, None
+	rankingstatpdf = None
+snr_min = far.inspiral_lr.LnLRDensity.snr_min
 if rankingstatpdf is not None:
 	fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 else:
@@ -1778,10 +1751,10 @@ else:
 #
 
 
-def new_plots(plots, fapfar, far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict):
+def new_plots(plots, fapfar, far_thresh, remove_precession, isolate_precession, snr_segments):
 	l = (
 		SummaryTable(),
-		MissedFoundPlots(far_thresh, remove_precession, isolate_precession, nonzero_horizon_seglistdict),
+		MissedFoundPlots(far_thresh, remove_precession, isolate_precession, snr_segments),
 		ParameterAccuracyPlots(far_thresh = far_thresh),
 		BackgroundVsInjectionPlots(snr_min = snr_min),
 		BackgroundVsInjectionPlotsMulti(snr_min = snr_min),
@@ -1792,7 +1765,7 @@ def new_plots(plots, fapfar, far_thresh, remove_precession, isolate_precession, 
 		plots = range(len(l))
 	return [(i, l[i]) for i in plots]
 
-plots = new_plots(options.plot_group, fapfar, options.far_threshold, options.remove_precession, options.isolate_precession, nonzero_horizon_seglistdict)
+plots = new_plots(options.plot_group, fapfar, options.far_threshold, options.remove_precession, options.isolate_precession, rankingstatpdf.segments if rankingstatpdf is not None else None)
 
 
 #

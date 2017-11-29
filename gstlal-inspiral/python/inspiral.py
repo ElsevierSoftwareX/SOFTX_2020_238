@@ -696,9 +696,9 @@ class Data(object):
 				# data loaded should never be older than
 				# the snapshot before last
 				if self.reference_likelihood_url is not None:
-					params_before = self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t
+					params_before = self.rankingstat.template_ids, self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t
 					self.rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.reference_likelihood_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
-					if params_before != (self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t):
+					if params_before != (self.rankingstat.template_ids, self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t):
 						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.reference_likelihood_url)
 
 				# post a checkpoint message.
@@ -748,6 +748,8 @@ class Data(object):
 					_, self.rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.rankingstatpdf_filename, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
 					if self.rankingstatpdf is None:
 						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.rankingstatpdf_filename)
+					if not self.rankingstat.template_ids <= self.rankingstatpdf.template_ids:
+						raise ValueError("\"%s\" is for the wrong templates")
 					self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())
 
 			# add triggers to trigger rate record.  this needs

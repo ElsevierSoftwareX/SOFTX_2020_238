@@ -104,10 +104,20 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 		pass
 
-	def __init__(self, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 1, delta_t = 0.005):
-		self.numerator = inspiral_lr.LnSignalDensity(instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
-		self.denominator = inspiral_lr.LnNoiseDensity(instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
-		self.zerolag = inspiral_lr.LnLRDensity(instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
+	def __init__(self, template_ids = None, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 1, delta_t = 0.005):
+		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
+		self.denominator = inspiral_lr.LnNoiseDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
+		self.zerolag = inspiral_lr.LnLRDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
+
+	@property
+	def template_ids(self):
+		return self.denominator.template_ids
+
+	@template_ids.setter
+	def template_ids(self, value):
+		self.numerator.template_ids = template_ids
+		self.denominator.template_ids = template_ids
+		self.zerolag.template_ids = template_ids
 
 	@property
 	def snr_min(self):
@@ -178,6 +188,9 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 
 		reference = min(events, key = lambda event: event.end)
 		ref_end, ref_offset = reference.end, offsetvector[reference.ifo]
+		# FIXME:  use a proper ID column when one is available
+		if reference.Gamma0 not in self.template_ids:
+			raise ValueError("event IDs %s are from the wrong template" % ", ".join(sorted(str(event.event_id) for event in events)))
 		# segment spanned by reference event
 		seg = segments.segment(ref_end - reference.template_duration, ref_end)
 		# initially populate segs dictionary shifting reference
@@ -351,6 +364,9 @@ class RankingStatPDF(object):
 		self.signal_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 3000),)))
 		self.zero_lag_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 3000),)))
 		self.segments = segmentsUtils.vote(rankingstat.segmentlists.values(), rankingstat.min_instruments)
+		if rankingstat.template_ids is None:
+			raise ValueError("cannot be initialized from a RankingStat that is not for a specific set of templates")
+		self.template_ids = rankingstat.template_ids
 
 		#
 		# run importance-weighted random sampling to populate
@@ -420,13 +436,26 @@ class RankingStatPDF(object):
 		new.signal_lr_lnpdf = self.signal_lr_lnpdf.copy()
 		new.zero_lag_lr_lnpdf = self.zero_lag_lr_lnpdf.copy()
 		new.segments = type(self.segments)(self.segments)
+		new.template_ids = self.template_ids
 		return new
 
 
 	def collect_zero_lag_rates(self, connection, coinc_def_id):
-		for ln_likelihood_ratio, in connection.cursor().execute("""
+		for ln_likelihood_ratio, template_id in connection.cursor().execute("""
 SELECT
-	likelihood
+	likelihood,
+	(SELECT
+		Gamma0
+	FROM
+		sngl_inspiral
+		JOIN coinc_event_map ON (
+			coinc_event_map.table_name == "sngl_inspiral"
+			AND coinc_event_map.event_id == sngl_inspiral.event_id
+		)
+	WHERE
+		coinc_event_map.coinc_event_id == coinc_event.coinc_event_id
+	LIMIT 1
+	)
 FROM
 	coinc_event
 WHERE
@@ -442,6 +471,8 @@ WHERE
 	)
 """, (coinc_def_id,)):
 			assert ln_likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
+			if template_id not in self.template_ids:
+				raise ValueError("zero-lag candidate encountered with template ID not for this RankingStatPDF")
 			self.zero_lag_lr_lnpdf.count[ln_likelihood_ratio,] += 1.
 		self.zero_lag_lr_lnpdf.normalize()
 
@@ -462,7 +493,12 @@ WHERE
 		self.signal_lr_lnpdf.normalize()
 		self.zero_lag_lr_lnpdf += other.zero_lag_lr_lnpdf
 		self.zero_lag_lr_lnpdf.normalize()
+		# FIXME:  now that we know what templates this is for, we
+		# could conceivably impose a policy that if the segments
+		# overlap then the templates must be different, and if the
+		# templates are the same then the segments must be disjoint
 		self.segments += other.segments
+		self.template_ids |= other.template_ids
 		return self
 
 
@@ -592,6 +628,7 @@ WHERE
 		self.signal_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"signal_lr_lnpdf")
 		self.zero_lag_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"zero_lag_lr_lnpdf")
 		self.segments = segmentsUtils.from_range_strings(ligolw_param.get_pyvalue(xml, u"segments").split(","), float)
+		self.template_ids = frozenset(map(int, ligolw_param.get_pyvalue(xml, u"template_ids").split(",")))
 		return self
 
 	def to_xml(self, name):
@@ -606,6 +643,7 @@ WHERE
 		xml.appendChild(self.signal_lr_lnpdf.to_xml(u"signal_lr_lnpdf"))
 		xml.appendChild(self.zero_lag_lr_lnpdf.to_xml(u"zero_lag_lr_lnpdf"))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"segments", ",".join(segmentsUtils.to_range_strings(self.segments))))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"template_ids", ",".join("%d" % template_id for template_id in sorted(self.template_ids))))
 		return xml
 
 
@@ -816,7 +854,7 @@ def parse_likelihood_control_doc(xmldoc):
 	return rankingstat, rankingstatpdf
 
 
-def marginalize_pdf_urls(urls, require_ranking_stat, require_ranking_stat_pdf, ignore_missing_files = False, verbose = False):
+def marginalize_pdf_urls(urls, which, ignore_missing_files = False, verbose = False):
 	"""
 	Implements marginalization of PDFs in ranking statistic data files.
 	The marginalization is over the degree of freedom represented by
@@ -824,8 +862,8 @@ def marginalize_pdf_urls(urls, require_ranking_stat, require_ranking_stat_pdf, i
 	and ranking statistic PDFs can be processed, with errors thrown if
 	one or more files is missing the required component.
 	"""
-	rankingstat = None
-	rankingstatpdf = None
+	name = u"gstlal_inspiral_likelihood"
+	data = None
 	for n, url in enumerate(urls, start = 1):
 		#
 		# load input document
@@ -847,27 +885,22 @@ def marginalize_pdf_urls(urls, require_ranking_stat, require_ranking_stat_pdf, i
 			continue
 
 		#
-		# compute weighted sum of ranking data PDFs
+		# extract PDF objects compute weighted sum of ranking data
+		# PDFs
 		#
 
-		this_rankingstat, this_rankingstatpdf = parse_likelihood_control_doc(xmldoc)
+		if which == "RankingStat":
+			if data is None:
+				data = RankingStat.from_xml(xmldoc, name)
+			else:
+				data += RankingStat.from_xml(xmldoc, name)
+		elif which == "RankingStatPDF":
+			if data is None:
+				data = RankingStatPDF.from_xml(xmldoc, name)
+			else:
+				data += RankingStatPDF.from_xml(xmldoc, name)
+		else:
+			raise ValueError("invalid which (%s)" % which)
 		xmldoc.unlink()
 
-		if this_rankingstat is None and require_ranking_stat:
-			raise ValueError("\"%s\" contains no parameter PDF data" % url)
-		if this_rankingstatpdf is None and require_ranking_stat_pdf:
-			raise ValueError("\"%s\" contains no ranking statistic PDF data" % url)
-
-		if rankingstat is None:
-			rankingstat = this_rankingstat
-		elif this_rankingstat is not None:
-			rankingstat += this_rankingstat
-		if rankingstatpdf is None:
-			rankingstatpdf = this_rankingstatpdf
-		elif this_rankingstatpdf is not None:
-			rankingstatpdf += this_rankingstatpdf
-
-	if rankingstat is None and rankingstatpdf is None:
-		raise ValueError("no data loaded from input documents")
-
-	return rankingstat, rankingstatpdf
+	return data

@@ -68,11 +68,13 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	# SNR, \chi^2 binning definition
 	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280)))
 
-	def __init__(self, instruments, delta_t, min_instruments = 2):
+	def __init__(self, template_ids, instruments, delta_t, min_instruments = 2):
 		#
 		# check input
 		#
 
+		if template_ids is not None and not template_ids:
+			raise ValueError("template_ids cannot be empty")
 		if min_instruments < 1:
 			raise ValueError("min_instruments=%d must be >= 1" % min_instruments)
 		if min_instruments > len(instruments):
@@ -84,6 +86,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		# initialize
 		#
 
+		self.template_ids = frozenset(template_ids) if template_ids is not None else template_ids
 		self.instruments = frozenset(instruments)
 		self.min_instruments = min_instruments
 		self.delta_t = delta_t
@@ -95,12 +98,21 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	def __iadd__(self, other):
 		if type(other) != type(self):
 			raise TypeError(other)
+		# template_id set mismatch is allowed in the special case
+		# that one or the other is None to make it possible to
+		# construct generic seed objects providing initialization
+		# data for the ranking statistics.
+		if self.template_ids is not None and other.template_ids is not None and self.template_ids != other.template_ids:
+			raise ValueError("incompatible template IDs")
 		if self.instruments != other.instruments:
 			raise ValueError("incompatible instrument sets")
 		if self.min_instruments != other.min_instruments:
 			raise ValueError("incompatible minimum number of instruments")
 		if self.delta_t != other.delta_t:
 			raise ValueError("incompatible delta_t coincidence thresholds")
+
+		if self.template_ids is None and other.template_ids is not None:
+			self.template_ids = frozenset(other.template_ids)
 
 		for key, lnpdf in self.densities.items():
 			lnpdf += other.densities[key]
@@ -112,10 +124,16 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		return self
 
 	def increment(self, event):
+		# this test is intended to fail if .template_ids is None:
+		# must not collect trigger statistics unless we can verify
+		# that they are for the correct templates.
+		# FIXME:  use a proper ID column when one is available
+		if event.Gamma0 not in self.template_ids:
+			raise ValueError("event from wrong template")
 		self.densities["%s_snr_chi" % event.ifo].count[event.snr, event.chisq / event.snr**2.] += 1.0
 
 	def copy(self):
-		new = type(self)(self.instruments, self.delta_t, self.min_instruments)
+		new = type(self)(self.template_ids, self.instruments, self.delta_t, self.min_instruments)
 		for key, lnpdf in self.densities.items():
 			new.densities[key] = lnpdf.copy()
 		return new
@@ -179,6 +197,10 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 	def to_xml(self, name):
 		xml = super(LnLRDensity, self).to_xml(name)
+		# None is mapped to an empty string
+		# FIXME:  glue can now encode None-valued Params, but we
+		# don't rely on that mechanism.  switch to it
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"template_ids", ",".join("%d" % template_id for template_id in sorted(self.template_ids if self.template_ids else []))))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(self.instruments)))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"delta_t", self.delta_t))
@@ -193,6 +215,12 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	def from_xml(cls, xml, name):
 		xml = cls.get_xml_root(xml, name)
 		self = cls(
+			# an empty string is assumed to mean None
+			# FIXME:  remove or "" after glue is upgraded
+			# FIXME:  glue can now encode None-valued Params,
+			# but we don't rely on that mechanism.  switch to
+			# it
+			template_ids = frozenset(int(i) for i in (ligolw_param.get_pyvalue(xml, u"template_ids") or "").split(",") if i) or None,
 			instruments = lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(xml, u"instruments")),
 			delta_t = ligolw_param.get_pyvalue(xml, u"delta_t"),
 			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments")
@@ -217,8 +245,8 @@ class LnSignalDensity(LnLRDensity):
 	SNRPDF = inspiral_extrinsics.SNRPDF.load()
 	assert SNRPDF.snr_cutoff == LnLRDensity.snr_min
 
-	def __init__(self, instruments, delta_t, min_instruments = 2):
-		super(LnSignalDensity, self).__init__(instruments, delta_t, min_instruments = min_instruments)
+	def __init__(self, *args, **kwargs):
+		super(LnSignalDensity, self).__init__(*args, **kwargs)
 
 		# install SNR, chi^2 PDF (one for all instruments)
 		self.densities = {
@@ -227,7 +255,7 @@ class LnSignalDensity(LnLRDensity):
 
 		# record of horizon distances for all instruments in the
 		# network
-		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in instruments)
+		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in self.instruments)
 
 	def __call__(self, segments, snrs, phase, dt, **kwargs):
 		assert frozenset(segments) == self.instruments
@@ -503,12 +531,12 @@ class DatalessLnSignalDensity(LnSignalDensity):
 
 
 class LnNoiseDensity(LnLRDensity):
-	def __init__(self, instruments, delta_t, min_instruments = 2):
-		super(LnNoiseDensity, self).__init__(instruments, delta_t, min_instruments = min_instruments)
+	def __init__(self, *args, **kwargs):
+		super(LnNoiseDensity, self).__init__(*args, **kwargs)
 
 		# record of trigger counts vs time for all instruments in
 		# the network
-		self.triggerrates = trigger_rate.triggerrates((instrument, trigger_rate.ratebinlist()) for instrument in instruments)
+		self.triggerrates = trigger_rate.triggerrates((instrument, trigger_rate.ratebinlist()) for instrument in self.instruments)
 		# point this to a LnLRDensity object containing the
 		# zero-lag densities to mix zero-lag into the model.
 		self.lnzerolagdensity = None
@@ -523,15 +551,10 @@ class LnNoiseDensity(LnLRDensity):
 		# algebraic geometry code for the probability
 		# calculations).
 		self.coinc_rates = snglcoinc.CoincRates(
-			instruments = instruments,
-			delta_t = delta_t,
-			min_instruments = min_instruments
+			instruments = self.instruments,
+			delta_t = self.delta_t,
+			min_instruments = self.min_instruments
 		)
-
-		# FIXME: we need to know the number of templates.  we
-		# currently guess this in the .finish() method.  in the
-		# future get this from the template bank
-		self.num_templates = None
 
 	@property
 	def segmentlists(self):
@@ -555,7 +578,7 @@ class LnNoiseDensity(LnLRDensity):
 		triggers_per_second_per_template = {}
 		for instrument, seg in segments.items():
 			try:
-				triggers_per_second_per_template[instrument] = self.triggerrates[instrument].density_at(seg[1]) / self.num_templates
+				triggers_per_second_per_template[instrument] = self.triggerrates[instrument].density_at(seg[1]) / len(self.template_ids)
 			except IndexError:
 				# no rate data at segment end-time =
 				# instrument was off
@@ -572,7 +595,7 @@ class LnNoiseDensity(LnLRDensity):
 		# have their ranking statistics compared meaningfully to
 		# the values assigned to candidates collected earlier, when
 		# the total number of candidates was smaller.
-		lnP = math.log(sum(self.coinc_rates.strict_coinc_rates(**triggers_per_second_per_template).values()) * self.num_templates)
+		lnP = math.log(sum(self.coinc_rates.strict_coinc_rates(**triggers_per_second_per_template).values()) * len(self.template_ids))
 
 		# P(instruments | t, noise)
 		lnP += self.coinc_rates.lnP_instruments(**triggers_per_second_per_template)[frozenset(snrs)]
@@ -592,8 +615,6 @@ class LnNoiseDensity(LnLRDensity):
 	def copy(self):
 		new = super(LnNoiseDensity, self).copy()
 		new.triggerrates = self.triggerrates.copy()
-		# in case it's been computed already
-		new.num_templates = self.num_templates
 		# NOTE:  lnzerolagdensity in the copy is reset to None by
 		# this operation.  it is left as an exercise to the calling
 		# code to re-connect it to the appropriate object if
@@ -611,13 +632,6 @@ class LnNoiseDensity(LnLRDensity):
 			# same as parent class, but with .lnzerolagdensity
 			# added
 			self.interps = dict((key, (pdf + self.lnzerolagdensity.densities[key]).mkinterp()) for key, pdf in self.densities.items())
-
-	def finish(self):
-		super(LnNoiseDensity, self).finish()
-		# guess the number of templates assuming 1 trigger per template
-		# per second.  FIXME:  don't do this, see .__init__()
-		triggers_per_template_second = 1.0
-		self.num_templates = int(round(sum(triggers_per_second / triggers_per_template_second for triggers_per_second in self.triggerrates.densities.values()) / len(self.triggerrates)))
 
 	def add_noise_model(self, number_of_events = 10000, prefactors_range = (0.5, 20.), df = 40, inv_snr_pow = 2.):
 		#
@@ -656,9 +670,14 @@ class LnNoiseDensity(LnLRDensity):
 		noise candidates expected for each instrument
 		combination.
 		"""
-		return dict((instruments, count * self.num_templates) for instruments, count in self.coinc_rates.marginalized_strict_coinc_counts(
+		# assumes the trigger rate is uniformly distributed among
+		# the templates and uniform in live time, calculates
+		# coincidence rate assuming template exact-match
+		# coincidence is required, then multiplies by the template
+		# count to get total coincidence rate.
+		return dict((instruments, count * len(self.template_ids)) for instruments, count in self.coinc_rates.marginalized_strict_coinc_counts(
 			self.triggerrates.segmentlistdict(),
-			**dict((instrument, rate / self.num_templates) for instrument, rate in self.triggerrates.densities.items())
+			**dict((instrument, rate / len(self.template_ids)) for instrument, rate in self.triggerrates.densities.items())
 		).items())
 
 	def random_params(self):
@@ -770,8 +789,6 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 
 	def __init__(self, *args, **kwargs):
 		super(DatalessLnNoiseDensity, self).__init__(*args, **kwargs)
-		# FIXME:  need to hack the triggerrate attribute
-		self.num_templates = 1000
 
 	def random_params(self):
 		# won't work

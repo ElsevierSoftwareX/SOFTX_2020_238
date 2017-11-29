@@ -22,6 +22,7 @@
 # ### Command line interface
 #
 #	+ `--ignore-missing`: Ignore and skip missing input documents.
+#	+ `--marginalize` {ranking-stat|ranking-stat-pdf}: Set which set of PDFs to marginalize, the ranking statistics themselves, or the distributions of ranking statistic values (default: ranking-stat).
 #	+ `--output` [filename]: Set the output file name (default = write to stdout).
 #	+ `--likelihood-cache` [filename]: Set the cache file name from which to read likelihood files
 #	+ `--verbose`: Be verbose.
@@ -68,13 +69,15 @@ def parse_command_line():
 	parser = OptionParser(
 	)
 	parser.add_option("--ignore-missing", action = "store_true", help = "Ignore and skip missing input documents.")
-	parser.add_option("--require-ranking-stat", action = "store_true", help = "Require input documents to contain ranking statistic definition data (default = data is optional).")
-	parser.add_option("--require-ranking-stat-pdf", action = "store_true", help = "Require input documents to contain ranking statistic PDF data (default = data is optional).")
+	parser.add_option("--marginalize", metavar = "{ranking-stat|ranking-stat-pdf}", default = "ranking-stat", help = "Set which set of PDFs to marginalize, the ranking statistics themselves, or the distributions of ranking statistic values (default: ranking-stat).")
 	parser.add_option("-o", "--output", metavar = "filename", help = "Set the output file name (default = write to stdout).")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Set the cache file name from which to read likelihood files.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 
 	options, urls = parser.parse_args()
+
+	if options.marginalize not in ("ranking-stat", "ranking-stat-pdf"):
+		raise ValueError("--marginalize must be one of 'ranking-stat' or 'ranking-stat-pdf'")
 
 	if options.likelihood_cache:
 		urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]
@@ -120,14 +123,12 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_marginaliz
 #
 
 
-rankingstat, rankingstatpdf = far.marginalize_pdf_urls(
+marginalized = far.marginalize_pdf_urls(
 	urls,
-	require_ranking_stat = options.require_ranking_stat,
-	require_ranking_stat_pdf = options.require_ranking_stat_pdf,
+	which = "RankingStat" if options.marginalize == "ranking-stat" else "RankingStatPDF",
 	ignore_missing_files = options.ignore_missing,
 	verbose = options.verbose
 )
-process.instruments = rankingstat.instruments
 
 
 #
@@ -135,6 +136,10 @@ process.instruments = rankingstat.instruments
 #
 
 
-far.gen_likelihood_control_doc(xmldoc, rankingstat, rankingstatpdf)
+if options.marginalize == "ranking-stat":
+	process.instruments = marginalized.instruments
+	far.gen_likelihood_control_doc(xmldoc, marginalized, None)
+else:
+	far.gen_likelihood_control_doc(xmldoc, None, marginalized)
 ligolw_process.set_process_end_time(process)
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

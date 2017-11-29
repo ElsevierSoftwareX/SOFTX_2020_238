@@ -93,7 +93,6 @@ options, filenames = parse_command_line()
 #
 
 
-#rankingstat, rankingstatpdf, _ = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = False, verbose = options.verbose)
 rankingstat = far.RankingStat(instruments = frozenset(("H1",)), min_instruments = 1)
 
 

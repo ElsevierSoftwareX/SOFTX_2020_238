@@ -106,7 +106,7 @@ options, urls, paramdict = parse_command_line()
 #
 
 
-rankingstat, _ = far.marginalize_pdf_urls(urls, require_ranking_stat = True, require_ranking_stat_pdf = False, verbose = options.verbose)
+rankingstat = far.marginalize_pdf_urls(urls, "RankingStat", verbose = options.verbose)
 
 
 #

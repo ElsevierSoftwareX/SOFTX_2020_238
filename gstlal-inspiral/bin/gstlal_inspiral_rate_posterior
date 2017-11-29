@@ -137,7 +137,7 @@ def parse_command_line():
 def load_ranking_data(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
 	if not filenames:
 		raise ValueError("no likelihood files!")
-	_, rankingstatpdf = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = True, verbose = verbose)
+	rankingstatpdf = far.marginalize_pdf_urls(filenames, "RankingStatPDF", verbose = verbose)
 	# affect the zeroing of the PDFs below threshold by hacking the
 	# histograms.  do the indexing ourselves to not 0 the bin @
 	# threshold
