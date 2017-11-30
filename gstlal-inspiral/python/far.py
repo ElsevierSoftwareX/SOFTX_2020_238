@@ -353,9 +353,9 @@ class RankingStatPDF(object):
 		# initialize binnings
 		#
 
-		self.noise_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 3000),)))
-		self.signal_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 3000),)))
-		self.zero_lag_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 3000),)))
+		self.noise_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 6000),)))
+		self.signal_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 6000),)))
+		self.zero_lag_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 6000),)))
 		self.segments = segmentsUtils.vote(rankingstat.segmentlists.values(), rankingstat.min_instruments)
 		if rankingstat.template_ids is None:
 			raise ValueError("cannot be initialized from a RankingStat that is not for a specific set of templates")
