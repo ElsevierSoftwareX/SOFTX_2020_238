@@ -635,7 +635,7 @@ class FAPFAR(object):
 		# get noise model ranking stat values and event counts from
 		# bins
 		threshold_index = rankingstatpdf.noise_lr_lnpdf.bins[0][rate_normalization_lr_threshold]
-		ranks = rankingstatpdf.noise_lr_lnpdf.bins[0].upper()[threshold_index:]
+		ranks = rankingstatpdf.noise_lr_lnpdf.bins[0].lower()[threshold_index:]
 		counts = rankingstatpdf.noise_lr_lnpdf.array[threshold_index:]
 		assert not numpy.isnan(counts).any(), "background log likelihood ratio rates contain NaNs"
 		assert (counts >= 0.).all(), "background log likelihood ratio rates contain negative values"
@@ -652,11 +652,6 @@ class FAPFAR(object):
 		# threshold, in order for FAR(threshold) * livetime to
 		# equal the actual observed number of candidates.
 		ccdf = gstlalstats.poisson_p_not_0(ccdf)
-
-		# interpolator won't accept infinite co-ordinates so need
-		# to remove the last bin
-		ranks = ranks[:-1]
-		ccdf = ccdf[:-1]
 
 		# safety checks
 		assert not numpy.isnan(ranks).any(), "log likelihood ratio co-ordinates contain NaNs"
