@@ -563,15 +563,15 @@ class LnNoiseDensity(LnLRDensity):
 		# sanity check rates
 		assert all(triggers_per_second_per_template[instrument] for instrument in snrs), "impossible candidate in %s at %s when rates were %s triggers/s/template" % (", ".join(sorted(snrs)), ", ".join("%s s in %s" % (str(seg[1]), instrument) for instrument, seg in sorted(segments.items())), str(triggers_per_second_per_template))
 
-		# P(t | noise) = (candidates per unit time @ t) / livetime.
-		# by not normalizing by the livetime the return value can
-		# only ever be proportional to the probability density, but
-		# we avoid the problem of the ranking statistic definition
-		# changing on-the-fly while running online, allowing
-		# candidates collected later to have their ranking
-		# statistics compared meaningfully to the values assigned
-		# to candidates collected earlier, when the total livetime
-		# was smaller.
+		# P(t | noise) = (candidates per unit time @ t) / total
+		# candidates.  by not normalizing by the total candidates
+		# the return value can only ever be proportional to the
+		# probability density, but we avoid the problem of the
+		# ranking statistic definition changing on-the-fly while
+		# running online, allowing candidates collected later to
+		# have their ranking statistics compared meaningfully to
+		# the values assigned to candidates collected earlier, when
+		# the total number of candidates was smaller.
 		lnP = math.log(sum(self.coinc_rates.strict_coinc_rates(**triggers_per_second_per_template).values()) * self.num_templates)
 
 		# P(instruments | t, noise)
