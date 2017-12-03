@@ -29,7 +29,6 @@
 #	+ `--output-dir` [path]: Write output to this directory (default = ".").
 #	+ `--output-format` [extension]: Select output format by setting the filename extension (default = ".png").
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
-#	+ `--threshold` [log likelihood ratio]: When plotting ranking statistic PDFs and CCDFs, discard everything below this threshold and renormalize accordingly (default = plot PDFs and CCDFs as found).
 #	+ `--add-zerolag-to-background`: Add zerolag events to background before populating coincident parameter PDF histograms.
 #	+ `--user-tag` [tag]: Set the adjustable component of the description fields in the output filenames (default = "ALL").
 #	+ `--plot-snr-snr-pdfs`: Plot the full cache of snr-snr-pdfs.
@@ -148,7 +147,6 @@ def parse_command_line():
 	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Write output to this directory (default = \".\").")
 	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by setting the filename extension (default = \".png\").")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
-	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "When plotting ranking statistic PDFs and CCDFs, discard everything below this threshold and renormalize accordingly (default = plot PDFs and CCDFs as found).")
 	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms.")
 	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the adjustable component of the description fields in the output filenames (default = \"ALL\").")
 	parser.add_option("--plot-snr-snr-pdfs", action = "store_true", help = "Plot the full cache of snr-snr-pdfs.")
@@ -181,7 +179,7 @@ def parse_command_line():
 #
 
 
-def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
+def load_distributions(filenames, verbose = False):
 	rankingstat, rankingstatpdf = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = False, verbose = verbose)
 	seg = None
 	if rankingstat is not None:
@@ -199,7 +197,7 @@ def load_distributions(filenames, ln_likelihood_ratio_threshold = None, verbose 
 	return rankingstat, rankingstatpdf, (seg if seg is not None else (0, 0))
 
 
-def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
+def load_search_results(filenames, tmp_path = None, verbose = False):
 	timeslide_ln_lr = []
 	zerolag_ln_lr = []
 	timeslide_sngls = []
@@ -251,10 +249,9 @@ FROM
 	)
 WHERE
 	coinc_event.coinc_def_id == ?
-	AND (? ISNULL OR coinc_event.likelihood >= ?)
 ORDER BY
 	coinc_event_map.coinc_event_id
-		""", (definer_id, ln_likelihood_ratio_threshold, ln_likelihood_ratio_threshold)), lambda row: row[0]):
+		""", (definer_id,)), lambda row: row[0]):
 			rows = list(rows)
 			is_timeslide = rows[0][3]
 			# {instrument: (snr, chisq)} dictionary
@@ -298,11 +295,11 @@ options, filenames = parse_command_line()
 #
 
 
-rankingstat, rankingstatpdf, seg = load_distributions(filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
+rankingstat, rankingstatpdf, seg = load_distributions(filenames, verbose = options.verbose)
 
 
 if options.database:
-	timeslide_ln_lr, zerolag_ln_lr, timeslide_sngls, zerolag_sngls = load_search_results(options.database, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+	timeslide_ln_lr, zerolag_ln_lr, timeslide_sngls, zerolag_sngls = load_search_results(options.database, tmp_path = options.tmp_space, verbose = options.verbose)
 	if options.scatter_log_lambdas is not None:
 		sngls = [sngl for sngl in timeslide_sngls + zerolag_sngls if sngl.ln_likelihood_ratio in options.scatter_log_lambdas]
 	else:
