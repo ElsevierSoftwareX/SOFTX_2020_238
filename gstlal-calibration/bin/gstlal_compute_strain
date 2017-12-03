@@ -351,6 +351,15 @@ compute_calib_factors_complex_caps = "audio/x-raw, format=Z128LE, rate=%d, chann
 integration_samples = int(options.demodulation_filter_time) * options.compute_factors_sr
 factors_average_samples = int(options.factors_averaging_time) * options.compute_factors_sr
 median_smoothing_samples = int(options.median_smoothing_time) * options.compute_factors_sr
+# if we are calibrating offline using many short jobs in parallel, we want to be able to
+# compute the kappas in time for the first lock stretch. So we will shift the timestamps.
+kappas_delay = 0
+if options.data_source == "frames" and (options.apply_kappatst or options.apply_kappapu or options.apply_kappac or options.update_fcc):
+	kappas_delay += median_smoothing_samples + factors_average_samples + integration_samples
+	if options.update_fcc:
+		 kappas_delay += int(options.fcc_averaging_time) * options.compute_factors_sr
+# To keep the adder happy, we need to throw away any kappas with timestamps before the start-of-stream
+kappas_chop_length = int(1000000000 * kappas_delay / options.compute_factors_sr) # in nanoseconds
 
 # Set up string for the channels suffix and prefix as provided by the user
 if options.chan_suffix is not None:
@@ -709,12 +718,12 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 	derrtee = pipeparts.mktee(pipeline, darm_err)
 
 	# demodulate the PCAL channel and apply the PCAL correction factor at the DARM actuation line frequency
-	pcal_at_darm_act_freq = calibration_parts.demodulate(pipeline, pcaltee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
+	pcal_at_darm_act_freq = calibration_parts.demodulate(pipeline, pcaltee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length, pcal_corr_at_darm_act_freq_real, pcal_corr_at_darm_act_freq_imag)
 	if not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
 		pcal_at_darm_act_freq = pipeparts.mktee(pipeline, pcal_at_darm_act_freq)
 
 	# demodulate DARM_ERR at the DARM actuation line frequency
-	derr_at_darm_act_freq = calibration_parts.demodulate(pipeline, derrtee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+	derr_at_darm_act_freq = calibration_parts.demodulate(pipeline, derrtee, darm_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length)
 	if options.dewhitening:
 		# dewhiten DARM_ERR at the DARM actuation line frequency
 		derr_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_darm_act_freq, derr_dewhiten_at_darm_act_freq_real, derr_dewhiten_at_darm_act_freq_imag)
@@ -722,10 +731,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 		derr_at_darm_act_freq = pipeparts.mktee(pipeline, derr_at_darm_act_freq)
 
 	# demodulate the TST excitation channel at the ESD actuation line frequency
-	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length)
 
 	# demodulate DARM_ERR at the ESD actuation line frequency
-	derr_at_esd_act_freq = calibration_parts.demodulate(pipeline, derrtee, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+	derr_at_esd_act_freq = calibration_parts.demodulate(pipeline, derrtee, esd_act_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length)
 	if options.dewhitening:
 		# dewhiten DARM_ERR at the ESD actuation line frequency
 		derr_at_esd_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_esd_act_freq, derr_dewhiten_at_esd_act_freq_real, derr_dewhiten_at_esd_act_freq_imag)
@@ -745,11 +754,11 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 
 		if not options.no_coherence:
 			# Gate kappa_tst with the coherence of the PCALY_line1 line
-			ktst_gated = calibration_parts.mkgate(pipeline, ktst, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+			ktst_gated = calibration_parts.mkgate(pipeline, ktst, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 			# Gate kappa_tst with the coherence of the suspension line
-			ktst_gated = calibration_parts.mkgate(pipeline, ktst_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+			ktst_gated = calibration_parts.mkgate(pipeline, ktst_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 			# Gate kappa_tst with the coherence of the DARM line
-			ktst_gated = calibration_parts.mkgate(pipeline, ktst_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+			ktst_gated = calibration_parts.mkgate(pipeline, ktst_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 
 			if not options.no_dq_vector:
 				ktst_gated = pipeparts.mktee(pipeline, ktst_gated)
@@ -771,10 +780,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 # If we're also computing \kappa_c, f_cc, or \kappa_pu, keep going
 if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not options.no_srcQ or not options.no_fs:
 	# demodulate excitation channel at PU actuation line frequency
-	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length)
 
 	# demodulate DARM_ERR at PU actuation line frequency
-	derr_at_pu_act_freq = calibration_parts.demodulate(pipeline, derrtee, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+	derr_at_pu_act_freq = calibration_parts.demodulate(pipeline, derrtee, pu_act_esd_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length)
 	if options.dewhitening:
 		# dewhiten DARM_ERR at the PU actuation line frequency
 		derr_at_pu_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_pu_act_freq, derr_dewhiten_at_pu_act_freq_real, derr_dewhiten_at_pu_act_freq_imag)
@@ -802,11 +811,11 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 		if not options.no_coherence:
 			# Gate kappa_pu with the coherence of the DARM line
-			kpu_gated = calibration_parts.mkgate(pipeline, kpu, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+			kpu_gated = calibration_parts.mkgate(pipeline, kpu, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 			# Gate kappa_pu with the coherence of the PCALY_line1 line
-			kpu_gated = calibration_parts.mkgate(pipeline, kpu_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+			kpu_gated = calibration_parts.mkgate(pipeline, kpu_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 			# Gate kappa_pu with the coherence of the suspension coherence
-			kpu_gated = calibration_parts.mkgate(pipeline, kpu_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+			kpu_gated = calibration_parts.mkgate(pipeline, kpu_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 
 			if not options.no_dq_vector:
 				kpu_gated = pipeparts.mktee(pipeline, kpu_gated)
@@ -828,10 +837,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 	# Finally, compute \kappa_c and f_cc
 	if not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
 		# demodulate PCAL channel and apply the PCAL correction factor at optical gain and f_cc line frequency
-		pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
+		pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length, pcal_corr_at_opt_gain_fcc_freq_real, pcal_corr_at_opt_gain_fcc_freq_imag)
 
 		# demodulate DARM_ERR at optical gain and f_cc line frequency
-		derr_at_opt_gain_freq = calibration_parts.demodulate(pipeline, derrtee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+		derr_at_opt_gain_freq = calibration_parts.demodulate(pipeline, derrtee, opt_gain_fcc_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length)
 		if options.dewhitening:
 			# dewhiten DARM_ERR at optical gain and f_cc line frequency
 			derr_at_opt_gain_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_opt_gain_freq, derr_dewhiten_at_opt_gain_fcc_freq_real, derr_dewhiten_at_opt_gain_fcc_freq_imag)
@@ -863,10 +872,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 			if not options.no_coherence:
 				# Gate kappa_c with all four of the calibration lines
-				kc_gated = calibration_parts.mkgate(pipeline, kc, pcaly_line2_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				kc_gated = calibration_parts.mkgate(pipeline, kc_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				kc_gated = calibration_parts.mkgate(pipeline, kc_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				kc_gated = calibration_parts.mkgate(pipeline, kc_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+				kc_gated = calibration_parts.mkgate(pipeline, kc, pcaly_line2_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				kc_gated = calibration_parts.mkgate(pipeline, kc_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				kc_gated = calibration_parts.mkgate(pipeline, kc_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				kc_gated = calibration_parts.mkgate(pipeline, kc_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 
 				if not options.no_dq_vector:
 					kc_gated = pipeparts.mktee(pipeline, kc_gated)
@@ -891,10 +900,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 			if not options.no_coherence:
 				# Gate f_cc with all four of the calibration lines
-				fcc_gated = calibration_parts.mkgate(pipeline, fcc, pcaly_line2_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				fcc_gated = calibration_parts.mkgate(pipeline, fcc_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				fcc_gated = calibration_parts.mkgate(pipeline, fcc_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				fcc_gated = calibration_parts.mkgate(pipeline, fcc_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+				fcc_gated = calibration_parts.mkgate(pipeline, fcc, pcaly_line2_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				fcc_gated = calibration_parts.mkgate(pipeline, fcc_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				fcc_gated = calibration_parts.mkgate(pipeline, fcc_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				fcc_gated = calibration_parts.mkgate(pipeline, fcc_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 
 				if not options.no_dq_vector:
 					fcc_gated = pipeparts.mktee(pipeline, fcc_gated)
@@ -915,10 +924,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 	# compute f_s and Q
 	if not options.no_fs or not options.no_srcQ:
 		# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
-		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
+		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag)
 
 		# demodulate DARM_ERR at SRC detuning line frequency
-		derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples)
+		derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, compute_calib_factors_complex_caps, integration_samples, kappas_delay, kappas_chop_length)
 
 		# Compute the factor Xi which will be used for the f_s and src_Q calculations
 		if not options.factors_from_filters_file:
@@ -948,10 +957,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 			if not options.no_coherence:
 				# Gate f_s with all four of the calibration lines
-				fs_gated = calibration_parts.mkgate(pipeline, fs, pcaly_line2_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				fs_gated = calibration_parts.mkgate(pipeline, fs_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				fs_gated = calibration_parts.mkgate(pipeline, fs_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				fs_gated = calibration_parts.mkgate(pipeline, fs_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+				fs_gated = calibration_parts.mkgate(pipeline, fs, pcaly_line2_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				fs_gated = calibration_parts.mkgate(pipeline, fs_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				fs_gated = calibration_parts.mkgate(pipeline, fs_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				fs_gated = calibration_parts.mkgate(pipeline, fs_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 
 				if not options.no_dq_vector:
 					fs_gated = pipeparts.mktee(pipeline, fs_gated)
@@ -978,10 +987,10 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 			if not options.no_coherence:
 				# Gate SRC_Q with all four of the calibration lines
-				srcQ_inv_gated = calibration_parts.mkgate(pipeline, srcQ_inv, pcaly_line2_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				srcQ_inv_gated = calibration_parts.mkgate(pipeline, srcQ_inv_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				srcQ_inv_gated = calibration_parts.mkgate(pipeline, srcQ_inv_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
-				srcQ_inv_gated = calibration_parts.mkgate(pipeline, srcQ_inv_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = -integration_samples, invert_control = True)
+				srcQ_inv_gated = calibration_parts.mkgate(pipeline, srcQ_inv, pcaly_line2_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				srcQ_inv_gated = calibration_parts.mkgate(pipeline, srcQ_inv_gated, darm_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				srcQ_inv_gated = calibration_parts.mkgate(pipeline, srcQ_inv_gated, pcaly_line1_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
+				srcQ_inv_gated = calibration_parts.mkgate(pipeline, srcQ_inv_gated, sus_coh, options.coherence_uncertainty_threshold, short_queue, long_queue, attack_length = kappas_delay - integration_samples, invert_control = True)
 
 				if not options.no_dq_vector:
 					srcQ_inv_gated = pipeparts.mktee(pipeline, srcQ_inv_gated)
@@ -1285,37 +1294,37 @@ if not options.no_dq_vector:
 	# KAPPATST BITS BRANCH
 	#
 	if not options.no_kappatst:
-		ktstSmoothInRange, ktstMedianUncorrupt = calibration_parts.compute_kappa_bits(pipeline, smooth_ktstRtee, smooth_ktstItee, smooth_ktstRdq, smooth_ktstIdq, options.expected_kappatst_real, options.expected_kappatst_imag, options.kappatst_real_ok_var, options.kappatst_imag_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, long_queue, short_queue, status_out_smooth = 2048, status_out_median = 4096, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		ktstSmoothInRange, ktstMedianUncorrupt = calibration_parts.compute_kappa_bits(pipeline, smooth_ktstRtee, smooth_ktstItee, smooth_ktstRdq, smooth_ktstIdq, options.expected_kappatst_real, options.expected_kappatst_imag, options.kappatst_real_ok_var, options.kappatst_imag_ok_var, int(median_smoothing_samples / 2) + factors_average_samples, long_queue, short_queue, status_out_smooth = 2048, status_out_median = 4096, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# KAPPAPU BITS BRANCH
 	#
 	if not options.no_kappapu:
-		kpuSmoothInRange, kpuMedianUncorrupt = calibration_parts.compute_kappa_bits(pipeline, smooth_kpuRtee, smooth_kpuItee, smooth_kpuRdq, smooth_kpuIdq, options.expected_kappapu_real, options.expected_kappapu_imag, options.kappapu_real_ok_var, options.kappapu_imag_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, long_queue, short_queue, status_out_smooth = 8192, status_out_median = 16384, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		kpuSmoothInRange, kpuMedianUncorrupt = calibration_parts.compute_kappa_bits(pipeline, smooth_kpuRtee, smooth_kpuItee, smooth_kpuRdq, smooth_kpuIdq, options.expected_kappapu_real, options.expected_kappapu_imag, options.kappapu_real_ok_var, options.kappapu_imag_ok_var, int(median_smoothing_samples / 2) + factors_average_samples, long_queue, short_queue, status_out_smooth = 8192, status_out_median = 16384, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# KAPPAC BITS BRANCH
 	#
 	if not options.no_kappac:
-		kcSmoothInRange, kcMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_kctee, smooth_kcdq, options.expected_kappac, options.kappac_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, status_out_smooth = 131072, status_out_median = 262144, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		kcSmoothInRange, kcMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_kctee, smooth_kcdq, options.expected_kappac, options.kappac_ok_var, int(median_smoothing_samples / 2) + factors_average_samples, status_out_smooth = 131072, status_out_median = 262144, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# FCC BITS BRANCH
 	#
 	if not options.no_fcc:
-		fccSmoothInRange, fccMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, smooth_fccdq, fcc_default, options.fcc_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples + options.fcc_averaging_time * options.compute_factors_sr, status_out_smooth = 524288, status_out_median = 1048576, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		fccSmoothInRange, fccMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, smooth_fccdq, fcc_default, options.fcc_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + options.fcc_averaging_time * options.compute_factors_sr, status_out_smooth = 524288, status_out_median = 1048576, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# FS BITS BRANCH
 	#
 	if not options.no_fs:
-		fsSmoothInRange, fsMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, smooth_fsdq, options.expected_fs, options.fs_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, status_out_smooth = 67108864, status_out_median = 134217728, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		fsSmoothInRange, fsMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, smooth_fsdq, options.expected_fs, options.fs_ok_var, int(median_smoothing_samples / 2) + factors_average_samples, status_out_smooth = 67108864, status_out_median = 134217728, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# SRCQ BITS BRANCH
 	#
 	if not options.no_srcQ:
-		srcQSmoothInRange, srcQMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, smooth_srcQdq, options.expected_srcQ, options.srcQ_ok_var, int(median_smoothing_samples / 2) + factors_average_samples + integration_samples, status_out_smooth = 268435456, status_out_median = 536870912, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		srcQSmoothInRange, srcQMedianUncorrupt = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, smooth_srcQdq, options.expected_srcQ, options.srcQ_ok_var, int(median_smoothing_samples / 2) + factors_average_samples, status_out_smooth = 268435456, status_out_median = 536870912, starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# COHERENCE BITS BRANCH

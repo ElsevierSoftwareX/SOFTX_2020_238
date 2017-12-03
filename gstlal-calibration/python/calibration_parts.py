@@ -272,12 +272,14 @@ def split_into_real(pipeline, complex_chan):
 	pipeparts.src_deferred_link(elem, "src_1", imag.get_static_pad("sink"))
 	return real, imag
 
-def demodulate(pipeline, head, freq, td, caps, integration_samples, prefactor_real = 1.0, prefactor_imag = 0.0):
+def demodulate(pipeline, head, freq, td, caps, integration_samples, delay, chop_length, prefactor_real = 1.0, prefactor_imag = 0.0):
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
 	head = mkresample(pipeline, head, 3, True, caps)
-	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td)
+	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td, latency = delay)
+	if chop_length != 0:
+		head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", chop_length = chop_length)
 
 	return head
 

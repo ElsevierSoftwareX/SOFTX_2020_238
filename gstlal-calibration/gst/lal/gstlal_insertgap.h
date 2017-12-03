@@ -82,6 +82,10 @@ struct _GSTLALInsertGap {
 	guint64 discont_time;
 	guint64 empty_bufs;
 
+	/* timestamp bookkeeping */
+
+	GstClockTime t0;
+
 	/* properties */
 
 	gboolean insert_gap;
@@ -92,6 +96,7 @@ struct _GSTLALInsertGap {
 	double replace_value;
 	double *bad_data_intervals;
 	gint array_length;
+	guint64 chop_length;
 	GstClockTime block_duration;
 };
 

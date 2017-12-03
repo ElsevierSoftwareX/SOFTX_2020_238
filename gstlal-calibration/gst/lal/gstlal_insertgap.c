@@ -149,22 +149,26 @@ static gboolean check_data(double complex data, double *bad_data_intervals, gint
 	gint i;
 	if(complex_data){
 		double data_im = cimag(data);
-		if(data_re <= bad_data_intervals[0] || data_re >= bad_data_intervals[array_length - 1] || data_im <= bad_data_intervals[0] || data_im >= bad_data_intervals[array_length - 1])
-			return TRUE;
-		for(i = 1; i < array_length - 1; i += 2) {
-			if((data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1]) || (data_im >= bad_data_intervals[i] && data_im <= bad_data_intervals[i + 1]))
+		if(bad_data_intervals) {
+			if(data_re <= bad_data_intervals[0] || data_re >= bad_data_intervals[array_length - 1] || data_im <= bad_data_intervals[0] || data_im >= bad_data_intervals[array_length - 1])
 				return TRUE;
+			for(i = 1; i < array_length - 1; i += 2) {
+				if((data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1]) || (data_im >= bad_data_intervals[i] && data_im <= bad_data_intervals[i + 1]))
+					return TRUE;
+			}
 		}
 		if(remove_nan && (isnan(data_re) || isnan(data_im)))
 			return TRUE;
 		if(remove_inf && (isinf(data_re) || isinf(data_im)))
 			return TRUE;
 	} else {
-		if(data_re <= bad_data_intervals[0] || data_re >= bad_data_intervals[array_length - 1])
-			return TRUE;
-		for(i = 1; i < array_length - 1; i += 2) {
-			if(data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1])
+		if(bad_data_intervals) {
+			if(data_re <= bad_data_intervals[0] || data_re >= bad_data_intervals[array_length - 1])
 				return TRUE;
+			for(i = 1; i < array_length - 1; i += 2) {
+				if(data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1])
+					return TRUE;
+			}
 		}
 		if(remove_nan && (isnan(data_re)))
 			return TRUE;
@@ -483,6 +487,26 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 	GST_DEBUG_OBJECT(element, "received %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 
+	if(GST_BUFFER_PTS_IS_VALID(sinkbuf)) {
+		/* Set the timestamp of the first output sample) */
+		if(element->t0 == GST_CLOCK_TIME_NONE)
+			element->t0 = GST_BUFFER_PTS(sinkbuf) + element->chop_length;
+
+		/* If we are throwing away any initial data, do it now */
+		if(GST_BUFFER_PTS(sinkbuf) + GST_BUFFER_DURATION(sinkbuf) < element->t0) {
+			gst_buffer_unref(sinkbuf);
+			goto done;
+		} else if(GST_BUFFER_PTS(sinkbuf) < element->t0) {
+			guint64 size_removed = element->unit_size * gst_util_uint64_scale_int_round(element->t0 - GST_BUFFER_PTS(sinkbuf), element->rate, 1000000000);
+			guint64 time_removed = gst_util_uint64_scale_int_round(size_removed / element->unit_size, 1000000000, element->rate);
+			guint64 newsize = element->unit_size * (GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf)) - size_removed;
+			gst_buffer_resize(sinkbuf, size_removed, newsize);
+			GST_BUFFER_OFFSET(sinkbuf) = GST_BUFFER_OFFSET(sinkbuf) + size_removed / element->unit_size;
+			GST_BUFFER_PTS(sinkbuf) = GST_BUFFER_PTS(sinkbuf) + time_removed;
+			GST_BUFFER_DURATION(sinkbuf) = GST_BUFFER_DURATION(sinkbuf) - time_removed;
+		}
+	}
+
 	/* if buffer does not possess valid metadata or is zero length and we are not filling in discontinuities, push gap downstream */
 	if(!(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) || (!element->fill_discont && (GST_BUFFER_DURATION(sinkbuf) == 0 || GST_BUFFER_OFFSET(sinkbuf) == GST_BUFFER_OFFSET_END(sinkbuf)))) {
 		GST_DEBUG_OBJECT(element, "pushing gap buffer at timestamp %lu seconds", (long unsigned) GST_TIME_AS_SECONDS(GST_BUFFER_PTS(sinkbuf)));
@@ -598,7 +622,8 @@ enum property {
 	ARG_FILL_DISCONT,
 	ARG_REPLACE_VALUE,
 	ARG_BAD_DATA_INTERVALS,
-	ARG_BLOCK_DURATION
+	ARG_BLOCK_DURATION,
+	ARG_CHOP_LENGTH
 };
 
 
@@ -632,10 +657,15 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		element->bad_data_intervals = g_malloc(16 * sizeof(double));
 		element->array_length = 1;
 		gstlal_doubles_from_g_value_array(va, element->bad_data_intervals, &element->array_length);
+		if(element->array_length % 2)
+			GST_ERROR_OBJECT(element, "Array length for property bad_data_intervals must be even");
 		break;
 	}
 	case ARG_BLOCK_DURATION:
 		element->block_duration = g_value_get_uint64(value);
+		break;
+	case ARG_CHOP_LENGTH:
+		element->chop_length = g_value_get_uint64(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -676,6 +706,9 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 	case ARG_BLOCK_DURATION:
 		g_value_set_uint64(value, element->block_duration);
+		break;
+	case ARG_CHOP_LENGTH:
+		g_value_set_uint64(value, element->chop_length);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -847,6 +880,18 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_CHOP_LENGTH,
+		g_param_spec_uint64(
+			"chop-length",
+			"Chop length",
+			"Amount of initial data to throw away before producing output data, in nanoseconds.",
+			0, G_MAXUINT64, 0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
 }
 
 
@@ -878,6 +923,9 @@ static void gstlal_insertgap_init(GSTLALInsertGap *element)
 	element->srcpad = pad;
 
 	/* internal data */
+	element->t0 = GST_CLOCK_TIME_NONE;
+	element->bad_data_intervals = NULL;
+	element->array_length = 0;
 	element->rate = 0;
 	element->unit_size = 0;
 	element->last_sinkbuf_ets = 0;
