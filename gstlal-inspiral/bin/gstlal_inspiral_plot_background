@@ -69,6 +69,7 @@ import sys
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue import segmentsUtils
+from glue.text_progress_bar import ProgressBar
 from lal.utils import CacheEntry
 from lalinspiral import thinca
 
@@ -180,21 +181,49 @@ def parse_command_line():
 
 
 def load_distributions(filenames, verbose = False):
-	rankingstat, rankingstatpdf = far.marginalize_pdf_urls(filenames, require_ranking_stat = False, require_ranking_stat_pdf = False, verbose = verbose)
-	seg = None
-	if rankingstat is not None:
+	# RankingStat objects go into a dictionary indexed by the template
+	# bank ID set they are for, with RankinStat objects for the same
+	# templates being summed.  RankingStatPDF objects are summed (and
+	# therefore are required to be fore the same templates).  these
+	# organizational choices reflect the current use cases for this
+	# program
+	rankingstats = {}
+	rankingstatpdf = None
+	for n, filename in enumerate(filenames, 1):
+		if verbose:
+			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+		this_rankingstat, this_rankingstatpdf = far.parse_likelihood_control_doc(far.ligolw_utils.load_filename(filename, verbose = verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+		if this_rankingstat is not None:
+			template_ids = this_rankingstat.template_ids
+			if template_ids in rankingstats:
+				rankingstats[template_ids] += this_rankingstat
+			else:
+				rankingstats[template_ids] = this_rankingstat
+		if this_rankingstatpdf is not None:
+			if rankingstatpdf is None:
+				rankingstatpdf = this_rankingstatpdf
+			else:
+				rankingstatpdf += this_rankingstatpdf
+	progress = ProgressBar(text = "Density estimation", max = len(rankingstats)) if verbose and rankingstats else None
+	for rankingstat in rankingstats.values():
+		if progress is not None:
+			progress.increment()
+		if options.add_zerolag_to_background:
+			rankingstat.denominator.lnzerolagdensity = rankingstat.zerolag
+		rankingstat.finish()
+	del progress
+	# the segment is only used to construct T050017-style filenames, so
+	# just fake one if there's no livetime information
+	seg = (0, 0)
+	if rankingstatpdf is not None:
+		seg = rankingstatpdf.segments.extent()
+	elif rankingstats:
+		rankingstat = rankingstats.values()[0]
 		try:
 			seg = rankingstat.segmentlists.extent_all()
 		except ValueError:
 			pass
-		if options.add_zerolag_to_background:
-			rankingstat.denominator.lnzerolagdensity = rankingstat.zerolag
-		rankingstat.finish()
-	if rankingstatpdf is not None:
-		seg = rankingstatpdf.segments.extent()
-	# the segment is only used to construct T050017-style filenames, so
-	# just fake one if there's no livetime information
-	return rankingstat, rankingstatpdf, (seg if seg is not None else (0, 0))
+	return rankingstats, rankingstatpdf, seg
 
 
 def load_search_results(filenames, tmp_path = None, verbose = False):
@@ -295,7 +324,7 @@ options, filenames = parse_command_line()
 #
 
 
-rankingstat, rankingstatpdf, seg = load_distributions(filenames, verbose = options.verbose)
+rankingstats, rankingstatpdf, seg = load_distributions(filenames, verbose = options.verbose)
 
 
 if options.database:
@@ -313,28 +342,31 @@ else:
 #
 
 
-# SNR and \chi^2
-for instrument in rankingstat.instruments:
-	for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
-		fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, snr_chi_type, options.max_snr, sngls = sngls)
-		if fig is None:
-			continue
-		plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_SNRCHI2" % (options.user_tag, snr_chi_type.upper()), seg, options.output_format, path = options.output_dir)
-		if options.verbose:
-			print >>sys.stderr, "writing %s" % plotname
-		fig.savefig(plotname)
+for bin_index, rankingstat in enumerate(sorted(rankingstats.values(), key = lambda rankingstat: sorted(rankingstat.template_ids))):
+	# SNR and \chi^2
+	for instrument in rankingstat.instruments:
+		for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
+			fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, snr_chi_type, options.max_snr, sngls = sngls)
+			if fig is None:
+				continue
+			plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_%s_SNRCHI2" % (options.user_tag, bin_index, snr_chi_type.upper()), seg, options.output_format, path = options.output_dir)
+			if options.verbose:
+				print >>sys.stderr, "writing %s" % plotname
+			fig.savefig(plotname)
 
-
-# candidate rates
-fig = plotfar.plot_rates(rankingstat)
-plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_RATES" % options.user_tag, seg, options.output_format, path = options.output_dir)
-if options.verbose:
-	print >>sys.stderr, "writing %s" % plotname
-fig.savefig(plotname)
+	# candidate rates
+	fig = plotfar.plot_rates(rankingstat)
+	plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_RATES" % (options.user_tag, bin_index), seg, options.output_format, path = options.output_dir)
+	if options.verbose:
+		print >>sys.stderr, "writing %s" % plotname
+	fig.savefig(plotname)
 
 
 # SNR PDFs
 if options.plot_snr_snr_pdfs:
+	# assume PDFs are identical for all template bank bins, and pick
+	# one set to plot
+	rankingstat = rankingstats.values()[0]
 	for (instruments, horizon_distances) in sorted(rankingstat.numerator.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
 		# they're stored as a frozen set of quantized key/value
 		# pairs, need to unquantize them and get a dictionary back
@@ -349,8 +381,6 @@ if options.plot_snr_snr_pdfs:
 
 # ranking statistic PDFs and CCDFs
 if rankingstatpdf is not None:
-	fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
-
 	for Title, which, NAME in (("Noise", "noise", "NOISE"), ("Signal", "signal", "SIGNAL")):
 		fig = plotfar.plot_likelihood_ratio_pdf(rankingstatpdf, (options.min_log_lambda, options.max_log_lambda), Title, which = which)
 		plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_LIKELIHOOD_RATIO_PDF" % (options.user_tag, NAME), seg, options.output_format, path = options.output_dir)
@@ -358,6 +388,8 @@ if rankingstatpdf is not None:
 			print >>sys.stderr, "writing %s" % plotname
 		fig.savefig(plotname)
 
+if rankingstatpdf is not None and rankingstatpdf.zero_lag_lr_lnpdf.array.any():
+	fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 	if zerolag_ln_lr is not None:
 		xhi = max(zerolag_ln_lr + timeslide_ln_lr)[0]
 		xhi = 5. * math.ceil(xhi / 5.)
