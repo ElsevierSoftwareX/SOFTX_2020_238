@@ -491,6 +491,8 @@ WHERE
 		# histogram
 
 		zl = self.zero_lag_lr_lnpdf.array
+		if not zl.any():
+			raise ValueError("zero-lag counts are all zero")
 		bg = self.noise_lr_lnpdf.array
 		x = self.noise_lr_lnpdf.bins[0].centres()
 		# compute the pre-clustered background's CCDF
@@ -606,6 +608,10 @@ WHERE
 
 class FAPFAR(object):
 	def __init__(self, rankingstatpdf):
+		# input checks
+		if not rankingstatpdf.zero_lag_lr_lnpdf.array.any():
+			raise ValueError("RankingStatPDF's zero-lag counts are all zero")
+
 		# save the livetime
 		self.livetime = float(abs(rankingstatpdf.segments))
 
