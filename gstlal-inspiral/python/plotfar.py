@@ -166,62 +166,52 @@ def plot_rates(rankingstat):
 	axes2 = fig.add_subplot(2, 2, 3)
 	axes3 = fig.add_subplot(2, 2, 4)
 
-	# FIXME: this plot is broken since rewrite
-	return fig
-
 	# singles counts
 	labels = []
 	sizes = []
 	colours = []
-	for instrument in sorted(rankingstat.instruments):
-		count = rankingstat.background_rates["singles"][instrument,]
+	for instrument, count in sorted(rankingstat.denominator.triggerrates.counts.items()):
 		labels.append("%s\n(%d)" % (instrument, count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments((instrument,)))
 	axes0.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes0.set_title("Observed Background Event Counts")
+	axes0.set_title("Trigger Counts")
+
+	# singles rates
+	labels = []
+	sizes = []
+	colours = []
+	for instrument, rate in sorted(rankingstat.denominator.triggerrates.densities.items()):
+		labels.append("%s\n(%g Hz)" % (instrument, rate))
+		sizes.append(rate)
+		colours.append(plotutil.colour_from_instruments((instrument,)))
+	axes1.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
+	axes1.set_title(r"Mean Trigger Rates (per live-time)")
+
+	# live time
+	labels = []
+	sizes = []
+	colours = []
+	seglists = rankingstat.denominator.triggerrates.segmentlistdict()
+	for instruments in sorted(rankingstat.denominator.coinc_rates.all_instrument_combos, key = lambda instruments: sorted(instruments)):
+		livetime = float(abs(seglists.intersection(instruments) - seglists.union(frozenset(seglists) - instruments)))
+		labels.append("%s\n(%g s)" % (", ".join(sorted(instruments)), livetime))
+		sizes.append(livetime)
+		colours.append(plotutil.colour_from_instruments(instruments))
+	axes2.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
+	axes2.set_title("Live-time")
 
 	# projected background counts
 	labels = []
 	sizes = []
 	colours = []
-	for instruments, count in sorted(zip(rankingstat.background_rates["instruments"].bins[0].centres(), rankingstat.background_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
-		if len(instruments) < rankingstat.denominator.min_instruments:
-			assert count == 0
-			continue
-		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
-		sizes.append(count)
-		colours.append(plotutil.colour_from_instruments(instruments))
-	axes1.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes1.set_title("Expected Background Candidate Counts\n(before $\ln \mathcal{L}$ cut)")
-
-	# signal distribution
-	labels = []
-	sizes = []
-	colours = []
-	for instruments, fraction in sorted(zip(rankingstat.injection_pdf["instruments"].bins[0].centres(), rankingstat.injection_pdf["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
-		if len(instruments) < rankingstat.denominator.min_instruments:
-			assert fraction == 0
-			continue
-		labels.append(", ".join(sorted(instruments)))
-		sizes.append(fraction)
-		colours.append(plotutil.colour_from_instruments(instruments))
-	axes2.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes2.set_title(r"Projected Recovered Signal Distribution")
-
-	# observed counts
-	labels = []
-	sizes = []
-	colours = []
-	for instruments, count in sorted(zip(rankingstat.zero_lag_rates["instruments"].bins[0].centres(), rankingstat.zero_lag_rates["instruments"].array), key = lambda (instruments, val): sorted(instruments)):
-		if len(instruments) < rankingstat.denominator.min_instruments:
-			assert count == 0
-			continue
+	for instruments, count in sorted(rankingstat.denominator.candidate_count_model().items(), key = lambda (instruments, count): sorted(instruments)):
 		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments(instruments))
 	axes3.pie(sizes, labels = labels, colors = colours, autopct = "%.3g%%", pctdistance = 0.4, labeldistance = 0.8)
-	axes3.set_title("Observed Candidate Counts\n(after $\ln \mathcal{L}$ cut)")
+	axes3.set_title("Expected Background Candidate Counts\n(before $\ln \mathcal{L}$ cut)")
+
 	fig.tight_layout(pad = .8)
 	return fig
 
