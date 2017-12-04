@@ -330,6 +330,9 @@ class Handler(simplehandler.Handler):
 				for segtype, seglistdict in self.seglistdicts.items():
 					for instrument in seglistdict:
 						self._gatehandler(None, timestamp, (segtype, instrument, "off"))
+			# NOTE:  never return True from the EOS code-path,
+			# so as to not stop the parent class to do
+			# EOS-related stuff
 			return False
 		return False
 
