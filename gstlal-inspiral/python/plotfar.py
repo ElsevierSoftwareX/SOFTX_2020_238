@@ -321,21 +321,25 @@ def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, min_instruments, 
 def plot_likelihood_ratio_pdf(rankingstatpdf, (xlo, xhi), title, which = "noise"):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 
-	extincted = rankingstatpdf.new_with_extinction()
+	if rankingstatpdf.zero_lag_lr_lnpdf.array.any():
+		extincted = rankingstatpdf.new_with_extinction()
+	else:
+		extincted = None
 
 	if which == "noise":
 		lnpdf = rankingstatpdf.noise_lr_lnpdf
-		extinctedlnpdf = extincted.noise_lr_lnpdf
+		extinctedlnpdf = extincted.noise_lr_lnpdf if extincted is not None else None
 		zerolag_lnpdf = rankingstatpdf.zero_lag_lr_lnpdf
 	elif which == "signal":
 		lnpdf = rankingstatpdf.signal_lr_lnpdf
-		extinctedlnpdf = extincted.signal_lr_lnpdf
+		extinctedlnpdf = extincted.signal_lr_lnpdf if extincted is not None else None
 		zerolag_lnpdf = None
 	else:
 		raise ValueError("invalid which (%s)" % which)
 
 	axes.semilogy(lnpdf.bins[0].centres(), numpy.exp(lnpdf.at_centres()), color = "r", label = "%s model without extinction" % title)
-	axes.semilogy(extinctedlnpdf.bins[0].centres(), numpy.exp(extinctedlnpdf.at_centres()), color = "k", label = "%s model with extinction" % title)
+	if extincted is not None:
+		axes.semilogy(extinctedlnpdf.bins[0].centres(), numpy.exp(extinctedlnpdf.at_centres()), color = "k", label = "%s model with extinction" % title)
 	if zerolag_lnpdf is not None:
 		axes.semilogy(zerolag_lnpdf.bins[0].centres(), numpy.exp(zerolag_lnpdf.at_centres()), color = "k", linestyle = "--", label = "Observed candidate density")
 
