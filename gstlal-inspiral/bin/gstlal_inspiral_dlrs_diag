@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017 Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import itertools
+import matplotlib
+matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 600,
+	"savefig.dpi": 600,
+	"text.usetex": True
+})
+from matplotlib import figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from optparse import OptionParser
+
+
+from glue.text_progress_bar import ProgressBar
+from gstlal import far
+from gstlal import plotutil
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by setting the filename extension (default = \".png\").")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+
+	valid_formats = (".png", ".pdf", ".svg")
+	if options.output_format not in valid_formats:
+		raise ValueError("invalid --output-format \"%s\", allowed are %s" % (options.output_format, ", ".join("\"%s\"" % fmt for fmt in valid_formats)))
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# load ranking statistic data, and initialize a matching dataless ranking
+# statistic
+#
+
+
+rankingstat = far.marginalize_pdf_urls(filenames, which = "RankingStat", verbose = options.verbose)
+rankingstat.finish()
+
+datalessrankingstat = far.DatalessRankingStat(
+	template_ids = rankingstat.template_ids,
+	instruments = rankingstat.instruments,
+	min_instruments = rankingstat.min_instruments,
+	delta_t = rankingstat.delta_t
+)
+datalessrankingstat.finish()
+
+
+#
+# generate (ranking stat, dataless ranking stat) samples
+#
+
+n_samples = 100000
+
+if options.verbose:
+	progress = ProgressBar(text = "Sampling", max = n_samples)
+else:
+	progress = None
+
+x = []
+y = []
+for args, kwargs, lnP in itertools.islice(rankingstat.denominator.random_params(), n_samples):
+	x.append(rankingstat(*args, **kwargs))
+	y.append(datalessrankingstat(*args, **kwargs))
+	if progress is not None:
+		progress.increment()
+
+del progress
+
+
+#
+# plot
+#
+
+
+fig = figure.Figure()
+FigureCanvas(fig)
+fig.set_size_inches((8., 8. / plotutil.golden_ratio))
+axes = fig.gca()
+axes.plot(x, y, "k.", markersize = 2.)
+axes.set_xlim(-10, 50)
+axes.set_ylim(-60, 50)
+axes.set_title(r"Dataless vs.\ Data-defined $\ln \mathcal{L}$")
+axes.set_xlabel(r"Data-defined $\ln \mathcal{L}$")
+axes.set_ylabel(r"Dataless $\ln \mathcal{L}$")
+fig.tight_layout(pad = 0.8)
+fig.savefig("dlrs_diag%s" % options.output_format)
