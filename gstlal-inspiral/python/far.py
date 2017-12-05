@@ -490,7 +490,16 @@ WHERE
 		# fitting to the observed zero-lag ranking statistic
 		# histogram
 
-		zl = self.zero_lag_lr_lnpdf.array
+		# some candidates are rejected by the ranking statistic,
+		# causing there to be a spike in the zero-lag density at ln
+		# L = -inf.  if enough candidates get rejected this spike
+		# becomes the mode of the PDF which messes up the mask
+		# constructed below for the fit.  we zero the first 40 bins
+		# here to prevent that from happening (assume density
+		# estimation kernel = 4 bins wide, with 10 sigma impulse
+		# length)
+		zl = self.zero_lag_lr_lnpdf.array.copy()
+		zl[:40] = 0.
 		if not zl.any():
 			raise ValueError("zero-lag counts are all zero")
 		bg = self.noise_lr_lnpdf.array
@@ -615,16 +624,23 @@ class FAPFAR(object):
 		# save the livetime
 		self.livetime = float(abs(rankingstatpdf.segments))
 
-		# set the rate normalization LR threshold to be a little
-		# above the mode of the zero-lag LR distribution.  NOTE:
-		# this is a hack to work around the extinction model's
-		# inability to model the rate of extremly low significance
-		# events.  if the extinction model can ever be made to
-		# model the observed candidate rate at all ranking
-		# statistic values then this threshold nonsense can be
-		# removed.
-		rate_normalization_lr_threshold, = rankingstatpdf.zero_lag_lr_lnpdf.argmax()
-		rate_normalization_lr_threshold += 1.
+		# set the rate normalization LR threshold to be the mode of
+		# the zero-lag LR distribution.  NOTE: this is a hack to
+		# work around the extinction model's inability to model the
+		# rate of extremly low significance events.  if the
+		# extinction model can ever be made to model the observed
+		# candidate rate at all ranking statistic values then this
+		# threshold nonsense can be removed.  NOTE: some candidates
+		# are rejected by the ranking statistic, causing there to
+		# be a spike in the zero-lag density at ln L = -inf.  if
+		# enough candidates get rejected this spike becomes the
+		# mode of the PDF.  .new_with_extinction() above has a hack
+		# to work around this in its noise mode fitting code, which
+		# we need to reproduce here when picking the threshold
+		# above which we believe the noise model to be correct
+		zl = rankingstatpdf.zero_lag_lr_lnpdf.copy()
+		zl.array[:40] = 0.
+		rate_normalization_lr_threshold, = zl.argmax()
 
 		# record trials factor, with safety checks
 		counts = rankingstatpdf.zero_lag_lr_lnpdf.count
