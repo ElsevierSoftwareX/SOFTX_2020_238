@@ -173,7 +173,7 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 				cur_stats = element->stats_1w[0];
 				table->far_l_1w = gen_fap_from_feature((double)table->cohsnr, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 				cur_stats = element->stats_1w[2];
-				table->far_l_1w = gen_fap_from_feature((double)table->cohsnr, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
+				table->far_v_1w = gen_fap_from_feature((double)table->cohsnr, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 				cur_stats = element->stats_1d[1];
 				table->far_h_1d = gen_fap_from_feature((double)table->cohsnr, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->duration * hist_trials);
 				cur_stats = element->stats_1d[0];

@@ -553,7 +553,7 @@ def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, b
 
 	mergestats_nodes = []
 	mergestats_bin_nodes = []
-	mergestats_box_nodes = []
+	mergestats_box_nodes = {}
 	tmp_nodes_round1 = []
 	tmp_nodes_round2 = []
 	# FIXME: hard-coded split stats files to be processed
@@ -642,9 +642,10 @@ def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, b
 			input_files = {"input":stats_name},
 			output_files = {"output":inspiral_pipe.T050017_filename("bankbox%d" % ibox,"SPIIR_stats", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)}
 		)
-		mergestats_box_nodes.append(one_box_merge_node)
+		mergestats_box_nodes.setdefault("bankbox%d" % ibox, []).append(one_box_merge_node)
 
 		#FIXME: remove the tmp stats
+        return mergestats_box_nodes
 
 
 
@@ -674,7 +675,7 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 		output cluster_zerolags_online/bankbox0/H1L1V1-SPIIR_zerolag-boundarystart-boundaryend.xml.gz;..
 	"""
 	cluster_nodes = {}
-	def gen_bankbin_cluster_nodes(ifos, binname, binnodes, extract_name, tagbase):
+	def gen_bankbin_cluster_nodes(ifos, binname, binnodes, extract_name, tagbase, segs_filename = None, vetoes_filename = None, inj_filename = None):
 		nodes = []
 		output_path = "%s/%s" % (tagbase, binname)
 		if not os.path.exists(output_path):
@@ -689,11 +690,15 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 
 		# convert xml cache to sql
 		db = inspiral_pipe.T050017_filename(ifos,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.sqlite', path = output_path)
-
+                extra_inputs = []
+                for filename in (segs_filename, vetoes_filename, inj_filename):
+                    if filename is not None:
+                        extra_inputs.append(filename)
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = binnodes,
 			opts = {"replace":"", 
 				"tmp-space":inspiral_pipe.condor_scratch_space()},
-			input_files = {"input-cache": cache_filename},
+			input_files = {"input-cache": cache_filename,
+                                        "":  extra_inputs},
 			output_files = {"database":db}
 		)
 		nodes.append(sqlitenode)
@@ -718,6 +723,13 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 		return nodes, xmlnode
 
 	output_nodes = {} 
+	cluster_box_nodes = {} 
+	for ifos in segsdict:
+	        cluster_box_nodes[(ifos, None)] = {}
+	        cluster_box_nodes[(ifos, "shift")] = {}
+	        for injections in options.injections:
+		        cluster_box_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
+	
 	# FIXME: hard-coded
 	clusterjob_tagbase = "cluster_zerolags_online"
 	if not os.path.exists(clusterjob_tagbase):
@@ -733,10 +745,11 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 		for ibox, nbin in enumerate(bankbox_list):
 			boxname = "bankbox%d" % ibox
 			ibin_stop = min(ibin_start+nbin, len(output_nodes[(ifos, None)]))
-			nodes, output_node = gen_bankbin_cluster_nodes(ifos, boxname, output_nodes[(ifos, None)][ibin_start:ibin_stop], "extract", clusterjob_tagbase)
+			nodes, output_node = gen_bankbin_cluster_nodes(ifos, boxname, output_nodes[(ifos, None)][ibin_start:ibin_stop], "extract", clusterjob_tagbase, segs_filename = options.frame_segments_file, vetoes_filename = options.vetoes)
 			ibin_start += nbin
 			cluster_nodes.setdefault((ifos, None), []).extend(nodes)
 			output_nodes.setdefault((ifos, None), []).append(output_node)
+                        cluster_box_nodes[(ifos, None)].setdefault("bankbox%d" % ibox, []).append(output_node)
 
 	# FIXME: hard-coded
 	clusterjob_tagbase = "cluster_zerolags_shift"
@@ -753,10 +766,11 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 		for ibox, nbin in enumerate(bankbox_list):
 			boxname = "bankbox%d" % ibox
 			ibin_stop = min(ibin_start+nbin, len(output_nodes[(ifos, "shift")]))
-			nodes, output_node = gen_bankbin_cluster_nodes(ifos, boxname, output_nodes[(ifos, "shift")][ibin_start:ibin_stop], "extract", clusterjob_tagbase)
+			nodes, output_node = gen_bankbin_cluster_nodes(ifos, boxname, output_nodes[(ifos, "shift")][ibin_start:ibin_stop], "extract", clusterjob_tagbase, segs_filename = options.frame_segments_file, vetoes_filename = options.vetoes)
 			ibin_start += nbin
 			cluster_nodes.setdefault((ifos, "shift"), []).extend(nodes)
 			output_nodes.setdefault((ifos, "shift"), []).append(output_node)
+                        cluster_box_nodes[(ifos, "shift")].setdefault("bankbox%d" % ibox, []).append(output_node)
 
 	inj_counter = 0
 	for injections in options.injections:
@@ -777,132 +791,42 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 		        for ibox, nbin in enumerate(bankbox_list):
 			        boxname = "bankbox%d" % ibox
 			        ibin_stop = min(ibin_start+nbin, len(output_nodes[(ifos, sim_name)]))
-			        nodes, output_node = gen_bankbin_cluster_nodes(ifos, boxname, output_nodes[(ifos, sim_name)][ibin_start:ibin_stop], "extract", clusterjob_tagbase)
+			        nodes, output_node = gen_bankbin_cluster_nodes(ifos, boxname, output_nodes[(ifos, sim_name)][ibin_start:ibin_stop], "extract", clusterjob_tagbase, segs_filename = options.frame_segments_file, vetoes_filename = options.vetoes, inj_filename = injections)
 			        ibin_start += nbin
 			        cluster_nodes.setdefault((ifos, sim_name), []).extend(nodes)
 			        output_nodes.setdefault((ifos, sim_name), []).append(output_node)
+                                cluster_box_nodes[(ifos, sim_name)].setdefault("bankbox%d" % ibox, []).append(output_node)
+	return cluster_nodes, cluster_box_nodes
 
-	return cluster_nodes, output_nodes
 
+def finalize_runs(dag, assignFARJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options):
+        """
+        mergestats_box_nodes = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
+    
+        cluster_box_nodes[(ifos, None)] = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
+        cluster_box_nodes[(ifos, "shift")] = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
+        cluster_box_nodes[(ifos, "inj_name")] = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
+        """
 
-def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, innodes, options, instruments):
 	"""
-	assign FARs, use gstlal_cohfar_merge_stats/bankbox1_SPIIR_stats-start-end.xml.gz for gstlal_cluster_zerolags_online/bankbox1_SPIIR_zerolag-start-end.xml.gz
-	apply injFind to gstlal_cluster_zerolags_inj/bankbox1_SPIIR_zerolags-start-end.xml.gz
+	assign FARs, use gstlal_cohfar_merge_stats/bankbox1/_SPIIR_stats-start-end.xml.gz for gstlal_cluster_zerolags_online/bankbox1_SPIIR_zerolag-start-end.xml.gz
+	apply injFind to gstlal_cluster_zerolags_inj0/bankbox1_SPIIR_zerolags-start-end.xml.gz
 	"""
-
-	if options.vetoes is None:
-		vetoes = []
-	else:
-		vetoes = [options.vetoes]
-
-	chunk_nodes = []
-	# Process the chirp mass bins in chunks to paralellize the merging process
-	for chunk, dbs in enumerate(chunks([node.input_files[""] for node in innodes[None]], 20)):
-		# Merge the final non injection database into chunks
-		noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_CHUNK_%d' % chunk, int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = innodes[None],
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
-			input_files = {"": dbs},
-			output_files = {"database":noninjdb}
+        for ibox, nbin in enumerate(bankbox_list):
+            box_name = "bankbox%d" % ibox
+            stats_node = mergestats_box_nodes[box_name]
+            # assign FAR to non-inj jobs
+            for ifos in segsdict:
+                zlag_node = cluster_box_nodes[(ifos, None)][box_name]
+                parent_nodes = stats_node + zlag_node
+	        assign_node = inspiral_pipe.generic_node(assignFARJob, dag, parent_nodes = parent_nodes,
+			opts = {"sql-segment":"",
+                                "zerolag-sql":  zlag_node[0].input_files["database"]
+				},
+			input_files = {"input-stats-filename": stats_node[0].output_files["output"]
+                                        }
 		)
 
-		# cluster the final non injection database
-		noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
-			input_files = {"":noninjdb}
-		)
-		chunk_nodes.append(noninjsqlitenode)
-
-	# Merge the final non injection database
-	noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID', int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
-	sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
-		opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
-		input_files = {"": ([node.input_files[""] for node in chunk_nodes] + vetoes + [options.frame_segments_file])},
-		output_files = {"database":noninjdb}
-	)
-
-	# cluster the final non injection database
-	noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-		opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
-		input_files = {"":noninjdb}
-	)
-
-	injdbs = []
-	outnodes = [noninjsqlitenode]
-
-	for injections, far_injections in zip(options.injections, options.far_injections):
-
-		# extract only the nodes that were used for injections
-		thisinjnodes = innodes[sim_tag_from_inj_file(injections)]
-		chunk_nodes = []
-
-		for chunk, dbs in enumerate(chunks([node.input_files[""] for node in thisinjnodes], 20)):
-
-			# Setup the final output names, etc.
-			injdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_CHUNK_%d_%s' % (chunk, sim_tag_from_inj_file(injections)), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
-
-
-			# merge
-			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = thisinjnodes,
-				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
-				input_files = {"":dbs},
-				output_files = {"database":injdb}
-			)
-
-			# cluster
-			clusternode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-				opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
-				input_files = {"":injdb}
-			)
-			chunk_nodes.append(clusternode)
-
-
-		# Setup the final output names, etc.
-		injdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), int(boundary_seg[0]), int(boundary_seg[1]), '.sqlite')
-		injdbs.append(injdb)
-		injxml = os.path.splitext(injdb)[0] + ".xml.gz"
-
-		# If there are injections that are too far away to be seen in a separate file, add them now. 
-		if far_injections is not None:
-			xml_input = [injxml] + [far_injections]
-		else:
-			xml_input = injxml
-
-		# merge
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
-			input_files = {"": ([node.input_files[""] for node in chunk_nodes] + vetoes + [options.frame_segments_file, injections])},
-			output_files = {"database":injdb}
-		)
-
-		# cluster
-		clusternode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
-			input_files = {"":injdb}
-		)
-
-
-		clusternode = inspiral_pipe.generic_node(toXMLJob, dag, parent_nodes = [clusternode],
-			opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
-			output_files = {"extract":injxml},
-			input_files = {"database":injdb}
-		)
-
-		inspinjnode = inspiral_pipe.generic_node(ligolwInspinjFindJob, dag, parent_nodes = [clusternode],
-			opts = {"time-window":0.9},
-			input_files = {"":injxml}
-		)
-
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [inspinjnode],
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
-			output_files = {"database":injdb},
-			input_files = {"":xml_input}
-		)
-			
-		outnodes.append(sqlitenode)
-
-	return injdbs, noninjdb, outnodes
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -1058,6 +982,12 @@ toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite_postcoh", tag_base = "ligolw
 # execute sql script on a sql database
 lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
+# assign FAR to zerolags using stats
+assignFARJob = inspiral_pipe.generic_job("gstlal_cohfar_assign_far", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# injectin find job
+ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind_postcoh", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
 # plot summary
 #plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
@@ -1155,10 +1085,20 @@ if options.bankbox_list is None:
 else:
 	bankbox_list = options.bankbox_list.split(":")
 
-merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, bankbox_list, segsdict)
+"""
+mergestats_box_nodes = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
+"""
+mergestats_box_nodes = merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, bankbox_list, segsdict)
 
-cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict)
+"""
+cluster_box_nodes[(ifos, None)] = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
+cluster_box_nodes[(ifos, "shift")] = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
+cluster_box_nodes[(ifos, "inj_name")] = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
+"""
 
+cluster_nodes, cluster_box_nodes = cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict)
+
+finalize_runs(dag, assignFARJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options)
 
 
 # make summary plots
