@@ -519,6 +519,16 @@ WHERE
 		# fitting to the observed zero-lag ranking statistic
 		# histogram
 
+		bg = self.noise_lr_lnpdf.array
+		x = self.noise_lr_lnpdf.bins[0].centres()
+		assert (x == self.zero_lag_lr_lnpdf.bins[0].centres()).all()
+		# compute the pre-clustered background's CCDF
+		ccdf = bg[::-1].cumsum()[::-1]
+		ccdf /= ccdf[0]
+
+		def mk_survival_probability(rate_eff, m):
+			return numpy.exp(-rate_eff * ccdf**m)
+
 		# some candidates are rejected by the ranking statistic,
 		# causing there to be a spike in the zero-lag density at ln
 		# L = -inf.  if enough candidates get rejected this spike
@@ -527,18 +537,10 @@ WHERE
 		# here to prevent that from happening (assume density
 		# estimation kernel = 4 bins wide, with 10 sigma impulse
 		# length)
-		zl = self.zero_lag_lr_lnpdf.array.copy()
-		zl[:40] = 0.
-		if not zl.any():
+		zl = self.zero_lag_lr_lnpdf.copy()
+		zl.array[:40] = 0.
+		if not zl.array.any():
 			raise ValueError("zero-lag counts are all zero")
-		bg = self.noise_lr_lnpdf.array
-		x = self.noise_lr_lnpdf.bins[0].centres()
-		# compute the pre-clustered background's CCDF
-		ccdf = bg[::-1].cumsum()[::-1]
-		ccdf /= ccdf[0]
-
-		def mk_survival_probability(rate_eff, m):
-			return numpy.exp(-rate_eff * ccdf**m)
 
 		# masked array containing the zerolag data for the fit.
 		# the mask selects the bins to be *ignored* for the fit.
@@ -546,12 +548,14 @@ WHERE
 		# potentially contain a genuine zero-lag population and/or
 		# that have too small a count to have been well measured,
 		# and/or can't be modelled correctly by this fit anyway.
-		mode, = self.zero_lag_lr_lnpdf.argmax()
-		obs = numpy.ma.masked_array(zl, (zl < mode) & (self.zero_lag_lr_lnpdf.at_centres() < self.zero_lag_lr_lnpdf[mode,] - 9.))
+		mode, = zl.argmax()
+		mask = (x < mode) | (zl.at_centres() < zl[mode,] - 9.)
+		zl = numpy.ma.masked_array(zl.array, mask)
+		bg = numpy.ma.masked_array(bg, mask)
 
 		def ssr((norm, rate_eff, m)):
 			# explicitly exclude disallowed parameter values
-			if not (0. < norm <= 1. and rate_eff > 0. and m > 0.):
+			if not (0. < norm and rate_eff > 0. and m > 0.):
 				return PosInf
 
 			# the extinction model applied to the background
@@ -562,7 +566,7 @@ WHERE
 			model_var = numpy.where(model > 1., model, 1.)
 
 			# square residual in units of variance
-			square_error = (obs - model)**2. / model_var
+			square_error = (zl - model)**2. / model_var
 
 			# sum-of-square residuals \propto integral of
 			# residual over x co-ordinate.  integral accounts
@@ -570,24 +574,12 @@ WHERE
 			return numpy.trapz(square_error, x)
 
 		norm, rate_eff, m = optimize.fmin(ssr, (zl.sum() / bg.sum(), zl.sum(), 1.), xtol = 1e-8, ftol = 1e-8, disp = 0)
-		# for debugging:  nothing after this requires the integral of
-		# the noise model to equal any particular value, they will be
-		# converted to PDFs and normalized.  we included a choice of
-		# normalization as an extra degree of freedom in the fit
-		# exactly because it doesn't matter.  it is probably best to
-		# not apply the normalization so that the histograms continue
-		# to carry the original weight (after, now, adjustment for
-		# clustering) so that hypothetical summing steps that might be
-		# done next will marginalize the PDFs correctly, therefore we
-		# reset it to 1.  the normalization is never applied to the
-		# signal model
-		norm = 1.
 
 		# compute survival probability model from best fit
 		survival_probability = mk_survival_probability(rate_eff, m)
 
 		# apply to background counts and signal counts
-		self.noise_lr_lnpdf.array *= norm * survival_probability
+		self.noise_lr_lnpdf.array *= survival_probability
 		self.noise_lr_lnpdf.normalize()
 		self.signal_lr_lnpdf.array *= survival_probability
 		self.signal_lr_lnpdf.normalize()
