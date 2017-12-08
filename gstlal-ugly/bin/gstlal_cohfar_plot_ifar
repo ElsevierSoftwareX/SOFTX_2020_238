@@ -28,9 +28,16 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot
 
+try:
+	import sqlite3
+except ImportError:
+	# pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
+sqlite3.enable_callback_tracebacks(True)
+
 from glue import iterutils
 from gstlal.postcoh_table_def import PostcohInspiralTable
-from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from glue.ligolw import ligolw, lsctables, array, param, utils, types, dbtables
 from pylal import datatypes as laltypes
 from pylal import git_version
 from gstlal import cohfar
@@ -56,6 +63,8 @@ def parse_command_line():
 	parser.add_option("--input-zerolag-filename", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--livetime", type = "float", help ="input coinc time")
 	parser.add_option("--label", default = "shifted", metavar = "name", help = "Set the output file name")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+
 	options, tmp = parser.parse_args()
 
 	missing_options = []
@@ -79,9 +88,19 @@ tick_lgifar = np.linspace(-1, 7, step)
 theory_lgcevent = np.zeros(len(tick_lgifar))
 theory_lgcevent = - tick_lgifar + np.log10(float(options.livetime))
 
-myfar = cohfar.FAR()
+pdb.set_trace()
+if options.input_zerolag_filename.endswith("xml.gz"):
+    zerolag_lgcevent_kde = cohfar.count_above_ifar_xml(options.input_zerolag_filename, tick_lgifar)
+elif options.input_zerolag_filename.endswith("sqlite"):
+    zerolag_fname_list = options.input_zerolag_filename.split(',')
+    # only deal with one sql file
+    assert len(zerolag_fname_list) == 1
+    fname = zerolag_fname_list[0]
+    working_filename = dbtables.get_connection_filename(fname, tmp_path = None, verbose = options.verbose)
+    zlag_connection = sqlite3.connect(working_filename)
 
-zerolag_lgcevent_kde = myfar.count_above_ifar_xml(options.input_zerolag_filename, tick_lgifar)
+    zerolag_lgcevent_kde = cohfar.count_above_ifar_sql(zlag_connection, tick_lgifar)
+ 
 logging.info("plot the numbers of zerolags versus IFAR thresholds")
 if 0:
 	pyplot.figure()
