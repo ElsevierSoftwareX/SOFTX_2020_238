@@ -165,7 +165,7 @@ for filename in zerolag_sql_list:
         if options.verbose:
 	        logging.info("assign fars to zerolags")
 
-	myfar.assign_fars_sql(connection, livetime)
+	myfar.assign_fars_sql(zlag_connection)
 	#
 	# done, restore file to original location
 	#
@@ -173,8 +173,8 @@ for filename in zerolag_sql_list:
 #	ligolw_process.set_process_end_time(process)
 #	connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (process.end_time, process.process_id))
 
-	connection.commit()
-	connection.close()
+	zlag_connection.commit()
+	zlag_connection.close()
 	dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
 
 
