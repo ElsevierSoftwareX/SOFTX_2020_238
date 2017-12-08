@@ -670,9 +670,6 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 		cluster_zerolags_online/bankbox0/H1L1-SPIIR_zerolag-boundarystart-boundaryend.sqlite
 		step 1.3: cluster 4s, output the same
 		cluster_zerolags_online/bankbox0/H1L1-SPIIR_zerolag-boundarystart-boundaryend.sqlite
-		step 1.4: convert to xml
-		output cluster_zerolags_online/bankbox0/H1L1-SPIIR_zerolag-boundarystart-boundaryend.xml.gz;..
-		output cluster_zerolags_online/bankbox0/H1L1V1-SPIIR_zerolag-boundarystart-boundaryend.xml.gz;..
 	"""
 	cluster_nodes = {}
 	def gen_bankbin_cluster_nodes(ifos, binname, binnodes, extract_name, tagbase, segs_filename = None, vetoes_filename = None, inj_filename = None):
@@ -711,14 +708,15 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 		)
 
 		nodes.append(scriptnode)
-		# extract from sqlite to xml
+
+                # convert to xml for the next round
 		xmlname = inspiral_pipe.T050017_filename(ifos,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)
 		xmlnode = inspiral_pipe.generic_node(toXMLJob, dag, parent_nodes = [scriptnode],
 			opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 			output_files = {"extract":xmlname},
 			input_files = {"database":db}
 		)
-		nodes.append(xmlnode)
+	
 		# store the output_nodes for next stage of clustering: cluster bankbin zlag xmls to bankbox zlag xml
 		return nodes, xmlnode
 
@@ -799,7 +797,7 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 	return cluster_nodes, cluster_box_nodes
 
 
-def finalize_runs(dag, assignFARJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options):
+def finalize_runs(dag, assignFARJob, toXMLJob, toSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options):
         """
         mergestats_box_nodes = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
     
@@ -811,21 +809,83 @@ def finalize_runs(dag, assignFARJob, ligolwInspinjFindJob, mergestats_box_nodes,
 	"""
 	assign FARs, use gstlal_cohfar_merge_stats/bankbox1/_SPIIR_stats-start-end.xml.gz for gstlal_cluster_zerolags_online/bankbox1_SPIIR_zerolag-start-end.xml.gz
 	apply injFind to gstlal_cluster_zerolags_inj0/bankbox1_SPIIR_zerolags-start-end.xml.gz
+        convert xml to sqlite file
 	"""
+        def assign_far(assignFARJob, dag, parent_nodes, dbname, statsname):
+	        assign_node = inspiral_pipe.generic_node(assignFARJob, dag, parent_nodes = parent_nodes,
+			opts = {"sql-segment":"",
+                                "zerolag-sql": dbname 
+				},
+			input_files = {"input-stats-filename": statsname
+                                        }
+		    )
+                return assign_node
+
+        def to_xml(ifos, boundary_seg, toXMLJob, dag, parent_nodes, dbname, xmlname):
+		# extract from sqlite to xml
+		xmlnode = inspiral_pipe.generic_node(toXMLJob, dag, parent_nodes = parent_nodes,
+			opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+			output_files = {"extract":xmlname},
+			input_files = {"database":dbname}
+		)
+		return xmlnode
+
+        def to_sqlite(toSqliteJob, dag, parent_nodes, dbname, xmlname):
+	    sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parent_nodes,
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			input_files = {"":xmlname},
+			output_files = {"database":dbname}
+		)
+            return sqlitenode
+
+        outnodes = []
+	
         for ibox, nbin in enumerate(bankbox_list):
             box_name = "bankbox%d" % ibox
             stats_node = mergestats_box_nodes[box_name]
-            # assign FAR to non-inj jobs
             for ifos in segsdict:
+                # assign FAR to non-inj jobs
                 zlag_node = cluster_box_nodes[(ifos, None)][box_name]
                 parent_nodes = stats_node + zlag_node
-	        assign_node = inspiral_pipe.generic_node(assignFARJob, dag, parent_nodes = parent_nodes,
-			opts = {"sql-segment":"",
-                                "zerolag-sql":  zlag_node[0].input_files["database"]
-				},
-			input_files = {"input-stats-filename": stats_node[0].output_files["output"]
-                                        }
-		)
+                dbname = zlag_node[0].input_files["database"]
+                statsname = stats_node[0].output_files["output"]
+                assign_node = assign_far(assignFARJob, dag, parent_nodes, dbname, statsname)
+                # extract xml from sql
+                xmlname = zlag_node[0].output_files["extract"]
+                xmlnode = to_xml(ifos, boundary_seg, toXMLJob, dag, [assign_node], dbname, xmlname)
+                outnodes.append(xmlnode)
+
+                # assign FAR to shift jobs
+                zlag_node = cluster_box_nodes[(ifos, "shift")][box_name]
+                parent_nodes = stats_node + zlag_node
+                dbname = zlag_node[0].input_files["database"]
+                statsname = stats_node[0].output_files["output"]
+                assign_node = assign_far(assignFARJob, dag, parent_nodes, dbname, statsname)
+                # extract xml from sql
+                xmlname = zlag_node[0].output_files["extract"]
+                xmlnode = to_xml(ifos, boundary_seg, toXMLJob, dag, [assign_node], dbname, xmlname)
+                outnodes.append(xmlnode)
+
+	        for injections in options.injections:
+		    sim_name = sim_tag_from_inj_file(injections)
+	                # assign FAR to shift jobs
+                    zlag_node = cluster_box_nodes[(ifos, sim_name)][box_name]
+                    parent_nodes = stats_node + zlag_node
+                    dbname = zlag_node[0].input_files["database"]
+                    statsname = stats_node[0].output_files["output"]
+                    assign_node = assign_far(assignFARJob, dag, parent_nodes, dbname, statsname)
+                    xmlname = zlag_node[0].output_files["extract"]
+                    xmlnode = to_xml(ifos, boundary_seg, toXMLJob, dag, [assign_node], dbname, xmlname)
+
+                    # find injections:
+                    inspinjnode = inspiral_pipe.generic_node(ligolwInspinjFindJob, dag, parent_nodes = [xmlnode],
+                            opts = {"time-window":0.9},
+                            input_files = {"":xmlname})
+                    pdb.set_trace()
+                    sqlitenode = to_sqlite(toSqliteJob, dag, [inspinjnode], dbname, xmlname)
+                    outnodes.append(sqlitenode)
+        return outnodes
+
 
 
 def parse_command_line():
@@ -970,9 +1030,6 @@ inspiralPostcohspiirInjJob = inspiral_pipe.generic_job(options.inspiral_executab
 # calculate the PDF of the rankings statistic
 mergestatsJob = inspiral_pipe.generic_job("gstlal_cohfar_calc_fap", tag_base="gstlal_cohfar_merge_stats", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "request_cpus":"1"}))
 
-# find the injections
-#ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
-
 # from xml to sqlite
 toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite_postcoh", tag_base = "ligolw_sqlite_to_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
@@ -989,10 +1046,10 @@ assignFARJob = inspiral_pipe.generic_job("gstlal_cohfar_assign_far", condor_comm
 ligolwInspinjFindJob = inspiral_pipe.generic_job("ligolw_inspinjfind_postcoh", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
 # plot summary
-#plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_postcohspiir_plotsummary", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
 # plot individual injection summary
-#plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_postcohspiir_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
 # plot sensitivity
 #plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
@@ -1098,7 +1155,7 @@ cluster_box_nodes[(ifos, "inj_name")] = {"bankbox0": [boxnode0]; "bankbox1": [bo
 
 cluster_nodes, cluster_box_nodes = cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict)
 
-finalize_runs(dag, assignFARJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options)
+finalize_runs(dag, assignFARJob, toXMLJob, toSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options)
 
 
 # make summary plots

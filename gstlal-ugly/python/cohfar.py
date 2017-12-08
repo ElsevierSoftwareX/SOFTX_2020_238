@@ -22,6 +22,7 @@
 
 # need to update the name when the background_utils.h update
 import numpy as np
+import math
 from scipy import interpolate
 # FIXME remove this when the LDG upgrades scipy on the SL6 systems, Debian
 # systems are already fine
@@ -149,7 +150,7 @@ class FAPFAR(object):
     weights = extinct_pdf * drank
     cdf = weights.cumsum()
     cdf /= cdf[-1]
-    ccdf = cdf.cumsum()[::-1]
+    ccdf = weights[::-1].cumsum()[::-1]
     ccdf /= ccdf[0]
 
     # cdf boundary condition:  cdf = 1/e at the ranking
@@ -212,8 +213,8 @@ class FAPFAR(object):
     # the distribution.  Only do the fit above 10 counts and below
     # 10000, unless that can't be met and trigger a warning
     fit_min_rank = -30.
-    fit_min_counts = min(10., self.nzlag / 10. + 1)
-    fit_max_counts = min(10000., self.nzlag / 10. + 2) # the +2 gaurantees that fit_max_counts > fit_min_counts
+    fit_min_counts = max(10., self.nzlag / 10. + 1)
+    fit_max_counts = max(10000., self.nzlag / 1.) # the +2 gaurantees that fit_max_counts > fit_min_counts
     rank_range = np.logical_and(ranks > fit_min_rank, np.logical_and(zero_lag_compcumcount < fit_max_counts, zero_lag_compcumcount > fit_min_counts))
     if fit_max_counts < 10000.:
       warnings.warn("There are less than 10000 coincidences, extinction effects on background may not be accurately calculated, which will decrease the accuracy of the combined instruments background estimation.")
@@ -225,18 +226,23 @@ class FAPFAR(object):
     obs_counts = interpolate.interp1d(ranks, bg_compcumcount)
     bg_pdf_interp = interpolate.interp1d(ranks, bgpdf_ba_array)
 
+
     def extincted_counts(x, N_ratio):
-      out = max(zero_lag_compcumcount) * (1. - np.exp(+obs_counts(x) * N_ratio))
+        # NOTE: the following does not work for mdc data
+      #out = max(zero_lag_compcumcount) * (1. - np.exp(-obs_counts(x) * N_ratio))
+      out = obs_counts(x) * N_ratio
       out[~np.isfinite(out)] = 0.
       return out
 
     def extincted_pdf(x, N_ratio):
-      out = np.exp(np.log(N_ratio) + obs_counts(x) * N_ratio + np.log(bg_pdf_interp(x)))
+        # NOTE: the following does not work for mdc data
+      #out = np.exp(np.log(N_ratio) - obs_counts(x) * N_ratio + np.log(bg_pdf_interp(x)))
+      out = bg_pdf_interp(x) * N_ratio
       out[~np.isfinite(out)] = 0.
       return out
 
     # Fit for the ratio of unclustered to clustered triggers.
-    # Only fit N_ratio over the range of ranks decided above
+    # Only fit N_ratio over the range of ranks decided above 
     precluster_normalization, precluster_covariance_matrix = curve_fit(
       extincted_counts,
       ranks[rank_range],
@@ -270,8 +276,9 @@ class FAPFAR(object):
   def assign_fars_sql(self, connection):
     # assign false-alarm rates
     # FIXME:  choose a function name more likely to be unique?
-    connection.create_function("far_from_rank", 2, self.far_from_rank)
-    connection.cursor().execute("""
+    connection.create_function("far_from_rank", 1, self.far_from_rank)
+    cur = self.connection.cursor()
+    cur.execute("""
 UPDATE
   postcoh
 SET
@@ -284,54 +291,62 @@ SET
     # arXiv:1209.0718.  the return value is divided by T to
     # convert events/experiment to events/second.
     assert self.livetime is not None, "cannot compute FAR without livetime"
-    rank = max(self.minrank, min(self.maxrank, rank))
+    rank = max(self.min_rank, min(self.max_rank, rank))
     # true-dismissal probability = 1 - single-event false-alarm
     # probability, the integral in equation (B4)
+    # NOTE: the following does not work for mdc data
+  
     #tdp = float(self.cdf_interpolator(rank))
+    #try:
+    #  log_tdp = math.log(tdp)
+    #except ValueError:
+    #  # TDP = 0 --> FAR = +inf
+    #  return PosInf
+    #if log_tdp >= -1e-9:
+    #  # rare event:  avoid underflow by using log1p(-FAP)
+    #  log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
+    #return self.nzlag * -log_tdp / self.livetime
+    fap = float(self.cdf_interpolator(rank))
+    return self.nzlag * fap / self.livetime
+
+
+def count_above_ifar_xml(zerolag_fname_xml, tick_lgifar):
   
-    tdp = float(self.cdf_interpolator(rank))
-    try:
-      log_tdp = math.log(tdp)
-    except ValueError:
-      # TDP = 0 --> FAR = +inf
-      return PosInf
-    if log_tdp >= -1e-9:
-      # rare event:  avoid underflow by using log1p(-FAP)
-      log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
-    return self.nzlag * -log_tdp / self.livetime
+  zerolag_fname_list = zerolag_fname_xml.split(',')
+  all_table = lsctables.New(PostcohInspiralTable)
 
+  for ifname in zerolag_fname_list:
+    table = postcoh_table_from_xml(ifname)
+    all_table.extend(table)
+    iterutils.inplace_filter(lambda row:row.is_background == 0, all_table)
 
-
-  def assign_fars_sql_kipp(self, connection):
-    # assign false-alarm rates
-    # FIXME:  choose a function name more likely to be unique?
-    connection.create_function("far_from_snr_chisq", 2, self.far_from_snr_chisq)
-    connection.cursor().execute("""
-UPDATE
-  postcoh
-SET
-  far =  far_from_snr_chisq_kipp(cohsnr, cmbchisq)
-""")
-
-  def count_above_ifar_xml(self, zerolag_fname_str, tick_lgifar):
+  zerolag_lgifar = - np.log10(all_table.getColumnByName("far"))
+  zerolag_lgcevent = np.zeros(len(tick_lgifar))
+    
+  for itick in range(0, len(tick_lgifar)):
+    cevent = len(zerolag_lgifar[np.where(zerolag_lgifar > tick_lgifar[itick])])
+    if cevent > 0:
+      zerolag_lgcevent[itick] = np.log10(cevent)
+  return zerolag_lgcevent
+    
+def count_above_ifar_sql(zerolag_connection, tick_lgifar):
   
-    zerolag_fname_list = zerolag_fname_str.split(',')
-    all_table = lsctables.New(PostcohInspiralTable)
-
-    for ifname in zerolag_fname_list:
-      table = postcoh_table_from_xml(ifname)
-      all_table.extend(table)
-      iterutils.inplace_filter(lambda row:row.is_background == 0, all_table)
-
-    zerolag_lgifar_kde = - np.log10(all_table.getColumnByName("far"))
-    zerolag_lgcevent_kde = np.zeros(len(tick_lgifar))
+  zerolag_lgcevent = np.zeros(len(tick_lgifar))
+  cur = zerolag_connection.cursor()    
+  for itick in range(0, len(tick_lgifar)):
+    far_min = 10**(-tick_lgifar[itick])
+    cur.execute(""" SELECT COUNT(*) FROM 
+            postcoh WHERE far <= ?""", (far_min,)
+    )
+    nevent = cur.fetchone()[0]
+    if nevent > 0:
+      zerolag_lgcevent[itick] = np.log10(nevent)
+  return zerolag_lgcevent
     
-    for itick in range(0, len(tick_lgifar)):
-      cevent_kde = len(zerolag_lgifar_kde[np.where(zerolag_lgifar_kde > tick_lgifar[itick])])
-      if cevent_kde > 0:
-        zerolag_lgcevent_kde[itick] = np.log10(cevent_kde)
-    return zerolag_lgcevent_kde
-    
+
+
+
+
 
 
 
