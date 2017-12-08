@@ -183,7 +183,7 @@ def add_sim_postcoh_coinc(contents, sim, event_ids):
 	postcoh rows to the new coinc_event row.
 	"""
 
-	ilwd_postcoh_id = ilwd.get_ilwdchar_class("postcoh", "postcoh_id")
+	ilwd_postcoh_id = ilwd.get_ilwdchar_class("postcoh", "event_id")
 	for one_event_id in event_ids:
 		coincmap = lsctables.CoincMap()
 		coincmap.coinc_event_id = ilwd_postcoh_id(one_event_id)
@@ -215,7 +215,7 @@ def find_exact_postcoh_matches(contents, t):
 	#pdb.set_trace()
 	postcohs = contents.postcoh_inspirals_near_endtime(t)
 
-	return set(one_postcoh.postcoh_id for one_postcoh in postcohs)
+	return set(one_postcoh.event_id for one_postcoh in postcohs)
 
 
 
