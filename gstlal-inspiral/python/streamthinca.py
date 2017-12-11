@@ -267,7 +267,7 @@ class StreamThinca(object):
 			xmldoc,
 			process_id = process_id,
 			coinc_definer_row = thinca.InspiralCoincDef,
-			thresholds = self.coincidence_threshold,
+			delta_t = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
 			seglists = seglists,
 			likelihood_func = self.ln_likelihood_func,
