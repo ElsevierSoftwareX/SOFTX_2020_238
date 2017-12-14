@@ -86,29 +86,28 @@ class SimInspiral(lsctables.SimInspiral):
 		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
 
 
-class SnglInspiral(lsctables.SnglInspiral):
-	@property
-	def mtotal(self):
-		return self.mass1 + self.mass2
-
-	@property
-	def eta(self):
-		return self.mass1 * self.mass2 / self.mtotal**2.
-
-	@property
-	def mchirp(self):
-		return self.mtotal * self.eta**0.6
-
+class PostcohInspiral(postcoh_table_def.PostcohInspiral):
 	@property
 	def chi(self):
 		return (self.mass1 * self.spin1z + self.mass2 * self.spin2z) / self.mtotal
 
+
 	def get_effective_snr(self, fac):
 		return self.snr / (self.chisq / self.chisq_dof)**.5
 
+        def end(self, instrument):
+                end_time = getattr(self, "end_time_%s" % instrument[0])
+                end_time_ns = getattr(self, "end_time_ns_%s" % instrument[0])
+                return LIGOTimeGPS(end_time, end_time_ns)
+
+        def get_eff_distance(self, instrument):
+                return getattr(self, "deff_%s" % instrument[0])
+
+
+
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 lsctables.SimInspiralTable.RowType = SimInspiral
-lsctables.SnglInspiralTable.RowType = SnglInspiral
+postcoh_table_def.PostcohInspiralDBTable.RowType = PostcohInspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
@@ -180,7 +179,7 @@ class CoincDatabase(object):
 
 		self.base = base
 		self.connection = connection
-		xmldoc = dbtables.get_xml(connection)
+		xmldoc = postcoh_table_def.get_xml(connection)
 
 		cursor = connection.cursor()
 
@@ -254,14 +253,6 @@ class CoincDatabase(object):
 #
 
 
-def sim_end_time(sim, instrument):
-	# this function requires .get_time_geocent() and .get_ra_dec()
-	# methods, and so can be used for both burst and inspiral
-	# injections.  FIXME:  update function call when inspiral
-	# injections carry offset vector information
-	return SimBurstUtils.time_at_instrument(sim, instrument, {instrument: 0.0})
-
-
 def roman(i, arabics = (1000,900,500,400,100,90,50,40,10,9,5,4,1), romans = ("m","cm","d","cd","c","xc","l","xl","x","ix","v","iv","i")):
 	if not arabics:
 		return ""
@@ -294,7 +285,7 @@ def create_sim_coinc_view(connection):
 	"""
 	Construct a sim_inspiral --> best matching coinc_event mapping.
 	Only injections that match at least one coinc get an entry in this
-	table.
+	table. if there are more than entries, select the smallest far one
         the format is like: 
             sim_inspiral:simulation_id:32135,postcoh:event_id:241023
             sim_inspiral:simulation_id:32155,postcoh:event_id:250000
@@ -330,8 +321,23 @@ AS
 			ORDER BY
 				postcoh.far ASC
 			LIMIT 1
-		) AS coinc_event_id
-	FROM
+		) as coinc_event_id,
+		(
+			SELECT
+				postcoh.far
+			FROM
+				coinc_event_map AS a
+				JOIN postcoh ON (
+					postcoh.event_id == a.coinc_event_id
+				)
+			WHERE
+				a.table_name == 'sim_inspiral'
+				AND a.event_id == sim_inspiral.simulation_id
+			ORDER BY
+				postcoh.far ASC
+			LIMIT 1
+		) as far
+        FROM
 		sim_inspiral
 	WHERE
 		coinc_event_id IS NOT NULL
@@ -597,11 +603,9 @@ FROM
 					except KeyError:
 						self.found_in[participating_instruments] = [sim]
 
-                        pdb.set_trace()
 
 		def finish(self):
 
-                        pdb.set_trace()
 			f = open(self.base + "injection_summary.txt", "a")
 			missed = self.found_in.pop(None, [])
 			# Define decisive distance even if there is one instrument
@@ -745,8 +749,9 @@ FROM
 
 
 class ParameterAccuracyPlots(object):
-	def __init__(self):
+	def __init__(self, far_thresh):
 		self.sim_sngl_pairs = {}
+                self.far_thresh = far_thresh
 
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is None:
@@ -756,26 +761,24 @@ class ParameterAccuracyPlots(object):
 		for values in contents.connection.cursor().execute("""
 SELECT
 	sim_inspiral.*,
-	sngl_inspiral.*
+	postcoh.*,postcoh.far
 FROM
 	sim_inspiral
 	JOIN sim_coinc_map ON (
 		sim_coinc_map.simulation_id == sim_inspiral.simulation_id
 	)
-	JOIN coinc_event_map ON (
-		coinc_event_map.coinc_event_id == sim_coinc_map.coinc_event_id
+	JOIN postcoh ON (
+		postcoh.event_id == sim_coinc_map.coinc_event_id
 	)
-	JOIN sngl_inspiral ON (
-		coinc_event_map.table_name == 'sngl_inspiral'
-		AND coinc_event_map.event_id == sngl_inspiral.event_id
-	)
-	WHERE sngl_inspiral.snr > 8.0
+	WHERE postcoh.cohsnr > 8.0
 		"""):
 			sim = contents.sim_inspiral_table.row_from_cols(values)
-			sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
+			sngl = contents.postcoh_inspiral_table.row_from_cols(values[n_simcolumns:-1])
+                        far = values[-1]
 			del sim.process_id, sim.source, sim.simulation_id
-			del sngl.process_id, sngl.event_id
-			self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl))
+			del sngl.event_id
+                        if far <= self.far_thresh:
+			    self.sim_sngl_pairs.setdefault((sim.waveform, sngl.pivotal_ifo), []).append((sim, sngl, far))
 
 	def finish(self):
 
@@ -786,76 +789,109 @@ FROM
 			axes.hist(arr, numpy.linspace(start, end, 100))
 
 		for (waveform, instrument), pairs in self.sim_sngl_pairs.items():
-			fig, axes = create_plot(r"Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)")
+			fig, axes = create_plot(r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)")
 			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim.mchirp for sim, sngl in pairs], [sngl.mchirp - sim.mchirp for sim, sngl in pairs], "kx")
-			yield fig, "mchirp_acc_abs_%s_%s" % (waveform, instrument), False
+			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [sngl.mchirp - sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			yield fig, "mchirp_acc_abs_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
+			fig, axes = create_plot(r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
 			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([sngl.mchirp - sim.mchirp for sim, sngl in pairs]), axes)
+			hist(numpy.array([sngl.mchirp - sim.mchirp for sim, sngl, far in pairs]), axes)
 			yield fig, "mchirp_acc_abs_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"(Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$) / Injected $M_{\mathrm{chirp}}$")
+			fig, axes = create_plot(r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$) / Inj. $M_{\mathrm{chirp}}$")
 			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim.mchirp for sim, sngl in pairs], [(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl in pairs], "kx")
-			yield fig, "mchirp_acc_frac_%s_%s" % (waveform, instrument), False
+			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			yield fig, "mchirp_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $M_{\mathrm{chirp}}$ - Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)) / Injected $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
+			fig, axes = create_plot(r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$)/ Inj. $M_{\mathrm{chirp}}$", "Number")
 			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl in pairs]), axes)
+			hist(numpy.array([(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs]), axes)
 			yield fig, "mchirp_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injected $\eta$", r"Recovered $\eta$ - Injected $\eta$")
-			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim.eta for sim, sngl in pairs], [sngl.eta - sim.eta for sim, sngl in pairs], "kx")
-			yield fig, "eta_acc_abs_%s_%s" % (waveform, instrument), False
+			fig, axes = create_plot(r"Inj. $M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$")
+			axes.set_title(r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
+			cb = axes.scatter([sim.mtotal for sim, sngl, far in pairs], [(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			yield fig, "mtotal_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Recovered $\eta$ - Injected $\eta$", "Number")
+			fig, axes = create_plot(r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$", "Number")
+			axes.set_title(r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs]), axes)
+			yield fig, "mtotal_acc_frac_hist_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"Inj. $\eta$", r"Rec. $\eta$ - Inj. $\eta$")
 			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([sngl.eta - sim.eta for sim, sngl in pairs]), axes)
+			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [sngl.eta - sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			yield fig, "eta_acc_abs_scatter_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"Rec. $\eta$ - Inj. $\eta$", "Number")
+			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
+			hist(numpy.array([sngl.eta - sim.eta for sim, sngl, far in pairs]), axes)
 			yield fig, "eta_acc_abs_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injected $\eta$", r"(Recovered $\eta$ - Injected $\eta$) / Injected $\eta$")
+			fig, axes = create_plot(r"Inj. $\eta$", r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$")
 			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim.eta for sim, sngl in pairs], [(sngl.eta - sim.eta) / sim.eta for sim, sngl in pairs], "kx")
-			yield fig, "eta_acc_frac_%s_%s" % (waveform, instrument), False
+			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
+			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			yield fig, "eta_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $\eta$ - Injected $\eta$) / Injected $\eta$", "Number")
+			fig, axes = create_plot(r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$", "Number")
 			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([(sngl.eta - sim.eta) / sim.eta for sim, sngl in pairs]), axes)
+			hist(numpy.array([(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs]), axes)
 			yield fig, "eta_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Recovered End Time - Injection End Time (s)")
+			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Rec. End Time - Injection End Time (ms)")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim_end_time(sim, instrument) for sim, sngl in pairs], [sngl.get_end() - sim_end_time(sim, instrument) for sim, sngl in pairs], "kx")
-			yield fig, "t_acc_%s_%s" % (waveform, instrument), False
+			axes.plot([sim.time_at_instrument(instrument, {instrument: 0.0}) for sim, sngl, far in pairs], [(sngl.end(instrument) - sim.time_at_instrument(instrument, {instrument: 0.0}))*1000. for sim, sngl, far in pairs], "kx")
+			yield fig, "t_acc_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Recovered End Time - Injection End Time (s)", "Number")
+			fig, axes = create_plot(r"Rec. End Time - Injection End Time (ms)", "Number")
 			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([float(sngl.get_end()) - float(sim_end_time(sim, instrument)) for sim, sngl in pairs]), axes)
+			hist(numpy.array([float(sngl.end(instrument) - sim.time_at_instrument(instrument, {instrument: 0.0}))*1000. for sim, sngl, far in pairs]), axes)
 			yield fig, "t_acc_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
+			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Rec. $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
 			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.semilogx([sim.get_eff_dist(instrument) for sim, sngl in pairs], [(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl in pairs], "kx")
-			yield fig, "deff_acc_frac_%s_%s" % (waveform, instrument), False
+			axes.semilogx([sim.get_eff_dist(instrument) for sim, sngl, far in pairs], [(sngl.get_eff_distance(instrument) - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl, far in pairs], "kx")
+			yield fig, "deff_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$", "Number")
+			fig, axes = create_plot(r"(Rec. $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$", "Number")
 			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl in pairs]), axes)
+			hist(numpy.array([(sngl.get_eff_distance(instrument) - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl, far in pairs]), axes)
 			yield fig, "deff_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Recovered $1/D_{\mathrm{eff}}$ - Injection $1/D_{\mathrm{eff}}$) / Injection $1/D_{\mathrm{eff}}$", "Number")
-			axes.set_title(r"Fractional Effective Amplitude Accuracy in %s (%s Injections)" % (instrument, waveform))
-			hist(numpy.array([(1. / sngl.eff_distance - 1. / sim.get_eff_dist(instrument)) / (1. / sim.get_eff_dist(instrument)) for sim, sngl in pairs]), axes)
-			yield fig, "deff_acc_frac_inv_hist_%s_%s" % (waveform, instrument), False
-
-			fig, axes = create_plot(r"Injected $\chi$", r"Recovered $\chi$")
+                        if sngl.get_eff_distance(instrument) > 0.0:
+    			    fig, axes = create_plot(r"(Rec. $1/D_{\mathrm{eff}}$ - Injection $1/D_{\mathrm{eff}}$) / Injection $1/D_{\mathrm{eff}}$", "Number")
+           		    axes.set_title(r"Fractional Effective Amplitude Accuracy in %s (%s Injections)" % (instrument, waveform))
+        		    hist(numpy.array([(1. / sngl.get_eff_distance(instrument) - 1. / sim.get_eff_dist(instrument)) / (1. / sim.get_eff_dist(instrument)) for sim, sngl, far in pairs]), axes)
+        		    yield fig, "deff_acc_frac_inv_hist_%s_%s" % (waveform, instrument), False
+        
+			fig, axes = create_plot(r"Inj. $\chi$", r"Rec. $\chi$")
 			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
-			axes.plot([sim.chi for sim, sngl in pairs], [sngl.chi for sim, sngl in pairs], "kx")
-			yield fig, "chi_acc_%s_%s" % (waveform, instrument), False
+			axes.plot([sim.chi for sim, sngl, far in pairs], [sngl.chi for sim, sngl, far in pairs], "kx")
+			yield fig, "chi_acc_scatter_%s_%s" % (waveform, instrument), False
 
+			if instrument == 'H1':
+				fig, axes = create_plot(r"Inj. H1 SNR", r"Rec. H1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
+				if max([sim.alpha1 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha1 for sim, sngl, far in pairs], [sngl.snglsnr_H for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha1 for sim, sngl, far in pairs], [sngl.snglsnr_H for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
+
+			if instrument == 'L1':
+				fig, axes = create_plot(r"Inj. L1 SNR", r"Rec. L1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
+				if max([sim.alpha2 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha2 for sim, sngl, far in pairs], [sngl.snglsnr_L for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha2 for sim, sngl, far in pairs], [sngl.snglsnr_L for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
 #
 # =============================================================================
@@ -1332,7 +1368,7 @@ def new_plots(plots = None, far_thresh = None):
 	l = (
 		SummaryTable(),
 		MissedFoundPlots(far_thresh = far_thresh),
-		ParameterAccuracyPlots(),
+		ParameterAccuracyPlots(far_thresh = far_thresh),
 		BackgroundVsInjectionPlots(),
 		BackgroundVsInjectionPlotsMulti(snrfactor = 50.0),
 		RateVsThreshold(),
