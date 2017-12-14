@@ -1,5 +1,5 @@
 # Copyright (C) 2006--2011,2013,2014,2016  Kipp Cannon
-# 2017 Qi Chu
+# 2017 Qi Chu adapted from glue ligolw_inspinjfind
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -104,7 +104,7 @@ class DocContents(object):
 		self.process = process
 
 		#
-		# locate the sngl_inspiral and sim_inspiral tables
+		# locate the postcoh and sim_inspiral tables
 		#
 
 		self.postcohinspiraltable = postcoh_table_def.PostcohInspiralTable.get_table(xmldoc)

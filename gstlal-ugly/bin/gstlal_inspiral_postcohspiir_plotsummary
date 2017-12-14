@@ -295,7 +295,11 @@ def create_sim_coinc_view(connection):
 	Construct a sim_inspiral --> best matching coinc_event mapping.
 	Only injections that match at least one coinc get an entry in this
 	table.
-	"""
+        the format is like: 
+            sim_inspiral:simulation_id:32135,postcoh:event_id:241023
+            sim_inspiral:simulation_id:32155,postcoh:event_id:250000
+        note the simulation_id and event_id may not be continous
+        """
 	#
 	# the log likelihood ratio stored in the likelihood column of the
 	# coinc_event table is the ranking statistic.  the "best match" is
@@ -314,14 +318,11 @@ AS
 		sim_inspiral.simulation_id AS simulation_id,
 		(
 			SELECT
-				postcoh.event_id
+				a.coinc_event_id
 			FROM
 				coinc_event_map AS a
-				JOIN coinc_event_map AS b ON (
-					b.coinc_event_id == a.coinc_event_id
-				)
 				JOIN postcoh ON (
-					b.event_id == postcoh.event_id
+					postcoh.event_id == a.coinc_event_id
 				)
 			WHERE
 				a.table_name == 'sim_inspiral'
@@ -567,7 +568,6 @@ class MissedFoundPlots(object):
 		def add_contents(self, contents):
 			self.base = contents.base
 			zerolag_segments = contents.seglists.intersection(self.on_instruments) - contents.seglists.union(contents.instruments - self.on_instruments)
-                        #pdb.set_trace()
 			for values in contents.connection.cursor().execute("""
 SELECT
 	sim_inspiral.*,
@@ -597,8 +597,11 @@ FROM
 					except KeyError:
 						self.found_in[participating_instruments] = [sim]
 
+                        pdb.set_trace()
+
 		def finish(self):
 
+                        pdb.set_trace()
 			f = open(self.base + "injection_summary.txt", "a")
 			missed = self.found_in.pop(None, [])
 			# Define decisive distance even if there is one instrument
@@ -657,7 +660,7 @@ FROM
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
                                 #pdb.set_trace()
-				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
+				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
 					if cnt == 0:
 						self.missed_found_plots.injection_summary_data.append(["Found", "".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)])
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
@@ -686,7 +689,7 @@ FROM
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
 				try:
-					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
+					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
 						legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
 						axes.semilogy([x_func(sim) for sim in sims], [found_decisive_charsnr(sim, self.on_instruments, participating_instruments) for sim in sims], ".")
 					if missed:
@@ -1351,7 +1354,6 @@ if options.plot_group is None:
 
 
 wiki = open(os.path.join(options.output_dir, "%s_%s" % (options.user_tag, "plotsummary.txt")),"w")
-pdb.set_trace()
 for n, filename in enumerate(filenames):
 	if options.verbose:
 		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
