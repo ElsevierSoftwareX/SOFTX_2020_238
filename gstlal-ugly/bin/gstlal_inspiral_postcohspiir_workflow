@@ -60,6 +60,9 @@ This program makes a dag to run gstlal_inspiral_postcohspiir_online in offline m
 
 __author__ = 'Chad Hanna <chad.hanna@ligo.org> Qi Chu <qi.chu@ligo.org>'
 
+# This IFO_MAP be reflect the same order of ifos of the IFO_COMBO_MAP in background_stats_utils.c
+IFO_MAP = ["H1", "L1", "V1"]
+
 ##############################################################################
 # import standard modules and append the lalapps name to the python path
 import sys, os, copy, math, stat, re
@@ -100,7 +103,7 @@ ligolw_param.use_in(LIGOLWContentHandler)
 
 
 # deprecated please use inspiral_pipe.T050017_filename instead
-# adapted from inspiral_pipe.py same function
+# adapted from inspiral_pipe.py the same name function
 def T050017_filename(instruments, description, start = None, end = None, extension = None, path = None):
 	"""!
 	A function to generate a T050017 filename.
@@ -268,8 +271,6 @@ def gen_spiir_bank_cache(spiir_bank_strings, counter, injection = False):
 
 	return [spiir_cache_entry.url for spiir_cache_entry in spiir_cache_entries] 
 
-# This IFO_MAP be reflect the same order of ifos of the IFO_COMBO_MAP in background_stats_utils.c
-IFO_MAP = ["H1", "L1", "V1"]
 # set the histogram trials to be 1 for shift jobs
 def gen_inspiralshiftJob_options(job_tag, spiir_bank_strings, seg, channeldict, daggen_options, ifos):
 	input_spiir_bank_string = ""
@@ -649,7 +650,7 @@ def merge_stats(dag, mergestatsJob, spiir_stats, instrument_set, boundary_seg, b
 
 
 
-def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict):
+def cluster_zerolags(dag, options, lalappsRunSqliteJob, CachetoSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict):
 	"""
 	cluster zerolags in 4s window with zerolag SNRs
 	step 1: cluster zerolags over boundary start-end
@@ -691,7 +692,7 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
                 for filename in (segs_filename, vetoes_filename, inj_filename):
                     if filename is not None:
                         extra_inputs.append(filename)
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = binnodes,
+		sqlitenode = inspiral_pipe.generic_node(CachetoSqliteJob, dag, parent_nodes = binnodes,
 			opts = {"replace":"", 
 				"tmp-space":inspiral_pipe.condor_scratch_space()},
 			input_files = {"input-cache": cache_filename,
@@ -754,7 +755,7 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 	if not os.path.exists(clusterjob_tagbase):
 		os.mkdir(clusterjob_tagbase)
 	
-	# cluster zerolags
+	# cluster shifted zerolags
 	for ifos in segsdict:
 		for binname, binnodes in spiir_zlag[(ifos, "shift")].items():
 			nodes, one_output_node = gen_bankbin_cluster_nodes(ifos, binname, binnodes, "finalsink-output-name", clusterjob_tagbase)
@@ -797,7 +798,7 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, s
 	return cluster_nodes, cluster_box_nodes
 
 
-def finalize_runs(dag, assignFARJob, toXMLJob, toSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options):
+def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options):
         """
         mergestats_box_nodes = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
     
@@ -830,8 +831,8 @@ def finalize_runs(dag, assignFARJob, toXMLJob, toSqliteJob, ligolwInspinjFindJob
 		)
 		return xmlnode
 
-        def to_sqlite(toSqliteJob, dag, parent_nodes, dbname, xmlname):
-	    sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parent_nodes,
+        def to_sqlite(XMLtoSqliteJob, dag, parent_nodes, dbname, xmlname):
+	    sqlitenode = inspiral_pipe.generic_node(XMLtoSqliteJob, dag, parent_nodes = parent_nodes,
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
 			input_files = {"":xmlname},
 			output_files = {"database":dbname}
@@ -882,7 +883,7 @@ def finalize_runs(dag, assignFARJob, toXMLJob, toSqliteJob, ligolwInspinjFindJob
                             opts = {"time-window":0.9},
                             input_files = {"":xmlname})
                     pdb.set_trace()
-                    sqlitenode = to_sqlite(toSqliteJob, dag, [inspinjnode], dbname, xmlname)
+                    sqlitenode = to_sqlite(XMLtoSqliteJob, dag, [inspinjnode], dbname, xmlname)
                     outnodes.append(sqlitenode)
         return outnodes
 
@@ -1030,8 +1031,12 @@ inspiralPostcohspiirInjJob = inspiral_pipe.generic_job(options.inspiral_executab
 # calculate the PDF of the rankings statistic
 mergestatsJob = inspiral_pipe.generic_job("gstlal_cohfar_calc_fap", tag_base="gstlal_cohfar_merge_stats", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "request_cpus":"1"}))
 
-# from xml to sqlite
-toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite_postcoh", tag_base = "ligolw_sqlite_to_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+# from xml to sqlite, using input_cache
+CachetoSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite_postcoh", tag_base = "ligolw_cache_to_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
+# from xml to sqlite, using direct xml
+XMLtoSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite_postcoh", tag_base = "ligolw_xml_to_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
 
 # from sqlite to xml
 toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite_postcoh", tag_base = "ligolw_sqlite_to_xml", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
@@ -1153,9 +1158,9 @@ cluster_box_nodes[(ifos, "shift")] = {"bankbox0": [boxnode0]; "bankbox1": [boxno
 cluster_box_nodes[(ifos, "inj_name")] = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
 """
 
-cluster_nodes, cluster_box_nodes = cluster_zerolags(dag, options, lalappsRunSqliteJob, toSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict)
+cluster_nodes, cluster_box_nodes = cluster_zerolags(dag, options, lalappsRunSqliteJob, CachetoSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict)
 
-finalize_runs(dag, assignFARJob, toXMLJob, toSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options)
+finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options)
 
 
 # make summary plots
