@@ -28,7 +28,8 @@ pkgpython_PYTHON = \
 	rate_estimation.py \
 	streamthinca.py \
 	svd_bank.py \
-	templates.py
+	templates.py \
+	webpage.py
 
 pkgpyexec_LTLIBRARIES = _rate_estimation.la
 

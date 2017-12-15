@@ -1060,7 +1060,8 @@ plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_
 #plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
 # openpage
-#openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+
 #pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 # closed page
 #marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
@@ -1160,7 +1161,7 @@ cluster_box_nodes[(ifos, "inj_name")] = {"bankbox0": [boxnode0]; "bankbox1": [bo
 
 cluster_nodes, cluster_box_nodes = cluster_zerolags(dag, options, lalappsRunSqliteJob, CachetoSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict)
 
-finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options)
+injdbs, noninjdb, outnodes = finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options)
 
 
 # make summary plots

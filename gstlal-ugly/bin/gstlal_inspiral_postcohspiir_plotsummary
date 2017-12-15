@@ -128,20 +128,25 @@ def parse_command_line():
 	parser = OptionParser(
 		version = "Name: %%prog\n%s" % git_version.verbose_msg
 	)
-	parser.add_option("","--input-cache", help = "Also get the list of databases to process from this LAL cache.")
-	parser.add_option("--user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
+	parser.add_option("--noninj-database", metavar = "noninj-database", default = None, help = "noninj database.")
+	parser.add_option("--shift-database", metavar = "shift-database", default = None, help = "shifted database.")
+	parser.add_option("--inj-database", metavar = "inj-database", default = None, help = "one or multiple inj database.")
+	parser.add_option("--noninj-user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
+	parser.add_option("--shift-user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
+	parser.add_option("--inj-user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
 	parser.add_option("--output-dir", metavar = "output-dir", default = ".", help = "Provide an output directory")
 	parser.add_option("-f", "--format", metavar = "{\"png\",\"pdf\",\"svg\",\"eps\",...}", action = "append", default = [], help = "Set the output image format.  Can be given multiple times (default = \"png\").")
 	parser.add_option("--segments-name", metavar = "name", default = "statevectorsegments", help = "Set the name of the segments that were analyzed (default = \"statevectorsegments\").")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the veto segments (default = \"vetoes\").")
 	parser.add_option("--plot-group", metavar = "number", action = "append", default = None, help = """Generate the given plot group.  Can be given multiple times (default = make all plot groups)
- 0. Summary Table (top 10 loudest events globally across all zero lag triggers read in)
- 1. Missed Found (Scatter plots of missed and found injections on several axes)
- 2. Injection Parameter Accuracy Plots
- 3. Background Vs Injection Plots (sngl detector triggers from coincs of snr, chisq, bank chisq,...)
- 4. Background Vs Injection Plots pairwise (effective snr DET1 Vs. DET2...),
- 5. Rate Vs Threshold (SNR histograms, IFAR histograms, ...)
- 6. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
+ 0. Segments Table (Analytical time)
+ 1. Summary Table (top 10 loudest events globally across all zero lag triggers read in)
+ 2. Missed Found (Scatter plots of missed and found injections on several axes)
+ 3. Injection Parameter Accuracy Plots
+ 4. Background Vs Injection Plots (sngl detector triggers from coincs of snr, chisq, bank chisq,...)
+ 5. Background Vs Injection Plots pairwise (effective snr DET1 Vs. DET2...),
+ 6. Rate Vs Threshold (SNR histograms, IFAR histograms, ...)
+ 7. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
 """)
 	parser.add_option("--far-threshold", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
@@ -153,10 +158,17 @@ def parse_command_line():
 	if not options.format:
 		options.format = ["png"]
 
+        if options.noninj_database is not None and options.noninj_user_tag is None:
+            raise ValueError("Need to set the noninj-user-tag since noninj-database is set") 
+
+        if options.inj_database is not None and options.inj_user_tag is None:
+            raise ValueError("Need to set the inj-user-tag since inj-database is set") 
+
+        if options.shift_database is not None and options.shift_user_tag is None:
+            raise ValueError("Need to set the shift-user-tag since shift-database is set") 
+
 	if not filenames:
 		filenames = []
-	if options.input_cache:
-		filenames.extend(c.path for c in map(lal.CacheEntry, open(options.input_cache)))
 
 	return options, filenames
 
@@ -169,9 +181,33 @@ def parse_command_line():
 # =============================================================================
 #
 
+class SegmentsTable(object):
+	def __init__(self, base):
+		self.all_segs_dict = {}
+		self.data = []
+		self.table = []
+		self.base = base
+
+	def add_contents(self, contents):
+
+		# only process non-injection documents
+		if contents.sim_inspiral_table is None:
+                    for ifo, one_seg_list in contents.seglists.items():
+                    	for seg in one_seg_list:
+                    		self.data.append(["%s: %s" % (str(ifo), str("datasegments")), "", "%.2f-%.2f" % (float(seg[0]), float(seg[1])), float(seg[0])*1000 + 315964800000 - 17000, float(seg[1])*1000 + 315964800000 - 17000])
+                    
+
+	def finish(self):
+                # FIXME: add segments_table.json
+		f = open("%s_segments.json" % self.base, "w")
+		f.write(repr(self.data))
+		f.close()
+                return None, None, None
+
+
 
 class CoincDatabase(object):
-	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, wiki = None, base = None, program_name = "gstlal_inspiral"):
+	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, plotsummary_json = None, wiki = None, base = None, program_name = "gstlal_inspiral"):
 		"""
 		Compute and record some summary information about the
 		database.
@@ -243,6 +279,18 @@ class CoincDatabase(object):
 			if self.sim_inspiral_table is not None:
 				wiki.write("||injections|| %d||\n" % len(self.sim_inspiral_table))
 
+		if plotsummary_json:
+			data = []
+			for on_instruments in self.on_instruments_combos:
+				data.append(["zero-lag livetime for %s" % ("+".join(sorted(on_instruments))), str(self.zerolag_livetime[on_instruments])])
+				data.append(["background livetime for %s" % ("+".join(sorted(on_instruments))), str(self.background_livetime[on_instruments])])
+			if self.postcoh_inspiral_table is not None:
+				data.append(["inspiral events", str(len(self.postcoh_inspiral_table))])
+			if self.sim_inspiral_table is not None:
+				data.append(["injections", str(len(self.sim_inspiral_table))])
+			if self.sim_inspiral_table is None:
+				to_google_json("%s_%s" % (self.base, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
+
 
 #
 # =============================================================================
@@ -286,9 +334,10 @@ def create_sim_coinc_view(connection):
 	Construct a sim_inspiral --> best matching coinc_event mapping.
 	Only injections that match at least one coinc get an entry in this
 	table. if there are more than entries, select the smallest far one
-        the format is like: 
-            sim_inspiral:simulation_id:32135,postcoh:event_id:241023
-            sim_inspiral:simulation_id:32155,postcoh:event_id:250000
+        the format is like:
+            simulation_id, event_id, far
+            sim_inspiral:simulation_id:32135,postcoh:event_id:241023,1.3e-7
+            sim_inspiral:simulation_id:32155,postcoh:event_id:250000,4.5e-3
         note the simulation_id and event_id may not be continous
         """
 	#
@@ -352,157 +401,123 @@ AS
 # =============================================================================
 #
 
-
+"""
+split the Summary Table for 2 purposes:
+    1. display 10 most significant events for noninj database
+    2. display 10 most significant events for shift database
+"""
 class SummaryTable(object):
-	def __init__(self):
+	def __init__(self, zerolag_form):
 		self.candidates = []
 		self.bgcandidates = []
 		self.livetime = {}
 		self.num_trigs = {}
+                self.zerolag_form = zerolag_form
 
 	def add_contents(self, contents):
 		self.base = contents.base
 		if contents.sim_inspiral_table:
 			#For now we only return summary information on non injections
 			return
-		self.candidates += contents.connection.cursor().execute("""
+                if self.zerolag_form == "noninj":
+                    # FIXME: third should be ranking_statistic
+		    self.candidates += contents.connection.cursor().execute("""
 SELECT
-	coinc_inspiral.combined_far,
-	coinc_inspiral.false_alarm_rate,
-	coinc_event.likelihood,
-	coinc_inspiral.snr,
-	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1e-9,
-	coinc_inspiral.mass,
-	coinc_inspiral.mchirp,
-	coinc_inspiral.ifos,
-	coinc_event.instruments,
-	(SELECT
-		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2, " ")
-	FROM
-		sngl_inspiral
-		JOIN coinc_event_map ON (
-			sngl_inspiral.event_id == coinc_event_map.event_id AND coinc_event_map.table_name == "sngl_inspiral"
-		)
-	WHERE
-		coinc_event_map.coinc_event_id == coinc_inspiral.coinc_event_id
-	)
+	postcoh.far,
+	postcoh.fap,
+	postcoh.fap, 
+	postcoh.cohsnr,
+	postcoh.end_time + postcoh.end_time_ns * 1e-9,
+	postcoh.mtotal,
+	postcoh.mchirp,
+	postcoh.ifos,
+        postcoh.mass1,
+        postcoh.mass2,
+        postcoh.spin1z,
+        postcoh.spin2z,
+        postcoh.snglsnr_H,
+        postcoh.chisq_H,
+        postcoh.snglsnr_L,
+        postcoh.chisq_L
 FROM
-	coinc_inspiral
-	JOIN coinc_event ON (
-		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
-	)
-WHERE
-	NOT EXISTS(
-		SELECT
-			*
-		FROM
-			time_slide
-		WHERE
-			time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0
-	)
+	postcoh
 ORDER BY
-	combined_far
+	far
 LIMIT 10
 		""").fetchall()
 
-		self.bgcandidates += contents.connection.cursor().execute("""
+                if self.zerolag_form == "shift":
+                    # FIXME: third should be ranking_statistic
+		    self.bgcandidates += contents.connection.cursor().execute("""
 SELECT
-	coinc_inspiral.combined_far,
-	coinc_inspiral.false_alarm_rate,
-	coinc_event.likelihood,
-	coinc_inspiral.snr,
-	coinc_inspiral.end_time + coinc_inspiral.end_time_ns * 1e-9,
-	coinc_inspiral.mass,
-	coinc_inspiral.mchirp,
-	coinc_inspiral.ifos,
-	coinc_event.instruments,
-	(SELECT
-		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2, " ")
-	FROM
-		sngl_inspiral
-		JOIN coinc_event_map ON (
-			sngl_inspiral.event_id == coinc_event_map.event_id AND coinc_event_map.table_name == "sngl_inspiral"
-		)
-	WHERE
-		coinc_event_map.coinc_event_id == coinc_inspiral.coinc_event_id
-	)
+	postcoh.far,
+	postcoh.fap,
+	postcoh.fap, 
+	postcoh.cohsnr,
+	postcoh.end_time + postcoh.end_time_ns * 1e-9,
+	postcoh.mtotal,
+	postcoh.mchirp,
+	postcoh.ifos,
+        postcoh.mass1,
+        postcoh.mass2,
+        postcoh.spin1z,
+        postcoh.spin2z,
+        postcoh.snglsnr_H,
+        postcoh.chisq_H,
+        postcoh.snglsnr_L,
+        postcoh.chisq_L
 FROM
-	coinc_inspiral
-	JOIN coinc_event ON (
-		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
-	)
-WHERE
-	EXISTS(
-		SELECT
-			*
-		FROM
-			time_slide
-		WHERE
-			time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0
-	)
+	postcoh
 ORDER BY
-	combined_far
+	far
 LIMIT 10
 		""").fetchall()
 
 
-		contents.connection.cursor().execute("CREATE TEMPORARY TABLE distinct_ifos AS SELECT DISTINCT(ifos) AS ifos FROM coinc_inspiral")
-		for instruments, num in contents.connection.cursor().execute("""
-SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (distinct_ifos.ifos==coinc_inspiral.ifos) JOIN coinc_event ON (coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.ifos==distinct_ifos.ifos AND NOT EXISTS(SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0) GROUP BY distinct_ifos.ifos;
-"""):
-			key = frozenset(lsctables.instrument_set_from_ifos(instruments))
-			self.num_trigs.setdefault(key,0)
-			self.num_trigs[key] += num
 
-		contents.connection.cursor().execute("DROP TABLE distinct_ifos")
-
-		for on_instruments in set(contents.background_livetime) | set(contents.zerolag_livetime):
-			self.livetime.setdefault(on_instruments, 0.0)
-
-		for on_instruments, livetime in contents.zerolag_livetime.items():
-			self.livetime[on_instruments] += livetime
-
-	def write_wiki_string(self, l, f, lt):
-		f.write("|| Rank || FAR (Hz) || FAP || ln &Lambda; || Combined SNR || GPS End Time || <i>M</i><sub>total</sub> / M<sub>&#x2299;</sub> || <i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub> || Participating Instruments                   || On Instruments                              ||\n")
-		f.write("||      ||          ||     ||             ||              || Instrument   || SNR                                             || &chi;<sup>2</sup>/DOF                           || <i>m</i><sub>1</sub> / M<sub>&#x2299;</sub> || <i>m</i><sub>2</sub> / M<sub>&#x2299;</sub> ||\n")
-		for rank, values in enumerate(l, 1):
-			values = tuple(values)
-			f.write('|| %d || %.2e || %.3g || %.3g || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % ((rank,) + values[:9]))
-			for ifo_row in values[9].split():
-				ifo_row = ifo_row.split(":")
-				ifo_row[1:] = map(float, ifo_row[1:])
-				f.write('|| || || || || || %s || %.2f || %.2f || %.2f || %.2f ||\n' % tuple(ifo_row) )
+	def write_candidate_json(self, candidates, fname):
+		data = []
+		# FIXME generalize for virgo
+		description = [
+			("Rank", "number"),
+			("FAR (Hz)", "number"),
+			("FAP", "number"),
+			("ranking_statistic;", "number"),
+			("&rho;", "number"),
+			("<i>t</i>", "number"),
+			("<i>M</i><sub>total</sub> / M<sub>&#x2299;</sub>", "number"),
+			("<i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub>", "number"),
+			("Participating<br>Instruments", "string"),
+			("m<sub>1</sub>", "number"),
+			("m<sub>2</sub>", "number"),
+			("s<sub>1z</sub>", "number"),
+			("s<sub>2z</sub>", "number"),
+			("H1 &rho;", "string"),
+			("H1 &chi;<sup>2</sup>", "number"),
+			("L1 &rho;", "string"),
+			("L1 &chi;<sup>2</sup>", "number"),
+		]
+		for rank, values in enumerate(candidates, 1):
+			row = [rank] + [float(v) for v in values[:7]] + [values[7]] +[float(v) for v in values[8:12]]
+			# values[9] is a string that is e.g., H1:4.8993754:1.0139208:2.061641:1.145543 L1:8.2582664:1.1890973:2.061641:1.145543
+			ifodict = {"H1": [float(values[12]),float(values[13])], "L1": [float(values[14]),float(values[15])]}
+			row.extend(ifodict["H1"])
+			row.extend(ifodict["L1"])
+			data.append(row)
+		to_google_json(fname, description, data)
 
 	def finish(self):
-		self.candidates.sort()
-		f = open(self.base+'summary_table.txt','w')
-		f.write("=== Open box loudest 10 summary table ===\n")
-		self.write_wiki_string(self.candidates[:11], f, self.livetime)
-		f.close()
+                pdb.set_trace()
+                if self.zerolag_form == "noninj":
+		    self.candidates.sort()
+		    self.write_candidate_json(self.candidates[:101], self.base+'_summary_table.json')
+		    return None, None, None
+                else:
+		    self.bgcandidates.sort()
+		    self.write_candidate_json(self.bgcandidates[:101], self.base+'_bgsummary_table.json')
+		    return None, None, None
 
-		f = open(self.base+'num_trigs_table.txt','w')
-		f.write("||<b>DETECTORS</b>||<b># COINC EVENTS</b>||\n")
-		for inst in self.livetime.keys(): 
-			f.write("||%s||" % ("".join(sorted(inst)),))
-			try:
-				num = self.num_trigs[inst]
-			except:
-				num = 0
-			f.write("%d||\n" % (num,))
-		f.close()
 
-		f = open(self.base+'live_time_table.txt','w')
-		f.write("||<b>DETECTORS ON</b>||<b>LIVETIME (s) (d) (yr)</b>||\n")
-		for inst in self.livetime.keys(): 
-			f.write("||%s||%.2f %.2f %.2f||\n" % ("".join(sorted(inst)), self.livetime[inst],self.livetime[inst]/86400.0,self.livetime[inst]/31556926.0))
-		f.close()
-
-		self.bgcandidates.sort()
-		f = open(self.base+'bgsummary_table.txt','w')
-		f.write("=== Closed box loudest 10 summary table ===\n")
-		self.write_wiki_string(self.bgcandidates[:11], f, self.livetime)
-		f.close()
-		yield None, None, None
 
 #
 # =============================================================================
@@ -1071,8 +1086,8 @@ FROM
 		coinc_event_map_y.table_name == 'sngl_inspiral'
 		AND coinc_event_map_y.event_id == sngl_inspiral_y.event_id
 	)
-	JOIN coinc_inspiral ON (
-		coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
+	JOIN postcoh ON (
+		postcoh.coinc_event_id == coinc_event.coinc_event_id
 	)
 WHERE
 	coinc_event.coinc_def_id == ?
@@ -1241,9 +1256,9 @@ class RateVsThreshold(object):
 		for ln_likelihood_ratio, far, fap, snr, is_background in connection.cursor().execute("""
 SELECT
 	coinc_event.likelihood,
-	coinc_inspiral.combined_far,
-	coinc_inspiral.false_alarm_rate,
-	coinc_inspiral.snr,
+	postcoh.combined_far,
+	postcoh.false_alarm_rate,
+	postcoh.snr,
 	EXISTS (
 		SELECT
 			*
@@ -1254,9 +1269,9 @@ SELECT
 			AND time_slide.offset != 0
 	)
 FROM
-	coinc_inspiral
+	postcoh
 	JOIN coinc_event ON (
-		coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id
+		coinc_event.coinc_event_id == postcoh.coinc_event_id
 	)
 WHERE
 	coinc_event.likelihood >= 0.
@@ -1361,27 +1376,49 @@ options, filenames = parse_command_line()
 
 
 # how many there could be, so we know how many digits for the filenames
-max_plot_groups = None
 
-def new_plots(plots = None, far_thresh = None):
-	global max_plot_groups
-	l = (
-		SummaryTable(),
-		MissedFoundPlots(far_thresh = far_thresh),
-		ParameterAccuracyPlots(far_thresh = far_thresh),
-		BackgroundVsInjectionPlots(),
-		BackgroundVsInjectionPlotsMulti(snrfactor = 50.0),
-		RateVsThreshold(),
-		InjectionParameterDistributionPlots(),
-	)
-	max_plot_groups = len(l)
-	if plots is None:
-		plots = range(len(l))
-	return [l[i] for i in plots]
+def setup_plot(dbname, plot_group, options, user_tag, wiki):
+    working_filename = dbtables.get_connection_filename(dbname, tmp_path = options.tmp_space, verbose = options.verbose)
+    connection = sqlite3.connect(working_filename)
+    contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(dbname)[-1].replace(".sqlite","").replace(".tmp",""), wiki = wiki, base = os.path.join(options.output_dir, user_tag))
+    for (n, plot) in plot_group:
+	if options.verbose:
+		print >>sys.stderr, "adding to plot group %d ..." % n
+	plot.add_contents(contents)
+    connection.close()
+    dbtables.discard_connection_filename(dbname, working_filename, verbose = options.verbose)
+    return contents
 
-plots = new_plots(options.plot_group, options.far_threshold)
-if options.plot_group is None:
-	options.plot_group = range(len(plots))
+def finish_plot(contents, plot_group, options, user_tag):
+    for (n, plot) in plot_group:
+        (fig, filename_fragment, is_open_box) = plot.finish()
+	for format in options.format:
+		if filename_fragment and fig:
+                        filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[0], "%s", path = options.output_dir)
+			filename = filename_template % (user_tag, n, filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
+			if options.verbose:
+				print >>sys.stderr, "writing %s ..." % filename
+			fig.savefig(filename)
+
+
+plots = []
+wiki = open(os.path.join(options.output_dir, "%s" % "plotsummary.txt"),"w")
+
+# FIXME: RateVsThresh for noninj and shift
+if options.noninj_database:
+    base = os.path.join(options.output_dir, options.noninj_user_tag)
+    plots.append(SegmentsTable(base))
+    plots.append(SummaryTable("noninj"))
+    # plots.append(RateVsThreshold("noninj"))
+    plot_group = zip([0,1], plots)
+    dbname = options.noninj_database
+    contents = setup_plot(dbname, plot_group, options, options.noninj_user_tag, wiki)
+    finish_plot(contents, plot_group, options, options.noninj_user_tag)
+    del contents
+
+if options.shift_database:
+    plots.append(SummaryTable("shift"))
+    #plots.append(RateVsThreshold("shift"))
 
 
 #
@@ -1389,37 +1426,9 @@ if options.plot_group is None:
 #
 
 
-wiki = open(os.path.join(options.output_dir, "%s_%s" % (options.user_tag, "plotsummary.txt")),"w")
-for n, filename in enumerate(filenames):
-	if options.verbose:
-		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
-	wiki.write("=== %d/%d: %s ===\n\n" % (n + 1, len(filenames), filename))
-	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
-	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, wiki = wiki, base = os.path.join(options.output_dir, options.user_tag))
-	if contents.sim_inspiral_table is not None:
-		create_sim_coinc_view(connection)
-	for n, plot in zip(options.plot_group, plots):
-		if options.verbose:
-			print >>sys.stderr, "adding to plot group %d ..." % n
-		plot.add_contents(contents)
-	connection.close()
-	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
-
-
+# noninj database
 #
 # Finish and write plots, deleting them as we go to save memory
 #
 
 
-n = 0
-filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[1], "%s", path = options.output_dir)
-while len(plots):
-	for fig, filename_fragment, is_open_box in plots.pop(0).finish():
-		for format in options.format:
-			if filename_fragment and fig:
-				filename = filename_template % (options.user_tag, options.plot_group[n], filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
-				if options.verbose:
-					print >>sys.stderr, "writing %s ..." % filename
-				fig.savefig(filename)
-	n += 1

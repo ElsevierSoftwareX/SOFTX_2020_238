@@ -42,5 +42,6 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_postcohspiir_plotsummary \
 	gstlal_spiir_plot_waveform \
 	gstlal_matched_filter \
-	gstlal_bank_extract
+	gstlal_bank_extract \
+	gstlal_inspiral_summary_page
 
