@@ -1,3 +1,12 @@
+gstlal-calibration (1.1.8-1) unstable; urgency=low
+
+  * Update the cavity pole FIR filter with time
+  * Switch to using only custom resampler
+  * Update state vector calculation for f_cc updates
+  * Require all kappas to be good values for duration of smoothing filter
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Mon, 18 Dec 2017 12:08:53 -0500
+
 gstlal-calibration (1.1.7-1) unstable; urgency=low
 
   * Added sinc filter in resampler to reduce excess noise in kappas
