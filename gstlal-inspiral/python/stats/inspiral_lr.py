@@ -561,8 +561,9 @@ class LnNoiseDensity(LnLRDensity):
 		# clusters this issue will go away (can use qhull's
 		# algebraic geometry code for the probability
 		# calculations).
+		# FIXME:  remove V1 from rates model.  delete after O2
 		self.coinc_rates = snglcoinc.CoincRates(
-			instruments = self.instruments,
+			instruments = self.instruments - frozenset(("V1",)),
 			delta_t = self.delta_t,
 			min_instruments = self.min_instruments
 		)
