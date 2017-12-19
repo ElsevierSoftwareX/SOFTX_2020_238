@@ -28,6 +28,7 @@
 
 import math
 import numpy
+import os
 import random
 from scipy import interpolate
 from scipy import stats
@@ -35,8 +36,11 @@ import sys
 import warnings
 
 
+from glue.ligolw import ligolw
 from glue.ligolw import lsctables
+from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
+from glue.ligolw import utils as ligolw_utils
 from glue import segments
 from gstlal.stats import horizonhistory
 from gstlal.stats import inspiral_extrinsics
@@ -45,6 +49,13 @@ import lal
 from lal import rate
 from lalburst import snglcoinc
 import lalsimulation
+
+
+# FIXME:  caution, this information might get organized differently later.
+# for now we just need to figure out where the gstlal-inspiral directory in
+# share/ is.  don't write anything that assumes that this module will
+# continue to define any of these symbols
+from gstlal import paths as gstlal_config_paths
 
 
 __all__ = [
@@ -846,15 +857,23 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 	distance, and assess candidates based only on SNR and \chi^2
 	distributions.
 	"""
+
+	DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_datalesslndensity.xml.gz")
+
+	@ligolw_array.use_in
+	@ligolw_param.use_in
+	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+		pass
+
 	def __init__(self, *args, **kwargs):
 		super(DatalessLnNoiseDensity, self).__init__(*args, **kwargs)
-		# this a guess at a mass dependent snr chisq prior.  10
-		# *million* events gets the density estimation kernel to be
-		# a sensible size.
-		# FIXME:  initialize from template information instead of
-		# guessing mchirp.
-		mchirp = 0.8
-		self.add_noise_model(number_of_events = 10000000, prefactors_range = ((1. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3.)
+
+		# install SNR, chi^2 PDF (one for all instruments)
+		# FIXME:  make mass dependent
+		self.densities = {
+			"snr_chi": rate.BinnedLnPDF.from_xml(ligolw_utils.load_filename(self.DEFAULT_FILENAME, contenthandler = self.LIGOLWContentHandler), u"datalesslnnoisedensity")
+		}
+
 
 	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
 		# assume all instruments are on, 1 trigger per second per
@@ -876,8 +895,8 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 		lnP += self.coinc_rates.lnP_instruments(**triggers_per_second_per_template)[frozenset(snrs)]
 
 		# evaluate the SNR, \chi^2 factors
-		interps = self.interps
-		return lnP + sum(interps[name](*value) for name, value in kwargs.items() if name in interps)
+		interp = self.interps["snr_chi"]
+		return lnP + sum(interp(*value) for name, value in kwargs.items() if name.endswith("_snr_chi"))
 
 	def random_params(self):
 		# won't work
