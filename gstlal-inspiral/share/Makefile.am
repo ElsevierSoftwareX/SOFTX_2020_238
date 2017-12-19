@@ -1,12 +1,12 @@
 dist_pkgdata_DATA = \
-	inspiral_snr_pdf.xml.gz \
-	ll_simplify_and_cluster.sql \
-	ll_simplify.sql \
-	Makefile.offline_analysis_rules \
 	de_calc_likelihood.sql \
 	inj_simplify_and_cluster.sql \
-	simplify_and_cluster.sql \
-	O1_snr_chi_pdf_reference.xml.gz
+	inspiral_snr_pdf.xml.gz \
+	ll_simplify.sql \
+	ll_simplify_and_cluster.sql \
+	Makefile.offline_analysis_rules \
+	O1_snr_chi_pdf_reference.xml.gz \
+	simplify_and_cluster.sql
 
 inspiral_snr_pdf.xml.gz :
 	gstlal_inspiral_make_snr_pdf --verbose --output $@ \
