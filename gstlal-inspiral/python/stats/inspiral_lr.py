@@ -32,6 +32,7 @@ import random
 from scipy import interpolate
 from scipy import stats
 import sys
+import warnings
 
 
 from glue.ligolw import lsctables
