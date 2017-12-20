@@ -764,7 +764,7 @@ FROM
 
 
 class ParameterAccuracyPlots(object):
-	def __init__(self, far_thresh):
+	def __init__(self, far_thresh = 1e-4):
 		self.sim_sngl_pairs = {}
                 self.far_thresh = far_thresh
 
@@ -1381,6 +1381,8 @@ def setup_plot(dbname, plot_group, options, user_tag, wiki):
     working_filename = dbtables.get_connection_filename(dbname, tmp_path = options.tmp_space, verbose = options.verbose)
     connection = sqlite3.connect(working_filename)
     contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(dbname)[-1].replace(".sqlite","").replace(".tmp",""), wiki = wiki, base = os.path.join(options.output_dir, user_tag))
+    if contents.sim_inspiral_table is not None:
+        create_sim_coinc_view(connection)
     for (n, plot) in plot_group:
 	if options.verbose:
 		print >>sys.stderr, "adding to plot group %d ..." % n
@@ -1391,8 +1393,8 @@ def setup_plot(dbname, plot_group, options, user_tag, wiki):
 
 def finish_plot(contents, plot_group, options, user_tag):
     for (n, plot) in plot_group:
-        (fig, filename_fragment, is_open_box) = plot.finish()
-	for format in options.format:
+        for (fig, filename_fragment, is_open_box) in plot.finish():
+	    for format in options.format:
 		if filename_fragment and fig:
                         filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[0], "%s", path = options.output_dir)
 			filename = filename_template % (user_tag, n, filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
@@ -1401,11 +1403,11 @@ def finish_plot(contents, plot_group, options, user_tag):
 			fig.savefig(filename)
 
 
-plots = []
 wiki = open(os.path.join(options.output_dir, "%s" % "plotsummary.txt"),"w")
 
 # FIXME: RateVsThresh for noninj and shift
 if options.noninj_database:
+    plots = []
     base = os.path.join(options.output_dir, options.noninj_user_tag)
     plots.append(SegmentsTable(base))
     plots.append(SummaryTable("noninj"))
@@ -1417,9 +1419,29 @@ if options.noninj_database:
     del contents
 
 if options.shift_database:
-    plots.append(SummaryTable("shift"))
-    #plots.append(RateVsThreshold("shift"))
+    plots = []
+    plots.append(SegmentsTable(base))
+    plots.append(SummaryTable("noninj"))
+    # plots.append(RateVsThreshold("noninj"))
+    plot_group = zip([0,1], plots)
+    dbname = options.shift_database
+    contents = setup_plot(dbname, plot_group, options, options.shift_user_tag, wiki)
+    finish_plot(contents, plot_group, options, options.shift_user_tag)
+    del contents
 
+
+for (inj_name, tag_name) in zip(options.inj_database.split(","), options.inj_user_tag.split(",")):
+    plots = []
+    base = os.path.join(options.output_dir, tag_name)
+    plots.append(MissedFoundPlots(far_thresh = options.far_threshold))
+    plots.append(ParameterAccuracyPlots(far_thresh = options.far_threshold))
+    plots.append(InjectionParameterDistributionPlots())
+    plot_group = zip([2,3,7], plots)
+    dbname = inj_name
+    pdb.set_trace()
+    contents = setup_plot(dbname, plot_group, options, tag_name, wiki)
+    finish_plot(contents, plot_group, options, tag_name)
+    del contents
 
 #
 # Process files
