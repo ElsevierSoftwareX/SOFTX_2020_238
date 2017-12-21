@@ -1,12 +1,12 @@
 gstlal (1.3.0-1) unstable; urgency=low
 
- * add --sample-format option to gstlal_play
- * new horizon distance calculator, re-uses pre-computed waveforms
- * fix lockup in lal_cachesrc
- * fix use-after-free in lal_drop
- * fix gap handling bug in lal_firbank, and update test suite
- * add gstlal_peak_max_over_channels() to peak-finding library
- * new PSD plot style
+  * add --sample-format option to gstlal_play
+  * new horizon distance calculator, re-uses pre-computed waveforms
+  * fix lockup in lal_cachesrc
+  * fix use-after-free in lal_drop
+  * fix gap handling bug in lal_firbank, and update test suite
+  * add gstlal_peak_max_over_channels() to peak-finding library
+  * new PSD plot style
 
  -- Kipp Cannon <kipp.cannon@ligo.org>  Thu, 21 Dec 2017 16:47:30 +0900
 
