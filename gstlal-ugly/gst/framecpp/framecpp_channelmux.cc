@@ -1089,6 +1089,9 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 
 	case GST_EVENT_EOS:
 		GST_LOG_OBJECT(mux, "EOS");
+#if __GNUC__ >= 7
+		__attribute__ ((fallthrough));
+#endif
 	case GST_EVENT_FLUSH_START:
 		flush(mux);
 		break;
