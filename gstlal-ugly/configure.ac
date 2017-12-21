@@ -228,18 +228,6 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\|gstlal_\|GstLAL_\|GSTLAL_\).*"])
 
-# Check for availability of GstBaseParse class (starting in 0.10.33)
-CFLAGS_saved="$CFLAGS"
-CFLAGS="$gstreamer_CFLAGS"
-AC_COMPILE_IFELSE(
-	[AC_LANG_PROGRAM([#include <gst/base/gstbaseparse.h>])],
-	[HAVE_GSTBASEPARSE=yes
-	AC_DEFINE([HAVE_GST_BASEPARSE], [1], [Define if GstBaseParse class is available.])],
-	[HAVE_GSTBASEPARSE=no]
-)
-CFLAGS="$CFLAGS_saved"
-AM_CONDITIONAL([COND_GSTBASEPARSE], [test "x${HAVE_GSTBASEPARSE}" == "xyes"])
-
 
 #
 # Check for GStreamer Video Library

@@ -10,10 +10,8 @@ libframecpp_plugin_la_SOURCES = \
 	muxcollectpads.c muxcollectpads.h \
 	framecpp_channelmux.cc framecpp_channelmux.h \
 	framecpp_channeldemux.cc framecpp_channeldemux.h \
-	framecpp_filesink.c framecpp_filesink.h
-if COND_GSTBASEPARSE
-libframecpp_plugin_la_SOURCES += framecpp_igwdparse.cc framecpp_igwdparse.h
-endif
+	framecpp_filesink.c framecpp_filesink.h \
+	framecpp_igwdparse.cc framecpp_igwdparse.h
 libframecpp_plugin_la_CFLAGS = $(AM_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS) $(framecpp_CFLAGS)
 libframecpp_plugin_la_CXXFLAGS = $(AM_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS) $(framecpp_CXXFLAGS)
 libframecpp_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(framecpp_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
