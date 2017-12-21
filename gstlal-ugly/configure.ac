@@ -350,8 +350,6 @@ AS_IF([test "x$with_gds" != "xno"], [
 
 		PKG_CHECK_MODULES([gds_framexmit], [gds-framexmit >= ${MIN_GDS_VERSION}], [
 			HAVE_GDS_FRAMEXMIT="yes"
-			# hack to work around broken .pc file
-			gds_framexmit_LIBS="$gds_framexmit_LIBS -lpthread"
 		], [
 			AC_MSG_WARN([not found: $gds_framexmit_PKG_ERRORS])
 			HAVE_GDS_FRAMEXMIT="no"
