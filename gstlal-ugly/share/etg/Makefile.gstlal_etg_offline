@@ -9,22 +9,18 @@ CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-co
 # Triggering parameters #
 #########################
 
-# The GPS start time for analysis
-#START = 1176638000
-#START = 1176630000
+SEG_PAD = 1000
 
+# The GPS start time for analysis
 START = 1187000000
+FSTART=$(shell echo $$((${START}-${SEG_PAD})))
 
 # The GPS end time for analysis
-#STOP  = 1176639000
-#STOP  = 1176640000
-
-#STOP  = 1188000000
 STOP  = 1187100000
 
 OUTPATH = $(PWD)
-# Number of streams (N_channels x N_rates_per_channel) that each processor will analise
-N_STREAMS = 500
+# Number of threads (N_channels x N_rates_per_channel) that each cpu will process
+N_THREADS = 400
 MISMATCH = 0.2
 QHIGH = 40
 
@@ -54,27 +50,17 @@ SEGMENT_MIN_LENGTH = 512
 
 FRAME_TYPE=R
 
-#######################
-# GSTLAL VETO Options #
-#######################
-
-# Vetoes file names
-# Obtain veto definer from here: https://code.pycbc.phy.syr.edu/detchar/veto-definitions/blob/master/cbc/O2/
-# As of commit on August 30, 2017: "Added new version of L1, H1 earthquake flag"
-COMMIT = 5449edf6bf96fbd428add6551a51397bc5777f11
-VETODEF = H1L1-HOFT_C00_O2_CBC.xml
-
 #################
 # Web directory #
 #################
 
 # A user tag for the run
-TAG = O2_C00
+#TAG = O2_C00
 # Run number
-RUN = run_1
+#RUN = run_1
 # A web directory for output (note difference between cit+uwm and Atlas)
 # cit & uwm
-WEBDIR = ~/public_html/observing/$(TAG)/$(START)-$(STOP)-$(RUN)
+#WEBDIR = ~/public_html/observing/$(TAG)/$(START)-$(STOP)-$(RUN)
 # Atlas
 #WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
 
@@ -93,36 +79,39 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--gps-start-time $(START) \
 		--gps-end-time $(STOP) \
 		--frame-cache frame.cache \
+		--frame-segments-file segments.xml.gz \
 		--channel-list channel_list.txt \
 		--out-path $(OUTPATH) \
-		--streams $(N_STREAMS)\
+		--threads $(N_THREADS)\
 		--mismatch $(MISMATCH) \
 		--qhigh $(QHIGH) \
 		$(CONDOR_COMMANDS) \
 		--request-cpu 2 \
-		--request-memory 5GB \
+		--request-memory 11GB \
 		--verbose \
 		--disable-web-service
 
 #		--web-dir $(WEBDIR) \
 
-full_channel_list.txt : frame.cache
-	FrChannels $$(head -n 1 $^ | awk '{ print $$5}' | sed -e "s@file://localhost@@g") > $@
+# FIXME Determine channel list automatically.
+#full_channel_list.txt : frame.cache
+#	FrChannels $$(head -n 1 $^ | awk '{ print $$5}' | sed -e "s@file://localhost@@g") > $@
 
 # Produce segments file
 segments.xml.gz : frame.cache
-	ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
+	ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${FSTART} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
-	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
+	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(FSTART) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
 
 frame.cache :
 	# FIXME force the observatory column to actually be instrument
 	if [[ ${CLUSTER} == *"ligo-wa.caltech.edu" ]] ; then \
-		gw_data_find -o H -t H1_$(FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file -O $@ ; \
+		gw_data_find -o H -t H1_$(FRAME_TYPE) -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
 	elif [[ ${CLUSTER} == *"ligo-la.caltech.edu" ]] ; then \
-		gw_data_find -o L -t L1_$(FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file -O $@ ; \
+		gw_data_find -o L -t L1_$(FRAME_TYPE) -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
 	fi
 
+# FIXME Add webpages once we have output
 # Make webpage directory and copy files across
 #$(WEBDIR) : $(MAKEFILE_LIST)
 #	mkdir -p $(WEBDIR)/OPEN-BOX

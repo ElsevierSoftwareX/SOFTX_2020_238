@@ -47,6 +47,7 @@ from gstlal import dagparts as gstlaldagparts
 from gstlal import datasource
 from gstlal import multichannel_datasource
 from gstlal import idq_multirate_datasource
+from gstlal import idq_aggregator
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -57,6 +58,38 @@ lsctables.use_in(LIGOLWContentHandler)
 # get a dictionary of all the segments
 #
 
+def breakupseg(seg, maxextent, overlap):
+	if maxextent <= 0:
+		raise ValueError, "maxextent must be positive, not %s" % repr(maxextent)
+
+	# Simple case of only one segment
+	if abs(seg) < maxextent:
+		return segments.segmentlist([seg])
+
+	# adjust maxextent so that segments are divided roughly equally
+	maxextent = max(int(abs(seg) / (int(abs(seg)) // int(maxextent) + 1)), overlap)
+	maxextent = int(math.ceil(abs(seg) / math.ceil(abs(seg) / maxextent)))
+	end = seg[1]
+
+	seglist = segments.segmentlist()
+
+	while abs(seg):
+		if (seg[0] + maxextent + overlap) < end:
+			# Round down segment gps end time to integer multiple of cadence.
+			seglist.append(segments.segment(seg[0], idq_aggregator.floor_div(int(seg[0]) + maxextent + overlap, options.cadence)))
+			seg = segments.segment(seglist[-1][1] - overlap, seg[1])
+		else:
+			seglist.append(segments.segment(seg[0], end))
+			break
+
+	return seglist
+
+def breakupsegs(seglist, maxextent, overlap):
+	newseglist = segments.segmentlist()
+	for bigseg in seglist:
+		newseglist.extend(breakupseg(bigseg, maxextent, overlap))
+	return newseglist
+
 def analysis_segments(ifo, allsegs, boundary_seg, max_template_length = 30):
 	segsdict = segments.segmentlistdict()
 	# 512 seconds for the whitener to settle + the maximum template_length
@@ -66,7 +99,8 @@ def analysis_segments(ifo, allsegs, boundary_seg, max_template_length = 30):
 
 	segsdict[ifo] = segments.segmentlist([boundary_seg])
 	segsdict[ifo] = segsdict[ifo].protract(start_pad)
-	segsdict[ifo] = gstlaldagparts.breakupsegs(segsdict[ifo], segment_length, start_pad)
+	# FIXME revert to gstlaldagparts.breakupsegs and remove above two functions when we no longer write to ascii.
+	segsdict[ifo] = breakupsegs(segsdict[ifo], segment_length, start_pad)
 	if not segsdict[ifo]:
 		del segsdict[ifo]
 
@@ -82,10 +116,11 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, channe
 	total_rates = 0
 	outstr = ""
 	n_channels = 0
-	n_cpu = 0
+	n_process = 0
 	trig_start = options.gps_start_time
+	write_channel_list = True
 
-	# Loop over all channels to determine number of streams and minimum number of processes needed
+	# Loop over all channels to determine number of threads and minimum number of processes needed
 	for ii, channel in enumerate(channels,1):
 		samp_rate = data_source_info.channel_dict[channel]['fsamp']
 		max_samp_rate = min(2048, int(samp_rate))
@@ -93,20 +128,24 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, channe
 		n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
 		cumsum_rates += n_rates
 		total_rates += n_rates
-		if cumsum_rates >= options.streams or ii == len(data_source_info.channel_dict.keys()):
-			n_cpu += 1
+
+		if cumsum_rates >= options.threads or ii == len(data_source_info.channel_dict.keys()):
+			n_process += 1
 			cumsum_rates = 0
+
 	# Create more even distribution of channels across minimum number of processes
-	n_streams = math.ceil(total_rates / n_cpu)
+	n_threads = math.ceil(total_rates / n_process)
+
 	if options.verbose:
-		print "Total streams =", total_rates
-		print "Total jobs needed =", n_cpu
-		print "Evenly distributed streams per job =", int(n_streams)
+		print "Total threads =", total_rates
+		print "Total jobs needed =", n_process
+		print "Evenly distributed threads per job =", int(n_threads)
 
 	for seg in segsdict[ifo]:
 
 		cumsum_rates = 0
 		out_index = 0
+		channel_list = []
 
 		for ii, channel in enumerate(channels,1):
 			n_channels += 1
@@ -116,15 +155,16 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, channe
 			n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
 			cumsum_rates += n_rates
 			outstr = outstr + channel + ":" + str(int(samp_rate))
+			channel_list.append(channel + " " + str(int(samp_rate)))
 
 			# Adds channel to current process
-			if cumsum_rates < n_streams and ii < len(data_source_info.channel_dict.keys()):
+			if cumsum_rates < n_threads and ii < len(data_source_info.channel_dict.keys()):
 				outstr = outstr + " --channel-name="
 
-			# Finalise each process once number of streams passes threshold
-			if cumsum_rates >= n_streams or ii == len(data_source_info.channel_dict.keys()):
+			# Finalise each process once number of threads passes threshold
+			if cumsum_rates >= n_threads or ii == len(data_source_info.channel_dict.keys()):
 				out_index += 1
-				outpath = options.out_path + "/gstlal_etg/gstlal_etg_%04d/%i-%i" %(out_index, int(trig_start), int(seg[1])-int(trig_start))
+				outpath = options.out_path + "/gstlal_etg/gstlal_etg_%04d" %(out_index)
 				etg_nodes[channel] = \
 					inspiral_pipe.generic_node(gstlalETGJob, dag, parent_nodes = parent_nodes,
 						opts = {"gps-start-time":int(seg[0]),
@@ -136,19 +176,28 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, channe
 							"mismatch":options.mismatch,
 							"qhigh":options.qhigh,
 							"cadence":options.cadence,
-							#"triggers-from-dataframe":"",
 							"disable-web-service":""
 						},
 						input_files = {"frame-cache":options.frame_cache},
 						output_files = {"out-path":outpath}
 					)
-				if options.verbose:
-					print "Job %04d, number of channels = %3d, number of streams = %4d" %(out_index, n_channels, cumsum_rates)
+				if options.verbose and write_channel_list is True :
+					print "Job %04d, number of channels = %3d, number of threads = %4d" %(out_index, n_channels, cumsum_rates)
+
+				if write_channel_list is True :
+					listpath = options.out_path + "/gstlal_etg/channel_lists/channel_list_%04d.txt" %(out_index)
+					f = open(listpath,'w')
+					for channel_out in channel_list:
+						f.write(channel_out+'\n')
+					f.close()
+
 				cumsum_rates = 0
 				outstr = ""
 				n_channels = 0
+				channel_list = []
 
 		trig_start = int(seg[1])
+		write_channel_list = False
 
 	return etg_nodes
 
@@ -166,13 +215,13 @@ def parse_command_line():
 	# trigger generation options
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--triggers-from-dataframe", action = "store_true", default = False,
-				help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
+		help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
-	parser.add_option("-s", "--streams", type = "float", default = 100, help = "Number of streams to process per node. Default = 100.")
+	parser.add_option("-t", "--threads", type = "float", default = 100, help = "Number of threads to process per node. Default = 100.")
 	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
 	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
@@ -186,7 +235,6 @@ def parse_command_line():
 
 	return options, filenames
 
-
 #
 # Useful variables
 #
@@ -194,6 +242,10 @@ def parse_command_line():
 options, filenames = parse_command_line()
 
 output_dir = "plots"
+
+listdir = os.path.join(options.out_path, "gstlal_etg/channel_lists")
+if not os.path.exists(listdir):
+    os.makedirs(listdir)
 
 #
 #
@@ -238,4 +290,3 @@ etg_nodes = etg_node_gen(gstlalETGJob, dag, [], segsdict, ifo, options, channels
 dag.write_sub_files()
 dag.write_dag()
 dag.write_script()
-#dag.write_cache()
