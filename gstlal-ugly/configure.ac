@@ -29,7 +29,6 @@ AC_CONFIG_FILES([ \
 	gst/python/Makefile \
 	gst/framecpp/Makefile \
 	gst/gds/Makefile \
-	gst/multirate/Makefile \
 	gst/cuda/Makefile \
 	bin/Makefile \
 	tests/Makefile \
