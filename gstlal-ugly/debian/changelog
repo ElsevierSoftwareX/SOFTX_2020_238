@@ -1,3 +1,16 @@
+gstlal-ugly (1.4.0-1) unstable; urgency=low
+
+  * add gstlal_plot_channel_psd program
+  * replace gstlal_idq_trigger_gen with gstlal_etg
+  * lots of lalsuite API updates
+  * fix clip-to-segments property reading in muxcollectpads
+  * fix lock-up in gds_framexmitsrc
+  * fix lock-up in gds_lvshmsrc
+  * fix lock-up in ndssrc
+  * add lal_tdwhiten element
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Thu, 21 Dec 2017 17:30:15 +0900
+
 gstlal-ugly (1.3.1-1) unstable; urgency=low
 
   * 1.3.1 release, O2
