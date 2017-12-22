@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-ugly],[1.4.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
-AC_COPYRIGHT([Copyright (C) 2008--2016 Kipp Cannon])
+AC_INIT([gstlal-ugly],[1.4.1],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_COPYRIGHT([Copyright (C) 2008--2017 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])

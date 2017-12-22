@@ -1,3 +1,10 @@
+gstlal-ugly (1.4.1-1) unstable; urgency=low
+
+  * gds-dev --> gds-devel in .spec
+  * remove multirate's Makefile.in from configure.ac (not packaged)
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Sat, 23 Dec 2017 02:39:46 +0900
+
 gstlal-ugly (1.4.0-1) unstable; urgency=low
 
   * add gstlal_plot_channel_psd program
