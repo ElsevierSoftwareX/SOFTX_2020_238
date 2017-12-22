@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-calibration],[1.1.8],[gstlal-discuss@ligo.org],[gstlal-calibration])
+AC_INIT([gstlal-calibration],[1.1.9],[gstlal-discuss@ligo.org],[gstlal-calibration])
 AC_COPYRIGHT([Copyright (C) 2008--2017 Madeline Wade, Aaron Viets])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
