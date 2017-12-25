@@ -246,11 +246,11 @@ to your GI_TYPELIB_PATH environment variable.])
 
 
 #
-# Check for pygobject (for gstpythonplugin from gstreamer)
+# Check for pygobject and gmodule (for gstpythonplugin from gstreamer)
 #
 
 
-PKG_CHECK_MODULES([PYGOBJECT], [pygobject-3.0])
+PKG_CHECK_MODULES([PYGOBJECT], [pygobject-3.0 gmodule-2.0])
 AC_SUBST([PYGOBJECT_CFLAGS])
 AC_SUBST([PYGOBJECT_LIBS])
 #AM_CHECK_PYTHON_LIBS(, AC_MSG_ERROR([Python libs not found.]))
