@@ -118,13 +118,12 @@ AC_SUBST([MIN_GTK_DOC_VERSION])
 #
 
 
-MIN_PYTHON_VERSION="2.7"
+AC_SUBST([MIN_PYTHON_VERSION], ["2.7"])
 AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
 # hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
 # and SL6.  FIXME:  find a way to do this properly
 PYTHON_LIBS=[`echo "$PYTHON_LIBS" | sed -e "s?-L/usr/lib[^[:space:]]*??g"`]
-AC_SUBST([MIN_PYTHON_VERSION])
 
 
 #
