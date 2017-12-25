@@ -113,14 +113,14 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %{_datadir}/gstlal/*
 %{_docdir}/gstlal-inspiral-*
 %{_libdir}/*.so.*
-%{_libdir}/gstreamer-*/*.so
-#%{_libdir}/gstreamer-*/python/*
+%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.so
+#%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/python/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal
 
 %files devel
 %defattr(-,root,root)
 %{_libdir}/*.a
 %{_libdir}/*.so
+%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.a
 %{_libdir}/pkgconfig/*
-%{_libdir}/gstreamer-*/*.a
 %{_includedir}/*

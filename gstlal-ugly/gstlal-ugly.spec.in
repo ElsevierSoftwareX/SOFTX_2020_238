@@ -116,10 +116,15 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %{_datadir}/gstlal/*
 # there's no documentation
 #%{_docdir}/gstlal-ugly-*
+%{_libdir}/*.so.*
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.so
 #%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/python/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal
 
 %files devel
 %defattr(-,root,root)
+%{_includedir}/gstlal-ugly
+%{_libdir}/*.a
+%{_libdir}/*.so
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.a
+%{_libdir}/pkgconfig/*
