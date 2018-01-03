@@ -170,13 +170,20 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.last_save_time = None
 		self.cadence = options.cadence
 		self.tag = '%s-%s' % (self.instrument[:1], self.description)
-		# create header for trigger file
-		if options.latency:
-			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel", "latency")
+		# hdf saving properties
+		if options.save_hdf:
+			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
+			self.fdata = idq_aggregator.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
+		# ascii saving properties
 		else:
-			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
-		self.fdata = deque(maxlen = 25000)
-		self.fdata.append(self.header)
+			self.tag = '%s-%s' % (self.instrument[:1], self.description)
+			# create header for trigger file
+			if options.latency:
+				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel", "latency")
+			else:
+				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
+			self.fdata = deque(maxlen = 25000)
+			self.fdata.append(self.header)
 
 		# set initialization time
 		if options.data_source in ("framexmit", "lvshm"):
@@ -260,9 +267,14 @@ class MultiChannelHandler(simplehandler.Handler):
 
 			# Save triggers (in ascii format) once every cadence
 			if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
-				self.to_trigger_file(buftime)
-				self.fdata.clear()
-				self.fdata.append(self.header)
+				if options.save_hdf:
+					fname = '%s-%d-%d' % (self.tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence)
+					fpath = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
+					self.fdata.dump(fpath, fname)
+				else:
+					self.to_trigger_file(buftime)
+					self.fdata.clear()
+					self.fdata.append(self.header)
 				self.last_save_time = buftime
 
 			# read buffer contents
@@ -303,15 +315,18 @@ class MultiChannelHandler(simplehandler.Handler):
 		# NOTE
 		# Setting stop time to trigger time for use with half sine gaussians
 		stop_time = trigger_time
-		# save iDQ compatible data
-		if options.latency:
-			self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag, latency))
-		else:
-			self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
 		# append row to feature vector for bottle requests
 		etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
-                           'frequency': freq, 'q': q, 'phase': row.phase, 'sigma_sq': row.sigmasq, 'chi_sq': row.chisq, 'snr': row.snr}
+                           'frequency': freq, 'q': q, 'phase': row.phase, 'sigmasq': row.sigmasq, 'chisq': row.chisq, 'snr': row.snr}
 		self.etg_event.append(etg_row)
+		# save iDQ compatible data
+		if options.save_hdf:
+			self.fdata.append(etg_row, key = (channel, rate), buftime = buftime)
+		else:
+			if options.latency:
+				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag, latency))
+			else:
+				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
 
 
 	def to_trigger_file(self, buftime = None):
@@ -481,6 +496,7 @@ def parse_command_line():
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 	parser.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
 	parser.add_option("--etg-partition", metavar = "string", help = "If using Kafka, sets the partition that this ETG is assigned to.")
 	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this ETG publishes feature vector subsets to.")
@@ -669,7 +685,8 @@ if options.verbose:
 mainloop.run()
 
 # save remaining triggers
-handler.to_trigger_file()
+if not options.save_hdf:
+	handler.to_trigger_file()
 
 #
 # Shut down pipeline
