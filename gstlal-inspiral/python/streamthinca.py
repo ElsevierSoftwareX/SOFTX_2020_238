@@ -98,7 +98,7 @@ class StreamThinca(object):
 		self.min_log_L = min_log_L
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.sngl_inspiral_table = None
-		self.rankingstat = None
+		self.ln_likelihood_func = None
 
 		# the \Delta t window not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
