@@ -112,9 +112,9 @@ GSTREAMER_TARGET=$(INSTALL_DIR)/lib/libgstreamer-1.0.so
 GSL_2_TARGET=$(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
 GSL_1_TARGET=$(INSTALL_DIR)/lib/libgsl.so
 ORC_TARGET=$(INSTALL_DIR)/lib/liborc-0.4.so
-FFTW_TARGET=$(INSTALL_DIR)/lib/libfftw3.so
 #PYFFTW_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/pyfftw/pyfftw.so
 PYFFTW_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/pyfftw/pyfftw.so
+FFTW_TARGET=$(INSTALL_DIR)/lib/libfftw3.so
 
 # tarballs
 GSTLALINSPIRAL_TAR_TARGET=$(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz
@@ -205,9 +205,9 @@ env.sh :
 		echo "source ${ICC_UWM} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
         elif [[ ${CLUSTER} == *"psu.edu" ]] ; then \
-                echo "source ${ICC_PSU} intel64" >> $@ ; \
-                echo "export LIBRARY_PATH=$${LD_LIBRARY_PATH}" >> $@ ; \
-                echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
+		echo "source ${ICC_PSU} intel64" >> $@ ; \
+		echo 'export LIBRARY_PATH=$${LD_LIBRARY_PATH}' >> $@ ; \
+		echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
 	elif [[ ${CLUSTER} == *"atlas.local" ]] ; then \
 		echo "source ${ICC_ATLAS} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="-L/opt/intel/2015/lib/intel64 -L/opt/intel/2015/mkl/lib/intel64"' >> $@ ; \
