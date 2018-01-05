@@ -7,6 +7,7 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 9),
+ dh-python,
  doxygen (>= @MIN_DOXYGEN_VERSION@),
  fakeroot,
  gobject-introspection (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
