@@ -167,16 +167,16 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.keys = kwargs.pop("keys")
 
 		# iDQ saving properties
-		self.last_save_time = None
 		self.cadence = options.cadence
 		self.tag = '%s-%s' % (self.instrument[:1], self.description)
 		# hdf saving properties
 		if options.save_hdf:
+			self.last_save_time = {key:None for key in self.keys}
 			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
 			self.fdata = idq_aggregator.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
 		# ascii saving properties
 		else:
-			self.tag = '%s-%s' % (self.instrument[:1], self.description)
+			self.last_save_time = None
 			# create header for trigger file
 			if options.latency:
 				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel", "latency")
@@ -262,20 +262,29 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.etg_event_time = buftime
 
 			# set save times appropriately
-			if self.last_save_time is None:
-				self.last_save_time = buftime
+			if options.save_hdf:
+				if self.last_save_time[(channel, rate)] is None:
+					self.last_save_time[(channel, rate)] = buftime
+			else:
+				if self.last_save_time is None:
+					self.last_save_time = buftime
 
 			# Save triggers (in ascii format) once every cadence
-			if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
-				if options.save_hdf:
-					fname = '%s-%d-%d' % (self.tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence)
+			if options.save_hdf:
+				if idq_aggregator.in_new_epoch(buftime, self.last_save_time[(channel, rate)], self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+					if options.gps_end_time:
+						fname = '%s-%s-%s' % (self.tag, options.gps_start_time, options.gps_end_time)
+					else:
+						fname = '%s-%d' % (self.tag, self.init_gps_time)
 					fpath = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
-					self.fdata.dump(fpath, fname)
-				else:
+					self.fdata.dump(fpath, fname, idq_aggregator.floor_div(self.last_save_time[(channel, rate)], self.cadence), key=(channel, rate))
+					self.last_save_time[(channel, rate)] = buftime
+			else:
+				if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
 					self.to_trigger_file(buftime)
 					self.fdata.clear()
 					self.fdata.append(self.header)
-				self.last_save_time = buftime
+					self.last_save_time = buftime
 
 			# read buffer contents
 			for i in range(buf.n_memory()):

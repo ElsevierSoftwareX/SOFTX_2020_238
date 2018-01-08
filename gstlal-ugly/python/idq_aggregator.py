@@ -42,48 +42,50 @@ from gstlal import aggregator
 #
 ####################
 
-def get_dataset(path, base):
+def get_dataset(path, base, name = 'data', group = None):
 	"""!
 	open a dataset at @param path with name @param base and return the data
 	"""
-	fname = os.path.join(path, "%s.hdf5" % base)
+	fname = os.path.join(path, "%s.h5" % base)
 	try:
-		f = h5py.File(fname, "r")
-		fields = f.keys()
-		data = zip(*[f[field] for field in fields])
-		f.close()
-		d_types = [(str(field), 'f8') for field in fields]
-		data = numpy.array(data, dtype=d_types)
+		with h5py.File(fname, 'r') as hfile:
+			if group:
+				data = numpy.array(hfile[group][name])
+			else:
+				data = numpy.array(hfile[name])
 		return fname, data
 	except IOError:
 		return fname, []
 
-def create_new_dataset(path, base, fields, data = None, tmp = False):
+def create_new_dataset(path, base, data, name = 'data', group = None, tmp = False):
 	"""!
 	A function to create a new dataset with data @param data.
 	The data will be stored in an hdf5 file at path @param path with
 	base name @param base.  You can also make a temporary file.
 	"""
 	if tmp:
-		fname = os.path.join(path, "%s.hdf5.tmp" % base)
+		fname = os.path.join(path, "%s.h5.tmp" % base)
 	else:
-		# A non temp dataset should not be overwritten
-		fname = os.path.join(path, "%s.hdf5" % base)
-		if os.path.exists(fname):
-			return fname
+		fname = os.path.join(path, "%s.h5" % base)
+
 	# create dir if it doesn't exist
 	if not os.path.exists(path):
 		aggregator.makedir(path)
-	# save data to hdf5
-	f = h5py.File(fname, "w")
-	for field in fields:
-		if data is None:
-			f.create_dataset(field, (0,), dtype="f8")
-		else:
-			f.create_dataset(field, (len(data[field]),), dtype="f8")
-			f[field][...] = data[field]
 
-	f.close()
+	print >>sys.stderr, "filename = %s" %fname
+	print >>sys.stderr, "dataset name = %s" % name
+	print >>sys.stderr, "group = %s" % group
+	print >>sys.stderr, "data = %s" %repr(data)
+
+	# save data to hdf5
+	with h5py.File(fname, 'a') as hfile:
+		if group:
+			if group not in hfile:
+				hfile.create_group(group)
+			hfile[group].create_dataset(name, data=data)
+		else:
+			hfile.create_dataset(name, data=data)
+
 	return fname
 
 def in_new_epoch(new_gps_time, prev_gps_time, gps_epoch):
@@ -142,16 +144,24 @@ class HDF5FeatureData(FeatureData):
 	"""
 	def __init__(self, columns, keys, **kwargs):
 		super(HDF5FeatureData, self).__init__(columns, keys = keys, **kwargs)
-		self.cadence = kwargs.pop("cadence")
+		self.cadence = kwargs.pop('cadence')
 		self.etg_data = {key: numpy.empty((self.cadence,), dtype = [(column, 'f8') for column in self.columns]) for key in keys}
-		for key in keys:
-			self.etg_data[key][:] = numpy.nan
-
-	def dump(self, path, base):
-		for key in self.keys:
-			key_path = os.path.join(path, str(key[0]), str(key[1]).zfill(4))
-			create_new_dataset(key_path, base, self.columns, data = self.etg_data[key])
 		self.clear()
+
+	def dump(self, path, base, start_time, key = None):
+		"""
+		Saves the current cadence of gps triggers to disk and clear out data
+		"""
+		name = "%d_%d" % (start_time, self.cadence)
+		if key:
+			group = os.path.join(str(key[0]), str(key[1]).zfill(4))
+			create_new_dataset(path, base, self.etg_data[key], name=name, group=group)
+			self.clear(key)
+		else:
+			for key in self.keys:
+				group = os.path.join(str(key[0]), str(key[1]).zfill(4))
+				create_new_dataset(path, base, self.etg_data[key], name=name, group=group)
+			self.clear()
 
 	def load(self, path):
 		raise NotImplementedError
@@ -160,10 +170,16 @@ class HDF5FeatureData(FeatureData):
 		raise NotImplementedError
 
 	def append(self, value, key = None, buftime = None):
+		"""
+		Append a trigger row to data structure
+		"""
 		if buftime and key:
 			idx = buftime % self.cadence
 			self.etg_data[key][idx] = numpy.array([value[column] for column in self.columns])
 
-	def clear(self):
-		for key in self.keys:
+	def clear(self, key = None):
+		if key:
 			self.etg_data[key][:] = numpy.nan
+		else:
+			for key in self.keys:
+				self.etg_data[key][:] = numpy.nan
