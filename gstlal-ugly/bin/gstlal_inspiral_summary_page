@@ -49,9 +49,9 @@ sched_doc = webpage.tab("schedule", "Schedule", "Schedule")
 # add the sections to the nav bar and the nav bar to the page
 #
 
-nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://versions.ligo.org/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+#nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://versions.ligo.org/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
 #FIXME: nav+=[summary, injparams, injrecovery, sens, back, money, about_doc, sched_doc]
-nav+=[summary, injparams, injrecovery, money, about_doc, sched_doc]
+nav+=[summary, injparams, injrecovery, money]
 nav+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
 thispage+=nav
 thispage+=webpage.elem("br",[])
@@ -352,120 +352,120 @@ shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir, os.path.split(o
 # simplified and parallelized with writing of the full version of the page
 
 # Set up a lite version of the summary page
-thispage_lite = webpage.page()
-nav_lite = webpage.tabs()
-
-summary_lite = webpage.tab("summary_lite", "Summary information", "Summary information")
-about_doc_lite = webpage.tab("about", "About", "About")
-sched_doc_lite = webpage.tab("schedule", "Schedule", "Schedule")
-
-# Summary lite setup
-nav_lite+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
-nav_lite+=[summary_lite, about_doc_lite, sched_doc_lite]
-nav_lite+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
-thispage_lite+=nav_lite
-thispage_lite+=webpage.elem("br",[])
-
-summary_lite_about = webpage.elem("p", ["This page was generated on %s by %s in the working directory <code>%s</code>." % (time.strftime("%Y-%m-%d %H:%M"), os.environ["USER"], os.environ["PWD"])])
-
-summary_lite_lt = webpage.section("Search Summary")
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]), "lt_summary_lite_div"))
-summary_lite_lt += [webpage.elem("div", [], "id=lt_summary_lite_div width=100% height=500")]
-
-# Include horizon distance plots
-horizon_lite = webpage.section("Horizon distance")
-horizon_lite += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a (1.4, 1.4) Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
-
-# Include found/missed as function of decisive characteristic SNR
-fm_lite_snr = webpage.section("Found / Missed Expected SNR")
-fm_lite_snr += webpage.elem("p", ["""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections for the various IFO times for coincident triggers."""])
-#FIXME: thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_injection_summary.json' % opts.output_user_tag[0]), "inj_summary_lite_div"))
-fm_lite_snr += [webpage.elem("div", [], "id=inj_summary_lite_div width=100% height=500")]
-fm_lite_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % opts.output_user_tag[0]), "Expected SNR of found and missed injections as a function of chirp mass.: %s" % opts.output_user_tag[0])
-
-# Include missed injection table
-fm_lite_mtab = webpage.section("Missed Table")
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]), "missed_summary_lite_div"))
-fm_lite_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % opts.output_user_tag[0]])]
-fm_lite_mtab += [webpage.elem("div", [], "id=missed_summary_lite_div")]
-
-# Include search sensitivity binned by source type
-sens_lite = webpage.section("Search Sensitivity")
-sens_lite += webpage.elem("p", ["""These plots characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0"""])
-sens_lite += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_FAR_BINNED_BY_SOURCE_TYPE*.png' % opts.output_user_tag[0]), "Sensitive volume (V*T) and mean sensitive distance: %s" % opts.output_user_tag[0])
-
-# Include FAP estimation plots
-back_snrchi_lite = webpage.section("SNR and chi-squared")
-back_snrchi_lite += [webpage.elem("p", ["This page shows the ingredients that go into ranking events and determining the False alarm probability."])]
-back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'), "Single Detector Background SNR-chisq Distributions")
-back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions")
-
-# Include Chi-square distribution plots
-chisq_dist_lite = webpage.section("Chi-squared Distributions")
-chisq_dist_lite += [webpage.elem("p", ["The chi-squared test checks that the snr accumulated matches expectation."])]
-chisq_dist_lite += webpage.image_glob(os.path.join(opts.glob_path, '*4_chi2_vs_rho_*closedbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
-
-# Include IFAR and lnL plots
-money_ifar_lite = webpage.section("Rate vs. Threshold")
-money_ifar_lite += [webpage.elem("p", ["This section provides the detection statistic plots and a summary of the loudest event."])]
-money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*6_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
-
-# Include loudest table
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "bgsummary_table_lite_div"))
-money_ifar_lite += [webpage.elem("p", ["Closed Box Summary Table"])]
-money_ifar_lite += [webpage.elem("div", [], "id=bgsummary_table_lite_div")]
-
+#thispage_lite = webpage.page()
+#nav_lite = webpage.tabs()
 #
-# OPEN BOX Lite
+#summary_lite = webpage.tab("summary_lite", "Summary information", "Summary information")
+#about_doc_lite = webpage.tab("about", "About", "About")
+#sched_doc_lite = webpage.tab("schedule", "Schedule", "Schedule")
 #
-
-if opts.open_box:
-	back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
-
-	chisq_dist_lite += webpage.image_glob(os.path.join(opts.glob_path, '*4_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
-
-	money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*6_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "zlsummary_table_lite_div"))
-	money_ifar_lite += [webpage.elem("p", ["Open Box Summary Table"])]
-	money_ifar_lite += [webpage.elem("div", [], "id=zlsummary_table_lite_div")]
-
-summary_lite_div = summary_lite([summary_lite_about, summary_lite_lt, horizon_lite, fm_lite_snr, fm_lite_mtab, sens_lite, back_snrchi_lite, chisq_dist_lite, money_ifar_lite])
-
+## Summary lite setup
+#nav_lite+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+#nav_lite+=[summary_lite, about_doc_lite, sched_doc_lite]
+#nav_lite+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
+#thispage_lite+=nav_lite
+#thispage_lite+=webpage.elem("br",[])
 #
-# Add search documentation to lite section
+#summary_lite_about = webpage.elem("p", ["This page was generated on %s by %s in the working directory <code>%s</code>." % (time.strftime("%Y-%m-%d %H:%M"), os.environ["USER"], os.environ["PWD"])])
 #
-
-about_search_lite = webpage.section("Search Plan Documentation")
-about_search_lite += [webpage.elem("iframe", [], """src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true" width=100%% height=100%% id=search_doc_div""")]
-
-about_lite_div = about_doc_lite([about_search_lite])
-
+#summary_lite_lt = webpage.section("Search Summary")
+#thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]), "lt_summary_lite_div"))
+#summary_lite_lt += [webpage.elem("div", [], "id=lt_summary_lite_div width=100% height=500")]
 #
-# Add shift documentation to lite section
+## Include horizon distance plots
+#horizon_lite = webpage.section("Horizon distance")
+#horizon_lite += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a (1.4, 1.4) Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
 #
-
-about_shifts_lite = webpage.section("Search Run Schedule")
-about_shifts_lite += [webpage.elem("iframe", [], """width=100% height=100% src="https://docs.google.com/spreadsheets/d/e/2PACX-1vR1XwazhZYoVbMXFZCq_s2rlzyNwcF0xC4kyhnKrCeXFSWte-2jRodL590RU3PsoX4OVypYyAZ7Nl_8/pubhtml?widget=true&amp;headers=false" id=shift_doc_div""")]
-
-shift_lite_div = sched_doc_lite([about_shifts_lite])
-
+## Include found/missed as function of decisive characteristic SNR
+#fm_lite_snr = webpage.section("Found / Missed Expected SNR")
+#fm_lite_snr += webpage.elem("p", ["""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections for the various IFO times for coincident triggers."""])
+##FIXME: thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_injection_summary.json' % opts.output_user_tag[0]), "inj_summary_lite_div"))
+#fm_lite_snr += [webpage.elem("div", [], "id=inj_summary_lite_div width=100% height=500")]
+#fm_lite_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % opts.output_user_tag[0]), "Expected SNR of found and missed injections as a function of chirp mass.: %s" % opts.output_user_tag[0])
 #
-# Add all the content from each tab to the lite pages
+## Include missed injection table
+#fm_lite_mtab = webpage.section("Missed Table")
+#thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]), "missed_summary_lite_div"))
+#fm_lite_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % opts.output_user_tag[0]])]
+#fm_lite_mtab += [webpage.elem("div", [], "id=missed_summary_lite_div")]
 #
-
-thispage_lite += [summary_lite_div, about_lite_div, shift_lite_div]
-
+## Include search sensitivity binned by source type
+#sens_lite = webpage.section("Search Sensitivity")
+#sens_lite += webpage.elem("p", ["""These plots characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0"""])
+#sens_lite += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_FAR_BINNED_BY_SOURCE_TYPE*.png' % opts.output_user_tag[0]), "Sensitive volume (V*T) and mean sensitive distance: %s" % opts.output_user_tag[0])
 #
-# write the result
+## Include FAP estimation plots
+#back_snrchi_lite = webpage.section("SNR and chi-squared")
+#back_snrchi_lite += [webpage.elem("p", ["This page shows the ingredients that go into ranking events and determining the False alarm probability."])]
+#back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'), "Single Detector Background SNR-chisq Distributions")
+#back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions")
 #
-
-try:
-	os.makedirs(opts.webserver_dir + "_lite")
-except OSError:
-	pass
-
-flite = open("%s/index.html" % (opts.webserver_dir + "_lite", ), "w")
-thispage_lite.write(flite)
-flite.close()
-
-shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir + "_lite", os.path.split(opts.glob_path)[1]))
+## Include Chi-square distribution plots
+#chisq_dist_lite = webpage.section("Chi-squared Distributions")
+#chisq_dist_lite += [webpage.elem("p", ["The chi-squared test checks that the snr accumulated matches expectation."])]
+#chisq_dist_lite += webpage.image_glob(os.path.join(opts.glob_path, '*4_chi2_vs_rho_*closedbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+#
+## Include IFAR and lnL plots
+#money_ifar_lite = webpage.section("Rate vs. Threshold")
+#money_ifar_lite += [webpage.elem("p", ["This section provides the detection statistic plots and a summary of the loudest event."])]
+#money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*6_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
+#
+## Include loudest table
+#thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "bgsummary_table_lite_div"))
+#money_ifar_lite += [webpage.elem("p", ["Closed Box Summary Table"])]
+#money_ifar_lite += [webpage.elem("div", [], "id=bgsummary_table_lite_div")]
+#
+##
+## OPEN BOX Lite
+##
+#
+#if opts.open_box:
+#	back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
+#
+#	chisq_dist_lite += webpage.image_glob(os.path.join(opts.glob_path, '*4_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+#
+#	money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*6_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
+#	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "zlsummary_table_lite_div"))
+#	money_ifar_lite += [webpage.elem("p", ["Open Box Summary Table"])]
+#	money_ifar_lite += [webpage.elem("div", [], "id=zlsummary_table_lite_div")]
+#
+#summary_lite_div = summary_lite([summary_lite_about, summary_lite_lt, horizon_lite, fm_lite_snr, fm_lite_mtab, sens_lite, back_snrchi_lite, chisq_dist_lite, money_ifar_lite])
+#
+##
+## Add search documentation to lite section
+##
+#
+#about_search_lite = webpage.section("Search Plan Documentation")
+#about_search_lite += [webpage.elem("iframe", [], """src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true" width=100%% height=100%% id=search_doc_div""")]
+#
+#about_lite_div = about_doc_lite([about_search_lite])
+#
+##
+## Add shift documentation to lite section
+##
+#
+#about_shifts_lite = webpage.section("Search Run Schedule")
+#about_shifts_lite += [webpage.elem("iframe", [], """width=100% height=100% src="https://docs.google.com/spreadsheets/d/e/2PACX-1vR1XwazhZYoVbMXFZCq_s2rlzyNwcF0xC4kyhnKrCeXFSWte-2jRodL590RU3PsoX4OVypYyAZ7Nl_8/pubhtml?widget=true&amp;headers=false" id=shift_doc_div""")]
+#
+#shift_lite_div = sched_doc_lite([about_shifts_lite])
+#
+##
+## Add all the content from each tab to the lite pages
+##
+#
+#thispage_lite += [summary_lite_div, about_lite_div, shift_lite_div]
+#
+##
+## write the result
+##
+#
+#try:
+#	os.makedirs(opts.webserver_dir + "_lite")
+#except OSError:
+#	pass
+#
+#flite = open("%s/index.html" % (opts.webserver_dir + "_lite", ), "w")
+#thispage_lite.write(flite)
+#flite.close()
+#
+#shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir + "_lite", os.path.split(opts.glob_path)[1]))
