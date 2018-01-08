@@ -932,7 +932,7 @@ def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFind
 	# combine shift ifos and bankbox
 	# FIXME: hard-coded input and outputnames
 	inj_counter = 0
-	inj_outnodes = {}
+	inj_outnodes = []
 	for injections in options.injections:
 	    sim_name = sim_tag_from_inj_file(injections)
 	    output_path = "cluster_zerolags_inj%d/all" % inj_counter
@@ -946,9 +946,9 @@ def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFind
             inspinjnode = inspiral_pipe.generic_node(ligolwInspinjFindJob, dag, parent_nodes = [xmlnode],
                  opts = {"time-window":0.9},
                  input_files = {"":xmlnode.output_files["extract"]})
-            pdb.set_trace()
             sqlitenode = xml_to_sqlite(all_ifo_set, boundary_seg, XMLtoSqliteJob, dag, [inspinjnode], output_path)
-	    inj_outnodes[sim_name] = xmlnode
+	    inj_outnodes.append(sqlitenode)
+
         return noninj_outnodes, shift_outnodes, inj_outnodes
 
 
@@ -1231,11 +1231,20 @@ noninj_dbnodes, shift_dbnodes, inj_dbnodes = finalize_runs(dag, assignFARJob, to
 # make summary plots
 plotnodes = []
 
-#plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[noninjdb],
-#	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "user-tag": "ALL_LLOID_COMBINED", "output-dir": output_dir},
-#	input_files = {"":[noninjdb] + injdbs}
-#))
+pdb.set_trace()
+noninjdb = noninj_dbnodes.input_files["database"]
+plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[noninj_dbnodes],
+	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "noninj-user-tag": "ALL_SPIIR_COMBINED", "output-dir": output_dir},
+	input_files = {"noninj-database":noninjdb}
+))
 
+injdbs = [oneinj.output_files["database"] for oneinj in inj_dbnodes]
+inj_plot_input = ",".join(injdbs)
+injtag_plot_input = ",".join(["INJ%d" % i for i in range(len(injdbs))])
+plotnodes.append(inspiral_pipe.generic_node(plotIndividualInjectionsSummaryJob, dag, parent_nodes=inj_dbnodes,
+	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "inj-user-tag": injtag_plot_input, "output-dir": output_dir},
+	input_files = {"inj-database":inj_plot_input}
+))
 
 #
 #
