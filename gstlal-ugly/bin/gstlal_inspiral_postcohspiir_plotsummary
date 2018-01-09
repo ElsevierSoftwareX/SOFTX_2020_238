@@ -62,6 +62,7 @@ from pylal import git_version
 from pylal import SimBurstUtils
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from gstlal import cohfar
+from gstlal import far
 from gstlal import inspiral_pipe
 
 from gstlal import postcoh_table_def
@@ -202,7 +203,7 @@ class SegmentsTable(object):
 		f = open("%s_segments.json" % self.base, "w")
 		f.write(repr(self.data))
 		f.close()
-                return None, None, None
+                yield None, None, None
 
 
 
@@ -244,8 +245,8 @@ class CoincDatabase(object):
 			self.veto_segments = segments.segmentlistdict()
 		self.seglists -= self.veto_segments
 
-		# Get the live time used for the far calculation.  By convention this is simply the entire interval of the analysis with no regard for segments
-		#self.farsegs = far.get_live_time_segs_from_search_summary_table(connection)
+		# FIXME: no search table Get the live time used for the far calculation.  By convention this is simply the entire interval of the analysis with no regard for segments
+		# self.farsegs = far.get_live_time_segs_from_search_summary_table(connection)
 
 		# get the live time
 		if verbose:
@@ -256,8 +257,11 @@ class CoincDatabase(object):
 			print >>sys.stderr
 		self.zerolag_livetime = {}
 		self.background_livetime = {}
+		self.segs_livetime = 0
 		for on_instruments in self.on_instruments_combos:
 			self.zerolag_livetime[on_instruments] = float(abs(self.seglists.intersection(on_instruments) - self.seglists.union(self.instruments - on_instruments)))
+			if len(on_instruments) >= 2:
+				self.segs_livetime += self.zerolag_livetime[on_instruments] 
 		# FIXME:  background livetime hard-coded to be same
 		# as zero-lag livetime.  figure out what to do
 		self.background_livetime.update(self.zerolag_livetime)
@@ -407,21 +411,20 @@ split the Summary Table for 2 purposes:
     2. display 10 most significant events for shift database
 """
 class SummaryTable(object):
-	def __init__(self, zerolag_form):
+	def __init__(self, tag):
 		self.candidates = []
 		self.bgcandidates = []
 		self.livetime = {}
 		self.num_trigs = {}
-                self.zerolag_form = zerolag_form
+                self.tag = tag
 
 	def add_contents(self, contents):
 		self.base = contents.base
 		if contents.sim_inspiral_table:
 			#For now we only return summary information on non injections
 			return
-                if self.zerolag_form == "noninj":
-                    # FIXME: third should be ranking_statistic
-		    self.candidates += contents.connection.cursor().execute("""
+                # FIXME: third should be ranking_statistic
+		select_candidates = contents.connection.cursor().execute("""
 SELECT
 	postcoh.far,
 	postcoh.fap,
@@ -446,43 +449,21 @@ ORDER BY
 LIMIT 10
 		""").fetchall()
 
-                if self.zerolag_form == "shift":
-                    # FIXME: third should be ranking_statistic
-		    self.bgcandidates += contents.connection.cursor().execute("""
-SELECT
-	postcoh.far,
-	postcoh.fap,
-	postcoh.fap, 
-	postcoh.cohsnr,
-	postcoh.end_time + postcoh.end_time_ns * 1e-9,
-	postcoh.mtotal,
-	postcoh.mchirp,
-	postcoh.ifos,
-        postcoh.mass1,
-        postcoh.mass2,
-        postcoh.spin1z,
-        postcoh.spin2z,
-        postcoh.snglsnr_H,
-        postcoh.chisq_H,
-        postcoh.snglsnr_L,
-        postcoh.chisq_L
-FROM
-	postcoh
-ORDER BY
-	far
-LIMIT 10
-		""").fetchall()
-
-
+                if self.tag == "noninj":
+			self.candidates = select_candidates
+                elif self.tag == "shift":
+			self.bgcandidates = select_candidates
+		else:
+			raise ValueError
 
 	def write_candidate_json(self, candidates, fname):
 		data = []
 		# FIXME generalize for virgo
 		description = [
 			("Rank", "number"),
-			("FAR (Hz)", "number"),
-			("FAP", "number"),
-			("ranking_statistic;", "number"),
+			("FAR (Hz)", "string"),
+			("FAP", "string"),
+			("ranking_statistic;", "string"),
 			("&rho;", "number"),
 			("<i>t</i>", "number"),
 			("<i>M</i><sub>total</sub> / M<sub>&#x2299;</sub>", "number"),
@@ -493,9 +474,9 @@ LIMIT 10
 			("s<sub>1z</sub>", "number"),
 			("s<sub>2z</sub>", "number"),
 			("H1 &rho;", "string"),
-			("H1 &chi;<sup>2</sup>", "number"),
+			("H1 &chi;<sup>2</sup>", "string"),
 			("L1 &rho;", "string"),
-			("L1 &chi;<sup>2</sup>", "number"),
+			("L1 &chi;<sup>2</sup>", "string"),
 		]
 		for rank, values in enumerate(candidates, 1):
 			row = [rank] + [float(v) for v in values[:7]] + [values[7]] +[float(v) for v in values[8:12]]
@@ -507,15 +488,14 @@ LIMIT 10
 		to_google_json(fname, description, data)
 
 	def finish(self):
-                pdb.set_trace()
-                if self.zerolag_form == "noninj":
+                if self.tag == "noninj":
 		    self.candidates.sort()
 		    self.write_candidate_json(self.candidates[:101], self.base+'_summary_table.json')
-		    return None, None, None
-                else:
+		    yield None, None, None
+	    	elif self.tag == "shift":
 		    self.bgcandidates.sort()
 		    self.write_candidate_json(self.bgcandidates[:101], self.base+'_bgsummary_table.json')
-		    return None, None, None
+		    yield None, None, None
 
 
 
@@ -1235,82 +1215,83 @@ def create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_o
 
 
 class RateVsThreshold(object):
-	def __init__(self):
-		self.background_ln_likelihood_ratio = []
-		self.zerolag_ln_likelihood_ratio = []
-		self.background_far = []
-		self.zerolag_far = []
-		self.background_fap = []
-		self.zerolag_fap = []
-		self.background_snr = []
+	def __init__(self, tag):
+		self.tag = tag
 		self.zerolag_snr = []
-		self.farsegs = segments.segmentlistdict()
+		self.zerolag_rank = []
+		self.zerolag_far = []
+		self.zerolag_fap = []
+		self.bg_snr = []
+		self.bg_rank = []
+		self.bg_far = []
+		self.bg_fap = []
+		self.livetime = 0
+
+	def reset_tag(self, tag):
+		self.tag = tag
 
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is not None:
 			# skip injection documents
 			return
 
-		self.farsegs |= contents.farsegs
-
-		for ln_likelihood_ratio, far, fap, snr, is_background in connection.cursor().execute("""
+		self.livetime = contents.segs_livetime
+		# FIXME: first should be rank
+		select_candidates = contents.connection.cursor().execute("""
 SELECT
-	coinc_event.likelihood,
-	postcoh.combined_far,
-	postcoh.false_alarm_rate,
-	postcoh.snr,
-	EXISTS (
-		SELECT
-			*
-		FROM
-			time_slide
-		WHERE
-			time_slide.time_slide_id == coinc_event.time_slide_id
-			AND time_slide.offset != 0
-	)
+	postcoh.fap,
+	postcoh.far,
+	postcoh.fap,
+	postcoh.cohsnr
 FROM
 	postcoh
-	JOIN coinc_event ON (
-		coinc_event.coinc_event_id == postcoh.coinc_event_id
-	)
 WHERE
-	coinc_event.likelihood >= 0.
-		"""):
-			if is_background:
-				self.background_ln_likelihood_ratio.append(ln_likelihood_ratio)
-				self.background_far.append(far)
-				self.background_fap.append(fap)
-				self.background_snr.append(snr)
-			else:
-				self.zerolag_ln_likelihood_ratio.append(ln_likelihood_ratio)
+	postcoh.cohsnr >= 4
+		""").fetchall()
+		if self.tag == "noninj":
+			for (rank, far, fap, snr) in select_candidates:
+				self.zerolag_rank.append(rank)
 				self.zerolag_far.append(far)
 				self.zerolag_fap.append(fap)
 				self.zerolag_snr.append(snr)
+		elif self.tag == "shift":
+			for (rank, far, fap, snr) in select_candidates:
+				self.bg_rank.append(rank)
+				self.bg_far.append(far)
+				self.bg_fap.append(fap)
+				self.bg_snr.append(snr)
 
 	def finish(self):
-		livetime = far.get_live_time(self.farsegs)
+		if self.bg_snr:
+			try:
+				fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+				axes.loglog(self.bg_snr, self.bg_rank, "kx", label = "Background")
+				axes.legend(loc = "upper left")
+				axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot (Closed Box)")
+				yield fig, "lr_vs_snr", False
+			except: # snr or rank has 0 values
+				pass
 
-		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
-		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
-		axes.legend(loc = "upper left")
-		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot (Closed Box)")
-		yield fig, "lr_vs_snr", False
-		fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
-		axes.loglog(self.background_snr, self.background_ln_likelihood_ratio, "kx", label = "Background")
-		axes.loglog(self.zerolag_snr, self.zerolag_ln_likelihood_ratio, "bx", label = "Zero-lag")
-		axes.legend(loc = "upper left")
-		axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot")
-		yield fig, "lr_vs_snr", True
+		if self.bg_snr and self.zerolag_snr:
+			try:
+				fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+				axes.loglog(self.bg_snr, self.bg_rank, "kx", label = "Background")
+				axes.loglog(self.zerolag_snr, self.zerolag_rank, "bx", label = "Zero-lag")
+				axes.legend(loc = "upper left")
+				axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot")
+				yield fig, "lr_vs_snr", True
+			except: # snr or rank has 0 values
+				pass
 
-		for ln_likelihood_ratio, fars, is_open_box in [(self.zerolag_ln_likelihood_ratio, self.zerolag_far, True), (self.background_ln_likelihood_ratio, self.background_far, False)]:
+		for ranks, fars, is_open_box in [(self.zerolag_rank, self.zerolag_far, True), (self.bg_rank, self.bg_far, False)]:
 			if fars:
 				fig, axes = create_plot(None, r"Number of Events")
 				axes.loglog()
 				# fars in ascending order --> ifars in descending order
 				zerolag_stats = 1. / numpy.array(sorted(fars))
 				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
-				expected_count_x = livetime / expected_count_y
-				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 2000. * livetime))
+				expected_count_x = self.livetime / expected_count_y
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 2000. * self.livetime))
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
@@ -1318,40 +1299,41 @@ WHERE
 				axes.set_xlabel(r"Inverse False-Alarm Rate (s)")
 				yield fig, "count_vs_ifar", is_open_box
 
-			if ln_likelihood_ratio:
-				fig, axes = create_plot(None, r"Number of Events")
-				axes.semilogy()
-
-				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
-
-				# we want to plot FAR(ln L) * livetime vs.
-				# ln L, but we don't have access to the
-				# ranking statistic data file where that
-				# function is encoded.  instead, we rely on
-				# the FARs stored in each coinc, together
-				# with the ln L assigned to each coinc, to
-				# provide us with a collection of samples
-				# of that function.  to get more points, we
-				# combine data from the zero-lag and
-				# background coincs.  in the future,
-				# perhaps this program could be provided
-				# with the marginalized ranking statistic
-				# PDF data file
-
-				expected_count_x = self.zerolag_ln_likelihood_ratio + self.background_ln_likelihood_ratio
-				order = range(len(expected_count_x))
-				order.sort(key = lambda i: expected_count_x[i], reverse = True)
-				expected_count_x = numpy.array(expected_count_x)[order]
-				expected_count_y = numpy.array(self.zerolag_far + self.background_far)[order] * livetime
-
-				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 10000)
-				if is_open_box:
-					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
-				else:
-					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
-				axes.set_xlabel(r"$\ln \Lambda$")
-				yield fig, "count_vs_lr", is_open_box
-
+			# if we have some values in ranks
+#			if ranks:
+#				fig, axes = create_plot(None, r"Number of Events")
+#				axes.semilogy()
+#
+#				zerolag_stats = numpy.array(sorted(ranks, reverse = True))
+#
+#				# we want to plot FAR(ln L) * livetime vs.
+#				# ln L, but we don't have access to the
+#				# ranking statistic data file where that
+#				# function is encoded.  instead, we rely on
+#				# the FARs stored in each coinc, together
+#				# with the ln L assigned to each coinc, to
+#				# provide us with a collection of samples
+#				# of that function.  to get more points, we
+#				# combine data from the zero-lag and
+#				# background coincs.  in the future,
+#				# perhaps this program could be provided
+#				# with the marginalized ranking statistic
+#				# PDF data file
+#
+#				expected_count_x = self.zerolag_rank + self.bg_rank
+#				order = range(len(expected_count_x))
+#				order.sort(key = lambda i: expected_count_x[i], reverse = True)
+#				expected_count_x = numpy.array(expected_count_x)[order]
+#				expected_count_y = numpy.array(self.zerolag_far + self.bg_far)[order] * self.livetime
+#
+#				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 10000)
+#				if is_open_box:
+#					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
+#				else:
+#					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
+#				axes.set_xlabel(r"$\ln \Lambda$")
+#				yield fig, "count_vs_lr", is_open_box
+#
 
 #
 # =============================================================================
@@ -1405,14 +1387,15 @@ def finish_plot(contents, plot_group, options, user_tag):
 
 wiki = open(os.path.join(options.output_dir, "%s" % "plotsummary.txt"),"w")
 
-# FIXME: RateVsThresh for noninj and shift
 if options.noninj_database:
     plots = []
     base = os.path.join(options.output_dir, options.noninj_user_tag)
     plots.append(SegmentsTable(base))
     plots.append(SummaryTable("noninj"))
-    # plots.append(RateVsThreshold("noninj"))
-    plot_group = zip([0,1], plots)
+    # need the shift database to plot rates
+    rate_plot = RateVsThreshold("noninj")
+    plots.append(rate_plot)
+    plot_group = zip([0,1,6], plots)
     dbname = options.noninj_database
     contents = setup_plot(dbname, plot_group, options, options.noninj_user_tag, wiki)
     finish_plot(contents, plot_group, options, options.noninj_user_tag)
@@ -1420,10 +1403,15 @@ if options.noninj_database:
 
 if options.shift_database:
     plots = []
+    base = os.path.join(options.output_dir, options.shift_user_tag)
     plots.append(SegmentsTable(base))
-    plots.append(SummaryTable("noninj"))
-    # plots.append(RateVsThreshold("noninj"))
-    plot_group = zip([0,1], plots)
+    plots.append(SummaryTable("shift"))
+    if rate_plot:
+	rate_plot.reset_tag("shift")
+    else:
+    	rate_plot = RateVsThreshold("shift")
+    plots.append(rate_plot)
+    plot_group = zip([0,1,6], plots)
     dbname = options.shift_database
     contents = setup_plot(dbname, plot_group, options, options.shift_user_tag, wiki)
     finish_plot(contents, plot_group, options, options.shift_user_tag)
@@ -1439,7 +1427,6 @@ if options.inj_database:
         plots.append(InjectionParameterDistributionPlots())
         plot_group = zip([2,3,7], plots)
         dbname = inj_name
-        pdb.set_trace()
         contents = setup_plot(dbname, plot_group, options, tag_name, wiki)
         finish_plot(contents, plot_group, options, tag_name)
         del contents

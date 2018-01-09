@@ -9,7 +9,9 @@ def parse_command_line():
 	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog summary web page")
 	parser.add_option("--webserver-dir", help = "Set the directory for the webserver.  Required.  Example /archive/home/channa/public_html/highmass_months_23-25_summary_page")
 	parser.add_option("--open-box", action = "store_true", help = "Produce open box page")
-	parser.add_option("--output-user-tag", action = "append", metavar = "name", help = "Set the basename for image search")
+	parser.add_option("--noninj-user-tag", metavar = "name", help = "Set the basename for image search")
+	parser.add_option("--inj-user-tag", action = "append", metavar = "name", help = "Set the basename for image search")
+	parser.add_option("--shift-user-tag", metavar = "name", help = "Set the basename for image search")
 	parser.add_option("--title", default="gstlal_inspiral offline analysis")
 	parser.add_option("--glob-path", help = "This is the path to search for images")
 
@@ -66,13 +68,13 @@ summary_about = webpage.elem("p", ["This page was generated on %s by %s in the w
 
 
 summary_lt = webpage.section("Search Summary")
-thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]), "lt_summary_div"))
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.noninj_user_tag), "lt_summary_div"))
 summary_lt += [webpage.elem("div", [], "id=lt_summary_div width=100% height=500")]
 
 #FIXME assumes the zero lag database is the first tag
 summary_seg = webpage.section("Segments")
-thispage.header_content.append(webpage.googleTimelineFromJson(os.path.join(opts.glob_path, '%s_segments.json' % opts.output_user_tag[0]), "segments_div"))
-#thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.output_user_tag[0]), "segment_table_div"))
+thispage.header_content.append(webpage.googleTimelineFromJson(os.path.join(opts.glob_path, '%s_segments.json' % opts.noninj_user_tag), "segments_div"))
+#thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.noninj_user_tag), "segment_table_div"))
 summary_seg += [webpage.elem("div", [], "id=segments_div width=100% height=500")]
 #summary_seg += [webpage.elem("div", [], "id=segment_table_div width=100% height=500")]
 
@@ -166,7 +168,7 @@ fm_mtab = webpage.section("Missed Table")
 
 horizon += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
 
-for tag in opts.output_user_tag:
+for tag in opts.inj_user_tag:
     if "inj" in tag or "INJ" in tag:
 	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_injection_summary.json' % tag), "%sinjection_summary" % tag))
 	fm_tab += [webpage.elem("p", ["Summary of missed and found injections broken up by detector time for %s" % tag])]
@@ -277,11 +279,10 @@ money_ifar = webpage.section("Rate vs. Threshold")
 money_table = webpage.section("Loudest Table")
 
 money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*6_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
-#FIXME: thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_bgsummary_table.json' % opts.output_user_tag[0]), "%s_bgsummary_table" % opts.output_user_tag[0]))
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_bgsummary_table.json' % opts.shift_user_tag), "%s_bgsummary_table" % opts.shift_user_tag))
 money_table += [webpage.elem("p", ["Closed Box Summary Table"])]
-#FIXME: money_table += [webpage.elem("div", [], "id=%sbg_summary_table" % opts.output_user_tag[0])]
+money_table += [webpage.elem("div", [], "id=%s_bgsummary_table" % opts.shift_user_tag)]
 
-money_div = money([money_about, money_ifar, money_table])
 
 
 #
@@ -300,10 +301,11 @@ if opts.open_box:
 	#chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*5_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
 
 	money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*6_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_summary_table.json' % opts.output_user_tag[0]), "%s_summary_table" % opts.output_user_tag[0]))
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_summary_table.json' % opts.noninj_user_tag), "%s_summary_table" % opts.noninj_user_tag))
 	money_table += [webpage.elem("p", ["Open Box Summary Table"])]
-	money_table += [webpage.elem("div", [], "id=%ssummary_table" % opts.output_user_tag[0])]
+	money_table += [webpage.elem("div", [], "id=%s_summary_table" % opts.noninj_user_tag)]
 
+money_div = money([money_about, money_ifar, money_table])
 #
 # Add search documentation
 #
