@@ -176,7 +176,8 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, channe
 							"mismatch":options.mismatch,
 							"qhigh":options.qhigh,
 							"cadence":options.cadence,
-							"disable-web-service":""
+							"disable-web-service":"",
+							"frame-segments-name": options.frame_segments_name
 						},
 						input_files = {"frame-cache":options.frame_cache,
 							"frame-segments-file":options.frame_segments_file},
