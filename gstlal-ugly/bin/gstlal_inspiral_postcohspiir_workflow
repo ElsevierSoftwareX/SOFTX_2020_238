@@ -804,7 +804,7 @@ def cluster_zerolags(dag, options, lalappsRunSqliteJob, CachetoSqliteJob, toXMLJ
 	return cluster_nodes, cluster_box_nodes
 
 
-def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options, segs_livetime):
+def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options, segs_livetime, analyzable_instruments_set):
         """
         mergestats_box_nodes = {"bankbox0": [boxnode0]; "bankbox1": [boxnode1]}
     
@@ -829,9 +829,9 @@ def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFind
 		    )
                 return assign_node
 
-        def to_xml(all_ifo_set, boundary_seg, toXMLJob, dag, parent_nodes, output_path):
-		dbname = inspiral_pipe.T050017_filename(all_ifo_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.sqlite', path = output_path)
-		xmlname = inspiral_pipe.T050017_filename(all_ifo_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)
+        def to_xml(analyzable_instruments_set, boundary_seg, toXMLJob, dag, parent_nodes, output_path):
+		dbname = inspiral_pipe.T050017_filename(analyzable_instruments_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.sqlite', path = output_path)
+		xmlname = inspiral_pipe.T050017_filename(analyzable_instruments_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)
 		# extract from sqlite to xml
 		xmlnode = inspiral_pipe.generic_node(toXMLJob, dag, parent_nodes = parent_nodes,
 			opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
@@ -840,9 +840,9 @@ def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFind
 		)
 		return xmlnode
 
-        def xml_to_sqlite(all_ifo_set, boundary_seg, XMLtoSqliteJob, dag, parent_nodes, output_path):
-		dbname = inspiral_pipe.T050017_filename(all_ifo_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.sqlite', path = output_path)
-		xmlname = inspiral_pipe.T050017_filename(all_ifo_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)
+        def xml_to_sqlite(analyzable_instruments_set, boundary_seg, XMLtoSqliteJob, dag, parent_nodes, output_path):
+		dbname = inspiral_pipe.T050017_filename(analyzable_instruments_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.sqlite', path = output_path)
+		xmlname = inspiral_pipe.T050017_filename(analyzable_instruments_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.xml.gz', path = output_path)
 	
 	    	sqlitenode = inspiral_pipe.generic_node(XMLtoSqliteJob, dag, parent_nodes = parent_nodes,
 			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
@@ -852,13 +852,13 @@ def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFind
             	return sqlitenode
 
 
-	def combine_sqls(nodes, all_ifo_set, extract_name, output_path):
+	def combine_sqls(nodes, analyzable_instruments_set, extract_name, output_path):
 		""" combine xml from different ifos/bankbox together to one sql file"""
 		if not os.path.exists(output_path):
 			os.mkdir(output_path)
-		cache_filename = inspiral_pipe.T050017_filename(all_ifo_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.cache', path = output_path)
+		cache_filename = inspiral_pipe.T050017_filename(analyzable_instruments_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.cache', path = output_path)
 
-		db = inspiral_pipe.T050017_filename(all_ifo_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.sqlite', path = output_path)
+		db = inspiral_pipe.T050017_filename(analyzable_instruments_set,"SPIIR_zerolag", boundary_seg[0].seconds, boundary_seg[1].seconds, '.sqlite', path = output_path)
 		# generate the cache
 		cache_entries = [lal.CacheEntry.from_T050017(one_node.input_files[extract_name]) for one_node in nodes]
 		with open(cache_filename, "w") as cache_file:
@@ -915,18 +915,17 @@ def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFind
 	# combine noninj ifos and bankbox
 	# FIXME: hard-coded input and outputnames
 	output_path = "cluster_zerolags_online/all"
-	all_ifo_set = segsdict.keys()[-1]
-	noninj_dbnode = combine_sqls(noninj_farnodes, all_ifo_set, "database", output_path)
+	noninj_dbnode = combine_sqls(noninj_farnodes, analyzable_instruments_set, "database", output_path)
         # extract xml from sql
-        xmlnode = to_xml(all_ifo_set, boundary_seg, toXMLJob, dag, [noninj_dbnode], output_path)
+        xmlnode = to_xml(analyzable_instruments_set, boundary_seg, toXMLJob, dag, [noninj_dbnode], output_path)
 	noninj_outnodes = xmlnode
 
 	# combine shift ifos and bankbox
 	# FIXME: hard-coded input and outputnames
 	output_path = "cluster_zerolags_shift/all"
-	shift_dbnode = combine_sqls(shift_farnodes, all_ifo_set, "database", output_path)
+	shift_dbnode = combine_sqls(shift_farnodes, analyzable_instruments_set, "database", output_path)
         # extract xml from sql
-        xmlnode = to_xml(all_ifo_set, boundary_seg, toXMLJob, dag, [shift_dbnode], output_path)
+        xmlnode = to_xml(analyzable_instruments_set, boundary_seg, toXMLJob, dag, [shift_dbnode], output_path)
 	shift_outnodes = xmlnode
 
 	# combine shift ifos and bankbox
@@ -936,9 +935,9 @@ def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFind
 	for injections in options.injections:
 	    sim_name = sim_tag_from_inj_file(injections)
 	    output_path = "cluster_zerolags_inj%d/all" % inj_counter
-	    inj_dbnode = combine_sqls(inj_farnodes[sim_name], all_ifo_set, "database", output_path)
+	    inj_dbnode = combine_sqls(inj_farnodes[sim_name], analyzable_instruments_set, "database", output_path)
             # extract xml from sql
-            xmlnode = to_xml(all_ifo_set, boundary_seg, toXMLJob, dag, [inj_dbnode], output_path)
+            xmlnode = to_xml(analyzable_instruments_set, boundary_seg, toXMLJob, dag, [inj_dbnode], output_path)
 	    inj_counter += 1
 
 
@@ -946,7 +945,7 @@ def finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFind
             inspinjnode = inspiral_pipe.generic_node(ligolwInspinjFindJob, dag, parent_nodes = [xmlnode],
                  opts = {"time-window":0.9},
                  input_files = {"":xmlnode.output_files["extract"]})
-            sqlitenode = xml_to_sqlite(all_ifo_set, boundary_seg, XMLtoSqliteJob, dag, [inspinjnode], output_path)
+            sqlitenode = xml_to_sqlite(analyzable_instruments_set, boundary_seg, XMLtoSqliteJob, dag, [inspinjnode], output_path)
 	    inj_outnodes.append(sqlitenode)
 
         return noninj_outnodes, shift_outnodes, inj_outnodes
@@ -1225,7 +1224,7 @@ cluster_box_nodes[(ifos, "inj_name")] = {"bankbox0": [boxnode0]; "bankbox1": [bo
 
 cluster_nodes, cluster_box_nodes = cluster_zerolags(dag, options, lalappsRunSqliteJob, CachetoSqliteJob, toXMLJob, spiir_zlag, boundary_seg, segsdict)
 
-noninj_dbnodes, shift_dbnodes, inj_dbnodes = finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options, segs_livetime)
+noninj_dbnodes, shift_dbnodes, inj_dbnodes = finalize_runs(dag, assignFARJob, toXMLJob, XMLtoSqliteJob, ligolwInspinjFindJob, mergestats_box_nodes, cluster_box_nodes, options, segs_livetime, set(bank_cache.keys()))
 
 
 # make summary plots
