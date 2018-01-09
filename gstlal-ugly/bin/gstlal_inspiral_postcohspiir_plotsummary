@@ -463,7 +463,7 @@ LIMIT 10
 			("Rank", "number"),
 			("FAR (Hz)", "string"),
 			("FAP", "string"),
-			("ranking_statistic;", "string"),
+			("ranking_statistic", "string"),
 			("&rho;", "number"),
 			("<i>t</i>", "number"),
 			("<i>M</i><sub>total</sub> / M<sub>&#x2299;</sub>", "number"),
