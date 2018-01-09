@@ -72,11 +72,6 @@ def create_new_dataset(path, base, data, name = 'data', group = None, tmp = Fals
 	if not os.path.exists(path):
 		aggregator.makedir(path)
 
-	print >>sys.stderr, "filename = %s" %fname
-	print >>sys.stderr, "dataset name = %s" % name
-	print >>sys.stderr, "group = %s" % group
-	print >>sys.stderr, "data = %s" %repr(data)
-
 	# save data to hdf5
 	with h5py.File(fname, 'a') as hfile:
 		if group:
