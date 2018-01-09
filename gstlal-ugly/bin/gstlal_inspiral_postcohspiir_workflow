@@ -1233,9 +1233,11 @@ plotnodes = []
 
 pdb.set_trace()
 noninjdb = noninj_dbnodes.input_files["database"]
-plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[noninj_dbnodes],
-	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "noninj-user-tag": "ALL_SPIIR_COMBINED", "output-dir": output_dir},
-	input_files = {"noninj-database":noninjdb}
+shiftdb = shift_dbnodes.input_files["database"]
+plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[noninj_dbnodes]+[shift_dbnodes],
+	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "noninj-user-tag": "ALL_SPIIR_COMBINED", "shift-user-tag": "ALL_SPIIR_SHIFT", "output-dir": output_dir},
+	input_files = {"noninj-database":noninjdb,
+		"shift-database": shiftdb}
 ))
 
 iinj = 0
@@ -1253,10 +1255,10 @@ for oneinj in inj_dbnodes:
 # make a web page
 
 inspiral_pipe.generic_node(openpageJob, dag, parent_nodes = plotnodes, 
-	opts = {"title":"spiir-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_SPIIR_COMBINED"] + all_injtag, "open-box":""}
+		opts = {"title":"spiir-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "noninj-user-tag":"ALL_SPIIR_COMBINED", "shift-user-tag": "ALL_SPIIR_SHIFT", "open-box":""}
 )
 inspiral_pipe.generic_node(pageJob, dag, parent_nodes = plotnodes, 
-	opts = {"title":"spiir-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_SPIIR_COMBINED"] + all_injtag}
+	opts = {"title":"spiir-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "noninj-user-tag":"ALL_SPIIR_COMBINED", "shift-user-tag": "ALL_SPIIR_SHIFT", "inj-user-tag": all_injtag}
 )
 
 
