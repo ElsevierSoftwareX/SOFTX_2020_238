@@ -1231,7 +1231,6 @@ noninj_dbnodes, shift_dbnodes, inj_dbnodes = finalize_runs(dag, assignFARJob, to
 # make summary plots
 plotnodes = []
 
-pdb.set_trace()
 noninjdb = noninj_dbnodes.input_files["database"]
 shiftdb = shift_dbnodes.input_files["database"]
 plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[noninj_dbnodes]+[shift_dbnodes],
