@@ -31,6 +31,8 @@ The difference between this file and the glue/bin/ligolw_sqlite is:
 1. add postcoh_table_def.DB_use_in before dbtables.use_in for a wrapper over dbtables.DBTable for event_id to work when xml->sqlite 
 2. local extract() function to call custom get_xml() function in postcoh_table_def
     while in the original file glue.ligolw.ligolw_sqlite, extract() will call dbtables.get_xml()
+"""
+"""
 Transfer table data between LIGO Light Weight XML files and SQLite
 databases.
 """
@@ -177,6 +179,7 @@ if __name__ == '__main__':
 				source_filename = dbtables.get_connection_filename(local_path_from_url(url), tmp_path = options.tmp_space, verbose = options.verbose)
 				if options.verbose:
 					print >>sys.stderr, "reading '%s' ..." % source_filename
+				# NOTE: changed to custom get_xml by Chichi
 				xmldoc = postcoh_table_def.get_xml(sqlite3.connect(source_filename))
 				ligolw_sqlite.insert_from_xmldoc(ContentHandler.connection, xmldoc, preserve_ids = options.preserve_ids, verbose = options.verbose)
 				xmldoc.unlink()
@@ -194,7 +197,7 @@ if __name__ == '__main__':
 	if options.extract is not None:
 		if options.extract == "-":
 			# stdout
-                        # NOTE: chichi, change to custom extract
+                        # NOTE: changed to custom extract by Chichi
 			#ligolw_sqlite.extract(ContentHandler.connection, None, verbose = options.verbose)
 			extract(ContentHandler.connection, None, verbose = options.verbose)
 		else:

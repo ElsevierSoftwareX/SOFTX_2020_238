@@ -38,7 +38,6 @@ from glue.ligolw import utils
 from glue.ligolw import ligolw
 from glue.ligolw import param
 from glue.ligolw import lsctables
-from glue.ligolw.utils import segments as ligolw_segments
 from glue import iterutils
 from gstlal import cohfar
 import pdb
@@ -62,8 +61,9 @@ def parse_command_line():
 	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog to assign FAR to a sql file")
 	# generic data source options
 	parser.add_option("--input-stats-filename", default = "", metavar = "name", help = "Set the input stats file name")
-	parser.add_option("--zerolag-sql", default = "", metavar = "name", help = "Set the input sql file name")
+	parser.add_option("--database", default = "", metavar = "name", help = "Set the input sql file name")
 	parser.add_option("--live-time", default = None, help ="input coinc time")
+	parser.add_option("--mul-factor", default = 1, help ="input multiplication factor to combine far.")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	parser.add_option("--segments-file", default = None, metavar = "name", help = "Set the input segments file name")
 	parser.add_option("--segments-name", default = None, metavar = "name", help = "Set the input segments file name")
@@ -75,7 +75,7 @@ def parse_command_line():
 	options, tmp = parser.parse_args()
 
 	missing_options = []
-	append_missing_options(missing_options, options, "zerolag_sql")
+	append_missing_options(missing_options, options, "database")
 	append_missing_options(missing_options, options, "input_stats_filename")
 
 	if options.live_time and (options.segments_file and options.segments_name):
@@ -88,44 +88,8 @@ def parse_command_line():
 
 options = parse_command_line()
 
-def get_livetime(options, on_instruments, verbose = False):
 
-	# get the segment lists
-	segments_xmldoc = utils.load_filename(options.segments_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
-	seglists = ligolw_segments.segmenttable_get_by_name(segments_xmldoc, options.segments_name).coalesce()
-	if options.shrink_data_segments is not None:
-		# Make sure all segments are at least long enough to be
-		# contracted (e.g. if a segment is 32 seconds long but
-		# the user is going to contract it by 17 seconds, then
-		# the end time of the segment would come before the
-		# start time of the segment. This is bad)
-		for seglist in seglists.values():
-			iterutils.inplace_filter(lambda s: abs(s) > 2*options.shrink_data_segments, seglist)
-		seglists.contract(options.shrink_data_segments)
-	instruments = set(seglists)
-	
-	# get the veto lists
-	vetoes_name = options.vetoes_name
-	if vetoes_name is not None:
-		vetoes_xmldoc = utils.load_filename(options.vetoes_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
-		veto_segments = ligolw_segments.segmenttable_get_by_name(vetoes_xmldoc, vetoes_name).coalesce()
-		if options.extend_veto_segments is not None:
-			veto_segments.protract(options.extend_veto_segments)
-	else:
-		veto_segments = segments.segmentlistdict()
-	seglists -= veto_segments
-
-
-	# get the live time
-	zerolag_livetime = float(abs(seglists.intersection(on_instruments) - seglists.union(instruments - on_instruments)))
-	if verbose:
-		print >>sys.stderr, "calculated zerolag livetimes %f " % zerolag_livetime
-
-
-	return zerolag_livetime
-
-
-zerolag_sql_list = options.zerolag_sql.split(",")
+zerolag_sql_list = options.database.split(",")
 
 for filename in zerolag_sql_list:
         # read in the stats for corresponding ifos
@@ -148,7 +112,7 @@ for filename in zerolag_sql_list:
 		livetime = float(options.live_time)
 	elif options.segments_file:
                 on_instruments = set(re.findall(r"[A-Z][0-9]", ifos))
-		livetime = get_livetime(options, on_instruments, verbose = options.verbose)
+		livetime = cohfar.get_livetime(options, on_instruments, verbose = options.verbose)
 
         myfar = cohfar.FAPFAR(ranking_stats, zlag_connection, livetime = livetime)
 	#
@@ -165,7 +129,7 @@ for filename in zerolag_sql_list:
         if options.verbose:
 	        logging.info("assign fars to zerolags")
 
-	myfar.assign_fars_sql(zlag_connection)
+	myfar.assign_fars_sql(zlag_connection, mul_factor = options.mul_factor)
 	#
 	# done, restore file to original location
 	#

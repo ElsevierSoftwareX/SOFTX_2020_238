@@ -34,6 +34,7 @@ except ImportError:
 import logging
 from glue import iterutils
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from glue.ligolw.utils import segments as ligolw_segments
 from gstlal.postcoh_table_def import PostcohInspiralTable
 import pdb
 
@@ -47,6 +48,41 @@ array.use_in(DefaultContentHandler)
 param.use_in(DefaultContentHandler)
 lsctables.use_in(DefaultContentHandler)
 
+def get_livetime(options, on_instruments, verbose = False):
+
+	# get the segment lists
+	segments_xmldoc = utils.load_filename(options.segments_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
+	seglists = ligolw_segments.segmenttable_get_by_name(segments_xmldoc, options.segments_name).coalesce()
+	if options.shrink_data_segments is not None:
+		# Make sure all segments are at least long enough to be
+		# contracted (e.g. if a segment is 32 seconds long but
+		# the user is going to contract it by 17 seconds, then
+		# the end time of the segment would come before the
+		# start time of the segment. This is bad)
+		for seglist in seglists.values():
+			iterutils.inplace_filter(lambda s: abs(s) > 2*options.shrink_data_segments, seglist)
+		seglists.contract(options.shrink_data_segments)
+	instruments = set(seglists)
+	
+	# get the veto lists
+	vetoes_name = options.vetoes_name
+	if vetoes_name is not None:
+		vetoes_xmldoc = utils.load_filename(options.vetoes_file, contenthandler = DefaultContentHandler, verbose = options.verbose)
+		veto_segments = ligolw_segments.segmenttable_get_by_name(vetoes_xmldoc, vetoes_name).coalesce()
+		if options.extend_veto_segments is not None:
+			veto_segments.protract(options.extend_veto_segments)
+	else:
+		veto_segments = segments.segmentlistdict()
+	seglists -= veto_segments
+
+
+	# get the live time
+	zerolag_livetime = float(abs(seglists.intersection(on_instruments) - seglists.union(instruments - on_instruments)))
+	if verbose:
+		print >>sys.stderr, "calculated zerolag livetimes %f " % zerolag_livetime
+
+
+	return zerolag_livetime
 
 
 def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
@@ -273,20 +309,21 @@ class FAPFAR(object):
     return fap_after_trials(fap, self.nzlag)
   
 
-  def assign_fars_sql(self, connection):
+  def assign_fars_sql(self, connection, mul_factor = 1):
     # assign false-alarm rates
     # FIXME:  choose a function name more likely to be unique?
-    connection.create_function("far_from_rank", 1, self.far_from_rank)
+    connection.create_function("far_from_rank", 2, self.far_from_rank)
     cur = self.connection.cursor()
     cur.execute("""
 UPDATE
   postcoh
 SET
-  far =  far_from_rank(far)
-""")
+  far =  far_from_rank(far, ?)
+""", mul_factor)
 
   # FIXME: see Kipp's code to adjust fap for clustered zerolag
-  def far_from_rank(self, rank):
+  # the mul_factor is used to combine far from different sqls
+  def far_from_rank(self, rank, mul_factor):
     # implements equation (B4) of Phys. Rev. D 88, 024025.
     # arXiv:1209.0718.  the return value is divided by T to
     # convert events/experiment to events/second.
@@ -307,7 +344,7 @@ SET
     #  log_tdp = math.log1p(-float(self.ccdf_interpolator(rank)))
     #return self.nzlag * -log_tdp / self.livetime
     fap = float(self.cdf_interpolator(rank))
-    return self.nzlag * fap / self.livetime
+    return self.nzlag * fap / self.livetime * mul_factor
 
 
 def count_above_ifar_xml(zerolag_fname_xml, tick_lgifar):
