@@ -128,20 +128,37 @@ def half_sine_gaussian(sg_arr):
 # number of tiles in frequency and Q
 #
 def N_Q(q_min, q_max, mismatch = 0.2):
-        return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
+	"""
+	Minimum number of distinct Q values to generate based on Q_min, Q_max, and mismatch params.
+	"""
+	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
 
 def N_phi(phi_min, phi_max, q,  mismatch = 0.2):
-       return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
+	"""
+	Minimum number of distinct frequency (phi) values to generate based on phi_min, phi_max, and mismatch params.
+	"""
+	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
 
 def Qq(q_min, q_max, mismatch = 0.2):
+	"""
+	List of Q values to generate based on Q_min, Q_max, and mismatch params.
+	"""
 	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch = mismatch))
 	return [q_min*(q_max/q_min)**((0.5+q)/N_q) for q in range(int(N_q))]
 
-def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.2):
+def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.2, phi_nyquist = None):
+	"""
+	Generates Q and frequency (phi) pairs based on mismatch, Q and phi ranges.
+	"""
 	for q in Qq(q_min, q_max, mismatch = mismatch):
 		nphi = N_phi(phi_min, phi_max, q, mismatch = mismatch)
 		for l in range(int(nphi)):
-			yield (phi_min*(phi_max/phi_min)**((0.5+l)/nphi), q)
+			phi = phi_min*(phi_max/phi_min)**((0.5+l)/nphi)
+			if phi_nyquist:
+				if phi < phi_nyquist/(1+numpy.sqrt(11)/q):
+					yield (phi, q)
+			else:
+				yield (phi, q)
 
 ####################
 # 
@@ -637,7 +654,6 @@ for channel in channels:
 			#       less than the factor in the chebychev low pass cutoff in the downsampler
 			#       this should be fine
 			flow = rate/4.*0.8
-			# NOTE: Omicron uses fhigh = fnyquist/(1.+(11.)**0.5/qlow) which is approx. fnyquist*0.55. We use different waveforms but this is plausibly okay padding for us too
 			fhigh = rate/2.*0.8
 			qhigh = options.qhigh
 		qlow = 4
@@ -647,11 +663,10 @@ for channel in channels:
 		phase = [0, numpy.pi/2.]
 		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 5e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
-		# uncomment to determine template durations
-		#print >>sys.stderr, len(list(half_sine_gaussian(sine_gaussian(phi, 0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = 0.2)))
 		# determine whether to do time-domain or frequency-domain convolution
 		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
-		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch) for phi_0 in phase]), time_domain = time_domain, block_stride = int(rate), latency = 0)
+		fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch, phi_nyquist = fhigh) for phi_0 in phase])
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = 0)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
