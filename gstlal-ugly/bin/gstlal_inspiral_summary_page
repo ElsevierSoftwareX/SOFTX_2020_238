@@ -172,27 +172,27 @@ for tag in opts.output_user_tag:
 	fm_tab += [webpage.elem("p", ["Summary of missed and found injections broken up by detector time for %s" % tag])]
 	fm_tab += [webpage.elem("div", [], "id=%sinjection_summary" % tag)]
 
-	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_d_vs_mchirp_*.png' % tag), "Distance of found and missed injections as a function of chirp mass: %s" % tag)
-	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mchirp_*.png' % tag), "Effective distance of found and missed injections as a function of chirp mass: %s" % tag)
-	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_mchirp_*.png' % tag), "Chirp distance of found and missed injections as a function of chirp mass.  For low mass systems the chirp mass scales out of the expected amplitude.  The chirp distance utilizes this and rescales the distance to be appropriate for a NS-NS binary.  At low total mass the missed/found barrier should be flat on this plot: %s" % tag)
+	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_d_vs_mchirp_*.png' % tag), "Distance of found and missed injections as a function of chirp mass: %s" % tag)
+	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_deff_vs_mchirp_*.png' % tag), "Effective distance of found and missed injections as a function of chirp mass: %s" % tag)
+	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_chirpdist_vs_mchirp_*.png' % tag), "Chirp distance of found and missed injections as a function of chirp mass.  For low mass systems the chirp mass scales out of the expected amplitude.  The chirp distance utilizes this and rescales the distance to be appropriate for a NS-NS binary.  At low total mass the missed/found barrier should be flat on this plot: %s" % tag)
 
-	fm_mt += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mtotal_*.png' % tag), "Effective distance of found and missed injections as a function of total mass: %s" % tag)
+	fm_mt += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_deff_vs_mtotal_*.png' % tag), "Effective distance of found and missed injections as a function of total mass: %s" % tag)
 
-	fm_eta += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_eta_*.png' % tag), "Effective distance of found and missed injections as a function of symmetric mass ratio eta: %s" % tag)
+	fm_eta += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_chirpdist_vs_eta_*.png' % tag), "Effective distance of found and missed injections as a function of symmetric mass ratio eta: %s" % tag)
 
-	fm_time += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_t_*.png' % tag), "Effective distance of found and missed injections as a function of time: %s" % tag)
+	fm_time += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_deff_vs_t_*.png' % tag), "Effective distance of found and missed injections as a function of time: %s" % tag)
 
-	fm_spin += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_chi_*.png' % tag), "Effective distance of found and missed injections as a function of mass-weighted spin: %s" % tag)
+	fm_spin += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_deff_vs_chi_*.png' % tag), "Effective distance of found and missed injections as a function of mass-weighted spin: %s" % tag)
 
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % tag), "Expected SNR of found and missed injections as a function of chirp mass.: %s" % tag)
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_dec_expsnr_vs_mchirp_*.png' % tag), "Expected SNR of found and missed injections as a function of chirp mass.: %s" % tag)
 
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mtotal_*.png' % tag), "Expected SNR of found and missed injections as a function of total mass: %s" % tag)
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_dec_expsnr_vs_mtotal_*.png' % tag), "Expected SNR of found and missed injections as a function of total mass: %s" % tag)
 
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_eta_*.png' % tag), "Expected SNR of found and missed injections as a function of symmetric mass ratio eta: %s" % tag)
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_dec_expsnr_vs_eta_*.png' % tag), "Expected SNR of found and missed injections as a function of symmetric mass ratio eta: %s" % tag)
 
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_chi_*.png' % tag), "Expected SNR of found and missed injections as a function of mass-weighted spin: %s" % tag)
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_dec_expsnr_vs_chi_*.png' % tag), "Expected SNR of found and missed injections as a function of mass-weighted spin: %s" % tag)
 
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag), "Expected SNR of found and missed injections as a function of time")
+	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*2_dec_expsnr_vs_t_*.png' % tag), "Expected SNR of found and missed injections as a function of time")
 
 	# FIXME stupid convention to rely on the first tag being all of them. Note, previously we just used opts.output_user_tag[0] here.
 	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag), "%smissed_summary" % tag))
@@ -277,9 +277,9 @@ money_ifar = webpage.section("Rate vs. Threshold")
 money_table = webpage.section("Loudest Table")
 
 money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*6_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
-#FIXME: thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "%sbgsummary_table" % opts.output_user_tag[0]))
+#FIXME: thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_bgsummary_table.json' % opts.output_user_tag[0]), "%s_bgsummary_table" % opts.output_user_tag[0]))
 money_table += [webpage.elem("p", ["Closed Box Summary Table"])]
-#FIXME: money_table += [webpage.elem("div", [], "id=%sbgsummary_table" % opts.output_user_tag[0])]
+#FIXME: money_table += [webpage.elem("div", [], "id=%sbg_summary_table" % opts.output_user_tag[0])]
 
 money_div = money([money_about, money_ifar, money_table])
 
@@ -291,16 +291,16 @@ money_div = money([money_about, money_ifar, money_table])
 
 if opts.open_box:
 
-	back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
+	#back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
 
-	chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*4_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+	#chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*4_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
 
-	chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*5_rho_*_vs_*openbox*.png'), "Comparison of SNR in pairs of detectors.")
+	#chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*5_rho_*_vs_*openbox*.png'), "Comparison of SNR in pairs of detectors.")
 
-	chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*5_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
+	#chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*5_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
 
 	money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*6_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "%ssummary_table" % opts.output_user_tag[0]))
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_summary_table.json' % opts.output_user_tag[0]), "%s_summary_table" % opts.output_user_tag[0]))
 	money_table += [webpage.elem("p", ["Open Box Summary Table"])]
 	money_table += [webpage.elem("div", [], "id=%ssummary_table" % opts.output_user_tag[0])]
 
@@ -345,7 +345,10 @@ f = open("%s/index.html" % opts.webserver_dir, "w")
 thispage.write(f)
 f.close()
 
-shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir, os.path.split(opts.glob_path)[1]))
+try:
+	shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir, os.path.split(opts.glob_path)[1]))
+except OSError:
+	pass
 
 ##############################################################################
 # FIXME the following code to write a lite version of the page can probably be

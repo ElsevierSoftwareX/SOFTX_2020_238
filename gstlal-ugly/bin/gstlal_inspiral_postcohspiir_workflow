@@ -1126,7 +1126,7 @@ plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_
 # openpage
 openpageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", tag_base = 'gstlal_inspiral_summary_page_open', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 
-#pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
+pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 # closed page
 #marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB"}))
 # plot background
@@ -1238,13 +1238,27 @@ plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[n
 	input_files = {"noninj-database":noninjdb}
 ))
 
-injdbs = [oneinj.output_files["database"] for oneinj in inj_dbnodes]
-inj_plot_input = ",".join(injdbs)
-injtag_plot_input = ",".join(["INJ%d" % i for i in range(len(injdbs))])
-plotnodes.append(inspiral_pipe.generic_node(plotIndividualInjectionsSummaryJob, dag, parent_nodes=inj_dbnodes,
-	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "inj-user-tag": injtag_plot_input, "output-dir": output_dir},
-	input_files = {"inj-database":inj_plot_input}
+iinj = 0
+all_injtag = []
+for oneinj in inj_dbnodes:
+	injdb = oneinj.output_files["database"]
+	injtag = "INJ%d" % iinj
+	plotnodes.append(inspiral_pipe.generic_node(plotIndividualInjectionsSummaryJob, dag, parent_nodes=inj_dbnodes,
+	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "inj-user-tag": injtag, "output-dir": output_dir},
+	input_files = {"inj-database":injdb}
 ))
+	iinj += 1
+	all_injtag.append(injtag)
+
+# make a web page
+
+inspiral_pipe.generic_node(openpageJob, dag, parent_nodes = plotnodes, 
+	opts = {"title":"spiir-%d-%d-open-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_SPIIR_COMBINED"] + all_injtag, "open-box":""}
+)
+inspiral_pipe.generic_node(pageJob, dag, parent_nodes = plotnodes, 
+	opts = {"title":"spiir-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_SPIIR_COMBINED"] + all_injtag}
+)
+
 
 #
 #
