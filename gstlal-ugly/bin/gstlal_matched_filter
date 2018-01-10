@@ -35,15 +35,16 @@ parser = OptionParser(description = __doc__)
 parser.add_option("--template-fname", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("--data-fname", metavar = "filename", help = "Set the filename in which to save the data (required).")
 parser.add_option("--sampleRate", metavar = "Hz", type = "float", default = 4096.0, help = "Set the sample rate of the IIR template bank (optional).")
-
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 options, filenames = parser.parse_args()
 
 template = numpy.loadtxt(options.template_fname).view(complex)
 time, data = numpy.loadtxt(options.data_fname, usecols = (0,1), unpack = True)
 
 snr_time, sigma = matched_filt(template, data, sampleRate = options.sampleRate)
-#pdb.set_trace()
-print max(abs(snr_time)), sigma
-pyplot.figure()
-p1 = pyplot.plot(abs(snr_time))
-pyplot.savefig('snr_series.svg', format = "svg", dpi = 1200)
+if options.vebose:
+	print "max snr is %f, sigma %f" % (max(abs(snr_time)), sigma)
+
+#pyplot.figure()
+#p1 = pyplot.plot(abs(snr_time))
+#pyplot.savefig('snr_series.svg', format = "svg", dpi = 1200)

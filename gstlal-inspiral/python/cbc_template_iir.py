@@ -629,9 +629,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     return data, autocorrelation_bank
 
 
-def gen_whitened_spiir_template_and_reconstructed_waveform(template_bank_filename, irow, psd, sampleRate = 4096, waveform_domain = "TD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, verbose = False):
-    tmpltbank_xmldoc = utils.load_filename(template_bank_filename, contenthandler = DefaultContentHandler, verbose = verbose)
-    sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
+def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, irow, psd, sampleRate = 4096, waveform_domain = "TD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, verbose = False):
     
     working_state = gen_template_working_state(sngl_inspiral_table, flower, sampleRate = sampleRate)
     # Smooth the PSD and interpolate to required resolution
