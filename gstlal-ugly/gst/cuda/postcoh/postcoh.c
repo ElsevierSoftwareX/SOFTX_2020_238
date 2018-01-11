@@ -563,7 +563,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	GST_OBJECT_LOCK(postcoh->collect);
 	/* find the ifo_combo_mapping and input_ifo_mapping:
 	 * first find the ifo_combo index in the IFO_COMBO_MAP
-	 * then, map original sinkpad's ifo to the position in the "H1L1V1" combo */
+	 * then, map original sinkpad's ifo to the position in this combo */
 	for (i=0, sinkpads = GST_ELEMENT(postcoh)->sinkpads; sinkpads; sinkpads = g_list_next(sinkpads), i++) {
 		GstPad *pad = GST_PAD(sinkpads->data);
 		data = gst_pad_get_element_private(pad);
@@ -1024,7 +1024,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	PostcohState *state = postcoh->state;
 
 	PostcohInspiralTable *output = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
-	int iifo = 0, nifo = state->nifo;
+	int iifo = 0, jifo = 0, nifo = state->nifo;
 	int ifos_size = sizeof(char) * IFO_LEN * state->cur_nifo, one_ifo_size = sizeof(char) * IFO_LEN ;
 	int ipeak, npeak = 0, itrial = 0, exe_len = state->exe_len, max_npeak = state->max_npeak;
 	int hist_trials = postcoh->hist_trials;
@@ -1068,10 +1068,11 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->chisq_V = pklist->chisq_V[peak_cur];
 			cur_tmplt_idx = pklist->tmplt_idx[peak_cur];
 
-			//output->deff_H = sqrt(state->sigmasq[H_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_H[peak_cur]; 
-			//output->deff_L = sqrt(state->sigmasq[L_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_L[peak_cur]; 
-			if (pklist->snglsnr_V[peak_cur] > 0)
-				output->deff_V = sqrt(state->sigmasq[V_MAPPING][cur_tmplt_idx])/ pklist->snglsnr_V[peak_cur]; 
+			for(jifo=0; jifo<nifo; jifo++)
+			{
+				int write_ifo = state->write_ifo_mapping[jifo];
+				*(&output->deff_H+write_ifo) = sqrt(state->sigmasq[jifo][cur_tmplt_idx])/ *(pklist->snglsnr_H + write_ifo * state->max_npeak + peak_cur);  // in MPC
+			}
 			output->is_background = 0;
 			output->livetime = livetime;
 			strncpy(output->ifos, state->cur_ifos, ifos_size);
@@ -1141,6 +1142,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 
 		if (state->cur_nifo == state->nifo) {
 			int *peak_pos = pklist->peak_pos;
+			/* NOTE: here needs to be max_npeak for bg, npeak for zerolag. */
 			for(ipeak=0; ipeak<state->max_npeak; ipeak++) {
 				for(itrial=1; itrial<=hist_trials; itrial++) {
 					peak_cur = peak_pos[ipeak];

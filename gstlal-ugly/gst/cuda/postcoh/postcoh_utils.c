@@ -29,7 +29,9 @@ char* IFO_MAP[] = {"H1", "L1", "V1"};
 #define __DEBUG__ 1
 #define NSNGL_TMPLT_COLS 12
 
-
+/* get ifo indices of a given combo in IFO_MAP
+ * e.g. HV: 0, 2
+ */
 void get_write_ifo_mapping(char *ifo_combo, int nifo, int *write_ifo_mapping)
 {
 	int iifo, jifo;
@@ -227,7 +229,8 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 
 		parseFile(token_bankname, xns, 1);
 
-		// FIXME: consider other combos like HV, how we store sigmasq
+		// combos like HL, match_ifo will still be like 0:H,1:L
+		// combos like HV, match_ifo will still be like 0:H,1:V
 		for (int i=0; i<nifo; i++) {
 			if (strncmp(token, all_ifos + IFO_LEN*i, 2) == 0) {
 				match_ifo = i;
@@ -238,28 +241,24 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 
 		ntmplt = array_sigmasq[0].dim[0];
 		/* check if the lengths of sigmasq arrays are equal for all detectors */
-		if (last_dimension == -1)
+		if (last_dimension == -1){
+			/* allocate memory for sigmasq for all detectors upon the first detector ntmplt */
 			last_dimension = ntmplt;
-		else
-			if (last_dimension != ntmplt) {
-				fprintf(stderr, "reading different lengths of sigmasq arrays from different detectors, should exit\n");
-				//exit(0);
-			}
-
-
-		mem_alloc_size = sizeof(double) * ntmplt;
-
-		if (sigmasq[0] == NULL) {
+			mem_alloc_size = sizeof(double) * ntmplt;
 			for (int i = 0; i < nifo; i++) {
 				sigmasq[i] = (double *)malloc(mem_alloc_size);
 				memset(sigmasq[i], 0, mem_alloc_size);
 			}
-
 		}
+		else
+			if (last_dimension != ntmplt) {
+				fprintf(stderr, "reading different lengths of sigmasq arrays from different detectors, should exit\n");
+				exit(0);
+			}
+
 
 		for (int j=0; j<ntmplt; j++) {
-			// FIXME: 
-			//sigmasq[match_ifo][j] = (double)((double *)(array_sigmasq[0].data))[j];
+			sigmasq[match_ifo][j] = (double)((double *)(array_sigmasq[0].data))[j];
 			//printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
 		}
 
