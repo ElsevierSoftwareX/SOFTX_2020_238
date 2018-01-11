@@ -894,7 +894,7 @@ def gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_sta
     if verbose:
         logging.info("spiir template length %d" % (len(data)))
 
-    return amp_lalwhiten, phase_lalwhiten, norm 
+    return amp_lalwhiten, phase_lalwhiten, norm
 
 def gen_spiir_coeffs(amp, phase, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
         # make the iir filter coeffs
@@ -1121,7 +1121,7 @@ class Bank(object):
 
 
             #self.sigmasq.append(1.0 * norm_h / sampleRate)
-            self.sigmasq.append(norm_data * len(amp) / sampleRate**2. )
+            self.sigmasq.append(norm_data * working_state["working_length"] / sampleRate**2. )
             
             # This is actually the cross correlation between the original waveform and this approximation
             # FIXME: also update the waveform
