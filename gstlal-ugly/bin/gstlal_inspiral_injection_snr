@@ -194,7 +194,7 @@ l1snr = numpy.zeros(len(sim_inspiral_table), dtype = "double")
 for idx, inj in enumerate(sim_inspiral_table):
 	h1sim, l1sim = calc_expected_snr(inj)
 	if options.verbose:
-		print "calc snr %d injection" % idx
+		print "calc snr %d injection: H1 snr %f, L1 snr %f" % (idx, h1sim, l1sim)
 	#h1snr.append(h1sim)
 	#l1snr.append(l1sim)
 	h1snr[idx] = h1sim
