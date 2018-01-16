@@ -76,6 +76,7 @@ def setrlimit(res, lim):
 setrlimit(resource.RLIMIT_NPROC, None)
 setrlimit(resource.RLIMIT_AS, None)
 setrlimit(resource.RLIMIT_RSS, None)
+
 # FIXME:  tests at CIT show that this next tweak has no effect.  it's
 # possible that SL7 has lowered the default stack size from SL6 and we
 # don't need to do this anymore.  remove?
@@ -290,7 +291,8 @@ class MultiChannelHandler(simplehandler.Handler):
 			if options.save_hdf:
 				if idq_aggregator.in_new_epoch(buftime, self.last_save_time[(channel, rate)], self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
 					if options.gps_end_time:
-						fname = '%s-%s-%s' % (self.tag, options.gps_start_time, options.gps_end_time)
+						# Uses the T050017 filenaming convention.
+						fname = '%s-%s-%s' % (self.tag, options.gps_start_time, options.gps_end_time - options.gps_start_time)
 					else:
 						fname = '%s-%d' % (self.tag, self.init_gps_time)
 					fpath = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
