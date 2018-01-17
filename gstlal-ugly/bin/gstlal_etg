@@ -292,7 +292,8 @@ class MultiChannelHandler(simplehandler.Handler):
 				if idq_aggregator.in_new_epoch(buftime, self.last_save_time[(channel, rate)], self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
 					if options.gps_end_time:
 						# Uses the T050017 filenaming convention.
-						fname = '%s-%s-%s' % (self.tag, options.gps_start_time, options.gps_end_time - options.gps_start_time)
+						duration = int(options.gps_end_time) - int(options.gps_start_time)
+						fname = '%s-%s-%d' % (self.tag, options.gps_start_time, duration)
 					else:
 						fname = '%s-%d' % (self.tag, self.init_gps_time)
 					fpath = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
