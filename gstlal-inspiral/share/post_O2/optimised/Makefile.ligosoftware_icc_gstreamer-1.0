@@ -65,7 +65,7 @@ LALSIMULATION=lalsimulation-1.7.3
 LALMETAIO=lalmetaio-1.3.1
 LALFRAME=lalframe-1.4.3
 LAL=lal-6.18.0
-GDS=gds-2.18.3
+GDS=gds-2.18.4
 LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.5.8
 LDASTOOLSAL=ldas-tools-al-2.5.7
 SWIG=swig-3.0.7
@@ -75,10 +75,12 @@ GSTPYTHON=gst-python-1.4.0
 GSTPLUGINSGOOD=gst-plugins-good-1.4.5
 GSTPLUGINSBASE=gst-plugins-base-1.4.5
 GSTREAMER=gstreamer-1.4.5
+GINTRO=gobject-introspection-1.50.0
 GSL=gsl-1.16
-ORC=orc-0.4.25
-FFTW=fftw-3.3.5
+ORC=orc-0.4.26
+#PYFFTW=pyFFTW-0.10.4
 PYFFTW=pyFFTW-0.9.0
+FFTW=fftw-3.3.5
 
 # Specify target/dependancy files
 GSTINSPIRAL_TARGET=$(INSTALL_DIR)/lib/libgstlalinspiral.so
@@ -109,11 +111,12 @@ GSTPYTHON_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpythonplugin.so
 GSTGOOD_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpng.so
 GSTBASE_TARGET=$(INSTALL_DIR)/lib/libgstapp-1.0.so
 GSTREAMER_TARGET=$(INSTALL_DIR)/lib/libgstreamer-1.0.so
+GINTRO_TARGET=$(INSTALL_DIR)/lib/libgirepository-1.0.so
 GSL_2_TARGET=$(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
 GSL_1_TARGET=$(INSTALL_DIR)/lib/libgsl.so
 ORC_TARGET=$(INSTALL_DIR)/lib/liborc-0.4.so
-#PYFFTW_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/pyfftw/pyfftw.so
-PYFFTW_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/pyfftw/pyfftw.so
+PYFFTW_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/pyfftw/pyfftw.so
+#PYFFTW_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/pyfftw/pyfftw.so
 FFTW_TARGET=$(INSTALL_DIR)/lib/libfftw3.so
 
 # tarballs
@@ -145,6 +148,7 @@ GSTPYTHON_TAR_TARGET=$(TAR_DIR)/$(GSTPYTHON).tar.xz
 GSTGOOD_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz
 GSTBASE_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz
 GSTREAMER_TAR_TARGET=$(TAR_DIR)/$(GSTREAMER).tar.xz
+GINTRO_TAR_TARGET=$(TAR_DIR)/$(GINTRO).tar.xz
 GSL_TAR_TARGET=$(TAR_DIR)/$(GSL).tar.gz
 ORC_TAR_TARGET=$(TAR_DIR)/$(ORC).tar.xz
 PYFFTW_TAR_TARGET=$(TAR_DIR)/$(PYFFTW).tar.gz
@@ -224,7 +228,8 @@ env.sh :
 	@echo 'LAL_DATA_PATH=/home/cbc/ROM_data' >> $@
 	@echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0' >> $@
 	@echo 'GST_REGISTRY_1_0=$${LAL_PATH}/registry.bin' >> $@
-	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH GST_REGISTRY_1_0' >> $@
+	@echo 'GI_TYPELIB_PATH=$${LAL_PATH}/lib/girepository-1.0:$${GI_TYPELIB_PATH}' >> $@
+	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH GST_REGISTRY_1_0 GI_TYPELIB_PATH' >> $@
 
 #####################
 # Check time stamps #
@@ -616,11 +621,23 @@ $(GSTBASE_TARGET) : $(GSTREAMER_TARGET)
 	cd $(SRC_DIR)/$(GSTPLUGINSBASE) && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer
-$(GSTREAMER_TARGET) : $(GSL_1_TARGET) $(GSL_2_TARGET)
+$(GSTREAMER_TARGET) : $(GINTRO_TARGET)
 	@echo $(GREEN)gstreamer$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(GSTREAMER).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GSTREAMER) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(GSTREAMER) && make -j$(CORES) && make install -j$(CORES)
+
+# gobject-introspection
+gobject-introspection : logs/gintro.txt
+
+logs/gintro.txt : $(GSL_1_TARGET) $(GSL_2_TARGET) 
+	 @echo $^ | sed -e "s@ @\n@g" > $@
+
+$(GINTRO_TARGET) : $(GSL_2_TARGET)
+	@echo $(GREEN)gobject-introspection$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(GINTRO).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(GINTRO) && ./configure --prefix=$(INSTALL_DIR)  --disable-static --with-python=/bin/python
+	cd $(SRC_DIR)/$(GINTRO) && make -j$(CORES) && make install -j $(CORES)
 
 # GSL
 gsl : logs/gsl.txt
@@ -692,7 +709,7 @@ logs/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 #tarballs
-logs/tar.txt : $(FFTW_TAR_TARGET) $(PYFFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
+logs/tar.txt : $(FFTW_TAR_TARGET) $(PYFFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GINTRO_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALDETCHAR_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALSTOCH_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(PYLAL_TAR_TARGET) $(DOXYGEN_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(GSTLALINSPIRAL_TAR_TARGET) : $(GSTLALCALIB_TAR_TARGET)
@@ -776,8 +793,11 @@ $(GSTGOOD_TAR_TARGET) : $(GSTBASE_TAR_TARGET)
 $(GSTBASE_TAR_TARGET) : $(GSTREAMER_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-plugins-base/$(GSTPLUGINSBASE).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
-$(GSTREAMER_TAR_TARGET) : $(GSL_TAR_TARGET)
+$(GSTREAMER_TAR_TARGET) : $(GINTRO_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gstreamer/$(GSTREAMER).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(GINTRO_TAR_TARGET) : $(GSL_TAR_TARGET)
+	wget --no-check-certificate http://ftp.gnome.org/pub/gnome/sources/gobject-introspection/1.50/$(GINTRO).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(GSL_TAR_TARGET) : $(ORC_TAR_TARGET)
 	wget --no-check-certificate http://ftp.gnu.org/gnu/gsl/$(GSL).tar.gz --directory-prefix=$(TAR_DIR) -nc
