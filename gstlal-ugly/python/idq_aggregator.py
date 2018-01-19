@@ -143,19 +143,19 @@ class HDF5FeatureData(FeatureData):
 		self.etg_data = {key: numpy.empty((self.cadence,), dtype = [(column, 'f8') for column in self.columns]) for key in keys}
 		self.clear()
 
-	def dump(self, path, base, start_time, key = None):
+	def dump(self, path, base, start_time, key = None, tmp = False):
 		"""
 		Saves the current cadence of gps triggers to disk and clear out data
 		"""
 		name = "%d_%d" % (start_time, self.cadence)
 		if key:
 			group = os.path.join(str(key[0]), str(key[1]).zfill(4))
-			create_new_dataset(path, base, self.etg_data[key], name=name, group=group)
+			create_new_dataset(path, base, self.etg_data[key], name=name, group=group, tmp=tmp)
 			self.clear(key)
 		else:
 			for key in self.keys:
 				group = os.path.join(str(key[0]), str(key[1]).zfill(4))
-				create_new_dataset(path, base, self.etg_data[key], name=name, group=group)
+				create_new_dataset(path, base, self.etg_data[key], name=name, group=group, tmp=tmp)
 			self.clear()
 
 	def load(self, path):
