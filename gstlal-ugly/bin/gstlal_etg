@@ -390,7 +390,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				latency = numpy.round(int(aggregator.now()) - buftime)
 				print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
 
-	def to_hdf_file(self, key, final_write = False):
+	def to_hdf_file(self, key):
 		"""
 		Dumps triggers saved in memory to disk in hdf5 format.
 		Uses the T050017 filenaming convention.
@@ -398,12 +398,14 @@ class MultiChannelHandler(simplehandler.Handler):
 		"""
 		self.fdata.dump(self.fpath, self.fname, idq_aggregator.floor_div(self.last_save_time[key], self.cadence), key = key, tmp = True)
 
-		# when job completes, move temp file over
-		if final_write:
-			final_path = os.path.join(self.fpath, self.fname)+".h5"
-			tmp_path = final_path+".tmp"
-			shutil.move(tmp_path, final_path)
-
+	def finish_hdf_file(self):
+		"""
+		Move a temporary hdf5 file to its final location after
+		all file writes have been completed.
+		"""
+		final_path = os.path.join(self.fpath, self.fname)+".h5"
+		tmp_path = final_path+".tmp"
+		shutil.move(tmp_path, final_path)
 
 	def gen_psd_xmldoc(self):
 		xmldoc = lal.series.make_psd_xmldoc(self.psds)
@@ -734,9 +736,10 @@ if options.verbose:
 mainloop.run()
 
 # save remaining triggers
-if  options.save_hdf:
+if options.save_hdf:
 	for key in src.keys():
-		handler.to_hdf_file(key, final_write = True)
+		handler.to_hdf_file(key)
+	handler.finish_hdf_file()
 else:
 	handler.to_trigger_file()
 
