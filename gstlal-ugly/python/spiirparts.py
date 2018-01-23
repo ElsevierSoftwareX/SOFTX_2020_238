@@ -338,11 +338,34 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		for bank_name in banks[instrument]:
 			sngl_max_rate = max(cbc_template_iir.get_maxrate_from_xml(bank_name), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
-		src = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
-		if veto_segments is not None:		
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		if verbose:
+		  print "%s: max rate of all banks %d Hz" % (instrument, sngl_max_rate)
+		if veto_segments is not None and instrument in veto_segments.keys():
+			# fir_whitener set to 0, use FFT whitener
+			hoftdicts[instrument] = \
+			uni_datasource.mkwhitened_src(pipeline, src,
+					sngl_max_rate, instrument, psd =
+					psd[instrument], psd_fft_length =
+					psd_fft_length, ht_gate_threshold =
+					ht_gate_threshold, veto_segments =
+					veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment =
+					nxydump_segment, track_psd = track_psd,
+					zero_pad = 0, width = 32, fir_whitener =
+					0, statevector = statevector,
+					dqvector = dqvector)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = \
+			uni_datasource.mkwhitened_src(pipeline, src,
+					sngl_max_rate, instrument, psd =
+					psd[instrument], psd_fft_length =
+					psd_fft_length, ht_gate_threshold =
+					ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, 
+					nxydump_segment = nxydump_segment,
+					track_psd = track_psd, zero_pad = 0,
+					width = 32, fir_whitener =
+					0, statevector =
+					statevector, dqvector = dqvector)
 
 	#
 	# construct trigger generators
