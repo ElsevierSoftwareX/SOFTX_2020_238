@@ -76,6 +76,7 @@ def setrlimit(res, lim):
 setrlimit(resource.RLIMIT_NPROC, None)
 setrlimit(resource.RLIMIT_AS, None)
 setrlimit(resource.RLIMIT_RSS, None)
+
 # FIXME:  tests at CIT show that this next tweak has no effect.  it's
 # possible that SL7 has lowered the default stack size from SL6 and we
 # don't need to do this anymore.  remove?
@@ -128,20 +129,37 @@ def half_sine_gaussian(sg_arr):
 # number of tiles in frequency and Q
 #
 def N_Q(q_min, q_max, mismatch = 0.2):
-        return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
+	"""
+	Minimum number of distinct Q values to generate based on Q_min, Q_max, and mismatch params.
+	"""
+	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
 
 def N_phi(phi_min, phi_max, q,  mismatch = 0.2):
-       return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
+	"""
+	Minimum number of distinct frequency (phi) values to generate based on phi_min, phi_max, and mismatch params.
+	"""
+	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
 
 def Qq(q_min, q_max, mismatch = 0.2):
+	"""
+	List of Q values to generate based on Q_min, Q_max, and mismatch params.
+	"""
 	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch = mismatch))
 	return [q_min*(q_max/q_min)**((0.5+q)/N_q) for q in range(int(N_q))]
 
-def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.2):
+def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.2, phi_nyquist = None):
+	"""
+	Generates Q and frequency (phi) pairs based on mismatch, Q and phi ranges.
+	"""
 	for q in Qq(q_min, q_max, mismatch = mismatch):
 		nphi = N_phi(phi_min, phi_max, q, mismatch = mismatch)
 		for l in range(int(nphi)):
-			yield (phi_min*(phi_max/phi_min)**((0.5+l)/nphi), q)
+			phi = phi_min*(phi_max/phi_min)**((0.5+l)/nphi)
+			if phi_nyquist:
+				if phi < phi_nyquist/(1+numpy.sqrt(11)/q):
+					yield (phi, q)
+			else:
+				yield (phi, q)
 
 ####################
 # 
@@ -166,23 +184,44 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.instrument = kwargs.pop("instrument")
 		self.keys = kwargs.pop("keys")
 
-		# iDQ saving properties
-		self.last_save_time = None
-		self.cadence = options.cadence
-		self.tag = '%s-%s' % (self.instrument[:1], self.description)
-		# create header for trigger file
-		if options.latency:
-			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel", "latency")
-		else:
-			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
-		self.fdata = deque(maxlen = 25000)
-		self.fdata.append(self.header)
-
 		# set initialization time
 		if options.data_source in ("framexmit", "lvshm"):
 			self.init_gps_time = int(aggregator.now())
 		else:
 			self.init_gps_time = int(options.gps_start_time)
+
+		### iDQ saving properties
+		self.cadence = options.cadence
+		self.tag = '%s-%s' % (self.instrument[:1], self.description)
+
+		# hdf saving properties
+		if options.save_hdf:
+			self.last_save_time = {key:None for key in self.keys}
+			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
+			self.fdata = idq_aggregator.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
+
+			if options.gps_end_time:
+				duration = int(options.gps_end_time) - int(options.gps_start_time)
+				self.fname = '%s-%d-%d' % (self.tag, self.init_gps_time, duration)
+			else:
+				self.fname = '%s-%d-9999999999' % (self.tag, self.init_gps_time)
+			self.fpath = os.path.join(self.out_path, self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5])
+
+			# delete leftover temporary files
+			temp_path = os.path.join(self.fpath, self.fname)+'.h5.tmp'
+			if os.path.isfile(temp_path):
+				os.remove(temp_path)
+
+		# ascii saving properties
+		else:
+			self.last_save_time = None
+			# create header for trigger file
+			if options.latency:
+				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel", "latency")
+			else:
+				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
+			self.fdata = deque(maxlen = 25000)
+			self.fdata.append(self.header)
 
 		# set up ETG bottle related properties
 		self.etg_event = deque(maxlen = 20000)
@@ -255,15 +294,24 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.etg_event_time = buftime
 
 			# set save times appropriately
-			if self.last_save_time is None:
-				self.last_save_time = buftime
+			if options.save_hdf:
+				if self.last_save_time[(channel, rate)] is None:
+					self.last_save_time[(channel, rate)] = buftime
+			else:
+				if self.last_save_time is None:
+					self.last_save_time = buftime
 
-			# Save triggers (in ascii format) once every cadence
-			if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
-				self.to_trigger_file(buftime)
-				self.fdata.clear()
-				self.fdata.append(self.header)
-				self.last_save_time = buftime
+			# Save triggers (hdf or ascii) once per cadence
+			if options.save_hdf:
+				if idq_aggregator.in_new_epoch(buftime, self.last_save_time[(channel, rate)], self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+					self.to_hdf_file((channel, rate))
+					self.last_save_time[(channel, rate)] = buftime
+			else:
+				if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+					self.to_trigger_file(buftime)
+					self.fdata.clear()
+					self.fdata.append(self.header)
+					self.last_save_time = buftime
 
 			# read buffer contents
 			for i in range(buf.n_memory()):
@@ -303,15 +351,18 @@ class MultiChannelHandler(simplehandler.Handler):
 		# NOTE
 		# Setting stop time to trigger time for use with half sine gaussians
 		stop_time = trigger_time
-		# save iDQ compatible data
-		if options.latency:
-			self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag, latency))
-		else:
-			self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
 		# append row to feature vector for bottle requests
 		etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
-                           'frequency': freq, 'q': q, 'phase': row.phase, 'sigma_sq': row.sigmasq, 'chi_sq': row.chisq, 'snr': row.snr}
+                           'frequency': freq, 'q': q, 'phase': row.phase, 'sigmasq': row.sigmasq, 'chisq': row.chisq, 'snr': row.snr}
 		self.etg_event.append(etg_row)
+		# save iDQ compatible data
+		if options.save_hdf:
+			self.fdata.append(etg_row, key = (channel, rate), buftime = buftime)
+		else:
+			if options.latency:
+				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag, latency))
+			else:
+				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
 
 
 	def to_trigger_file(self, buftime = None):
@@ -338,6 +389,23 @@ class MultiChannelHandler(simplehandler.Handler):
 			if buftime:
 				latency = numpy.round(int(aggregator.now()) - buftime)
 				print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
+
+	def to_hdf_file(self, key):
+		"""
+		Dumps triggers saved in memory to disk in hdf5 format.
+		Uses the T050017 filenaming convention.
+		NOTE: This method should only be called by an instance that is locked.
+		"""
+		self.fdata.dump(self.fpath, self.fname, idq_aggregator.floor_div(self.last_save_time[key], self.cadence), key = key, tmp = True)
+
+	def finish_hdf_file(self):
+		"""
+		Move a temporary hdf5 file to its final location after
+		all file writes have been completed.
+		"""
+		final_path = os.path.join(self.fpath, self.fname)+".h5"
+		tmp_path = final_path+".tmp"
+		shutil.move(tmp_path, final_path)
 
 	def gen_psd_xmldoc(self):
 		xmldoc = lal.series.make_psd_xmldoc(self.psds)
@@ -481,6 +549,7 @@ def parse_command_line():
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 	parser.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
 	parser.add_option("--etg-partition", metavar = "string", help = "If using Kafka, sets the partition that this ETG is assigned to.")
 	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this ETG publishes feature vector subsets to.")
@@ -612,8 +681,7 @@ for channel in channels:
 			#       less than the factor in the chebychev low pass cutoff in the downsampler
 			#       this should be fine
 			flow = rate/4.*0.8
-			# NOTE: Omicron uses fhigh = fnyquist/(1.+(11.)**0.5/qlow) which is approx. fnyquist*0.55. We use different waveforms but this is plausibly okay padding for us too
-			fhigh = rate/2.*0.55
+			fhigh = rate/2.*0.8
 			qhigh = options.qhigh
 		qlow = 4
 		# generate sine-gaussian templates
@@ -622,11 +690,10 @@ for channel in channels:
 		phase = [0, numpy.pi/2.]
 		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 5e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
-		# uncomment to determine template durations
-		#print >>sys.stderr, len(list(half_sine_gaussian(sine_gaussian(phi, 0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = 0.2)))
 		# determine whether to do time-domain or frequency-domain convolution
 		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
-		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch) for phi_0 in phase]), time_domain = time_domain, block_stride = int(rate), latency = 0)
+		fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch, phi_nyquist = fhigh) for phi_0 in phase])
+		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = 0)
 		if data_source_info.latency_output:
 			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
@@ -669,7 +736,13 @@ if options.verbose:
 mainloop.run()
 
 # save remaining triggers
-handler.to_trigger_file()
+if options.save_hdf:
+	for key in src.keys():
+		handler.to_hdf_file(key)
+	handler.finish_hdf_file()
+else:
+	handler.to_trigger_file()
+
 
 #
 # Shut down pipeline

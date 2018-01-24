@@ -80,6 +80,7 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--gps-end-time $(STOP) \
 		--frame-cache frame.cache \
 		--frame-segments-file segments.xml.gz \
+		--frame-segments-name datasegments \
 		--channel-list channel_list.txt \
 		--out-path $(OUTPATH) \
 		--threads $(N_THREADS)\
