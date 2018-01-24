@@ -62,6 +62,7 @@
 #include <gstlal_demodulate.h>
 #include <gstlal_insertgap.h>
 #include <gstlal_fccupdate.h>
+#include <gstlal_transferfunction.h>
 
 
 /*
@@ -91,6 +92,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_demodulate", GSTLAL_DEMODULATE_TYPE},
 		{"lal_insertgap", GSTLAL_INSERTGAP_TYPE},
 		{"lal_fcc_update", GSTLAL_FCC_UPDATE_TYPE},
+		{"lal_transferfunction", GSTLAL_TRANSFERFUNCTION_TYPE},
 		{NULL, 0},
 	};
 
