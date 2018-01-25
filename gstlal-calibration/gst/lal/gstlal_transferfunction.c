@@ -167,15 +167,15 @@ static void write_transfer_functions(complex double *tfs, char *element_name, gi
 	gint64 i;
 	int j, j_stop;
 	if(write_to_screen) {
-		g_print("\n\n========= Transfer functions computed by %s =========\n", element_name);
+		g_print("\n\n==================== Transfer functions computed by %s ====================\n\t  ", element_name);
 		for(j = 1; j < columns; j++)
-			g_print("ch%d -> ch0\t", j);
+			g_print("ch%d -> ch0\t\t\t\t  ", j);
 		g_print("ch%d -> ch0\n\n", columns);
 
 		j_stop = columns - 1;
 		for(i = 0; i < rows; i++) {
 			for(j = 0; j < j_stop; j++)
-				g_print("%10e + %10e i\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
+				g_print("%10e + %10e i\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
 			g_print("%10e + %10e i\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
 		}
 		g_print("\n\n");
@@ -183,18 +183,19 @@ static void write_transfer_functions(complex double *tfs, char *element_name, gi
 
 	if(filename) {
 		FILE *fp;
-		fp = fopen(filename, "w");
-		g_fprintf(fp, "========= Transfer functions computed by %s =========\n", element_name);
+		fp = fopen(filename, "a");
+		g_fprintf(fp, "==================== Transfer functions computed by %s ====================\n\t  ", element_name);
 		for(j = 1; j < columns; j++)
-			g_fprintf(fp, "ch%d -> ch0\t", j);
+			g_fprintf(fp, "ch%d -> ch0\t\t\t\t  ", j);
 		g_fprintf(fp, "ch%d -> ch0\n\n", columns);
 
 		j_stop = columns - 1;
 		for(i = 0; i < rows; i++) {
 			for(j = 0; j < j_stop; j++)
-				g_fprintf(fp, "%10e + %10e i\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
+				g_fprintf(fp, "%10e + %10e i\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
 			g_fprintf(fp, "%10e + %10e i\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
 		}
+		g_fprintf(fp, "\n\n");
 		fclose(fp);
 	}
 	g_free(element_name);
@@ -205,7 +206,7 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 	gint64 i;
 	int j, j_stop;
 	if(write_to_screen) {
-		g_print("============ FIR filters computed by %s ============\n", element_name);
+		g_print("================== FIR filters computed by %s ==================\n", element_name);
 		for(j = 1; j < columns; j++)
 			g_print("ch%d -> ch0\t", j);
 		g_print("ch%d -> ch0\n\n", columns);
@@ -221,8 +222,8 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 
 	if(filename) {
 		FILE *fp;
-		fp = fopen(filename, "w");
-		g_fprintf(fp, "\n\n============ FIR filters computed by %s ============\n", element_name);
+		fp = fopen(filename, "a");
+		g_fprintf(fp, "================== FIR filters computed by %s ==================\n", element_name);
 		for(j = 1; j < columns; j++)
 			g_fprintf(fp, "ch%d -> ch0\t", j);
 		g_fprintf(fp, "ch%d -> ch0\n\n", columns);
@@ -233,6 +234,7 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 				g_fprintf(fp, "%10e\t", filters[i + j * rows]);
 			g_fprintf(fp, "%10e\n", filters[i + j_stop * rows]);
 		}
+		g_fprintf(fp, "\n\n");
 		fclose(fp);
 	}
 	g_free(element_name);
@@ -284,11 +286,12 @@ static void update_fir_filters_ ## DTYPE(complex double *transfer_functions, int
  \
 	int i; \
 	gint64 j, zero_index, fir_length; \
-	DTYPE df, delay, exp_arg; \
+	DTYPE df, delay; \
+	complex DTYPE exp_arg; \
 	fir_length = 2 * (length_tfs - 1); \
 	df = sample_rate / 2.0 / (length_tfs - 1); /* frequency spacing is Nyquist frequency / number of frequency increments */ \
 	delay = (length_tfs - 1.0) / sample_rate; /* number of samples of delay is length of transfer functions - 1 */ \
-	exp_arg = -2.0 * M_PI * I * df * delay; \
+	exp_arg = (complex DTYPE) (-2.0 * M_PI * I * df * delay); \
 	for(i = 0; i < num_tfs; i++) { \
 		/*
 		 * First, copy samples from transfer_functions to fir_filter for fftw(f) to take an inverse fft.
@@ -296,7 +299,7 @@ static void update_fir_filters_ ## DTYPE(complex double *transfer_functions, int
 		 * A delay is also added in order to center the filter in time.
 		 */ \
 		for(j = 0; j < length_tfs; j++) \
-			fir_filter[j] = fd_window[j] * cexp ## F_OR_BLANK(exp_arg * j) * transfer_functions[i * length_tfs + j]; \
+			fir_filter[j] = fd_window[j] * cexp ## F_OR_BLANK(exp_arg * j) * (DTYPE) transfer_functions[i * length_tfs + j]; \
  \
 		/* Now make fir_filter conjugate symmetric by filling the remaining memory with complex conjugates */ \
 		zero_index = length_tfs - 1; \
@@ -532,6 +535,10 @@ static gboolean start(GstBaseSink *sink) {
 	/* At start of stream, we want the element to compute a transfer function as soon as possible */
 	element->sample_count = element->update_samples;
 
+	/* If we are writing output to file, and a file already exists with the same name, remove it */
+	if(element->filename)
+		remove(element->filename);
+
 	return TRUE;
 }
 
@@ -736,6 +743,8 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			fir_length = 2 * (element->fft_length - 1);
 			edge_to_corner = (gint64) (0.45 * fir_length);
 
+			element->workspace.wspf.tukey = g_malloc(fir_length * sizeof(*element->workspace.wspf.tukey));
+
 			/* first curve of window */
 			for(i = 0; i < edge_to_corner; i++)
 				element->workspace.wspf.tukey[i] = pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0);
@@ -773,7 +782,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->workspace.wspf.fft = (complex float *) fftwf_malloc(element->fft_length * sizeof(*element->workspace.wspf.fft));
 		element->workspace.wspf.plan = fftwf_plan_dft_r2c_1d(element->fft_length, (float *) element->workspace.wspf.fft, element->workspace.wspf.fft, FFTW_MEASURE);
 
-		if(element->make_fir_filters && !element->fir_filters) {
+		if(element->make_fir_filters && !element->workspace.wspf.fir_filter) {
 
 			/* data that will be inverse Fourier transformed back into the time domain */
 			element->workspace.wspf.fir_filter = (complex float *) fftwf_malloc(2 * (element->fft_length - 1) * sizeof(*element->workspace.wspf.fir_filter));
@@ -846,6 +855,8 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			fir_length = 2 * (element->fft_length - 1);
 			edge_to_corner = (gint64) (0.45 * fir_length);
 
+			element->workspace.wdpf.tukey = g_malloc(fir_length * sizeof(*element->workspace.wdpf.tukey));
+
 			/* first curve of window */
 			for(i = 0; i < edge_to_corner; i++)
 				element->workspace.wdpf.tukey[i] = pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0);
@@ -883,7 +894,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->workspace.wdpf.fft = (complex double *) fftw_malloc(element->fft_length * sizeof(*element->workspace.wdpf.fft));
 		element->workspace.wdpf.plan = fftw_plan_dft_r2c_1d(element->fft_length, (double *) element->workspace.wdpf.fft, element->workspace.wdpf.fft, FFTW_MEASURE);
 
-		if(element->make_fir_filters && !element->fir_filters) {
+		if(element->make_fir_filters && !element->workspace.wdpf.fir_filter) {
 
 			/* data that will be inverse Fourier transformed back into the time domain */
 			element->workspace.wdpf.fir_filter = (complex double *) fftw_malloc(2 * (element->fft_length  - 1) * sizeof(*element->workspace.wdpf.fir_filter));
