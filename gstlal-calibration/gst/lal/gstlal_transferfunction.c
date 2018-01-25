@@ -1172,8 +1172,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		"This sink element only has one sink pad, so it requires interleaving all input data. The\n\t\t\t   "
 		"first channel is treated as the output of the transfer function, and the rest are\n\t\t\t   "
 		"treated as inputs. If there are multiple inputs, the transfer functions are optimized\n\t\t\t   "
-		"to minimize the RMS difference between the output and the approximated output. A maximum\n\t\t\t   "
-		"of 10 inputs are supported.",
+		"to minimize the RMS difference between the output and the approximated output.",
 		"Aaron Viets <aaron.viets@ligo.org>"
 	);
 
