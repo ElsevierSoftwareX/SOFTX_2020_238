@@ -264,7 +264,7 @@ def parse_command_line():
 	datasource.append_options(parser)
 
 	# local caching to help with I/O for offline running
-	parser.add_option("--local-frame-caching", action = "store_true", help = "blah")
+	parser.add_option("--local-frame-caching", action = "store_true", help = "Pre-reads frame data, performs downsampling, and stores to local filespace. ")
 
 	parser.add_option("--psd-fft-length", metavar = "s", default = 32, type = "int", help = "The length of the FFT used to used to whiten the data (default 32 s).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
