@@ -260,12 +260,11 @@ static void update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_m
 		for(j = 0; j < j_stop; j++) { \
 			z = (complex double) autocorrelation_matrix[first_index + j] / num_avg; \
 			gsl_matrix_complex_set(autocorrelation_matrix_at_f, j / num_tfs, j % num_tfs, gsl_complex_rect(creal(z), cimag(z))); \
-			/* autocorrelation_matrix_at_f->data[j] = gsl_complex_rect(creal(z), cimag(z)); */ \
 		} \
  \
 		/* Now solve [autocorrelation_matrix_at_f] [transfer_functions(f)] = [transfer_functions_at_f] for [transfer_functions(f)] using gsl */ \
 		gsl_linalg_complex_LU_decomp(autocorrelation_matrix_at_f, permutation, &signum); \
-		gsl_linalg_complex_LU_solve (autocorrelation_matrix_at_f, permutation, transfer_functions_at_f, transfer_functions_solved_at_f); \
+		gsl_linalg_complex_LU_solve(autocorrelation_matrix_at_f, permutation, transfer_functions_at_f, transfer_functions_solved_at_f); \
  \
 		/* Now copy the result into transfer_functions */ \
 		for(j = 0; j < num_tfs; j++) { \
@@ -465,8 +464,8 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 	for(k = k_start; k < k_stop; k++) \
 		element->workspace.w ## S_OR_D ## pf.leftover_data[k] = src[first_index + k]; \
  \
-	/* k_stop is the total number of leftover samples */ \
-	element->workspace.w ## S_OR_D ## pf.num_leftover = maximum64(0, k_stop); \
+	/* Record the total number of leftover samples */ \
+	element->workspace.w ## S_OR_D ## pf.num_leftover = maximum64(0, element->sample_count + 1 - sample_count_next_fft); \
  \
 	/* Finally, update transfer functions if ready */ \
 	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
@@ -507,40 +506,6 @@ DEFINE_FIND_TRANSFER_FUNCTION(double, d, );
 
 
 /*
- * set_caps()
- */
-
-
-static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
-
-	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(sink);
-
-	gboolean success = TRUE;
-
-	/* Parse the caps to find the format, sample rate, and number of channels */
-	GstStructure *str = gst_caps_get_structure(caps, 0);
-	const gchar *name = gst_structure_get_string(str, "format");
-	success &= (name != NULL);
-	success &= gst_structure_get_int(str, "rate", &element->rate);
-	success &= gst_structure_get_int(str, "channels", &element->channels);
-	g_assert_cmpint(element->channels, >, 1);
-	
-	/* Record the data type and unit size */
-	if(success) {
-		if(!strcmp(name, GST_AUDIO_NE(F32))) {
-			element->data_type = GSTLAL_TRANSFERFUNCTION_F32;
-			element->unit_size = 4 * element->channels;
-		} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
-			element->data_type = GSTLAL_TRANSFERFUNCTION_F64;
-			element->unit_size = 8 * element->channels;
-		} else
-			g_assert_not_reached();
-	}
-	return success;
-}
-
-
-/*
  * start()
  */
 
@@ -558,33 +523,173 @@ static gboolean start(GstBaseSink *sink) {
 		GST_WARNING_OBJECT(element, "A FIR filter cutoff frequency is set, but no FIR filter is being produced. Set the property make_fir_filters = True to make FIR filters.");
 	if(element->high_pass != 0 && element->low_pass != 0 && element->high_pass > element->low_pass)
 		GST_WARNING_OBJECT(element, "The high-pass cutoff frequency of the FIR filters is above the low-pass cutoff frequency. Reset high_pass and/or low_pass to change this.");
-	if(element->update_samples + element->fft_length < element->rate)
-		GST_WARNING_OBJECT(element, "The chosen fft_length and update_samples are very short. Errors may result.");
 
 	/* Timestamp bookkeeping */
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
 
-	/* Memory allocation */
-	if(!element->transfer_functions)
-		element->transfer_functions = g_malloc((element->channels - 1) * element->fft_length * sizeof(*element->transfer_functions));
-	if(element->make_fir_filters && !element->fir_filters)
-		element->fir_filters = g_malloc((element->channels - 1) * 2 * (element->fft_length - 1) * sizeof(*element->fir_filters));
-
+	/* At start of stream, we want the element to compute a transfer function as soon as possible */
 	element->sample_count = element->update_samples;
+
+	return TRUE;
+}
+
+
+/*
+ * set_caps()
+ */
+
+
+static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
+
+	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(sink);
+
+	gboolean success = TRUE;
+
+	/* Parse the caps to find the format, sample rate, and number of channels */
+	GstStructure *str = gst_caps_get_structure(caps, 0);
+	const gchar *name = gst_structure_get_string(str, "format");
+	success &= (name != NULL);
+	success &= gst_structure_get_int(str, "rate", &element->rate);
+	success &= gst_structure_get_int(str, "channels", &element->channels);
+	g_assert_cmpint(element->channels, >, 1);
+
+	/* Record the data type and unit size */
+	if(success) {
+		if(!strcmp(name, GST_AUDIO_NE(F32))) {
+			element->data_type = GSTLAL_TRANSFERFUNCTION_F32;
+			element->unit_size = 4 * element->channels;
+		} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
+			element->data_type = GSTLAL_TRANSFERFUNCTION_F64;
+			element->unit_size = 8 * element->channels;
+		} else
+			g_assert_not_reached();
+	}
+
+	/* Sanity check */
+	if(element->update_samples + element->fft_length < element->rate)
+		GST_WARNING_OBJECT(element, "The chosen fft_length and update_samples are very short. Errors may result.");
+
+	/*
+	 * Free any memory that depends on stream parameters
+	 */
+
+	if(element->transfer_functions) {
+		g_free(element->transfer_functions);
+		element->transfer_functions = NULL;
+	}
+	if(element->fir_filters) {
+		g_free(element->fir_filters);
+		element->fir_filters = NULL;
+	}
+	if(element->workspace.wspf.leftover_data) {
+		g_free(element->workspace.wspf.leftover_data);
+		element->workspace.wspf.leftover_data = NULL;
+	}
+	element->workspace.wspf.num_leftover = 0;
+	if(element->workspace.wspf.ffts) {
+		g_free(element->workspace.wspf.ffts);
+		element->workspace.wspf.ffts = NULL;
+	}
+	element->workspace.wspf.num_ffts_in_avg = 0;
+	if(element->workspace.wspf.transfer_functions_at_f) {
+		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_at_f);
+		element->workspace.wspf.transfer_functions_at_f = NULL;
+	}
+	if(element->workspace.wspf.transfer_functions_solved_at_f) {
+		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_solved_at_f);
+		element->workspace.wspf.transfer_functions_solved_at_f = NULL;
+	}
+	if(element->workspace.wspf.autocorrelation_matrix_at_f) {
+		gsl_matrix_complex_free(element->workspace.wspf.autocorrelation_matrix_at_f);
+		element->workspace.wspf.autocorrelation_matrix_at_f = NULL;
+	}
+	if(element->workspace.wspf.permutation) {
+		gsl_permutation_free(element->workspace.wspf.permutation);
+		element->workspace.wspf.permutation = NULL;
+	}
+	if(element->workspace.wspf.fft) {
+		gstlal_fftw_lock();
+		fftwf_free(element->workspace.wspf.fft);
+		element->workspace.wspf.fft = NULL;
+		fftwf_destroy_plan(element->workspace.wspf.plan);
+		gstlal_fftw_unlock();
+	}
+	if(element->workspace.wspf.fir_filter) {
+		gstlal_fftw_lock();
+		fftwf_free(element->workspace.wspf.fir_filter);
+		element->workspace.wspf.fir_filter = NULL;
+		fftwf_destroy_plan(element->workspace.wspf.fir_plan);
+		gstlal_fftw_unlock();
+	}
+	if(element->workspace.wdpf.leftover_data) {
+		g_free(element->workspace.wdpf.leftover_data);
+		element->workspace.wdpf.leftover_data = NULL;
+	}
+	element->workspace.wdpf.num_leftover = 0;
+	if(element->workspace.wdpf.ffts) {
+		g_free(element->workspace.wdpf.ffts);
+		element->workspace.wdpf.ffts = NULL;
+	}
+	element->workspace.wdpf.num_ffts_in_avg = 0;
+	if(element->workspace.wdpf.transfer_functions_at_f) {
+		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_at_f);
+		element->workspace.wdpf.transfer_functions_at_f = NULL;
+	}
+	if(element->workspace.wdpf.transfer_functions_solved_at_f) {
+		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_solved_at_f);
+		element->workspace.wdpf.transfer_functions_solved_at_f = NULL;
+	}
+	if(element->workspace.wdpf.autocorrelation_matrix_at_f) {
+		gsl_matrix_complex_free(element->workspace.wdpf.autocorrelation_matrix_at_f);
+		element->workspace.wdpf.autocorrelation_matrix_at_f = NULL;
+	}
+	if(element->workspace.wdpf.permutation) {
+		gsl_permutation_free(element->workspace.wdpf.permutation);
+		element->workspace.wdpf.permutation = NULL;
+	}
+	if(element->workspace.wdpf.fft) {
+		gstlal_fftw_lock();
+		fftw_free(element->workspace.wdpf.fft);
+		element->workspace.wdpf.fft = NULL;
+		fftw_destroy_plan(element->workspace.wdpf.plan);
+		gstlal_fftw_unlock();
+	}
+	if(element->workspace.wdpf.fir_filter) {
+		gstlal_fftw_lock();
+		fftw_free(element->workspace.wdpf.fir_filter);
+		element->workspace.wdpf.fir_filter = NULL;
+		fftw_destroy_plan(element->workspace.wdpf.fir_plan);
+		gstlal_fftw_unlock();
+	}
+
+	/*
+	 * Allocate any memory that depends on stream parameters
+	 */
+
+	element->transfer_functions = g_malloc((element->channels - 1) * element->fft_length * sizeof(*element->transfer_functions));
+	if(element->make_fir_filters)
+		element->fir_filters = g_malloc((element->channels - 1) * 2 * (element->fft_length - 1) * sizeof(*element->fir_filters));
 
 	/* Prepare workspace for finding transfer functions and FIR filters */
 	if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
-		/* window functions */
-		element->workspace.wspf.fft_window = g_malloc(element->fft_length * sizeof(*element->workspace.wspf.fft_window));
+
+		/*
+		 * window functions
+		 */
+
 		gint64 i, i_stop, i_start;
-		for(i = 0; i < element->fft_length; i++)
-			element->workspace.wspf.fft_window[i] = (float) pow(sin(M_PI * i / (element->fft_length - 1)), 2.0);
-		if(element->make_fir_filters) {
+		if(!element->workspace.wspf.fft_window) {
+			element->workspace.wspf.fft_window = g_malloc(element->fft_length * sizeof(*element->workspace.wspf.fft_window));
+			for(i = 0; i < element->fft_length; i++)
+				element->workspace.wspf.fft_window[i] = (float) pow(sin(M_PI * i / (element->fft_length - 1)), 2.0);
+		}
+
+		if(element->make_fir_filters && (!element->workspace.wspf.fir_window)) {
 
 			/*
-			 * Make a frequency-donain window to roll off low and high frequencies
+			 * Make a frequency-domain window to roll off low and high frequencies
 			 */
 
 			element->workspace.wspf.fir_window = g_malloc(element->fft_length * sizeof(*element->workspace.wspf.fir_window));
@@ -679,12 +784,19 @@ static gboolean start(GstBaseSink *sink) {
 		gstlal_fftw_unlock();
 
 	} else if(element->data_type == GSTLAL_TRANSFERFUNCTION_F64) {
-		/* window functions */
-		element->workspace.wdpf.fft_window = g_malloc(element->fft_length * sizeof(*element->workspace.wdpf.fft_window));
+
+		/* 
+		 * window functions
+		 */
+
 		gint64 i, i_stop, i_start;
-		for(i = 0; i < element->fft_length; i++)
-			element->workspace.wdpf.fft_window[i] = pow(sin(M_PI * i / (element->fft_length - 1)), 2.0);
-		if(element->make_fir_filters) {
+		if(!element->workspace.wdpf.fft_window) {
+			element->workspace.wdpf.fft_window = g_malloc(element->fft_length * sizeof(*element->workspace.wdpf.fft_window));
+			for(i = 0; i < element->fft_length; i++)
+				element->workspace.wdpf.fft_window[i] = pow(sin(M_PI * i / (element->fft_length - 1)), 2.0);
+		}
+
+		if(element->make_fir_filters && (!element->workspace.wdpf.fir_window)) {
 
 			/*
 			 * Make a frequency-donain window to roll off low and high frequencies
@@ -782,9 +894,82 @@ static gboolean start(GstBaseSink *sink) {
 		gstlal_fftw_unlock();
 
 	} else
-		g_assert_not_reached();
+		success = FALSE;
 
-	return TRUE;
+	return success;
+}
+
+
+/*
+ * render()
+ */
+
+
+static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
+
+	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(sink);
+	GstMapInfo mapinfo;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * check for discontinuity
+	 */
+
+	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_OFFSET(buffer) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
+		element->t0 = GST_BUFFER_PTS(buffer);
+		element->offset0 = GST_BUFFER_OFFSET(buffer);
+		if(element->sample_count > element->update_samples) 
+			element->sample_count = element->update_samples;
+		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
+			element->workspace.wspf.num_ffts_in_avg = 0;
+			element->workspace.wspf.num_leftover = 0;
+		} else {
+			element->workspace.wdpf.num_ffts_in_avg = 0;
+			element->workspace.wdpf.num_leftover = 0;
+		}
+	}
+	element->next_in_offset = GST_BUFFER_OFFSET_END(buffer);
+	GST_DEBUG_OBJECT(element, "have buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
+
+	/* Get the data from the buffer */
+	gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
+
+	/* Increment the sample count */
+	element->sample_count += (mapinfo.size / element->unit_size);
+
+	/* Deal with gaps */
+	if(GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP) && mapinfo.size != 0) {
+		if(element->update_after_gap || element->sample_count > element->update_samples)
+			element->sample_count = element->update_samples;
+		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
+			element->workspace.wspf.num_ffts_in_avg = 0;
+			element->workspace.wspf.num_leftover = 0;
+		} else {
+			element->workspace.wdpf.num_ffts_in_avg = 0;
+			element->workspace.wdpf.num_leftover = 0;
+		}
+	}
+
+	/* Check whether we need to do anything with this data */
+	if(element->sample_count > element->update_samples) {
+		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
+			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
+			if(!element->workspace.wspf.num_ffts_in_avg)
+				memset(element->workspace.wspf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * element->fft_length * sizeof(*element->workspace.wspf.autocorrelation_matrix));
+
+			/* Send the data to a function to compute fft's and transfer functions */
+			find_transfer_functions_float(element, (float *) mapinfo.data, mapinfo.size);
+		} else {
+			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
+			if(!element->workspace.wdpf.num_ffts_in_avg)
+				memset(element->workspace.wdpf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * element->fft_length * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
+
+			/* Send the data to a function to compute fft's and transfer functions */
+			find_transfer_functions_double(element, (double *) mapinfo.data, mapinfo.size);
+		}
+	}
+
+	return result;
 }
 
 
@@ -868,79 +1053,6 @@ static gboolean stop(GstBaseSink *sink) {
 		gstlal_fftw_unlock();
 	}
 	return TRUE;
-}
-
-
-/*
- * render()
- */
-
-
-static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
-
-	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(sink);
-	GstMapInfo mapinfo;
-	GstFlowReturn result = GST_FLOW_OK;
-
-	/*
-	 * check for discontinuity
-	 */
-
-	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_OFFSET(buffer) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
-		element->t0 = GST_BUFFER_PTS(buffer);
-		element->offset0 = GST_BUFFER_OFFSET(buffer);
-		if(element->sample_count > element->update_samples) 
-			element->sample_count = element->update_samples;
-		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
-			element->workspace.wspf.num_ffts_in_avg = 0;
-			element->workspace.wspf.num_leftover = 0;
-		} else {
-			element->workspace.wdpf.num_ffts_in_avg = 0;
-			element->workspace.wdpf.num_leftover = 0;
-		}
-	}
-	element->next_in_offset = GST_BUFFER_OFFSET_END(buffer);
-	GST_DEBUG_OBJECT(element, "have buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
-
-	/* Get the data from the buffer */
-	gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
-
-	/* Increment the sample count */
-	element->sample_count += (mapinfo.size / element->unit_size);
-
-	/* Deal with gaps */
-	if(GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP) && mapinfo.size != 0) {
-		if(element->update_after_gap || element->sample_count > element->update_samples)
-			element->sample_count = element->update_samples;
-		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
-			element->workspace.wspf.num_ffts_in_avg = 0;
-			element->workspace.wspf.num_leftover = 0;
-		} else {
-			element->workspace.wdpf.num_ffts_in_avg = 0;
-			element->workspace.wdpf.num_leftover = 0;
-		}
-	}
-
-	/* Check whether we need to do anything with this data */
-	if(element->sample_count > element->update_samples) {
-		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
-			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
-			if(!element->workspace.wspf.num_ffts_in_avg)
-				memset(element->workspace.wspf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * element->fft_length * sizeof(*element->workspace.wspf.autocorrelation_matrix));
-
-			/* Send the data to a function to compute fft's and transfer functions */
-			find_transfer_functions_float(element, (float *) mapinfo.data, mapinfo.size);
-		} else {
-			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
-			if(!element->workspace.wdpf.num_ffts_in_avg)
-				memset(element->workspace.wdpf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * element->fft_length * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
-
-			/* Send the data to a function to compute fft's and transfer functions */
-			find_transfer_functions_double(element, (double *) mapinfo.data, mapinfo.size);
-		}
-	}
-
-	return result;
 }
 
 
