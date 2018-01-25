@@ -104,13 +104,24 @@ G_DEFINE_TYPE_WITH_CODE(
 );
 
 
-/*
- * ============================================================================
- *
- *				 Parameters
- *
- * ============================================================================
- */
+enum property {
+	ARG_FFT_LENGTH = 1,
+	ARG_FFT_OVERLAP,
+	ARG_NUM_FFTS,
+	ARG_UPDATE_SAMPLES,
+	ARG_UPDATE_AFTER_GAP,
+	ARG_WRITE_TO_SCREEN,
+	ARG_FILENAME,
+	ARG_MAKE_FIR_FILTERS,
+	ARG_HIGH_PASS,
+	ARG_LOW_PASS,
+	ARG_TRANSFER_FUNCTIONS,
+	ARG_FIR_FILTERS,
+	ARG_FAKE
+};
+
+
+static GParamSpec *properties[ARG_FAKE];
 
 
 /*
@@ -461,6 +472,7 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
 		update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, element->fft_length, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
 		GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
+		g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 		element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
 		element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg = 0; \
  \
@@ -468,10 +480,8 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 		if(element->make_fir_filters) { \
 			update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fft_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
 			GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
+			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
 		} \
- \
-		/* Let the pipeline know about the updates */ \
-		/* FIXME: nothing here yet */ \
  \
 		/* Write output to the screen or a file if we want */ \
 		if(element->write_to_screen || element->filename) { \
@@ -948,22 +958,6 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
  */
 
 
-enum property {
-	ARG_FFT_LENGTH = 1,
-	ARG_FFT_OVERLAP,
-	ARG_NUM_FFTS,
-	ARG_UPDATE_SAMPLES,
-	ARG_UPDATE_AFTER_GAP,
-	ARG_WRITE_TO_SCREEN,
-	ARG_FILENAME,
-	ARG_MAKE_FIR_FILTERS,
-	ARG_HIGH_PASS,
-	ARG_LOW_PASS,
-	ARG_TRANSFER_FUNCTIONS,
-	ARG_FIR_FILTERS,
-};
-
-
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(object);
@@ -1082,13 +1076,33 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case ARG_TRANSFER_FUNCTIONS:
-		if(element->transfer_functions)
-			g_value_take_boxed(value, gstlal_g_value_array_from_doubles((double *) element->transfer_functions, 2 * (element->channels - 1) * element->fft_length));
+		if(element->transfer_functions) {
+			GValueArray *va;
+			va = g_value_array_new(element->channels - 1);
+			GValue v = G_VALUE_INIT;
+			g_value_init(&v, G_TYPE_VALUE_ARRAY);
+			int i;
+			for(i = 0; i < element->channels - 1; i++) {
+				g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((double *) element->transfer_functions, 2 * element->fft_length));
+				g_value_array_append(va, &v);
+			}
+			g_value_take_boxed(value, va);
+		}
 		break;
 
 	case ARG_FIR_FILTERS:
-		if(element->fir_filters)
-			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->fir_filters, (element->channels - 1) * 2 * (element->fft_length - 1)));
+		if(element->fir_filters) {
+			GValueArray *val_array;
+			val_array = g_value_array_new(element->channels - 1);
+			GValue val = G_VALUE_INIT;
+			g_value_init(&val, G_TYPE_VALUE_ARRAY);
+			int j;
+			for(j = 0; j < element->channels - 1; j++) {
+				g_value_take_boxed(&val, gstlal_g_value_array_from_doubles(element->fir_filters, 2 * (element->fft_length - 1)));
+				g_value_array_append(val_array, &val);
+			}
+			g_value_take_boxed(value, val_array);
+		}
 		break;
 
 	default:
@@ -1173,165 +1187,180 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		)
 	);
 
+
+	properties[ARG_FFT_LENGTH] = g_param_spec_int64(
+		"fft-length",
+		"FFT Length",
+		"Length in samples of the FFTs used to compute the transfer function(s)",
+		0, G_MAXINT64, 16384,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_FFT_OVERLAP] = g_param_spec_int64(
+		"fft-overlap",
+		"FFT Overlap",
+		"The overlap in samples of the FFTs used to compute the transfer function(s)",
+		-G_MAXINT64, G_MAXINT64, 8192,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_NUM_FFTS] = g_param_spec_int64(
+		"num-ffts",
+		"Number of FFTs",
+		"Number of FFTs that will be averaged to compute the transfer function(s)",
+		1, G_MAXINT64, 16,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_UPDATE_SAMPLES] = g_param_spec_int64(
+		"update-samples",
+		"Update Samples",
+		"Number of input samples after which to update the transfer function(s)",
+		0, G_MAXINT64, 58982400,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_UPDATE_AFTER_GAP] = g_param_spec_boolean(
+		"update-after-gap",
+		"Update After Gap",
+		"Set to True in order to update the transfer function(s) after a gap in the\n\t\t\t"
+		"input data.",
+		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_WRITE_TO_SCREEN] = g_param_spec_boolean(
+		"write-to-screen",
+		"Write to Screen",
+		"Set to True in order to write transfer functions and/or FIR filters to the screen.",
+		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_FILENAME] = g_param_spec_string(
+		"filename",
+		"Filename",
+		"Name of file to write transfer functions and/or FIR filters to. If not given,\n\t\t\t"
+		"no file is produced.",
+		NULL,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_MAKE_FIR_FILTERS] = g_param_spec_boolean(
+		"make-fir-filters",
+		"Make FIR Filters",
+		"If True, FIR filters will be produced each time the transfer functions are computed.",
+		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_HIGH_PASS] = g_param_spec_int(
+		"high-pass",
+		"High Pass",
+		"The high-pass cutoff frequency (in Hz) of the FIR filters.\n\t\t\t"
+		"If zero, no high-pass cutoff is added.",
+		0, G_MAXINT, 9,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_LOW_PASS] = g_param_spec_int(
+		"low-pass",
+		"Low Pass",
+		"The low-pass cutoff frequency (in Hz) of the FIR filters.\n\t\t\t"
+		"If zero, no low-pass cutoff is added.",
+		0, G_MAXINT, 0,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_TRANSFER_FUNCTIONS] = g_param_spec_value_array(
+		"transfer-functions",
+		"Transfer Functions",
+		"Array of the computed transfer functions",
+		g_param_spec_value_array(
+			"transfer-function",
+			"Transfer Function",
+			"A single transfer function",
+			g_param_spec_double(
+				"value",
+				"Value",
+				"Value of the transfer function at a particular frequency",
+				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		),
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
+	);
+	properties[ARG_FIR_FILTERS] = g_param_spec_value_array(
+		"fir-filters",
+		"FIR Filters",
+		"Array of the computed FIR filters",
+		g_param_spec_value_array(
+			"fir-filter",
+			"FIR Filter",
+			"A single FIR filter",
+			g_param_spec_double(
+				"sample",
+				"Sample",
+				"A sample from the FIR filter",
+				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		),
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
+	);
+
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_FFT_LENGTH,
-		g_param_spec_int64(
-			"fft-length",
-			"FFT Length",
-			"Length in samples of the FFTs used to compute the transfer function(s)",
-			0, G_MAXINT64, 16384,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_FFT_LENGTH]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_FFT_OVERLAP,
-		g_param_spec_int64(
-			"fft-overlap",
-			"FFT Overlap",
-			"The overlap in samples of the FFTs used to compute the transfer function(s)",
-			-G_MAXINT64, G_MAXINT64, 8192,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_FFT_OVERLAP]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_NUM_FFTS,
-		g_param_spec_int64(
-			"num-ffts",
-			"Number of FFTs",
-			"Number of FFTs that will be averaged to compute the transfer function(s)",
-			1, G_MAXINT64, 16,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_NUM_FFTS]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_UPDATE_SAMPLES,
-		g_param_spec_int64(
-			"update-samples",
-			"Update Samples",
-			"Number of input samples after which to update the transfer function(s)",
-			0, G_MAXINT64, 58982400,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_UPDATE_SAMPLES]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_UPDATE_AFTER_GAP,
-		g_param_spec_boolean(
-			"update-after-gap",
-			"Update After Gap",
-			"Set to True in order to update the transfer function(s) after a gap in the\n\t\t\t"
-			"input data.",
-			FALSE,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_UPDATE_AFTER_GAP]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_WRITE_TO_SCREEN,
-		g_param_spec_boolean(
-			"write-to-screen",
-			"Write to Screen",
-			"Set to True in order to write transfer functions and/or FIR filters to the screen.",
-			FALSE,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_WRITE_TO_SCREEN]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_FILENAME,
-		g_param_spec_string(
-			"filename",
-			"Filename",
-			"Name of file to write transfer functions and/or FIR filters to. If not given,\n\t\t\t"
-			"no file is produced.",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_FILENAME]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_MAKE_FIR_FILTERS,
-		g_param_spec_boolean(
-			"make-fir-filters",
-			"Make FIR Filters",
-			"If True, FIR filters will be produced each time the transfer functions are computed.",
-			FALSE,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_MAKE_FIR_FILTERS]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_HIGH_PASS,
-		g_param_spec_int(
-			"high-pass",
-			"High Pass",
-			"The high-pass cutoff frequency (in Hz) of the FIR filters.\n\t\t\t"
-			"If zero, no high-pass cutoff is added.",
-			0, G_MAXINT, 9,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_HIGH_PASS]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_LOW_PASS,
-		g_param_spec_int(
-			"low-pass",
-			"Low Pass",
-			"The low-pass cutoff frequency (in Hz) of the FIR filters.\n\t\t\t"
-			"If zero, no low-pass cutoff is added.",
-			0, G_MAXINT, 0,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_LOW_PASS]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_TRANSFER_FUNCTIONS,
-		g_param_spec_value_array(
-			"transfer-functions",
-			"Transfer Functions",
-			"Array of the computed transfer functions",
-			g_param_spec_value_array(
-				"transfer-function",
-				"Transfer Function",
-				"A single transfer function",
-				g_param_spec_double(
-					"value",
-					"Value",
-					"Value of the transfer function at a particular frequency",
-					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
-					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-				),
-				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-			),
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
-		)
+		properties[ARG_TRANSFER_FUNCTIONS]
 	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_FIR_FILTERS,
-		g_param_spec_value_array(
-			"fir-filters",
-			"FIR Filters",
-			"Array of the computed FIR filters",
-			g_param_spec_value_array(
-				"fir-filter",
-				"FIR Filter",
-				"A single FIR filter",
-				g_param_spec_double(
-					"sample",
-					"Sample",
-					"A sample from the FIR filter",
-					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
-					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-				),
-				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-			),
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
-		)
+		properties[ARG_FIR_FILTERS]
 	);
 }
 
