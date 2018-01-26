@@ -747,17 +747,17 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 			/* first curve of window */
 			for(i = 0; i < edge_to_corner; i++)
-				element->workspace.wspf.tukey[i] = pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0);
+				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0);
 
 			/* flat top of window */
 			i_stop = fir_length - edge_to_corner;
 			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wspf.tukey[i] = 1.0;
+				element->workspace.wspf.tukey[i] = (double) element->make_fir_filters;
 
 			/* last curve of window */
 			i_start = i_stop;
 			for(i = i_start; i < fir_length; i++)
-				element->workspace.wspf.tukey[i] = pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (fir_length - i_start)), 2.0);
+				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (fir_length - i_start)), 2.0);
 		}
 
 		/* intermediate data storage */
@@ -859,17 +859,17 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 			/* first curve of window */
 			for(i = 0; i < edge_to_corner; i++)
-				element->workspace.wdpf.tukey[i] = pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0);
+				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0);
 
 			/* flat top of window */
 			i_stop = fir_length - edge_to_corner;
 			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wdpf.tukey[i] = 1.0;
+				element->workspace.wdpf.tukey[i] = (double) element->make_fir_filters;
 
 			/* last curve of window */
 			i_start = i_stop;
 			for(i = i_start; i < fir_length; i++)
-				element->workspace.wdpf.tukey[i] = pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (fir_length - i_start)), 2.0);
+				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (fir_length - i_start)), 2.0);
 		}
 
 		/* intermediate data storage */
@@ -1117,7 +1117,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_MAKE_FIR_FILTERS:
-		element->make_fir_filters = g_value_get_boolean(value);
+		element->make_fir_filters = g_value_get_int(value);
 		break;
 
 	case ARG_HIGH_PASS:
@@ -1187,7 +1187,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case ARG_MAKE_FIR_FILTERS:
-		g_value_set_boolean(value, element->make_fir_filters);
+		g_value_set_int(value, element->make_fir_filters);
 		break;
 
 	case ARG_HIGH_PASS:
@@ -1349,7 +1349,8 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	properties[ARG_WRITE_TO_SCREEN] = g_param_spec_boolean(
 		"write-to-screen",
 		"Write to Screen",
-		"Set to True in order to write transfer functions and/or FIR filters to the screen.",
+		"Set to True in order to write transfer functions and/or FIR filters to\n\t\t\t"
+		"the screen.",
 		FALSE,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
@@ -1361,11 +1362,13 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		NULL,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_MAKE_FIR_FILTERS] = g_param_spec_boolean(
+	properties[ARG_MAKE_FIR_FILTERS] = g_param_spec_int(
 		"make-fir-filters",
 		"Make FIR Filters",
-		"If True, FIR filters will be produced each time the transfer functions are computed.",
-		FALSE,
+		"If set to 1, FIR filters will be produced each time the transfer functions\n\t\t\t"
+		"are computed. If set to -1, a minus sign is added to the filters. If unset\n\t\t\t"
+		"(or set to 0), no FIR filters are produced.",
+		-1, 1, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_HIGH_PASS] = g_param_spec_int(

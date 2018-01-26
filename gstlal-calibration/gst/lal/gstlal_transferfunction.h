@@ -130,7 +130,7 @@ struct _GSTLALTransferFunction {
 	gboolean update_after_gap;
 	gboolean write_to_screen;
 	char *filename;
-	gboolean make_fir_filters;
+	int make_fir_filters;
 	int high_pass;
 	int low_pass;
 	complex double *transfer_functions;
