@@ -26,6 +26,7 @@
 import numpy
 import sys
 from gstlal import pipeparts
+from gstlal import calibration_parts
 import test_common
 
 if sys.byteorder == "little":
@@ -72,7 +73,25 @@ def deinterleave_01(pipeline, name):
 	#pipeparts.mkfakesink(pipeline, out2)
 	
 	return pipeline
-	
+
+def deinterleave_02(pipeline, name):
+
+	buffer_length = 1.0
+        rate = 2048
+        width = 64
+        channels = 3
+        test_duration = 10.0
+        freq = 10
+        is_live = False
+
+
+	src = test_common.test_src(pipeline, wave = 5, freq = freq, test_duration = test_duration, volume = 1, width = 64, rate = rate, channels = channels, verbose = False)
+	streams = calibration_parts.mkdeinterleave(pipeline, src, channels)
+	for i in range(0, channels):
+		pipeparts.mknxydumpsink(pipeline, streams[i], "%s_stream%d.txt" % (name, i))
+
+	return pipeline
+
 #
 # =============================================================================
 #
@@ -82,5 +101,6 @@ def deinterleave_01(pipeline, name):
 #
 
 
-test_common.build_and_run(deinterleave_01, "deinterleave_01")
+#test_common.build_and_run(deinterleave_01, "deinterleave_01")
+test_common.build_and_run(deinterleave_02, "deinterleave_02")
 

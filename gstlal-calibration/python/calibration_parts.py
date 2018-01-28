@@ -85,22 +85,43 @@ def mkadder(pipeline, srcs, sync = True):
 			if type(src) is list:
 				mkqueue(pipeline, src[0], src[1]).link(elem)
 			else:
-				src.link(elem)
+				mkqueue(pipeline, src, 0).link(elem)
 	return elem
 
 def mkgate(pipeline, src, control, threshold, queue_length1, queue_length2, **properties):
 	elem = pipeparts.mkgate(pipeline, mkqueue(pipeline, src, queue_length1), control = mkqueue(pipeline, control, queue_length2), threshold = threshold, **properties)
 	return elem
 
-def mkinterleave(pipeline, src1, src2, queue_length1, queue_length2):
-	chan1 = pipeparts.mkmatrixmixer(pipeline, src1, matrix=[[1,0]])
-	chan2 = pipeparts.mkmatrixmixer(pipeline, src2, matrix=[[0,1]])
-	elem = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, chan1, queue_length1), mkqueue(pipeline, chan2, queue_length2))) 
+def mkinterleave(pipeline, srcs):
+	num_srcs = len(srcs)
+	i = 0
+	mixed_srcs = []
+	for src in srcs:
+		matrix = [numpy.zeros(num_srcs)]
+		matrix[0][i] = 1
+		mixed_srcs.append(pipeparts.mkmatrixmixer(pipeline, src, matrix=matrix))
+		i += 1
+	elem = mkadder(pipeline, tuple(mixed_srcs))
+
+	#chan1 = pipeparts.mkmatrixmixer(pipeline, src1, matrix=[[1,0]])
+	#chan2 = pipeparts.mkmatrixmixer(pipeline, src2, matrix=[[0,1]])
+	#elem = mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, chan1, queue_length1), mkqueue(pipeline, chan2, queue_length2))) 
+
 	#elem = pipeparts.mkgeneric(pipeline, None, "interleave")
 	#if srcs is not None:
 	#	for src in srcs:
 	#		pipeparts.mkqueue(pipeline, src).link(elem)
 	return elem
+
+def mkdeinterleave(pipeline, src, num_channels):
+	head = pipeparts.mktee(pipeline, src)
+	streams = []
+	for i in range(0, num_channels):
+		matrix = numpy.transpose([numpy.zeros(num_channels)])
+		matrix[i][0] = 1.0
+		streams.append(pipeparts.mkmatrixmixer(pipeline, head, matrix = matrix))
+
+	return tuple(streams)
 
 
 #
@@ -244,8 +265,8 @@ def compute_kappa_bits_only_real(pipeline, smooth, dq, expected, ok_var, min_sam
 		smoothInRange = pipeparts.mkgeneric(pipeline, smoothInRange, "lal_logicalundersample", required_on = status_out_smooth, status_out = status_out_smooth)
 		smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % ending_rate)
 	smoothInRangetee = pipeparts.mktee(pipeline, smoothInRange)
-        smoothInRange = pipeparts.mkgate(pipeline, mkqueue(pipeline, smoothInRangetee, 0), threshold = status_out_smooth, control = mkqueue(pipeline, smoothInRangetee, 0), attack_length = -min_samples)
-        smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
+	smoothInRange = pipeparts.mkgate(pipeline, mkqueue(pipeline, smoothInRangetee, 0), threshold = status_out_smooth, control = mkqueue(pipeline, smoothInRangetee, 0), attack_length = -min_samples)
+	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 
 	medianUncorrupt = pipeparts.mkbitvectorgen(pipeline, dq, threshold = 1, bit_vector = status_out_median)
 	medianUncorrupt = pipeparts.mkcapsfilter(pipeline, medianUncorrupt, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % starting_rate)
@@ -257,7 +278,7 @@ def compute_kappa_bits_only_real(pipeline, smooth, dq, expected, ok_var, min_sam
 
 def merge_into_complex(pipeline, real, imag, queue_length1, queue_length2):
 	# Merge real and imag into one complex channel with complex caps
-	head = mkinterleave(pipeline, real, imag, queue_length1, queue_length2)
+	head = mkinterleave(pipeline, list_srcs(pipeline, real, imag))
 	head = pipeparts.mktogglecomplex(pipeline,head)
 	return head
 
@@ -532,4 +553,36 @@ def compute_Xi(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP14,
 	Xi = pipeparts.mkgeneric(pipeline, Xi_plus_one, "lal_add_constant", value = -1.0)
 
 	return Xi
+
+def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name, which_filter):
+	filter_taker.set_property(taker_prop_name, filter_maker.get_property(maker_prop_name)[which_filter][::-1])
+
+def clean_data(pipeline, srcs, fft_length, fft_overlap, num_ffts, update_samples):
+
+	#
+	# Note: this function can cause pipelines to lock up. Adding queues does not seem to help.
+	# What does seem to help is one of two things: either replace lal_transferfunction with
+	# another sink element, or be sure to give it inputs that feed into this function before
+	# going anywhere else (e.g., if there is a tee, hook this function to the tee before
+	# anything else.
+	#
+
+	default_fir_filter = numpy.zeros(2 * (fft_length - 1))
+
+	tees = []
+	for i in range(0, len(srcs)):
+		tees.append(pipeparts.mktee(pipeline, srcs[i]))
+
+	transfer_functions = mkinterleave(pipeline, tees)
+	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1)
+	data = [tees[0]]
+	for i in range(1, len(srcs)):
+		data.append(pipeparts.mkgeneric(pipeline, tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fft_length / 2 - 2, taper_length = 20 * fft_length))
+		transfer_functions.connect("notify::fir-filters", update_filter, data[i], "fir_filters", "kernel", i - 1)
+
+	clean  = mkadder(pipeline, tuple(data))
+
+	return clean
+
+
 

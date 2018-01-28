@@ -175,8 +175,8 @@ static void write_transfer_functions(complex double *tfs, char *element_name, gi
 		j_stop = columns - 1;
 		for(i = 0; i < rows; i++) {
 			for(j = 0; j < j_stop; j++)
-				g_print("%10e + %10e i\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
-			g_print("%10e + %10e i\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
+				g_print("%10e + %10ei\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
+			g_print("%10e + %10ei\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
 		}
 		g_print("\n\n");
 	}
@@ -192,8 +192,8 @@ static void write_transfer_functions(complex double *tfs, char *element_name, gi
 		j_stop = columns - 1;
 		for(i = 0; i < rows; i++) {
 			for(j = 0; j < j_stop; j++)
-				g_fprintf(fp, "%10e + %10e i\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
-			g_fprintf(fp, "%10e + %10e i\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
+				g_fprintf(fp, "%10e + %10ei\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
+			g_fprintf(fp, "%10e + %10ei\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
 		}
 		g_fprintf(fp, "\n\n");
 		fclose(fp);
@@ -250,7 +250,7 @@ static void update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_m
 	gsl_complex gslz; \
 	for(i = 0; i < length_tfs; i++) { \
 		/* First, copy samples at a specific frequency from the big autocorrelation matrix to the gsl vector transfer_functions_at_f */ \
-		first_index = i * num_tfs; \
+		first_index = i * (num_tfs + 1); \
 		for(j = 0; j < num_tfs; j++) { \
 			z = (complex double) autocorrelation_matrix[first_index + j] / num_avg; \
 			gsl_vector_complex_set(transfer_functions_at_f, j, gsl_complex_rect(creal(z), cimag(z))); \
@@ -282,13 +282,13 @@ DEFINE_UPDATE_TRANSFER_FUNCTIONS(double);
 
 
 #define DEFINE_UPDATE_FIR_FILTERS(DTYPE, F_OR_BLANK) \
-static void update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 length_tfs, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
+static void update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
  \
 	int i; \
-	gint64 j, zero_index, fir_length; \
+	gint64 j, length_tfs; \
 	DTYPE df, delay; \
 	complex DTYPE exp_arg; \
-	fir_length = 2 * (length_tfs - 1); \
+	length_tfs = fir_length / 2 + 1; \
 	df = sample_rate / 2.0 / (length_tfs - 1); /* frequency spacing is Nyquist frequency / number of frequency increments */ \
 	delay = (length_tfs - 1.0) / sample_rate; /* number of samples of delay is length of transfer functions - 1 */ \
 	exp_arg = (complex DTYPE) (-2.0 * M_PI * I * df * delay); \
@@ -301,17 +301,13 @@ static void update_fir_filters_ ## DTYPE(complex double *transfer_functions, int
 		for(j = 0; j < length_tfs; j++) \
 			fir_filter[j] = fd_window[j] * cexp ## F_OR_BLANK(exp_arg * j) * (DTYPE) transfer_functions[i * length_tfs + j]; \
  \
-		/* Now make fir_filter conjugate symmetric by filling the remaining memory with complex conjugates */ \
-		zero_index = length_tfs - 1; \
-		for(j = 1; j <= length_tfs - 2; j++) \
-			fir_filter[zero_index + j] = conj ## F_OR_BLANK(fir_filter[zero_index - j]); \
- \
 		/* Take the inverse Fourier transform */ \
 		fftw ## F_OR_BLANK ## _execute(fir_plan); \
  \
 		/* Apply the Tukey window and copy to fir_filters */ \
+		DTYPE *real_filter = (DTYPE *) fir_filter; \
 		for(j = 0; j < fir_length; j++) \
-			fir_filters[i * fir_length + j] = tukey[j] * fir_filter[j]; \
+			fir_filters[i * fir_length + j] = tukey[j] * real_filter[j]; \
 	} \
 }
 
@@ -327,9 +323,11 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 	g_assert(!(src_size % element->unit_size)); \
 	src_size /= element->unit_size; \
  \
-	gint64 i, j, k, m, num_ffts, k_start, k_stop, first_index, first_index2, stride, num_tfs; \
+	gint64 i, j, k, m, num_ffts, k_start, k_stop, first_index, first_index2, fd_fft_length, stride, num_tfs; \
+	fd_fft_length = element->fft_length / 2 + 1; \
 	stride = element->fft_length - element->fft_overlap; \
 	num_tfs = element->channels - 1; \
+	DTYPE *real_fft = (DTYPE *) element->workspace.w ## S_OR_D ## pf.fft; \
  \
 	/* Determine how many fft's we will calculate from combined leftover and new input data */ \
 	num_ffts = minimum64((element->workspace.w ## S_OR_D ## pf.num_leftover + stride - 1) / stride, element->num_ffts); \
@@ -344,20 +342,20 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 			k_stop = element->workspace.w ## S_OR_D ## pf.num_leftover - i * stride; \
 			first_index = i * stride * element->channels + j; \
 			for(k = 0; k < k_stop; k++) \
-				element->workspace.w ## S_OR_D ## pf.fft[k] = element->workspace.w ## S_OR_D ## pf.fft_window[k] * element->workspace.w ## S_OR_D ## pf.leftover_data[first_index + k * element->channels]; \
+				real_fft[k] = element->workspace.w ## S_OR_D ## pf.fft_window[k] * element->workspace.w ## S_OR_D ## pf.leftover_data[first_index + k * element->channels]; \
  \
 			/* Now copy the inputs from new input data */ \
 			k_start = k_stop; \
 			k_stop = element->fft_length; \
 			for(k = k_start; k < k_stop; k++) \
-				element->workspace.w ## S_OR_D ## pf.fft[k] = element->workspace.w ## S_OR_D ## pf.fft_window[k] * src[j + element->channels * (k - k_start)]; \
+				real_fft[k] = element->workspace.w ## S_OR_D ## pf.fft_window[k] * src[j + element->channels * (k - k_start)]; \
  \
 			/* Take an FFT */ \
 			fftw ## F_OR_BLANK ## _execute(element->workspace.w ## S_OR_D ## pf.plan); \
  \
 			/* Copy FFT to the proper location */ \
-			first_index = j * element->fft_length; \
-			for(k = 0; k < element->fft_length; k++) \
+			first_index = j * fd_fft_length; \
+			for(k = 0; k < fd_fft_length; k++) \
 				element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
 		} \
  \
@@ -367,11 +365,11 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 		 * "frequency-major" order: transfer functions at a particular frequency are
 		 * stored contiguously in memory before incrementing to the next frequency.
 		 */ \
-		for(j = 0; j < element->fft_length; j++) { \
+		for(j = 0; j < fd_fft_length; j++) { \
 			first_index = j * element->channels * num_tfs - 1; \
 			for(k = 1; k <= num_tfs; k++) { \
 				/* First, divide FFT's of first channel by others to get those transfer functions */ \
-				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * element->fft_length]; \
+				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
  \
 				/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
 				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k * element->channels] += 1.0; \
@@ -379,7 +377,7 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 				/* Now find all other elements of the autocorrelation matrix */ \
 				first_index2 = first_index + k * element->channels; \
 				for(m = 1; m <= num_tfs - k; m++) { \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * element->fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * element->fft_length]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
 					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += 1.0 / element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m]; \
 				} \
 			} \
@@ -408,14 +406,14 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 			k_stop = element->fft_length; \
 			first_index = i * stride * element->channels + j; \
 			for(k = 0; k < k_stop; k++) \
-				element->workspace.w ## S_OR_D ## pf.fft[k] = element->workspace.w ## S_OR_D ## pf.fft_window[k] * ptr[first_index + k * element->channels]; \
+				real_fft[k] = element->workspace.w ## S_OR_D ## pf.fft_window[k] * ptr[first_index + k * element->channels]; \
  \
 			/* Take an FFT */ \
 			fftw ## F_OR_BLANK ## _execute(element->workspace.w ## S_OR_D ## pf.plan); \
  \
 			/* Copy FFT to the proper location */ \
-			first_index = j * element->fft_length; \
-			for(k = 0; k < element->fft_length; k++) \
+			first_index = j * fd_fft_length; \
+			for(k = 0; k < fd_fft_length; k++) \
 				element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
 		} \
  \
@@ -425,11 +423,11 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 		 * "frequency-major" order: transfer functions at a particular frequency are
 		 * stored contiguously in memory before incrementing to the next frequency.
 		 */ \
-		for(j = 0; j < element->fft_length; j++) { \
+		for(j = 0; j < fd_fft_length; j++) { \
 			first_index = j * element->channels * num_tfs - 1; \
 			for(k = 1; k <= num_tfs; k++) { \
 				/* First, divide FFT's of first channel by others to get those transfer functions */ \
-				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * element->fft_length]; \
+				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
  \
 				/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
 				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k * element->channels] += 1.0; \
@@ -437,7 +435,7 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 				/* Now find all other elements of the autocorrelation matrix */ \
 				first_index2 = first_index + k * element->channels; \
 				for(m = 1; m <= num_tfs - k; m++) { \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * element->fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * element->fft_length]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
 					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += 1.0 / element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m]; \
 				} \
 			} \
@@ -472,7 +470,7 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
  \
 	/* Finally, update transfer functions if ready */ \
 	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
-		update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, element->fft_length, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
+		update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
 		GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
 		g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 		element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
@@ -487,9 +485,9 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
  \
 		/* Write output to the screen or a file if we want */ \
 		if(element->write_to_screen || element->filename) { \
-			write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->fft_length, num_tfs, element->write_to_screen, element->filename); \
+			write_transfer_functions(element->transfer_functions, gst_element_get_name(element), fd_fft_length, num_tfs, element->write_to_screen, element->filename); \
 			if(element->make_fir_filters) \
-				write_fir_filters(element->fir_filters, gst_element_get_name(element), 2 * (element->fft_length - 1), num_tfs, element->write_to_screen, element->filename); \
+				write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fft_length, num_tfs, element->write_to_screen, element->filename); \
 		} \
 	} \
 }
@@ -675,7 +673,8 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	 * Allocate any memory that depends on stream parameters
 	 */
 
-	element->transfer_functions = g_malloc((element->channels - 1) * element->fft_length * sizeof(*element->transfer_functions));
+	gint64 fd_fft_length = element->fft_length / 2 + 1;
+	element->transfer_functions = g_malloc((element->channels - 1) * fd_fft_length * sizeof(*element->transfer_functions));
 	if(element->make_fir_filters)
 		element->fir_filters = g_malloc((element->channels - 1) * 2 * (element->fft_length - 1) * sizeof(*element->fir_filters));
 
@@ -699,14 +698,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a frequency-domain window to roll off low and high frequencies
 			 */
 
-			element->workspace.wspf.fir_window = g_malloc(element->fft_length * sizeof(*element->workspace.wspf.fir_window));
+			element->workspace.wspf.fir_window = g_malloc(fd_fft_length * sizeof(*element->workspace.wspf.fir_window));
 
 			/* Initialize to ones */
-			for(i = 0; i < element->fft_length; i++)
+			for(i = 0; i < fd_fft_length; i++)
 				element->workspace.wspf.fir_window[i] = 1.0;
 
 			int f_nyquist = element->rate / 2;
-			float df_per_hz = (element->fft_length - 1.0) / f_nyquist;
+			float df_per_hz = (fd_fft_length - 1.0) / f_nyquist;
 
 			/* high-pass filter */
 			/* Remove low frequencies */
@@ -724,13 +723,13 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			if(element->low_pass > 0) {
 				/* Apply half of a Hann window */
 				i_start = (gint64) (element->low_pass * df_per_hz + 0.49);
-				i_stop = minimum64(element->fft_length, 1.4 * i_start);
+				i_stop = minimum64(fd_fft_length, 1.4 * i_start);
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wspf.fir_window[i] *= (float) pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
 				i_start = i_stop;
-				i_stop = element->fft_length;
+				i_stop = fd_fft_length;
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wspf.fir_window[i] = 0.0;
 			}
@@ -739,33 +738,31 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a time-domain Tukey window so that the filter falls off smoothly at the edges
 			 */
 
-			gint64 fir_length, edge_to_corner;
-			fir_length = 2 * (element->fft_length - 1);
-			edge_to_corner = (gint64) (0.45 * fir_length);
+			gint64 edge_to_corner = (gint64) (0.45 * element->fft_length);
 
-			element->workspace.wspf.tukey = g_malloc(fir_length * sizeof(*element->workspace.wspf.tukey));
+			element->workspace.wspf.tukey = g_malloc(element->fft_length * sizeof(*element->workspace.wspf.tukey));
 
 			/* first curve of window */
 			for(i = 0; i < edge_to_corner; i++)
-				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0);
+				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0) / element->fft_length;
 
 			/* flat top of window */
-			i_stop = fir_length - edge_to_corner;
+			i_stop = element->fft_length - edge_to_corner;
 			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wspf.tukey[i] = (double) element->make_fir_filters;
+				element->workspace.wspf.tukey[i] = (double) element->make_fir_filters / element->fft_length;
 
 			/* last curve of window */
 			i_start = i_stop;
-			for(i = i_start; i < fir_length; i++)
-				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (fir_length - i_start)), 2.0);
+			for(i = i_start; i < element->fft_length; i++)
+				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (element->fft_length - i_start)), 2.0) / element->fft_length;
 		}
 
 		/* intermediate data storage */
 		element->workspace.wspf.leftover_data = g_malloc(element->channels * (element->fft_length - 1) * sizeof(*element->workspace.wspf.leftover_data));
 		element->workspace.wspf.num_leftover = 0;
-		element->workspace.wspf.ffts = g_malloc(element->channels * element->fft_length * sizeof(*element->workspace.wspf.ffts));
+		element->workspace.wspf.ffts = g_malloc(element->channels * fd_fft_length * sizeof(*element->workspace.wspf.ffts));
 		element->workspace.wspf.num_ffts_in_avg = 0;
-		element->workspace.wspf.autocorrelation_matrix = g_malloc(element->channels * (element->channels - 1) * element->fft_length * sizeof(*element->workspace.wspf.autocorrelation_matrix));
+		element->workspace.wspf.autocorrelation_matrix = g_malloc(element->channels * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wspf.autocorrelation_matrix));
 
 		/* Allocate memory for gsl matrix manipulations. The same memory locations will be used repeatedly */
 		element->workspace.wspf.transfer_functions_at_f = gsl_vector_complex_alloc(element->channels - 1);
@@ -779,14 +776,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		GST_LOG_OBJECT(element, "starting FFTWF planning");
 
 		/* data that will be Fourier transformed into frequency domain */
-		element->workspace.wspf.fft = (complex float *) fftwf_malloc(element->fft_length * sizeof(*element->workspace.wspf.fft));
+		element->workspace.wspf.fft = (complex float *) fftwf_malloc(fd_fft_length * sizeof(*element->workspace.wspf.fft));
 		element->workspace.wspf.plan = fftwf_plan_dft_r2c_1d(element->fft_length, (float *) element->workspace.wspf.fft, element->workspace.wspf.fft, FFTW_MEASURE);
 
 		if(element->make_fir_filters && !element->workspace.wspf.fir_filter) {
 
 			/* data that will be inverse Fourier transformed back into the time domain */
-			element->workspace.wspf.fir_filter = (complex float *) fftwf_malloc(2 * (element->fft_length - 1) * sizeof(*element->workspace.wspf.fir_filter));
-			element->workspace.wspf.fir_plan = fftwf_plan_dft_c2r_1d(2 * (element->fft_length - 1), element->workspace.wspf.fir_filter, (float *) element->workspace.wspf.fir_filter, FFTW_MEASURE);
+			element->workspace.wspf.fir_filter = (complex float *) fftwf_malloc(fd_fft_length * sizeof(*element->workspace.wspf.fir_filter));
+			element->workspace.wspf.fir_plan = fftwf_plan_dft_c2r_1d(element->fft_length, element->workspace.wspf.fir_filter, (float *) element->workspace.wspf.fir_filter, FFTW_MEASURE);
 		}
 		GST_LOG_OBJECT(element, "FFTWF planning complete");
 
@@ -811,14 +808,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a frequency-donain window to roll off low and high frequencies
 			 */
 
-			element->workspace.wdpf.fir_window = g_malloc(element->fft_length * sizeof(*element->workspace.wdpf.fir_window));
+			element->workspace.wdpf.fir_window = g_malloc(fd_fft_length * sizeof(*element->workspace.wdpf.fir_window));
 
 			/* Initialize to ones */
-			for(i = 0; i < element->fft_length; i++)
+			for(i = 0; i < fd_fft_length; i++)
 				element->workspace.wdpf.fir_window[i] = 1.0;
 
 			int f_nyquist = element->rate / 2;
-			double df_per_hz = (element->fft_length - 1.0) / f_nyquist;
+			double df_per_hz = (fd_fft_length - 1.0) / f_nyquist;
 
 			/* high-pass filter */
 			/* Remove low frequencies */
@@ -851,33 +848,31 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a time-domain Tukey window so that the filter falls off smoothly at the edges
 			 */
 
-			gint64 fir_length, edge_to_corner;
-			fir_length = 2 * (element->fft_length - 1);
-			edge_to_corner = (gint64) (0.45 * fir_length);
+			gint64 edge_to_corner = (gint64) (0.45 * element->fft_length);
 
-			element->workspace.wdpf.tukey = g_malloc(fir_length * sizeof(*element->workspace.wdpf.tukey));
+			element->workspace.wdpf.tukey = g_malloc(element->fft_length * sizeof(*element->workspace.wdpf.tukey));
 
 			/* first curve of window */
 			for(i = 0; i < edge_to_corner; i++)
-				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0);
+				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0) / element->fft_length;
 
 			/* flat top of window */
-			i_stop = fir_length - edge_to_corner;
+			i_stop = element->fft_length - edge_to_corner;
 			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wdpf.tukey[i] = (double) element->make_fir_filters;
+				element->workspace.wdpf.tukey[i] = (double) element->make_fir_filters / element->fft_length;
 
 			/* last curve of window */
 			i_start = i_stop;
-			for(i = i_start; i < fir_length; i++)
-				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (fir_length - i_start)), 2.0);
+			for(i = i_start; i < element->fft_length; i++)
+				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (element->fft_length - i_start)), 2.0) / element->fft_length;
 		}
 
 		/* intermediate data storage */
 		element->workspace.wdpf.leftover_data = g_malloc(element->channels * (element->fft_length - 1) * sizeof(*element->workspace.wdpf.leftover_data));
 		element->workspace.wdpf.num_leftover = 0;
-		element->workspace.wdpf.ffts = g_malloc(element->channels * element->fft_length * sizeof(*element->workspace.wdpf.ffts));
+		element->workspace.wdpf.ffts = g_malloc(element->channels * fd_fft_length * sizeof(*element->workspace.wdpf.ffts));
 		element->workspace.wdpf.num_ffts_in_avg = 0;
-		element->workspace.wdpf.autocorrelation_matrix = g_malloc(element->channels * (element->channels - 1) * element->fft_length * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
+		element->workspace.wdpf.autocorrelation_matrix = g_malloc(element->channels * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
 
 		/* Allocate memory for gsl matrix manipulations. The same memory locations will be used repeatedly */
 		element->workspace.wdpf.transfer_functions_at_f = gsl_vector_complex_alloc(element->channels - 1);
@@ -891,14 +886,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		GST_LOG_OBJECT(element, "starting FFTW planning");
 
 		/* data that will be Fourier transformed into frequency domain */
-		element->workspace.wdpf.fft = (complex double *) fftw_malloc(element->fft_length * sizeof(*element->workspace.wdpf.fft));
+		element->workspace.wdpf.fft = (complex double *) fftw_malloc(fd_fft_length * sizeof(*element->workspace.wdpf.fft));
 		element->workspace.wdpf.plan = fftw_plan_dft_r2c_1d(element->fft_length, (double *) element->workspace.wdpf.fft, element->workspace.wdpf.fft, FFTW_MEASURE);
 
 		if(element->make_fir_filters && !element->workspace.wdpf.fir_filter) {
 
 			/* data that will be inverse Fourier transformed back into the time domain */
-			element->workspace.wdpf.fir_filter = (complex double *) fftw_malloc(2 * (element->fft_length  - 1) * sizeof(*element->workspace.wdpf.fir_filter));
-			element->workspace.wdpf.fir_plan = fftw_plan_dft_c2r_1d(2 * (element->fft_length - 1), element->workspace.wdpf.fir_filter, (double *) element->workspace.wdpf.fir_filter, FFTW_MEASURE);
+			element->workspace.wdpf.fir_filter = (complex double *) fftw_malloc(fd_fft_length * sizeof(*element->workspace.wdpf.fir_filter));
+			element->workspace.wdpf.fir_plan = fftw_plan_dft_c2r_1d(element->fft_length, element->workspace.wdpf.fir_filter, (double *) element->workspace.wdpf.fir_filter, FFTW_MEASURE);
 		}
 		GST_LOG_OBJECT(element, "FFTW planning complete");
 
@@ -966,14 +961,14 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
 			if(!element->workspace.wspf.num_ffts_in_avg)
-				memset(element->workspace.wspf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * element->fft_length * sizeof(*element->workspace.wspf.autocorrelation_matrix));
+				memset(element->workspace.wspf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * (element->fft_length / 2 + 1) * sizeof(*element->workspace.wspf.autocorrelation_matrix));
 
 			/* Send the data to a function to compute fft's and transfer functions */
 			find_transfer_functions_float(element, (float *) mapinfo.data, mapinfo.size);
 		} else {
 			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
 			if(!element->workspace.wdpf.num_ffts_in_avg)
-				memset(element->workspace.wdpf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * element->fft_length * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
+				memset(element->workspace.wdpf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * (element->fft_length / 2 + 1) * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
 
 			/* Send the data to a function to compute fft's and transfer functions */
 			find_transfer_functions_double(element, (double *) mapinfo.data, mapinfo.size);
@@ -1002,12 +997,20 @@ static gboolean stop(GstBaseSink *sink) {
 	if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 
 		/* free allocated memory in workspace */
+		g_free(element->workspace.wspf.fft_window);
+		element->workspace.wspf.fft_window = NULL;
 		g_free(element->workspace.wspf.leftover_data);
 		element->workspace.wspf.leftover_data = NULL;
 		g_free(element->workspace.wspf.ffts);
 		element->workspace.wspf.ffts = NULL;
 		g_free(element->workspace.wspf.autocorrelation_matrix);
 		element->workspace.wspf.autocorrelation_matrix = NULL;
+		if(element->make_fir_filters) {
+			g_free(element->workspace.wspf.fir_window);
+			element->workspace.wspf.fir_window = NULL;
+			g_free(element->workspace.wspf.tukey);
+			element->workspace.wspf.tukey = NULL;
+		}
 
 		/* free gsl stuff in workspace */
 		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_at_f);
@@ -1034,12 +1037,20 @@ static gboolean stop(GstBaseSink *sink) {
 	} else {
 
 		/* free allocated memory in workspace */
+		g_free(element->workspace.wdpf.fft_window);
+		element->workspace.wdpf.fft_window = NULL;
 		g_free(element->workspace.wdpf.leftover_data);
 		element->workspace.wdpf.leftover_data = NULL;
 		g_free(element->workspace.wdpf.ffts);
 		element->workspace.wdpf.ffts = NULL;
 		g_free(element->workspace.wdpf.autocorrelation_matrix);
 		element->workspace.wdpf.autocorrelation_matrix = NULL;
+		if(element->make_fir_filters) {
+			g_free(element->workspace.wdpf.fir_window);
+			element->workspace.wdpf.fir_window = NULL;
+			g_free(element->workspace.wdpf.tukey);
+			element->workspace.wdpf.tukey = NULL;
+		}
 
 		/* free gsl stuff in workspace */
 		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_at_f);
@@ -1206,7 +1217,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			g_value_init(&v, G_TYPE_VALUE_ARRAY);
 			int i;
 			for(i = 0; i < element->channels - 1; i++) {
-				g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((double *) element->transfer_functions, 2 * element->fft_length));
+				g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((double *) element->transfer_functions, 2 * (element->fft_length / 2 + 1)));
 				g_value_array_append(va, &v);
 			}
 			g_value_take_boxed(value, va);
@@ -1221,7 +1232,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			g_value_init(&val, G_TYPE_VALUE_ARRAY);
 			int j;
 			for(j = 0; j < element->channels - 1; j++) {
-				g_value_take_boxed(&val, gstlal_g_value_array_from_doubles(element->fir_filters, 2 * (element->fft_length - 1)));
+				g_value_take_boxed(&val, gstlal_g_value_array_from_doubles(element->fir_filters, element->fft_length));
 				g_value_array_append(val_array, &val);
 			}
 			g_value_take_boxed(value, val_array);
@@ -1289,7 +1300,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 
 	gst_element_class_set_details_simple(
 		element_class,
-		"TransferFunction",
+		"Compute transfer functions",
 		"Sink",
 		"Compute the transfer function(s) between an output signal and one or more input signals.\n\t\t\t   "
 		"This sink element only has one sink pad, so it requires interleaving all input data. The\n\t\t\t   "
