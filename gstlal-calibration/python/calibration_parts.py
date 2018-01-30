@@ -567,7 +567,7 @@ def clean_data(pipeline, srcs, fft_length, fft_overlap, num_ffts, update_samples
 	# anything else.
 	#
 
-	default_fir_filter = numpy.zeros(2 * (fft_length - 1))
+	default_fir_filter = numpy.zeros(fft_length)
 
 	tees = []
 	for i in range(0, len(srcs)):
@@ -577,7 +577,7 @@ def clean_data(pipeline, srcs, fft_length, fft_overlap, num_ffts, update_samples
 	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1)
 	data = [tees[0]]
 	for i in range(1, len(srcs)):
-		data.append(pipeparts.mkgeneric(pipeline, tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fft_length / 2 - 2, taper_length = 20 * fft_length))
+		data.append(pipeparts.mkgeneric(pipeline, tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fft_length / 2, taper_length = 20 * fft_length))
 		transfer_functions.connect("notify::fir-filters", update_filter, data[i], "fir_filters", "kernel", i - 1)
 
 	clean  = mkadder(pipeline, tuple(data))

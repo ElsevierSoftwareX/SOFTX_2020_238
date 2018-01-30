@@ -1513,5 +1513,7 @@ static void gstlal_transferfunction_init(GSTLALTransferFunction *element) {
 	element->rate = 0;
 	element->unit_size = 0;
 	element->channels = 0;
+
+	gst_base_sink_set_sync(GST_BASE_SINK(element), FALSE);
 }
 
