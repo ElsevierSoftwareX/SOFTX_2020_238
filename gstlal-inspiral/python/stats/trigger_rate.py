@@ -338,6 +338,39 @@ class ratebinlist(segments.segmentlist):
 	def density_at(self, x):
 		return self[self.find(x)].density
 
+	def __iand__(self, other):
+		if not other or not self:
+			del self[:]
+			return self
+		if other is self:
+			self[:] = (ratebin(seg, seg.count * 2) for seg in self)
+			return self
+		def andgen(self, other):
+			self_next = iter(self).next
+			other_next = iter(other).next
+			self_seg = self_next()
+			other_seg = other_next()
+			try:
+				while 1:
+					while self_seg[1] <= other_seg[0]:
+						self_seg = self_next()
+					while other_seg[1] <= self_seg[0]:
+						other_seg = other_next()
+					if self_seg.intersects(other_seg):
+						yield self_seg & other_seg
+						if self_seg[1] > other_seg[1]:
+							other_seg = other_next()
+						else:
+							self_seg = self_next()
+			except StopIteration:
+				pass
+		i = bisect_right(self, other[0][0])
+		self[:] = andgen(
+			self[(i - 1 if i else 0):bisect_right(self, other[-1][1])],
+			other
+		)
+		return self
+
 	def __ior__(self, other):
 		if other is self:
 			self[:] = (ratebin(seg, count = 2 * seg.count) for seg in self)
