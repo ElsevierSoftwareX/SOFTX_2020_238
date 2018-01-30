@@ -250,7 +250,7 @@ static void update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_m
 	gsl_complex gslz; \
 	for(i = 0; i < length_tfs; i++) { \
 		/* First, copy samples at a specific frequency from the big autocorrelation matrix to the gsl vector transfer_functions_at_f */ \
-		first_index = i * (num_tfs + 1); \
+		first_index = i * num_tfs * (num_tfs + 1); \
 		for(j = 0; j < num_tfs; j++) { \
 			z = (complex double) autocorrelation_matrix[first_index + j] / num_avg; \
 			gsl_vector_complex_set(transfer_functions_at_f, j, gsl_complex_rect(creal(z), cimag(z))); \
@@ -372,13 +372,13 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
  \
 				/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
-				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k * element->channels] += 1.0; \
+				first_index2 = first_index + k * element->channels; \
+				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2] += 1.0; \
  \
 				/* Now find all other elements of the autocorrelation matrix */ \
-				first_index2 = first_index + k * element->channels; \
 				for(m = 1; m <= num_tfs - k; m++) { \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += 1.0 / element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
 				} \
 			} \
 		} \
@@ -430,13 +430,13 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
  \
 				/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
-				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k * element->channels] += 1.0; \
+				first_index2 = first_index + k * element->channels; \
+				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2] += 1.0; \
  \
 				/* Now find all other elements of the autocorrelation matrix */ \
-				first_index2 = first_index + k * element->channels; \
 				for(m = 1; m <= num_tfs - k; m++) { \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += 1.0 / element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
 				} \
 			} \
 		} \
