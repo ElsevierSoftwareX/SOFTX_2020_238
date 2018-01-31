@@ -587,14 +587,15 @@ class LnNoiseDensity(LnLRDensity):
 		if len(snrs) < self.min_instruments:
 			return float("-inf")
 
+		# FIXME:  the +/-3600 s window thing is a temporary hack to
+		# work around the problem of vetoes creating short segments
+		# that have no triggers in them but that can have
+		# injections recovered in them.  the +/- 3600 s window is
+		# just a guess as to what might be sufficient to work
+		# around it.  you might might to make this bigger.
 		triggers_per_second_per_template = {}
 		for instrument, seg in segments.items():
-			try:
-				triggers_per_second_per_template[instrument] = self.triggerrates[instrument].density_at(seg[1]) / len(self.template_ids)
-			except IndexError:
-				# no rate data at segment end-time =
-				# instrument was off
-				triggers_per_second_per_template[instrument] = 0.
+			triggers_per_second_per_template[instrument] = (self.triggerrates[instrument] & trigger_rate.ratebinlist([trigger_rate.ratebin(seg[1] - 3600., seg[1] + 3600., count = 0)])).density() / len(self.template_ids)
 		# sanity check rates
 		assert all(triggers_per_second_per_template[instrument] for instrument in snrs), "impossible candidate in %s at %s when rates were %s triggers/s/template" % (", ".join(sorted(snrs)), ", ".join("%s s in %s" % (str(seg[1]), instrument) for instrument, seg in sorted(segments.items())), str(triggers_per_second_per_template))
 
