@@ -20,7 +20,7 @@
 /*
  * SECTION:gstlal_transferfunction
  * @short_description:  Compute transfer function between two or more
- * time series (up to 11 total).
+ * time series.
  */
 
 
