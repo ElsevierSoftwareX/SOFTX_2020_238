@@ -1217,7 +1217,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			g_value_init(&v, G_TYPE_VALUE_ARRAY);
 			int i;
 			for(i = 0; i < element->channels - 1; i++) {
-				g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((double *) element->transfer_functions, 2 * (element->fft_length / 2 + 1)));
+				g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((double *) (element->transfer_functions + i * (element->fft_length / 2 + 1)), element->fft_length + 2));
 				g_value_array_append(va, &v);
 			}
 			g_value_take_boxed(value, va);
@@ -1232,7 +1232,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			g_value_init(&val, G_TYPE_VALUE_ARRAY);
 			int j;
 			for(j = 0; j < element->channels - 1; j++) {
-				g_value_take_boxed(&val, gstlal_g_value_array_from_doubles(element->fir_filters, element->fft_length));
+				g_value_take_boxed(&val, gstlal_g_value_array_from_doubles(element->fir_filters + j * element->fft_length, element->fft_length));
 				g_value_array_append(val_array, &val);
 			}
 			g_value_take_boxed(value, val_array);
@@ -1387,7 +1387,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		"High Pass",
 		"The high-pass cutoff frequency (in Hz) of the FIR filters.\n\t\t\t"
 		"If zero, no high-pass cutoff is added.",
-		0, G_MAXINT, 9,
+		0, G_MAXINT, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_LOW_PASS] = g_param_spec_int(

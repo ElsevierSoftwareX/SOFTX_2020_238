@@ -554,8 +554,9 @@ def compute_Xi(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP14,
 
 	return Xi
 
-def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name, which_filter):
-	filter_taker.set_property(taker_prop_name, filter_maker.get_property(maker_prop_name)[which_filter][::-1])
+def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name, filter_number):
+	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
+	filter_taker.set_property(taker_prop_name, firfilter)
 
 def clean_data(pipeline, srcs, fft_length, fft_overlap, num_ffts, update_samples):
 
