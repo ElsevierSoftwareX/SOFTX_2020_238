@@ -377,8 +377,8 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
  \
 				/* Now find all other elements of the autocorrelation matrix */ \
 				for(m = 1; m <= num_tfs - k; m++) { \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
 				} \
 			} \
 		} \
@@ -435,8 +435,8 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
  \
 				/* Now find all other elements of the autocorrelation matrix */ \
 				for(m = 1; m <= num_tfs - k; m++) { \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
 				} \
 			} \
 		} \
