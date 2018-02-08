@@ -209,31 +209,21 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	#
 
 	if FIR_WHITENER:
-		# For now just hard code these acceptable inputs until we have
-		# it working well in all situations or appropriate assertions
-		psd = None
 		head = pipeparts.mktee(pipeline, head)
-		psd_fft_length = 16
-		zero_pad = 0
-		# because we are not asking the whitener to reassemble an
-		# output time series (that we care about) we drop the
-		# zero-padding in this code path.  the psd_fft_length is
-		# reduced to account for the loss of the zero padding to
-		# keep the Hann window the same as implied by the
-		# user-supplied parameters.
-		whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head, max_size_time = 2 * psd_fft_length * Gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+		whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		pipeparts.mkfakesink(pipeline, whiten)
 
 		# high pass filter
 		kernel = reference_psd.one_second_highpass_kernel(max(rates), cutoff = 12)
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
-		head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = max(rates), time_domain = False, latency = (len(kernel) - 1) // 2)
+		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = max(rates), time_domain = False, latency = (len(kernel) - 1) // 2)
 
-		# FIXME at some point build an initial kernel from a reference psd
+		# FIR filter for whitening kernel
 		psd_fir_kernel = reference_psd.PSDFirKernel()
 		fir_matrix = numpy.zeros((1, 1 + max(rates) * psd_fft_length), dtype=numpy.float64)
 		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, block_stride = max(rates), time_domain = False, latency = 0)
 
+		# compute whitening kernel from PSD
 		def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
 			psd_data = numpy.array(whiten.get_property("mean-psd"))
 			psd = lal.CreateREAL8FrequencySeries(
@@ -259,8 +249,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			head = pipeparts.mkgate(pipeline, head, control = statevector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
 		if dqvector:
 			head = pipeparts.mkgate(pipeline, head, control = dqvector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
-		# Drop initial data to let the PSD settle
-		head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max(rates))
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
