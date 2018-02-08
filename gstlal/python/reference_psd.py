@@ -728,16 +728,6 @@ def interpolate_psd(psd, deltaF):
 	#psd_data = numpy.concatenate(([x[0]], x[1::2]))
 
 	#
-	# interpolate PSD with linear interpolator
-	#
-
-	#psd_data = psd.data.data
-	#f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
-	#interp = interpolate.interp1d(f, psd_data, bounds_error = False)
-	#f = psd.f0 + numpy.arange(round(len(psd_data) * psd.deltaF / deltaF)) * deltaF
-	#psd_data = interp(f)
-
-	#
 	# interpolate log(PSD) with cubic spline.  note that the PSD is
 	# clipped at 1e-300 to prevent nan's in the interpolator (which
 	# doesn't seem to like the occasional sample being -inf)
