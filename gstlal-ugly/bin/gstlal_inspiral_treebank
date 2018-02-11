@@ -207,8 +207,7 @@ if args.verbose:
 		print "\t", row
 
 mismatch = 1.0 - args.min_match
-# NOTE: As an optimist, I assume we get optimal packing
-bank.split(1.00 * tree.packing_density(len(coord_limits)), mismatch = mismatch, verbose = args.verbose)
+bank.split(tree.packing_density(len(coord_limits)), mismatch = mismatch, verbose = args.verbose)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
@@ -241,6 +240,7 @@ for n, c in enumerate(nodes):
 		row.event_id = ilwd.ilwdchar('sngl_inspiral:event_id:%d' % len(tbl))
 		row.ifo = "H1" # FIXME
 		if row.mass1 < row.mass2:
+			continue
 			mass1 = row.mass1
 			row.mass1 = row.mass2
 			row.mass2 = mass1
