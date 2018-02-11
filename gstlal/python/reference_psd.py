@@ -699,12 +699,11 @@ class PSDFirKernel(object):
 
 def interpolate_psd(psd, deltaF):
 	#
-	# no-op?  and disallow resolution reduction
+	# no-op?
 	#
 
 	if deltaF == psd.deltaF:
 		return psd
-	assert deltaF < psd.deltaF
 
 	#
 	# interpolate PSD by clipping/zero-padding time-domain impulse
