@@ -294,8 +294,10 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	if width == 64:
 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
-	else:
+	elif width == 32:
 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max(rates), GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
+	else:
+		raise ValueError("invalid width: %d" % width)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
