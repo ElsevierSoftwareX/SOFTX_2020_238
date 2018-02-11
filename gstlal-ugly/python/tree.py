@@ -68,6 +68,7 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
+	return 1.0
 	prefactor = 1.0
 	if n==1:
 		return prefactor
@@ -224,6 +225,7 @@ class HyperCube(object):
 	def dl(self, mismatch):
 		# From Owen 1995
 		return mismatch**.5
+		#return 2. * (mismatch/len(self.center))**.5
 
 	def volume(self, metric_tensor = None):
 		if metric_tensor is None:
@@ -272,23 +274,14 @@ class Node(object):
 				self.on_boundary = True
 				print "\n\non boundary!!\n\n"
 		#self.on_boundary = numpy.any((self.cube.center + self.cube.deltas) == (self.boundary.center + self.boundary.deltas)) or numpy.any((self.cube.center - self.cube.deltas) == (self.boundary.center - self.boundary.deltas))
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, vtol = 1.01, max_coord_vol = float(100)):
+
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, metric_tol = 0.10, max_coord_vol = float(10)):
 		size = self.cube.num_tmps_per_side(mismatch)
-		F = 1. / 2**.2
 		self.splitdim = numpy.argmax(size)
-		aspect_ratios = size / min(size)
-		#if (F*.99 < self.cube.center[0] / self.cube.center[1] <= F * 1.10):
-		#	self.splitdim = 1
-		#	aspect_factor = 2.00
-		aspect_factor = max(1., numpy.product(aspect_ratios[aspect_ratios>1.5]) /1.5**len(aspect_ratios[aspect_ratios>1.5]))
-		aspect_factor_2 = max(1., numpy.product(aspect_ratios[aspect_ratios>8.0]) / 8.**len(aspect_ratios[aspect_ratios>8.]))
-		aspect_ratio = max(aspect_ratios)
 
 		if not self.parent:
 			numtmps = float("inf")
 			par_numtmps = float("inf")
-			sib_aspect_factor = 1.0
-			parent_aspect_factor = 1.0
 			volume_split_condition = False
 			metric_diff = 1.0
 			metric_cond = True
@@ -303,43 +296,46 @@ class Node(object):
 			numtmps = self.cube.num_templates(mismatch)
 
 
-			#metric_diff = max(abs(self.sibling.cube.eigv - self.cube.eigv) / abs(self.sibling.cube.eigv + self.cube.eigv) / 2) #self.cube.metric_tensor - self.sibling.cube.metric_tensor
-			#metric_diff2 = max(abs(self.parent.cube.eigv - self.cube.eigv) / abs(self.parent.cube.eigv + self.cube.eigv) / 2) #self.cube.metric_tensor - self.parent.cube.metric_tensor
 			metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
-			metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
 			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
+
+			metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
 			metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
+
 			metric_diff = max(metric_diff, metric_diff2)
 			# take the bigger of self, sibling and parent
-			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps) * aspect_factor
+			numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps)
 
-			mts = [(numtmps, self.cube), (sib_numtmps, self.sibling.cube), (par_numtmps / 2., self.parent.cube)]
+			#mts = [(numtmps, self.cube), (sib_numtmps, self.sibling.cube), (par_numtmps / 2., self.parent.cube)]
 			reuse_metric = self.cube #max(mts)[1]
 
-		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (numtmps >= split_num_templates/2.0 and metric_cond)):
-		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > 0.30 and numtmps > split_num_templates / 2**.5)) or bifurcation < 2:
-			bifurcation += 1
-			if metric_diff <= 0.3 and (numtmps < 3**(len(size))) and self.cube.coord_volume() < 4 and aspect_factor_2 == 1.0:
-				self.cube.metric_tensor = reuse_metric.metric_tensor
-				self.cube.effective_dimension = reuse_metric.effective_dimension
-				self.cube.det = reuse_metric.det
-				self.cube.metric_is_valid = reuse_metric.metric_is_valid
-				self.cube.eigv = reuse_metric.eigv
-				left, right = self.cube.split(self.splitdim, reuse_metric = True)
-				#print "REUSE"
-			else:
-				left, right = self.cube.split(self.splitdim)
+		#if self.cube.constraint_func(self.cube.vertices + [self.cube.center]) and ((numtmps >= split_num_templates) or (metric_diff > metric_tol and numtmps > split_num_templates)) or bifurcation < 2:
+		tmps_per_side = self.cube.num_tmps_per_side(mismatch)
+		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]):
+			# NOTE FIXME work out correct max templates per side
+			if ((numtmps >= split_num_templates) or max(tmps_per_side) > 2 * len(size)**.5 ) or bifurcation < 2:
+				bifurcation += 1
+				if metric_diff <= metric_tol and (numtmps < 3**(len(size))) and self.cube.coord_volume() < max_coord_vol:
+					self.cube.metric_tensor = reuse_metric.metric_tensor
+					self.cube.effective_dimension = reuse_metric.effective_dimension
+					self.cube.det = reuse_metric.det
+					self.cube.metric_is_valid = reuse_metric.metric_is_valid
+					self.cube.eigv = reuse_metric.eigv
+					left, right = self.cube.split(self.splitdim, reuse_metric = True)
+					#print "REUSE"
+				else:
+					left, right = self.cube.split(self.splitdim)
 
-			self.left = Node(left, self, boundary = self.boundary)
-			self.right = Node(right, self, boundary = self.boundary)
-			self.left.sibling = self.right
-			self.right.sibling = self.left
-			self.left.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
-			self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
-		else:
-			self.template_count[0] = self.template_count[0] + 1
-			if verbose:
-				print "%d tmps : level %03d @ %s : deltas %s : vol frac. %.2f : splits %s : det %.2f : size %s" % (self.template_count[0], bifurcation, self.cube.center, self.cube.deltas, numtmps, self.on_boundary, self.cube.det**.5, size)
+				self.left = Node(left, self, boundary = self.boundary)
+				self.right = Node(right, self, boundary = self.boundary)
+				self.left.sibling = self.right
+				self.right.sibling = self.left
+				self.left.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
+				self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
+			else:
+				self.template_count[0] = self.template_count[0] + 1
+				if verbose:
+					print "%d tmps : level %03d @ %s : num tmps per side %s: deltas %s : vol frac. %.2f : splits %s : det %.2f : size %s" % (self.template_count[0], bifurcation, self.cube.center, tmps_per_side, self.cube.deltas, numtmps, self.on_boundary, self.cube.det**.5, size)
 
 	# FIXME can this be made a generator?
 	def leafnodes(self, out = set()):
