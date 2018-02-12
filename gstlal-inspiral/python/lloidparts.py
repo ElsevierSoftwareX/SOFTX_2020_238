@@ -1045,7 +1045,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates())
 		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		assert psd_fft_length % 4 == 0, "psd_fft_length (= %g) must be multiple of 4" % psd_fft_length
-		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = psd_fft_length / 4, width = 32, statevector = statevector, dqvector = dqvector)
+		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, nxydump_segment = nxydump_segment, track_psd = track_psd, width = 32, statevector = statevector, dqvector = dqvector)
 
 	#
 	# build gate control branches

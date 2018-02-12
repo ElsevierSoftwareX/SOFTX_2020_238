@@ -141,7 +141,7 @@ except KeyError as e:
 #
 # }
 # @enddot
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = 0, width = 64, unit_normalize = True, statevector = None, dqvector = None):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = None, width = 64, unit_normalize = True, statevector = None, dqvector = None):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -156,6 +156,22 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	- track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
 	- width: type convert to either 32 or 64 bit float
 	"""
+	#
+	# set default whitener zero-padding if needed
+	#
+
+	if zero_pad is None:
+		if FIR_WHITENER:
+			# in this configuration we are not asking the
+			# whitener to reassemble an output time series
+			# (that we care about) so we disable zero-padding
+			# to get the most information from the whitener's
+			# FFT blocks.
+			zero_pad = 0
+		elif psd_fft_length % 4:
+			raise ValueError("default whitener zero-padding requires psd_fft_length to be multiple of 4")
+		else:
+			zero_pad = psd_fft_length // 4
 
 	#
 	# down-sample to highest of target sample rates.  we include a caps
