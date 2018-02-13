@@ -21,7 +21,7 @@ from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import table
 from pylal import db_thinca_rings
-from pylal import rate
+from lal import rate
 import numpy
 import math
 import copy
@@ -268,7 +268,11 @@ def compute_search_efficiency_in_bins(found, total, ndbins, sim_to_bins_function
 	assert (num.array <= den.array).all(), "some bins have more found injections than were made"
 
 	# regularize by setting empty bins to zero efficiency
-	den.array[numpy.logical_and(num.array == 0, den.array == 0)] = 1
+	# FIXME: the following was set for zero efficiency bins but it
+	# results in efficiency error bars that are too large at zero
+	# efficiencies. Replacing for now.
+	#den.array[numpy.logical_and(num.array == 0, den.array == 0)] = 1
+	den.array[num.array < 1] = 1e35
 
 	# pull out the efficiency array, it is the ratio
 	eff = rate.BinnedArray(rate.NDBins(ndbins), array = num.array / den.array)
