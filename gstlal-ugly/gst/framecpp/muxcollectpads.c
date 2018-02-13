@@ -117,7 +117,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buffer)
 		if(collectpads->clip_to_segments) {
 			gint rate, bpf;
 			GST_DEBUG_OBJECT(pad, "clipping to [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", collectpads->segment.start, collectpads->segment.stop);
-			g_object_get(data->queue, "rate", &rate, "size", &bpf, NULL);
+			g_object_get(data->queue, "rate", &rate, "unit-size", &bpf, NULL);
 			buffer = gst_audio_buffer_clip(buffer, &collectpads->segment, rate, bpf);
 		}
 		if(buffer)
