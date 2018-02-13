@@ -375,7 +375,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 					# FIXME do better with svd node parents?
 					# non injection node
-					noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, parent_nodes = sum(svd_nodes.values(),[]),
+					noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag,
+							parent_nodes = sum((svd_node_list[numchunks*chunk_counter:numchunks*(chunk_counter+1)] for svd_node_list in svd_nodes.values()),[]),
 							opts = {"psd-fft-length":options.psd_fft_length,
 								"ht-gate-threshold":threshold_values,
 								"frame-segments-name":options.frame_segments_name,
@@ -430,7 +431,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, injection = True))]
 					try:
 						reference_psd = psd_nodes[(ifos, seg)].output_files["write-psd"]
-						parents = sum(svd_nodes.values(),[])
+						parents = [svd_node_list[int(bgbin_index)] for svd_node_list in svd_nodes.values() for bgbin_index in bgbin_indices]
 					except AttributeError:
 						# injection-only run
 						reference_psd = psd_nodes[(ifos, seg)]
