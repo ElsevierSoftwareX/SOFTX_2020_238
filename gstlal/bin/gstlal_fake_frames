@@ -174,7 +174,10 @@ from glue.ligolw import utils as ligolw_utils
 # Return the number of digits in a number
 #
 def digits(num):
-	return int(numpy.ceil(numpy.log10(float(num))))
+        if float(num) == 0:
+                return 1
+        else:
+                return int(numpy.ceil(numpy.log10(float(num))))
 
 
 ##
