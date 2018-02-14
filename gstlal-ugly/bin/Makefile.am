@@ -8,7 +8,7 @@
 #
 
 dist_bin_SCRIPTS = \
-	gstlal_harmonic_sum_psd \
+	gstlal_harmonic_mean_psd \
 	gstlal_mock_data_server \
 	gstlal_injections_by_local_rate \
 	gstlal_injections_by_local_rate_plot \
