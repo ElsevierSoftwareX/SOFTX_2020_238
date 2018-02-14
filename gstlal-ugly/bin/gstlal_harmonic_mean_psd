@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2012  Drew Keppel
+# Copyright (C) 2012  Drew Keppel, 2018  Heather Fong
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -80,12 +80,12 @@ for fname in filenames:
 			print >> sys.stderr, "Please choose a more suitable --df or obtain a PSD with f0 that is a multiple of --df."
 			sys.exit(1)
 		# get fmax for this instrument
-		fmaxs[ifo] = psd_freqseries.f0 + psd_freqseries.deltaF * (len(psd_freqseries.data) - 1)
+		fmaxs[ifo] = psd_freqseries.f0 + psd_freqseries.deltaF * (len(psd_freqseries.data.data) - 1)
 
 	# add psds to dictionary
 	psds.update(new_psds)
 
-# create vectors to store f and harmonic sum psd
+# create vectors to store f and harmonic mean psd
 f = scipy.arange(max(fmaxs.values())/deltaF+1)*deltaF
 invpsd_data = scipy.zeros(len(f))
 
@@ -93,25 +93,25 @@ invpsd_data = scipy.zeros(len(f))
 for ifo,psd_freqseries in psds.items():
 	psdinterp = reference_psd.interpolate_psd(psd_freqseries, deltaF)
 	sampleunits = psdinterp.sampleUnits
-	windowed_invpsd_freqseries = psdinterp.data**-1.
+	windowed_invpsd_freqseries = psdinterp.data.data**-1.
 	start = int(psdinterp.f0/deltaF)
 	end = start + len(windowed_invpsd_freqseries)
 	windowed_invpsd_freqseries[f[start:end] < flowers[ifo]] = scipy.zeros(sum(f[start:end] < flowers[ifo]))
 	invpsd_data[start:end] += windowed_invpsd_freqseries
 
-# create harmonic sum psd frequency series
-harmonic_sum_psd = lal.CreateREAL8FrequencySeries(
-		name = 'PSD:array',
+# create harmonic mean psd frequency series
+harmonic_mean_psd = lal.CreateREAL8FrequencySeries(
+		name = 'PSD',
 		epoch = lal.LIGOTimeGPS(0.),
 		f0 = f[0],
 		deltaF = deltaF,
 		sampleUnits = sampleunits,
 		length = len(invpsd_data)
 	)
-harmonic_sum_psd.data.data = invpsd_data**-1.
-psds[''.join(sorted(psds.keys()))] = harmonic_sum_psd
+harmonic_mean_psd.data.data = (invpsd_data/len(psds))**-1.
+psds[''.join(sorted(psds.keys()))] = harmonic_mean_psd
 
-# write harmonic sum psd to file
+# write harmonic mean psd to file
 reference_psd.write_psd(options.output, psds, options.verbose)
 
 sys.exit(0)
