@@ -194,6 +194,12 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.cadence = options.cadence
 		self.tag = '%s-%s' % (self.instrument[:1], self.description)
 
+		# get base temp directory
+		if options.condor_scratch_dir:
+			tmp_dir = options.condor_scratch_dir
+		else:
+			tmp_dir = os.environ['TMPDIR']
+
 		# hdf saving properties
 		if options.save_hdf:
 			self.last_save_time = {key:None for key in self.keys}
@@ -205,12 +211,18 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.fname = '%s-%d-%d' % (self.tag, self.init_gps_time, duration)
 			else:
 				self.fname = '%s-%d-9999999999' % (self.tag, self.init_gps_time)
-			self.fpath = os.path.join(self.out_path, self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5])
+
+			self.fpath = os.path.join(os.path.abspath(self.out_path), self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5])
+			self.tmp_path = os.path.join(tmp_dir, self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5])
+
+			# create temp and output directories if they don't exist
+			aggregator.makedir(self.fpath)
+			aggregator.makedir(self.tmp_path)
 
 			# delete leftover temporary files
-			temp_path = os.path.join(self.fpath, self.fname)+'.h5.tmp'
-			if os.path.isfile(temp_path):
-				os.remove(temp_path)
+			tmp_file = os.path.join(self.tmp_path, self.fname)+'.h5.tmp'
+			if os.path.isfile(tmp_file):
+				os.remove(tmp_file)
 
 		# ascii saving properties
 		else:
@@ -396,7 +408,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		Uses the T050017 filenaming convention.
 		NOTE: This method should only be called by an instance that is locked.
 		"""
-		self.fdata.dump(self.fpath, self.fname, idq_aggregator.floor_div(self.last_save_time[key], self.cadence), key = key, tmp = True)
+		self.fdata.dump(self.tmp_path, self.fname, idq_aggregator.floor_div(self.last_save_time[key], self.cadence), key = key, tmp = True)
 
 	def finish_hdf_file(self):
 		"""
@@ -404,7 +416,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		all file writes have been completed.
 		"""
 		final_path = os.path.join(self.fpath, self.fname)+".h5"
-		tmp_path = final_path+".tmp"
+		tmp_path = os.path.join(self.tmp_path, self.fname)+".h5.tmp"
 		shutil.move(tmp_path, final_path)
 
 	def gen_psd_xmldoc(self):
@@ -545,6 +557,7 @@ def parse_command_line():
 
 	multichannel_datasource.append_options(parser)
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
+	parser.add_option("--condor-scratch-dir", metavar = "path", help = "Scratch directory for Condor-based jobs, if launching via Condor")
 	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
