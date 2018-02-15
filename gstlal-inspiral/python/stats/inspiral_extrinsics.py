@@ -919,3 +919,407 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 		self = super(rate.BinnedLnPDF, cls).from_xml(xml, name)
 		self.norm = ligolw_array.get_array(xml, "norm").array
 		return self
+
+
+#
+# =============================================================================
+#
+#                 Utilities for computing SNR, time, phase PDF
+#
+# =============================================================================
+#
+
+
+class HyperRect(object):
+	def __init__(self, lower, upper, parent, points = None, prob = None):
+		"""
+		A dynamic N-dimensional
+		"""
+		self.lower = numpy.array(lower, dtype=float)
+		self.upper = numpy.array(upper, dtype=float)
+		self.parent = parent
+		self.left = None
+		self.right = None
+		if points is None:
+			self.points = []
+		else:
+			self.points = points
+		if prob is None:
+			self.prob = []
+		else:
+			self.prob = prob
+
+	def serialize(self, prob):
+		return [self.lower, self.upper, self.parent, self.left, self.right, prob]
+
+	def split(self, splitdim):
+		upper_left = self.upper.copy()
+		upper_right = self.upper.copy()
+		lower_left = self.lower.copy()
+		lower_right = self.lower.copy()
+		upper_left[splitdim] -= (self.upper[splitdim] - self.lower[splitdim])/ 2.
+		lower_right[splitdim] += (self.upper[splitdim] - self.lower[splitdim])/ 2.
+		self.left = HyperRect(lower_left, upper_left, self)
+		self.right = HyperRect(lower_right, upper_right, self)
+
+		return self.left, self.right
+
+	def __contains__(self, point):
+		return (numpy.logical_and(point >= self.lower, point < self.upper)).all()
+
+	def biggest_side(self, size):
+		return numpy.argmax((self.upper - self.lower) / size)
+
+	@property
+	def size(self):
+		return self.upper - self.lower
+
+	@property
+	def volume(self):
+		return numpy.product(self.size)
+
+	@classmethod
+	def search(cls, instance, point):
+		#if point not in instance:
+		#	raise ValueError("Point not in parameter space")
+		if instance.left is None and instance.right is None:
+			return instance
+		if point in instance.left:
+			return HyperRect.search(instance.left, point)
+		elif point in instance.right:
+			return HyperRect.search(instance.right, point)
+		else:
+			raise ValueError("This should be impossible: %s", point)
+
+	def __repr__(self):
+		return "lower: %s, upper: %s" % (repr(self.lower), repr(self.upper))
+
+
+class DynamicBins(object):
+	def __init__(self, lower, upper, max_splits = None, min_vol = None):
+		self.lower = numpy.array(lower)
+		self.upper = numpy.array(upper)
+		if max_splits is not None:
+			self.max_splits = numpy.array(max_splits)
+		else:
+			self.max_splits = None
+		self.min_vol = min_vol
+		self.num_points = 0
+		self.total_prob = 1.0
+		self.num_cells = 1
+		self.hyper_rect = HyperRect(self.lower, self.upper, None)
+		self.hyper_rect.prob = [1.0]
+
+	def serialize(self):
+		return (self.lower, self.upper, self.right, self.left, self.parent, self(self.lower()))
+
+	@property
+	def size(self):
+		return self.upper - self.lower
+
+	@property
+	def minsize(self):
+		if self.max_splits is not None:
+			return self.size / self.max_splits
+		else:
+			return numpy.zeros(len(self.upper))
+
+	@property
+	def volume(self):
+		return numpy.product(self.size)
+
+	def insert(self, point, prob):
+		# figure out the hyperrectangle where this point belongs
+		thisrect = HyperRect.search(self.hyper_rect, point)
+		# There are three possibilities
+		# 1) The hyperrectangle is empty
+		# 2) It is not empty, but is as small as it is allowed to be
+		# 3) It is not empty and is larger than the minimum size
+
+		# Case 1)
+		if len(thisrect.points) == 0:
+			thisrect.points.append(point)
+			thisrect.prob.append(prob)
+			self.num_points += 1
+			self.total_prob += prob
+		# Case 2) or 3)
+		else:
+			# Case 2)
+			# Check to see if we have reached the maximum resolution first
+			splitdim = thisrect.biggest_side(self.size)
+			if thisrect.size[splitdim] / 2. < self.minsize[splitdim]:
+				thisrect.points.append(point)
+				thisrect.prob.append(prob)
+				self.num_points += 1
+				self.total_prob += prob
+				assert not thisrect.left and not thisrect.right
+			# Case 3)
+			else:
+				assert len(thisrect.points) == 1
+				left, right = thisrect.split(splitdim)
+				self.num_cells += 2
+				if point in left:
+					left.points.append(point)
+				elif point in right:
+					right.points.append(point)
+				else:
+					raise ValueError("This is impossible: %s" % point)
+				right.prob.append(prob / 2.)
+				left.prob.append(prob / 2.)
+				thisrect.points = []
+				thisrect.prob = []
+
+	def __call__(self, point):
+		node = HyperRect.search(self.hyper_rect, point)
+		# should it be num_points or num cells?
+		#return len(node.points) / self.num_points / node.volume
+		#return (len(node.points) or 1.) / self.num_cells / node.volume
+		#return (numpy.sum(node.prob) or 1.) / self.num_cells / node.volume
+		return numpy.sum(node.prob) / self.total_prob / node.volume
+
+	def leafnodes(self, thisrect = None, out = set()):
+		"""
+		Return a list of all leaf nodes that are ancestors of the given node
+		and whose bounding box is not fully contained in the symmetryic region.
+		"""
+		if thisrect == None:
+			thisrect = self.hyper_rect
+		if thisrect.right:
+			self.leafnodes(thisrect.right, out)
+		if thisrect.left:
+			self.leafnodes(thisrect.left, out)
+		if not thisrect.right and not thisrect.left:
+			out.add(thisrect)
+		return out
+
+	def serialize(self):
+		out = []
+		nodes = self.flatten()
+		for i,node in enumerate(nodes):
+			node.nodeid = i
+		for node in nodes:
+			# lower, upper, parent id, right id, left id, prob
+			out.append((node.lower, node.upper, node.parent.nodeid if node.parent else None, node.right.nodeid if node.right else None, node.left.nodeid if node.left else None, self(node.lower)))
+		return tuple(out)
+
+	def flatten(self, this_rect = None, out = None):
+		if out is None:
+			out = []
+		if this_rect == None:
+			this_rect = self.hyper_rect
+		out.append(this_rect)
+		if this_rect.right:
+			self.flatten(this_rect.right, out)
+		if this_rect.left:
+			self.flatten(this_rect.left, out)
+
+		return out
+
+class StaticDynamicBins(object):
+	def __init__(self, DB):
+		self.DB = DB
+	def __call__(self, point):
+
+		def _in_node(point, upper, lower):
+			return (numpy.logical_and(point >= lower, point < upper)).all()
+
+		def search_serialized(nodes, point, ix = 0):
+			leftix = nodes[ix][4]
+			rightix = nodes[ix][3]
+			if leftix is None and rightix is None:
+				return nodes[ix][5]
+			if _in_node(point, nodes[leftix][1], nodes[leftix][0]):
+				return search_serialized(nodes, point, leftix)
+			elif _in_node(point, nodes[rightix][1], nodes[rightix][0]):
+				return search_serialized(nodes, point, rightix)
+			else:
+				raise ValueError("This should be impossible: %s" % point)
+
+		return search_serialized(self.DB, point, ix = 0)
+
+
+class RandomSource(object):
+
+	def __init__(self, psd, horizons, SR = 1024, FL = 30, FH = 500):
+
+		psd_data = psd.data.data
+		f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
+
+		f = f[int(FL / psd.deltaF):int(FH / psd.deltaF)]
+		psd = psd_data[int(FL / psd.deltaF): int(FH / psd.deltaF)]
+
+		psd = interpolate.interp1d(f, psd)
+		f = numpy.arange(FL, FH)
+		PSD = psd(f)
+
+		self.t = numpy.arange(0, SR) / float(SR)
+		self.f = numpy.arange(-SR/2, SR/2)
+		psd = numpy.ones(len(self.f)) * 1e-30
+		psd[SR/2-FH:SR/2-FL] = PSD[::-1]
+		psd[SR/2+FL:SR/2+FH] = PSD
+
+		self.psd = psd
+
+		self.horizons = horizons
+
+		self.responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}
+		self.locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}
+
+		self.w1 = self.waveform(0., 0.)
+		self.w2 = self.waveform(0., numpy.pi / 2.)
+
+	def __call__(self):
+		# We will draw uniformly in extrinsic parameters
+		# FIXME Coalescence phase?
+
+		COSIOTA = numpy.random.uniform(-1.0,1.0)
+		RA = numpy.random.uniform(0.0,2.0*numpy.pi)
+		DEC = numpy.arcsin(numpy.random.uniform(-1.0,1.0))
+		PSI = numpy.random.uniform(0.0,2.0*numpy.pi)
+		D = numpy.random.power(2) * max(self.horizons.values()) * 2 # not! volume weighted - according to numpy doc, the distribution is drawn from arg -1
+		# since we are sampling in D instead of D^2, set the probability to scale with D
+		PROB = D
+		T = lal.LIGOTimeGPS(0)
+
+		# Derived quantities
+		GMST = lal.GreenwichMeanSiderealTime(T)
+		hplus = 0.5 * (1.0 + COSIOTA**2)
+		hcross = COSIOTA
+
+		phi = {}
+		Deff = {}
+		time = {}
+		snr = {}
+		for ifo in self.horizons:
+
+			#
+			# These are the fiducial values
+			#
+
+			Fplus, Fcross = lal.ComputeDetAMResponse(self.responses[ifo], RA, DEC, PSI, GMST)
+			phi[ifo] = - numpy.arctan2(Fcross * hcross, Fplus * hplus)
+			Deff[ifo] = D / ((Fplus * hplus)**2 + (Fcross * hcross)**2)**0.5
+			time[ifo] = lal.TimeDelayFromEarthCenter(self.locations[ifo], RA, DEC, T)
+			snr[ifo] = self.horizons[ifo] / Deff[ifo] * 8.
+
+			#
+			# Now we will slide stuff around according to the
+			# uncertainty in matched filtering
+			#
+
+			newsnr, dt, dphi = self.sample_from_matched_filter(snr[ifo])
+			snr[ifo] = newsnr
+			time[ifo] += dt
+			phi[ifo] += dphi
+
+		return time, phi, snr, Deff, PROB
+
+	def match(self, w1, w2):
+		return numpy.real((numpy.conj(w1) * w2).sum())
+
+	def matchfft(self, w1, w2):
+		return numpy.real(scipy.ifft(numpy.conj(scipy.fft(w1)) * scipy.fft(w2)))
+
+	def waveform(self, tc, phi):
+		a = abs(self.f)**(-7./6.)
+		a[len(a)/2] = 0
+		w = a * numpy.exp(numpy.pi * 2 * self.f * 1j * tc + phi * 1.j) / self.psd **.5
+		w = numpy.real(scipy.ifft(w))
+		return w / self.match(w, w)**.5
+
+	def noise(self):
+		return numpy.random.randn(len(self.f))
+
+	def inject(self, w, n, A):
+		return A*w+n
+
+	def sample_from_matched_filter(self, snr):
+		while True:
+			n = self.noise()
+			d = self.inject(self.w1, n, snr)
+			m1 = self.matchfft(self.w1,d)
+			m2 = self.matchfft(self.w2,d)
+			snr = ((m1**2 + m2**2)**.5)
+			ix = snr.argmax()
+			# FIXME Only consider times within 3ms to be "found"
+			if self.t[ix] > 0.003 and self.t[ix] < 0.997:
+				continue
+			if self.t[ix] >= 0.997:
+				DT = (1. - self.t[ix])
+			else:
+				DT = self.t[ix]
+			SNR = snr[ix]
+			DPHI = numpy.arctan(m2[ix] / m1[ix])
+			break
+		return SNR, DT, DPHI
+
+class InspiralExtrinsicParameters(object):
+
+	def __init__(self, horizons, snr_thresh, min_instruments):
+		self.horizons = horizons
+		self.snr_thresh = snr_thresh
+		self.min_instruments = min_instruments
+		self.instruments = tuple(sorted(self.horizons.keys()))
+		combos = set()
+		for i in range(self.min_instruments, len(self.instruments) + 1):
+			for choice in itertools.combinations(self.instruments, i):
+				combos.add(tuple(sorted(choice)))
+		self.combos = sorted(list(combos))
+		self.histograms = dict((combo, None) for combo in self.combos)
+
+	def add_histogram(self, hist, combo):
+		# this is just a tuple
+		self.histograms[combo] = hist
+
+	#
+	# NOTE we bin in arctan (log (D))
+	#
+
+	def snrfunc(self, snr):
+		return numpy.arctan(numpy.log10(snr / self.snr_thresh))
+
+	def boundaries(self):
+		out = {}
+		def boundary(ifos):
+			ifos = sorted(ifos)
+			lower = []
+			upper = []
+			max_splits = []
+			# we have pairs of dt and dphi
+			for pair in itertools.combinations(ifos, 2):
+				lower.append(-0.032)
+				upper.append(0.032)
+				max_splits.append(128)
+			for pair in itertools.combinations(ifos, 2):
+				lower.append(-numpy.pi)
+				upper.append(numpy.pi)
+				max_splits.append(64)
+			for ifo in ifos:
+				lower.append(0)
+				upper.append(numpy.pi / 2.)
+				max_splits.append(128)
+			return lower, upper, max_splits
+		for combo in self.combos:
+			out[combo] = boundary(combo)
+		return out
+
+	def pointfunc(self, time, phase, snr):
+		ifos = sorted(time)
+		point = []
+		# first time
+		for pair in itertools.combinations(ifos, 2):
+			point.append(time[pair[0]] - time[pair[1]])
+		# then phase
+		for pair in itertools.combinations(ifos, 2):
+			unwrapped = numpy.unwrap([phase[pair[0]], phase[pair[1]]])
+			point.append(unwrapped[0] - unwrapped[1])
+		for ifo in ifos:
+			point.append(self.snrfunc(snr[ifo]))
+		return point
+
+	def __call__(self, time, phase, snr):
+		ifos = tuple(sorted(time))
+		return self.histograms[ifos](self.pointfunc(time, phase, snr))
+
+
+
