@@ -195,8 +195,8 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.tag = '%s-%s' % (self.instrument[:1], self.description)
 
 		# get base temp directory
-		if options.condor_scratch_dir:
-			tmp_dir = options.condor_scratch_dir
+		if '_CONDOR_SCRATCH_DIR' in os.environ:
+			tmp_dir = os.environ['_CONDOR_SCRATCH_DIR']
 		else:
 			tmp_dir = os.environ['TMPDIR']
 
@@ -210,7 +210,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				duration = int(options.gps_end_time) - int(options.gps_start_time)
 				self.fname = '%s-%d-%d' % (self.tag, self.init_gps_time, duration)
 			else:
-				self.fname = '%s-%d-9999999999' % (self.tag, self.init_gps_time)
+				self.fname = '%s-%d-5000000000' % (self.tag, self.init_gps_time)
 
 			self.fpath = os.path.join(os.path.abspath(self.out_path), self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5])
 			self.tmp_path = os.path.join(tmp_dir, self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5])
@@ -557,7 +557,6 @@ def parse_command_line():
 
 	multichannel_datasource.append_options(parser)
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
-	parser.add_option("--condor-scratch-dir", metavar = "path", help = "Scratch directory for Condor-based jobs, if launching via Condor")
 	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
