@@ -71,10 +71,10 @@ class gstlal_median_psd_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_median_psd job
 	"""
-	def __init__(self, executable=dagparts.which('gstlal_ninja_median_of_psds'), tag_base='gstlal_ninja_median_of_psds'):
+	def __init__(self, executable=dagparts.which('gstlal_median_of_psds'), tag_base='gstlal_median_of_psds'):
 		"""
 		"""
-		self.__prog__ = 'gstlal_ninja_median_of_psds'
+		self.__prog__ = 'gstlal_median_of_psds'
 		self.__executable = executable
 		self.__universe = 'vanilla'
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
@@ -86,14 +86,14 @@ class gstlal_median_psd_job(pipeline.CondorDAGJob):
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
 
-class gstlal_ninja_smooth_reference_psd_job(pipeline.CondorDAGJob):
+class gstlal_smooth_reference_psd_job(pipeline.CondorDAGJob):
 	"""
-	A gstlal_ninja_smooth_reference_psd job
+	A gstlal_smooth_reference_psd job
 	"""
-	def __init__(self, executable=dagparts.which('gstlal_ninja_smooth_reference_psd'), tag_base='gstlal_ninja_smooth_reference_psd'):
+	def __init__(self, executable=dagparts.which('gstlal_psd_polyfit'), tag_base='gstlal_psd_polyfit'):
 		"""
 		"""
-		self.__prog__ = 'gstlal_ninja_smooth_reference_psd'
+		self.__prog__ = 'gstlal_psd_polyfit'
 		self.__executable = executable
 		self.__universe = 'vanilla'
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
@@ -128,18 +128,18 @@ class gstlal_reference_psd_node(pipeline.CondorDAGNode):
 		dag.add_node(self)
 
 
-class gstlal_ninja_smooth_reference_psd_node(pipeline.CondorDAGNode):
+class gstlal_smooth_reference_psd_node(pipeline.CondorDAGNode):
 	"""
-	A gstlal_ninja_smooth_reference_psd node
+	A gstlal_smooth_reference_psd node
 	"""
 	def __init__(self, job, dag, instrument, input_psd, p_node=[]):
 		pipeline.CondorDAGNode.__init__(self,job)
 		path = os.getcwd()
 		#FIXME shouldn't be hardcoding stuff like this
 		output_name = self.output_name = input_psd.replace('reference_psd', 'smoothed_reference_psd')
-		self.add_var_opt("instrument", instrument)
-		self.add_var_opt("input-psd", input_psd)
-		self.add_var_opt("output-psd", output_name)
+		self.add_var_arg(input_psd)
+		self.add_var_opt("output", output_name)
+		self.add_var_opt("low-fit-freq", 10)
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
@@ -283,7 +283,7 @@ seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(o
 choosesegs(seglists, options.min_segment_length)
 
 psdJob = gstlal_reference_psd_job()
-smoothJob = gstlal_ninja_smooth_reference_psd_job()
+smoothJob = gstlal_smooth_reference_psd_job()
 medianJob = gstlal_median_psd_job()
 colorJob = gstlal_fake_frames_job()
 
@@ -300,7 +300,7 @@ if options.whiten_type in ("psdperseg", "medianofpsdperseg"):
 		for seg in seglist:
 			#FIXME if there are sements without frame caches this will barf
 			psdnode = gstlal_reference_psd_node(psdJob, dag, options.frame_cache, int(seg[0]), int(seg[1]), instrument, inchannels[instrument], injections=None, p_node=[])
-			smoothnode[instrument][seg] = gstlal_ninja_smooth_reference_psd_node(smoothJob, dag, instrument, psdnode.output_name,  p_node=[psdnode])
+			smoothnode[instrument][seg] = gstlal_smooth_reference_psd_node(smoothJob, dag, instrument, psdnode.output_name,  p_node=[psdnode])
 			if options.whiten_type == "psdperseg":
 				psd[instrument][seg] = smoothnode[instrument][seg].output_name
 
