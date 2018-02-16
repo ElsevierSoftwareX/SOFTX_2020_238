@@ -21,7 +21,7 @@ from gstlal import cbc_template_fir
 from pylal import datatypes as laltypes
 from pylal import lalfft
 from pylal import series as lalseries
-from pylal import spawaveform
+from gstlal import spawaveform
 from gstlal.reference_psd import interpolate_psd
 import math
 from gstlal import templates
