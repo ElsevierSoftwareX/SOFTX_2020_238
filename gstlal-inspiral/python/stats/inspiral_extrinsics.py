@@ -40,6 +40,7 @@ import numpy
 import os
 import random
 from scipy import stats
+from scipy import interpolate, fft, ifft
 import sys
 
 
@@ -52,6 +53,7 @@ from glue.text_progress_bar import ProgressBar
 from gstlal import stats as gstlalstats
 import lal
 from lal import rate
+from lal import LIGOTimeGPS
 from lalburst import snglcoinc
 import lalsimulation
 
@@ -997,8 +999,8 @@ class HyperRect(object):
 
 class DynamicBins(object):
 	def __init__(self, lower, upper, max_splits = None, min_vol = None):
-		self.lower = numpy.array(lower)
-		self.upper = numpy.array(upper)
+		self.lower = numpy.array(lower, dtype=float)
+		self.upper = numpy.array(upper, dtype=float)
 		if max_splits is not None:
 			self.max_splits = numpy.array(max_splits)
 		else:
@@ -1137,10 +1139,49 @@ class StaticDynamicBins(object):
 
 		return search_serialized(self.DB, point, ix = 0)
 
+class FFT(object):
+	def __init__(self):
+		self.fwdplan = {}
+		self.tvec = {}
+		self.fvec = {}
+
+	def __call__(self, arr):
+		length = len(arr)
+		if length not in self.fwdplan:
+			self.fwdplan[length] = lal.CreateForwardREAL4FFTPlan(length, 1)
+		if length not in self.tvec:
+			self.tvec[length] = lal.CreateREAL4Vector(length)
+		if length not in self.fvec:
+			self.fvec[length] = lal.CreateCOMPLEX8Vector(length / 2 + 1)
+
+		self.tvec[length].data[:] = arr[:]
+		lal.REAL4ForwardFFT(self.fvec[length], self.tvec[length], self.fwdplan[length])
+
+		return numpy.array(self.fvec[length].data, dtype=complex)
+
+class IFFT(object):
+	def __init__(self):
+		self.revplan = {}
+		self.tvec = {}
+		self.fvec = {}
+
+	def __call__(self, arr):
+		length = 2 * (len(arr) -1)
+		if length not in self.revplan:
+			self.revplan[length] = lal.CreateReverseREAL4FFTPlan(length, 1)
+		if length not in self.tvec:
+			self.tvec[length] = lal.CreateREAL4Vector(length)
+		if length not in self.fvec:
+			self.fvec[length] = lal.CreateCOMPLEX8Vector(length / 2 + 1)
+
+		self.fvec[length].data[:] = arr[:] / length
+		lal.REAL4ReverseFFT(self.tvec[length], self.fvec[length], self.revplan[length])
+
+		return numpy.array(self.tvec[length].data, dtype=float)
 
 class RandomSource(object):
 
-	def __init__(self, psd, horizons, SR = 1024, FL = 30, FH = 500):
+	def __init__(self, psd, horizons, SR = 2048, FL = 32, FH = 1024, DF = 32):
 
 		psd_data = psd.data.data
 		f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
@@ -1149,14 +1190,14 @@ class RandomSource(object):
 		psd = psd_data[int(FL / psd.deltaF): int(FH / psd.deltaF)]
 
 		psd = interpolate.interp1d(f, psd)
-		f = numpy.arange(FL, FH)
+		f = numpy.arange(FL, FH, DF)
 		PSD = psd(f)
 
-		self.t = numpy.arange(0, SR) / float(SR)
-		self.f = numpy.arange(-SR/2, SR/2)
+		self.t = numpy.arange(0, SR) / float(SR) / DF
+		self.f = numpy.arange(-SR/2, SR/2, DF)
 		psd = numpy.ones(len(self.f)) * 1e-30
-		psd[SR/2-FH:SR/2-FL] = PSD[::-1]
-		psd[SR/2+FL:SR/2+FH] = PSD
+		psd[(SR/2-FH)/DF:(SR/2-FL)/DF] = PSD[::-1]
+		psd[(SR/2+FL)/DF:(SR/2+FH)/DF] = PSD
 
 		self.psd = psd
 
@@ -1165,8 +1206,12 @@ class RandomSource(object):
 		self.responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}
 		self.locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}
 
-		self.w1 = self.waveform(0., 0.)
-		self.w2 = self.waveform(0., numpy.pi / 2.)
+		self.fft = FFT()
+		self.ifft = IFFT()
+
+		self.w1t = self.waveform(0., 0.)
+		self.w1 = self.fft(self.w1t)
+		self.w2 = self.fft(self.waveform(0., numpy.pi / 2.))
 
 	def __call__(self):
 		# We will draw uniformly in extrinsic parameters
@@ -1176,9 +1221,9 @@ class RandomSource(object):
 		RA = numpy.random.uniform(0.0,2.0*numpy.pi)
 		DEC = numpy.arcsin(numpy.random.uniform(-1.0,1.0))
 		PSI = numpy.random.uniform(0.0,2.0*numpy.pi)
-		D = numpy.random.power(2) * max(self.horizons.values()) * 2 # not! volume weighted - according to numpy doc, the distribution is drawn from arg -1
-		# since we are sampling in D instead of D^2, set the probability to scale with D
-		PROB = D
+		D = numpy.random.power(1) * max(self.horizons.values()) * 2 # not! volume weighted - according to numpy doc, the distribution is drawn from arg -1
+		# since we are sampling uniform in D instead of D^2, set the probability to scale with D
+		PROB = D**2
 		T = lal.LIGOTimeGPS(0)
 
 		# Derived quantities
@@ -1218,14 +1263,14 @@ class RandomSource(object):
 		return numpy.real((numpy.conj(w1) * w2).sum())
 
 	def matchfft(self, w1, w2):
-		return numpy.real(scipy.ifft(numpy.conj(scipy.fft(w1)) * scipy.fft(w2)))
+		return numpy.real(self.ifft(numpy.conj(w1) * w2))
 
 	def waveform(self, tc, phi):
 		a = abs(self.f)**(-7./6.)
 		a[len(a)/2] = 0
 		w = a * numpy.exp(numpy.pi * 2 * self.f * 1j * tc + phi * 1.j) / self.psd **.5
-		w = numpy.real(scipy.ifft(w))
-		return w / self.match(w, w)**.5
+		w = numpy.real(fft(w))
+		return numpy.array(w / self.match(w, w)**.5, dtype=float)
 
 	def noise(self):
 		return numpy.random.randn(len(self.f))
@@ -1236,7 +1281,7 @@ class RandomSource(object):
 	def sample_from_matched_filter(self, snr):
 		while True:
 			n = self.noise()
-			d = self.inject(self.w1, n, snr)
+			d = self.fft(self.inject(self.w1t, n, snr))
 			m1 = self.matchfft(self.w1,d)
 			m2 = self.matchfft(self.w2,d)
 			snr = ((m1**2 + m2**2)**.5)
@@ -1282,22 +1327,23 @@ class InspiralExtrinsicParameters(object):
 		out = {}
 		def boundary(ifos):
 			ifos = sorted(ifos)
+			assert 1 <= len(ifos) <= 3
 			lower = []
 			upper = []
 			max_splits = []
 			# we have pairs of dt and dphi
-			for pair in itertools.combinations(ifos, 2):
+			for pair in list(itertools.combinations(ifos, 2))[:2]:
 				lower.append(-0.032)
 				upper.append(0.032)
-				max_splits.append(128)
-			for pair in itertools.combinations(ifos, 2):
+				max_splits.append(64)
+			for pair in list(itertools.combinations(ifos, 2))[:2]:
 				lower.append(-numpy.pi)
 				upper.append(numpy.pi)
-				max_splits.append(64)
+				max_splits.append(32)
 			for ifo in ifos:
 				lower.append(0)
 				upper.append(numpy.pi / 2.)
-				max_splits.append(128)
+				max_splits.append(64)
 			return lower, upper, max_splits
 		for combo in self.combos:
 			out[combo] = boundary(combo)
@@ -1305,12 +1351,13 @@ class InspiralExtrinsicParameters(object):
 
 	def pointfunc(self, time, phase, snr):
 		ifos = sorted(time)
+		assert 1 <= len(ifos) <= 3
 		point = []
 		# first time
-		for pair in itertools.combinations(ifos, 2):
+		for pair in list(itertools.combinations(ifos, 2))[:2]:
 			point.append(time[pair[0]] - time[pair[1]])
 		# then phase
-		for pair in itertools.combinations(ifos, 2):
+		for pair in list(itertools.combinations(ifos, 2))[:2]:
 			unwrapped = numpy.unwrap([phase[pair[0]], phase[pair[1]]])
 			point.append(unwrapped[0] - unwrapped[1])
 		for ifo in ifos:
