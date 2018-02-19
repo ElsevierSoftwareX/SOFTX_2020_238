@@ -203,18 +203,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
 
 	#
-	# add a reblock element.  the whitener's gap support isn't 100% yet
-	# and giving it smaller input buffers works around the remaining
-	# weaknesses (namely that when it sees a gap buffer large enough to
-	# drain its internal history, it doesn't know enough to produce a
-	# short non-gap buffer to drain its history followed by a gap
-	# buffer, it just produces one huge non-gap buffer that's mostly
-	# zeros).
-	#
-
-	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
-
-	#
 	# construct whitener.
 	#
 
@@ -262,6 +250,21 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
+		#
+		# add a reblock element.  the whitener's gap support isn't
+		# 100% yet and giving it smaller input buffers works around
+		# the remaining weaknesses (namely that when it sees a gap
+		# buffer large enough to drain its internal history, it
+		# doesn't know enough to produce a short non-gap buffer to
+		# drain its history followed by a gap buffer, it just
+		# produces one huge non-gap buffer that's mostly zeros).
+		# this is not required in the FIR-whitener case because
+		# there we don't use the whitener's output time series for
+		# anything.
+		#
+
+		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
+
 		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		# make the buffers going downstream smaller, this can
 		# really help with RAM
