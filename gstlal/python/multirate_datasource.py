@@ -218,7 +218,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
 
 		# FIR filter for whitening kernel
-		psd_fir_kernel = reference_psd.PSDFirKernel()
 		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.zeros((1, 1 + max(rates) * psd_fft_length), dtype=numpy.float64), block_stride = block_stride, time_domain = False, latency = 0)
 
 		# compute whitening kernel from PSD
@@ -236,7 +235,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
 			kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
 			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
-		whiten.connect_after("notify::mean-psd", set_fir_psd, head, psd_fir_kernel)
+		whiten.connect_after("notify::mean-psd", set_fir_psd, head, reference_psd.PSDFirKernel())
 
 		# Gate after gaps
 		# FIXME the -max(rates) extra padding is for the high pass
