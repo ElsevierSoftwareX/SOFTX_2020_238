@@ -161,12 +161,11 @@ class gstlal_median_psd_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_median_psd node
 	"""
-	def __init__(self, job, dag, instrument, input_psds, output, p_node=[]):
+	def __init__(self, job, dag, input_psds, output, p_node=[]):
 		pipeline.CondorDAGNode.__init__(self,job)
 		path = os.getcwd()
 		#FIXME shouldn't be hardcoding stuff like this
 		output_name = self.output_name = output
-		self.add_var_opt("instrument", instrument)
 		self.add_var_opt("output-name", output_name)
 		for psd in input_psds:
 			self.add_file_arg(psd)
@@ -322,7 +321,7 @@ if options.whiten_type in ("psdperseg", "medianofpsdperseg"):
 			if options.whiten_type == "psdperseg":
 				psd[instrument][seg] = smoothnode[instrument][seg].output_name
 
-		mediannode[instrument] = gstlal_median_psd_node(medianJob, dag, instrument, [v.output_name for v in smoothnode[instrument].values()], "%s_median_psd.xml.gz" % instrument, p_node=smoothnode[instrument].values())
+		mediannode[instrument] = gstlal_median_psd_node(medianJob, dag, [v.output_name for v in smoothnode[instrument].values()], "%s_median_psd.xml.gz" % instrument, p_node=smoothnode[instrument].values())
 		p_node[instrument] = [mediannode[instrument]]
 		if options.whiten_type == "medianofpsdperseg":
 			psd[instrument] = mediannode[instrument].output_name
