@@ -51,7 +51,7 @@ class gstlal_reference_psd_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_reference_psd job
 	"""
-	def __init__(self, executable=dagparts.which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
+	def __init__(self, group, user, executable=dagparts.which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_reference_psd'
@@ -63,6 +63,10 @@ class gstlal_reference_psd_job(pipeline.CondorDAGJob):
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
+		if group is not None:
+			self.add_condor_cmd('accounting_group', group)
+		if user is not None:
+			self.add_condor_cmd('accounting_group_user', user)
 		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(process).out')
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
@@ -71,7 +75,7 @@ class gstlal_median_psd_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_median_psd job
 	"""
-	def __init__(self, executable=dagparts.which('gstlal_median_of_psds'), tag_base='gstlal_median_of_psds'):
+	def __init__(self, group, user, executable=dagparts.which('gstlal_median_of_psds'), tag_base='gstlal_median_of_psds'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_median_of_psds'
@@ -82,6 +86,10 @@ class gstlal_median_psd_job(pipeline.CondorDAGJob):
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
+		if group is not None:
+			self.add_condor_cmd('accounting_group', group)
+		if user is not None:
+			self.add_condor_cmd('accounting_group_user', user)
 		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(process).out')
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
@@ -90,7 +98,7 @@ class gstlal_smooth_reference_psd_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_smooth_reference_psd job
 	"""
-	def __init__(self, executable=dagparts.which('gstlal_psd_polyfit'), tag_base='gstlal_psd_polyfit'):
+	def __init__(self, group, user, executable=dagparts.which('gstlal_psd_polyfit'), tag_base='gstlal_psd_polyfit'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_psd_polyfit'
@@ -101,6 +109,10 @@ class gstlal_smooth_reference_psd_job(pipeline.CondorDAGJob):
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
+		if group is not None:
+			self.add_condor_cmd('accounting_group', group)
+		if user is not None:
+			self.add_condor_cmd('accounting_group_user', user)
 		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(process).out')
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
@@ -171,7 +183,7 @@ class gstlal_fake_frames_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_fake_frames job
 	"""
-	def __init__(self, executable=dagparts.which('gstlal_fake_frames'), tag_base='gstlal_fake_frames'):
+	def __init__(self, group, user, executable=dagparts.which('gstlal_fake_frames'), tag_base='gstlal_fake_frames'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_fake_frames'
@@ -183,6 +195,10 @@ class gstlal_fake_frames_job(pipeline.CondorDAGJob):
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
+		if group is not None:
+			self.add_condor_cmd('accounting_group', group)
+		if user is not None:
+			self.add_condor_cmd('accounting_group_user', user)
 		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(process).out')
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
@@ -248,6 +264,8 @@ def parse_command_line():
 	parser.add_option("--frame-type", metavar = "IFO=TYPE", action = "append", help = "Set the instrument dependent frame type, H1=TYPE. Can be given more than once and is required for each instrument processed.")
 	parser.add_option("--frame-duration", metavar = "SECONDS", default = 16, type = "int", help = "Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default: 16s")
 	parser.add_option("--frames-per-file", metavar = "INT", default = 256, type = "int", help = "Set the number of frames per file.  Default: 256")
+	parser.add_option("--accounting-group", metavar = "str", help = "Set the accounting group name, e.g., ligo.dev.o3.cw.directedbinary.production")
+	parser.add_option("--accounting-group-user", metavar = "str", help = "Set the accounting group user, e.g., chad.hanna")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 	
 	options, filenames = parser.parse_args()
@@ -282,10 +300,10 @@ dag = dagparts.CondorDAG("gstlal_fake_frames_pipe")
 seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.frame_segments_file, verbose = options.verbose, contenthandler = ligolw_segments.LIGOLWContentHandler), options.frame_segments_name).coalesce()
 choosesegs(seglists, options.min_segment_length)
 
-psdJob = gstlal_reference_psd_job()
-smoothJob = gstlal_smooth_reference_psd_job()
-medianJob = gstlal_median_psd_job()
-colorJob = gstlal_fake_frames_job()
+psdJob = gstlal_reference_psd_job(options.accounting_group, options.accounting_group_user)
+smoothJob = gstlal_smooth_reference_psd_job(options.accounting_group, options.accounting_group_user)
+medianJob = gstlal_median_psd_job(options.accounting_group, options.accounting_group_user)
+colorJob = gstlal_fake_frames_job(options.accounting_group, options.accounting_group_user)
 
 smoothnode = {}
 mediannode = {}
