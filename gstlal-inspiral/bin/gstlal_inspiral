@@ -127,7 +127,7 @@
 #	+ `--nxydump-segment` [start:stop]: Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time."
 #	+ `--output` [filename]: Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).
 #	+ `--reference-psd` [filename]: Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).
-#	+ `--track-psd`: Track PSD even if a reference is given.
+#	+ `--track-psd`: Enable dynamic PSD tracking.  Always enabled if --reference-psd is not given.
 #	+ `--svd-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.
 #	+ `--time-slide-file` [filename]: Set the name of the xml file to get time slide offsets (required).
 #	+ `--control-peak-time` [time] (int): Set a time window in seconds to find peaks in the control signal.
@@ -273,7 +273,7 @@ def parse_command_line():
 	parser.add_option("--output", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
 	parser.add_option("--output-cache", metavar = "filename", help = "Provide a cache file with the names of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
-	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
+	parser.add_option("--track-psd", action = "store_true", help = "Enable dynamic PSD tracking.  Always enabled if --reference-psd is not given.")
 	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.")
 	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Provide a cache file of svd-bank files")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (required).")
@@ -418,8 +418,8 @@ def parse_command_line():
 		if bad_options:
 			raise ValueError("%s options can only be given for --data-source is lvshm or framexmit " % ", ".join(bad_options))
 
-	if options.reference_psd is None and not options.track_psd:
-		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+	if options.reference_psd is None:
+		options.track_psd = True
 	if options.psd_fft_length < 32:
 		raise ValueError("--psd-fft-length cannot be less than 32")
 	if options.local_frame_caching and not options.data_source == "frames":

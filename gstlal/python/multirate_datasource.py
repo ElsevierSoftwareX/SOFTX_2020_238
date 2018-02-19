@@ -157,6 +157,13 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	- width: type convert to either 32 or 64 bit float
 	"""
 	#
+	# input sanity checks
+	#
+
+	if psd is None and not track_psd:
+		raise ValueError("must enable track_psd when psd is None")
+
+	#
 	# set default whitener zero-padding if needed
 	#
 
@@ -257,24 +264,19 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		# really help with RAM
 		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
 
-	if psd is None:
-		# use running average PSD
-		whiten.set_property("psd-mode", 0)
-	else:
-		if track_psd:
-			# use running average PSD
-			whiten.set_property("psd-mode", 0)
-		else:
-			# use fixed PSD
-			whiten.set_property("psd-mode", 1)
+	#
+	# enable/disable PSD tracking
+	#
 
-		#
-		# install signal handler to retrieve \Delta f and
-		# f_{Nyquist} whenever they are known and/or change,
-		# resample the user-supplied PSD, and install it into the
-		# whitener.
-		#
+	whiten.set_property("psd-mode", 0 if track_psd else 1)
 
+	#
+	# install signal handler to retrieve \Delta f and f_{Nyquist}
+	# whenever they are known and/or change, resample the user-supplied
+	# PSD, and install it into the whitener.
+	#
+
+	if psd is not None:
 		def psd_units_or_resolution_changed(elem, pspec, psd):
 			# make sure units are set, compute scale factor
 			units = lal.Unit(elem.get_property("psd-units"))
