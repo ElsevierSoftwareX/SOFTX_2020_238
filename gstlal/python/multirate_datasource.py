@@ -213,13 +213,13 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 		# high pass filter
 		kernel = reference_psd.one_second_highpass_kernel(max(rates), cutoff = 12)
+		block_stride = block_duration * max(rates) // Gst.SECOND
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
-		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = max(rates), time_domain = False, latency = (len(kernel) - 1) // 2)
+		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
 
 		# FIR filter for whitening kernel
 		psd_fir_kernel = reference_psd.PSDFirKernel()
-		fir_matrix = numpy.zeros((1, 1 + max(rates) * psd_fft_length), dtype=numpy.float64)
-		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, block_stride = max(rates), time_domain = False, latency = 0)
+		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.zeros((1, 1 + max(rates) * psd_fft_length), dtype=numpy.float64), block_stride = block_stride, time_domain = False, latency = 0)
 
 		# compute whitening kernel from PSD
 		def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
