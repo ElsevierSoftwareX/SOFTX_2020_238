@@ -297,7 +297,9 @@ if options.color_psd:
 	max_sample = int(round(1.0 / rpsd.deltaF * options.sample_rate / 2.0)) + 1
 
 	# Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
-	rpsd.data.data = rpsd.data.data[:max_sample]
+	rpsd_data = numpy.array(rpsd.data.data[:max_sample])
+	rpsd = lal.CreateCOMPLEX16FrequencySeries(name = rpsd.name, epoch = rpsd.epoch, f0 = rpsd.f0, deltaF = rpsd.deltaF, length = max_sample, sampleUnits = rpsd.sampleUnits)
+	rpsd.data.data = rpsd_data
 	
 	# create the coloring FIR kernel from reference_psd.psd_to_fir_kernel()
 	FIRKernel = reference_psd.PSDFirKernel()
