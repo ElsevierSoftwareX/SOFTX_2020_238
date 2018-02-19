@@ -586,7 +586,7 @@ if options.reference_psd is not None:
 	if set(psd) < all_instruments:
 		raise ValueError("missing PSD(s) for %s" % ", ".join(sorted(all_instruments - set(psd))))
 else:
-	psd = dict((instrument, None) for instrument in detectors.channel_dict)
+	psd = dict.fromkeys(all_instruments, None)
 
 
 #
