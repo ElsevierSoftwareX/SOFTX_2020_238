@@ -162,6 +162,9 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	if psd is None and not track_psd:
 		raise ValueError("must enable track_psd when psd is None")
+	if int(psd_fft_length) != psd_fft_length:
+		raise ValueError("psd_fft_length must be an integer")
+	psd_fft_length = int(psd_fft_length)
 
 	#
 	# set default whitener zero-padding if needed
