@@ -135,6 +135,14 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	else:
 		head = src
 
+	# high pass filter
+	# FIXME: don't hardcode native rate cutoff for high-pass filtering
+	if native_rate >= 128:
+		kernel = reference_psd.one_second_highpass_kernel(max_rate, cutoff = 12)
+		block_stride = block_duration * max_rate // Gst.SECOND
+		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
+		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
+
 	#	
 	# add a reblock element.  the whitener's gap support isn't 100% yet
 	# and giving it smaller input buffers works around the remaining
