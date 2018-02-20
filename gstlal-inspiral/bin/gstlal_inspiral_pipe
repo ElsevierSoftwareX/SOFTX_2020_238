@@ -373,7 +373,6 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						if options.ht_gate_threshold is not None:
 							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
 
-					# FIXME do better with svd node parents?
 					# non injection node
 					noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag,
 							parent_nodes = sum((svd_node_list[numchunks*chunk_counter:numchunks*(chunk_counter+1)] for svd_node_list in svd_nodes.values()),[]),
