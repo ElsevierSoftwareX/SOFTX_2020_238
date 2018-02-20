@@ -1,0 +1,93 @@
+#! /usr/bin/python
+# Copyright (C) 2015  Surabhi Sachdev, Tjonnie Li
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+###############################################################################
+#
+# IMPORT MODULES
+#
+###############################################################################
+
+from time import strftime
+from optparse import OptionParser
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw import ligolw
+from glue.ligolw.utils import process as ligolw_process
+import numpy
+
+###############################################################################
+#
+# IMPORT MODULES
+#
+###############################################################################
+
+class ContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(ContentHandler)
+
+###############################################################################
+#
+# COMMAND LINE PARSING
+#
+###############################################################################
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("-o", "--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
+	parser.add_option("-u", "--usertag", metavar = "usertag", help = "Set the user tag",default="INJSPLITTER")
+	parser.add_option("-n", "--nsplit", metavar = "count", type = "int", help = "Number of files you want the original file to be split into",default=1)
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+
+	if len(filenames)!=1:
+		raise ValueError, "Provide one injection file"
+
+	return options, filenames
+
+options, filenames = parse_command_line()
+
+###############################################################################
+#
+# MAIN CODE
+#
+###############################################################################
+
+# GETTING COMMAND LINE OPTIONS FOR PRINTING INTO THE TABLE
+opts_dict = dict((k, v) for k, v in options.__dict__.iteritems() if v is not False and v is not None)
+
+# LOAD INJECTION TABLE
+xmldoc=utils.load_filename(filenames[0], gz=filenames[0].endswith(".gz"), verbose = options.verbose, contenthandler=ContentHandler)
+sim_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SimInspiralTable.tableName)
+# Sort the sim inspiral table based on geocent end time
+sim_inspiral_table.sort(key = lambda row: (row.geocent_end_time + 1e-9 * row.geocent_end_time_ns))
+process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
+
+# PREPARE PROCESS TABLE WITH INFORMATION ABOUT THE CURRENT PROGRAM
+process = ligolw_process.register_to_xmldoc(xmldoc,
+"gstlal_injsplitter", opts_dict,
+version="no version", cvs_repository="gstlal",
+cvs_entry_time=strftime('%Y/%m/%d %H:%M:%S'))
+
+sim_inspiral_table_split = lsctables.New(lsctables.SimInspiralTable)
+sim_inspiral_table.parentNode.replaceChild(sim_inspiral_table_split, sim_inspiral_table)
+
+evensplit = numpy.array_split(sim_inspiral_table,options.nsplit);
+for i in xrange(options.nsplit):
+	sim_inspiral_table_split[:] = evensplit[i]
+	ligolw_process.set_process_end_time(process)
+	utils.write_filename(xmldoc, "%s/%s_INJ_SPLIT_%04d.xml"%(options.output_path,options.usertag,i), gz = False, verbose = options.verbose)
+
