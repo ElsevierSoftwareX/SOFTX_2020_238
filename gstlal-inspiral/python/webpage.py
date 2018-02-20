@@ -57,13 +57,13 @@ class image_glob(elem):
 			
 class page(object):
 	def __init__(self, title="cbc web page", path='./',
-		css=["//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/gstlal.css", 
-			"//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/jquery.fancybox.css"
+		css=["https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.css", 
+			"https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.css"
 			], 
-		script=["//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/jquery-3.1.1.min.js",
-			"//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/jquery.fancybox.pack.js?v=2.1.5",
+		script=["https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js",
+			"https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.js",
 			"https://www.gstatic.com/charts/loader.js",
-			"//versions.ligo.org/cgit/gstlal/plain/gstlal-ugly/share/vis/gstlal.js"
+			"https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.js"
 			], 
 		content = None, header_content = None, verbose=False):
 		if content is None:
