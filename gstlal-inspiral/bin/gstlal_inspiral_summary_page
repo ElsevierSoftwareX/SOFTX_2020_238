@@ -49,7 +49,7 @@ sched_doc = webpage.tab("schedule", "Schedule", "Schedule")
 # add the sections to the nav bar and the nav bar to the page
 #
 
-nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://versions.ligo.org/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.png" """)])]
 nav+=[summary, injparams, injrecovery, sens, back, money, about_doc, sched_doc]
 nav+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
 thispage+=nav
@@ -356,7 +356,7 @@ about_doc_lite = webpage.tab("about", "About", "About")
 sched_doc_lite = webpage.tab("schedule", "Schedule", "Schedule")
 
 # Summary lite setup
-nav_lite+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png" """)])]
+nav_lite+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.png" """)])]
 nav_lite+=[summary_lite, about_doc_lite, sched_doc_lite]
 nav_lite+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
 thispage_lite+=nav_lite
