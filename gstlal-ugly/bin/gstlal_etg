@@ -37,14 +37,23 @@ import threading
 import shutil
 import traceback
 
+import numpy
+
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
-import lal
 
-import numpy
+import lal
+from lal import LIGOTimeGPS
+
+from glue import iterutils
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import segments as ligolw_segments
 
 from gstlal import pipeio
 from gstlal import datasource
@@ -57,10 +66,6 @@ from gstlal import aggregator
 from gstlal import idq_aggregator
 from gstlal import httpinterface
 from gstlal import bottle
-from glue import iterutils
-from glue.ligolw import ligolw
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
 
 #
 # Make sure we have sufficient resources
@@ -183,6 +188,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.out_path = kwargs.pop("out_path")
 		self.instrument = kwargs.pop("instrument")
 		self.keys = kwargs.pop("keys")
+		self.frame_segments = kwargs.pop("frame_segments")
 
 		# set initialization time
 		if options.data_source in ("framexmit", "lvshm"):
@@ -354,27 +360,33 @@ class MultiChannelHandler(simplehandler.Handler):
 		Given a channel, rate, and the current buffer
 		time, will process a row from a gstreamer buffer.
 		"""
-		trigger_time = row.end_time + row.end_time_ns * 1e-9
-		if options.latency:
-			latency = numpy.round(int(aggregator.now()) - buftime)
-		freq, q, duration = self.basis_params[(channel, rate)][row.channel_index]
-		start_time = trigger_time - duration
-		channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
-		# NOTE
-		# Setting stop time to trigger time for use with half sine gaussians
-		stop_time = trigger_time
-		# append row to feature vector for bottle requests
-		etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
-                           'frequency': freq, 'q': q, 'phase': row.phase, 'sigmasq': row.sigmasq, 'chisq': row.chisq, 'snr': row.snr}
-		self.etg_event.append(etg_row)
-		# save iDQ compatible data
-		if options.save_hdf:
-			self.fdata.append(etg_row, key = (channel, rate), buftime = buftime)
-		else:
+		# if segments provided, ensure that trigger falls within these segments
+		if self.frame_segments:
+			trigger_seg = segments.segment(LIGOTimeGPS(row.end_time, row.end_time_ns), LIGOTimeGPS(row.end_time, row.end_time_ns))
+
+		if not self.frame_segments or self.frame_segments.intersects_segment(trigger_seg):
+			trigger_time = row.end_time + row.end_time_ns * 1e-9
 			if options.latency:
-				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag, latency))
+				latency = numpy.round(int(aggregator.now()) - buftime)
+			freq, q, duration = self.basis_params[(channel, rate)][row.channel_index]
+			start_time = trigger_time - duration
+			channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
+			# NOTE
+			# Setting stop time to trigger time for use with half sine gaussians
+			stop_time = trigger_time
+			# append row to feature vector for bottle requests
+			etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
+        	                   'frequency': freq, 'q': q, 'phase': row.phase, 'sigmasq': row.sigmasq, 'chisq': row.chisq, 'snr': row.snr}
+			self.etg_event.append(etg_row)
+
+			# save iDQ compatible data
+			if options.save_hdf:
+				self.fdata.append(etg_row, key = (channel, rate), buftime = buftime)
 			else:
-				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
+				if options.latency:
+					self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag, latency))
+				else:
+					self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
 
 
 	def to_trigger_file(self, buftime = None):
@@ -721,7 +733,7 @@ for channel in channels:
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline..."
 
-handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys())
+handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments)
 appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
 appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for (channel, rate) in src.keys()) 
   
