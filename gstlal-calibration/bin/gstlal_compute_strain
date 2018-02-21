@@ -509,6 +509,12 @@ if options.full_calibration:
 		resdewhitendelay = int(filters["dewhiten_err_delay"])
 		resdewhiten = filters["dewhiten_err"]
 
+# Load the high-pass filter for h(t)
+try:
+	act_high_pass = filters["act_high_pass"]
+except:
+	act_high_pass = None
+
 
 # Set up queue parameters
 if options.low_latency:
@@ -1065,8 +1071,10 @@ if options.full_calibration:
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
 tst = calibration_parts.mkresample(pipeline, tst, 3, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
-#tst = calibration_parts.mkstockresample(pipeline, tst, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
-# filter TST chain with the TST acutaiton filter
+# High-pass filter
+if act_high_pass:
+	tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdelay / 2.0), fir_matrix = [act_high_pass[::-1]], time_domain = td)
+# Filter TST chain with the TST acutaiton filter
 tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdelay), fir_matrix = [tstfilt[::-1]], time_domain = td)
 if options.low_latency:
 	tst = calibration_parts.mkinsertgap(pipeline, tst, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
@@ -1079,7 +1087,9 @@ if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappap
 
 # resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
 pumuim = calibration_parts.mkresample(pipeline, pumuim, 3, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
-#pumuim = calibration_parts.mkstockresample(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
+# High-pass filter
+if act_high_pass:
+	pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdelay / 2.0), fir_matrix = [act_high_pass[::-1]], time_domain = td)
 # filter the PUM/UIM chain with the PUM/UIM actuation filter
 pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdelay), fir_matrix = [pumuimfilt[::-1]], time_domain = td)
 if options.low_latency:
