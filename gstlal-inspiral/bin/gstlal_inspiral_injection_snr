@@ -163,12 +163,14 @@ lsctables.use_in(LIGOLWContentHandler)
 
 options, filenames = parse_command_line()
 
-# First, read in the PSDs
-reference_psd_files = [CacheEntry(line) for line in open(options.reference_psd_cache)]
-
 # Now we need to read in from the sim_inspiral table
 simxmldoc = ligolw_utils.load_filename(options.injection_file, verbose = True, contenthandler = LIGOLWContentHandler)
 sim_inspiral_table = lsctables.SimInspiralTable.get_table(simxmldoc)
+sorted_inj_times = sorted([inj.geocent_end_time+1e-9*inj.geocent_end_time_ns for inj in sim_inspiral_table])
+inj_segment = segments.segment(sorted_inj_times[0], sorted_inj_times[-1])
+
+# Read the PSD cache for only files we are interested in
+reference_psd_files = Cache([CacheEntry(line) for line in open(options.reference_psd_cache)]).sieve(segment=inj_segment)
 
 # Load all PSDs so that they don't need to be loaded for every injection.
 allPSDs = {}
