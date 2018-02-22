@@ -1326,6 +1326,7 @@ elif options.reference_psd is None:
 	# Make the reference PSD cache
 	#
 
+	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	output_cache_file = open('reference_psd.cache', "w")
 	for node in psd_nodes.values():
 		output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(node.output_files["write-psd"])))
@@ -1345,10 +1346,11 @@ elif options.reference_psd is None:
 	# compute the median PSD
 	#
 
+	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	median_psd_node = \
 		inspiral_pipe.generic_node(medianPSDJob, dag,
 			parent_nodes = psd_nodes.values(),
-			input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
+			input_files = {"input-cache": "reference_psd.cache"},
 			output_files = {"output-name": inspiral_pipe.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg, '.xml.gz', path = subdir_path([medianPSDJob.output_path, str(int(boundary_seg[0]))[:5]]))}
 		)
 
@@ -1358,6 +1360,7 @@ elif options.reference_psd is None:
 else:
 	ref_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
 
+	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	output_cache_file = open('reference_psd.cache', "w")
 	output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(options.reference_psd)))
 	output_cache_file.close()
@@ -1380,6 +1383,7 @@ if not options.lloid_cache and not options.disable_calc_inj_snr:
 			input_files = {"": inj.split(":")[-1]}
 		)
 
+		# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 		for i in xrange(num_split_inj_snr_jobs):
 			inj_snr_nodes.append(inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes + [inj_splitter_node],
 				opts = {"flow":options.flow},
