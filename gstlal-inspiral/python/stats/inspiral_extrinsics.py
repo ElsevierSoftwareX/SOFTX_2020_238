@@ -42,7 +42,7 @@ import random
 from scipy import stats
 from scipy import interpolate, fft, ifft
 import sys
-
+import h5py
 
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -933,23 +933,19 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 
 
 class HyperRect(object):
-	def __init__(self, lower, upper, parent, points = None, prob = None):
+	__slots__ = ["lower", "upper", "parent", "left", "right", "point", "prob", "nodeid"]
+	def __init__(self, lower, upper, parent, point = None, prob = None, nodeid = None):
 		"""
 		A dynamic N-dimensional
 		"""
-		self.lower = numpy.array(lower, dtype=float)
-		self.upper = numpy.array(upper, dtype=float)
+		self.lower = numpy.array(lower, dtype="uint8")
+		self.upper = numpy.array(upper, dtype="uint8")
 		self.parent = parent
 		self.left = None
 		self.right = None
-		if points is None:
-			self.points = []
-		else:
-			self.points = points
-		if prob is None:
-			self.prob = []
-		else:
-			self.prob = prob
+		self.point = point
+		self.prob = prob
+		self.nodeid = nodeid
 
 	def serialize(self, prob):
 		return [self.lower, self.upper, self.parent, self.left, self.right, prob]
@@ -969,21 +965,15 @@ class HyperRect(object):
 	def __contains__(self, point):
 		return (numpy.logical_and(point >= self.lower, point < self.upper)).all()
 
-	def biggest_side(self, size):
-		return numpy.argmax((self.upper - self.lower) / size)
+	def biggest_side(self):
+		return numpy.argmax(self.upper - self.lower)
 
 	@property
 	def size(self):
 		return self.upper - self.lower
 
-	@property
-	def volume(self):
-		return numpy.product(self.size)
-
 	@classmethod
 	def search(cls, instance, point):
-		#if point not in instance:
-		#	raise ValueError("Point not in parameter space")
 		if instance.left is None and instance.right is None:
 			return instance
 		if point in instance.left:
@@ -998,113 +988,187 @@ class HyperRect(object):
 
 
 class DynamicBins(object):
-	def __init__(self, lower, upper, max_splits = None, min_vol = None):
+	def __init__(self, lower, upper, max_splits = None, static = False):
 		self.lower = numpy.array(lower, dtype=float)
 		self.upper = numpy.array(upper, dtype=float)
 		if max_splits is not None:
-			self.max_splits = numpy.array(max_splits)
+			assert numpy.all(numpy.array(max_splits) <= 128 ) and numpy.all(numpy.array(max_splits) >= 0)
+			self.max_splits = numpy.array(max_splits, dtype="uint8")
 		else:
-			self.max_splits = None
-		self.min_vol = min_vol
-		self.num_points = 0
-		self.total_prob = 1.0
-		self.num_cells = 1
-		self.hyper_rect = HyperRect(self.lower, self.upper, None)
-		self.hyper_rect.prob = [1.0]
+			self.max_splits = numpy.ones(len(self.lower), dtype="uint8") * 128
+		self.__finish_init()
 
-	def serialize(self):
-		return (self.lower, self.upper, self.right, self.left, self.parent, self(self.lower()))
-
-	@property
-	def size(self):
-		return self.upper - self.lower
-
-	@property
-	def minsize(self):
-		if self.max_splits is not None:
-			return self.size / self.max_splits
+		if not static:
+			self.num_points = 0
+			self.total_prob = 0
+			self.num_cells = 1
+			self.dx = [self.lower[i] + numpy.arange(0,129) * b for i,b in enumerate(self.bin_edges)]
+			self.hyper_rect = HyperRect(numpy.zeros(len(lower), dtype="uint8"), numpy.ones(len(upper), dtype="uint8") * 128, None)
+			self.hyper_rect.prob = 1.0
+			self.staticbins = None
 		else:
-			return numpy.zeros(len(self.upper))
+			self.hyper_rect = None
 
-	@property
-	def volume(self):
-		return numpy.product(self.size)
+	def __repr__(self):
+		out = "\nThis is a %dD dynamic histogram\n" % len(self.lower)
+		out += "\tMaximum bins in each dimension: %s\n" % self.max_splits
+		out += "\tLower boundary: %s\n" % self.lower
+		out += "\tUpper boundary: %s\n" % self.upper
+		out += "\tCurrently contains %d points in %d cells\n" % (self.num_points, self.num_cells)
+		return out
+
+	@staticmethod
+	def from_hdf5(fname):
+		f = h5py.File(fname, "r")
+		dgrp = f["dynbins"]
+		DB = DynamicBins(numpy.array(dgrp["lower"]), numpy.array(dgrp["upper"]), numpy.array(dgrp["max_splits"]), static = True)
+		DB.num_points = dgrp.attrs["num_points"]
+		DB.total_prob = dgrp.attrs["total_prob"]
+		DB.num_cells = dgrp.attrs["num_cells"]
+		DB.dx = numpy.array(dgrp["dx"])
+
+		# FIXME here down, I also have to get the static version of this class working properly
+		bgrp = f["bins"]
+		lower = numpy.array(bgrp["lower"])
+		upper = numpy.array(bgrp["upper"])
+		parent = numpy.array(bgrp["parent"])
+		right = numpy.array(bgrp["right"])
+		left = numpy.array(bgrp["left"])
+		prob = numpy.array(bgrp["prob"])
+		# This order is assumed elsewhere (lower, upper, parent, right, left, prob)
+		self.staticbins = (lower, upper, parent, right, left, prob)
+
+	def __finish_init(self):
+		self.size = self.upper - self.lower
+		self.bin_edges = self.size / 128.
+		self.minsize = numpy.ones(len(self.lower), dtype="uint8") * 128 / self.max_splits
+
+	def set_dx(self, dim, dx):
+		assert self.staticbins is None
+		assert len(dx) == 129
+		self.dx[dim] = numpy.array(dx)
+
+	def point_to_bin(self, point):
+		point = (point - self.lower) / self.bin_edges
+		assert numpy.all(point <= 128) and numpy.all(point >=0)
+		point = numpy.array(point, dtype = "uint8")
+		return point	
+
+	def bin_to_point(self, binpoint):
+		return binpoint * self.bin_edges + self.lower
 
 	def insert(self, point, prob):
+		assert self.staticbins is None and self.hyper_rect is not None
 		# figure out the hyperrectangle where this point belongs
-		thisrect = HyperRect.search(self.hyper_rect, point)
+		binpoint = self.point_to_bin(point)
+		thisrect = HyperRect.search(self.hyper_rect, binpoint)
+
 		# There are three possibilities
 		# 1) The hyperrectangle is empty
 		# 2) It is not empty, but is as small as it is allowed to be
 		# 3) It is not empty and is larger than the minimum size
 
 		# Case 1)
-		if len(thisrect.points) == 0:
-			thisrect.points.append(point)
-			thisrect.prob.append(prob)
+		if thisrect.point is None:
+			thisrect.point = binpoint
+			thisrect.prob = prob
 			self.num_points += 1
 			self.total_prob += prob
 		# Case 2) or 3)
 		else:
 			# Case 2)
 			# Check to see if we have reached the maximum resolution first
-			splitdim = thisrect.biggest_side(self.size)
+			splitdim = thisrect.biggest_side()
 			if thisrect.size[splitdim] / 2. < self.minsize[splitdim]:
-				thisrect.points.append(point)
-				thisrect.prob.append(prob)
+				thisrect.prob += prob
 				self.num_points += 1
 				self.total_prob += prob
 				assert not thisrect.left and not thisrect.right
 			# Case 3)
 			else:
-				assert len(thisrect.points) == 1
+				assert thisrect.point is not None
 				left, right = thisrect.split(splitdim)
-				self.num_cells += 2
-				if point in left:
-					left.points.append(point)
-				elif point in right:
-					right.points.append(point)
+				self.num_points += 1
+				self.num_cells += 1
+				if binpoint in left:
+					left.point = binpoint
+				elif binpoint in right:
+					right.point = binpoint
 				else:
-					raise ValueError("This is impossible: %s" % point)
-				right.prob.append(prob / 2.)
-				left.prob.append(prob / 2.)
-				thisrect.points = []
-				thisrect.prob = []
+					raise ValueError("This is impossible: %s" % binpoint)
+				right.prob = (prob + thisrect.prob) / 2.
+				left.prob = (prob + thisrect.prob) / 2.
+				thisrect.point = None
+				thisrect.prob = None
 
 	def __call__(self, point):
-		node = HyperRect.search(self.hyper_rect, point)
-		# should it be num_points or num cells?
-		#return len(node.points) / self.num_points / node.volume
-		#return (len(node.points) or 1.) / self.num_cells / node.volume
-		#return (numpy.sum(node.prob) or 1.) / self.num_cells / node.volume
-		return numpy.sum(node.prob) / self.total_prob / node.volume
+		binpoint = self.point_to_bin(point)
+		if self.staticbins is None:
+			return self.__eval_prob(binpoint)
+		else:
+			return self.__static_prob(binpoint)
 
-	def leafnodes(self, thisrect = None, out = set()):
-		"""
-		Return a list of all leaf nodes that are ancestors of the given node
-		and whose bounding box is not fully contained in the symmetryic region.
-		"""
-		if thisrect == None:
-			thisrect = self.hyper_rect
-		if thisrect.right:
-			self.leafnodes(thisrect.right, out)
-		if thisrect.left:
-			self.leafnodes(thisrect.left, out)
-		if not thisrect.right and not thisrect.left:
-			out.add(thisrect)
-		return out
+	def __eval_prob(self, binpoint):
+		node = HyperRect.search(self.hyper_rect, binpoint)
+		lower = numpy.array([self.dx[i][p] for i,p in enumerate(node.lower)])
+		upper = numpy.array([self.dx[i][p] for i,p in enumerate(node.upper)])
+		volume = numpy.product(upper - lower)
+		return node.prob / self.total_prob / volume
+
+	def __static_prob(self, binpoint):
+
+		def _in_node(point, upper, lower):
+			return (numpy.logical_and(point >= lower, point < upper)).all()
+
+		def search_serialized(staticbins, point, ix):
+			lower, upper, parent, right, left, prob = staticbins
+			# we have found our terminal cell
+			leftix = left[ix]
+			rightix = right[ix]
+			if leftix is 0 and rightix is 0:
+				return prob[ix]
+			# check to see if it is in the left
+			if _in_node(point, upper[leftix,:], lower[leftix,:]):
+				return search_serialized(staticbins, point, leftix)
+			# check to see if it is in the right
+			elif _in_node(point, upper[rightix,:], lower[rightix,:]):
+				return search_serialized(staticbins, point, rightix)
+			else:
+				raise ValueError("This should be impossible: %s" % point)
+
+		# This order is assumed elsewhere (lower, upper, parent, right, left, prob)
+		return search_serialized(self.staticbins, binpoint, ix = 0)
 
 	def serialize(self):
+		assert self.staticbins is None
 		out = []
 		nodes = self.flatten()
+		# setup efficient storage for all of the data
+		# for an 8D PDF this should ad up to 32 bytes per bin
+		# NOTE we will use zero to denote a null value so we want to start counting at 1
+		# FIXME should probably check that we don't have more than 4 billion bins.  
+		LOWER = numpy.zeros((len(nodes)+1, len(self.lower)), dtype = "uint8")
+		UPPER = numpy.zeros((len(nodes)+1, len(self.lower)), dtype = "uint8")
+		PARENT = numpy.zeros(len(nodes)+1, dtype="uint32")
+		LEFT = numpy.zeros(len(nodes)+1, dtype="uint32")
+		RIGHT = numpy.zeros(len(nodes)+1, dtype="uint32")
+		PROB = numpy.zeros(len(nodes)+1, dtype="float32")
+		
+		# give them all an integer id first
+		# NOTE we will use zero to denote a null value so we want to start counting at 1
 		for i,node in enumerate(nodes):
-			node.nodeid = i
-		for node in nodes:
-			# lower, upper, parent id, right id, left id, prob
-			out.append((node.lower, node.upper, node.parent.nodeid if node.parent else None, node.right.nodeid if node.right else None, node.left.nodeid if node.left else None, self(node.lower)))
-		return tuple(out)
+			node.nodeid = i+1
+		for i,node in enumerate(nodes):
+			LOWER[i+1,:] = node.lower
+			UPPER[i+1,:] = node.upper
+			PARENT[i+1] = node.parent.nodeid if node.parent else 0
+			RIGHT[i+1] = node.right.nodeid if node.right else 0
+			LEFT[i+1] = node.left.nodeid if node.left else 0
+			PROB[i+1] = self.__eval_prob(node.lower) # this gives the probability of this cell
+		return LOWER, UPPER, PARENT, RIGHT, LEFT, PROB
 
 	def flatten(self, this_rect = None, out = None):
+		assert self.staticbins is None
 		if out is None:
 			out = []
 		if this_rect == None:
@@ -1117,27 +1181,59 @@ class DynamicBins(object):
 
 		return out
 
+	def to_hdf5(self, fname):
+		assert self.staticbins is None
+		f = h5py.File(fname, "w")
+		dgrp = f.create_group("dynbins")
+		dgrp.create_dataset("lower", data = self.lower)
+		dgrp.create_dataset("upper", data = self.upper)
+		dgrp.create_dataset("max_splits", data = self.max_splits)
+		dgrp.attrs["num_points"] = self.num_points 
+		dgrp.attrs["total_prob"] = self.total_prob
+		dgrp.attrs["num_cells"] = self.num_cells
+		dgrp.create_dataset("dx", data = self.dx)
+
+		bgrp = f.create_group("bins")
+		lower, upper, parent, right, left, prob = self.serialize()
+		bgrp.create_dataset("lower", data = lower)
+		bgrp.create_dataset("upper", data = upper)
+		bgrp.create_dataset("parent", data = parent)
+		bgrp.create_dataset("right", data = right)
+		bgrp.create_dataset("left", data = left)
+		bgrp.create_dataset("prob", data = prob)
+
+		f.close()
+
 class StaticDynamicBins(object):
-	def __init__(self, DB):
-		self.DB = DB
+	def __init__(self, LOWER, UPPER, PARENT, RIGHT, LEFT, PROB):
+		self.LOWER = LOWER
+		self.UPPER = UPPER
+		self.PARENT = PARENT
+		self.RIGHT = RIGHT
+		self.LEFT = LEFT
+		self.PROB = PROB
+		
 	def __call__(self, point):
 
 		def _in_node(point, upper, lower):
 			return (numpy.logical_and(point >= lower, point < upper)).all()
 
-		def search_serialized(nodes, point, ix = 0):
-			leftix = nodes[ix][4]
-			rightix = nodes[ix][3]
-			if leftix is None and rightix is None:
-				return nodes[ix][5]
-			if _in_node(point, nodes[leftix][1], nodes[leftix][0]):
+		def search_serialized(lower, upper, parent, right, left, prob, point, ix = 0):
+			# we have found our terminal cell
+			leftix = left[ix]
+			rightix = right[ix]
+			if leftix is 0 and rightix is 0:
+				return prob[ix]
+			# check to see if it is in the left
+			if _in_node(point, upper[leftix,:], lower[leftix,:]):
 				return search_serialized(nodes, point, leftix)
-			elif _in_node(point, nodes[rightix][1], nodes[rightix][0]):
+			# check to see if it is in the right
+			elif _in_node(point, upper[rightix,:], lower[rightix,:]):
 				return search_serialized(nodes, point, rightix)
 			else:
 				raise ValueError("This should be impossible: %s" % point)
 
-		return search_serialized(self.DB, point, ix = 0)
+		return search_serialized(self.LOWER, self.UPPER, self.PARENT, self.RIGHT, self.LEFT, self.PROB, point, ix = 0)
 
 class FFT(object):
 	def __init__(self):
@@ -1335,11 +1431,11 @@ class InspiralExtrinsicParameters(object):
 			for pair in list(itertools.combinations(ifos, 2))[:2]:
 				lower.append(-0.032)
 				upper.append(0.032)
-				max_splits.append(64)
+				max_splits.append(32)
 			for pair in list(itertools.combinations(ifos, 2))[:2]:
 				lower.append(-numpy.pi)
 				upper.append(numpy.pi)
-				max_splits.append(32)
+				max_splits.append(16)
 			for ifo in ifos:
 				lower.append(0)
 				upper.append(numpy.pi / 2.)
