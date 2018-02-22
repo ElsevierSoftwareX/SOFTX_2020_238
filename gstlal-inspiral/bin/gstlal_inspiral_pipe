@@ -489,9 +489,9 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 						injnode.add_post_script_arg(" ".join(output_names))
 					# impose a priority to help with depth first submission
 					if bgbin_chunk_map:
-						injnode.set_priority(bgbin_chunk_map[bgbin_indices[-1]])
+						injnode.set_priority(bgbin_chunk_map[bgbin_indices[-1]]+1)
 					else:
-						injnode.set_priority(chunk_counter)
+						injnode.set_priority(chunk_counter+1)
 					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
 
 	# Replace mchirplo:mchirphi:inj.xml with inj.xml
