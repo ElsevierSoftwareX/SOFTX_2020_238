@@ -55,6 +55,7 @@ def parse_command_line():
 	parser.add_option("--reference-psd-cache", metavar = "filename", help = "Set the reference psd cache file.")
 	parser.add_option("--injection-file", metavar = "filename", help = "Set the injection xml file.")
 	parser.add_option("--flow", metavar = "value", type = "float", help = "Set the low frequency for waveform generation and SNR integral.")
+	parser.add_option("--npool", metavar = "value", type = "int", default = 1, help = "Set value for pool. Number of parallel sub-processes")
 
 	options, filenames = parser.parse_args()
 
@@ -181,7 +182,7 @@ for cacheentry in reference_psd_files:
 	PSDs = read_psd_xmldoc(xmldoc)
 	allPSDs[start] = PSDs
 
-pool = multiprocessing.Pool(16)
+pool = multiprocessing.Pool(options.npool)
 h1snr = []
 l1snr = []
 #print pool.map(calc_expected_snr,[inj for idx, inj in enumerate(sim_inspiral_table)])
