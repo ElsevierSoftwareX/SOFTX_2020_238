@@ -998,9 +998,10 @@ class DynamicBins(object):
 			self.max_splits = numpy.ones(len(self.lower), dtype="uint8") * 128
 		self.__finish_init()
 
+		# We assume that before we start there is a probability of 1 of being in the full cell
 		if not static:
 			self.num_points = 0
-			self.total_prob = 0
+			self.total_prob = 1.0
 			self.num_cells = 1
 			self.dx = [self.lower[i] + numpy.arange(0,129) * b for i,b in enumerate(self.bin_edges)]
 			self.hyper_rect = HyperRect(numpy.zeros(len(lower), dtype="uint8"), numpy.ones(len(upper), dtype="uint8") * 128, None)
@@ -1015,6 +1016,7 @@ class DynamicBins(object):
 		out += "\tLower boundary: %s\n" % self.lower
 		out += "\tUpper boundary: %s\n" % self.upper
 		out += "\tCurrently contains %d points in %d cells\n" % (self.num_points, self.num_cells)
+		out += "\tCurrently contains %f probability\n" % (self.total_prob)
 		return out
 
 	@staticmethod
@@ -1036,7 +1038,8 @@ class DynamicBins(object):
 		left = numpy.array(bgrp["left"])
 		prob = numpy.array(bgrp["prob"])
 		# This order is assumed elsewhere (lower, upper, parent, right, left, prob)
-		self.staticbins = (lower, upper, parent, right, left, prob)
+		DB.staticbins = (lower, upper, parent, right, left, prob)
+		return DB
 
 	def __finish_init(self):
 		self.size = self.upper - self.lower
@@ -1070,8 +1073,9 @@ class DynamicBins(object):
 
 		# Case 1)
 		if thisrect.point is None:
+			assert thisrect.prob is not None
 			thisrect.point = binpoint
-			thisrect.prob = prob
+			thisrect.prob += prob
 			self.num_points += 1
 			self.total_prob += prob
 		# Case 2) or 3)
@@ -1090,6 +1094,7 @@ class DynamicBins(object):
 				left, right = thisrect.split(splitdim)
 				self.num_points += 1
 				self.num_cells += 1
+				self.total_prob += prob
 				if binpoint in left:
 					left.point = binpoint
 				elif binpoint in right:
@@ -1110,9 +1115,9 @@ class DynamicBins(object):
 
 	def __eval_prob(self, binpoint):
 		node = HyperRect.search(self.hyper_rect, binpoint)
-		lower = numpy.array([self.dx[i][p] for i,p in enumerate(node.lower)])
-		upper = numpy.array([self.dx[i][p] for i,p in enumerate(node.upper)])
-		volume = numpy.product(upper - lower)
+		l = numpy.array([self.dx[i][p] for i,p in enumerate(node.lower)])
+		u = numpy.array([self.dx[i][p] for i,p in enumerate(node.upper)])
+		volume = numpy.product(u - l)
 		return node.prob / self.total_prob / volume
 
 	def __static_prob(self, binpoint):
@@ -1139,10 +1144,10 @@ class DynamicBins(object):
 		# This order is assumed elsewhere (lower, upper, parent, right, left, prob)
 		return search_serialized(self.staticbins, binpoint, ix = 0)
 
-	def serialize(self):
+	def __serialize(self):
 		assert self.staticbins is None
 		out = []
-		nodes = self.flatten()
+		nodes = self.__flatten()
 		# setup efficient storage for all of the data
 		# for an 8D PDF this should ad up to 32 bytes per bin
 		# NOTE we will use zero to denote a null value so we want to start counting at 1
@@ -1167,19 +1172,51 @@ class DynamicBins(object):
 			PROB[i+1] = self.__eval_prob(node.lower) # this gives the probability of this cell
 		return LOWER, UPPER, PARENT, RIGHT, LEFT, PROB
 
-	def flatten(self, this_rect = None, out = None):
+	def __flatten(self, this_rect = None, out = None, leaf = False):
+		# FIXME, can this be a generator??
 		assert self.staticbins is None
 		if out is None:
-			out = []
+			out = set([])
 		if this_rect == None:
 			this_rect = self.hyper_rect
-		out.append(this_rect)
+		if not leaf:
+			out.add(this_rect)
+		if leaf and not this_rect.right and not this_rect.left:
+			out.add(this_rect)
 		if this_rect.right:
-			self.flatten(this_rect.right, out)
+			self.__flatten(this_rect.right, out, leaf)
 		if this_rect.left:
-			self.flatten(this_rect.left, out)
+			self.__flatten(this_rect.left, out, leaf)
 
 		return out
+
+	def bins(self):
+		nodes = self.__flatten(leaf = True)
+		for node in nodes:
+			lower = numpy.array([self.dx[i][p] for i,p in enumerate(node.lower)])
+			upper = numpy.array([self.dx[i][p] for i,p in enumerate(node.upper)])
+			volume = numpy.product(upper - lower)
+			prob = node.prob / self.total_prob / volume
+			yield self.bin_to_point(node.lower), self.bin_to_point(node.upper), volume, prob
+
+	def sbins(self):
+		# NOTE the first element of static bins is reserved as a NULL value, it does not contain a valid bin
+		lower = self.staticbins[0]
+		upper = self.staticbins[1]
+		prob = self.staticbins[5]
+		for i, p in enumerate(prob):
+			if i == 0:
+				continue
+			l = numpy.array([self.dx[j][x] for j,x in enumerate(lower[i,:])])
+			u = numpy.array([self.dx[j][x] for j,x in enumerate(upper[i,:])])
+			v = numpy.product(u - l)
+			yield self.bin_to_point(lower[i,:]), self.bin_to_point(upper[i,:]), v, p
+
+	def __iter__(self):
+		if self.staticbins is None:
+			return self.bins()
+		else:
+			return self.sbins()
 
 	def to_hdf5(self, fname):
 		assert self.staticbins is None
@@ -1194,7 +1231,7 @@ class DynamicBins(object):
 		dgrp.create_dataset("dx", data = self.dx)
 
 		bgrp = f.create_group("bins")
-		lower, upper, parent, right, left, prob = self.serialize()
+		lower, upper, parent, right, left, prob = self.__serialize()
 		bgrp.create_dataset("lower", data = lower)
 		bgrp.create_dataset("upper", data = upper)
 		bgrp.create_dataset("parent", data = parent)
@@ -1203,37 +1240,6 @@ class DynamicBins(object):
 		bgrp.create_dataset("prob", data = prob)
 
 		f.close()
-
-class StaticDynamicBins(object):
-	def __init__(self, LOWER, UPPER, PARENT, RIGHT, LEFT, PROB):
-		self.LOWER = LOWER
-		self.UPPER = UPPER
-		self.PARENT = PARENT
-		self.RIGHT = RIGHT
-		self.LEFT = LEFT
-		self.PROB = PROB
-		
-	def __call__(self, point):
-
-		def _in_node(point, upper, lower):
-			return (numpy.logical_and(point >= lower, point < upper)).all()
-
-		def search_serialized(lower, upper, parent, right, left, prob, point, ix = 0):
-			# we have found our terminal cell
-			leftix = left[ix]
-			rightix = right[ix]
-			if leftix is 0 and rightix is 0:
-				return prob[ix]
-			# check to see if it is in the left
-			if _in_node(point, upper[leftix,:], lower[leftix,:]):
-				return search_serialized(nodes, point, leftix)
-			# check to see if it is in the right
-			elif _in_node(point, upper[rightix,:], lower[rightix,:]):
-				return search_serialized(nodes, point, rightix)
-			else:
-				raise ValueError("This should be impossible: %s" % point)
-
-		return search_serialized(self.LOWER, self.UPPER, self.PARENT, self.RIGHT, self.LEFT, self.PROB, point, ix = 0)
 
 class FFT(object):
 	def __init__(self):
