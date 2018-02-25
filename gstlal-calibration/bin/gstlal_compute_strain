@@ -511,9 +511,13 @@ if options.full_calibration:
 
 # Load the high-pass filter for h(t)
 try:
-	act_high_pass = filters["act_high_pass"]
+	act_highpass_delay = int(filters['actuation_highpass_delay'])
+	invsens_highpass_delay = int(filters['invsens_highpass_delay'])
+	act_highpass = filters["actuation_highpass"]
+	invsens_highpass = filters["inv_sensing_highpass"]
 except:
-	act_high_pass = None
+	act_highpass = []
+	invsens_highpass = []
 
 
 # Set up queue parameters
@@ -1071,11 +1075,13 @@ if options.full_calibration:
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
 tst = calibration_parts.mkresample(pipeline, tst, 3, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
-# High-pass filter
-if act_high_pass:
-	tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdelay / 2.0), fir_matrix = [act_high_pass[::-1]], time_domain = td)
+# High-pass filter the TST chain
+if any(act_highpass):
+	tst = pipeparts.mkfirbank(pipeline, tst, latency = act_highpass_delay, fir_matrix = [act_highpass[::-1]], time_domain = td)
+	tst_filter_settle_time += float(len(act_highpass)-act_highpass_delay)/tstchainsr
+	tst_filter_latency += float(act_highpass_delay)/tstchainsr
 # Filter TST chain with the TST acutaiton filter
-tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdelay), fir_matrix = [tstfilt[::-1]], time_domain = td)
+tst = pipeparts.mkfirbank(pipeline, tst, latency = tstdelay, fir_matrix = [tstfilt[::-1]], time_domain = td)
 if options.low_latency:
 	tst = calibration_parts.mkinsertgap(pipeline, tst, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
 tst_filter_settle_time += float(len(tstfilt)-tstdelay)/tstchainsr
@@ -1087,11 +1093,13 @@ if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappap
 
 # resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
 pumuim = calibration_parts.mkresample(pipeline, pumuim, 3, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
-# High-pass filter
-if act_high_pass:
-	pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdelay / 2.0), fir_matrix = [act_high_pass[::-1]], time_domain = td)
+# High-pass filter the PUM/UIM chain
+if any(act_highpass):
+	pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = act_highpass_delay, fir_matrix = [act_highpass[::-1]], time_domain = td)
+	pumuim_filter_settle_time += float(len(act_highpass)-act_highpass_delay)/pumuimchainsr
+	pumuim_filter_latency += float(act_highpass_delay)/pumuimchainsr
 # filter the PUM/UIM chain with the PUM/UIM actuation filter
-pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdelay), fir_matrix = [pumuimfilt[::-1]], time_domain = td)
+pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = pumuimdelay, fir_matrix = [pumuimfilt[::-1]], time_domain = td)
 if options.low_latency:
 	pumuim = calibration_parts.mkinsertgap(pipeline, pumuim, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
 pumuim_filter_settle_time += float(len(pumuimfilt)-pumuimdelay)/pumuimchainsr
@@ -1131,27 +1139,31 @@ res_filter_latency = 0.0
 # enforce caps on the residual branch and hook up progress report if verbose is on
 if options.full_calibration:
 	if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc:
-		restee = derrtee
+		res = restee = derrtee
 	else:
 		res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "res")
-		restee = pipeparts.mktee(pipeline, res)
+		res = restee = pipeparts.mktee(pipeline, res)
 if options.partial_calibration:
 	res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "res")
-	restee = pipeparts.mktee(pipeline, res)
+	res = restee = pipeparts.mktee(pipeline, res)
 
-# apply the residual chain filter
+# High-pass filter the residual chain
+if any(invsens_highpass):
+	res = pipeparts.mkfirbank(pipeline, res, latency = invsens_highpass_delay, fir_matrix = [invsens_highpass[::-1]], time_domain = td)
+	res_filter_settle_time += float(len(invsens_highpass)-invsens_highpass_delay)/hoftsr
+	res_filter_latency += float(invsens_highpass_delay)/hoftsr
 
+# Correct for time-dependeice of f_cc
 if options.update_fcc:
 	default_fir_matrix = numpy.zeros(int(numpy.floor(hoftsr*options.fcc_filter_duration/2.0+1)*2.0-2.0))
 	latency = int(hoftsr*options.fcc_filter_duration/(2.0)+1)
 	default_fir_matrix[latency] = 1.0
-	res = pipeparts.mkgeneric(pipeline, restee, "lal_tdwhiten", kernel = default_fir_matrix[::-1], latency = latency, taper_length = options.fcc_filter_taper_length)
+	res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = default_fir_matrix[::-1], latency = latency, taper_length = options.fcc_filter_taper_length)
 	update_fcc.connect("notify::fir-matrix", fir_matrix_update, res)
 
-if not options.update_fcc:
-	res = pipeparts.mkfirbank(pipeline, restee, latency = int(reschaindelay), fir_matrix = [reschainfilt[::-1]], time_domain = td)
-else:
-	res = pipeparts.mkfirbank(pipeline, res, latency = int(reschaindelay), fir_matrix = [reschainfilt[::-1]], time_domain = td)
+# Apply the residual chain filter
+res = pipeparts.mkfirbank(pipeline, res, latency = int(reschaindelay), fir_matrix = [reschainfilt[::-1]], time_domain = td)
+
 if options.low_latency:
 	res = calibration_parts.mkinsertgap(pipeline, res, bad_data_intervals = [-1e35, 1e35], block_duration = 1000000000 * options.buffer_length, remove_gap = False)
 res_filter_settle_time += float(len(reschainfilt)-reschaindelay)/hoftsr
