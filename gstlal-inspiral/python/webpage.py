@@ -1,5 +1,10 @@
 import sys, os, glob, time
 
+if "GSTLAL_WEBVIS_DIR" in os.environ:
+	webvis_dir = os.environ["GSTLAL_WEBVIS_DIR"]
+else:
+	raise ValueError("Must set environment variable GSTLAL_WEBVIS_DIR to path containing gstlal.css and gstlal.js. This is typically the directory set during the configure step of gstlal-ugly. You can also set it to the static directories at each of the following: UWM - /home/gstlalcbc/public_html/share/vis/, CIT - /home/gstlalcbc/public_html/share/vis/, Atlas - /home/gstlalcbc/WWW/LSC/share/vis/")
+
 class elem(object):
 	def __init__(self, tag, content, attributes = ""):
 		self.tag = tag; self.content = content; self. attributes = attributes;
@@ -57,13 +62,11 @@ class image_glob(elem):
 			
 class page(object):
 	def __init__(self, title="cbc web page", path='./',
-		css=["https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.css", 
-			"https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.css"
+		css=["https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.css"
 			], 
 		script=["https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js",
 			"https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.js",
-			"https://www.gstatic.com/charts/loader.js",
-			"https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.js"
+			"https://www.gstatic.com/charts/loader.js"
 			], 
 		content = None, header_content = None, verbose=False):
 		if content is None:
@@ -81,9 +84,14 @@ class page(object):
 
 
 	def write(self, f):
+		gstlal_css_file = open(webvis_dir + 'gstlal.css')
+		gstlal_js_file = open(webvis_dir + 'gstlal.js')
+		gstlal_css = """<style>""" + gstlal_css_file.read() + """</style>"""
+		gstlal_js = """<script>""" + gstlal_js_file.read()  + """</script>"""
+		gstlal_list = [elem("head", [gstlal_css, gstlal_js])]
 		css_list = [elem("link", [], """ rel="stylesheet" type="text/css" href="%s" """ % c) for c in self.css]
 		script_list = [elem("script", [], """ type="text/javascript" src="%s" """ % s) for s in self.script]
-		self.full_content = [elem("html",  css_list + script_list + self.header_content + [elem("title", [self.title]), elem("body", self.content, "")])]
+		self.full_content = [elem("html",  gstlal_list + css_list + script_list + self.header_content + [elem("title", [self.title]), elem("body", self.content, "")])]
 		for c in self.full_content:
 			print >>f, c
 
