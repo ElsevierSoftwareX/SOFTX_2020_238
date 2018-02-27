@@ -62,7 +62,7 @@ def parse_command_line():
 	# generic data source options
 	parser.add_option("--input-stats-filename", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--database", default = "", metavar = "name", help = "Set the input sql file name")
-	parser.add_option("--live-time", default = None, help ="input coinc time")
+	parser.add_option("--livetime", default = None, help ="input coinc time")
 	parser.add_option("--mul-factor", default = 1, help ="input multiplication factor to combine far.")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	parser.add_option("--segments-file", default = None, metavar = "name", help = "Set the input segments file name")
@@ -78,7 +78,7 @@ def parse_command_line():
 	append_missing_options(missing_options, options, "database")
 	append_missing_options(missing_options, options, "input_stats_filename")
 
-	if options.live_time and (options.segments_file and options.segments_name):
+	if not options.livetime and not (options.segments_file and options.segments_name):
 		raise ValueError, "specify live time or segments file and name"
 
 	if missing_options:
@@ -108,11 +108,13 @@ for filename in zerolag_sql_list:
 	        logging.info("reading zerolag file %s" % working_filename)
 
 	zlag_connection = sqlite3.connect(working_filename)
-	if options.live_time:
-		livetime = float(options.live_time)
+	if options.livetime:
+		livetime = float(options.livetime)
 	elif options.segments_file:
                 on_instruments = set(re.findall(r"[A-Z][0-9]", ifos))
 		livetime = cohfar.get_livetime(options, on_instruments, verbose = options.verbose)
+        else:
+            raise ValueError, "missing livetime, either from options.livetime or from options.segment_file"
 
         myfar = cohfar.FAPFAR(ranking_stats, zlag_connection, livetime = livetime)
 	#
