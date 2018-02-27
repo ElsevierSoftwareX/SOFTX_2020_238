@@ -161,7 +161,7 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 	# 512 seconds for the whitener to settle + the maximum template_length FIXME don't hard code
 	start_pad = 512 + max_template_length
 	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
-	segment_length = int(20 * start_pad)
+	segment_length = int(10 * start_pad)
 	for n in range(min_instruments, 1 + len(analyzable_instruments_set)):
 		for ifo_combos in itertools.combinations(list(analyzable_instruments_set), n):
 			# never analyze H1H2 or H2L1 times
