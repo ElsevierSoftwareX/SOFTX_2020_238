@@ -492,6 +492,16 @@ if options.partial_calibration:
 		resdewhitendelay = int(filters["deltal_res_dewhiten_delay"])
 		resdewhiten = filters["deltal_res_dewhiten"]
 
+	# Load the high-pass filter for h(t)
+	try:
+		act_highpass_delay = int(filters['ctrl_highpass_delay'])
+		invsens_highpass_delay = int(filters['res_highpass_delay'])
+		act_highpass = filters["ctrl_highpass"]
+		invsens_highpass = filters["res_highpass"]
+	except:
+		act_highpass = []
+		invsens_highpass = []
+
 # If we're performing full calibration, load the actuation, sensing filters
 if options.full_calibration:
 	tstchainsr = int(filters["actuation_tst_sr"])
@@ -509,15 +519,15 @@ if options.full_calibration:
 		resdewhitendelay = int(filters["dewhiten_err_delay"])
 		resdewhiten = filters["dewhiten_err"]
 
-# Load the high-pass filter for h(t)
-try:
-	act_highpass_delay = int(filters['actuation_highpass_delay'])
-	invsens_highpass_delay = int(filters['invsens_highpass_delay'])
-	act_highpass = filters["actuation_highpass"]
-	invsens_highpass = filters["inv_sensing_highpass"]
-except:
-	act_highpass = []
-	invsens_highpass = []
+	# Load the high-pass filter for h(t)
+	try:
+		act_highpass_delay = int(filters['actuation_highpass_delay'])
+		invsens_highpass_delay = int(filters['invsens_highpass_delay'])
+		act_highpass = filters["actuation_highpass"]
+		invsens_highpass = filters["inv_sensing_highpass"]
+	except:
+		act_highpass = []
+		invsens_highpass = []
 
 
 # Set up queue parameters
@@ -1186,6 +1196,10 @@ filter_latency = max(res_filter_latency, tst_filter_latency, pumuim_filter_laten
 #
 
 # Add control and residual chains and divide by L to make h(t)
+res = pipeparts.mktee(pipeline, res)
+res_strain = pipeparts.mkaudioamplify(pipeline, res, 1.0/3994.5)
+ctrl = pipeparts.mktee(pipeline, ctrl)
+ctrl_strain = pipeparts.mkaudioamplify(pipeline, ctrl, 1.0/3994.5)
 strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [res, res_queue_length], [ctrl, ctrl_queue_length]))
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
@@ -1557,6 +1571,8 @@ else:
 	strain_queue_length = short_queue
 
 # Link the strain branch to the muxer
+calibration_parts.mkqueue(pipeline, res_strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_RES%s" % (instrument, chan_prefix, chan_suffix)))
+calibration_parts.mkqueue(pipeline, ctrl_strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_CTRL%s" % (instrument, chan_prefix, chan_suffix)))
 calibration_parts.mkqueue(pipeline, strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_tst to the muxer
