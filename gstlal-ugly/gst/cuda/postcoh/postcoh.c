@@ -1112,7 +1112,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			if (postcoh->output_skymap && output->cohsnr > MIN_OUTPUT_SKYMAP_SNR) {
 				GString *filename = NULL;
 				FILE *file = NULL;
-				filename = g_string_new(output->ifos);
+				filename = g_string_new(IFO_COMBO_MAP[get_icombo(output->ifos)]);
 				g_string_append_printf(filename, "_skymap/%s_%d_%d", output->pivotal_ifo, output->end_time_L.gpsSeconds, output->end_time_L.gpsNanoSeconds);
 				g_string_append_printf(filename, "_%d", output->tmplt_idx);
 				strcpy(output->skymap_fname, filename->str);
