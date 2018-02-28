@@ -218,8 +218,9 @@ class MultiChannelHandler(simplehandler.Handler):
 			else:
 				self.fname = '%s-%d-5000000000' % (self.tag, self.init_gps_time)
 
-			self.fpath = os.path.join(os.path.abspath(self.out_path), self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5])
-			self.tmp_path = os.path.join(tmp_dir, self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5])
+			trigger_path = os.path.join(self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5], self.tag+"-"+options.job_id)
+			self.fpath = os.path.join(os.path.abspath(self.out_path), trigger_path)
+			self.tmp_path = os.path.join(tmp_dir, trigger_path)
 
 			# create temp and output directories if they don't exist
 			aggregator.makedir(self.fpath)
@@ -578,6 +579,7 @@ def parse_command_line():
 	parser.add_option("--etg-partition", metavar = "string", help = "If using Kafka, sets the partition that this ETG is assigned to.")
 	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this ETG publishes feature vector subsets to.")
 	parser.add_option("--kafka-server", metavar = "string", help = "If using Kafka, sets the server url that the kafka topic is hosted on.")
+	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the ETG with a 4 digit hex code, useful for running multiple instances. Default = 0001")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
 	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
