@@ -298,11 +298,11 @@ def matched_filt(template, data, sampleRate = 4096.0):
     template: complex
     data: real
     the template is produced from using the gen_whitened_fir_template or gen_whitened_spiir_template_and_reconstructed_waveform.
-    The unit of template is s^-1/2. the data is generated from gstlal_whiten where the unit is dimensionless,
-    It needs to be normalized so the unit is s^-1/2, consistent with the template in order to perform fft
+    The unit of template is s^-1/2. the data is generated from gstlal_whiten where the unit is dimensionless.
+    It needs to be normalized so the unit is s^-1/2, same as the template for unit consistency.
     '''
-    # the data is generated from gstlal_play where the unit is dimensionless.
-    # needs to be normalized so the unit is s^-1/2, consistent with the template
+    # the data is generated from gstlal_play --whiten where the unit is dimensionless.
+    # needs to be normalized so the unit is s^-1/2, i.e., *1/sqrt(dt). 
     data /= numpy.sqrt(2.0/sampleRate)
     # if the template inner product is normalized to 2, need to convert its unit by doing the following:
     #template /= numpy.sqrt(2.0/sampleRate)
@@ -320,7 +320,7 @@ def matched_filt(template, data, sampleRate = 4096.0):
     template_fft = numpy.fft.fft(template_pad)/ fs
 
     snr_fft = data_fft * template_fft.conjugate()
-    snr_time = 2 * numpy.fft.ifft(snr_fft) * fs # times df, default ifft has the output scaled by 1/N 
+    snr_time = 2 * numpy.fft.ifft(snr_fft) * fs # times df then the unit is dimensionless, default ifft has the output scaled by 1/N 
     sigmasq = (template_fft * template_fft.conjugate()).sum() * df
     sigma = numpy.sqrt(abs(sigmasq))
     #pdb.set_trace()
