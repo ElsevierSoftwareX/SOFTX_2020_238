@@ -121,7 +121,7 @@ def channel_dict_from_channel_ini(options):
 	channel_dict = {}
 
 	# known/permissible values of safety and fidelity flags
-	known_safety   = set(("safe", " unsafe", " unsafeabove2kHz", "unknown"))
+	known_safety   = set(("safe", "unsafe", "unsafeabove2kHz", "unknown"))
 	known_fidelity = set(("clean", "flat", "glitchy", "unknown"))
 	
 	# read in channel list
@@ -151,45 +151,40 @@ def channel_dict_from_channel_ini(options):
 				
 			# set up each channel
 			for channel in config.get(name, 'channels').strip().split('\n'):
-            			
+
 				# parse out expected format for each channel
-           			channel = channel.split()
-          			if len(channel)==2: # backward compatibility with old format
-		                	channel, fsamp = channel
-         				fsamp    = float(fsamp)
-					safety   = "unknown"
-              				fidelity = "unknown"
+				channel = channel.split()
 
-    			        elif len(channel)==4: # expected format
-            				channel, fsamp, safety, fidelity = channel
-    			        	fsamp = float(fsamp)
+				if len(channel)==2: # backward compatibility with old format
+					channel, fsamp = channel
+					fsamp = float(fsamp)
+					safety = "unknown"
+					fidelity = "unknown"
 
-           			else:
-         				raise SyntaxError( 'could not parse channel : %s'%(' '.join(channel)) )
+				elif len(channel)==4: # expected format
+					channel, fsamp, safety, fidelity = channel
+					fsamp = float(fsamp)
 
-			        #-----------------------------------------
+				else:
+					raise SyntaxError( 'could not parse channel : %s'%(''.join(channel)) )
 
-  				### check that safety and fidelity are permissible values
-           			assert safety   in known_safety,   'safety=%s is not understood. Must be one of %s'%(safety, ", ".join(known_safety))
-      				assert fidelity in known_fidelity, 'fidelity=%s is not understood. Must be one of %s'%(fidelity, ", ".join(known_fidelity))
+			    #-----------------------------------------
 
-     				# conditions on whether or now we want to exclude this channel
-            			if (channel not in options.channel_exclude and
-				      safety not in options.safety_exclude and
-				    fidelity not in options.fidelity_exclude):
-					
-					# add ifo, channel name & omicron parameters to dict
-					channel_name = channel
-					ifo,_  = channel.split(':')
-					if useNyquist:
-						fhigh = fsamp/2.
+				### check that safety and fidelity are permissible values
+				assert safety   in known_safety,   'safety=%s is not understood. Must be one of %s'%(safety, ", ".join(known_safety))
+				assert fidelity in known_fidelity, 'fidelity=%s is not understood. Must be one of %s'%(fidelity, ", ".join(known_fidelity))
 
-					channel_dict[channel_name] = {'fsamp': fsamp,
-								      'ifo': ifo,
-								      'flow': flow,
-								      'fhigh': fhigh,
-								      'qhigh' : config.get(name, 'qhigh'),
-								      'frametype' : options.frame_type}
+				# conditions on whether or now we want to exclude this channel
+				if (safety not in options.safety_exclude and fidelity not in options.fidelity_exclude):
+					if options.channel_include and channel in options.channel_include:
+
+						# add ifo, channel name & omicron parameters to dict
+						channel_name = channel
+						ifo,_  = channel.split(':')
+						if useNyquist:
+							fhigh = fsamp/2.
+
+						channel_dict[channel_name] = {'fsamp': fsamp, 'ifo': ifo, 'flow': int(flow), 'fhigh': int(fhigh), 'qhigh' : float(config.get(name, 'qhigh')), 'frametype' : options.frame_type}
 
 	return channel_dict				
 
@@ -226,7 +221,7 @@ class DataSourceInfo(object):
 		## Generate a dictionary of requested channels from channel INI file
 		
 		# known/permissible values of safety and fidelity flags
-		self.known_safety   = set(("safe", " unsafe", " unsafeabove2kHz", "unknown"))
+		self.known_safety   = set(("safe", "unsafe", "unsafeabove2kHz", "unknown"))
 		self.known_fidelity = set(("clean", "flat", "glitchy", "unknown"))
 
 		# ensure --safety-exclude and --fidelity-exclude are permissible values
@@ -364,16 +359,16 @@ def append_options(parser):
 		Required iff --frame-segments-file is given
 
 -	--section-exclude [string]
-		Set the channel sections to be excluded. Can be given multiple times.
+		Set the channel sections to be excluded from the INI file. Can be given multiple times.
 
 -	--safety-exclude [string]
-		Set the safety values for channels to be excluded. Can be given multiple times.
+		Set the safety values for channels to be excluded from the INI file. Can be given multiple times.
 
 -	--fidelity-exclude [string]
-		Set the fidelity values to be excluded. Can be given multiple times.
+		Set the fidelity values to be excluded from the INI file. Can be given multiple times.
 	
--	--channel-exclude [string]
-		Set the channel names  to be excluded. Can be given multiple times.
+-	--channel-include [string]
+		Set the channel names to be included from the INI file. Can be given multiple times. If not specified, assumed to include all channels.
 
 -	--latency-output
 		Set whether to print out latency (in seconds) at various stages of the detector.
@@ -405,9 +400,9 @@ def append_options(parser):
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")	
 	group.add_option("--section-exclude", default=[], type="string", action="append", help="Exclude these sections of the INI file from the final omegascan config. We require an exact match to exclude a section.")
-	group.add_option("--safety-exclude", default=[], type="string", action="append", help="Exclude any channel with this safety value. Can supply multiple values by repeating this argument. Each must be one of (add here)")
-	group.add_option("--fidelity-exclude", default=[], type="string", action="append", help="Exclude any channel with this fidelity value. Can supply multiple values by repeating this argument. Each must be on of (add here)")
-	group.add_option("--channel-exclude", default=[], action="append", type="string", help="Exclude this channel (requires exact match). Can be repeated.")
+	group.add_option("--safety-exclude", default=[], type="string", action="append", help="Exclude any channel in the INI file with this safety value. Can supply multiple values by repeating this argument. Each must be one of (add here)")
+	group.add_option("--fidelity-exclude", default=[], type="string", action="append", help="Exclude any channel in the INI file with this fidelity value. Can supply multiple values by repeating this argument. Each must be on of (add here)")
+	group.add_option("--channel-include", default=[], action="append", type="string", help="Include this channel when reading the INI file (requires exact match). Can be repeated. If not specified, assume to include all channels.")
 	group.add_option("--latency-output", action = "store_true", help = "Print out latency output (s) at different stages of the pipeline (measured as current time - buffer time).")
 	parser.add_option_group(group)
 

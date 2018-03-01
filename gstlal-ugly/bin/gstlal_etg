@@ -698,17 +698,14 @@ for channel in channels:
 		# choose range of basis parameters for sine-gaussians
 		if data_source_info.extension == 'ini':
 			# use omicron params with .ini files
-			flow = data_source_info.channel_dict[channel]['flow']  
-			fhigh = data_source_info.channel_dict[channel]['fhigh']  
 			qhigh = data_source_info.channel_dict[channel]['qhigh']  
 		else:
-			# FIXME: don't hardcode q and frequency
-			# NOTE: as long as this fudge factor (0.8) for the high frequency cutoff is
-			#       less than the factor in the chebychev low pass cutoff in the downsampler
-			#       this should be fine
-			flow = rate/4.*0.8
-			fhigh = rate/2.*0.8
 			qhigh = options.qhigh
+		# NOTE: as long as this fudge factor (0.8) for the high frequency cutoff is
+		#       less than the factor in the chebychev low pass cutoff in the downsampler
+		#       this should be fine
+		flow = rate/4.*0.8
+		fhigh = rate/2.*0.8
 		qlow = 4
 		# generate sine-gaussian templates
 		dur = max([duration(phi, q, 5e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
