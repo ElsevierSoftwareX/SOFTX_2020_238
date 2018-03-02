@@ -161,6 +161,20 @@ def list_srcs(pipeline, *args):
 		out.append(src)
 	return tuple(out)
 
+def removeDC(pipeline, head, caps):
+	head = pipeparts.mktee(pipeline, head)
+	pipeparts.mknxydumpsink(pipeline, head, "head.txt")
+	DC = mkresample(pipeline, head, 3, True, "audio/x-raw, rate=16")
+	DC = pipeparts.mktee(pipeline, DC)
+	pipeparts.mknxydumpsink(pipeline, DC, "DC1.txt")
+	DC = pipeparts.mkgeneric(pipeline, DC, "lal_smoothkappas", default_kappa_re = 0, array_size = 1, avg_array_size = 64)
+	DC = pipeparts.mktee(pipeline, DC)
+	pipeparts.mknxydumpsink(pipeline, DC, "DC.txt")
+	DC = mkresample(pipeline, DC, 5, True, caps)
+	DC = pipeparts.mkaudioamplify(pipeline, DC, -1)
+
+	return mkadder(pipeline, list_srcs(pipeline, mkqueue(pipeline, head, 0), mkqueue(pipeline, DC, 0)))
+
 #
 # Calibration factor related functions
 #
