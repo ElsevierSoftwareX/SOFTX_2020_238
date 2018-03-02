@@ -1196,10 +1196,6 @@ filter_latency = max(res_filter_latency, tst_filter_latency, pumuim_filter_laten
 #
 
 # Add control and residual chains and divide by L to make h(t)
-res = pipeparts.mktee(pipeline, res)
-res_strain = pipeparts.mkaudioamplify(pipeline, res, 1.0/3994.5)
-ctrl = pipeparts.mktee(pipeline, ctrl)
-ctrl_strain = pipeparts.mkaudioamplify(pipeline, ctrl, 1.0/3994.5)
 strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, [res, res_queue_length], [ctrl, ctrl_queue_length]))
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
@@ -1571,8 +1567,6 @@ else:
 	strain_queue_length = short_queue
 
 # Link the strain branch to the muxer
-calibration_parts.mkqueue(pipeline, res_strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_RES%s" % (instrument, chan_prefix, chan_suffix)))
-calibration_parts.mkqueue(pipeline, ctrl_strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_CTRL%s" % (instrument, chan_prefix, chan_suffix)))
 calibration_parts.mkqueue(pipeline, strain, strain_queue_length).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)))
 
 # Link the real and imaginary parts of \kappa_tst to the muxer
