@@ -161,7 +161,7 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 	# 512 seconds for the whitener to settle + the maximum template_length FIXME don't hard code
 	start_pad = 512 + max_template_length
 	# Chosen so that the overlap is only a ~5% hit in run time for long segments...
-	segment_length = int(10 * start_pad)
+	segment_length = int(5 * start_pad)
 	for n in range(min_instruments, 1 + len(analyzable_instruments_set)):
 		for ifo_combos in itertools.combinations(list(analyzable_instruments_set), n):
 			# never analyze H1H2 or H2L1 times
@@ -331,7 +331,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					ignore[injections].append(int(bgbin_index))
 
 		# FIXME choose better splitting?
-		numchunks = 10
+		numchunks = 20
 
 		# only use a channel dict with the relevant channels
 		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
