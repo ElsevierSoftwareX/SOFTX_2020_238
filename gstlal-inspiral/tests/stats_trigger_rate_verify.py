@@ -21,6 +21,18 @@ def random_coalesced_list(n):
 		x = l[i][1] + r()
 	return l
 
+def random_uncoalesced_list(n):
+	def r():
+		return float(random.randint(1, 999)) / 1000
+	if n < 1:
+		raise ValueError(n)
+	x = r()
+	l = trigger_rate.ratebinlist([trigger_rate.ratebin(x, x + r() / 100.0, count = r())])
+	for i in range(n - 1):
+		x = r()
+		l.append(trigger_rate.ratebin(x, x + r() / 100.0, count = r()))
+	return l
+
 class test_segmentlist(unittest.TestCase):
 	algebra_repeats = 8000
 	algebra_listlength = 200
@@ -37,6 +49,16 @@ class test_segmentlist(unittest.TestCase):
 			self.assertAlmostEqual(c.count, float(abs(c)) * 2, places = 12)
 		except AssertionError as e:
 			raise AssertionError(str(e) + "\na = " + str(a) + "\nb = " + str(b))
+
+	def test_coalesce(self):
+		for i in range(self.algebra_repeats):
+			a = random_uncoalesced_list(random.randint(1, self.algebra_listlength))
+			b = a.segmentlist()
+			count_before = sum(seg.count for seg in a)
+			a.coalesce()
+			b.coalesce()
+			self.assertEqual(a.segmentlist(), b)
+			self.assertAlmostEqual(sum(seg.count for seg in a), count_before, places = 12)
 
 
 suite = unittest.TestSuite()
