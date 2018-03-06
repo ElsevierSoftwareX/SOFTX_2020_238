@@ -163,11 +163,9 @@ class RankingData(object):
     #self.far_kde = self.fap_kde * self.back_nevent / (self.hist_trials * self.livetime)
     
 class FAPFAR(object):
-  def __init__(self, ranking_stats, connection, livetime = None):
+  def __init__(self, ranking_stats, livetime = None):
     self.livetime = livetime
     self.ranking_stats = ranking_stats
-    self.connection = connection
-    pdb.set_trace()
     # construct zerolag rate distribution
     self.zlag_rates = np.zeros(300)
     self.count_zlag_rates()
@@ -209,15 +207,15 @@ class FAPFAR(object):
     self.cdf_interpolator = interpolate.interp1d(self.ranking_stats.rank_centers, cdf)
     self.ccdf_interpolator = interpolate.interp1d(self.ranking_stats.rank_centers, ccdf)
 
-  def count_zlag_rates(self):
+  def count_zlag_rates(self, connection):
     # use the far field for tempory rank assignment
-    self.connection.create_function("rank_from_features", 2, self.rank_from_features)
-    cur = self.connection.cursor()
+    connection.create_function("rank_from_features", 2, self.rank_from_features)
+    cur = connection.cursor()
     cur.execute(""" UPDATE postcoh SET
   far =  rank_from_features(cohsnr, cmbchisq)
   """)
     # count the rate of rank in a given range
-    self.connection.commit()
+    connection.commit()
     try:
         import sqlite3
         use_sqlite3 = True
@@ -319,15 +317,15 @@ UPDATE
   postcoh
 SET
   far =  far_from_rank(far, ?)
-""", mul_factor)
+""", (mul_factor,))
 
   # FIXME: see Kipp's code to adjust fap for clustered zerolag
-  # the mul_factor is used to combine far from different sqls
+  # the mul_factor is used to combine far from different ifo combinations
   def far_from_rank(self, rank, mul_factor):
     # implements equation (B4) of Phys. Rev. D 88, 024025.
     # arXiv:1209.0718.  the return value is divided by T to
     # convert events/experiment to events/second.
-    assert self.livetime is not None, "cannot compute FAR without livetime"
+    assert self.livetime > 0, "cannot compute FAR without a positive livetime"
     rank = max(self.min_rank, min(self.max_rank, rank))
     # true-dismissal probability = 1 - single-event false-alarm
     # probability, the integral in equation (B4)
@@ -380,12 +378,5 @@ def count_above_ifar_sql(zerolag_connection, tick_lgifar):
       zerolag_lgcevent[itick] = np.log10(nevent)
   return zerolag_lgcevent
     
-
-
-
-
-
-
-
 
 
