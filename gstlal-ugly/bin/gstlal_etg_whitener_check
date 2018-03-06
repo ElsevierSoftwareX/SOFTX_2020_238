@@ -1,0 +1,223 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2017 Sydney J. Chamberlin, Patrick Godwin, Chad Hanna, Duncan Meacher
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+
+####################
+# 
+#     preamble
+#
+####################   
+
+
+from optparse import OptionParser
+import os
+import sys
+
+import numpy
+
+import gi
+gi.require_version('Gst', '1.0')
+gi.require_version('GstAudio', '1.0')
+from gi.repository import GObject, Gst, GstAudio
+GObject.threads_init()
+Gst.init(None)
+
+import lal
+
+from gstlal import pipeio
+from gstlal import datasource
+from gstlal import multichannel_datasource
+from gstlal import reference_psd
+from gstlal import pipeparts
+from gstlal import simplehandler
+
+# global settings for whitening properties
+PSD_FFT_LENGTH = 32
+PSD_DROP_TIME = 16 * PSD_FFT_LENGTH
+
+###############################
+# 
+#       command line parser
+#
+###############################
+
+def parse_command_line():
+
+	parser = OptionParser(description = __doc__)
+
+	# First append the datasource common options
+	multichannel_datasource.append_options(parser)
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	# parse the arguments and sanity check
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+
+####################
+# 
+#       main
+#
+####################   
+
+#  
+# parsing and setting up some core structures
+#
+
+options, filenames = parse_command_line()
+
+data_source_info = multichannel_datasource.DataSourceInfo(options)
+instrument = data_source_info.instrument
+channels = data_source_info.channel_dict.keys()
+
+#
+# building the event loop and pipeline
+#
+
+if options.verbose:
+	print >>sys.stderr, "assembling pipeline..."
+
+mainloop = GObject.MainLoop()
+pipeline = Gst.Pipeline(sys.argv[0])
+
+# generate multiple channel sources, and link up pipeline
+head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
+for channel in channels:
+
+	# define sampling rates used
+	samp_rate = int(data_source_info.channel_dict[channel]['fsamp'])
+	max_samp_rate = min(2048, int(samp_rate))
+	min_samp_rate = min(32, max_samp_rate)
+	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
+	rates = [min_samp_rate*2**i for i in range(n_rates)]
+
+	# For now just hard code these inputs
+	psd = None
+	head[channel] = pipeparts.mktee(pipeline, head[channel])
+	psd_fft_length = 16
+	zero_pad = 0
+	block_duration = int(1 * Gst.SECOND)
+
+    #
+	# whiten auxiliary channel data
+    #
+
+	# downsample to max sampling rate if necessary
+	max_rate = max(rates)
+	if samp_rate > max_rate:
+		head[channel] = pipeparts.mkaudiocheblimit(pipeline, head[channel], cutoff = 0.9 * (max_rate/2), type = 2, ripple = 0.1)
+		head[channel] = pipeparts.mkaudioundersample(pipeline, head[channel])
+		head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, rate=%d" % max_rate)
+
+    # add reblock
+	head[channel] = pipeparts.mkreblock(pipeline, head[channel], block_duration = block_duration)
+
+	# because we are not asking the whitener to reassemble an
+	# output time series (that we care about) we drop the
+	# zero-padding in this code path.  the psd_fft_length is
+	# reduced to account for the loss of the zero padding to
+	# keep the Hann window the same as implied by the
+	# user-supplied parameters.
+	whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head[channel], max_size_time = 2 * psd_fft_length * Gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_%s_lalwhiten" % (instrument, channel))
+	pipeparts.mkfakesink(pipeline, whiten)
+
+	# FIXME at some point build an initial kernel from a reference psd
+	psd_fir_kernel = reference_psd.PSDFirKernel()
+	fir_matrix = numpy.zeros((1, 1 + max_rate * psd_fft_length), dtype=numpy.float64)
+	head[channel] = pipeparts.mkfirbank(pipeline, head[channel], fir_matrix = fir_matrix, block_stride = max_rate, time_domain = False, latency = 0)
+
+	def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
+		psd_data = numpy.array(whiten.get_property("mean-psd"))
+		psd = lal.CreateREAL8FrequencySeries(
+			name = "psd",
+			epoch = lal.LIGOTimeGPS(0),
+			f0 = 0.0,
+			deltaF = whiten.get_property("delta-f"),
+			sampleUnits = lal.Unit(whiten.get_property("psd-units")),
+			length = len(psd_data)
+		)
+		psd.data.data = psd_data
+		kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
+		kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
+
+		# subtract DC offset from signal
+		kernel -= numpy.mean(kernel)
+		firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
+
+	whiten.connect_after("notify::mean-psd", set_fir_psd, head[channel], psd_fir_kernel)
+
+	# Drop initial data to let the PSD settle
+	head[channel] = pipeparts.mkdrop(pipeline, head[channel], drop_samples = PSD_DROP_TIME * max_rate)
+	
+	# use running average PSD
+	whiten.set_property("psd-mode", 0)
+
+	# convert to desired precision
+	head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
+	head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], "audio/x-raw, rate=%d, format=%s" % (max_rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
+
+    # dump timeseries to disk
+	pipeparts.mknxydumpsink(pipeline, head[channel], filename="whitened_timeseries_%s.txt" % channel)
+
+# Allow Ctrl+C or sig term to gracefully shut down the program for online
+# sources, otherwise it will just kill it
+if data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
+	simplehandler.OneTimeSignalHandler(pipeline)
+
+# Seek
+if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter READY state")
+
+if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
+	datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time)
+#
+# Run pipeline
+#
+
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
+
+if options.verbose:
+	print >>sys.stderr, "running pipeline..."
+
+mainloop.run()
+
+#
+# Shut down pipeline
+#
+
+if options.verbose:
+	print >>sys.stderr, "shutting down pipeline..."
+
+#
+# Set pipeline state to NULL and garbage collect the handler
+#
+
+if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline could not be set to NULL")
+del handler.pipeline
+del handler
+
+#
+# close program manually if data source is live
+#
+
+if options.data_source in ("lvshm", "framexmit"):
+	sys.exit(0)

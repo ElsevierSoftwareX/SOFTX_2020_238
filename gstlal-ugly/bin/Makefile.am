@@ -35,4 +35,5 @@ dist_bin_SCRIPTS = \
 	gstlal_condor_top \
 	gstlal_etg \
 	gstlal_etg_pipe \
+	gstlal_etg_whitener_check \
 	gstlal_injsplitter
