@@ -313,15 +313,15 @@ background_stats_list_create(char *ifos)
 int
 bins1D_get_idx(double val, Bins1D *bins)
 {
-  double lgval = log10(val); // double
+  int bin = (log10(val) - bins->cmin - bins->step_2) / bins->step;
 
-  if (lgval < bins->cmin) 
-    return 0;
+  if (bin < 0)
+    bin = 0;
   
-  if (lgval > bins->cmax) 
-    return bins->nbin - 1;
+  if (bin >= bins->nbin)
+    bin = bins->nbin - 1;
 
-  return (int) ((lgval - bins->cmin - bins->step_2) / bins->step);
+  return bin;
 }
 
 // return the lower boudnary of the bin
