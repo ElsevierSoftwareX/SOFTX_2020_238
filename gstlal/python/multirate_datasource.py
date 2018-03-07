@@ -316,7 +316,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	#
 
 	if veto_segments is not None:
-		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, invert_output=True)
+		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, invert_output=True, rate = max(rates))
 
 	#
 	# optional gate on whitened h(t) amplitude.  attack and hold are
