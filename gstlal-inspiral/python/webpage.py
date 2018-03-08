@@ -39,7 +39,7 @@ class tabs(elem):
 	
 
 class tab(elem):
-	def __init__(self, href, div, text, charts=[]):
+	def __init__(self, href, div, text, charts=[], active = False):
 		self.href = href; self.div = div; self.text = text;
 		if len(charts) > 0:
 			elem.__init__(self, tag="li", content = [elem("a", [text], """ href=#%s class="tablinks" onclick="openGstlalTab(event, '%s',%s)" """ % (href, div, ",".join(charts)) )], attributes = "")
@@ -96,7 +96,7 @@ class page(object):
 			print >>f, c
 
 def section(text):
-	return elem("details", [elem("summary", [text])], "")
+	return elem("details", [elem("summary", [text])], "open")
 
 def googleTableFromJson(fname, div_id = 'table_div'):
 	f = open(fname)
@@ -106,6 +106,9 @@ def googleTableFromJson(fname, div_id = 'table_div'):
 		function draw_%s() {
 		var data = new google.visualization.DataTable(%s);
 		var table = new google.visualization.Table(document.getElementById('%s'));
+		var formatter = new google.visualization.NumberFormat(
+        {pattern: '0.###E0'});
+        formatter.format(data, 1);
 		table.draw(data, {showRowNumber: true, width: '100%%', allowHtml: true, page: "enable"});
 		}
 		google.charts.setOnLoadCallback(draw_%s);
