@@ -71,20 +71,20 @@ summary_lt += [webpage.elem("div", [], "id=lt_summary_div width=100% height=500"
 #FIXME assumes the zero lag database is the first tag
 summary_seg = webpage.section("Segments")
 thispage.header_content.append(webpage.googleTimelineFromJson(os.path.join(opts.glob_path, '%s_segments.json' % opts.output_user_tag[0]), "segments_div"))
-thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.output_user_tag[0]), "segment_table_div"))
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.output_user_tag[0]), "segment_table_div", gpscolumns = [2,3,4]))
 summary_seg += [webpage.elem("div", [], "id=segments_div width=100% height=500")]
 summary_seg += [webpage.elem("div", [], "id=segment_table_div width=100% height=500")]
 
 summary_env = webpage.section("Environment")
-makefile = [f for f in glob.glob("Makefile*") if "Makefile.offline_analysis_rules" not in f][0]
+#makefile = [f for f in glob.glob("Makefile*") if "Makefile.offline_analysis_rules" not in f][0]
 tmpcontent = ["\n".join(["%s=%s" % (k, os.environ[k]) for k in ("PATH", "PYTHONPATH", "PKG_CONFIG_PATH", "GST_PLUGIN_PATH")])]
 summary_env += [webpage.elem("pre", tmpcontent)]
 
 summary_make = webpage.section("Analysis Makefile")
-summary_make += [webpage.elem("pre", [webpage.elem("code", [open(makefile).read()])])]
+#summary_make += [webpage.elem("pre", [webpage.elem("code", [open(makefile).read()])])]
 
 summary_commands = webpage.section("Commands run")
-summary_commands += [webpage.elem("pre", [webpage.elem("samp", ["\n".join(["\t %s" % x for x in  subprocess.check_output(["make", "-B", "-n", "-f", makefile]).split("\n") ])])])]
+#summary_commands += [webpage.elem("pre", [webpage.elem("samp", ["\n".join(["\t %s" % x for x in  subprocess.check_output(["make", "-B", "-n", "-f", makefile]).split("\n") ])])])]
 
 
 summary_div = summary([summary_about, summary_lt, summary_seg, summary_env, summary_make, summary_commands])
@@ -192,7 +192,7 @@ for tag in opts.output_user_tag:
 	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag), "Expected SNR of found and missed injections as a function of time")
 
 	# FIXME stupid convention to rely on the first tag being all of them. Note, previously we just used opts.output_user_tag[0] here.
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag), "%smissed_summary" % tag))
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag), "%smissed_summary" % tag, gpscolumns = [2,3]))
 	fm_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % tag])]
 	fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % tag)]
 
@@ -274,7 +274,7 @@ money_ifar = webpage.section("Rate vs. Threshold")
 money_table = webpage.section("Loudest Table")
 
 money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
-thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "%sbgsummary_table" % opts.output_user_tag[0]))
+thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "%sbgsummary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
 money_table += [webpage.elem("p", ["Closed Box Summary Table"])]
 money_table += [webpage.elem("div", [], "id=%sbgsummary_table" % opts.output_user_tag[0])]
 
@@ -297,7 +297,7 @@ if opts.open_box:
 	chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
 
 	money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "%ssummary_table" % opts.output_user_tag[0]))
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "%ssummary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
 	money_table += [webpage.elem("p", ["Open Box Summary Table"])]
 	money_table += [webpage.elem("div", [], "id=%ssummary_table" % opts.output_user_tag[0])]
 
@@ -381,7 +381,7 @@ fm_lite_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr
 
 # Include missed injection table
 fm_lite_mtab = webpage.section("Missed Table")
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]), "missed_summary_lite_div"))
+thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]), "missed_summary_lite_div", gpscolumns = [2,3]))
 fm_lite_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % opts.output_user_tag[0]])]
 fm_lite_mtab += [webpage.elem("div", [], "id=missed_summary_lite_div")]
 
@@ -407,7 +407,7 @@ money_ifar_lite += [webpage.elem("p", ["This section provides the detection stat
 money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
 
 # Include loudest table
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "bgsummary_table_lite_div"))
+thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "bgsummary_table_lite_div", gpscolumns = [5], scinotationcolumns = [1,2]))
 money_ifar_lite += [webpage.elem("p", ["Closed Box Summary Table"])]
 money_ifar_lite += [webpage.elem("div", [], "id=bgsummary_table_lite_div")]
 
@@ -421,7 +421,7 @@ if opts.open_box:
 	chisq_dist_lite += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
 
 	money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "zlsummary_table_lite_div"))
+	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "zlsummary_table_lite_div", gpscolumns = [5], scinotationcolumns = [1,2]))
 	money_ifar_lite += [webpage.elem("p", ["Open Box Summary Table"])]
 	money_ifar_lite += [webpage.elem("div", [], "id=zlsummary_table_lite_div")]
 

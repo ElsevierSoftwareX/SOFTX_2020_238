@@ -98,22 +98,25 @@ class page(object):
 def section(text):
 	return elem("details", [elem("summary", [text])], "open")
 
-def googleTableFromJson(fname, div_id = 'table_div'):
+def googleTableFromJson(fname, div_id = 'table_div', gpscolumns = [], scinotationcolumns = []):
 	f = open(fname)
+	gpsformatstr = ["""
+		var gpsformatter = new google.visualization.NumberFormat(
+			{groupingSymbol: ''});\n""" + '\n'.join(["""		gpsformatter.format(data, %d);""" % (gpscolumn,) for gpscolumn in gpscolumns]) if gpscolumns else ''][0]
+	scinotationformatstr = ["""
+		var formatter = new google.visualization.NumberFormat(
+			{pattern: '0.###E0'});\n""" + '\n'.join(["""		formatter.format(data, %d);""" % (scinotationcolumn,) for scinotationcolumn in scinotationcolumns]) if scinotationcolumns else ''][0]
 	out = """
 		<script type="text/javascript">
 
 		function draw_%s() {
 		var data = new google.visualization.DataTable(%s);
-		var table = new google.visualization.Table(document.getElementById('%s'));
-		var formatter = new google.visualization.NumberFormat(
-        {pattern: '0.###E0'});
-        formatter.format(data, 1);
+		var table = new google.visualization.Table(document.getElementById('%s'));%s%s
 		table.draw(data, {showRowNumber: true, width: '100%%', allowHtml: true, page: "enable"});
 		}
 		google.charts.setOnLoadCallback(draw_%s);
 		</script>
-	""" % (div_id, f.read(), div_id, div_id)
+	""" % (div_id, f.read(), div_id, gpsformatstr, scinotationformatstr, div_id)
 	f.close()
 	return out
 
