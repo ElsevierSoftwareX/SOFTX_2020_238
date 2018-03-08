@@ -912,7 +912,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 		smooth_kctee = pipeparts.mktee(pipeline, smooth_kc)
 
 		# compute f_cc
-		if not options.no_fcc or not options.nosrcQ or not options.no_fs:
+		if not options.no_fcc or not options.no_srcQ or not options.no_fs:
 			fcc = calibration_parts.compute_fcc(pipeline, SR, SI, opt_gain_fcc_line_freq, long_queue, short_queue)
 		if not options.no_fcc:
 			fcc = pipeparts.mktee(pipeline, fcc)
@@ -1084,7 +1084,7 @@ if options.full_calibration:
 	pumuim = ctrltee
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
-tst = calibration_parts.mkresample(pipeline, tst, 3, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
+tst = calibration_parts.mkresample(pipeline, tst, 5, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
 # High-pass filter the TST chain
 if any(act_highpass):
 	tst = pipeparts.mkfirbank(pipeline, tst, latency = act_highpass_delay, fir_matrix = [act_highpass[::-1]], time_domain = td)
@@ -1102,7 +1102,7 @@ if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappap
 	#tst = calibration_parts.mkstockresample(pipeline, tst, hoft_caps)
 
 # resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
-pumuim = calibration_parts.mkresample(pipeline, pumuim, 3, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
+pumuim = calibration_parts.mkresample(pipeline, pumuim, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
 # High-pass filter the PUM/UIM chain
 if any(act_highpass):
 	pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = act_highpass_delay, fir_matrix = [act_highpass[::-1]], time_domain = td)

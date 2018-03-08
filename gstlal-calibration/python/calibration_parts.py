@@ -163,13 +163,8 @@ def list_srcs(pipeline, *args):
 
 def removeDC(pipeline, head, caps):
 	head = pipeparts.mktee(pipeline, head)
-	pipeparts.mknxydumpsink(pipeline, head, "head.txt")
-	DC = mkresample(pipeline, head, 3, True, "audio/x-raw, rate=16")
-	DC = pipeparts.mktee(pipeline, DC)
-	pipeparts.mknxydumpsink(pipeline, DC, "DC1.txt")
+	DC = mkresample(pipeline, head, 5, True, "audio/x-raw, rate=16")
 	DC = pipeparts.mkgeneric(pipeline, DC, "lal_smoothkappas", default_kappa_re = 0, array_size = 1, avg_array_size = 64)
-	DC = pipeparts.mktee(pipeline, DC)
-	pipeparts.mknxydumpsink(pipeline, DC, "DC.txt")
 	DC = mkresample(pipeline, DC, 5, True, caps)
 	DC = pipeparts.mkaudioamplify(pipeline, DC, -1)
 
@@ -311,7 +306,7 @@ def demodulate(pipeline, head, freq, td, caps, integration_samples, delay, chop_
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
-	head = mkresample(pipeline, head, 3, True, caps)
+	head = mkresample(pipeline, head, 5, True, caps)
 	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td, latency = delay)
 	if chop_length != 0:
 		head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", chop_length = chop_length)
@@ -331,7 +326,7 @@ def remove_lines(pipeline, head, freq, caps, filter_length):
 	mkqueue(pipeline, head, 0).link(elem)
 	for f in freq:
 		line = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = f)
-		line = mkresample(pipeline, line, 3, False, "audio/x-raw,rate=16")
+		line = mkresample(pipeline, line, 5, False, "audio/x-raw,rate=16")
 		line = mkcomplexfirbank(pipeline, line, latency = integration_samples / 2, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
 		line = mkresample(pipeline, line, 3, False, caps)
 		line = pipeparts.mkgeneric(pipeline, line, "lal_demodulate", line_frequency = -1.0 * f, prefactor_real = -2.0)
