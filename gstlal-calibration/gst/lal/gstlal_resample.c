@@ -1486,7 +1486,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				/* To save memory, we use symmetry and record only half of the sinc table */
 				element->sinc_table = g_malloc((1 + element->sinc_length / 2) * sizeof(double));
 				*(element->sinc_table) = 1.0;
-				gint32 i;
+				gint32 i, j;
 				double sin_arg;
 				for(i = 1; i <= element->sinc_length / 2; i++) {
 					sin_arg = M_PI * i * element->rate_in / element->rate_out;
@@ -1497,14 +1497,28 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 				/*
 				 * Normalize sinc_table to make the DC gain exactly 1. We need to account for the fact
-				 * that the density of input samples is less that the density of samples in the sinc table
+				 * that the density of input samples is less than the density of samples in the sinc table
 				 */
-				double normalization = (double) element->rate_in / element->rate_out;
-				for(i = 1; i <= element->sinc_length / 2; i++)
-					normalization += 2 * element->sinc_table[i] * element->rate_in / element->rate_out;
-
-				for(i = 0; i <= element->sinc_length / 2; i++)
-					element->sinc_table[i] /= normalization;
+				double normalization;
+				for(i = 0; i < (element->rate_out / element->rate_in + 1) / 2; i++) {
+					normalization = 0.0;
+					for(j = i; j <= element->sinc_length / 2; j += element->rate_out / element->rate_in)
+						normalization += element->sinc_table[j];
+					for(j = element->rate_out / element->rate_in - i; j <= element->sinc_length / 2; j += element->rate_out / element->rate_in)
+						normalization += element->sinc_table[j];
+					for(j = i; j <= element->sinc_length / 2; j += element->rate_out / element->rate_in)
+						element->sinc_table[j] /= normalization;
+					for(j = element->rate_out / element->rate_in - i; j <= element->sinc_length / 2; j += element->rate_out / element->rate_in)
+						element->sinc_table[j] /= normalization;
+				}
+				/* If cadence is even, we need to account for one more normalization without "over-normalizing." */
+				if(!((element->rate_out / element->rate_in) % 2)) {
+					normalization = 0.0;
+					for(j = element->rate_out / element->rate_in / 2; j <= element->sinc_length / 2; j += element->rate_out / element->rate_in)
+						normalization += 2 * element->sinc_table[j];
+					for(j = element->rate_out / element->rate_in / 2; j <= element->sinc_length / 2; j += element->rate_out / element->rate_in)
+						element->sinc_table[j] /= normalization;
+				}
 			}
 
 		} else if(element->rate_out > element->rate_in && element->quality > 1 && element->quality < 4 && !element->end_samples)
