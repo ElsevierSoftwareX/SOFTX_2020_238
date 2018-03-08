@@ -70,5 +70,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
 gboolean
 background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_trials, const char *filename);
 
+double
+gen_fap_from_feature(double snr, double chisq, BackgroundStats *stats);
 #endif /* __BACKGROUND_STATS_UTILS_H__ */
 

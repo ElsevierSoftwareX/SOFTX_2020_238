@@ -1173,7 +1173,8 @@ gen_fap_from_feature(double snr, double chisq, BackgroundStats *stats)
 {
 	RankingStats *rank = stats->rank;
 	double rank_val = background_stats_rank_get_val_from_map(snr, chisq, rank->rank_map);
-	int rank_idx = bins1D_get_idx(rank_val, rank->rank_pdf);
+	/* the bins1D_get_idx will compute log10(x) first and then find index, so need to 10^rank_val for this function */
+	int rank_idx = bins1D_get_idx(pow(10, rank_val), rank->rank_pdf);
 	return gsl_vector_get(rank->rank_fap->data, rank_idx);
 }
 
