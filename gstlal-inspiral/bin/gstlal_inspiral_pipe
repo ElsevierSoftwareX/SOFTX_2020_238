@@ -266,11 +266,9 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 	primary_ifo = bank_cache.keys()[0]
 	inspiral_pipe.generic_node(plotBanksJob, dag,
 				parent_nodes = sum(svd_nodes.values(),[]),
-				opts = { "plot-svd-bank":"",
-					"plot-template-bank":"",
+				opts = {"plot-template-bank":"",
 					"output-dir": output_dir},
-				input_files = {"template-bank-file":options.template_bank},
-				input_cache_files = {"svd-bank-cache":[f.output_files["write-svd"] for f in svd_nodes[primary_ifo]]}
+				input_files = {"template-bank-file":options.template_bank}
 				)
 
 	return svd_nodes, new_template_mchirp_dict
