@@ -206,6 +206,7 @@ parser.add_option("--exc-channel-name", metavar = "name", default = "CAL-CS_LINE
 parser.add_option("--tst-exc-channel-name", metavar = "name", default = "SUS-ETMY_L3_CAL_LINE_OUT_DQ", help = "Set the name of the TST excitation channel.  This is only necessary when the \kappa_tst factors computation is turned on, which is the default behavior. (Default = SUS-ETMY_L3_CAL_LINE_OUT_DQ)")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Set the name of the PCal channel used for calculating the calibration factors. (Default = CAL-PCALY_RX_PD_OUT_DQ)")
 parser.add_option("--dewhitening", action = "store_true", help = "Dewhitening should be used on the relevant channels, since the incoming channels are whitened and single precision.")
+parser.add_option("--remove-DC", action = "store_true", help = "Set this option to remove the DC component from the residual and control channels before filtering.")
 parser.add_option("--low-latency", action = "store_true", help = "Run the pipeline in low-latency mode. This uses minimal queueing. Otherwise, maximal queueing is used to prevent the pipeline from locking up.")
 parser.add_option("--update-fcc", action = "store_true", help = "Update the cavity pole filter with time.")
 parser.add_option("--fcc-filter-duration", metavar = "seconds", default = 1.0, type = float, help = "Duration of the cavity pole FIR filter. (Default = 0.01 seconds)")
@@ -1085,6 +1086,9 @@ if options.full_calibration:
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
 tst = calibration_parts.mkresample(pipeline, tst, 5, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
+# Remove any DC component
+if options.remove_DC:
+	tst = calibration_parts.removeDC(pipeline, tst, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr, "tst")
 # High-pass filter the TST chain
 if any(act_highpass):
 	tst = pipeparts.mkfirbank(pipeline, tst, latency = act_highpass_delay, fir_matrix = [act_highpass[::-1]], time_domain = td)
@@ -1103,6 +1107,9 @@ if tstchainsr != pumuimchainsr or options.apply_kappatst or options.apply_kappap
 
 # resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
 pumuim = calibration_parts.mkresample(pipeline, pumuim, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
+# Remove any DC component
+if options.remove_DC:
+	pumuim = calibration_parts.removeDC(pipeline, pumuim, "audio/x-raw, format=F64LE, rate=%d" %  pumuimchainsr, "pumuim")
 # High-pass filter the PUM/UIM chain
 if any(act_highpass):
 	pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = act_highpass_delay, fir_matrix = [act_highpass[::-1]], time_domain = td)
@@ -1156,6 +1163,10 @@ if options.full_calibration:
 if options.partial_calibration:
 	res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "res")
 	res = restee = pipeparts.mktee(pipeline, res)
+
+# Remove any DC component
+if options.remove_DC:
+	res = calibration_parts.removeDC(pipeline, res, hoft_caps, "res")
 
 # High-pass filter the residual chain
 if any(invsens_highpass):
