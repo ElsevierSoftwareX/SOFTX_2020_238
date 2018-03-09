@@ -241,6 +241,7 @@ class FinalSink(object):
 		self.gracedb_search = gracedb_search
 		self.gracedb_pipeline = gracedb_pipeline
 		self.gracedb_service_url = gracedb_service_url
+		self.gracedb_client = gracedb.rest.GraceDb(gracedb_service_url)
 
 		# the postcoh doc stores clustered postcoh triggers and is snapshotted
 		self.postcoh_document = PostcohDocument()
@@ -490,7 +491,6 @@ class FinalSink(object):
 			return
 			
 		# do alerts
-		gracedb_client = gracedb.rest.GraceDb(self.gracedb_service_url)
 		gracedb_ids = []
 		common_messages = []
 
@@ -519,7 +519,7 @@ class FinalSink(object):
 		# FIXME: make this optional from cmd line?
 		while gracedb_upload_itrial < 10:
 			try:
-				resp = gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
+				resp = self.gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
 				resp_json = resp.json()
 				if resp.status != httplib.CREATED:
 					print >>sys.stderr, "gracedb upload of %s failed" % filename
@@ -546,7 +546,7 @@ class FinalSink(object):
 		log_message = "Optimal ra and dec from this coherent pipeline: (%f, %f) in degrees" % (trigger.ra, trigger.dec)
 		while gracedb_upload_itrial < 10:
 			try:
-				resp = gracedb_client.writeLog(gracedb_id, log_message , filename = None, tagname = "analyst_comments")
+				resp = self.gracedb_client.writeLog(gracedb_id, log_message , filename = None, tagname = "analyst_comments")
 				if resp.status != httplib.CREATED:
 		    			print >>sys.stderr, "gracedb upload of log failed"
 				else:
@@ -594,7 +594,7 @@ class FinalSink(object):
 			gracedb_id = gracedb_ids[0]
 			while gracedb_upload_itrial < 10:
 				try:
-					resp = gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
+					resp = self.gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
 					resp_json = resp.json()
 					if resp.status != httplib.CREATED:
 						print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
