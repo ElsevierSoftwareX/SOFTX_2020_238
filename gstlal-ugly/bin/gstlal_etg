@@ -362,10 +362,10 @@ class MultiChannelHandler(simplehandler.Handler):
 		time, will process a row from a gstreamer buffer.
 		"""
 		# if segments provided, ensure that trigger falls within these segments
-		if self.frame_segments:
+		if self.frame_segments[self.instrument]:
 			trigger_seg = segments.segment(LIGOTimeGPS(row.end_time, row.end_time_ns), LIGOTimeGPS(row.end_time, row.end_time_ns))
 
-		if not self.frame_segments or self.frame_segments.intersects_segment(trigger_seg):
+		if not self.frame_segments[self.instrument] or self.frame_segments[self.instrument].intersects_segment(trigger_seg):
 			trigger_time = row.end_time + row.end_time_ns * 1e-9
 			if options.latency:
 				latency = numpy.round(int(aggregator.now()) - buftime)
