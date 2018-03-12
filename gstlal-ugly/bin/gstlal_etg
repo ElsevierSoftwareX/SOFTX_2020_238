@@ -702,7 +702,7 @@ for channel in channels:
 		dur = max([duration(phi, q, 5e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
 		t_arr = numpy.linspace(-dur/2., dur/2., int(numpy.floor(dur*rate)+1))
 		phase = [0, numpy.pi/2.]
-		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 5e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)]
+		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 5e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch, phi_nyquist = fhigh)]
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 		# determine whether to do time-domain or frequency-domain convolution
 		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
