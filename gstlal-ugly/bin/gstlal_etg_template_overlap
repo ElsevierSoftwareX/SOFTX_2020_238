@@ -1,0 +1,174 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2018 Patrick Godwin
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+
+####################
+# 
+#     preamble
+#
+####################   
+
+
+from optparse import OptionParser
+import os
+import sys
+
+import numpy
+
+import lal
+
+#from gstlal import idq_waveforms
+
+###############################
+# 
+#       command line parser
+#
+###############################
+
+def parse_command_line():
+
+	parser = OptionParser(description = __doc__)
+
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("-m", "--mismatch", type = "float", default = 0.05, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.05.")
+	parser.add_option("-q", "--qhigh", type = "float", default = 100, help = "Q high value for half sine-gaussian waveforms. Default = 100.")
+
+	# parse the arguments and sanity check
+	options, args = parser.parse_args()
+
+	return options, args
+
+####################
+# 
+#    functions
+#
+####################   
+
+### FIXME: should not copy functions over from gstlal_etg
+###        instead, factor out functions from gstlal_etg to its own module
+#
+# construct sine gaussian waveforms that taper to 1e-7 at edges of window
+#
+def duration(phi, q, tolerance = 1e-7):
+        # return the duration of the waveform such that its edges will die out to tolerance of the peak.
+	# phi is the central frequency of the frequency band
+	return q/(2.*numpy.pi*phi)*numpy.log(1./tolerance)
+
+def sine_gaussian(phi, phi_0, q, time_arr):
+        # edges should be 1e-7 times peak
+	dt = time_arr[1]-time_arr[0]
+	rate = 1./dt
+	assert phi < rate/2. 
+
+	# phi is the central frequency of the sine gaussian
+	dur = duration(phi,q)
+	tau = q/(2.*numpy.pi*phi)
+	sg_vals = numpy.cos(2.*numpy.pi*phi*time_arr + phi_0)*numpy.exp(-1.*time_arr**2./tau**2.)
+
+	# normalize sine gaussians to have unit length in their vector space
+	#inner_product = numpy.sum(sg_vals*sg_vals)
+	#norm_factor = 1./(inner_product**0.5)
+
+	return sg_vals 
+
+def half_sine_gaussian(sg_arr):
+	samples = sg_arr.size/2 + 1
+
+	# only take first half of sine gaussian + peak
+	hsg_vals = sg_arr[:samples]
+	
+	# renormalize
+	inner_product = numpy.sum(hsg_vals*hsg_vals)
+	norm_factor = 1./(inner_product**0.5)
+
+	return norm_factor*hsg_vals
+
+#
+# number of tiles in frequency and Q
+#
+def N_Q(q_min, q_max, mismatch = 0.2):
+	"""
+	Minimum number of distinct Q values to generate based on Q_min, Q_max, and mismatch params.
+	"""
+	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
+
+def N_phi(phi_min, phi_max, q,  mismatch = 0.2):
+	"""
+	Minimum number of distinct frequency (phi) values to generate based on phi_min, phi_max, and mismatch params.
+	"""
+	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
+
+def Qq(q_min, q_max, mismatch = 0.2):
+	"""
+	List of Q values to generate based on Q_min, Q_max, and mismatch params.
+	"""
+	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch = mismatch))
+	return [q_min*(q_max/q_min)**((0.5+q)/N_q) for q in range(int(N_q))]
+
+def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.2, phi_nyquist = None):
+	"""
+	Generates Q and frequency (phi) pairs based on mismatch, Q and phi ranges.
+	"""
+	for q in Qq(q_min, q_max, mismatch = mismatch):
+		nphi = N_phi(phi_min, phi_max, q, mismatch = mismatch)
+		for l in range(int(nphi)):
+			phi = phi_min*(phi_max/phi_min)**((0.5+l)/nphi)
+			if phi_nyquist:
+				if phi < phi_nyquist/(1+numpy.sqrt(11)/q):
+					yield (phi, q)
+			else:
+				yield (phi, q)
+
+####################
+# 
+#       main
+#
+####################   
+
+if __name__ == '__main__':
+	options, args = parse_command_line()
+
+    # common parameters we will use throughout
+	max_samp_rate = 2048
+	min_samp_rate = 32
+	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
+
+	# generate templates for each rate considered
+	rates = [min_samp_rate*2**i for i in range(n_rates)]
+	templates = {}
+	for rate in rates:
+		flow = rate/4.*0.8
+		fhigh = rate/2.*0.8
+		qhigh = options.qhigh
+		qlow = 4
+		dur = max([duration(phi, q, 5e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch)])
+		t_arr = numpy.linspace(-dur/2., dur/2., int(numpy.floor(dur*rate)+1))
+		#basis_params[rate] = [(phi, q, duration(phi, q, 5e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch, phi_nyquist = fhigh)]
+		templates[rate] = [half_sine_gaussian(sine_gaussian(phi, 0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch, phi_nyquist = fhigh)]
+
+	# calculate overlap for each template, find maximum
+	overlaps = {rate: [] for rate in rates}
+	for rate in rates:
+		for this_template in templates[rate]:
+			overlaps[rate].append(max(sorted([numpy.dot(this_template,template) for template in templates[rate]])[:-1]))
+
+	print >>sys.stderr, "min overlap specified: %f" % (1 - options.mismatch)
+	print >>sys.stderr, "max template overlap: %f" % max([max(overlaps[rate]) for rate in rates])
+	print >>sys.stderr, "min template overlap: %f" % min([min(overlaps[rate]) for rate in rates])
+

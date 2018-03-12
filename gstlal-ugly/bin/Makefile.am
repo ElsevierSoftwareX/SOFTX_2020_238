@@ -36,4 +36,5 @@ dist_bin_SCRIPTS = \
 	gstlal_etg \
 	gstlal_etg_pipe \
 	gstlal_etg_whitener_check \
+	gstlal_etg_template_overlap \
 	gstlal_injsplitter
