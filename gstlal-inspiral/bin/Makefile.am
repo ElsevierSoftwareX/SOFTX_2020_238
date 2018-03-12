@@ -7,6 +7,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_calc_rank_pdfs \
 	gstlal_inspiral_coinc_extractor \
+	gstlal_inspiral_create_dt_dphi_snr_ratio_pdfs \
 	gstlal_inspiral_create_prior_diststats \
 	gstlal_inspiral_dlrs_diag \
 	gstlal_inspiral_fake_zerolag_counts \
