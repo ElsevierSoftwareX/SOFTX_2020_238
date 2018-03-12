@@ -235,10 +235,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		else:
 			self.last_save_time = None
 			# create header for trigger file
-			if options.latency:
-				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel", "latency")
-			else:
-				self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
+			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
 			self.fdata = deque(maxlen = 25000)
 			self.fdata.append(self.header)
 
@@ -367,27 +364,22 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		if not self.frame_segments[self.instrument] or self.frame_segments[self.instrument].intersects_segment(trigger_seg):
 			trigger_time = row.end_time + row.end_time_ns * 1e-9
-			if options.latency:
-				latency = numpy.round(int(aggregator.now()) - buftime)
 			freq, q, duration = self.basis_params[(channel, rate)][row.channel_index]
 			start_time = trigger_time - duration
 			channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
 			# NOTE
 			# Setting stop time to trigger time for use with half sine gaussians
 			stop_time = trigger_time
-			# append row to feature vector for bottle requests
+			# append row for data transfer/saving
 			etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
-        	                   'frequency': freq, 'q': q, 'phase': row.phase, 'sigmasq': row.sigmasq, 'chisq': row.chisq, 'snr': row.snr}
+			           'frequency': freq, 'q': q, 'phase': row.phase, 'sigmasq': row.sigmasq, 'chisq': row.chisq, 'snr': row.snr}
 			self.etg_event.append(etg_row)
 
 			# save iDQ compatible data
 			if options.save_hdf:
 				self.fdata.append(etg_row, key = (channel, rate), buftime = buftime)
 			else:
-				if options.latency:
-					self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\t%.2f\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag, latency))
-				else:
-					self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
+				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
 
 
 	def to_trigger_file(self, buftime = None):
@@ -582,7 +574,6 @@ def parse_command_line():
 	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the ETG with a 4 digit hex code, useful for running multiple instances. Default = 0001")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
-	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
 	parser.add_option("--trigger-start-time", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
 	parser.add_option("--trigger-end-time", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
 
