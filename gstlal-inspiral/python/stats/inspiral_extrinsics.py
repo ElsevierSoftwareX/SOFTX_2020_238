@@ -926,7 +926,7 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 #
 # =============================================================================
 #
-#                 Utilities for computing SNR, time, phase PDF
+#                 Utilities for computing SNR, time, phase PDFs
 #
 # =============================================================================
 #
@@ -936,7 +936,11 @@ class HyperRect(object):
 	__slots__ = ["lower", "upper", "parent", "left", "right", "point", "prob", "nodeid"]
 	def __init__(self, lower, upper, parent, point = None, prob = None, nodeid = None):
 		"""
-		A dynamic N-dimensional
+		An N dimensional hyper rectangle with references to sub
+		rectangles split along one dimension so that a binary tree of such objects can
+		be constructed.  NOTE for now each dimension must have no more than 128 bins in
+		any given side.  FIXME, make this an option to allow larger histograms by using
+		e.g., uint16.
 		"""
 		self.lower = numpy.array(lower, dtype="uint8")
 		self.upper = numpy.array(upper, dtype="uint8")
@@ -948,9 +952,17 @@ class HyperRect(object):
 		self.nodeid = nodeid
 
 	def serialize(self, prob):
+		"""
+		Return the minimal set of information to describe a
+		hyperrectangle in "read only" mode.
+		"""
 		return [self.lower, self.upper, self.parent, self.left, self.right, prob]
 
 	def split(self, splitdim):
+		"""
+		return two new hyper rectangles split along splitdim and save
+		references to them in this instance.
+		"""
 		upper_left = self.upper.copy()
 		upper_right = self.upper.copy()
 		lower_left = self.lower.copy()
@@ -963,9 +975,17 @@ class HyperRect(object):
 		return self.left, self.right
 
 	def __contains__(self, point):
+		"""
+		Determine if a point is contained within this hyper rectangle
+		"""
 		return (numpy.logical_and(point >= self.lower, point < self.upper)).all()
 
 	def biggest_side(self):
+		"""
+		Compute the biggest side. This is used in the splitting process
+		to ensure the most square tiles possible.  NOTE, in the future perhaps we
+		should allow the user to override this with a different function.
+		"""
 		return numpy.argmax(self.upper - self.lower)
 
 	@property
@@ -974,6 +994,10 @@ class HyperRect(object):
 
 	@classmethod
 	def search(cls, instance, point):
+		"""
+		Recursively descend starting with the rectangle defined by
+		instance until a rectangle with no right or left siblings is found.
+		"""
 		if instance.left is None and instance.right is None:
 			return instance
 		if point in instance.left:
@@ -988,48 +1012,64 @@ class HyperRect(object):
 
 
 class DynamicBins(object):
-	def __init__(self, lower, upper, max_splits = None, static = False):
-		self.lower = numpy.array(lower, dtype=float)
-		self.upper = numpy.array(upper, dtype=float)
-		if max_splits is not None:
-			assert numpy.all(numpy.array(max_splits) <= 128 ) and numpy.all(numpy.array(max_splits) >= 0)
-			self.max_splits = numpy.array(max_splits, dtype="uint8")
-		else:
-			self.max_splits = numpy.ones(len(self.lower), dtype="uint8") * 128
-		self.__finish_init()
+	def __init__(self, bin_edges, static = False):
+		"""
+		A class for turning a bunch of hyper rectangles into a dynamic histogram
+
+		Bins should be a tuple of arrays where the length of the
+		tuple is the dimension of the function space that you are
+		histogramming and each array in the tuple is the explicit bin
+		boundaries in the ith dimension.  The length of the arrays
+		should always be expressable as 2^x +1, i.e., there will be a
+		power of two number of bins described by that number of bins
+		+1 bin edges.  For the time being a max of 128 bins are allowed,
+		thus the array length must be <= 129.  This could be changed
+		at a later time.  To be explicit, the bin edge lengths must be
+		one of 3, 5, 9, 17, 33, 65, 129.
+
+		Supports a "read only" mode if static is True.  Currently this
+		is only done through reading an instance off disk with hdf5.
+		"""
+
+		self.max_splits = numpy.array([len(b) - 1 for b in bin_edges])
+		assert numpy.all(self.max_splits <= 128)
+		assert not numpy.any(self.max_splits % 2)
+		self.bin_edges = tuple([numpy.array(b, dtype=float) for b in bin_edges])
+		#self.__finish_init()
 
 		# We assume that before we start there is a probability of 1 of being in the full cell
 		if not static:
 			self.num_points = 0
 			self.total_prob = 1.0
 			self.num_cells = 1
-			self.dx = [self.lower[i] + numpy.arange(0,129) * b for i,b in enumerate(self.bin_edges)]
-			self.hyper_rect = HyperRect(numpy.zeros(len(lower), dtype="uint8"), numpy.ones(len(upper), dtype="uint8") * 128, None)
+			self.hyper_rect = HyperRect(self.point_to_bin([b[0] for b in self.bin_edges]), self.point_to_bin([b[-1] for b in self.bin_edges]), None)
 			self.hyper_rect.prob = 1.0
-			self.staticbins = None
+			self.static_data = None
 		else:
 			self.hyper_rect = None
 
 	def __repr__(self):
-		out = "\nThis is a %dD dynamic histogram\n" % len(self.lower)
+		out = "\nThis is a %dD dynamic histogram\n" % len(self.bin_edges)
 		out += "\tMaximum bins in each dimension: %s\n" % self.max_splits
-		out += "\tLower boundary: %s\n" % self.lower
-		out += "\tUpper boundary: %s\n" % self.upper
+		out += "\tLower boundary: %s\n" % [b[0] for b in self.bin_edges]
+		out += "\tUpper boundary: %s\n" % [b[-1] for b in self.bin_edges]
 		out += "\tCurrently contains %d points in %d cells\n" % (self.num_points, self.num_cells)
 		out += "\tCurrently contains %f probability\n" % (self.total_prob)
 		return out
 
 	@staticmethod
-	def from_hdf5(fname):
-		f = h5py.File(fname, "r")
+	def _from_hdf5(f):
+		"""
+		Instantiate the class from an open HDF5 file handle, f, which
+		is rooted at the path where it needs to be to get the information below.
+		"""
 		dgrp = f["dynbins"]
-		DB = DynamicBins(numpy.array(dgrp["lower"]), numpy.array(dgrp["upper"]), numpy.array(dgrp["max_splits"]), static = True)
+		begrp = dgrp["bin_edges"]
+		DB = DynamicBins([numpy.array(begrp["%d" % i]) for i in range(len(begrp.keys()))], static = True)
 		DB.num_points = dgrp.attrs["num_points"]
 		DB.total_prob = dgrp.attrs["total_prob"]
 		DB.num_cells = dgrp.attrs["num_cells"]
-		DB.dx = numpy.array(dgrp["dx"])
 
-		# FIXME here down, I also have to get the static version of this class working properly
 		bgrp = f["bins"]
 		lower = numpy.array(bgrp["lower"])
 		upper = numpy.array(bgrp["upper"])
@@ -1038,38 +1078,58 @@ class DynamicBins(object):
 		left = numpy.array(bgrp["left"])
 		prob = numpy.array(bgrp["prob"])
 		# This order is assumed elsewhere (lower, upper, parent, right, left, prob)
-		DB.staticbins = (lower, upper, parent, right, left, prob)
+		DB.static_data = (lower, upper, parent, right, left, prob)
 		return DB
 
-	def __finish_init(self):
-		self.size = self.upper - self.lower
-		self.bin_edges = self.size / 128.
-		self.minsize = numpy.ones(len(self.lower), dtype="uint8") * 128 / self.max_splits
-
-	def set_dx(self, dim, dx):
-		assert self.staticbins is None
-		assert len(dx) == 129
-		self.dx[dim] = numpy.array(dx)
+	@staticmethod
+	def from_hdf5(fname):
+		"""
+		Instantiate the class from an hdf5 file name that is not yet open
+		"""
+		f = h5py.File(fname, "r")
+		DB = self._from_hdf5(f)
+		f.close()
+		return DB
 
 	def point_to_bin(self, point):
-		point = (point - self.lower) / self.bin_edges
+		"""
+		Figure out which bin a given point belongs in
+		"""
+		# search sorted right gives the index above the value in
+		# question, so remove 1, this is how we get it to be [)
+		point = numpy.array([a.searchsorted(point[i], "right")-1 for i,a in enumerate(self.bin_edges)])
 		assert numpy.all(point <= 128) and numpy.all(point >=0)
 		point = numpy.array(point, dtype = "uint8")
 		return point	
 
 	def bin_to_point(self, binpoint):
-		return binpoint * self.bin_edges + self.lower
+		"""
+		Return a point which is the lower corner of a given bin.
+		"""
+		return numpy.array([self.bin_edges[i][p] for i,p in enumerate(binpoint)])
 
 	def insert(self, point, prob):
-		assert self.staticbins is None and self.hyper_rect is not None
+		"""
+		Add a new point to the histogram.
+
+		There are three possibilities
+			1) The hyperrectangle is empty
+			2) It is not empty, but is as small as it is allowed to be
+			3) It is not empty and is larger than the minimum size, 
+			so it will be split
+		"""
+		assert self.static_data is None and self.hyper_rect is not None
+
+		# handle a special case of a 0D histogram
+		if len(self.bin_edges) == 0:
+			self.num_points += 1
+			self.total_prob += prob
+			return
+
 		# figure out the hyperrectangle where this point belongs
 		binpoint = self.point_to_bin(point)
 		thisrect = HyperRect.search(self.hyper_rect, binpoint)
 
-		# There are three possibilities
-		# 1) The hyperrectangle is empty
-		# 2) It is not empty, but is as small as it is allowed to be
-		# 3) It is not empty and is larger than the minimum size
 
 		# Case 1)
 		if thisrect.point is None:
@@ -1083,7 +1143,7 @@ class DynamicBins(object):
 			# Case 2)
 			# Check to see if we have reached the maximum resolution first
 			splitdim = thisrect.biggest_side()
-			if thisrect.size[splitdim] / 2. < self.minsize[splitdim]:
+			if thisrect.size[splitdim] / 2. < 1:
 				thisrect.prob += prob
 				self.num_points += 1
 				self.total_prob += prob
@@ -1107,16 +1167,27 @@ class DynamicBins(object):
 				thisrect.prob = None
 
 	def __call__(self, point):
+		"""
+		Return the value of the PDF at point.  If called over the
+		actual histogram cells, it should integrate to 1. For example, say you have an
+		instance of this class called DB:
+
+		>>> totalprobvol = 0.
+		>>> for (lower, upper, volume, prob) in DB:
+		>>>	totalprobvol += prob * volume
+		>>> print totalprobvol
+		>>> 1.0
+		"""
 		binpoint = self.point_to_bin(point)
-		if self.staticbins is None:
+		if self.static_data is None:
 			return self.__eval_prob(binpoint)
 		else:
 			return self.__static_prob(binpoint)
 
 	def __eval_prob(self, binpoint):
 		node = HyperRect.search(self.hyper_rect, binpoint)
-		l = numpy.array([self.dx[i][p] for i,p in enumerate(node.lower)])
-		u = numpy.array([self.dx[i][p] for i,p in enumerate(node.upper)])
+		l = numpy.array([self.bin_edges[i][p] for i,p in enumerate(node.lower)])
+		u = numpy.array([self.bin_edges[i][p] for i,p in enumerate(node.upper)])
 		volume = numpy.product(u - l)
 		return node.prob / self.total_prob / volume
 
@@ -1130,7 +1201,7 @@ class DynamicBins(object):
 			# we have found our terminal cell
 			leftix = left[ix]
 			rightix = right[ix]
-			if leftix is 0 and rightix is 0:
+			if leftix == 0 and rightix == 0:
 				return prob[ix]
 			# check to see if it is in the left
 			if _in_node(point, upper[leftix,:], lower[leftix,:]):
@@ -1142,18 +1213,18 @@ class DynamicBins(object):
 				raise ValueError("This should be impossible: %s" % point)
 
 		# This order is assumed elsewhere (lower, upper, parent, right, left, prob)
-		return search_serialized(self.staticbins, binpoint, ix = 0)
+		return search_serialized(self.static_data, binpoint, ix = 1)
 
 	def __serialize(self):
-		assert self.staticbins is None
+		assert self.static_data is None
 		out = []
 		nodes = self.__flatten()
 		# setup efficient storage for all of the data
 		# for an 8D PDF this should ad up to 32 bytes per bin
 		# NOTE we will use zero to denote a null value so we want to start counting at 1
 		# FIXME should probably check that we don't have more than 4 billion bins.  
-		LOWER = numpy.zeros((len(nodes)+1, len(self.lower)), dtype = "uint8")
-		UPPER = numpy.zeros((len(nodes)+1, len(self.lower)), dtype = "uint8")
+		LOWER = numpy.zeros((len(nodes)+1, len(self.bin_edges)), dtype = "uint8")
+		UPPER = numpy.zeros((len(nodes)+1, len(self.bin_edges)), dtype = "uint8")
 		PARENT = numpy.zeros(len(nodes)+1, dtype="uint32")
 		LEFT = numpy.zeros(len(nodes)+1, dtype="uint32")
 		RIGHT = numpy.zeros(len(nodes)+1, dtype="uint32")
@@ -1174,15 +1245,15 @@ class DynamicBins(object):
 
 	def __flatten(self, this_rect = None, out = None, leaf = False):
 		# FIXME, can this be a generator??
-		assert self.staticbins is None
+		assert self.static_data is None
 		if out is None:
-			out = set([])
+			out = []
 		if this_rect == None:
 			this_rect = self.hyper_rect
 		if not leaf:
-			out.add(this_rect)
+			out.append(this_rect)
 		if leaf and not this_rect.right and not this_rect.left:
-			out.add(this_rect)
+			out.append(this_rect)
 		if this_rect.right:
 			self.__flatten(this_rect.right, out, leaf)
 		if this_rect.left:
@@ -1191,44 +1262,55 @@ class DynamicBins(object):
 		return out
 
 	def bins(self):
+		"""
+		Iterate over the histogram bins
+		"""
 		nodes = self.__flatten(leaf = True)
 		for node in nodes:
-			lower = numpy.array([self.dx[i][p] for i,p in enumerate(node.lower)])
-			upper = numpy.array([self.dx[i][p] for i,p in enumerate(node.upper)])
+			lower = numpy.array([self.bin_edges[i][p] for i,p in enumerate(node.lower)])
+			upper = numpy.array([self.bin_edges[i][p] for i,p in enumerate(node.upper)])
 			volume = numpy.product(upper - lower)
 			prob = node.prob / self.total_prob / volume
 			yield self.bin_to_point(node.lower), self.bin_to_point(node.upper), volume, prob
 
 	def sbins(self):
+		"""
+		Iterate over the histogram bins in read only mode
+		"""
 		# NOTE the first element of static bins is reserved as a NULL value, it does not contain a valid bin
-		lower = self.staticbins[0]
-		upper = self.staticbins[1]
-		prob = self.staticbins[5]
+		lower = self.static_data[0]
+		upper = self.static_data[1]
+		prob = self.static_data[5]
+		right = self.static_data[3]
+		left = self.static_data[4]
 		for i, p in enumerate(prob):
-			if i == 0:
+			if i == 0 or right[i] != 0 or left[i] != 0:
 				continue
-			l = numpy.array([self.dx[j][x] for j,x in enumerate(lower[i,:])])
-			u = numpy.array([self.dx[j][x] for j,x in enumerate(upper[i,:])])
+			l = numpy.array([self.bin_edges[j][x] for j,x in enumerate(lower[i,:])])
+			u = numpy.array([self.bin_edges[j][x] for j,x in enumerate(upper[i,:])])
 			v = numpy.product(u - l)
 			yield self.bin_to_point(lower[i,:]), self.bin_to_point(upper[i,:]), v, p
 
 	def __iter__(self):
-		if self.staticbins is None:
+		if self.static_data is None:
 			return self.bins()
 		else:
 			return self.sbins()
 
 	def to_hdf5(self, fname):
-		assert self.staticbins is None
+		assert self.static_data is None
 		f = h5py.File(fname, "w")
+		self._to_hdf5(f)
+		f.close()
+
+	def _to_hdf5(self, f):
 		dgrp = f.create_group("dynbins")
-		dgrp.create_dataset("lower", data = self.lower)
-		dgrp.create_dataset("upper", data = self.upper)
-		dgrp.create_dataset("max_splits", data = self.max_splits)
+		begroup = dgrp.create_group("bin_edges")
+		for i, bin_edge in enumerate(self.bin_edges):
+			begroup.create_dataset("%d" % i, data = bin_edge)
 		dgrp.attrs["num_points"] = self.num_points 
 		dgrp.attrs["total_prob"] = self.total_prob
 		dgrp.attrs["num_cells"] = self.num_cells
-		dgrp.create_dataset("dx", data = self.dx)
 
 		bgrp = f.create_group("bins")
 		lower, upper, parent, right, left, prob = self.__serialize()
@@ -1239,7 +1321,10 @@ class DynamicBins(object):
 		bgrp.create_dataset("left", data = left)
 		bgrp.create_dataset("prob", data = prob)
 
-		f.close()
+
+#
+# Helper class to do lal FFTs as a drop in replacement for scipy
+#
 
 class FFT(object):
 	def __init__(self):
@@ -1323,8 +1408,9 @@ class RandomSource(object):
 		RA = numpy.random.uniform(0.0,2.0*numpy.pi)
 		DEC = numpy.arcsin(numpy.random.uniform(-1.0,1.0))
 		PSI = numpy.random.uniform(0.0,2.0*numpy.pi)
-		D = numpy.random.power(1) * max(self.horizons.values()) * 2 # not! volume weighted - according to numpy doc, the distribution is drawn from arg -1
-		# since we are sampling uniform in D instead of D^2, set the probability to scale with D
+		# FIXME assumes an SNR 4 threshold
+		#D = numpy.random.power(3) * max(self.horizons.values()) * 2
+		D = numpy.random.power(1) * max(self.horizons.values()) * 2
 		PROB = D**2
 		T = lal.LIGOTimeGPS(0)
 
@@ -1349,13 +1435,19 @@ class RandomSource(object):
 			time[ifo] = lal.TimeDelayFromEarthCenter(self.locations[ifo], RA, DEC, T)
 			snr[ifo] = self.horizons[ifo] / Deff[ifo] * 8.
 
-			#
-			# Now we will slide stuff around according to the
-			# uncertainty in matched filtering
-			#
+		#
+		# Now we will slide stuff around according to the
+		# uncertainty in matched filtering NOTE.  We target a
+		# network SNR of 11.  The actual binning code will use
+		# SNR ratios, so we care most about capturing the
+		# uncertainty right when things get interesting.
+		#
 
-			newsnr, dt, dphi = self.sample_from_matched_filter(snr[ifo])
-			snr[ifo] = newsnr
+		network_snr = (numpy.array(snr.values())**2).sum()**.5
+		adjustment_factor = 11. / network_snr
+		for ifo in self.horizons:
+			newsnr, dt, dphi = self.sample_from_matched_filter(snr[ifo] * adjustment_factor)
+			snr[ifo] += (newsnr - snr[ifo] * adjustment_factor)
 			time[ifo] += dt
 			phi[ifo] += dphi
 
@@ -1402,7 +1494,7 @@ class RandomSource(object):
 
 class InspiralExtrinsicParameters(object):
 
-	def __init__(self, horizons, snr_thresh, min_instruments):
+	def __init__(self, horizons, snr_thresh, min_instruments, histograms = None):
 		self.horizons = horizons
 		self.snr_thresh = snr_thresh
 		self.min_instruments = min_instruments
@@ -1412,41 +1504,55 @@ class InspiralExtrinsicParameters(object):
 			for choice in itertools.combinations(self.instruments, i):
 				combos.add(tuple(sorted(choice)))
 		self.combos = sorted(list(combos))
-		self.histograms = dict((combo, None) for combo in self.combos)
+		if histograms is not None:
+			self.histograms = histograms
+		else:
+			self.histograms = dict((combo, None) for combo in self.combos)
+			for combo, bin_edges in self.boundaries().items():
+				self.histograms[combo] = DynamicBins(bin_edges)
 
-	def add_histogram(self, hist, combo):
-		# this is just a tuple
-		self.histograms[combo] = hist
+	@staticmethod
+	def from_hdf5(fname):
 
-	#
-	# NOTE we bin in arctan (log (D))
-	#
+		f = h5py.File(fname, "r")
 
-	def snrfunc(self, snr):
-		return numpy.arctan(numpy.log10(snr / self.snr_thresh))
+		snr_thresh = f.attrs["snr_thresh"]
+		min_instruments = f.attrs["min_instruments"]
+		horizons = dict(f["horizons"].attrs)
+		histograms = {}
+		for combo in f["histograms"]:
+			key = tuple(combo.split(","))
+			histograms[key] = DynamicBins._from_hdf5(f["histograms"][combo])
+		return InspiralExtrinsicParameters(horizons, snr_thresh, min_instruments, histograms)
+		f.close()
+
+	#def snrfunc(self, snr):
+	#	return min(snr, self.max_snr)
+
+	def effdratiofunc(self, effd1, effd2):
+		return min(7.9999, max(0.125001, effd1 / effd2))
 
 	def boundaries(self):
 		out = {}
 		def boundary(ifos):
+			bin_edges = []
 			ifos = sorted(ifos)
-			assert 1 <= len(ifos) <= 3
-			lower = []
-			upper = []
-			max_splits = []
+			# for now we only gaurantee that this will work for H1,
+			# L1, V1, need to change time delay boundaries for
+			# Kagra possibly
+			assert not set(ifos) - set(["H1", "L1", "V1"])
 			# we have pairs of dt and dphi
 			for pair in list(itertools.combinations(ifos, 2))[:2]:
-				lower.append(-0.032)
-				upper.append(0.032)
-				max_splits.append(32)
+				# Assumes Virgo time delay is the biggest we care about
+				bin_edges.append(numpy.linspace(-0.032, 0.032, 65))
 			for pair in list(itertools.combinations(ifos, 2))[:2]:
-				lower.append(-numpy.pi)
-				upper.append(numpy.pi)
-				max_splits.append(16)
-			for ifo in ifos:
-				lower.append(0)
-				upper.append(numpy.pi / 2.)
-				max_splits.append(64)
-			return lower, upper, max_splits
+				bin_edges.append(numpy.linspace(-numpy.pi, numpy.pi, 33))
+			for pair in list(itertools.combinations(ifos, 2))[:2]:
+				bin_edges.append(numpy.logspace(numpy.log10(1./8), numpy.log10(8), 17))
+			# NOTE this would track the SNR instead of effective distance ratio
+			#for ifo in ifos:
+			#	bin_edges.append(numpy.logspace(numpy.log10(self.snr_thresh), numpy.log10(self.max_snr), 65))
+			return bin_edges
 		for combo in self.combos:
 			out[combo] = boundary(combo)
 		return out
@@ -1455,20 +1561,48 @@ class InspiralExtrinsicParameters(object):
 		ifos = sorted(time)
 		assert 1 <= len(ifos) <= 3
 		point = []
-		# first time
+		# first time diff
 		for pair in list(itertools.combinations(ifos, 2))[:2]:
 			point.append(time[pair[0]] - time[pair[1]])
-		# then phase
+		# then phase diff
 		for pair in list(itertools.combinations(ifos, 2))[:2]:
 			unwrapped = numpy.unwrap([phase[pair[0]], phase[pair[1]]])
 			point.append(unwrapped[0] - unwrapped[1])
-		for ifo in ifos:
-			point.append(self.snrfunc(snr[ifo]))
+		# NOTE this would track the SNR instead of effective distance ratio
+		#for ifo in ifos:
+		#	point.append(self.snrfunc(snr[ifo]))
+		# then effective distance ratio
+		for pair in list(itertools.combinations(ifos, 2))[:2]:
+			point.append(self.effdratiofunc(self.horizons[pair[0]] / snr[pair[0]], self.horizons[pair[1]] / snr[pair[1]]))
 		return point
+
+	def insert(self, time, phase, snr, prob):
+		detected_ifos = tuple(sorted(snr))
+		self.histograms[detected_ifos].insert(self.pointfunc(time, phase, snr), prob)
 
 	def __call__(self, time, phase, snr):
 		ifos = tuple(sorted(time))
-		return self.histograms[ifos](self.pointfunc(time, phase, snr))
+		if len(ifos) > 1:
+			return self.histograms[ifos](self.pointfunc(time, phase, snr))
+		else:
+			return 1
 
+	def to_hdf5(self, fname):
+		f = h5py.File(fname, "w")
+		# first record the minimal set of instance state
+		f.attrs["snr_thresh"] = self.snr_thresh
+		f.attrs["min_instruments"] = self.min_instruments
+		#f.attrs["max_snr"] = self.max_snr
 
+		# Then record the horizon distances
+		hgrp = f.create_group("horizons")
+		for ifo in self.horizons:
+			hgrp.attrs[ifo] = self.horizons[ifo]
 
+		# then all of the histogram data
+		histgrp = f.create_group("histograms")
+		for combo in self.combos:
+			cgrp = histgrp.create_group(",".join(combo))
+			self.histograms[combo]._to_hdf5(cgrp)
+
+		f.close()
