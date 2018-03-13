@@ -567,13 +567,14 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 
 		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
 				parent_nodes = [diststats_per_bin_node],
+				opts = {"ranking-stat-samples":options.ranking_stat_samples},
 				input_files = {"":diststats_per_bin_node.output_files["output"]},
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), boundary_seg, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 
 		calcrankzerolagnode = inspiral_pipe.generic_node(calcRankPDFsWithZerolagJob, dag,
 				parent_nodes = [diststats_per_bin_node],
-				opts = {"add-zerolag-to-background":""},
+				opts = {"add-zerolag-to-background":"","ranking-stat-samples":options.ranking_stat_samples},
 				input_files = {"":diststats_per_bin_node.output_files["output"]},
 				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS_WZL' % (n,), boundary_seg, '.xml.gz', path = calcRankPDFsWithZerolagJob.output_path)}
 			)
@@ -1079,6 +1080,7 @@ def parse_command_line():
 	parser.add_option("--gzip-test", default=False, action = "store_true", help = "Perform gzip --test on all output files.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 	parser.add_option("--disable-calc-inj-snr", default=False, action = "store_true", help = "Disable injection SNR calculation")
+	parser.add_option("--ranking-stat-samples", metavar = "N", default = 2**24, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 2^24).")
 
 	# Override the datasource injection option
 	parser.remove_option("--injections")
