@@ -33,7 +33,6 @@ import numpy
 
 import gi
 gi.require_version('Gst', '1.0')
-gi.require_version('GstAudio', '1.0')
 from gi.repository import GObject, Gst, GstAudio
 GObject.threads_init()
 Gst.init(None)
@@ -101,33 +100,34 @@ pipeline = Gst.Pipeline(sys.argv[0])
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
 for channel in channels:
 
-	# define sampling rates used
-	samp_rate = int(data_source_info.channel_dict[channel]['fsamp'])
-	max_samp_rate = min(2048, int(samp_rate))
-	min_samp_rate = min(32, max_samp_rate)
-	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
-	rates = [min_samp_rate*2**i for i in range(n_rates)]
+	if options.verbose:
+		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_after_multisrc" % channel)
 
-	# For now just hard code these inputs
+	# define whitening params
 	psd = None
-	head[channel] = pipeparts.mktee(pipeline, head[channel])
+	samp_rate = int(data_source_info.channel_dict[channel]['fsamp'])
 	psd_fft_length = 16
 	zero_pad = 0
 	block_duration = int(1 * Gst.SECOND)
+	width = 32
 
     #
 	# whiten auxiliary channel data
     #
 
 	# downsample to max sampling rate if necessary
-	max_rate = max(rates)
+	max_rate = min(2048, samp_rate)
 	if samp_rate > max_rate:
 		head[channel] = pipeparts.mkaudiocheblimit(pipeline, head[channel], cutoff = 0.9 * (max_rate/2), type = 2, ripple = 0.1)
 		head[channel] = pipeparts.mkaudioundersample(pipeline, head[channel])
 		head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, rate=%d" % max_rate)
 
-    # add reblock
+	if options.verbose:
+		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_after_downsample" % channel)
+
+    # add reblock and tee
 	head[channel] = pipeparts.mkreblock(pipeline, head[channel], block_duration = block_duration)
+	head[channel] = pipeparts.mktee(pipeline, head[channel])
 
 	# because we are not asking the whitener to reassemble an
 	# output time series (that we care about) we drop the
@@ -166,15 +166,25 @@ for channel in channels:
 	# Drop initial data to let the PSD settle
 	head[channel] = pipeparts.mkdrop(pipeline, head[channel], drop_samples = PSD_DROP_TIME * max_rate)
 	
+	if options.verbose:
+		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_after_drop" % channel)
+
 	# use running average PSD
 	whiten.set_property("psd-mode", 0)
 
 	# convert to desired precision
 	head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
-	head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], "audio/x-raw, rate=%d, format=%s" % (max_rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
+	if width == 64:
+		head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], "audio/x-raw, rate=%d, format=%s" % (max_rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
+	else:
+		head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], "audio/x-raw, rate=%d, format=%s" % (max_rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
+
+	if options.verbose:
+		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_before sink" % channel)
 
     # dump timeseries to disk
 	pipeparts.mknxydumpsink(pipeline, head[channel], filename="whitened_timeseries_%s.txt" % channel)
+
 
 # Allow Ctrl+C or sig term to gracefully shut down the program for online
 # sources, otherwise it will just kill it
@@ -206,14 +216,8 @@ mainloop.run()
 if options.verbose:
 	print >>sys.stderr, "shutting down pipeline..."
 
-#
-# Set pipeline state to NULL and garbage collect the handler
-#
-
 if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 	raise RuntimeError("pipeline could not be set to NULL")
-del handler.pipeline
-del handler
 
 #
 # close program manually if data source is live
