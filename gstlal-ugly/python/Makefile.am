@@ -14,7 +14,7 @@ pkgpython_PYTHON = \
 	coherent_inspiral_metric_plots.py \
 	coherent_inspiral_metric.py \
 	gviz_api.py \
-	idq_aggregator.py \
+	idq_utils.py \
 	idq_multirate_datasource.py \
 	metric.py \
 	multichannel_datasource.py \

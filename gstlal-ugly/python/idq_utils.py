@@ -100,6 +100,15 @@ def floor_div(x, n):
 	assert n > 0
 	return (x / n) * n
 
+def latency_name(stage_name, stage_num, channel, rate=None):
+	"""!
+	Returns a properly formatted latency element name based on stage,
+	channel, and rate information.
+	"""
+	if rate:
+		return 'stage%d_%s_%s_%s' % (stage_num, stage_name, str(rate).zfill(5), channel)
+	else:
+		return 'stage%d_%s_%s' % (stage_num, stage_name, channel)
 
 
 ####################
@@ -178,3 +187,89 @@ class HDF5FeatureData(FeatureData):
 		else:
 			for key in self.keys:
 				self.etg_data[key][:] = numpy.nan
+
+class HalfSineGaussianGenerator(object):
+	"""
+	Generates sine gaussian templates based on a f, Q range and a sampling frequency.
+	"""
+	def __init__(self, f_range, q_range, f_samp, mismatch=0.2, tolerance=5e-3):
+		### define parameter range
+		self.f_low, self.f_high = f_range
+		self.q_low, self.q_high = q_range
+		self.f_samp = f_samp
+		self.mismatch = mismatch
+		self.tol = tolerance
+
+		### define grid and template duration
+		self.parameter_grid = [(f, q, self.duration(f, q)/2.) for f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high)]
+		self.max_duration = max(duration for f, q, duration in self.parameter_grid)
+
+		self.phases = [0., numpy.pi/2.]
+		self.times = numpy.linspace(-self.max_duration/2., self.max_duration/2., int(numpy.floor(self.max_duration*self.f_samp)+1))
+
+	def generate_templates(self):
+		"""
+		generate all half sine gaussian templates corresponding to a parameter range and template duration
+		"""
+		for f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high):
+			for phase in self.phases:
+				yield self.waveform(f, q, phase)
+
+	def duration(self, f, q):
+		"""
+		return the duration of the full sine-gaussian waveform such that its edges will die out to tolerance of the peak.
+		"""
+		return (q/(2.*numpy.pi*f)) * numpy.log(1./self.tol)
+	
+	def waveform(self, f, q, phase):
+		"""
+		construct sine gaussian waveforms that taper to tolerance at edges of window
+		f is the central frequency of the waveform
+		"""
+		dt = self.times[1] - self.times[0]
+		rate = 1./dt
+		assert f < rate/2. 
+	
+		# phi is the central frequency of the sine gaussian
+		tau = q/(2.*numpy.pi*f)
+		sg_vals = numpy.cos(2.*numpy.pi*f*self.times + phase)*numpy.exp(-1.*self.times**2./tau**2.)
+	
+		# only take first half of sine gaussian + peak
+		samples = sg_vals.size/2 + 1
+		hsg_vals = sg_vals[:samples]
+		
+		# normalize sine gaussians to have unit length in their vector space
+		inner_product = numpy.sum(hsg_vals*hsg_vals)
+		norm_factor = 1./(inner_product**0.5)
+	
+		return norm_factor*hsg_vals
+	
+	def num_q_templates(self, q_min, q_max):
+		"""
+		Minimum number of distinct Q values to generate based on Q_min, Q_max, and mismatch params.
+		"""
+		return int(numpy.ceil(1./(2.*numpy.sqrt(self.mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min)))
+	
+	def num_f_templates(self, f_min, f_max, q):
+		"""
+		Minimum number of distinct frequency values to generate based on f_min, f_max, and mismatch params.
+		"""
+		return int(numpy.ceil(1./(2.*numpy.sqrt(self.mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(f_max/f_min)))
+	
+	def generate_q_values(self, q_min, q_max):
+		"""
+		List of Q values to generate based on Q_min, Q_max, and mismatch params.
+		"""
+		num_q = self.num_q_templates(q_min, q_max)
+		return [q_min*(q_max/q_min)**((0.5+q)/num_q) for q in range(num_q)]
+	
+	def generate_f_q_grid(self, f_min, f_max, q_min, q_max):
+		"""
+		Generates (f, Q) pairs based on f, Q ranges
+		"""
+		for q in self.generate_q_values(q_min, q_max):
+			num_f = self.num_f_templates(f_min, f_max, q)
+			for l in range(num_f):
+				f = f_min * (f_max/f_min)**( (0.5+l) /num_f)
+				if f < f_max / (1 + (numpy.sqrt(11)/q)):
+						yield (f, q)

@@ -63,7 +63,7 @@ from gstlal import sngltriggertable
 from gstlal import pipeparts
 from gstlal import simplehandler
 from gstlal import aggregator
-from gstlal import idq_aggregator
+from gstlal import idq_utils
 from gstlal import httpinterface
 from gstlal import bottle
 
@@ -87,84 +87,6 @@ setrlimit(resource.RLIMIT_RSS, None)
 # don't need to do this anymore.  remove?
 setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
-####################
-# 
-#    functions
-#
-####################   
-
-#
-# construct sine gaussian waveforms that taper to 1e-7 at edges of window
-#
-def duration(phi, q, tolerance = 1e-7):
-        # return the duration of the waveform such that its edges will die out to tolerance of the peak.
-	# phi is the central frequency of the frequency band
-	return q/(2.*numpy.pi*phi)*numpy.log(1./tolerance)
-
-def sine_gaussian(phi, phi_0, q, time_arr):
-        # edges should be 1e-7 times peak
-	dt = time_arr[1]-time_arr[0]
-	rate = 1./dt
-	assert phi < rate/2. 
-
-	# phi is the central frequency of the sine gaussian
-	dur = duration(phi,q)
-	tau = q/(2.*numpy.pi*phi)
-	sg_vals = numpy.cos(2.*numpy.pi*phi*time_arr + phi_0)*numpy.exp(-1.*time_arr**2./tau**2.)
-
-	# normalize sine gaussians to have unit length in their vector space
-	#inner_product = numpy.sum(sg_vals*sg_vals)
-	#norm_factor = 1./(inner_product**0.5)
-
-	return sg_vals 
-
-def half_sine_gaussian(sg_arr):
-	samples = sg_arr.size/2 + 1
-
-	# only take first half of sine gaussian + peak
-	hsg_vals = sg_arr[:samples]
-	
-	# renormalize
-	inner_product = numpy.sum(hsg_vals*hsg_vals)
-	norm_factor = 1./(inner_product**0.5)
-
-	return norm_factor*hsg_vals
-
-#
-# number of tiles in frequency and Q
-#
-def N_Q(q_min, q_max, mismatch = 0.2):
-	"""
-	Minimum number of distinct Q values to generate based on Q_min, Q_max, and mismatch params.
-	"""
-	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min))
-
-def N_phi(phi_min, phi_max, q,  mismatch = 0.2):
-	"""
-	Minimum number of distinct frequency (phi) values to generate based on phi_min, phi_max, and mismatch params.
-	"""
-	return numpy.ceil(1./(2.*numpy.sqrt(mismatch/3.))*(numpy.sqrt(2.+q**2.)/2.)*numpy.log(phi_max/phi_min))
-
-def Qq(q_min, q_max, mismatch = 0.2):
-	"""
-	List of Q values to generate based on Q_min, Q_max, and mismatch params.
-	"""
-	N_q = numpy.ceil(N_Q(q_min, q_max, mismatch = mismatch))
-	return [q_min*(q_max/q_min)**((0.5+q)/N_q) for q in range(int(N_q))]
-
-def phi_ql(phi_min, phi_max, q_min, q_max, mismatch = 0.2, phi_nyquist = None):
-	"""
-	Generates Q and frequency (phi) pairs based on mismatch, Q and phi ranges.
-	"""
-	for q in Qq(q_min, q_max, mismatch = mismatch):
-		nphi = N_phi(phi_min, phi_max, q, mismatch = mismatch)
-		for l in range(int(nphi)):
-			phi = phi_min*(phi_max/phi_min)**((0.5+l)/nphi)
-			if phi_nyquist:
-				if phi < phi_nyquist/(1+numpy.sqrt(11)/q):
-					yield (phi, q)
-			else:
-				yield (phi, q)
 
 ####################
 # 
@@ -210,7 +132,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		if options.save_hdf:
 			self.last_save_time = {key:None for key in self.keys}
 			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
-			self.fdata = idq_aggregator.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
+			self.fdata = idq_utils.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
 
 			if options.gps_end_time:
 				duration = int(options.gps_end_time) - int(options.gps_start_time)
@@ -319,11 +241,11 @@ class MultiChannelHandler(simplehandler.Handler):
 
 			# Save triggers (hdf or ascii) once per cadence
 			if options.save_hdf:
-				if idq_aggregator.in_new_epoch(buftime, self.last_save_time[(channel, rate)], self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+				if idq_utils.in_new_epoch(buftime, self.last_save_time[(channel, rate)], self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
 					self.to_hdf_file((channel, rate))
 					self.last_save_time[(channel, rate)] = buftime
 			else:
-				if idq_aggregator.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+				if idq_utils.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
 					self.to_trigger_file(buftime)
 					self.fdata.clear()
 					self.fdata.append(self.header)
@@ -392,7 +314,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		# Only write triggers to disk where the associated data structure has more
 		# than the header stored within.
 		if len(self.fdata) > 1 :
-			fname = '%s-%d-%d.%s' % (self.tag, idq_aggregator.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
+			fname = '%s-%d-%d.%s' % (self.tag, idq_utils.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
 			path = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
 			fpath = os.path.join(path, fname)
 			tmpfile = fpath+"~"
@@ -413,7 +335,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		Uses the T050017 filenaming convention.
 		NOTE: This method should only be called by an instance that is locked.
 		"""
-		self.fdata.dump(self.tmp_path, self.fname, idq_aggregator.floor_div(self.last_save_time[key], self.cadence), key = key, tmp = True)
+		self.fdata.dump(self.tmp_path, self.fname, idq_utils.floor_div(self.last_save_time[key], self.cadence), key = key, tmp = True)
 
 	def finish_hdf_file(self):
 		"""
@@ -674,49 +596,60 @@ pipeline = Gst.Pipeline(sys.argv[0])
 # generate multiple channel sources, and link up pipeline
 head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
 src = {}
+
 for channel in channels:
 	# define sampling rates used
-	samp_rate = data_source_info.channel_dict[channel]['fsamp']  
-	max_samp_rate = min(2048, int(samp_rate))
+	samp_rate = int(data_source_info.channel_dict[channel]['fsamp'])
+	max_samp_rate = min(2048, samp_rate)
 	min_samp_rate = min(32, max_samp_rate)
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
-	if data_source_info.latency_output:
-		head[channel] = pipeparts.mklatency(pipeline, head[channel], name = 'stage2_beforeWhitening_%s' % channel)
+	rates = [min_samp_rate*2**i for i in range(n_rates)]
+
+	if options.latency_output:
+		head[channel] = pipeparts.mklatency(pipeline, head[channel], name=idq_utils.latency_name('beforewhitening', 2, channel))
+
 	# whiten auxiliary channel data
-	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], [min_samp_rate*2**i for i in range(n_rates)], int(samp_rate), instrument, channel_name = channel, width=32).items():
-		if data_source_info.latency_output:
-			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage3_afterWhitening_%s_%s' % (str(rate).zfill(5), channel))
+	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32).items():
+		if options.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterwhitening', 3, channel, rate))
+
 		# choose range of basis parameters for sine-gaussians
+		# NOTE: scale down frequency range by downsample_factor to deal with rolloff from downsampler
+		downsample_factor = 0.8
+		flow = rate/4. * downsample_factor
+		fhigh = rate/2. * downsample_factor
+		qlow = 4
 		if data_source_info.extension == 'ini':
-			# use omicron params with .ini files
 			qhigh = data_source_info.channel_dict[channel]['qhigh']  
 		else:
 			qhigh = options.qhigh
-		# NOTE: as long as this fudge factor (0.8) for the high frequency cutoff is
-		#       less than the factor in the chebychev low pass cutoff in the downsampler
-		#       this should be fine
-		flow = rate/4.*0.8
-		fhigh = rate/2.*0.8
-		qlow = 4
-		# generate sine-gaussian templates
-		dur = max([duration(phi, q, 5e-3) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch, phi_nyquist = fhigh)])
-		t_arr = numpy.linspace(-dur/2., dur/2., int(numpy.floor(dur*rate)+1))
-		phase = [0, numpy.pi/2.]
-		basis_params[(channel, rate)] = [(phi, q, duration(phi, q, 5e-3)/2.) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch, phi_nyquist = fhigh)]
+
+		# generate half sine-gaussian templates
+		hsg_waveforms = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
+		basis_params[(channel, rate)] = hsg_waveforms.parameter_grid
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
+
 		# determine whether to do time-domain or frequency-domain convolution
-		time_domain = (dur*rate**2) < (5*dur*rate*numpy.log2(rate))
-		fir_matrix = numpy.array([half_sine_gaussian(sine_gaussian(phi, phi_0, q, t_arr)) for (phi, q) in phi_ql(flow, fhigh, qlow, qhigh, mismatch = options.mismatch, phi_nyquist = fhigh) for phi_0 in phase])
+		time_domain = (hsg_waveforms.max_duration*rate**2) < (5*hsg_waveforms.max_duration*rate*numpy.log2(rate))
+
+		# create FIR bank of half sine-gaussian templates
+		fir_matrix = numpy.array([waveform for waveform in hsg_waveforms.generate_templates()])
 		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = 0)
-		if data_source_info.latency_output:
-			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage4_afterFIRbank_%s_%s' % (str(rate).zfill(5), channel))
+
+		# add queues, change stream format, add tags
+		if options.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterFIRbank', 4, channel, rate))
 		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
 		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
 		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
+
+		# extract features from time series
 		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
-		if data_source_info.latency_output:
-			thishead = pipeparts.mklatency(pipeline, thishead, name = 'stage5_afterTrigger_%s_%s' % (str(rate).zfill(5), channel))
+		if options.latency_output:
+			thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('aftertrigger', 5, channel, rate))
+
+		# link to src for processing by appsync
 		src[(channel, rate)] = thishead	
 
 # define structures to synchronize output streams and extract triggers from buffer
@@ -725,7 +658,7 @@ if options.verbose:
 
 handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments)
 appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
-appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for (channel, rate) in src.keys()) 
+appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for channel, rate in src.keys())
   
 # Allow Ctrl+C or sig term to gracefully shut down the program for online
 # sources, otherwise it will just kill it
