@@ -272,4 +272,4 @@ class HalfSineGaussianGenerator(object):
 			for l in range(num_f):
 				f = f_min * (f_max/f_min)**( (0.5+l) /num_f)
 				if f < f_max / (1 + (numpy.sqrt(11)/q)):
-						yield (f, q)
+					yield (f, q)
