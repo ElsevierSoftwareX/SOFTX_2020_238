@@ -146,6 +146,7 @@ def lal_transferfunction_03(pipeline, name):
 	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = 512, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
 #	hoftadd = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 0, volume = 1, freq = 2048, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
 #	hoft = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, hoft, hoftadd))
+	hoft = calibration_parts.highpass(pipeline, hoft, rate)
 	hoft = pipeparts.mktee(pipeline, hoft)
 
 	difference = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.001, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
@@ -163,7 +164,7 @@ def lal_transferfunction_03(pipeline, name):
 	hoft3 = pipeparts.mktee(pipeline, hoft3)
 
 #	hoft3 = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.1, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-	clean_data = calibration_parts.clean_data(pipeline, calibration_parts.list_srcs(pipeline, hoft, hoft2, hoft3), rate / 8, rate / 16, 32, rate * 100)
+	clean_data = calibration_parts.clean_data(pipeline, hoft, rate, calibration_parts.list_srcs(pipeline, hoft2, hoft3), rate, rate / 8, rate / 16, 32, rate * 100)
 	pipeparts.mknxydumpsink(pipeline, hoft, "%s_hoft.txt" % name)
 	pipeparts.mknxydumpsink(pipeline, hoft2, "%s_hoft2.txt" % name)
 	pipeparts.mknxydumpsink(pipeline, difference, "%s_difference.txt" % name)
@@ -182,8 +183,8 @@ def lal_transferfunction_03(pipeline, name):
 
 
 #test_common.build_and_run(lal_transferfunction_01, "lal_transferfunction_01")
-test_common.build_and_run(lal_transferfunction_02, "lal_transferfunction_02")
-#test_common.build_and_run(lal_transferfunction_03, "lal_transferfunction_03")
+#test_common.build_and_run(lal_transferfunction_02, "lal_transferfunction_02")
+test_common.build_and_run(lal_transferfunction_03, "lal_transferfunction_03")
 
 
 

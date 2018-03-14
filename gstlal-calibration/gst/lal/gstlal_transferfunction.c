@@ -271,7 +271,10 @@ static void update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_m
 		/* Now copy the result into transfer_functions */ \
 		for(j = 0; j < num_tfs; j++) { \
 			gslz = gsl_vector_complex_get(transfer_functions_solved_at_f, j); \
-			transfer_functions[j * length_tfs + i] = GSL_REAL(gslz) + I * GSL_IMAG(gslz); \
+			if(isnormal(GSL_REAL(gslz))) \
+				transfer_functions[j * length_tfs + i] = GSL_REAL(gslz) + I * GSL_IMAG(gslz); \
+			else \
+				transfer_functions[j * length_tfs + i] = 0; \
 		} \
 	} \
 }

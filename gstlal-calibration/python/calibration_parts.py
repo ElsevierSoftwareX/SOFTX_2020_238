@@ -42,8 +42,8 @@ def mkcomplexqueue(pipeline, head, length = 0, min_length = 0):
 	head = pipeparts.mktogglecomplex(pipeline, head)
 	return head
 	
-def mkinsertgap(pipeline, head, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND):
-	return pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = insert_gap, remove_gap = remove_gap, replace_value = replace_value, fill_discont = fill_discont, block_duration = int(block_duration))
+def mkinsertgap(pipeline, head, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND, chop_length = 0):
+	return pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = insert_gap, remove_gap = remove_gap, replace_value = replace_value, fill_discont = fill_discont, block_duration = int(block_duration), chop_length = int(chop_length))
 
 #def mkupsample(pipeline, head, new_caps):
 #	head = pipeparts.mkgeneric(pipeline, head, "lal_constantupsample")
@@ -154,6 +154,10 @@ def list_srcs(pipeline, *args):
 	for src in args:
 		out.append(src)
 	return tuple(out)
+
+#
+# Various filtering functions
+#
 
 def removeDC(pipeline, head, caps):
 	head = pipeparts.mktee(pipeline, head)
@@ -646,7 +650,7 @@ def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_n
 	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
 
-def clean_data(pipeline, srcs, fft_length, fft_overlap, num_ffts, update_samples):
+def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, update_samples):
 
 	#
 	# Note: this function can cause pipelines to lock up. Adding queues does not seem to help.
@@ -658,20 +662,23 @@ def clean_data(pipeline, srcs, fft_length, fft_overlap, num_ffts, update_samples
 
 	default_fir_filter = numpy.zeros(fft_length)
 
-	tees = []
-	for i in range(0, len(srcs)):
-		tees.append(pipeparts.mktee(pipeline, srcs[i]))
+	signal_tee = pipeparts.mktee(pipeline, signal)
+	witnesses = list(witnesses)
+	witness_tees = []
+	for i in range(0, len(witnesses)):
+		witnesses[i] = highpass(pipeline, witnesses[i], witness_rate)
+		witness_tees.append(pipeparts.mktee(pipeline, witnesses[i]))
 
-	transfer_functions = mkinterleave(pipeline, tees)
+	resampled_signal = mkresample(pipeline, signal_tee, 5, False, "audio/x-raw,rate=%d" % witness_rate)
+	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
 	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1)
-	data = [tees[0]]
-	for i in range(1, len(srcs)):
-		data.append(pipeparts.mkgeneric(pipeline, tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fft_length / 2, taper_length = 20 * fft_length))
-		transfer_functions.connect("notify::fir-filters", update_filter, data[i], "fir_filters", "kernel", i - 1)
+	signal_minus_noise = [signal_tee]
+	for i in range(0, len(witnesses)):
+		minus_noise = pipeparts.mkgeneric(pipeline, witness_tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fft_length / 2, taper_length = 20 * fft_length)
+		transfer_functions.connect("notify::fir-filters", update_filter, minus_noise, "fir_filters", "kernel", i)
+		signal_minus_noise.append(mkresample(pipeline, minus_noise, 5, False, "audio/x-raw,rate=%d" % signal_rate))
 
-	clean  = mkadder(pipeline, tuple(data))
-
-	return clean
+	return mkadder(pipeline, tuple(signal_minus_noise))
 
 
 
