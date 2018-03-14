@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018  Qi Chu
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# Plot injection properties such as time and chirp mass
+#
+# ### Command line interface
+#
+#	+ `--inj-xml` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
+#	+ `--output_prefix` [filename]: Set the filename in which to save the plot (required).
+#	+ `--verbose`: Be verbose.
+
+
+import sys
+import scipy
+import numpy
+from optparse import OptionParser
+import pdb
+
+import matplotlib
+matplotlib.use('Agg')
+
+from matplotlib import pyplot
+
+
+from glue.ligolw import ligolw, lsctables, array, param, utils
+from glue import iterutils
+
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+    pass
+array.use_in(DefaultContentHandler)
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--inj-xml", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the inj xml (required).")
+parser.add_option("--gps-start-time", metavar = "s", type = "float", help = "Set the gps start time.")
+parser.add_option("--gps-end-time", metavar = "s", type = "float", help = "Set the gps end time.")
+parser.add_option("--output-prefix", metavar = "filename", help = "Set the filename prefix in which to save the plot (required).")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parser.parse_args()
+
+required_options = ("inj_xml", "gps_start_time", "gps_end_time", "output_prefix")
+
+missing_options = [option for option in required_options if getattr(options, option) is None]
+if missing_options:
+	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+# load the sim_inspiral table
+inj_xmldoc = utils.load_filename(options.inj_xml, contenthandler = DefaultContentHandler, verbose = options.verbose)
+
+# Get sim inspiral table
+sim_inspiral_table = lsctables.SimInspiralTable.get_table(inj_xmldoc)
+
+# check the GW end_time in detector hanford is within the given range
+iterutils.inplace_filter(lambda row: row.h_end_time >= float(options.gps_start_time) and row.h_end_time < float(options.gps_end_time), sim_inspiral_table)
+
+inj_h_time = sim_inspiral_table.getColumnByName("h_end_time")
+inj_mchirp = sim_inspiral_table.getColumnByName("mchirp")
+inj_h_effd = sim_inspiral_table.getColumnByName("eff_dist_h")
+    
+# plot the time vs. mchirp:
+out_name = "%s_mchirp.svg" % options.output_prefix
+pyplot.figure()
+pyplot.scatter(inj_h_time, inj_mchirp)
+pyplot.xlabel('GPS Time in LHO')	
+pyplot.ylabel('Mchirp')	
+pyplot.savefig(out_name, format = "svg", dpi = 1200)
+
+# plot the time vs. eff_dist_h
+out_name = "%s_effd.svg" % options.output_prefix
+pyplot.figure()
+pyplot.scatter(inj_h_time, inj_h_effd)
+pyplot.xlabel('GPS Time in LHO')	
+pyplot.ylabel('Effective distance in LHO (MPC)')	
+pyplot.savefig(out_name, format = "svg", dpi = 1200)
+
