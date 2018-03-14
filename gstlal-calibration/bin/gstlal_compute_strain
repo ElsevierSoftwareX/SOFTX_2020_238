@@ -354,7 +354,7 @@ median_smoothing_samples = int(options.median_smoothing_time) * options.compute_
 # if we are calibrating offline using many short jobs in parallel, we want to be able to
 # compute the kappas in time for the first lock stretch. So we will shift the timestamps.
 kappas_delay = 0
-if options.data_source == "frames" and (options.apply_kappatst or options.apply_kappapu or options.apply_kappac or options.update_fcc):
+if options.full_calibration and (options.apply_kappatst or options.apply_kappapu or options.apply_kappac or options.update_fcc):
 	kappas_delay += median_smoothing_samples + factors_average_samples + integration_samples
 	if options.update_fcc:
 		 kappas_delay += int(options.fcc_averaging_time) * options.compute_factors_sr
