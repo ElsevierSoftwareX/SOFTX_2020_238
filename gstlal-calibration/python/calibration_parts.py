@@ -164,6 +164,90 @@ def removeDC(pipeline, head, caps):
 
 	return mkadder(pipeline, list_srcs(pipeline, head, DC))
 
+def lowpass(pipeline, head, rate, length = 1.0, fcut = 500):
+	length *= rate
+	if not length % 2:
+		length += 1 # Make sure the filter length is odd
+
+	# Compute a low-pass filter.
+	lowpass = numpy.sinc(2 * float(fcut) / rate * (numpy.arange(length) - (length - 1) / 2))
+	lowpass *= numpy.blackman(length)
+	lowpass /= numpy.sum(lowpass)
+
+	# Now apply the filter
+	return pipeparts.mkfirbank(pipeline, head, latency = int((length - 1) / 2), fir_matrix = [lowpass], time_domain = True)
+
+def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0):
+	length *= rate
+	if not length % 2:
+		length += 1 # Make sure the filter length is odd
+
+	# Compute a low-pass filter.
+	lowpass = numpy.sinc(2 * float(fcut) / rate * (numpy.arange(length) - (length - 1) / 2))
+	lowpass *= numpy.blackman(length)
+	lowpass /= numpy.sum(lowpass)
+
+	# Create a high-pass filter from the low-pass filter through spectral inversion.
+	highpass = -lowpass
+	highpass[(length - 1) / 2] += 1
+
+	# Now apply the filter
+	return pipeparts.mkfirbank(pipeline, head, latency = int((length - 1) / 2), fir_matrix = [highpass], time_domain = True)
+
+def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400):
+	length *= int(rate / 2)
+	if not length % 2:
+		length += 1 # Make sure the filter length is odd
+
+	# Compute a temporary low-pass filter.
+	lowpass = numpy.sinc(2 * float(f_low) / rate * (numpy.arange(length) - (length - 1) / 2))
+	lowpass *= numpy.blackman(length)
+	lowpass /= numpy.sum(lowpass)
+
+	# Create the high-pass filter from the low-pass filter through spectral inversion.
+	highpass = -lowpass
+	highpass[(length - 1) / 2] += 1
+
+	# Compute the low-pass filter.
+	lowpass = numpy.sinc(2 * float(f_high) / rate * (numpy.arange(length) - (length - 1) / 2))
+	lowpass *= numpy.blackman(length)
+	lowpass /= numpy.sum(lowpass)
+
+	# Convolve the high-pass and low-pass filters to make a band-pass filter
+	bandpass = numpy.convolve(highpass, lowpass)
+
+	# Now apply the filter
+	return pipeparts.mkfirbank(pipeline, head, latency = int(length - 1), fir_matrix = [bandpass], time_domain = True)
+
+def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400):
+	length *= int(rate / 2)
+	if not length % 2:
+		length += 1 # Make sure the filter length is odd
+
+	# Compute a temporary low-pass filter.
+	lowpass = numpy.sinc(2 * float(f_low) / rate * (numpy.arange(length) - (length - 1) / 2))
+	lowpass *= numpy.blackman(length)
+	lowpass /= numpy.sum(lowpass)
+
+	# Create a high-pass filter from the low-pass filter through spectral inversion.
+	highpass = -lowpass
+	highpass[(length - 1) / 2] += 1
+
+	# Compute a low-pass filter.
+	lowpass = numpy.sinc(2 * float(f_high) / rate * (numpy.arange(length) - (length - 1) / 2))
+	lowpass *= numpy.blackman(length)
+	lowpass /= numpy.sum(lowpass)
+
+	# Convolve the high-pass and low-pass filters to make a temporary band-pass filter
+	bandpass = numpy.convolve(highpass, lowpass)
+
+	# Create a band-stop filter from the band-pass filter through spectral inversion.
+	bandstop = -bandpass
+	bandstop[length - 1] += 1
+
+	# Now apply the filter
+	return pipeparts.mkfirbank(pipeline, head, latency = int(length - 1), fir_matrix = [bandstop], time_domain = True)
+
 #
 # Calibration factor related functions
 #
