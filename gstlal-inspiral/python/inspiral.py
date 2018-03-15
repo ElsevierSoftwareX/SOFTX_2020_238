@@ -50,6 +50,7 @@
 #
 
 
+import bisect
 from collections import deque
 import itertools
 import math
@@ -80,6 +81,7 @@ except ImportError:
 
 from glue import iterutils
 from glue import segments
+from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw import ilwd
@@ -776,6 +778,14 @@ class Data(object):
 			if not buf_is_gap:
 				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg), len(events))
 
+			# times when at least 2 instruments were generating
+			# SNR.  used to sieve triggers for inclusion in the
+			# denominator.  fast path:  because all end times
+			# have been confirmed to be later than the start of
+			# the buffer we just collected, that can be used to
+			# clip the trigger rate history for speed
+			two_or_more_instruments = segmentsUtils.vote((ratebinlist[bisect.bisect_left(ratebinlist, (float(buf_timestamp),)):] for ratebinlist in self.rankingstat.denominator.triggerrates.values() if ratebinlist), 2)
+
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
 			# zero-lag multi-instrument coincs.  NOTE:  we rely
@@ -792,9 +802,8 @@ class Data(object):
 			# contaminating our noise model, so it's not
 			# necessary for this test to be super precisely
 			# defined.
-			ratebinlists = self.rankingstat.denominator.triggerrates.values()
 			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, self.rankingstat.segmentlists, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
-				if sum(event.end in ratebins for ratebins in ratebinlists) > 1:
+				if event.end in two_or_more_instruments:
 					self.rankingstat.denominator.increment(event)
 			self.coincs_document.commit()
 
