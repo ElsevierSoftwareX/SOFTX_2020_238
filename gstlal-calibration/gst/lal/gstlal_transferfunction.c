@@ -242,8 +242,9 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 
 
 #define DEFINE_UPDATE_TRANSFER_FUNCTIONS(DTYPE) \
-static void update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_matrix, int num_tfs, gint64 length_tfs, gint64 num_avg, gsl_vector_complex *transfer_functions_at_f, gsl_vector_complex *transfer_functions_solved_at_f, gsl_matrix_complex *autocorrelation_matrix_at_f, gsl_permutation *permutation, complex double *transfer_functions) { \
+static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_matrix, int num_tfs, gint64 length_tfs, gint64 num_avg, gsl_vector_complex *transfer_functions_at_f, gsl_vector_complex *transfer_functions_solved_at_f, gsl_matrix_complex *autocorrelation_matrix_at_f, gsl_permutation *permutation, complex double *transfer_functions) { \
  \
+	gboolean success = TRUE; \
 	gint64 i, first_index; \
 	int j, j_stop, signum; \
 	complex double z; \
@@ -273,10 +274,14 @@ static void update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_m
 			gslz = gsl_vector_complex_get(transfer_functions_solved_at_f, j); \
 			if(isnormal(GSL_REAL(gslz))) \
 				transfer_functions[j * length_tfs + i] = GSL_REAL(gslz) + I * GSL_IMAG(gslz); \
-			else \
+			else { \
+				success = FALSE; \
 				transfer_functions[j * length_tfs + i] = 0; \
+			} \
 		} \
 	} \
+ \
+	return success; \
 }
 
 
@@ -285,8 +290,9 @@ DEFINE_UPDATE_TRANSFER_FUNCTIONS(double);
 
 
 #define DEFINE_UPDATE_FIR_FILTERS(DTYPE, F_OR_BLANK) \
-static void update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
+static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
  \
+	gboolean success = TRUE; \
 	int i; \
 	gint64 j, length_tfs; \
 	DTYPE df, delay; \
@@ -309,9 +315,14 @@ static void update_fir_filters_ ## DTYPE(complex double *transfer_functions, int
  \
 		/* Apply the Tukey window and copy to fir_filters */ \
 		DTYPE *real_filter = (DTYPE *) fir_filter; \
-		for(j = 0; j < fir_length; j++) \
+		for(j = 0; j < fir_length; j++) { \
 			fir_filters[i * fir_length + j] = tukey[j] * real_filter[j]; \
+			if(isnan(fir_filters[i * fir_length + j]) || isinf(fir_filters[i * fir_length + j])) \
+				success = FALSE; \
+		} \
 	} \
+ \
+	return success; \
 }
 
 
@@ -320,7 +331,9 @@ DEFINE_UPDATE_FIR_FILTERS(double, );
 
 
 #define DEFINE_FIND_TRANSFER_FUNCTION(DTYPE, S_OR_D, F_OR_BLANK) \
-static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, DTYPE *src, guint64 src_size) { \
+static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, DTYPE *src, guint64 src_size) { \
+ \
+	gboolean success = TRUE; \
  \
 	/* Convert src_size from bytes to samples */ \
 	g_assert(!(src_size % element->unit_size)); \
@@ -473,7 +486,7 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
  \
 	/* Finally, update transfer functions if ready */ \
 	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
-		update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
+		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
 		GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
 		g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 		element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
@@ -481,7 +494,7 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
  \
 		/* Update FIR filters if we want */ \
 		if(element->make_fir_filters) { \
-			update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fft_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
+			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fft_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
 			GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
 		} \
@@ -493,6 +506,8 @@ static void find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *element, D
 				write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fft_length, num_tfs, element->write_to_screen, element->filename); \
 		} \
 	} \
+ \
+	return success; \
 }
 
 
@@ -961,21 +976,25 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 
 	/* Check whether we need to do anything with this data */
 	if(element->sample_count > element->update_samples) {
+		gboolean success;
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
 			if(!element->workspace.wspf.num_ffts_in_avg)
 				memset(element->workspace.wspf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * (element->fft_length / 2 + 1) * sizeof(*element->workspace.wspf.autocorrelation_matrix));
 
 			/* Send the data to a function to compute fft's and transfer functions */
-			find_transfer_functions_float(element, (float *) mapinfo.data, mapinfo.size);
+			success = find_transfer_functions_float(element, (float *) mapinfo.data, mapinfo.size);
 		} else {
 			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
 			if(!element->workspace.wdpf.num_ffts_in_avg)
 				memset(element->workspace.wdpf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * (element->fft_length / 2 + 1) * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
 
 			/* Send the data to a function to compute fft's and transfer functions */
-			find_transfer_functions_double(element, (double *) mapinfo.data, mapinfo.size);
+			success = find_transfer_functions_double(element, (double *) mapinfo.data, mapinfo.size);
 		}
+
+		if(!success)
+			element->sample_count = element->update_samples;
 	}
 
 	return result;

@@ -146,7 +146,7 @@ def lal_transferfunction_03(pipeline, name):
 	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = 512, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
 #	hoftadd = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 0, volume = 1, freq = 2048, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
 #	hoft = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, hoft, hoftadd))
-	hoft = calibration_parts.highpass(pipeline, hoft, rate)
+	#hoft = calibration_parts.highpass(pipeline, hoft, rate)
 	hoft = pipeparts.mktee(pipeline, hoft)
 
 	difference = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.001, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
