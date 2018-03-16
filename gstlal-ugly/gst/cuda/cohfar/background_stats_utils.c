@@ -270,6 +270,8 @@ background_stats_destroy(BackgroundStats **stats, int ncombo)
     free(cur_stats);
     cur_stats = NULL;
   }
+  free(stats);
+  stats = NULL;
 }
 
 
@@ -855,10 +857,34 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
     //printf("icombo %d, nevent addr %p, %p\n", icombo, (param_nevent[icombo].data), (&(param_nevent[icombo]))->data);
   }
   *hist_trials = *((int *)param_hist_trials->data);
-  free(param_hist_trials);
 
   // FIXME: some sanity check for file loading
   //printf( "load stats file\n");
+  /*
+   * Cleanup function for the XML library.
+   */
+  xmlCleanupParser();
+  /*
+   * this is to debug memory for regression tests
+   */
+  xmlMemoryDump();
+
+  /*
+   * free the allocated memory for xml reading
+   */
+  for (icombo=0; icombo<ncombo; icombo++) {
+    free(array_lgsnr_rates[icombo].data);
+    free(array_lgchisq_rates[icombo].data);
+    free(array_lgsnr_lgchisq_rates[icombo].data);
+    free(array_lgsnr_lgchisq_pdf[icombo].data);
+    free(param_nevent[icombo].data);
+    free(param_duration[icombo].data);
+    free(array_rank_map[icombo].data);
+    free(array_rank_rates[icombo].data);
+    free(array_rank_pdf[icombo].data);
+    free(array_rank_fap[icombo].data);
+  }
+  free(param_hist_trials->data);
   free(array_lgsnr_rates);
   free(array_lgchisq_rates);
   free(array_lgsnr_lgchisq_rates);
@@ -869,10 +895,8 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
   free(array_rank_rates);
   free(array_rank_pdf);
   free(array_rank_fap);
+  free(param_hist_trials);
 
-  free(xns);
-  xmlCleanupParser();
-  xmlMemoryDump();
   return TRUE;
 }
 
@@ -1072,6 +1096,9 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_tria
   }
 
   xmlFreeTextWriter(writer);
+  /*
+   * free all alocated memory
+   */
   free(param_range.data);
   free(param_nevent.data);
   free(param_duration.data);
@@ -1086,6 +1113,15 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_tria
     freeArray(array_rank_pdf + icombo);
     freeArray(array_rank_fap + icombo);
   }
+  free(array_lgsnr_rates);
+  free(array_lgchisq_rates);
+  free(array_lgsnr_lgchisq_rates);
+  free(array_lgsnr_lgchisq_pdf);
+  free(array_rank_map);
+  free(array_rank_rates);
+  free(array_rank_pdf);
+  free(array_rank_fap);
+
   /* rename the file, prevent write/ read of the same file problem.
    * rename will wait for file count of the filename to be 0.  */
   printf("rename from %s\n", tmp_filename);

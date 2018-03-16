@@ -153,13 +153,18 @@ int main(int argc, char *argv[])
 	BackgroundStats **stats_out = background_stats_create(*pifos);
 	gchar **in_fnames = g_strsplit(*pin, ",", -1); // split the string completely
 
-	gsl_vector *data_dim1, *data_dim2;
 	if (g_strcmp0(*pfmt, "data") == 0) {
+		gsl_vector *data_dim1 = NULL, *data_dim2 = NULL;
 		cohfar_get_data_from_file(in_fnames, &data_dim1, &data_dim2);
 		// FIXME: hardcoded to only update the last stats
 		background_stats_feature_rates_update_all(data_dim1, data_dim2, stats_out[ncombo-1]->feature, stats_out[ncombo-1]);
 		background_stats_feature_rates_to_pdf(stats_out[ncombo-1]->feature);
 		background_stats_feature_to_rank(stats_out[ncombo-1]->feature, stats_out[ncombo-1]->rank);
+		if (data_dim1) {
+			free(data_dim1);
+			free(data_dim2);
+		}
+		
 		// background_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
 	} else if(g_strcmp0(*pfmt, "stats") == 0) {
 		cohfar_get_stats_from_file(in_fnames, stats_in, stats_out, &hist_trials, ncombo);
@@ -171,6 +176,8 @@ int main(int argc, char *argv[])
 		}
 	}
 	background_stats_to_xml(stats_out, ncombo, hist_trials, *pout);
+	background_stats_destroy(stats_in, ncombo);
+	background_stats_destroy(stats_out, ncombo);
 	//FIXME: free stats
 	g_strfreev(in_fnames);
 
@@ -183,5 +190,9 @@ int main(int argc, char *argv[])
 	free(pfmt);
 	free(pout);
 	free(pifos);
+	pin = NULL;
+	pfmt = NULL;
+	pout = NULL;
+	pifos = NULL;
 	return 0;
 }
