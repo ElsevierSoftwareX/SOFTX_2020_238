@@ -24,6 +24,8 @@ import lal.series
 import argparse
 from glue.ligolw import utils as ligolw_utils
 from gstlal.stats import inspiral_extrinsics
+#import cProfile
+import itertools
 
 parser = argparse.ArgumentParser(description='Generate PDFs of extrinsic parameters')
 parser.add_argument('--horizons', action = "append", help='add horizon distances in the form of e.g, H1=200.0')
@@ -31,19 +33,15 @@ parser.add_argument('--min-instruments', type=int, default = 1, help = 'min inst
 parser.add_argument('--snr-thresh', type=float, default = 4.0, help = 'set the snr minimum to define found')
 parser.add_argument('--num-samples', type=int, default = 1000000, help = 'set the number of samples to compute')
 parser.add_argument('--num-samples-random-time-phase', type=int, default = 10000, help = 'set the number of samples to compute')
-parser.add_argument('--psd-file', help = 'set the PSD file')
 parser.add_argument('--output-file', default = 'extparams.h5', help = 'set the output hdf5 file. Default extparams.h5')
 args = parser.parse_args()
 
 horizons = dict((x, float(y)) for (x,y) in [h.split("=") for h in args.horizons])
 
-
-psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(args.psd_file, verbose = True, contenthandler = lal.series.PSDContentHandler))["H1"]
-
-RS = inspiral_extrinsics.RandomSource(psd, horizons)
+RS = inspiral_extrinsics.RandomSource(horizons)
 
 DB = {}
-IE = inspiral_extrinsics.InspiralExtrinsicParameters(horizons, args.snr_thresh, args.min_instruments) 
+IE = inspiral_extrinsics.InspiralExtrinsicParameters(horizons, args.snr_thresh, args.min_instruments)
 
 for hist in IE.histograms.values():
 	print hist
@@ -51,9 +49,13 @@ for hist in IE.histograms.values():
 i = 0
 last = dict((k,0) for k in IE.histograms)
 num = dict((k,0.) for k in IE.histograms)
+#pr = cProfile.Profile()
+#pr.enable()
 while i < args.num_samples:
 	time, phase, snr, dist, prob = RS()
 	detected_ifos = tuple(sorted([ifo for ifo in snr if snr[ifo] >= args.snr_thresh]))
+	if any(abs(time[choice[0]] - time[choice[1]]) > IE.max_dt for choice in itertools.combinations(detected_ifos, 2)):
+		continue
 	# make sure at least one detector found it
 	if len(detected_ifos) >= args.min_instruments:
 		i += 1
@@ -65,7 +67,11 @@ while i < args.num_samples:
 		del time[ifo]
 		del phase[ifo]
 		del snr[ifo]
-	IE.insert(time, phase, snr, prob)
+
+	try:
+		IE.insert(time, phase, snr, prob)
+	except ValueError as e:
+		print time, phase, snr, " was rejected"
 	if not(i % 10000):
 		print >> sys.stderr, "\nSIMULATION %d \n " % i
 		print "%20s | %20s | %20s | %20s" % ("IFO combos", "number of cells", "number of points", "fraction change")
@@ -74,6 +80,8 @@ while i < args.num_samples:
 			print "%20s | %20s | %20s | %20s" %  (str(combo), IE.histograms[combo].num_cells, IE.histograms[combo].num_points, (IE.histograms[combo].num_cells - last[combo]) / num[combo])
 			last[combo] = IE.histograms[combo].num_cells
 			num[combo] = 0.
+#pr.disable()
+#pr.print_stats(sort='time')
 
 IE.to_hdf5(args.output_file)
 

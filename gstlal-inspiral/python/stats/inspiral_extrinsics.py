@@ -40,7 +40,7 @@ import numpy
 import os
 import random
 from scipy import stats
-from scipy import interpolate, fft, ifft
+import scipy, scipy.signal
 import sys
 import h5py
 
@@ -1100,7 +1100,7 @@ class DynamicBins(object):
 		point = numpy.array([a.searchsorted(point[i], "right")-1 for i,a in enumerate(self.bin_edges)])
 		assert numpy.all(point <= 128) and numpy.all(point >=0)
 		point = numpy.array(point, dtype = "uint8")
-		return point	
+		return point
 
 	def bin_to_point(self, binpoint):
 		"""
@@ -1115,7 +1115,7 @@ class DynamicBins(object):
 		There are three possibilities
 			1) The hyperrectangle is empty
 			2) It is not empty, but is as small as it is allowed to be
-			3) It is not empty and is larger than the minimum size, 
+			3) It is not empty and is larger than the minimum size,
 			so it will be split
 		"""
 		assert self.static_data is None and self.hyper_rect is not None
@@ -1222,14 +1222,14 @@ class DynamicBins(object):
 		# setup efficient storage for all of the data
 		# for an 8D PDF this should ad up to 32 bytes per bin
 		# NOTE we will use zero to denote a null value so we want to start counting at 1
-		# FIXME should probably check that we don't have more than 4 billion bins.  
+		# FIXME should probably check that we don't have more than 4 billion bins.
 		LOWER = numpy.zeros((len(nodes)+1, len(self.bin_edges)), dtype = "uint8")
 		UPPER = numpy.zeros((len(nodes)+1, len(self.bin_edges)), dtype = "uint8")
 		PARENT = numpy.zeros(len(nodes)+1, dtype="uint32")
 		LEFT = numpy.zeros(len(nodes)+1, dtype="uint32")
 		RIGHT = numpy.zeros(len(nodes)+1, dtype="uint32")
 		PROB = numpy.zeros(len(nodes)+1, dtype="float32")
-		
+
 		# give them all an integer id first
 		# NOTE we will use zero to denote a null value so we want to start counting at 1
 		for i,node in enumerate(nodes):
@@ -1308,7 +1308,7 @@ class DynamicBins(object):
 		begroup = dgrp.create_group("bin_edges")
 		for i, bin_edge in enumerate(self.bin_edges):
 			begroup.create_dataset("%d" % i, data = bin_edge)
-		dgrp.attrs["num_points"] = self.num_points 
+		dgrp.attrs["num_points"] = self.num_points
 		dgrp.attrs["total_prob"] = self.total_prob
 		dgrp.attrs["num_cells"] = self.num_cells
 
@@ -1368,37 +1368,35 @@ class IFFT(object):
 
 class RandomSource(object):
 
-	def __init__(self, psd, horizons, SR = 2048, FL = 32, FH = 1024, DF = 32):
-
-		psd_data = psd.data.data
-		f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
-
-		f = f[int(FL / psd.deltaF):int(FH / psd.deltaF)]
-		psd = psd_data[int(FL / psd.deltaF): int(FH / psd.deltaF)]
-
-		psd = interpolate.interp1d(f, psd)
-		f = numpy.arange(FL, FH, DF)
-		PSD = psd(f)
-
-		self.t = numpy.arange(0, SR) / float(SR) / DF
-		self.f = numpy.arange(-SR/2, SR/2, DF)
-		psd = numpy.ones(len(self.f)) * 1e-30
-		psd[(SR/2-FH)/DF:(SR/2-FL)/DF] = PSD[::-1]
-		psd[(SR/2+FL)/DF:(SR/2+FH)/DF] = PSD
-
-		self.psd = psd
+	def __init__(self, horizons, snr_thresh = 4):
 
 		self.horizons = horizons
+		self.snr_thresh = snr_thresh
 
 		self.responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}
 		self.locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}
 
+		# FIXME hardcoded waveform parameters
+		SR = 1024
+		FL = 32
+		FH = 512
+		DF = 8
+		M = 20
+
 		self.fft = FFT()
 		self.ifft = IFFT()
 
-		self.w1t = self.waveform(0., 0.)
-		self.w1 = self.fft(self.w1t)
-		self.w2 = self.fft(self.waveform(0., numpy.pi / 2.))
+		# A fit to log10(PSD) valid from 32 - 1000 Hz
+		self.psd_poly = numpy.poly1d([2.03126049858e-31, -1.2972892934e-27, 3.66982378504e-24, -6.05825031839e-21, 6.47340811262e-18, -4.69465030024e-15, 2.35714669447e-12, -8.20998601486e-10, 1.95808315435e-07, -3.10661046948e-05, 0.00311779487257, -0.179937186933, -41.5826943969])
+
+		self.t = numpy.arange(-SR / DF, 0) / float(SR)
+		# we do the match in a buffer twice as long centered at t = 0
+		self.tmatch = numpy.arange(-SR / DF, SR / DF) / float(SR)
+		self.f = numpy.arange(-SR/2, SR/2, DF)
+
+		self.w1td = numpy.concatenate((self.waveform(M, 0), numpy.zeros(len(self.t))))
+		self.w1fd = numpy.conj(self.fft(numpy.concatenate((numpy.zeros(len(self.t)), self.waveform(M, 0)))))
+		self.w2fd = numpy.conj(self.fft(numpy.concatenate((numpy.zeros(len(self.t)), self.waveform(M, numpy.pi / 2.)))))
 
 	def __call__(self):
 		# We will draw uniformly in extrinsic parameters
@@ -1408,9 +1406,11 @@ class RandomSource(object):
 		RA = numpy.random.uniform(0.0,2.0*numpy.pi)
 		DEC = numpy.arcsin(numpy.random.uniform(-1.0,1.0))
 		PSI = numpy.random.uniform(0.0,2.0*numpy.pi)
-		# FIXME assumes an SNR 4 threshold
-		#D = numpy.random.power(3) * max(self.horizons.values()) * 2
-		D = numpy.random.power(1) * max(self.horizons.values()) * 2
+		# FIXME check this
+		Dmax = max(self.horizons.values()) * (8 / self.snr_thresh)
+		D = numpy.random.random() * Dmax
+		# assume that we don't care about distances smaller than 1 / 1,000th of the maximum distance
+		#D = numpy.exp(numpy.random.random() * (numpy.log(Dmax) - numpy.log(Dmax/1000.)) + numpy.log(Dmax/1000.))
 		PROB = D**2
 		T = lal.LIGOTimeGPS(0)
 
@@ -1444,7 +1444,7 @@ class RandomSource(object):
 		#
 
 		network_snr = (numpy.array(snr.values())**2).sum()**.5
-		adjustment_factor = 11. / network_snr
+		adjustment_factor = 11. / network_snr if network_snr < 11 else 1
 		for ifo in self.horizons:
 			newsnr, dt, dphi = self.sample_from_matched_filter(snr[ifo] * adjustment_factor)
 			snr[ifo] += (newsnr - snr[ifo] * adjustment_factor)
@@ -1457,39 +1457,49 @@ class RandomSource(object):
 		return numpy.real((numpy.conj(w1) * w2).sum())
 
 	def matchfft(self, w1, w2):
-		return numpy.real(self.ifft(numpy.conj(w1) * w2))
+		# NOTE w1 should already have a conjugate applied!!
+		return numpy.real(self.ifft(w1 * w2))
 
-	def waveform(self, tc, phi):
-		a = abs(self.f)**(-7./6.)
-		a[len(a)/2] = 0
-		w = a * numpy.exp(numpy.pi * 2 * self.f * 1j * tc + phi * 1.j) / self.psd **.5
-		w = numpy.real(fft(w))
-		return numpy.array(w / self.match(w, w)**.5, dtype=float)
+	def waveform(self, mchirp, phi):
+
+		#
+		# Finn, Chernoff PRD 47 2198-2219 (1993)
+		#
+
+		M = mchirp * 4.92579497e-6 #mass of sun in seconds
+		PI = numpy.pi
+
+		def F(mchirp, t):
+			return 1.0 / PI / M * (5.0 * M / 256.0 / (6*M - t))**(3./8.)
+
+		def PHI(mchirp, t, phi):
+			return -2.0 * ((6*M - t) / 5 / M)**(5./8.) + phi
+
+		def A(mchirp, t):
+			# "whiten" the waveform
+			ASD = (10**self.psd_poly(F(mchirp, t)))**.5
+			return (PI * M * F(mchirp, t) / ASD)**(2./3.)
+
+		w = scipy.signal.tukey(len(self.t), alpha = 0.25) * A(mchirp, self.t) * numpy.cos(PHI(mchirp, self.t, phi))
+		return w / self.match(w,w)**.5
 
 	def noise(self):
-		return numpy.random.randn(len(self.f))
+		return numpy.random.randn(len(self.tmatch))
 
 	def inject(self, w, n, A):
 		return A*w+n
 
 	def sample_from_matched_filter(self, snr):
-		while True:
-			n = self.noise()
-			d = self.fft(self.inject(self.w1t, n, snr))
-			m1 = self.matchfft(self.w1,d)
-			m2 = self.matchfft(self.w2,d)
-			snr = ((m1**2 + m2**2)**.5)
-			ix = snr.argmax()
-			# FIXME Only consider times within 3ms to be "found"
-			if self.t[ix] > 0.003 and self.t[ix] < 0.997:
-				continue
-			if self.t[ix] >= 0.997:
-				DT = (1. - self.t[ix])
-			else:
-				DT = self.t[ix]
-			SNR = snr[ix]
-			DPHI = numpy.arctan(m2[ix] / m1[ix])
-			break
+		n = self.noise()
+		d = self.fft(self.inject(self.w1td, n, snr))
+		m1 = self.matchfft(self.w1fd, d)
+		m2 = self.matchfft(self.w2fd, d)
+		snr = ((m1**2 + m2**2)**.5)
+		ix = snr.argmax()
+		DT = self.tmatch[ix]
+		SNR = snr[ix]
+		DPHI = numpy.arctan(m2[ix] / m1[ix])
+
 		return SNR, DT, DPHI
 
 class InspiralExtrinsicParameters(object):
@@ -1499,6 +1509,8 @@ class InspiralExtrinsicParameters(object):
 		self.snr_thresh = snr_thresh
 		self.min_instruments = min_instruments
 		self.instruments = tuple(sorted(self.horizons.keys()))
+		# FIXME not adequate for Kagra
+		self.max_dt = 0.032
 		combos = set()
 		for i in range(self.min_instruments, len(self.instruments) + 1):
 			for choice in itertools.combinations(self.instruments, i):
@@ -1544,7 +1556,7 @@ class InspiralExtrinsicParameters(object):
 			# we have pairs of dt and dphi
 			for pair in list(itertools.combinations(ifos, 2))[:2]:
 				# Assumes Virgo time delay is the biggest we care about
-				bin_edges.append(numpy.linspace(-0.032, 0.032, 65))
+				bin_edges.append(numpy.linspace(-self.max_dt, self.max_dt, 65))
 			for pair in list(itertools.combinations(ifos, 2))[:2]:
 				bin_edges.append(numpy.linspace(-numpy.pi, numpy.pi, 33))
 			for pair in list(itertools.combinations(ifos, 2))[:2]:
