@@ -375,13 +375,16 @@ def merge_into_complex(pipeline, real, imag):
 
 def split_into_real(pipeline, complex_chan):
 	# split complex channel with complex caps into two channels (real and imag) with real caps
+
 	elem = pipeparts.mktogglecomplex(pipeline, complex_chan)
-	elem = pipeparts.mkgeneric(pipeline, elem, "deinterleave", keep_positions=True)
-	real = pipeparts.mkgeneric(pipeline, None, "identity")
-	pipeparts.src_deferred_link(elem, "src_0", real.get_static_pad("sink"))
-	
-	imag = pipeparts.mkgeneric(pipeline, None, "identity")
-	pipeparts.src_deferred_link(elem, "src_1", imag.get_static_pad("sink"))
+	(real, imag) = mkdeinterleave(pipeline, elem, 2)
+
+#	elem = pipeparts.mkgeneric(pipeline, elem, "deinterleave", keep_positions=True)
+#	real = pipeparts.mkgeneric(pipeline, None, "identity")
+#	pipeparts.src_deferred_link(elem, "src_0", real.get_static_pad("sink"))
+#	imag = pipeparts.mkgeneric(pipeline, None, "identity")
+#	pipeparts.src_deferred_link(elem, "src_1", imag.get_static_pad("sink"))
+
 	return real, imag
 
 def demodulate(pipeline, head, freq, td, caps, integration_samples, delay, chop_length, prefactor_real = 1.0, prefactor_imag = 0.0):
@@ -650,7 +653,7 @@ def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_n
 	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
 
-def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, update_samples):
+def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, update_samples, obsready = None):
 
 	#
 	# Note: this function can cause pipelines to lock up. Adding queues does not seem to help.
@@ -666,12 +669,15 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	witnesses = list(witnesses)
 	witness_tees = []
 	for i in range(0, len(witnesses)):
+		witnesses[i] = mkresample(pipeline, witnesses[i], 5, False, "audio/x-raw,rate=%d" % witness_rate)
 		witnesses[i] = highpass(pipeline, witnesses[i], witness_rate)
 		witness_tees.append(pipeparts.mktee(pipeline, witnesses[i]))
 
 	resampled_signal = mkresample(pipeline, signal_tee, 5, False, "audio/x-raw,rate=%d" % witness_rate)
 	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
-	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1)
+	if obsready is not None:
+		transfer_functions = mkgate(pipeline, transfer_functions, obsready, 1)
+	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1, update_after_gap = True)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
 		minus_noise = pipeparts.mkgeneric(pipeline, witness_tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fft_length / 2, taper_length = 20 * fft_length)
