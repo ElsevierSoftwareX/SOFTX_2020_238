@@ -254,10 +254,25 @@ class ratebinlist(segments.segmentlist):
 	[5@[0,10), 2.5@[5,15), 2.5@[15,25), 5@[20,30)]
 	>>> y.coalesce()
 	[15@[0,30)]
+	>>> # slices are ratebinlist objects
+	>>> (x0 | x3)[1:].density
+	0.5
 
 	NOTE:  the XML I/O feature of this class will only work correctly
 	for float-valued boundaries and integer counts.
 	"""
+	def __getitem__(self, index):
+		# make sure to return slices as ratebinlist objects, not
+		# native list objects
+		val = super(ratebinlist, self).__getitem__(index)
+		return self.__class__(val) if isinstance(index, slice) else val
+
+	# FIXME:  delete after porting to 3
+	def __getslice__(self, *args, **kwargs):
+		# make sure to return slices as ratebinlist objects, not
+		# native list objects
+		return self.__class__(super(ratebinlist, self).__getslice__(*args, **kwargs))
+
 	@property
 	def count(self):
 		return sum(seg.count for seg in self)
