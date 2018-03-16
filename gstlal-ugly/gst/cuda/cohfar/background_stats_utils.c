@@ -440,7 +440,10 @@ background_stats_feature_rates_to_pdf(FeatureStats *feature)
 	gsl_vector_linspace(pdf->cmin_y, pdf->cmax_y, pdf->nbin_y, tin_chisq);
 
 	knn_kde(tin_snr, tin_chisq, (gsl_matrix_long *)feature->lgsnr_lgchisq_rates->data, (gsl_matrix *)pdf->data);
-
+	gsl_vector_free(snr_double);
+	gsl_vector_free(chisq_double);
+	gsl_vector_free(tin_snr);
+	gsl_vector_free(tin_chisq);
 }
 
 

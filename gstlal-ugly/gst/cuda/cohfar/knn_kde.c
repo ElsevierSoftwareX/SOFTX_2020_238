@@ -182,6 +182,8 @@ static void calc_pdf(double band_const, gsl_vector *tin_x, gsl_vector *tin_y, gs
 	// norm_factor = 1/ gsl_matrix_sum(pdf);
 	//printf("norm_factor %lf\n", norm_factor);
 	//gsl_matrix_scale(pdf, norm_factor);
+	gsl_matrix_free(histogram_double);
+
 }
 
 void
@@ -198,5 +200,6 @@ knn_kde(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long *histogram, gsl_ma
 	gsl_vector * kth_dist = gsl_vector_alloc(num_nonzero);
 	find_kth_dist(tin_x, tin_y, nonzero_idx, knn_k, kth_dist);
 	calc_pdf(band_const, tin_x, tin_y, histogram, nonzero_idx, kth_dist, pdf);
-
+	gsl_matrix_long_free(nonzero_idx);
+	gsl_vector_free(kth_dist);
 }
