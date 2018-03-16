@@ -178,7 +178,6 @@ int main(int argc, char *argv[])
 	background_stats_to_xml(stats_out, ncombo, hist_trials, *pout);
 	background_stats_destroy(stats_in, ncombo);
 	background_stats_destroy(stats_out, ncombo);
-	//FIXME: free stats
 	g_strfreev(in_fnames);
 
 	g_free(*pin);

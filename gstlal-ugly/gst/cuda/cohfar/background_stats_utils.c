@@ -203,7 +203,6 @@ feature_stats_destroy( FeatureStats *feature)
   bins2D_destroy(feature->lgsnr_lgchisq_pdf);
   feature->lgsnr_lgchisq_pdf = NULL;
   free(feature);
-  feature = NULL;
 }
  
 
@@ -229,7 +228,6 @@ rank_stats_destroy(RankingStats *rank)
   bins2D_destroy(rank->rank_map);
   rank->rank_map = NULL;
   free(rank);
-  rank = NULL;
 }
  
 BackgroundStats **
@@ -266,7 +264,11 @@ background_stats_destroy(BackgroundStats **stats, int ncombo)
   for (icombo=0; icombo<ncombo; icombo++) {
     BackgroundStats *cur_stats = stats[icombo];
     feature_stats_destroy(cur_stats->feature);
+    cur_stats->feature = NULL;
     rank_stats_destroy(cur_stats->rank);
+    cur_stats->rank = NULL;
+    free(cur_stats->ifos);
+    cur_stats->ifos = NULL;
     free(cur_stats);
     cur_stats = NULL;
   }
