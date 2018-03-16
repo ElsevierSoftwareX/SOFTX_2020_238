@@ -241,7 +241,8 @@ class FinalSink(object):
 		self.gracedb_search = gracedb_search
 		self.gracedb_pipeline = gracedb_pipeline
 		self.gracedb_service_url = gracedb_service_url
-		self.gracedb_client = gracedb.rest.GraceDb(gracedb_service_url)
+                if gracedb:
+		    self.gracedb_client = gracedb.rest.GraceDb(gracedb_service_url)
 
 		# the postcoh doc stores clustered postcoh triggers and is snapshotted
 		self.postcoh_document = PostcohDocument()
