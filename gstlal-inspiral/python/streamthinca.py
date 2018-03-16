@@ -103,6 +103,10 @@ class StreamThinca(object):
 		# the \Delta t window not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
 
+		# allow .discard_boundary to return meaningful results
+		# before the first set of triggers are processed
+		self.coincidence_back_off = self.max_dt
+
 		# upper boundary of interval spanned by last invocation
 		self.last_boundary = -segments.infinity()
 
