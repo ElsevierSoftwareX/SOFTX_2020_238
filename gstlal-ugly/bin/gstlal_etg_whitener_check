@@ -63,6 +63,8 @@ def parse_command_line():
 	# First append the datasource common options
 	multichannel_datasource.append_options(parser)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--high-pass", action = "store_true", default = False, help = "Add a high-pass filter to the pipeline")
+	parser.add_option("--high-pass-cutoff", type = int, default = 12, help = "Set the high-pass filter cutoff, default = 12 Hz.")
 
 	# parse the arguments and sanity check
 	options, filenames = parser.parse_args()
@@ -125,6 +127,16 @@ for channel in channels:
 	if options.verbose:
 		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_after_downsample" % channel)
 
+
+	# high pass filter
+	if options.high_pass:
+		# FIXME: don't hardcode native rate cutoff for high-pass filtering
+		if samp_rate >= 128:
+			kernel = reference_psd.one_second_highpass_kernel(max_rate, cutoff = options.high_pass_cutoff)
+			block_stride = block_duration * max_rate // Gst.SECOND
+			assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
+			head[channel] = pipeparts.mkfirbank(pipeline, head[channel], fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
+
     # add reblock and tee
 	head[channel] = pipeparts.mkreblock(pipeline, head[channel], block_duration = block_duration)
 	head[channel] = pipeparts.mktee(pipeline, head[channel])
@@ -183,7 +195,7 @@ for channel in channels:
 		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_before sink" % channel)
 
     # dump timeseries to disk
-	pipeparts.mknxydumpsink(pipeline, head[channel], filename="whitened_timeseries_%s.txt" % channel)
+	pipeparts.mknxydumpsink(pipeline, head[channel], filename="whitenedtimeseries_%d_%s.txt" % (samp_rate,channel))
 
 
 # Allow Ctrl+C or sig term to gracefully shut down the program for online
