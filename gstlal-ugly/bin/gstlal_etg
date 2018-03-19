@@ -28,6 +28,7 @@
 from optparse import OptionParser
 from collections import deque
 import json
+import logging
 import os
 import sys
 import socket
@@ -119,6 +120,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.init_gps_time = int(options.gps_start_time)
 
 		### iDQ saving properties
+		self.last_save_time = None
 		self.cadence = options.cadence
 		self.tag = '%s-%s' % (self.instrument[:1], self.description)
 
@@ -130,7 +132,6 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# hdf saving properties
 		if options.save_hdf:
-			self.last_save_time = {key:None for key in self.keys}
 			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
 			self.fdata = idq_utils.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
 
@@ -155,7 +156,6 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# ascii saving properties
 		else:
-			self.last_save_time = None
 			# create header for trigger file
 			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
 			self.fdata = deque(maxlen = 25000)
@@ -231,25 +231,20 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.etg_event.clear()
 				self.etg_event_time = buftime
 
-			# set save times appropriately
-			if options.save_hdf:
-				if self.last_save_time[(channel, rate)] is None:
-					self.last_save_time[(channel, rate)] = buftime
-			else:
-				if self.last_save_time is None:
-					self.last_save_time = buftime
+			# set save time appropriately
+			if self.last_save_time is None:
+				self.last_save_time = buftime
 
-			# Save triggers (hdf or ascii) once per cadence
-			if options.save_hdf:
-				if idq_utils.in_new_epoch(buftime, self.last_save_time[(channel, rate)], self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
-					self.to_hdf_file((channel, rate))
-					self.last_save_time[(channel, rate)] = buftime
-			else:
-				if idq_utils.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+			# Save triggers once per cadence
+			if idq_utils.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+				logging.info("saving features to disk at timestamp = %d" % buftime)
+				if options.save_hdf:
+					self.to_hdf_file()
+				else:
 					self.to_trigger_file(buftime)
 					self.fdata.clear()
 					self.fdata.append(self.header)
-					self.last_save_time = buftime
+				self.last_save_time = buftime
 
 			# read buffer contents
 			for i in range(buf.n_memory()):
@@ -327,15 +322,15 @@ class MultiChannelHandler(simplehandler.Handler):
 			shutil.move(tmpfile, fpath)
 			if buftime:
 				latency = numpy.round(int(aggregator.now()) - buftime)
-				print >>sys.stdout, "buftime = %d, latency at write stage = %d" % (buftime, latency)
+				logging.info("buffer timestamp = %d, latency at write stage = %d" % (buftime, latency))
 
-	def to_hdf_file(self, key):
+	def to_hdf_file(self):
 		"""
 		Dumps triggers saved in memory to disk in hdf5 format.
 		Uses the T050017 filenaming convention.
 		NOTE: This method should only be called by an instance that is locked.
 		"""
-		self.fdata.dump(self.tmp_path, self.fname, idq_utils.floor_div(self.last_save_time[key], self.cadence), key = key, tmp = True)
+		self.fdata.dump(self.tmp_path, self.fname, idq_utils.floor_div(self.last_save_time, self.cadence), tmp = True)
 
 	def finish_hdf_file(self):
 		"""
@@ -532,6 +527,15 @@ data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument = data_source_info.instrument
 channels = data_source_info.channel_dict.keys()
 
+# set up logging
+if options.verbose:
+	level = logging.INFO
+else:
+	level = logging.WARNING
+
+#logging.basicConfig(level = level, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
+logging.basicConfig(level = level, format = "%(asctime)s | gstlal-etg : %(levelname)s : %(message)s")
+
 # dictionary of basis parameters keyed by ifo, rate
 basis_params = {}
 
@@ -586,9 +590,7 @@ if not options.disable_web_service:
 #
 # building the event loop and pipeline
 #
-
-if options.verbose:
-	print >>sys.stderr, "assembling pipeline..."
+logging.info("assembling pipeline...")
 
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
@@ -653,8 +655,7 @@ for channel in channels:
 		src[(channel, rate)] = thishead	
 
 # define structures to synchronize output streams and extract triggers from buffer
-if options.verbose:
-	print >>sys.stderr, "attaching appsinks to pipeline..."
+logging.info("attaching appsinks to pipeline...")
 
 handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments)
 appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
@@ -677,15 +678,13 @@ if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds o
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 
-if options.verbose:
-	print >>sys.stderr, "running pipeline..."
+logging.info("running pipeline...")
 
 mainloop.run()
 
 # save remaining triggers
 if options.save_hdf:
-	for key in src.keys():
-		handler.to_hdf_file(key)
+	handler.to_hdf_file()
 	handler.finish_hdf_file()
 else:
 	handler.to_trigger_file()
@@ -695,8 +694,7 @@ else:
 # Shut down pipeline
 #
 
-if options.verbose:
-	print >>sys.stderr, "shutting down pipeline..."
+logging.info("shutting down pipeline...")
 
 #
 # Shutdown the web interface servers and garbage collect the Bottle
@@ -722,4 +720,4 @@ del handler
 #
 
 if options.data_source in ("lvshm", "framexmit"):
-        sys.exit(0)
+	sys.exit(0)

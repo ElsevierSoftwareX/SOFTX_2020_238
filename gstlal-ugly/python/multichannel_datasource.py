@@ -520,7 +520,7 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 		head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
 		# progress report
 		if verbose:
-			head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_src" % channel)
+			head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "datasource_progress_for_%s" % channel)
 		 
 	return head
 
