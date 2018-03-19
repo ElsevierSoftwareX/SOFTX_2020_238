@@ -47,7 +47,7 @@ from gstlal import dagparts as gstlaldagparts
 from gstlal import datasource
 from gstlal import multichannel_datasource
 from gstlal import idq_multirate_datasource
-from gstlal import idq_aggregator
+from gstlal import idq_utils
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -76,7 +76,7 @@ def breakupseg(seg, maxextent, overlap):
 	while abs(seg):
 		if (seg[0] + maxextent + overlap) < end:
 			# Round down segment gps end time to integer multiple of cadence.
-			seglist.append(segments.segment(seg[0], idq_aggregator.floor_div(int(seg[0]) + maxextent + overlap, options.cadence)))
+			seglist.append(segments.segment(seg[0], idq_utils.floor_div(int(seg[0]) + maxextent + overlap, options.cadence)))
 			seg = segments.segment(seglist[-1][1] - overlap, seg[1])
 		else:
 			seglist.append(segments.segment(seg[0], end))
