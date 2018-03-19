@@ -40,7 +40,6 @@ import numpy
 import os
 import random
 from scipy import stats
-import scipy, scipy.signal
 import sys
 import h5py
 
@@ -1307,19 +1306,19 @@ class DynamicBins(object):
 		dgrp = f.create_group("dynbins")
 		begroup = dgrp.create_group("bin_edges")
 		for i, bin_edge in enumerate(self.bin_edges):
-			begroup.create_dataset("%d" % i, data = bin_edge)
+			begroup.create_dataset("%d" % i, data = bin_edge, compression="gzip")
 		dgrp.attrs["num_points"] = self.num_points
 		dgrp.attrs["total_prob"] = self.total_prob
 		dgrp.attrs["num_cells"] = self.num_cells
 
 		bgrp = f.create_group("bins")
 		lower, upper, parent, right, left, prob = self.__serialize()
-		bgrp.create_dataset("lower", data = lower)
-		bgrp.create_dataset("upper", data = upper)
-		bgrp.create_dataset("parent", data = parent)
-		bgrp.create_dataset("right", data = right)
-		bgrp.create_dataset("left", data = left)
-		bgrp.create_dataset("prob", data = prob)
+		bgrp.create_dataset("lower", data = lower, compression="gzip")
+		bgrp.create_dataset("upper", data = upper, compression="gzip")
+		bgrp.create_dataset("parent", data = parent, compression="gzip")
+		bgrp.create_dataset("right", data = right, compression="gzip")
+		bgrp.create_dataset("left", data = left, compression="gzip")
+		bgrp.create_dataset("prob", data = prob, compression="gzip")
 
 
 #
@@ -1365,6 +1364,9 @@ class IFFT(object):
 		lal.REAL4ReverseFFT(self.tvec[length], self.fvec[length], self.revplan[length])
 
 		return numpy.array(self.tvec[length].data, dtype=float)
+
+def tukeywindow(data, alpha = 0.25):
+	return lal.CreateTukeyREAL8Window(len(data), alpha).data.data
 
 class RandomSource(object):
 
@@ -1480,7 +1482,7 @@ class RandomSource(object):
 			ASD = (10**self.psd_poly(F(mchirp, t)))**.5
 			return (PI * M * F(mchirp, t) / ASD)**(2./3.)
 
-		w = scipy.signal.tukey(len(self.t), alpha = 0.25) * A(mchirp, self.t) * numpy.cos(PHI(mchirp, self.t, phi))
+		w = tukeywindow(self.t, alpha = 0.25) * A(mchirp, self.t) * numpy.cos(PHI(mchirp, self.t, phi))
 		return w / self.match(w,w)**.5
 
 	def noise(self):
