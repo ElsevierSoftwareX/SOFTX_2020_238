@@ -346,7 +346,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	DTYPE *real_fft = (DTYPE *) element->workspace.w ## S_OR_D ## pf.fft; \
  \
 	/* Determine how many fft's we will calculate from combined leftover and new input data */ \
-	num_ffts = minimum64((element->workspace.w ## S_OR_D ## pf.num_leftover + stride - 1) / stride, element->num_ffts); \
+	num_ffts = minimum64((element->workspace.w ## S_OR_D ## pf.num_leftover + stride - 1) / stride, element->num_ffts - element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg); \
 	num_ffts = minimum64(num_ffts, (element->workspace.w ## S_OR_D ## pf.num_leftover + (gint64) src_size - element->fft_overlap) / stride); \
 	if(num_ffts < 0) \
 		num_ffts = 0; \
@@ -469,15 +469,16 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		sample_count_next_fft = element->update_samples + 1 + element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg * stride; \
  \
 	/* Deal with any leftover samples that will remain leftover */ \
-	first_index = sample_count_next_fft - (element->sample_count - (gint64) src_size - element->workspace.w ## S_OR_D ## pf.num_leftover); \
+	first_index = (sample_count_next_fft - (element->sample_count - (gint64) src_size - element->workspace.w ## S_OR_D ## pf.num_leftover)) * element->channels; \
 	k_stop = (element->sample_count - (gint64) src_size + 1 - sample_count_next_fft) * element->channels; \
 	for(k = 0; k < k_stop; k++) \
 		element->workspace.w ## S_OR_D ## pf.leftover_data[k] = element->workspace.w ## S_OR_D ## pf.leftover_data[first_index + k]; \
  \
 	/* Deal with new samples that will be leftover */ \
-	first_index = sample_count_next_fft - (element->sample_count - (gint64) src_size + 1); \
+	first_index = (sample_count_next_fft - (element->sample_count - (gint64) src_size + 1)) * element->channels; \
 	k_start = maximum64(k_stop, 0); \
 	k_stop = (element->sample_count + 1 - sample_count_next_fft) * element->channels; \
+	first_index -= k_start; \
 	for(k = k_start; k < k_stop; k++) \
 		element->workspace.w ## S_OR_D ## pf.leftover_data[k] = src[first_index + k]; \
  \

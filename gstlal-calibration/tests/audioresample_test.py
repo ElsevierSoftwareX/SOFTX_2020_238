@@ -48,7 +48,7 @@ def audioresample_01(pipeline, name):
 
 	rate = 16384		# Hz
 	buffer_length = 1.0	# seconds
-	test_duration = 1000.0	# seconds
+	test_duration = 2000.0	# seconds
 	width = 64		# bits
 
 	#
@@ -64,7 +64,7 @@ def audioresample_01(pipeline, name):
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw,format=F64LE,rate=16384")
 	head = calibration_parts.mkinterleave(pipeline, [head, identity])
 	#pipeparts.mknxydumpsink(pipeline, head, "resampled_data.txt")
-#	head = pipeparts.mkgeneric(pipeline, head, "splitcounter")
+	#head = pipeparts.mkgeneric(pipeline, head, "splitcounter")
 	pipeparts.mkgeneric(pipeline, head, "lal_transferfunction", fft_length = rate, fft_overlap = rate / 2, num_ffts = 1000, update_samples = rate * test_duration, filename = "audioresample_tf.txt")
 
 	#
