@@ -329,13 +329,13 @@ class FinalSink(object):
 				if self.need_candidate_check:
 					self.nevent_clustered += 1
 					self.__set_far(self.candidate)
-					self.postcoh_table.append(self.candidate)	
                                         # FIXME: hard-coded detector list and snglsnr_X fields...
                                         ifo_active=[self.candidate.snglsnr_H!=0,self.candidate.snglsnr_L!=0,self.candidate.snglsnr_V!=0]
                                         ifo_names=['H1','L1','V1']
                                         ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
                                         ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
                                         self.candidate.ifos = ''.join([i for (i,v) in zip(ifo_names,ifo_active) if v])
+                                        self.postcoh_table.append(self.candidate)
 					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and sum([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v])>=2 and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v])):
 						# self.__lookback_far(self.candidate)
 						self.__do_gracedb_alert(self.candidate)
@@ -540,6 +540,11 @@ class FinalSink(object):
 		gracedb_upload_itrial = 1
 		# write a log to explain far
 		#for gracedb_id in gracedb_ids:
+
+		# delete the xmldoc and get a new empty one for next upload
+		coincs_document = self.coincs_document.get_another()
+		del self.coincs_document
+		self.coincs_document = coincs_document
                 if not gracedb_ids:
                         print "gracedb upload of %s failed completely" % filename
                         return
@@ -604,11 +609,6 @@ class FinalSink(object):
 				except:
 					gracedb_upload_itrial += 1
 
-		# delete the xmldoc and get a new empty one for next upload
-		coincs_document = self.coincs_document.get_another()
-		del self.coincs_document
-		self.coincs_document = coincs_document
-	
 	def get_output_filename(self, output_prefix, output_name, t_snapshot_start, snapshot_duration):
 		if output_prefix is not None:
 			fname = "%s_%d_%d.xml.gz" % (output_prefix, t_snapshot_start, snapshot_duration)
