@@ -207,13 +207,16 @@ class HalfSineGaussianGenerator(object):
 		self.phases = [0., numpy.pi/2.]
 		self.times = numpy.linspace(-self.max_duration/2., self.max_duration/2., int(numpy.floor(self.max_duration*self.f_samp)+1))
 
-	def generate_templates(self):
+	def generate_templates(self, quadrature = True):
 		"""
 		generate all half sine gaussian templates corresponding to a parameter range and template duration
 		"""
 		for f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high):
-			for phase in self.phases:
-				yield self.waveform(f, q, phase)
+			if quadrature:
+				for phase in self.phases:
+					yield self.waveform(f, q, phase)
+			else:
+				yield self.waveform(f, q, self.phases[0])
 
 	def duration(self, f, q):
 		"""
@@ -248,7 +251,7 @@ class HalfSineGaussianGenerator(object):
 		"""
 		Minimum number of distinct Q values to generate based on Q_min, Q_max, and mismatch params.
 		"""
-		return int(numpy.ceil(1./(2.*numpy.sqrt(self.mismatch/3.))*1./numpy.sqrt(2)*numpy.log(q_max/q_min)))
+		return int(numpy.ceil(1./(2.*numpy.sqrt(self.mismatch/3.))*(1./numpy.sqrt(2))*numpy.log(q_max/q_min)))
 	
 	def num_f_templates(self, f_min, f_max, q):
 		"""

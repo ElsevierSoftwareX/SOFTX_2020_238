@@ -25,6 +25,7 @@
 ####################   
 
 
+import itertools
 from optparse import OptionParser
 import os
 import sys
@@ -71,22 +72,33 @@ if __name__ == '__main__':
 	# generate templates for each rate considered
 	rates = [min_samp_rate*2**i for i in range(n_rates)]
 	templates = {}
+	basis_params = {}
 	for rate in rates:
 		flow = rate/4.*0.8
 		fhigh = rate/2.*0.8
 		qhigh = options.qhigh
 		qlow = 4
 		hsg_waveforms = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
-		#basis_params[(channel, rate)] = hsg_waveforms.parameter_grid
-		templates[rate] = [waveform for waveform in hsg_waveforms.generate_templates()]
+		basis_params[rate] = hsg_waveforms.parameter_grid
+		templates[rate] = [waveform for waveform in hsg_waveforms.generate_templates(quadrature=False)]
 
-	# calculate overlap for each template, find maximum
-	overlaps = {rate: [] for rate in rates}
-	for rate in rates:
-		for this_template in templates[rate]:
-			overlaps[rate].append(max(sorted([numpy.dot(this_template,template) for template in templates[rate]])[:-1]))
+	# show frequency Q grid for each rate
+	if options.verbose:
+		for rate in rates:
+			print "(f, Q) values for rate %d" % rate
+			for point in basis_params[rate]:
+				print "    "+repr(point)
+
+	# get all templates
+	templates = list(itertools.chain(*templates.values()))
+
+	# calculate overlap for each template and find maximum
+	overlaps = []
+	for this_template in templates:
+		overlaps.append(max([numpy.dot(this_template,template) for template in templates if not numpy.array_equal(template, this_template)]))
 
 	print >>sys.stderr, "min overlap specified: %f" % (1 - options.mismatch)
-	print >>sys.stderr, "max template overlap: %f" % max([max(overlaps[rate]) for rate in rates])
-	print >>sys.stderr, "min template overlap: %f" % min([min(overlaps[rate]) for rate in rates])
+	print >>sys.stderr, "max template overlap: %f" % max(overlaps)
+	print >>sys.stderr, "min template overlap: %f" % min(overlaps)
 
+	# generate template overlap map
