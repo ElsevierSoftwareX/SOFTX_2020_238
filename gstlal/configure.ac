@@ -250,6 +250,8 @@ to your GI_TYPELIB_PATH environment variable.])
 #
 
 
+# FIXME:  we really require 3.28 for element support, but not yet available on reference platform
+AC_SUBST([MIN_PYGOBJECT_VERSION], [3.22])
 PKG_CHECK_MODULES([PYGOBJECT], [pygobject-3.0 gmodule-2.0])
 AC_SUBST([PYGOBJECT_CFLAGS])
 AC_SUBST([PYGOBJECT_LIBS])

@@ -18,6 +18,9 @@ Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-bad-free
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
+# FIXME:  add this when it becomes available, and figure out what its name
+# is on .rpm based systems
+#Requires: %{gstreamername}-python3-plugin-loader
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lal-python >= @MIN_LAL_VERSION@
 Requires: lalburst >= @MIN_LALBURST_VERSION@
@@ -28,6 +31,7 @@ Requires: numpy
 Requires: orc >= @MIN_ORC_VERSION@
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
+Requires: python-gobject >= @MIN_PYGOBJECT_VERSION@
 Requires: scipy
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
 BuildRequires: fftw-devel >= 3
@@ -47,7 +51,7 @@ BuildRequires: numpy
 BuildRequires: orc >= @MIN_ORC_VERSION@
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 # needed for gstpythonplugin.c remove when we remove that plugin from gstlal
-BuildRequires: pygobject3-devel
+BuildRequires: pygobject3-devel >= @MIN_PYGOBJECT_VERSION@
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://wiki.ligo.org/DASWG/GstLAL
 Packager: Kipp Cannon <kipp.cannon@ligo.org>

@@ -27,7 +27,7 @@ Build-Depends:
  liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
  pkg-config,
  python-all-dev (>= @MIN_PYTHON_VERSION@),
- python-gi-dev,
+ python-gi-dev (>= @MIN_PYGOBJECT_VERSION@),
  python-numpy-dev
 
 Package: gstlal
@@ -59,12 +59,19 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
  python (>= @MIN_PYTHON_VERSION@),
  python-avahi,
- python-gi,
+ python-gi (>= @MIN_PYGOBJECT_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-segments (>= @MIN_GLUE_VERSION@),
  python-gst-1.0,
  python-numpy,
  python-scipy
+# FIXME:  gstreamer1.0-python3-plugin-loader is *in fact* a dependency, but
+# it's not possible to have both our own legacy plugin loader and the stock
+# loader installed in the gstreamer search path simultaneously, so we have
+# this listed as a conflict.  note that this is just a safety check:  as
+# soon as the package is actually available on the reference platform, we
+# will switch to it, so in reality there will never really be an actual
+# conflict.
 Conflicts:
  gstreamer1.0-python3-plugin-loader
 Description: GStreamer for GW data analysis (core stable parts)
