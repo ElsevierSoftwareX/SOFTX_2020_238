@@ -310,18 +310,18 @@ class ratebinlist(segments.segmentlist):
 		>>> x
 		[10@[0,20)]
 		"""
-		newseg = ratebin(seg, count = count)
+		seg = ratebin(seg, count = count)
 		# tail optimization cases
 		if not self:
-			self.append(newseg)
-		elif not newseg.disjoint(self[-1]):
-			self[-1] |= newseg
-		elif newseg.disjoint(self[-1]) > 0:
-			self.append(newseg)
+			self.append(seg)
+		elif not seg.disjoint(self[-1]):
+			self[-1] |= seg
+		elif seg.disjoint(self[-1]) > 0:
+			self.append(seg)
 		else:
 			# general case.  implementation of .__ior__()
 			# allows us to use a tuple here
-			self |= (newseg,)
+			self |= (seg,)
 
 	def find(self, item):
 		"""
