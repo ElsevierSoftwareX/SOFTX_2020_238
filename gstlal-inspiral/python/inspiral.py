@@ -657,9 +657,8 @@ class Data(object):
 			buf_timestamp = LIGOTimeGPS(0, buf.pts)
 			buf_seg = segments.segment(buf_timestamp, max((buf_timestamp + LIGOTimeGPS(0, buf.duration),) + tuple(event.end + 0.000000001 for event in events)))
 			buf_is_gap = bool(buf.mini_object.flags & Gst.BufferFlags.GAP)
-			if buf_is_gap:
-				# sanity check that gap buffers are empty
-				assert not events
+			# sanity check that gap buffers are empty
+			assert not (buf_is_gap and events)
 
 			# safety check end times.  OK for end times to be
 			# past end of buffer, but we cannot allow triggr
