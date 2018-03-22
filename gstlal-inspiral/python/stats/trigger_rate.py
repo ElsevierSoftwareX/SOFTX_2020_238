@@ -257,6 +257,12 @@ class ratebinlist(segments.segmentlist):
 	>>> # slices are ratebinlist objects
 	>>> (x0 | x3)[1:].density
 	0.5
+	>>> # density is 0 at times with no segments
+	>>> x0.density_at(15)
+	0.0
+	>>> # and empty lists have a mean density of 0 (not NaN)
+	>>> (x0 & x2).density
+	0.0
 
 	NOTE:  the XML I/O feature of this class will only work correctly
 	for float-valued boundaries and integer counts.
@@ -279,7 +285,9 @@ class ratebinlist(segments.segmentlist):
 
 	@property
 	def density(self):
-		return self.count / float(abs(self))
+		# NOTE:  event density at times when there are no segments
+		# is 0., not NaN!
+		return self.count / float(abs(self)) if self else 0.
 
 	def segmentlist(self):
 		"""
@@ -360,7 +368,12 @@ class ratebinlist(segments.segmentlist):
 		raise IndexError(item)
 
 	def density_at(self, x):
-		return self[self.find(x)].density
+		try:
+			i = self.find(x)
+		except IndexError:
+			# density is 0 at times not covered by segments
+			return 0.
+		return self[i].density
 
 	def __iand__(self, other):
 		if not other or not self:
@@ -548,24 +561,15 @@ class triggerrates(segments.segmentlistdict):
 		raise NotImplementedError
 
 	def density_at(self, x):
-		d = {}
-		for key, value in self.items():
-			try:
-				d[key] = value.density_at(x)
-			except IndexError:
-				continue
-		return d
+		return dict((key, value.density_at(x)) for key, value in self.items())
 
 	def random_uniform(self):
 		lo, hi = self.extent_all()
 		uniform = random.uniform
-		zeros = dict.fromkeys(self, 0.).copy
 		lnP = -math.log(hi - lo)
 		while 1:
 			x = uniform(lo, hi)
-			rates = zeros()
-			rates.update(self.density_at(x))
-			yield x, rates, lnP
+			yield x, self.density_at(x), lnP
 
 	@classmethod
 	def from_xml(cls, xml, name):
