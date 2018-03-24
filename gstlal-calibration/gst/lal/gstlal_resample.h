@@ -73,7 +73,8 @@ struct _GSTLALResample {
 		GSTLAL_RESAMPLE_Z128
 	} data_type;
 	gboolean need_buffer_resize;
-	gint16 leading_samples;
+	gint32 leading_samples;
+	gint32 first_leading_samples;
 
 	/* timestamp bookkeeping */
 

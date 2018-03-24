@@ -413,7 +413,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	if(element->update_samples >= element->sample_count - (gint64) src_size) \
 		ptr = src + (element->update_samples - element->sample_count + (gint64) src_size) * element->channels; \
 	else \
-		ptr = src + (stride - (element->sample_count - (gint64) src_size - element->update_samples) % stride) % stride; \
+		ptr = src + ((stride - (element->sample_count - (gint64) src_size - element->update_samples) % stride) % stride) * element->channels; \
  \
 	/* Loop through the input data and compute transfer functions */ \
 	for(i = 0; i < num_ffts; i++) { \
@@ -475,10 +475,10 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		element->workspace.w ## S_OR_D ## pf.leftover_data[k] = element->workspace.w ## S_OR_D ## pf.leftover_data[first_index + k]; \
  \
 	/* Deal with new samples that will be leftover */ \
-	first_index = (sample_count_next_fft - (element->sample_count - (gint64) src_size + 1)) * element->channels; \
 	k_start = maximum64(k_stop, 0); \
 	k_stop = (element->sample_count + 1 - sample_count_next_fft) * element->channels; \
-	first_index -= k_start; \
+	first_index = (sample_count_next_fft - (element->sample_count - (gint64) src_size + 1)) * element->channels; \
+	first_index = maximum64(first_index, 0) - k_start; /* since we are adding k below */ \
 	for(k = k_start; k < k_stop; k++) \
 		element->workspace.w ## S_OR_D ## pf.leftover_data[k] = src[first_index + k]; \
  \
@@ -1538,5 +1538,6 @@ static void gstlal_transferfunction_init(GSTLALTransferFunction *element) {
 	element->channels = 0;
 
 	gst_base_sink_set_sync(GST_BASE_SINK(element), FALSE);
+	gst_base_sink_set_async_enabled(GST_BASE_SINK(element), FALSE);
 }
 

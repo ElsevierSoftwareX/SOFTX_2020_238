@@ -169,7 +169,7 @@ def removeDC(pipeline, head, caps):
 	return mkadder(pipeline, list_srcs(pipeline, head, DC))
 
 def lowpass(pipeline, head, rate, length = 1.0, fcut = 500):
-	length *= rate
+	length = int(length * rate)
 	if not length % 2:
 		length += 1 # Make sure the filter length is odd
 
@@ -182,7 +182,7 @@ def lowpass(pipeline, head, rate, length = 1.0, fcut = 500):
 	return pipeparts.mkfirbank(pipeline, head, latency = int((length - 1) / 2), fir_matrix = [lowpass], time_domain = True)
 
 def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0):
-	length *= rate
+	length = int(length * rate)
 	if not length % 2:
 		length += 1 # Make sure the filter length is odd
 
@@ -193,13 +193,13 @@ def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0):
 
 	# Create a high-pass filter from the low-pass filter through spectral inversion.
 	highpass = -lowpass
-	highpass[(length - 1) / 2] += 1
+	highpass[int((length - 1) / 2)] += 1
 
 	# Now apply the filter
 	return pipeparts.mkfirbank(pipeline, head, latency = int((length - 1) / 2), fir_matrix = [highpass], time_domain = True)
 
 def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400):
-	length *= int(rate / 2)
+	length = int(length * rate / 2)
 	if not length % 2:
 		length += 1 # Make sure the filter length is odd
 
@@ -224,7 +224,7 @@ def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400):
 	return pipeparts.mkfirbank(pipeline, head, latency = int(length - 1), fir_matrix = [bandpass], time_domain = True)
 
 def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400):
-	length *= int(rate / 2)
+	length = int(length * rate / 2)
 	if not length % 2:
 		length += 1 # Make sure the filter length is odd
 
@@ -677,7 +677,7 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
 	if obsready is not None:
 		transfer_functions = mkgate(pipeline, transfer_functions, obsready, 1)
-	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1, update_after_gap = True, async = False)
+	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1, update_after_gap = True)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
 		minus_noise = pipeparts.mkgeneric(pipeline, witness_tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fft_length / 2, taper_length = 20 * fft_length)
