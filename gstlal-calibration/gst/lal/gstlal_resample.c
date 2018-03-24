@@ -1437,8 +1437,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			 */
 			if(!element->sinc_table) {
 				int sinc_length_at_low_rate = (int) (element->quality == 4) * SHORT_SINC_LENGTH + (int) (element->quality == 5) * LONG_SINC_LENGTH;
-				element->max_end_samples = (((gint32) sinc_length_at_low_rate * element->rate_in / element->rate_out) / 2) * 2;
-
+				element->max_end_samples = (((gint32) sinc_length_at_low_rate * inv_cadence) / 2) * 2;
 				/* end_samples stores input samples needed to produce output with the next buffer(s) */
 				element->end_samples = g_malloc(element->max_end_samples * element->unit_size);
 
@@ -1451,7 +1450,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				gint32 i;
 				double sin_arg;
 				for(i = 1; i <= element->max_end_samples / 2; i++) {
-					sin_arg = M_PI * i * cadence / (1.0 + 4.825 / sinc_length_at_low_rate);
+					sin_arg = M_PI * i / inv_cadence / (1.0 + 4.825 / sinc_length_at_low_rate);
 					element->sinc_table[i] = pow(cos(M_PI * i / (element->max_end_samples * 1.15)), 6) * sin(sin_arg) / sin_arg;
 				}
 
