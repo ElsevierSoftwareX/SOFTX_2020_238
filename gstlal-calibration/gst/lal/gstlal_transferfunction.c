@@ -489,7 +489,13 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
 		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
 		GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
-		g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
+		if(success) { \
+			/* Let other elements know about the update */ \
+			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
+			/* Write transfer functions to the screen or a file if we want */ \
+			if(element->write_to_screen || element->filename) \
+				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), fd_fft_length, num_tfs, element->write_to_screen, element->filename); \
+		} \
 		element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
 		element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg = 0; \
  \
@@ -497,14 +503,13 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		if(element->make_fir_filters) { \
 			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fft_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
 			GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
-			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
-		} \
- \
-		/* Write output to the screen or a file if we want */ \
-		if(element->write_to_screen || element->filename) { \
-			write_transfer_functions(element->transfer_functions, gst_element_get_name(element), fd_fft_length, num_tfs, element->write_to_screen, element->filename); \
-			if(element->make_fir_filters) \
-				write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fft_length, num_tfs, element->write_to_screen, element->filename); \
+			if(success) { \
+				/* Let other elements know about the update */ \
+				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
+				/* Write FIR filters to the screen or a file if we want */ \
+				if(element->write_to_screen || element->filename) \
+					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fft_length, num_tfs, element->write_to_screen, element->filename); \
+			} \
 		} \
 	} \
  \
