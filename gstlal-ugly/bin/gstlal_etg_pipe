@@ -224,14 +224,14 @@ def parse_command_line():
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
-	parser.add_option("-t", "--threads", type = "float", default = 100, help = "Number of threads to process per node. Default = 100.")
+	parser.add_option("-t", "--threads", type = "float", default = 50, help = "Number of threads to process per node. Default = 50.")
 	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
 	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 
 	# Condor commands
-	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the inspiral CPU count, default = 2")
-	parser.add_option("--request-memory", default = "6GB", metavar = "integer", help = "set the inspiral memory, default = 6GB")
+	parser.add_option("--request-cpu", default = "4", metavar = "integer", help = "set the requested node CPU count, default = 4")
+	parser.add_option("--request-memory", default = "3GB", metavar = "integer", help = "set the requested node memory, default = 3GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 
 	options, filenames = parser.parse_args()

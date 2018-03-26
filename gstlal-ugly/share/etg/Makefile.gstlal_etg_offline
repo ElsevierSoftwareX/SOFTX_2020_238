@@ -20,7 +20,7 @@ STOP  = 1187100000
 
 OUTPATH = $(PWD)
 # Number of threads (N_channels x N_rates_per_channel) that each cpu will process
-N_THREADS = 100
+N_THREADS = 50
 MISMATCH = 0.05
 QHIGH = 100
 
@@ -87,8 +87,8 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--mismatch $(MISMATCH) \
 		--qhigh $(QHIGH) \
 		$(CONDOR_COMMANDS) \
-		--request-cpu 2 \
-		--request-memory 6GB \
+		--request-cpu 4 \
+		--request-memory 3GB \
 		--verbose \
 		--disable-web-service
 
