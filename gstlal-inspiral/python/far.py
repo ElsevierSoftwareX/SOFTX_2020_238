@@ -115,9 +115,9 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 
 	@template_ids.setter
 	def template_ids(self, value):
-		self.numerator.template_ids = template_ids
-		self.denominator.template_ids = template_ids
-		self.zerolag.template_ids = template_ids
+		self.numerator.template_ids = value
+		self.denominator.template_ids = value
+		self.zerolag.template_ids = value
 
 	@property
 	def snr_min(self):
