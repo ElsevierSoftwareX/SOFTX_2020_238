@@ -39,6 +39,7 @@ Gst.init(None)
 
 import lal
 
+from gstlal import aggregator
 from gstlal import pipeio
 from gstlal import datasource
 from gstlal import multichannel_datasource
@@ -63,6 +64,7 @@ def parse_command_line():
 	# First append the datasource common options
 	multichannel_datasource.append_options(parser)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	parser.add_option("--high-pass", action = "store_true", default = False, help = "Add a high-pass filter to the pipeline")
 	parser.add_option("--high-pass-cutoff", type = int, default = 12, help = "Set the high-pass filter cutoff, default = 12 Hz.")
 
@@ -87,6 +89,9 @@ options, filenames = parse_command_line()
 data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument = data_source_info.instrument
 channels = data_source_info.channel_dict.keys()
+
+# create output directory if it doesn't already exists
+aggregator.makedir(options.out_path)
 
 #
 # building the event loop and pipeline
@@ -195,7 +200,7 @@ for channel in channels:
 		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_before sink" % channel)
 
     # dump timeseries to disk
-	pipeparts.mknxydumpsink(pipeline, head[channel], filename="whitenedtimeseries_%d_%s.txt" % (samp_rate,channel))
+	pipeparts.mknxydumpsink(pipeline, head[channel], filename=os.path.join(options.out_path, "whitenedtimeseries_%d_%s.txt" % (samp_rate,channel)))
 
 
 # Allow Ctrl+C or sig term to gracefully shut down the program for online

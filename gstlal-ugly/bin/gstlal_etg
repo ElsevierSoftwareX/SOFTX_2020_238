@@ -28,7 +28,6 @@
 from optparse import OptionParser
 from collections import deque
 import json
-import logging
 import os
 import sys
 import socket
@@ -113,12 +112,6 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.keys = kwargs.pop("keys")
 		self.frame_segments = kwargs.pop("frame_segments")
 
-		# set initialization time
-		if options.data_source in ("framexmit", "lvshm"):
-			self.init_gps_time = int(aggregator.now())
-		else:
-			self.init_gps_time = int(options.gps_start_time)
-
 		### iDQ saving properties
 		self.last_save_time = None
 		self.cadence = options.cadence
@@ -135,11 +128,8 @@ class MultiChannelHandler(simplehandler.Handler):
 			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
 			self.fdata = idq_utils.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
 
-			if options.gps_end_time:
-				duration = int(options.gps_end_time) - int(options.gps_start_time)
-				self.fname = '%s-%d-%d' % (self.tag, self.init_gps_time, duration)
-			else:
-				self.fname = '%s-%d-5000000000' % (self.tag, self.init_gps_time)
+			duration = int(options.gps_end_time) - int(options.gps_start_time)
+			self.fname = '%s-%d-%d' % (self.tag, options.gps_start_time, duration)
 
 			trigger_path = os.path.join(self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5], self.tag+"-"+options.job_id)
 			self.fpath = os.path.join(os.path.abspath(self.out_path), trigger_path)
@@ -237,7 +227,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 			# Save triggers once per cadence
 			if idq_utils.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
-				logging.info("saving features to disk at timestamp = %d" % buftime)
+				logger.info("saving features to disk at timestamp = %d" % buftime)
 				if options.save_hdf:
 					self.to_hdf_file()
 				else:
@@ -322,7 +312,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			shutil.move(tmpfile, fpath)
 			if buftime:
 				latency = numpy.round(int(aggregator.now()) - buftime)
-				logging.info("buffer timestamp = %d, latency at write stage = %d" % (buftime, latency))
+				logger.info("buffer timestamp = %d, latency at write stage = %d" % (buftime, latency))
 
 	def to_hdf_file(self):
 		"""
@@ -491,8 +481,8 @@ def parse_command_line():
 	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the ETG with a 4 digit hex code, useful for running multiple instances. Default = 0001")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
-	parser.add_option("--trigger-start-time", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
-	parser.add_option("--trigger-end-time", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
+	parser.add_option("--trigger-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
+	parser.add_option("--trigger-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
 
 	#
 	# parse the arguments and sanity check
@@ -502,11 +492,16 @@ def parse_command_line():
 
 	# Sanity check the options
 
+	# set gps ranges for live and offline sources
 	if options.data_source not in ("lvshm", "framexmit"):
 		if options.trigger_start_time is None:
 			options.trigger_start_time = options.gps_start_time
 		if options.trigger_end_time is None:
 			options.trigger_end_time = options.gps_end_time
+
+	elif options.data_source in ("framexmit", "lvshm"):
+		options.gps_start_time = int(aggregator.now())
+		options.gps_end_time = 9999999999
 
 	return options, filenames
 
@@ -527,14 +522,13 @@ data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument = data_source_info.instrument
 channels = data_source_info.channel_dict.keys()
 
-# set up logging
-if options.verbose:
-	level = logging.INFO
-else:
-	level = logging.WARNING
+# set up logger
+duration = int(options.gps_end_time) - int(options.gps_start_time)
+logdir = os.path.join(options.out_path, 'logs', options.job_id)
+aggregator.makedir(logdir)
 
-#logging.basicConfig(level = level, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
-logging.basicConfig(level = level, format = "%(asctime)s | gstlal-etg : %(levelname)s : %(message)s")
+logger = idq_utils.get_logger('gstlal-etg_%d-%d' % (options.gps_start_time, duration), rootdir=logdir, verbose=options.verbose)
+logger.info("writing log to %s" % logdir)
 
 # dictionary of basis parameters keyed by ifo, rate
 basis_params = {}
@@ -590,7 +584,7 @@ if not options.disable_web_service:
 #
 # building the event loop and pipeline
 #
-logging.info("assembling pipeline...")
+logger.info("assembling pipeline...")
 
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
@@ -655,7 +649,7 @@ for channel in channels:
 		src[(channel, rate)] = thishead	
 
 # define structures to synchronize output streams and extract triggers from buffer
-logging.info("attaching appsinks to pipeline...")
+logger.info("attaching appsinks to pipeline...")
 
 handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments)
 appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
@@ -678,7 +672,7 @@ if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds o
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 
-logging.info("running pipeline...")
+logger.info("running pipeline...")
 
 mainloop.run()
 
@@ -694,7 +688,7 @@ else:
 # Shut down pipeline
 #
 
-logging.info("shutting down pipeline...")
+logger.info("shutting down pipeline...")
 
 #
 # Shutdown the web interface servers and garbage collect the Bottle

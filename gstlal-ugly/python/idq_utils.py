@@ -25,8 +25,9 @@
 #################### 
 
 
-import os
 import glob
+import logging
+import os
 import sys
 
 import h5py
@@ -110,6 +111,37 @@ def latency_name(stage_name, stage_num, channel, rate=None):
 	else:
 		return 'stage%d_%s_%s' % (stage_num, stage_name, channel)
 
+# logging functions
+# FIXME: shamelessly copied from iDQ's logs module, until this dependency is added in to gstlal-iDQ proper.
+def get_logger(logname, log_level=10, rootdir='.', verbose=False):
+    '''
+    standardize how we instantiate loggers
+    '''
+    logger = logging.getLogger(logname)
+    logger.setLevel(log_level)
+
+    # set up FileHandler for output file
+    log_path = os.path.join(rootdir, logname+'.log')
+    handlers = [logging.FileHandler(log_path)]
+
+    # set up handler for stdout
+    if verbose:
+        handlers.append( logging.StreamHandler() )
+
+    # add handlers to logger
+    formatter = gen_formatter()
+    for handler in handlers:
+        handler.setFormatter( formatter )
+        logger.addHandler( handler )
+
+    return logger
+
+def gen_formatter():
+    """
+    standarizes formatting for loggers
+    returns an instance of logging.Formatter
+    """
+    return logging.Formatter('%(asctime)s | %(name)s : %(levelname)s : %(message)s')
 
 ####################
 #
