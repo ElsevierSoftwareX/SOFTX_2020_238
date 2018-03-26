@@ -278,17 +278,17 @@ class StreamThinca(object):
 		# assign the FAP and FAR if provided with the data to do so
 		if fapfar is not None:
 			coinc_event_index = dict((row.coinc_event_id, row) for row in coinc_event_table)
-			gps_time_now = float(lal.UTCToGPS(time.gmtime()))
 			for coinc_inspiral_row in coinc_inspiral_table:
 				ln_likelihood_ratio = coinc_event_index[coinc_inspiral_row.coinc_event_id].likelihood
 				coinc_inspiral_row.combined_far = fapfar.far_from_rank(ln_likelihood_ratio)
 				# FIXME:  add a proper column to store this in
 				coinc_inspiral_row.false_alarm_rate = fapfar.fap_from_rank(ln_likelihood_ratio)
 
-				# abuse minimum_duration column to store
-				# the latency.  NOTE:  this is nonsensical
-				# unless running live.
-				coinc_inspiral_row.minimum_duration = gps_time_now - float(coinc_inspiral_row.end)
+		# abuse minimum_duration column to store the latency.
+		# NOTE:  this is nonsense unless running live.
+		gps_time_now = float(lal.UTCToGPS(time.gmtime()))
+		for coinc_inspiral_row in coinc_inspiral_table:
+			coinc_inspiral_row.minimum_duration = gps_time_now - float(coinc_inspiral_row.end)
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
