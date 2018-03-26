@@ -176,10 +176,11 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, channe
 							"mismatch":options.mismatch,
 							"qhigh":options.qhigh,
 							"cadence":options.cadence,
-							"job-id": out_index,
-							"disable-web-service":"",
+							"job-id": "%04d" %out_index,
+							"disable-web-service":options.disable_web_service,
 							"frame-segments-name": options.frame_segments_name,
-							"save-hdf": options.save_hdf
+							"save-hdf": options.save_hdf,
+							"verbose":options.verbose
 						},
 						input_files = {"frame-cache":options.frame_cache,
 							"frame-segments-file":options.frame_segments_file},
@@ -218,8 +219,6 @@ def parse_command_line():
 
 	# trigger generation options
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--triggers-from-dataframe", action = "store_true", default = False,
-		help = "If set, will output iDQ-compatible triggers to disk straight from dataframe once every cadence")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
@@ -232,7 +231,7 @@ def parse_command_line():
 
 	# Condor commands
 	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the inspiral CPU count, default = 2")
-	parser.add_option("--request-memory", default = "7GB", metavar = "integer", help = "set the inspiral memory, default = 7GB")
+	parser.add_option("--request-memory", default = "6GB", metavar = "integer", help = "set the inspiral memory, default = 6GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 
 	options, filenames = parser.parse_args()

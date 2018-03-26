@@ -20,9 +20,9 @@ STOP  = 1187100000
 
 OUTPATH = $(PWD)
 # Number of threads (N_channels x N_rates_per_channel) that each cpu will process
-N_THREADS = 400
-MISMATCH = 0.2
-QHIGH = 40
+N_THREADS = 100
+MISMATCH = 0.05
+QHIGH = 100
 
 # Detector
 CLUSTER:=$(shell hostname -d)
@@ -88,7 +88,7 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--qhigh $(QHIGH) \
 		$(CONDOR_COMMANDS) \
 		--request-cpu 2 \
-		--request-memory 11GB \
+		--request-memory 6GB \
 		--verbose \
 		--disable-web-service
 
