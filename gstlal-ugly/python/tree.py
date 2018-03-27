@@ -45,22 +45,33 @@ def mass_sym_constraint(vertices, mass_ratio  = float("inf"), total_mass = float
 		return False
 	return True
 
-def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = float("inf"), min_m1 = 0):
+def mass_sym_constraint_mc(vertices, mass_ratio  = float("inf"), total_mass = float("inf"), minmax_m1 = (0, float('inf')), minmax_m2 = (0, float('inf')), minmax_mc = (0, float('inf'))):
 	# Assumes m_c and m_2 are first
 	Q = []
 	M = []
 	M1 = []
+	M2 = []
+	MC = []
 	for vertex in vertices:
 		mc,m2 = vertex[0:2]
 		m1 = metric_module.m1_from_mc_m2(mc, m2)
 		Q.append(m1/m2)
 		M.append(m1+m2)
 		M1.append(m1)
-	minq_condition = all([q < 0.90 for q in Q])
-	minm1_condition = all([m1 < 0.90 * min_m1 for m1 in M1])
-	maxq_condition = all([q > 1.1 * mass_ratio for q in Q])
-	mtotal_condition = all([m > 1.1 * total_mass for m in M])
-	if minq_condition or minm1_condition or maxq_condition or mtotal_condition:
+		M2.append(m2)
+		MC.append(mc)
+	minq_condition = all([q < 1.0 for q in Q])
+	maxq_condition = all([q > mass_ratio for q in Q])
+	mtotal_condition = all([m > total_mass for m in M])
+
+	minm1_condition = all([m1 < minmax_m1[0] for m1 in M1])
+	maxm1_condition = all([m1 > minmax_m1[1] for m1 in M1])
+	minm2_condition = all([m2 < minmax_m2[0] for m1 in M2])
+	maxm2_condition = all([m2 > minmax_m2[1] for m1 in M2])
+	minmc_condition = all([mc < minmax_mc[0] for m1 in MC])
+	maxmc_condition = all([mc > minmax_mc[1] for m1 in MC])
+
+	if minq_condition or maxq_condition or mtotal_condition or minm1_condition or maxm1_condition or minm2_condition or maxm2_condition or minmc_condition or maxmc_condition:
 		return False
 	return True
 
@@ -275,8 +286,11 @@ class Node(object):
 				print "\n\non boundary!!\n\n"
 		#self.on_boundary = numpy.any((self.cube.center + self.cube.deltas) == (self.boundary.center + self.boundary.deltas)) or numpy.any((self.cube.center - self.cube.deltas) == (self.boundary.center - self.boundary.deltas))
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, metric_tol = 0.10, max_coord_vol = float(10)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, metric_tol = 0.01, max_coord_vol = float(10)):
 		size = self.cube.num_tmps_per_side(mismatch)
+		#if max(self.cube.deltas) / min(self.cube.deltas) > 100.0:
+		#	self.splitdim = numpy.argmax(self.cube.deltas)
+		#else:
 		self.splitdim = numpy.argmax(size)
 
 		if not self.parent:
@@ -296,11 +310,13 @@ class Node(object):
 			numtmps = self.cube.num_templates(mismatch)
 
 
-			metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
-			metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
+			metric_diff = max(abs(self.cube.deltas / self.cube.size - self.sibling.cube.deltas / self.sibling.cube.size) / (self.cube.deltas / self.cube.size))
+			#metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
+			#metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
 
-			metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
-			metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
+			metric_diff2 = max(abs(self.cube.deltas / self.cube.size - self.parent.cube.deltas / self.parent.cube.size) / self.cube.deltas / self.cube.size)
+			#metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
+			#metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
 
 			metric_diff = max(metric_diff, metric_diff2)
 			# take the bigger of self, sibling and parent
@@ -315,14 +331,13 @@ class Node(object):
 			# NOTE FIXME work out correct max templates per side
 			if ((numtmps >= split_num_templates) or max(tmps_per_side) > 2 * len(size)**.5 ) or bifurcation < 2:
 				bifurcation += 1
-				if metric_diff <= metric_tol and (numtmps < 3**(len(size))) and self.cube.coord_volume() < max_coord_vol:
+				if metric_diff <= metric_tol and (numtmps < 5**(len(size))) and self.cube.coord_volume() < max_coord_vol:
 					self.cube.metric_tensor = reuse_metric.metric_tensor
 					self.cube.effective_dimension = reuse_metric.effective_dimension
 					self.cube.det = reuse_metric.det
 					self.cube.metric_is_valid = reuse_metric.metric_is_valid
 					self.cube.eigv = reuse_metric.eigv
 					left, right = self.cube.split(self.splitdim, reuse_metric = True)
-					#print "REUSE"
 				else:
 					left, right = self.cube.split(self.splitdim)
 
@@ -334,15 +349,18 @@ class Node(object):
 				self.right.split(split_num_templates, mismatch = mismatch, bifurcation = bifurcation)
 			else:
 				self.template_count[0] = self.template_count[0] + 1
-				if verbose:
+				if verbose and not (self.template_count[0] % 100):
 					print "%d tmps : level %03d @ %s : num tmps per side %s: deltas %s : vol frac. %.2f : splits %s : det %.2f : size %s" % (self.template_count[0], bifurcation, self.cube.center, tmps_per_side, self.cube.deltas, numtmps, self.on_boundary, self.cube.det**.5, size)
 
 	# FIXME can this be made a generator?
-	def leafnodes(self, out = set()):
+	#def leafnodes(self, out = set()):
+	def leafnodes(self, out = None):
 		"""
 		Return a list of all leaf nodes that are ancestors of the given node
 		and whose bounding box is not fully contained in the symmetryic region.
 		"""
+		if out is None:
+			out = set([])
 		if self.right:
 			self.right.leafnodes(out)
 		if self.left:
