@@ -93,7 +93,7 @@ FFTW=fftw-3.3.5
 
 # Specify target/dependency files
 IDQ_TARGET=$(INSTALL_DIR)/bin/idq-train
-KAFKA_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/confluent_kafka/cimpl.so
+KAFKA_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/confluent_kafka-$(KAFKA)-py2.7-linux-x86_64.egg/confluent_kafka/cimpl.so
 LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 SKLEARN_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/sklearn/_isotonic.so
 CYTHON_TARGET=$(INSTALL_DIR)/bin/cython
@@ -276,12 +276,15 @@ logs/idq.txt : $(LOGS_DIR)/kafka.txt $(IDQ_TARGET)
 
 $(IDQ_TARGET) : $(KAFKA_TARGET)
 	@echo $(GREEN)iDQ$(WHITE) 1>&2
-	if [ "${IDQ_GIT}" = "1" ]; then \
+	if [ "$(IDQ_GIT)" = "1" ]; then \
 		cd $(IDQ_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 	else \
 		tar -xzf $(TAR_DIR)/$(IDQ).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(IDQ) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 	fi ;
+	# fix to make python-eggs not world writable (raises UserWarnings if not done)
+	# not tied solely to iDQ install, but should be done at the end of all python installs
+	chmod og-w $(HOME)/.python-eggs
 
 # confluent-kafka
 kafka : logs/kafka.txt
