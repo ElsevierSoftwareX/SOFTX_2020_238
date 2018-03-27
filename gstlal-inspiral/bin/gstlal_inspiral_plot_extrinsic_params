@@ -1,0 +1,48 @@
+#!/usr/bin/python
+
+import time
+import numpy
+import matplotlib
+matplotlib.rcParams['text.usetex'] = True
+matplotlib.rcParams['lines.markersize'] = 2
+matplotlib.rcParams['lines.linewidth'] = 1
+matplotlib.rcParams['font.size'] = 10
+matplotlib.rcParams['savefig.dpi'] = 300
+matplotlib.rcParams['text.latex.preamble'].append(r'\usepackage{amsmath}')
+matplotlib.rcParams['legend.fontsize'] = 10
+matplotlib.use("agg")
+from matplotlib import pyplot
+from gstlal.stats import inspiral_extrinsics
+
+TPDPDF = inspiral_extrinsics.TPhiDeffPDF()
+
+num = 100
+dts = numpy.linspace(-0.010, 0.010, num)
+dphis = numpy.linspace(-numpy.pi*.99, numpy.pi*.99, num)
+jointpdf = numpy.zeros((num,num))
+tpdf = numpy.zeros((num))
+phipdf = numpy.zeros((num))
+
+s = time.time()
+for i, dt in enumerate(dts):
+	for j, dphi in enumerate(dphis):
+		t = {"H1": 0, "L1": dt}
+		phi = {"H1": 0, "L1": dphi}
+		deff = {"H1": 20., "L1": 20.}
+		prob = TPDPDF.IE(t, phi, deff)
+		tpdf[i] += prob
+		phipdf[j] += prob
+		jointpdf[i,j] = prob
+print "evaluated %d probabilities in %f seconds" % (num**2, time.time()-s)
+f = pyplot.figure(figsize=(10,10))
+pyplot.subplot(222)
+pyplot.plot(dts, tpdf)#, drawstyle="steps-mid")
+pyplot.subplot(223)
+pyplot.plot(phipdf, dphis)#, drawstyle="steps-mid")
+pyplot.gca().invert_xaxis()
+pyplot.subplot(224)
+pyplot.pcolor(dts, dphis, jointpdf.T)
+pyplot.xlabel("delta time")
+pyplot.ylabel("delta phase")
+pyplot.savefig("dtdphdeff.png")
+

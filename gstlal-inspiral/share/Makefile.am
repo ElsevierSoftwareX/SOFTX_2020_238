@@ -1,6 +1,7 @@
 dist_pkgdata_DATA = \
 	de_calc_likelihood.sql \
 	inj_simplify_and_cluster.sql \
+	inspiral_dtdphi_pdf.h5 \
 	inspiral_snr_pdf.xml.gz \
 	ll_simplify.sql \
 	ll_simplify_and_cluster.sql \
