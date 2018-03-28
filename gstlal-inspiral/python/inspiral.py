@@ -835,7 +835,7 @@ class Data(object):
 			# events with an identical likelihood.  It will just
 			# choose the event with the highest event id
 			if self.stream_thinca.last_coincs:
-				self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
+				self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.items(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
 
 			# Add events to the observed likelihood histogram
 			# post "clustering"
@@ -938,7 +938,7 @@ class Data(object):
 		# events with an identical likelihood.  It will just
 		# choose the event with the highest event id
 		if self.stream_thinca.last_coincs:
-			self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.iteritems(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
+			self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.items(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
 
 		# Add events to the observed likelihood histogram post
 		# "clustering"
