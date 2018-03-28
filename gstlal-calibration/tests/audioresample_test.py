@@ -58,9 +58,9 @@ def audioresample_01(pipeline, name):
 	src = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, rate = rate, test_duration = test_duration, width = width, verbose = False)
 	tee = pipeparts.mktee(pipeline, src)
 	identity = pipeparts.mkgeneric(pipeline, tee, "identity")
-	head = pipeparts.mkgeneric(pipeline, tee, "audioresample", quality = 9, resample_method = 1)
+	head = pipeparts.mkgeneric(pipeline, tee, "lal_resample", quality = 5)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw,format=F64LE,rate=2048")
-	head = pipeparts.mkgeneric(pipeline, head, "audioresample", quality = 9, resample_method = 1)
+	head = pipeparts.mkgeneric(pipeline, head, "audioresample", quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw,format=F64LE,rate=16384")
 	head = calibration_parts.mkinterleave(pipeline, [head, identity])
 	#pipeparts.mknxydumpsink(pipeline, head, "resampled_data.txt")
@@ -73,6 +73,39 @@ def audioresample_01(pipeline, name):
 	
 	return pipeline
 
+def lal_resample_01(pipeline, name):
+
+	#
+	# This test adds various noise into a stream and uses audioresample to remove it
+	#
+
+	rate = 16384		# Hz
+	buffer_length = 1.0	# seconds
+	test_duration = 2000.0	# seconds
+	width = 64		# bits
+
+	#
+	# build pipeline
+	#
+
+	src = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, rate = rate, test_duration = test_duration, width = width, verbose = False)
+	tee = pipeparts.mktee(pipeline, src)
+	identity = pipeparts.mkgeneric(pipeline, tee, "identity")
+	head = pipeparts.mkgeneric(pipeline, tee, "lal_resample", quality = 5)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw,format=F64LE,rate=2048")
+	head = pipeparts.mkgeneric(pipeline, head, "lal_resample", quality = 5)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw,format=F64LE,rate=16384")
+	head = calibration_parts.mkinterleave(pipeline, [head, identity])
+	#pipeparts.mknxydumpsink(pipeline, head, "resampled_data.txt")
+	#head = pipeparts.mkgeneric(pipeline, head, "splitcounter")
+	pipeparts.mkgeneric(pipeline, head, "lal_transferfunction", fft_length = rate, fft_overlap = rate / 2, num_ffts = 1000, update_samples = rate * test_duration, filename = "lal_resample_tf.txt")
+
+	#
+	# done
+	#
+
+	return pipeline
+
 #
 # =============================================================================
 #
@@ -83,7 +116,7 @@ def audioresample_01(pipeline, name):
 
 
 test_common.build_and_run(audioresample_01, "audioresample_01")
-
+#test_common.build_and_run(lal_resample_01, "lal_resample_01")
 
 
 

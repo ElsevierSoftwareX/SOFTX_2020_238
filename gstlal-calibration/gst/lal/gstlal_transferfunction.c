@@ -83,6 +83,9 @@
 #include <gstlal_transferfunction.h>
 
 
+#define SINC_LENGTH 17
+
+
 /*
  * ============================================================================
  *
@@ -113,6 +116,8 @@ enum property {
 	ARG_WRITE_TO_SCREEN,
 	ARG_FILENAME,
 	ARG_MAKE_FIR_FILTERS,
+	ARG_FIR_LENGTH,
+	ARG_FREQUENCY_RESOLUTION,
 	ARG_HIGH_PASS,
 	ARG_LOW_PASS,
 	ARG_TRANSFER_FUNCTIONS,
@@ -136,6 +141,16 @@ static GParamSpec *properties[ARG_FAKE];
 static void rebuild_workspace_and_reset(GObject *object)
 {
 	return;
+}
+
+
+double minimum(double value1, double value2) {
+	return value1 < value2 ? value1 : value2;
+}
+
+
+double maximum(double value1, double value2) {
+	return value1 > value2 ? value1 : value2; \
 }
 
 
@@ -242,14 +257,14 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 
 
 #define DEFINE_UPDATE_TRANSFER_FUNCTIONS(DTYPE) \
-static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_matrix, int num_tfs, gint64 length_tfs, gint64 num_avg, gsl_vector_complex *transfer_functions_at_f, gsl_vector_complex *transfer_functions_solved_at_f, gsl_matrix_complex *autocorrelation_matrix_at_f, gsl_permutation *permutation, complex double *transfer_functions) { \
+static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_matrix, int num_tfs, gint64 fd_fft_length, gint64 num_avg, gsl_vector_complex *transfer_functions_at_f, gsl_vector_complex *transfer_functions_solved_at_f, gsl_matrix_complex *autocorrelation_matrix_at_f, gsl_permutation *permutation, complex double *transfer_functions) { \
  \
 	gboolean success = TRUE; \
 	gint64 i, first_index; \
 	int j, j_stop, signum; \
 	complex double z; \
 	gsl_complex gslz; \
-	for(i = 0; i < length_tfs; i++) { \
+	for(i = 0; i < fd_fft_length; i++) { \
 		/* First, copy samples at a specific frequency from the big autocorrelation matrix to the gsl vector transfer_functions_at_f */ \
 		first_index = i * num_tfs * (num_tfs + 1); \
 		for(j = 0; j < num_tfs; j++) { \
@@ -273,10 +288,10 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 		for(j = 0; j < num_tfs; j++) { \
 			gslz = gsl_vector_complex_get(transfer_functions_solved_at_f, j); \
 			if(isnormal(GSL_REAL(gslz))) \
-				transfer_functions[j * length_tfs + i] = GSL_REAL(gslz) + I * GSL_IMAG(gslz); \
+				transfer_functions[j * fd_fft_length + i] = GSL_REAL(gslz) + I * GSL_IMAG(gslz); \
 			else { \
 				success = FALSE; \
-				transfer_functions[j * length_tfs + i] = 0; \
+				transfer_functions[j * fd_fft_length + i] = 0; \
 			} \
 		} \
 	} \
@@ -290,25 +305,74 @@ DEFINE_UPDATE_TRANSFER_FUNCTIONS(double);
 
 
 #define DEFINE_UPDATE_FIR_FILTERS(DTYPE, F_OR_BLANK) \
-static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
+static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fft_length, gint64 fir_length, int sample_rate, DTYPE *sinc_table, gint64 sinc_length, gint64 sinc_taps_per_df, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
  \
 	gboolean success = TRUE; \
-	int i; \
-	gint64 j, length_tfs; \
+	gint16 i, input0, sinc0, sinc_taps_per_input, sinc_taps_per_output; \
+	gint64 j, k, k_stop, fd_fft_length, fd_fir_length; \
 	DTYPE df, delay; \
-	complex DTYPE exp_arg; \
-	length_tfs = fir_length / 2 + 1; \
-	df = sample_rate / 2.0 / (length_tfs - 1); /* frequency spacing is Nyquist frequency / number of frequency increments */ \
-	delay = (length_tfs - 1.0) / sample_rate; /* number of samples of delay is length of transfer functions - 1 */ \
+	complex DTYPE exp_arg, smooth_tf; \
+ \
+	fd_fft_length = fft_length / 2 + 1; \
+	fd_fir_length = fir_length / 2 + 1; \
+	/*
+	 * We may need to resample and/or low-pass filter the transfer functions to produce FIR filters
+	 * with the right length and frequency resolution. First, calculate the number of taps of the
+	 * sinc filter that corresponds to one increment in the input and output. 
+	 */ \
+	sinc_taps_per_input = fd_fir_length > fd_fft_length ? sinc_taps_per_df * fd_fir_length / fd_fft_length : sinc_taps_per_df; \
+	sinc_taps_per_output = fd_fir_length > fd_fft_length ? sinc_taps_per_df : sinc_taps_per_df * fd_fir_length / fd_fft_length; \
+ \
+	df = sample_rate / 2.0 / (fd_fir_length - 1); /* frequency spacing is Nyquist frequency / number of frequency increments */ \
+	delay = (fd_fir_length - 1.0) / sample_rate; /* number of samples of delay is length of transfer functions - 1 */ \
 	exp_arg = (complex DTYPE) (-2.0 * M_PI * I * df * delay); \
 	for(i = 0; i < num_tfs; i++) { \
-		/*
-		 * First, copy samples from transfer_functions to fir_filter for fftw(f) to take an inverse fft.
-		 * The frequency domain window is applied here to roll off low and high freqneucies.
-		 * A delay is also added in order to center the filter in time.
-		 */ \
-		for(j = 0; j < length_tfs; j++) \
-			fir_filter[j] = fd_window[j] * cexp ## F_OR_BLANK(exp_arg * j) * (DTYPE) transfer_functions[i * length_tfs + j]; \
+		for(j = 0; j < fd_fir_length; j++) { \
+			smooth_tf = 0; \
+			/*
+			 * First, apply the sinc filter to higher frequencies. We could hit the edge
+			 * of the sinc table or the Nyquist frequency of the transfer function
+			 */ \
+			sinc0 = (fd_fir_length - j - 1) * sinc_taps_per_output % sinc_taps_per_input; \
+			input0 = i * fd_fft_length + (j * fd_fft_length + fd_fir_length - 1) / fd_fir_length; \
+			k_stop = minimum64((sinc_length / 2 - sinc0) / sinc_taps_per_input, (i + 1) * fd_fft_length - input0); \
+			for(k = 0; k < k_stop; k++) \
+				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (transfer_functions[input0 + k]); \
+			/*
+			 * If we hit the Nyquist frequency of the transfer function but not the edge of
+			 * the sinc table, turn around and keep going until we hit the edge of the sinc table.
+			 */ \
+			sinc0 += k_stop * sinc_taps_per_input; \
+			input0 = (i + 1) * fd_fft_length - 1; \
+			k_stop = (sinc_length / 2 - sinc0) / sinc_taps_per_input; \
+			for(k = 0; k < k_stop; k++) \
+				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (transfer_functions[input0 - k]); \
+			/*
+			 * Now, go back and apply the sinc filter to the lower frequencies. We could hit the edge
+			 * of the sinc table or the DC component of the transfer function.
+			 */ \
+			sinc0 = 1 + (j * sinc_taps_per_output - 1) % sinc_taps_per_input; \
+			input0 = i * fd_fft_length + (j * fd_fft_length - 1) / fd_fir_length; \
+			k_stop = minimum64((sinc_length / 2 - sinc0) / sinc_taps_per_input, input0 - i * fd_fft_length); \
+			for(k = 0; k < k_stop; k++) \
+				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (transfer_functions[input0 - k]); \
+			/*
+			 * If we hit the DC component of the transfer function but not the edge of the 
+			 * sinc table, turn around and keep going until we hit the edge of the sinc table.
+			 */ \
+			sinc0 += k_stop * sinc_taps_per_input; \
+			input0 = i * fd_fft_length + 1; \
+			k_stop = (sinc_length / 2 - sinc0) / sinc_taps_per_input; \
+			for(k = 0; k < k_stop; k++) \
+				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (transfer_functions[input0 + k]); \
+ \
+			/*
+			 * Now use smoothed samples from transfer_functions in fir_filter for fftw(f) to take an inverse fft.
+			 * The frequency domain window is applied here to roll off low and high freqneucies.
+			 * A delay is also added in order to center the filter in time.
+			 */ \
+			fir_filter[j] = fd_window[j] * cexp ## F_OR_BLANK(exp_arg * j) * smooth_tf; \
+		} \
  \
 		/* Take the inverse Fourier transform */ \
 		fftw ## F_OR_BLANK ## _execute(fir_plan); \
@@ -501,14 +565,14 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
  \
 		/* Update FIR filters if we want */ \
 		if(element->make_fir_filters) { \
-			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fft_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
+			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fft_length, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
 			GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
 			if(success) { \
 				/* Let other elements know about the update */ \
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
 				/* Write FIR filters to the screen or a file if we want */ \
 				if(element->write_to_screen || element->filename) \
-					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fft_length, num_tfs, element->write_to_screen, element->filename); \
+					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->write_to_screen, element->filename); \
 			} \
 		} \
 	} \
@@ -538,16 +602,6 @@ DEFINE_FIND_TRANSFER_FUNCTION(double, d, );
 static gboolean start(GstBaseSink *sink) {
 
 	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(sink);
-
-	/* Sanity checks */
-	if(element->num_ffts > 1 && element->fft_overlap >= element->fft_length) {
-		GST_ERROR_OBJECT(element, "fft_overlap must not be greater than fft_length! Reset fft_length and/or fft_overlap properties.");
-		g_assert_not_reached();
-	}
-	if((!element->make_fir_filters) && (element->high_pass != 9 || element->low_pass != 0))
-		GST_WARNING_OBJECT(element, "A FIR filter cutoff frequency is set, but no FIR filter is being produced. Set the property make_fir_filters = True to make FIR filters.");
-	if(element->high_pass != 0 && element->low_pass != 0 && element->high_pass > element->low_pass)
-		GST_WARNING_OBJECT(element, "The high-pass cutoff frequency of the FIR filters is above the low-pass cutoff frequency. Reset high_pass and/or low_pass to change this.");
 
 	/* Timestamp bookkeeping */
 	element->t0 = GST_CLOCK_TIME_NONE;
@@ -612,6 +666,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		g_free(element->fir_filters);
 		element->fir_filters = NULL;
 	}
+	if(element->workspace.wspf.fir_window) {
+		g_free(element->workspace.wspf.fir_window);
+		element->workspace.wspf.fir_window = NULL;
+	}
+	if(element->workspace.wspf.sinc_table) {
+		g_free(element->workspace.wspf.sinc_table);
+		element->workspace.wspf.sinc_table = NULL;
+	}
 	if(element->workspace.wspf.leftover_data) {
 		g_free(element->workspace.wspf.leftover_data);
 		element->workspace.wspf.leftover_data = NULL;
@@ -651,6 +713,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->workspace.wspf.fir_filter = NULL;
 		fftwf_destroy_plan(element->workspace.wspf.fir_plan);
 		gstlal_fftw_unlock();
+	}
+	if(element->workspace.wspf.fir_window) {
+		g_free(element->workspace.wspf.fir_window);
+		element->workspace.wspf.fir_window = NULL;
+	}
+	if(element->workspace.wdpf.sinc_table) {
+		g_free(element->workspace.wdpf.sinc_table);
+		element->workspace.wdpf.sinc_table = NULL;
 	}
 	if(element->workspace.wdpf.leftover_data) {
 		g_free(element->workspace.wdpf.leftover_data);
@@ -698,9 +768,10 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	 */
 
 	gint64 fd_fft_length = element->fft_length / 2 + 1;
+	gint64 fd_fir_length = element->fir_length / 2 + 1;
 	element->transfer_functions = g_malloc((element->channels - 1) * fd_fft_length * sizeof(*element->transfer_functions));
 	if(element->make_fir_filters)
-		element->fir_filters = g_malloc((element->channels - 1) * 2 * (element->fft_length - 1) * sizeof(*element->fir_filters));
+		element->fir_filters = g_malloc((element->channels - 1) * element->fir_length * sizeof(*element->fir_filters));
 
 	/* Prepare workspace for finding transfer functions and FIR filters */
 	if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
@@ -719,41 +790,101 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		if(element->make_fir_filters && (!element->workspace.wspf.fir_window)) {
 
 			/*
+			 * Make a sinc table to resample and/or low-pass filter the transfer functions when we make FIR filters
+			 */
+
+			if(element->fir_length == element->fft_length && element->frequency_resolution < 1.0 / element->fir_length) {
+				element->workspace.wspf.sinc_length = 1;
+				element->workspace.wspf.sinc_table = g_malloc(sizeof(*element->workspace.wspf.sinc_table));
+				*element->workspace.wspf.sinc_table = 1.0;
+			} else {
+				/* 
+				 * element->workspace.wspf.sinc_taps_per_df is the number of taps per frequency bin (at the finer
+				 * frequency resolution). If fir_length is an integer multiple of divisor of fft_length, taps_per_df is 1.
+				 */
+				gint64 common_denomimator, short_length, long_length;
+				short_length = minimum64(fd_fft_length - 1, fd_fir_length - 1);
+				long_length = maximum64(fd_fft_length - 1, fd_fir_length - 1);
+				common_denomimator = long_length;
+				while(common_denomimator % short_length)
+					common_denomimator += long_length;
+				element->workspace.wspf.sinc_taps_per_df = common_denomimator / long_length;
+				/* taps_per_osc is the number of taps per half-oscillation in the sinc table */
+				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length, element->frequency_resolution * element->fft_length), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
+				element->workspace.wspf.sinc_length = minimum64(element->workspace.wspf.sinc_taps_per_df * maximum64(fd_fir_length / 2, fd_fft_length / 2) - 1, 1 + SINC_LENGTH * taps_per_osc);
+
+				/* To save memory, we use symmetry and record only half of the sinc table */
+				element->workspace.wspf.sinc_table = g_malloc((1 + element->workspace.wspf.sinc_length / 2) * sizeof(*element->workspace.wspf.sinc_table));
+				*element->workspace.wspf.sinc_table = 1.0;
+				gint64 i, j;
+				float sin_arg, normalization;
+				for(i = 1; i <= element->workspace.wspf.sinc_length / 2; i++) {
+					sin_arg = M_PI * i / taps_per_osc;
+					element->workspace.wspf.sinc_table[i] = powf(cosf(M_PI * i / (element->workspace.wspf.sinc_length * 1.07)), 6) * sinf(sin_arg) / sin_arg;
+				}
+
+				/* 
+				 * Normalize the sinc table to make the DC gain exactly 1. We need to account for the fact 
+				 * that the density of taps in the filter could be higher than the density of input samples.
+				 */
+				gint64 taps_per_input = fd_fir_length > fd_fft_length ? common_denomimator / short_length : element->workspace.wspf.sinc_taps_per_df;
+				for(i = 0; i < (taps_per_input + 1) / 2; i++) {
+					normalization = 0.0;
+					for(j = i; j <= element->workspace.wspf.sinc_length / 2; j += taps_per_input)
+						normalization += element->workspace.wspf.sinc_table[j];
+					for(j = taps_per_input - i; j <= element->workspace.wspf.sinc_length / 2; j += taps_per_input)
+						normalization += element->workspace.wspf.sinc_table[j];
+					for(j = i; j <= element->workspace.wspf.sinc_length / 2; j += taps_per_input)
+						element->workspace.wspf.sinc_table[j] /= normalization;
+					for(j = taps_per_input - i; j <= element->workspace.wspf.sinc_length / 2; j += taps_per_input)
+						element->workspace.wspf.sinc_table[j] /= normalization;
+				}
+				/* If taps_per_input is even, we need to account for one more normalization without "over-normalizing." */
+				if(!((taps_per_input) % 2)) {
+					normalization = 0.0;
+					for(j = taps_per_input / 2; j <= element->workspace.wspf.sinc_length / 2; j += taps_per_input)
+						normalization += 2 * element->workspace.wspf.sinc_table[j];
+					for(j = taps_per_input / 2; j <= element->workspace.wspf.sinc_length / 2; j += taps_per_input)
+						element->workspace.wspf.sinc_table[j] /= normalization;
+				}
+			}
+
+			/*
 			 * Make a frequency-domain window to roll off low and high frequencies
 			 */
 
-			element->workspace.wspf.fir_window = g_malloc(fd_fft_length * sizeof(*element->workspace.wspf.fir_window));
+			element->workspace.wspf.fir_window = g_malloc(fd_fir_length * sizeof(*element->workspace.wspf.fir_window));
 
 			/* Initialize to ones */
-			for(i = 0; i < fd_fft_length; i++)
+			for(i = 0; i < fd_fir_length; i++)
 				element->workspace.wspf.fir_window[i] = 1.0;
 
 			int f_nyquist = element->rate / 2;
-			float df_per_hz = (fd_fft_length - 1.0) / f_nyquist;
+			float df_per_hz = (fd_fir_length - 1.0) / f_nyquist;
 
 			/* high-pass filter */
 			/* Remove low frequencies */
-			i_stop = (gint64) (element->high_pass * df_per_hz / 2.0 + 0.49);
+			i_stop = (gint64) (element->high_pass * df_per_hz / 2.0 + 0.5);
 			for(i = 0; i < i_stop; i++)
 				element->workspace.wspf.fir_window[i] = 0.0;
 
 			/* Apply half of a Hann window raised to the fourth power */
 			i_start = i_stop;
-			i_stop = (gint64) (element->high_pass * df_per_hz + 0.49);
+			i_stop = (gint64) (element->high_pass * df_per_hz + 0.5);
 			for(i = i_start; i < i_stop; i++)
 				element->workspace.wspf.fir_window[i] *= (float) pow(sin((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 8.0);
 
 			/* low-pass filter */
 			if(element->low_pass > 0) {
 				/* Apply half of a Hann window */
-				i_start = (gint64) (element->low_pass * df_per_hz + 0.49);
-				i_stop = minimum64(fd_fft_length, 1.4 * i_start);
+				i_start = (gint64) (element->low_pass * df_per_hz + 0.5);
+				i_stop = minimum64(fd_fir_length, 1.4 * i_start);
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wspf.fir_window[i] *= (float) pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
 				i_start = i_stop;
-				i_stop = fd_fft_length;
+				i_stop = fd_fir_length;
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wspf.fir_window[i] = 0.0;
 			}
@@ -762,23 +893,23 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a time-domain Tukey window so that the filter falls off smoothly at the edges
 			 */
 
-			gint64 edge_to_corner = (gint64) (0.45 * element->fft_length);
+			gint64 edge_to_corner = (gint64) (0.45 * element->fir_length);
 
-			element->workspace.wspf.tukey = g_malloc(element->fft_length * sizeof(*element->workspace.wspf.tukey));
+			element->workspace.wspf.tukey = g_malloc(element->fir_length * sizeof(*element->workspace.wspf.tukey));
 
 			/* first curve of window */
 			for(i = 0; i < edge_to_corner; i++)
-				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0) / element->fft_length;
+				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0) / element->fir_length;
 
 			/* flat top of window */
-			i_stop = element->fft_length - edge_to_corner;
+			i_stop = element->fir_length - edge_to_corner;
 			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wspf.tukey[i] = (double) element->make_fir_filters / element->fft_length;
+				element->workspace.wspf.tukey[i] = (double) element->make_fir_filters / element->fir_length;
 
 			/* last curve of window */
 			i_start = i_stop;
-			for(i = i_start; i < element->fft_length; i++)
-				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (element->fft_length - i_start)), 2.0) / element->fft_length;
+			for(i = i_start; i < element->fir_length; i++)
+				element->workspace.wspf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (element->fir_length - i_start)), 2.0) / element->fir_length;
 		}
 
 		/* intermediate data storage */
@@ -806,8 +937,8 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		if(element->make_fir_filters && !element->workspace.wspf.fir_filter) {
 
 			/* data that will be inverse Fourier transformed back into the time domain */
-			element->workspace.wspf.fir_filter = (complex float *) fftwf_malloc(fd_fft_length * sizeof(*element->workspace.wspf.fir_filter));
-			element->workspace.wspf.fir_plan = fftwf_plan_dft_c2r_1d(element->fft_length, element->workspace.wspf.fir_filter, (float *) element->workspace.wspf.fir_filter, FFTW_MEASURE);
+			element->workspace.wspf.fir_filter = (complex float *) fftwf_malloc(fd_fir_length * sizeof(*element->workspace.wspf.fir_filter));
+			element->workspace.wspf.fir_plan = fftwf_plan_dft_c2r_1d(element->fir_length, element->workspace.wspf.fir_filter, (float *) element->workspace.wspf.fir_filter, FFTW_MEASURE);
 		}
 		GST_LOG_OBJECT(element, "FFTWF planning complete");
 
@@ -829,41 +960,101 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		if(element->make_fir_filters && (!element->workspace.wdpf.fir_window)) {
 
 			/*
+			 * Make a sinc table to resample and/or low-pass filter the transfer functions when we make FIR filters
+			 */
+
+			if(element->fir_length == element->fft_length && element->frequency_resolution < 1.0 / element->fir_length) {
+				element->workspace.wdpf.sinc_length = 1;
+				element->workspace.wdpf.sinc_table = g_malloc(sizeof(*element->workspace.wdpf.sinc_table));
+				*element->workspace.wdpf.sinc_table = 1.0;
+			} else {
+				/* 
+				 * element->workspace.wspf.sinc_taps_per_df is the number of taps per frequency bin (at the finer
+				 * frequency resolution). If fir_length is an integer multiple of divisor of fft_length, taps_per_df is 1.
+				 */
+				gint64 common_denomimator, short_length, long_length;
+				short_length = minimum64(fd_fft_length - 1, fd_fir_length - 1);
+				long_length = maximum64(fd_fft_length - 1, fd_fir_length - 1);
+				common_denomimator = long_length;
+				while(common_denomimator % short_length)
+					common_denomimator += long_length;
+				element->workspace.wspf.sinc_taps_per_df = common_denomimator / long_length;
+				/* taps_per_osc is the number of taps per half-oscillation in the sinc table */
+				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length, element->frequency_resolution * element->fft_length), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
+				element->workspace.wdpf.sinc_length = minimum64(element->workspace.wspf.sinc_taps_per_df * maximum64(fd_fir_length / 2, fd_fft_length / 2) - 1, 1 + SINC_LENGTH * taps_per_osc);
+
+				/* To save memory, we use symmetry and record only half of the sinc table */
+				element->workspace.wdpf.sinc_table = g_malloc((1 + element->workspace.wdpf.sinc_length / 2) * sizeof(*element->workspace.wdpf.sinc_table));
+				*element->workspace.wdpf.sinc_table = 1.0;
+				gint64 i, j;
+				double sin_arg, normalization;
+				for(i = 1; i <= element->workspace.wdpf.sinc_length / 2; i++) {
+					sin_arg = M_PI * i / taps_per_osc;
+					element->workspace.wdpf.sinc_table[i] = pow(cos(M_PI * i / (element->workspace.wdpf.sinc_length * 1.07)), 6) * sin(sin_arg) / sin_arg;
+				}
+
+				/* 
+				 * Normalize the sinc table to make the DC gain exactly 1. We need to account for the fact 
+				 * that the density of taps in the filter could be higher than the density of input samples.
+				 */
+				gint64 taps_per_input = fd_fir_length > fd_fft_length ? common_denomimator / short_length : element->workspace.wspf.sinc_taps_per_df;
+				for(i = 0; i < (taps_per_input + 1) / 2; i++) {
+					normalization = 0.0;
+					for(j = i; j <= element->workspace.wdpf.sinc_length / 2; j += taps_per_input)
+						normalization += element->workspace.wdpf.sinc_table[j];
+					for(j = taps_per_input - i; j <= element->workspace.wdpf.sinc_length / 2; j += taps_per_input)
+						normalization += element->workspace.wdpf.sinc_table[j];
+					for(j = i; j <= element->workspace.wdpf.sinc_length / 2; j += taps_per_input)
+						element->workspace.wdpf.sinc_table[j] /= normalization;
+					for(j = taps_per_input - i; j <= element->workspace.wdpf.sinc_length / 2; j += taps_per_input)
+						element->workspace.wdpf.sinc_table[j] /= normalization;
+				}
+				/* If taps_per_input is even, we need to account for one more normalization without "over-normalizing." */
+				if(!((taps_per_input) % 2)) {
+					normalization = 0.0;
+					for(j = taps_per_input / 2; j <= element->workspace.wdpf.sinc_length / 2; j += taps_per_input)
+						normalization += 2 * element->workspace.wdpf.sinc_table[j];
+					for(j = taps_per_input / 2; j <= element->workspace.wdpf.sinc_length / 2; j += taps_per_input)
+						element->workspace.wdpf.sinc_table[j] /= normalization;
+				}
+			}
+
+			/*
 			 * Make a frequency-donain window to roll off low and high frequencies
 			 */
 
-			element->workspace.wdpf.fir_window = g_malloc(fd_fft_length * sizeof(*element->workspace.wdpf.fir_window));
+			element->workspace.wdpf.fir_window = g_malloc(fd_fir_length * sizeof(*element->workspace.wdpf.fir_window));
 
 			/* Initialize to ones */
-			for(i = 0; i < fd_fft_length; i++)
+			for(i = 0; i < fd_fir_length; i++)
 				element->workspace.wdpf.fir_window[i] = 1.0;
 
 			int f_nyquist = element->rate / 2;
-			double df_per_hz = (fd_fft_length - 1.0) / f_nyquist;
+			double df_per_hz = (fd_fir_length - 1.0) / f_nyquist;
 
 			/* high-pass filter */
 			/* Remove low frequencies */
-			i_stop = (gint64) (element->high_pass * df_per_hz / 2.0 + 0.49);
+			i_stop = (gint64) (element->high_pass * df_per_hz / 2.0 + 0.5);
 			for(i = 0; i < i_stop; i++)
 				element->workspace.wdpf.fir_window[i] = 0.0;
 
 			/* Apply half of a Hann window raised to the fourth power */
 			i_start = i_stop;
-			i_stop = (gint64) (element->high_pass * df_per_hz + 0.49);
+			i_stop = (gint64) (element->high_pass * df_per_hz + 0.5);
 			for(i = i_start; i < i_stop; i++)
 				element->workspace.wdpf.fir_window[i] *= pow(sin((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 8.0);
 
 			/* low-pass filter */
 			if(element->low_pass > 0) {
 				/* Apply half of a Hann window */
-				i_start = (gint64) (element->low_pass * df_per_hz + 0.49);
-				i_stop = minimum64(element->fft_length, 1.4 * i_start);
+				i_start = (gint64) (element->low_pass * df_per_hz + 0.5);
+				i_stop = minimum64(element->fir_length, 1.4 * i_start);
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wdpf.fir_window[i] *= pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
 				i_start = i_stop;
-				i_stop = element->fft_length;
+				i_stop = element->fir_length;
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wdpf.fir_window[i] = 0.0;
 			}
@@ -872,23 +1063,23 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a time-domain Tukey window so that the filter falls off smoothly at the edges
 			 */
 
-			gint64 edge_to_corner = (gint64) (0.45 * element->fft_length);
+			gint64 edge_to_corner = (gint64) (0.45 * element->fir_length);
 
-			element->workspace.wdpf.tukey = g_malloc(element->fft_length * sizeof(*element->workspace.wdpf.tukey));
+			element->workspace.wdpf.tukey = g_malloc(element->fir_length * sizeof(*element->workspace.wdpf.tukey));
 
 			/* first curve of window */
 			for(i = 0; i < edge_to_corner; i++)
-				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0) / element->fft_length;
+				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0) / element->fir_length;
 
 			/* flat top of window */
-			i_stop = element->fft_length - edge_to_corner;
+			i_stop = element->fir_length - edge_to_corner;
 			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wdpf.tukey[i] = (double) element->make_fir_filters / element->fft_length;
+				element->workspace.wdpf.tukey[i] = (double) element->make_fir_filters / element->fir_length;
 
 			/* last curve of window */
 			i_start = i_stop;
-			for(i = i_start; i < element->fft_length; i++)
-				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (element->fft_length - i_start)), 2.0) / element->fft_length;
+			for(i = i_start; i < element->fir_length; i++)
+				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (element->fir_length - i_start)), 2.0) / element->fir_length;
 		}
 
 		/* intermediate data storage */
@@ -916,8 +1107,8 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		if(element->make_fir_filters && !element->workspace.wdpf.fir_filter) {
 
 			/* data that will be inverse Fourier transformed back into the time domain */
-			element->workspace.wdpf.fir_filter = (complex double *) fftw_malloc(fd_fft_length * sizeof(*element->workspace.wdpf.fir_filter));
-			element->workspace.wdpf.fir_plan = fftw_plan_dft_c2r_1d(element->fft_length, element->workspace.wdpf.fir_filter, (double *) element->workspace.wdpf.fir_filter, FFTW_MEASURE);
+			element->workspace.wdpf.fir_filter = (complex double *) fftw_malloc(fd_fir_length * sizeof(*element->workspace.wdpf.fir_filter));
+			element->workspace.wdpf.fir_plan = fftw_plan_dft_c2r_1d(element->fir_length, element->workspace.wdpf.fir_filter, (double *) element->workspace.wdpf.fir_filter, FFTW_MEASURE);
 		}
 		GST_LOG_OBJECT(element, "FFTW planning complete");
 
@@ -1036,6 +1227,8 @@ static gboolean stop(GstBaseSink *sink) {
 		if(element->make_fir_filters) {
 			g_free(element->workspace.wspf.fir_window);
 			element->workspace.wspf.fir_window = NULL;
+			g_free(element->workspace.wspf.sinc_table);
+			element->workspace.wspf.sinc_table = NULL;
 			g_free(element->workspace.wspf.tukey);
 			element->workspace.wspf.tukey = NULL;
 		}
@@ -1076,6 +1269,8 @@ static gboolean stop(GstBaseSink *sink) {
 		if(element->make_fir_filters) {
 			g_free(element->workspace.wdpf.fir_window);
 			element->workspace.wdpf.fir_window = NULL;
+			g_free(element->workspace.wdpf.sinc_table);
+			element->workspace.wdpf.sinc_table = NULL;
 			g_free(element->workspace.wdpf.tukey);
 			element->workspace.wdpf.tukey = NULL;
 		}
@@ -1137,6 +1332,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_NUM_FFTS:
 		element->num_ffts = g_value_get_int64(value);
+		if(element->num_ffts > 1 && element->fft_overlap >= element->fft_length) {
+			GST_WARNING_OBJECT(element, "fft_overlap must be less than fft_length! Resetting fft_overlap to fft_length - 1.");
+			element->fft_overlap = element->fft_length - 1;
+		}
 		break;
 
 	case ARG_UPDATE_SAMPLES:
@@ -1159,12 +1358,32 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->make_fir_filters = g_value_get_int(value);
 		break;
 
+	case ARG_FIR_LENGTH:
+		element->fir_length = g_value_get_int64(value);
+		if(element->fir_length % 2) {
+			GST_WARNING_OBJECT(element, "The chosen fir-length must be even. Adding 1 to make it even.");
+			element->fir_length += 1;
+		}
+		break;
+
+	case ARG_FREQUENCY_RESOLUTION:
+		element->frequency_resolution = g_value_get_double(value);
+		if(element->make_fir_filters && element->frequency_resolution < 1.0 / element->fir_length)
+			GST_WARNING_OBJECT(element, "The specified frequency resolution is finer than 1/fir_length, which cannot be achieved. The actual frequency resolution will be reset to 1/MIN(fft_length, fir_length).");
+		if(element->make_fir_filters && element->frequency_resolution < 1.0 / element->fft_length)
+			GST_WARNING_OBJECT(element, "The specified frequency resolution is finer than 1/fft_length, which cannot be achieved. The actual frequency resolution will be reset to 1/MIN(fft_length, fir_length).");
+		break;
+
 	case ARG_HIGH_PASS:
 		element->high_pass = g_value_get_int(value);
 		break;
 
 	case ARG_LOW_PASS:
 		element->low_pass = g_value_get_int(value);
+		if((!element->make_fir_filters) && (element->high_pass != 0 || element->low_pass != 0))
+			GST_WARNING_OBJECT(element, "A FIR filter cutoff frequency is set, but no FIR filter is being produced. Set the property make_fir_filters = True to make FIR filters.");
+		if(element->high_pass != 0 && element->low_pass != 0 && element->high_pass > element->low_pass)
+			GST_WARNING_OBJECT(element, "The high-pass cutoff frequency of the FIR filters is above the low-pass cutoff frequency. Reset high_pass and/or low_pass to change this.");
 		break;
 
 	case ARG_TRANSFER_FUNCTIONS:
@@ -1229,6 +1448,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_int(value, element->make_fir_filters);
 		break;
 
+	case ARG_FIR_LENGTH:
+		g_value_set_int64(value, element->fir_length);
+		break;
+
+	case ARG_FREQUENCY_RESOLUTION:
+		g_value_set_double(value, element->frequency_resolution);
+		break;
+
 	case ARG_HIGH_PASS:
 		g_value_set_int(value, element->high_pass);
 		break;
@@ -1260,7 +1487,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			g_value_init(&val, G_TYPE_VALUE_ARRAY);
 			int j;
 			for(j = 0; j < element->channels - 1; j++) {
-				g_value_take_boxed(&val, gstlal_g_value_array_from_doubles(element->fir_filters + j * element->fft_length, element->fft_length));
+				g_value_take_boxed(&val, gstlal_g_value_array_from_doubles(element->fir_filters + j * element->fir_length, element->fir_length));
 				g_value_array_append(val_array, &val);
 			}
 			g_value_take_boxed(value, val_array);
@@ -1353,7 +1580,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		"fft-length",
 		"FFT Length",
 		"Length in samples of the FFTs used to compute the transfer function(s)",
-		0, G_MAXINT64, 16384,
+		1, G_MAXINT64, 16384,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_FFT_OVERLAP] = g_param_spec_int64(
@@ -1396,8 +1623,8 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	properties[ARG_FILENAME] = g_param_spec_string(
 		"filename",
 		"Filename",
-		"Name of file to write transfer functions and/or FIR filters to. If not given,\n\t\t\t"
-		"no file is produced.",
+		"Name of file to write transfer functions and/or FIR filters to. If not\n\t\t\t"
+		"given, no file is produced.",
 		NULL,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
@@ -1408,6 +1635,23 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		"are computed. If set to -1, a minus sign is added to the filters. If unset\n\t\t\t"
 		"(or set to 0), no FIR filters are produced.",
 		-1, 1, 0,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_FIR_LENGTH] = g_param_spec_int64(
+		"fir-length",
+		"FIR filter length",
+		"Length in samples of FIR filters produced. Must be an even number.",
+		1, G_MAXINT64, 16384,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_FREQUENCY_RESOLUTION] = g_param_spec_double(
+		"frequency-resolution",
+		"Frequency resolution",
+		"Frequency resolution of the FIR filters in samples^-1. This must be greater\n\t\t\t"
+		"than or equal to 1/fir-length. When computing multiple FIR filters\n\t\t\t"
+		"simultaneously, it is recommended to set this to a value significantly\n\t\t\t"
+		"larger than 1/fft_length.",
+		0, 1, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_HIGH_PASS] = g_param_spec_int(
@@ -1505,6 +1749,16 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_MAKE_FIR_FILTERS,
 		properties[ARG_MAKE_FIR_FILTERS]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FIR_LENGTH,
+		properties[ARG_FIR_LENGTH]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FREQUENCY_RESOLUTION,
+		properties[ARG_FREQUENCY_RESOLUTION]
 	);
 	g_object_class_install_property(
 		gobject_class,

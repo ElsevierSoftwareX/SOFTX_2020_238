@@ -103,34 +103,38 @@ def lal_transferfunction_01(pipeline, name):
 def lal_transferfunction_02(pipeline, name):
 
 	#
-	# This test produces simple multi-channel data to be read into lal_transferfunction
+	# This test produces three-channel data to be read into lal_transferfunction
 	#
 
-	rate = 16384		# Hz
+	rate = 16384	    	# Hz
 	buffer_length = 1.0	# seconds
 	test_duration = 100.0	# seconds
 	width = 64		# bits
 	channels = 1
+	freq = 512		# Hz
 
 	#
 	# build pipeline
 	#
 
-	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.1, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-	hoft2 = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.1, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-	hoft3 = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.1, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-	hoft4 = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.1, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-#	hoft5 = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.1, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-#	hoft6 = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.1, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-	hoft = calibration_parts.mkinterleave(pipeline, calibration_parts.list_srcs(pipeline, hoft, hoft2, hoft3, hoft4))
-	pipeparts.mkgeneric(pipeline, hoft, "lal_transferfunction", fft_length = rate / 4, fft_overlap = rate / 8, num_ffts = 256, update_samples = test_duration * rate, filename = "transferfunction.txt", make_fir_filters = True)
+	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = freq, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
+	hoft = pipeparts.mktee(pipeline, hoft)
+
+	noise = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = freq, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
+	noise = pipeparts.mktee(pipeline, noise)
+
+	witness1 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.highpass(pipeline, hoft, rate, fcut = 400), calibration_parts.lowpass(pipeline, noise, rate, fcut = 400)))
+	witness2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.lowpass(pipeline, hoft, rate, fcut = 600), calibration_parts.highpass(pipeline, noise, rate, fcut = 600)))
+
+	clean_data = calibration_parts.clean_data(pipeline, hoft, rate, calibration_parts.list_srcs(pipeline, witness1, witness2), rate, rate / 2, rate / 4, 128, rate * test_duration, filename = "highpass_lowpass_tfs.txt")
+	pipeparts.mknxydumpsink(pipeline, clean_data, "%s_out.txt" % name)
 
 	return pipeline
 
 def lal_transferfunction_03(pipeline, name):
 
 	#
-	# This test produces two-channel data to be read into lal_transferfunction
+	# This test produces three-channel data to be read into lal_transferfunction
 	#
 
 	rate = 16384		# Hz
@@ -138,14 +142,14 @@ def lal_transferfunction_03(pipeline, name):
 	test_duration = 100.0	# seconds
 	width = 64		# bits
 	channels = 1
+	freq = 512
 
 	#
 	# build pipeline
 	#
 
-	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = 512, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
+	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = freq, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
 	hoft = pipeparts.mktee(pipeline, hoft)
-	pipeparts.mkfakesink(pipeline, hoft)
 	difference = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.001, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
 	difference = pipeparts.mktee(pipeline, difference)
 
@@ -175,8 +179,8 @@ def lal_transferfunction_03(pipeline, name):
 
 
 #test_common.build_and_run(lal_transferfunction_01, "lal_transferfunction_01")
-#test_common.build_and_run(lal_transferfunction_02, "lal_transferfunction_02")
-test_common.build_and_run(lal_transferfunction_03, "lal_transferfunction_03")
+test_common.build_and_run(lal_transferfunction_02, "lal_transferfunction_02")
+#test_common.build_and_run(lal_transferfunction_03, "lal_transferfunction_03")
 
 
 

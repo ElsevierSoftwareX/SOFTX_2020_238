@@ -78,6 +78,9 @@ struct _GSTLALTransferFunction {
 	union {
 		struct {
 			float *fft_window;
+			float *sinc_table;
+			gint64 sinc_length;
+			gint64 sinc_taps_per_df;
 			float *fir_window;
 			double *tukey;
 			float *leftover_data;
@@ -100,6 +103,9 @@ struct _GSTLALTransferFunction {
 		} wspf;  /* workspace single-precision float */
 		struct {
 			double *fft_window;
+			double *sinc_table;
+			gint64 sinc_length;
+			gint64 sinc_taps_per_df;
 			double *fir_window;
 			double *tukey;
 			double *leftover_data;
@@ -131,6 +137,8 @@ struct _GSTLALTransferFunction {
 	gboolean write_to_screen;
 	char *filename;
 	int make_fir_filters;
+	gint64 fir_length;
+	double frequency_resolution;
 	int high_pass;
 	int low_pass;
 	complex double *transfer_functions;
