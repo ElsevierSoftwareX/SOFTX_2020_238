@@ -262,12 +262,11 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 
 	# Create new document
 	xmldoc = ligolw.Document()
-	lw = ligolw.LIGO_LW()
+	lw = xmldoc.appendChild(ligolw.LIGO_LW())
 
 	for bank, clipleft, clipright in zip(banks, cliplefts, cliprights):
 		# set up root for this sub bank
-		root = ligolw.LIGO_LW(Attributes({u"Name": u"gstlal_svd_bank_Bank"}))
-		lw.appendChild(root)
+		root = lw.appendChild(ligolw.LIGO_LW(Attributes({u"Name": u"gstlal_svd_bank_Bank"})))
 
 		# FIXME FIXME FIXME move this clipping stuff to the Bank class
 		# set the right clipping index
@@ -306,8 +305,8 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 
 		# Write bank fragments
 		for i, frag in enumerate(bank.bank_fragments):
-			# Start new container
-			el = ligolw.LIGO_LW()
+			# Start new bank fragment container
+			el = root.appendChild(ligolw.LIGO_LW())
 
 			# Apply clipping option
 			if frag.mix_matrix is not None:
@@ -329,17 +328,11 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 			if frag.sum_of_squares_weights is not None:
 				el.appendChild(ligolw_array.Array.build('sum_of_squares_weights', frag.sum_of_squares_weights))
 
-			# Add bank fragment container to root container
-			root.appendChild(el)
-
 	# put a copy of the processed PSD file in
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one here
 	if write_psd:
 		lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
-
-	# add top level LIGO_LW to document
-	xmldoc.appendChild(lw)
 
 	# Write to file
 	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
