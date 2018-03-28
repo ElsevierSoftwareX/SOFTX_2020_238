@@ -74,7 +74,7 @@ all : dag
 
 # Run etg pipe to produce dag
 dag : frame.cache plots channel_list.txt segments.xml.gz
-	./gstlal_etg_pipe \
+	gstlal_etg_pipe \
 		--data-source frames \
 		--gps-start-time $(START) \
 		--gps-end-time $(STOP) \
@@ -105,10 +105,9 @@ segments.xml.gz : frame.cache
 	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(FSTART) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
 
 frame.cache :
-	# FIXME force the observatory column to actually be instrument
-	if [[ ${CLUSTER} == *"ligo-wa.caltech.edu" ]] ; then \
+	if [[ $(IFO) == H1 ]] ; then \
 		gw_data_find -o H -t H1_$(FRAME_TYPE) -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
-	elif [[ ${CLUSTER} == *"ligo-la.caltech.edu" ]] ; then \
+	elif [[ $(IFO) == L1 ]] ; then \
 		gw_data_find -o L -t L1_$(FRAME_TYPE) -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
 	fi
 
