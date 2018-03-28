@@ -413,7 +413,6 @@ class CoincsDocument(object):
 		#
 
 		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(self.xmldoc)
-		self.llwsegments = ligolw_segments.LigolwSegments(self.xmldoc, self.process)
 
 
 	def commit(self):
@@ -431,8 +430,12 @@ class CoincsDocument(object):
 		return self.sngl_inspiral_table.get_next_id()
 
 
-	def write_output_url(self, verbose = False):
-		self.llwsegments.finalize()
+	def write_output_url(self, seglistdicts = None, verbose = False):
+		if seglistdicts is not None:
+			with ligolw_segments.LigolwSegments(self.xmldoc, self.process) as llwsegments:
+				for segtype, seglistdict in seglistdicts.items():
+					llwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID")
+
 		ligolw_process.set_process_end_time(self.process)
 
 		if self.connection is not None:
@@ -447,8 +450,11 @@ class CoincsDocument(object):
 			self.connection = None
 			dbtables.put_connection_filename(ligolw_utils.local_path_from_url(self.url), self.working_filename, verbose = verbose)
 		else:
-			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
+			self.sngl_inspiral_table.sort(key = lambda row: (row.end, row.ifo))
 			ligolw_utils.write_url(self.xmldoc, self.url, gz = (self.url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		# can no longer be used
+		self.xmldoc.unlink()
+		del self.xmldoc
 
 
 class Data(object):
@@ -1252,14 +1258,11 @@ class Data(object):
 
 	def __write_output_url(self, url = None, verbose = False):
 		self.__flush()
-
-		# FIXME:  should this be done in .flush() somehow?
-		for segtype, seglistdict in self.seglistdicts.items():
-			self.coincs_document.llwsegments.insert_from_segmentlistdict(seglistdict, name = segtype, comment = "LLOID")
-
 		if url is not None:
 			self.coincs_document.url = url
-		self.coincs_document.write_output_url(verbose = verbose)
+		self.coincs_document.write_output_url(seglistdicts = self.seglistdicts, verbose = verbose)
+		# can't be used anymore
+		del self.coincs_document
 
 	def __write_likelihood_url(self, url, description, snapshot = False, verbose = False):
 		# write the parameter PDF file.  NOTE;  this file contains
@@ -1288,9 +1291,6 @@ class Data(object):
 			if self.likelihood_url is not None:
 				self.__write_likelihood_url(self.likelihood_url, description, verbose = verbose)
 
-			# can't be used anymore
-			del self.coincs_document
-
 	def snapshot_output_url(self, description, extension, verbose = False):
 		with self.lock:
 			coincs_document = self.coincs_document.get_another()
@@ -1304,8 +1304,5 @@ class Data(object):
 				self.__write_likelihood_url(self.likelihood_url, description, snapshot = True, verbose = verbose)
 			if self.zerolag_rankingstatpdf is not None:
 				self.__write_zero_lag_ranking_stats_file(self.zerolag_rankingstatpdf_filename, verbose = verbose)
-
-			# can't be used anymore
-			del self.coincs_document
 			self.coincs_document = coincs_document
 			self.snr_time_series_cleanup_index = 0
