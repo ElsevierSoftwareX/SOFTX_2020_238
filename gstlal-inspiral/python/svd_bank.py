@@ -353,6 +353,7 @@ def read_banks(filename, contenthandler, verbose = False):
 
 		# Read sngl inspiral table
 		bank.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
+		bank.sngl_inspiral_table.parentNode.removeChild(bank.sngl_inspiral_table)
 
 		# Read root-level scalar parameters
 		bank.filter_length = ligolw_param.get_pyvalue(root, 'filter_length')
@@ -394,6 +395,7 @@ def read_banks(filename, contenthandler, verbose = False):
 			bank.bank_fragments.append(frag)
 
 		banks.append(bank)
+	xmldoc.unlink()
 	return banks
 
 
