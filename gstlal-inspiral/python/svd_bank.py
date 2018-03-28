@@ -167,7 +167,9 @@ class Bank(object):
 			verbose = verbose)
 		
 		# Include signal inspiral table
-		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
+		self.sngl_inspiral_table = sngl_inspiral_table.copy()
+		self.sngl_inspiral_table.extend(sngl_inspiral_table)
 		# Include the processed psd
 		self.processed_psd = processed_psd
 
