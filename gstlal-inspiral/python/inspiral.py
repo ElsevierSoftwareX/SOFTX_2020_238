@@ -909,9 +909,16 @@ class Data(object):
 		# non-coincident sngls.  add them to the distribution.  as
 		# above in appsink_new_buffer() we skip singles collected
 		# during times when only one instrument was one.
+
+		# times when at least 2 instruments were generating SNR.
+		# used to sieve triggers for inclusion in the denominator.
+		discard_boundary = float(self.stream_thinca.discard_boundary)
+		snr_segments = segments.segmentlistdict((instrument, ratebinlist[bisect.bisect_left(ratebinlist, (discard_boundary,)):].segmentlist()) for instrument, ratebinlist in self.rankingstat.denominator.triggerrates.items())
+		two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
+
 		ratebinlists = self.rankingstat.denominator.triggerrates.values()
-		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, self.rankingstat.segmentlists, fapfar = self.fapfar):
-			if sum(event.end in ratebins for ratebins in ratebinlists) > 1:
+		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, snr_segments, fapfar = self.fapfar):
+			if event.end in two_or_more_instruments:
 				self.rankingstat.denominator.increment(event)
 		self.coincs_document.commit()
 
