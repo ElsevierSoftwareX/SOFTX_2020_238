@@ -454,7 +454,8 @@ class PSDFirKernel(object):
 
 
 	def min_phase(self,linear_phase_kernel):
-		
+		# FIXME: this function is just too slow (15mins) to work,
+		# Manoj is double checking if this function is correct
 		h = linear_phase_kernel
 		#norm_before = numpy.dot(h,h)
                 n_fft = 1.5*len(h) #typically a lot greater than filter length
@@ -493,7 +494,9 @@ class PSDFirKernel(object):
 
 	def homomorphic(self, linear_phase_kernel, sample_rate):
 
-
+		# FIXME: two things need to be done for this function to work:
+		# 1. scaling is not accurate
+		# 2. working_length needs to be larger than 10 times of the kernel length
                 # FIXME check for change in length
                 if self.fwdplan is None:
                         self.fwdplan = lal.CreateForwardCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)

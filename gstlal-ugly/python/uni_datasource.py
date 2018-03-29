@@ -227,8 +227,8 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 			kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
 			
 			#kernel = psd_fir_kernel.min_phase(kernel)
-			kernel = psd_fir_kernel.homomorphic(kernel, sample_rate)
-			#kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
+			#kernel = psd_fir_kernel.homomorphic(kernel, sample_rate)
+			kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
 			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
 		whiten.connect_after("notify::mean-psd", set_fir_psd, head, psd_fir_kernel)
 
