@@ -819,8 +819,7 @@ class Data(object):
 					self.rankingstat.denominator.increment(event)
 			self.coincs_document.commit()
 
-			# update zero-lag coinc bin counts in
-			# rankingstat.
+			# update zero-lag bin counts in rankingstat.
 			if self.stream_thinca.last_coincs:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					if coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
@@ -922,11 +921,10 @@ class Data(object):
 				self.rankingstat.denominator.increment(event)
 		self.coincs_document.commit()
 
-		# update zero-lag bin counts in rankingstat
+		# update zero-lag bin counts in rankingstat.
 		if self.stream_thinca.last_coincs:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
-				offset_vector = self.stream_thinca.last_coincs.offset_vector(coinc_event.time_slide_id)
-				if not any(offset_vector.values()):
+				if coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
 					for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id):
 						self.rankingstat.zerolag.increment(event)
 
@@ -1030,8 +1028,7 @@ class Data(object):
 			for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
 				snr_time_series = event.snr_time_series
 				if snr_time_series is not None:
-					snr_time_series = xmldoc.childNodes[-1].appendChild(lalseries.build_COMPLEX8TimeSeries(snr_time_series))
-					snr_time_series.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
+					xmldoc.childNodes[-1].appendChild(lalseries.build_COMPLEX8TimeSeries(snr_time_series)).appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
 			# serialize to XML
 			ligolw_utils.write_fileobj(xmldoc, message, gz = False)
 			xmldoc.unlink()
