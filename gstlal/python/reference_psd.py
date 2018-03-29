@@ -36,7 +36,6 @@ import sys
 import signal
 import warnings
 
-
 import pygtk
 pygtk.require("2.0")
 import gobject
@@ -452,6 +451,140 @@ class PSDFirKernel(object):
 		#
 
 		return kernel, latency, sample_rate
+
+
+	def min_phase(self,linear_phase_kernel):
+		
+		h = linear_phase_kernel
+		#norm_before = numpy.dot(h,h)
+                n_fft = 1.5*len(h) #typically a lot greater than filter length
+		#Source code default - n_fft = 2 ** int(np.ceil(np.log2(2 * (len(h) - 1) / 0.01)))
+		n_fft = int(n_fft)
+		n_half = len(h) // 2
+
+		# zero-pad; calculate the DFT
+		h_temp = abs(scipy.fftpack.fft(h, n_fft))
+		# take 0.25*log(|H|**2) = 0.5*log(|H|)
+		h_temp += 1e-7 * h_temp[h_temp > 0].min()  # don't let log blow up
+		h_temp = scipy.log(h_temp)
+		h_temp *= 0.5
+		# IDFT
+		h_temp = scipy.fftpack.ifft(h_temp).real
+		# multiply pointwise by the homomorphic filter
+		# lmin[n] = 2u[n] - d[n]
+		win = numpy.zeros(n_fft)
+		win[0] = 1
+		stop = (len(h) + 1) // 2
+		win[1:stop] = 2
+		if len(h) % 2:
+		    win[stop] = 1    
+		h_temp *= win
+		h_temp = scipy.fftpack.ifft(scipy.exp(scipy.fftpack.fft(h_temp)))
+		h_minimum = h_temp.real
+		h_minimum = h_minimum[:len(linear_phase_kernel)]
+		#h_minimum *= math.sqrt(norm_before / numpy.dot(h_minimum,h_minimum))
+		n_out = n_half + len(h) % 2
+		filt = h_minimum[:n_out] #time domain of the min phase filter
+
+		#filt = np.pad(filt, (0, len(h)-len(filt)), 'constant')
+		min_kernel = filt[-1::-1]
+
+		return min_kernel
+
+	def homomorphic(self, linear_phase_kernel, sample_rate):
+
+
+                # FIXME check for change in length
+                if self.fwdplan is None:
+                        self.fwdplan = lal.CreateForwardCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)
+                if self.revplan is None:
+                        self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)
+
+                deltaF = 1. / (len(linear_phase_kernel) / sample_rate)
+                working_length = len(linear_phase_kernel)
+		n_half = len(linear_phase_kernel) // 2
+                deltaT = 1. / sample_rate
+
+                kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
+                        name = "timeseries of whitening kernel",
+                        epoch = LIGOTimeGPS(0.),
+                        f0 = 0.,
+                        deltaT = 1.0 / sample_rate,
+                        length = len(linear_phase_kernel),
+                        sampleUnits = lal.Unit("strain")
+                )
+                kernel_tseries.data.data = linear_phase_kernel
+
+                absX = lal.CreateCOMPLEX16FrequencySeries(
+                        name = "absX",
+                        epoch = LIGOTimeGPS(0),
+                        f0 = 0.0,
+                        deltaF = deltaF,
+                        length = working_length,
+                        sampleUnits = lal.Unit("strain s")
+                )
+                lal.COMPLEX16TimeFreqFFT(absX, kernel_tseries, self.fwdplan)
+
+		t_absX = abs(absX.data.data)
+                t_absX += 1e-7 * t_absX[t_absX > 0].min()  # don't let log blow up
+                log_absX = numpy.log(t_absX)
+                log_absX *= 0.5
+
+                logabsX = lal.CreateCOMPLEX16FrequencySeries(
+                        name = "absX",
+                        epoch = LIGOTimeGPS(0),
+                        f0 = 0.0,
+                        deltaF = deltaF,
+                        length = working_length,
+                        sampleUnits = lal.Unit("strain s")
+                )
+		logabsX.data.data = log_absX
+
+                temp = lal.CreateCOMPLEX16TimeSeries(
+                        name = "cepstrum",
+                        epoch = LIGOTimeGPS(0.),
+                        f0 = 0.,
+                        deltaT = deltaT,
+                        length = len(log_absX),
+                        sampleUnits = lal.Unit("strain")
+                )
+		lal.COMPLEX16FreqTimeFFT(temp, logabsX, self.revplan)
+                h_temp = numpy.real(temp.data.data)
+                win = numpy.zeros(working_length)
+                win[0] = 1
+                stop = (len(linear_phase_kernel) + 1) // 2
+                win[1:stop] = 2
+                if len(linear_phase_kernel) % 2:
+                    win[stop] = 1
+		h_temp *= win
+		temp.data.data = h_temp
+                elog = lal.CreateCOMPLEX16FrequencySeries(
+                        name = "theta",
+                        epoch = LIGOTimeGPS(0),
+                        f0 = 0.0,
+                        deltaF = deltaF,
+                        length = working_length,
+                        sampleUnits = lal.Unit("strain s")
+                )
+                lal.COMPLEX16TimeFreqFFT(elog, temp, self.fwdplan)
+		elog.data.data = numpy.exp(elog.data.data)
+
+                min_phase_kernel = lal.CreateCOMPLEX16TimeSeries(
+                        name = "min phase kernel",
+                        epoch = LIGOTimeGPS(0.),
+                        f0 = 0.,
+                        deltaT = deltaT,
+                        length = working_length,
+                        sampleUnits = lal.Unit("strain")
+                )
+                lal.COMPLEX16FreqTimeFFT(min_phase_kernel, elog, self.revplan)
+		kernel = numpy.real(min_phase_kernel.data.data)
+                n_out = n_half + len(linear_phase_kernel) % 2
+                kernel = kernel[:n_out] #time domain of the min phase filter
+		kernel = kernel[-1::-1]
+		return kernel
+
+
 
 
 	def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(self, linear_phase_kernel, sample_rate):

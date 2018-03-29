@@ -29,6 +29,7 @@ import sys
 import optparse
 import math
 import numpy
+from scipy import fftpack
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -177,6 +178,10 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 	#
 
 	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
+	head = pipeparts.mktee(pipeline, head)
+
+	if nxydump_segment is not None:
+                pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "before_whitened_data_%s_%d.dump" % (instrument, nxydump_segment[0]), segment = nxydump_segment)
 
 	#
 	# construct whitener.
@@ -220,7 +225,10 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 			)
 			psd.data.data = psd_data
 			kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
-			kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
+			
+			#kernel = psd_fir_kernel.min_phase(kernel)
+			kernel = psd_fir_kernel.homomorphic(kernel, sample_rate)
+			#kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
 			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
 		whiten.connect_after("notify::mean-psd", set_fir_psd, head, psd_fir_kernel)
 
