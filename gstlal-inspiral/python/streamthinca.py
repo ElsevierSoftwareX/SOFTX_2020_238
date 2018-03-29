@@ -157,10 +157,6 @@ class StreamThinca(object):
 		an exercise for the calling code to ensure it follows the
 		rules.
 		"""
-		# invalidate the coinc extractor in case all that follows
-		# is a no-op
-		self.last_coincs = {}
-
 		# we need our own copy of the sngl_inspiral table because
 		# we need a place to store a history of all the triggers,
 		# and a place we can run coincidence on them.  when making
@@ -225,6 +221,10 @@ class StreamThinca(object):
 		# required since all coincs that can involve those triggers
 		# have been obtained on this iteration.
 		#
+
+		# invalidate the coinc extractor in case all that follows
+		# is a no-op
+		self.last_coincs = {}
 
 		# check that we've accumulated thinca_interval seconds, and
 		# that .add_events() has been called with some events since
@@ -355,10 +355,6 @@ class StreamThinca(object):
 
 
 	def flush(self, xmldoc, process_id, seglists, fapfar = None):
-		# invalidate the coinc extractor in case run_coincidence()
-		# is a no-op.
-		self.last_coincs = {}
-
 		# coincidence.
 		noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), seglists, fapfar = fapfar)
 
