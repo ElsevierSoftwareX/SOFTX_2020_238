@@ -89,7 +89,6 @@ class SnglInspiral(snglinspiraltable.GSTLALSnglInspiral):
 
 class StreamThinca(object):
 	def __init__(self, coincidence_threshold, thinca_interval = 50.0, min_instruments = 2, min_log_L = None, sngls_snr_threshold = None):
-		self._xmldoc = None
 		self.thinca_interval = thinca_interval	# seconds
 		self.last_coincs = {}
 		if min_instruments < 1:
@@ -146,6 +145,17 @@ class StreamThinca(object):
 
 
 	def add_events(self, xmldoc, process_id, events, boundary, seglists, fapfar = None):
+		"""
+		NOTE:  upon the first invocation of .add_events() some
+		initialization occurs using xmldoc.  no other xmldoc object
+		may be used on any subsequent invocation until .flush() is
+		invoked or else the behaviour is undefined.  The code used
+		to have safety checks to monitor for changes to the xmldoc
+		tree but it was found that that confused the garbage
+		collector and led to memory leaks, so for now it is left as
+		an exercise for the calling code to ensure it follows the
+		rules.
+		"""
 		# invalidate the coinc extractor in case all that follows
 		# is a no-op
 		self.last_coincs = {}
@@ -158,9 +168,6 @@ class StreamThinca(object):
 		# subclass
 		if self.sngl_inspiral_table is None:
 			self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, lsctables.SnglInspiralTable.get_table(xmldoc).columnnames)
-			# so we can watch for it changing
-			assert self._xmldoc is None
-			self._xmldoc = xmldoc
 			# How far apart two singles can be and still be
 			# coincident, including time slide offsets.
 			offsetvectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
@@ -217,9 +224,6 @@ class StreamThinca(object):
 		# required since all coincs that can involve those triggers
 		# have been obtained on this iteration.
 		#
-
-		# safety check
-		assert xmldoc is self._xmldoc
 
 		# check that we've accumulated thinca_interval seconds, and
 		# that .add_events() has been called with some events since
@@ -376,12 +380,8 @@ class StreamThinca(object):
 		# is a no-op.
 		self.last_coincs = {}
 
-		# coincidence.  don't bother unless .add_events() has been
-		# called since the last flush()
-		if self._xmldoc is not None:
-			noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), seglists, fapfar = fapfar)
-		else:
-			noncoinc_sngls = []
+		# coincidence.
+		noncoinc_sngls = self.run_coincidence(xmldoc, process_id, segments.infinity(), seglists, fapfar = fapfar)
 
 		# any event that hasn't been used in a coinc by now will
 		# never be
@@ -394,9 +394,6 @@ class StreamThinca(object):
 		# last_boundary must be reset to -infinity so that it looks
 		# like a fresh copy of the stream thinca instance
 		self.last_boundary = -segments.infinity()
-
-		# it's now safe to work with a different document
-		self._xmldoc = None
 
 		# return non-coincident sngls
 		return noncoinc_sngls
