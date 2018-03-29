@@ -15,4 +15,5 @@ pkgpython_PYTHON = \
 	postcoh_table_def.py \
 	postcoh_finalsink.py \
 	cohfar.py \
-	ligolw_inspinjfind_postcoh.py
+	ligolw_inspinjfind_postcoh.py \
+	homomorphic.py
