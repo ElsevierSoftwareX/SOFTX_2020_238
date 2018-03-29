@@ -31,6 +31,7 @@
 # - Question: Is it possible for the offline pipeline to begin producing tiggers after a certain time rather than waiting for all the inspiral jobs to get over? Will be particularly useful if the data length is ~ months or ~ year. Should also avoid producing massive amount of data, right?
 # - L300+: Please document within the code that the FAR column is used to store FAP so that future developers don't get confused what that column represents
 
+
 #
 # =============================================================================
 #
@@ -40,7 +41,7 @@
 #
 
 
-import time
+import itertools
 
 
 from glue import iterutils
@@ -231,28 +232,17 @@ class StreamThinca(object):
 		if self.last_boundary + self.thinca_interval > boundary or self.sngl_inspiral_table is None:
 			return []
 
-		# we need our own copies of these other tables because
-		# sometimes thinca wants to modify the attributes of a row
-		# object after appending it to a table, which isn't
-		# possible if the tables are SQL-based.  these do not store
-		# any state so we create them on the fly when needed
+		# we need our own copy of this table to figure out what
+		# triggers have been newly used in coincs.  this does not
+		# store any state across invocations so we create it on the
+		# fly
 		coinc_event_map_table = lsctables.New(lsctables.CoincMapTable)
-		coinc_event_table = lsctables.New(lsctables.CoincTable)
-		coinc_inspiral_table = lsctables.New(lsctables.CoincInspiralTable)
 
 		# replace tables with our versions
 		real_sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 		real_coinc_event_map_table = lsctables.CoincMapTable.get_table(xmldoc)
-		real_coinc_event_table = lsctables.CoincTable.get_table(xmldoc)
-		real_coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(xmldoc)
-		xmldoc.childNodes[-1].replaceChild(self.sngl_inspiral_table, real_sngl_inspiral_table)
-		xmldoc.childNodes[-1].replaceChild(coinc_event_map_table, real_coinc_event_map_table)
-		xmldoc.childNodes[-1].replaceChild(coinc_event_table, real_coinc_event_table)
-		xmldoc.childNodes[-1].replaceChild(coinc_inspiral_table, real_coinc_inspiral_table)
-
-		# synchronize our coinc_event table's ID generator with the
-		# ID generator attached to the database' table object
-		coinc_event_table.set_next_id(real_coinc_event_table.next_id)
+		real_sngl_inspiral_table.parentNode.replaceChild(self.sngl_inspiral_table, real_sngl_inspiral_table)
+		real_coinc_event_map_table.parentNode.replaceChild(coinc_event_map_table, real_coinc_event_map_table)
 
 		# define once-off ntuple_comparefunc() so we can pass the
 		# coincidence segment in as a default value for the seg
@@ -275,38 +265,18 @@ class StreamThinca(object):
 			ntuple_comparefunc = ntuple_comparefunc,
 			seglists = seglists,
 			likelihood_func = self.ln_likelihood_func,
+			fapfar = fapfar,
 			min_instruments = self.min_instruments,
 			min_log_L = self.min_log_L
 		)
-
-		# assign the FAP and FAR if provided with the data to do so
-		if fapfar is not None:
-			coinc_event_index = dict((row.coinc_event_id, row) for row in coinc_event_table)
-			for coinc_inspiral_row in coinc_inspiral_table:
-				ln_likelihood_ratio = coinc_event_index[coinc_inspiral_row.coinc_event_id].likelihood
-				coinc_inspiral_row.combined_far = fapfar.far_from_rank(ln_likelihood_ratio)
-				# FIXME:  add a proper column to store this in
-				coinc_inspiral_row.false_alarm_rate = fapfar.fap_from_rank(ln_likelihood_ratio)
-
-		# abuse minimum_duration column to store the latency.
-		# NOTE:  this is nonsense unless running live.
-		gps_time_now = float(lal.UTCToGPS(time.gmtime()))
-		for coinc_inspiral_row in coinc_inspiral_table:
-			coinc_inspiral_row.minimum_duration = gps_time_now - float(coinc_inspiral_row.end)
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
 		self.last_coincs = thinca.sngl_inspiral_coincs(xmldoc)
 
-		# synchronize the database' coinc_event table's ID
-		# generator with ours
-		real_coinc_event_table.set_next_id(coinc_event_table.next_id)
-
 		# put the original table objects back
-		xmldoc.childNodes[-1].replaceChild(real_sngl_inspiral_table, self.sngl_inspiral_table)
-		xmldoc.childNodes[-1].replaceChild(real_coinc_event_map_table, coinc_event_map_table)
-		xmldoc.childNodes[-1].replaceChild(real_coinc_event_table, coinc_event_table)
-		xmldoc.childNodes[-1].replaceChild(real_coinc_inspiral_table, coinc_inspiral_table)
+		self.sngl_inspiral_table.parentNode.replaceChild(real_sngl_inspiral_table, self.sngl_inspiral_table)
+		coinc_event_map_table.parentNode.replaceChild(real_coinc_event_map_table, coinc_event_map_table)
 
 		# copy triggers into real output document
 		# FIXME:  the "min log L" cut is applied inside
@@ -333,8 +303,18 @@ class StreamThinca(object):
 			newids = set(coinc_event_map_table.getColumnByName("event_id")) - self.event_ids
 			self.event_ids |= newids
 
-			# find multi-instrument zero-lag coinc event IDs
-			zero_lag_multi_instrument_coinc_event_ids = set(row.coinc_event_id for row in coinc_event_table if row.nevents >= 2 and row.time_slide_id in self.zero_lag_time_slide_ids)
+			# find multi-instrument zero-lag coinc event IDs.
+			# to avoid quadratic scaling, we use
+			# coinc_event_map to identify newly-created coincs;
+			# these will all be at the end of the coinc_event
+			# table, so we take rows from the end until one is
+			# encountered whose ID is not in the
+			# coinc_event_map table, then bail out
+			# FIXME:  this code does not work with
+			# database-backed tables in versions of glue <=
+			# 1.58
+			coinc_event_ids = frozenset(coinc_event_map_table.getColumnByName("coinc_event_id"))
+			zero_lag_multi_instrument_coinc_event_ids = frozenset(row.coinc_event_id for row in itertools.takewhile(lambda row: row.coinc_event_id in coinc_event_ids, reversed(lsctables.CoincTable.get_table(xmldoc))) if row.nevents >= 2 and row.time_slide_id in self.zero_lag_time_slide_ids)
 
 			# singles used in coincs but not in zero-lag coincs
 			# with two or more instruments.  these will be added to
@@ -346,10 +326,9 @@ class StreamThinca(object):
 			for event_id in newids:
 				real_sngl_inspiral_table.append(index[event_id])
 			map(real_coinc_event_map_table.append, coinc_event_map_table)
-			map(real_coinc_event_table.append, coinc_event_table)
-			map(real_coinc_inspiral_table.append, coinc_inspiral_table)
 		else:
 			background_coinc_sngls = []
+		coinc_event_map_table.unlink()
 
 		# record boundary
 		self.last_boundary = boundary
