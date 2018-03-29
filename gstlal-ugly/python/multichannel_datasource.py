@@ -44,6 +44,7 @@ from glue import segments
 import lal
 from lal import LIGOTimeGPS
 
+import numpy
 
 ## framexmit ports in use on the LDG
 # Look-up table to map instrument name to framexmit multicast address and
@@ -188,6 +189,75 @@ def channel_dict_from_channel_ini(options):
 
 	return channel_dict				
 
+def partition_channels_to_subsets(channel_dict, max_streams, min_sample_rate, max_sample_rate):
+	"""!
+	Given a channel dictionary, will produce roughly equal partitions of channel subsets, given max_streams,
+	and well as max and min sample rates enforced to determine the number of streams that a particular
+	channel will generate.
+
+	Returns a list of disjoint channel lists.
+	"""
+	# determine how many streams a single channel will produce when split up into multiple frequency bands
+	channel_streams = []
+
+	for channel in channel_dict.keys():
+		sample_rate = int(channel_dict[channel]['fsamp'])
+		max_rate = min(max_sample_rate, sample_rate)
+		min_rate = min(min_sample_rate, max_rate)
+		n_rates = int(numpy.log2(max_rate/min_rate) + 1)
+
+		channel_streams.append((n_rates, channel))
+
+	return [subset for subset in partition_list(channel_streams, max_streams)]
+
+def partition_list(lst, target_sum):
+	"""!
+	Partition list to roughly equal partitioned chunks based on a target sum,
+	given a list with items in the form (int, value), where ints are used to determine partitions.
+
+	Returns a sublist with items value.
+	"""
+	total_sum = sum(item[0] for item in lst)
+	chunks = numpy.ceil(total_sum/float(target_sum))
+	avg_sum = total_sum/float(chunks)
+
+	chunks_yielded = 0
+	chunk = []
+	chunksum = 0
+	sum_of_seen = 0
+
+	for i, item in enumerate(lst):
+
+		# if only one chunk left to process, yield rest of list
+		if chunks - chunks_yielded == 1:
+			yield chunk + [x[1] for x in lst[i:]]
+			raise StopIteration
+
+		to_yield = chunks - chunks_yielded
+		chunks_left = len(lst) - i
+
+		# yield remaining list in single item chunks
+		if to_yield > chunks_left:
+			if chunk:
+				yield chunk
+			for x in lst[i:]:
+				yield [x[1]]
+			raise StopIteration
+
+		sum_of_seen += item[0]
+
+		# if target sum is less than the average, add another item to chunk
+		if chunksum < avg_sum:
+			chunk.append(item[1])
+			chunksum += item[0]
+
+		# else, yield the chunk, and update expected sum since this chunk isn't perfectly partitioned
+		else:
+			yield chunk
+			avg_sum = (total_sum - sum_of_seen)/(to_yield - 1)
+			chunks_yielded += 1
+			chunksum = item[0]
+			chunk = [item[1]]
 
 class DataSourceInfo(object):
 	"""!
@@ -233,7 +303,7 @@ class DataSourceInfo(object):
 		for fidelity in options.fidelity_exclude:
 			assert fidelity in self.known_fidelity, '--fidelity-exclude=%s is not understood. Must be one of %s'%(fidelity, ", ".join(self.known_fidelity))
 
-		# dictionary of the requested channels, e.g., {"H1": {"LDAS-STRAIN": 16384}, "L1": {"LDAS-STRAIN": 16384}}
+		# dictionary of the requested channels, e.g., {"H1:LDAS-STRAIN": 16384, "H1:ODC-LARM": 2048}
 		if options.channel_list:
 			name, self.extension = options.channel_list.rsplit('.', 1)
 			if self.extension == 'ini':
@@ -244,8 +314,19 @@ class DataSourceInfo(object):
 			self.extension = 'none'
 			self.channel_dict = channel_dict_from_channel_list(options.channel_name)
 
-		# set instrument; it is assumed all channels from a given channel list are from the same instrument		
+		# set instrument; it is assumed all channels from a given channel list are from the same instrument
 		self.instrument = self.channel_dict[next(iter(self.channel_dict))]['ifo']
+
+		# set the maximum number of streams to be run by a single pipeline.
+		self.max_streams = options.max_streams
+
+		# set the frequency ranges considered by channels with splitting into multiple frequency bands.
+		# If channel sampling rate doesn't fall within this range, it will not be split into multiple bands.
+		self.max_sample_rate = options.max_sample_rate
+		self.min_sample_rate = options.min_sample_rate
+
+		# split up channels requested into roughly equal partitions for serial processing
+		self.channel_subsets = partition_channels_to_subsets(self.channel_dict, self.max_streams, self.min_sample_rate, self.max_sample_rate)
 
 		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
@@ -336,6 +417,18 @@ def append_options(parser):
 		Set the name of the channels to process.
 		Can be given multiple times as --channel-name=IFO:AUX-CHANNEL-NAME:RATE
 
+-	--max-streams [int]
+		Set the maximum number of streams to process at a given time (num_channels * num_rates = num_streams).
+		Used to split up channels given into roughly equal subsets to be processed in sequence.
+
+-	--max-sampling-rate [int]
+		Maximum sampling rate for a given channel.
+		If a given channel has a higher native sampling rate, it will be downsampled to this target rate.
+
+-	--min-sampling-rate [int]
+		Minimum sampling rate for a given channel when splitting a given channel into multiple frequency bands.
+		If a channel has a lower sampling rate than this minimum, however, it will not be upsampled to this sampling rate.
+
 -	--framexmit-addr [string]
 		Set the address of the framexmit service.  Can be given
 		multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port
@@ -393,6 +486,9 @@ def append_options(parser):
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
 	group.add_option("--channel-list", type="string", metavar = "name", help = "Set the list of the channels to process. Command given as --channel-list=location/to/file")
 	group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO:AUX-CHANNEL-NAME:RATE")
+	group.add_option("--max-streams", type = "int", default = 50, help = "Maximum number of streams to process for a given pipeline at once. Used to split up channel lists into subsets that can then be processed in serial. Default = 50.")
+	group.add_option("--max-sample-rate", type = "int", default = 2048, help = "Maximum sampling rate for a given channel. If a given channel has a higher native sampling rate, it will be downsampled to this target rate. Default = 2048.")
+	group.add_option("--min-sample-rate", type = "int", default = 32, help = "Minimum sampling rate for a given channel when splitting a given channel into multiple frequency bands. If a channel has a lower sampling rate than this minimum, however, it will not be upsampled to this sampling rate. Default = 32.")
 	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
 	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
 	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")
@@ -452,7 +548,7 @@ def append_options(parser):
 # @enddot
 #
 #
-def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
+def mkbasicmultisrc(pipeline, data_source_info, channels, verbose = False):
 	"""!
 	All the things for reading real or simulated channel data in one place.
 
@@ -460,29 +556,29 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 
 	This src in general supports only one instrument although
 	DataSourceInfo contains dictionaries of multi-instrument things.  By
-	specifying the instrument when calling this function you will get ony a single
-	instrument source.  A code wishing to have multiple basicsrcs will need to call
-	this function for each instrument.
+	specifying the channels when calling this function you will only process
+	the channels specified. A code wishing to have multiple basicmultisrcs
+	will need to call this multiple times with different sets of channels specified.
 	"""
 
 	if data_source_info.data_source == "white":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[channel]['fsamp']) for channel in data_source_info.channel_dict.keys()}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[channel]['fsamp']) for channel in channels}
 	elif data_source_info.data_source == "silence":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = instrument, channel_name = channel, wave = 4) for channel in data_source_info.channel_dict.keys()}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, wave = 4) for channel in channels}
 	elif data_source_info.data_source == "frames":
-		src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = data_source_info.channel_dict.keys())
+		src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = data_source_info.instrument[0], cache_dsc_regex = data_source_info.instrument)
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channels)
 		# allow frame reading and decoding to occur in a different
 		# thread
-		head = dict.fromkeys(data_source_info.channel_dict.keys(), None)
+		head = dict.fromkeys(channels, None)
 		for channel in head:	
 			head[channel] = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * Gst.SECOND)
 			pipeparts.src_deferred_link(demux, channel, head[channel].get_static_pad("sink"))
-			if data_source_info.frame_segments[instrument] is not None:
+			if not data_source_info.frame_segments[data_source_info.instrument]:
 				# FIXME:  make segmentsrc generate segment samples at the channel sample rate?
 				# FIXME:  make gate leaky when I'm certain that will work.
-				head[channel] = pipeparts.mkgate(pipeline, head[channel], threshold = 1, control = pipeparts.mksegmentsrc(pipeline, data_source_info.frame_segments[instrument]), name = "%s_frame_segments_gate" % channel)
-				pipeparts.framecpp_channeldemux_check_segments.set_probe(head[channel].get_static_pad("src"), data_source_info.frame_segments[instrument])
+				head[channel] = pipeparts.mkgate(pipeline, head[channel], threshold = 1, control = pipeparts.mksegmentsrc(pipeline, data_source_info.frame_segments[data_source_info.instrument]), name = "%s_frame_segments_gate" % channel)
+				pipeparts.framecpp_channeldemux_check_segments.set_probe(head[channel].get_static_pad("src"), data_source_info.frame_segments[data_source_info.instrument])
 		
 			# fill in holes, skip duplicate data
 			head[channel] = pipeparts.mkaudiorate(pipeline, head[channel], skip_to_first = True, silent = False)
@@ -490,17 +586,17 @@ def mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = False):
 	elif data_source_info.data_source in ("framexmit", "lvshm"):
 		if data_source_info.data_source == "lvshm":
 			# FIXME make wait_time adjustable through web interface or command line or both
-			src = pipeparts.mklvshmsrc(pipeline, shm_name = data_source_info.shm_part_dict[instrument], num_buffers = 64, blocksize = 10000000, wait_time = 120)
+			src = pipeparts.mklvshmsrc(pipeline, shm_name = data_source_info.shm_part_dict[data_source_info.instrument], num_buffers = 64, blocksize = 10000000, wait_time = 120)
 		elif data_source_info.data_source == "framexmit":
-			src = pipeparts.mkframexmitsrc(pipeline, multicast_iface = data_source_info.framexmit_iface, multicast_group = data_source_info.framexmit_addr[instrument][0], port = data_source_info.framexmit_addr[instrument][1], wait_time = 120)
+			src = pipeparts.mkframexmitsrc(pipeline, multicast_iface = data_source_info.framexmit_iface, multicast_group = data_source_info.framexmit_addr[data_source_info.instrument][0], port = data_source_info.framexmit_addr[data_source_info.instrument][1], wait_time = 120)
 		else:
 			# impossible code path
 			raise ValueError(data_source_info.data_source)
 
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = data_source_info.channel_dict.keys())
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channels)
 
 		# channels
-		head = dict.fromkeys(data_source_info.channel_dict.keys(), None)
+		head = dict.fromkeys(channels, None)
 		for channel in head:		
 			head[channel] = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND* 60 * 1) # 1 minute of buffering
 			pipeparts.src_deferred_link(demux, channel, head[channel].get_static_pad("sink"))

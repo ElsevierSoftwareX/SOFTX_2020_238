@@ -112,6 +112,9 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.keys = kwargs.pop("keys")
 		self.frame_segments = kwargs.pop("frame_segments")
 
+		# format id for aesthetics
+		self.job_id = str(kwargs.pop("job_id")).zfill(4)
+
 		### iDQ saving properties
 		self.last_save_time = None
 		self.cadence = options.cadence
@@ -131,7 +134,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			duration = int(options.gps_end_time) - int(options.gps_start_time)
 			self.fname = '%s-%d-%d' % (self.tag, options.gps_start_time, duration)
 
-			trigger_path = os.path.join(self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5], self.tag+"-"+options.job_id)
+			trigger_path = os.path.join(self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5], self.tag+"-"+self.job_id)
 			self.fpath = os.path.join(os.path.abspath(self.out_path), trigger_path)
 			self.tmp_path = os.path.join(tmp_dir, trigger_path)
 
@@ -359,10 +362,13 @@ class MultiChannelHandler(simplehandler.Handler):
 		return bottle.HTTPResponse(status = status, headers = header, body = body)
 
 class LinkedAppSync(pipeparts.AppSync):
-	def __init__(self, appsink_new_buffer, sink_dict = {}):
-		super(LinkedAppSync, self).__init__(appsink_new_buffer, sink_dict.keys())
-		self.sink_dict = sink_dict	
+	def __init__(self, appsink_new_buffer, sink_dict = None):
 		self.time_ordering = 'full'
+		if sink_dict:
+			self.sink_dict = sink_dict
+		else:
+			self.sink_dict = {}
+		super(LinkedAppSync, self).__init__(appsink_new_buffer, self.sink_dict.keys())
 	
 	def attach(self, appsink):
 		"""
@@ -520,9 +526,15 @@ options, filenames = parse_command_line()
 
 data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument = data_source_info.instrument
-channels = data_source_info.channel_dict.keys()
 
-# set up logger
+# only load kafka library if triggers are transferred via kafka topic
+if options.use_kafka:
+	from confluent_kafka import Producer
+
+#
+# set up logging
+#
+
 duration = int(options.gps_end_time) - int(options.gps_start_time)
 logdir = os.path.join(options.out_path, 'logs', options.job_id)
 aggregator.makedir(logdir)
@@ -530,184 +542,197 @@ aggregator.makedir(logdir)
 logger = idq_utils.get_logger('gstlal-etg_%d-%d' % (options.gps_start_time, duration), rootdir=logdir, verbose=options.verbose)
 logger.info("writing log to %s" % logdir)
 
-# dictionary of basis parameters keyed by ifo, rate
-basis_params = {}
-
-# only load kafka library if triggers are transferred via kafka topic
-if options.use_kafka:
-	from confluent_kafka import Producer
-
 #
-# if web services serving up bottle routes are enabled,
-# create a new, empty, Bottle application and make it the
-# current default, then start http server to serve it up
+# process channel subsets in serial
 #
 
-if not options.disable_web_service:
-	bottle.default_app.push()
-	# uncomment the next line to show tracebacks when something fails
-	# in the web server
-	#bottle.app().catchall = False
-	import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
-	httpservers = httpinterface.HTTPServers(
-		# FIXME:  either switch to using avahi's native name
-		# uniquification system or adopt a naturally unique naming
-		# scheme (e.g., include a search identifier and job
-		# number).
-		service_name = "gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
-		service_properties = {},
-		verbose = options.verbose
-	)
+for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 
-	# Set up a registry of the resources that this job provides
-	@bottle.route("/")
-	@bottle.route("/index.html")
-	def index(channel_list = channels):
-		# get the host and port to report in the links from the
-		# request we've received so that the URLs contain the IP
-		# address by which client has contacted us
-		netloc = bottle.request.urlparts[1]
-		server_address = "http://%s" % netloc
-		yield "<html><body>\n<h3>%s %s</h3>\n<p>\n" % (netloc, " ".join(sorted(channel_list)))
-		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
-			# don't create links back to this page
-			if route.rule in ("/", "/index.html"):
-				continue
-			# only create links for GET methods
-			if route.method != "GET":
-				continue
-			yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
-		yield "</p>\n</body></html>"
-	# FIXME:  get service-discovery working, then don't do this
-	open("registry.txt", "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
+	# format subset_id for aesthetics
+	#subset_id = str(subset_id).zfill(4)
 
-#
-# building the event loop and pipeline
-#
-logger.info("assembling pipeline...")
+	logger.info("processing channel subset %d of %d" % (subset_id, len(data_source_info.channel_subsets)))
 
-mainloop = GObject.MainLoop()
-pipeline = Gst.Pipeline(sys.argv[0])
+	#
+	# if web services serving up bottle routes are enabled,
+	# create a new, empty, Bottle application and make it the
+	# current default, then start http server to serve it up
+	#
 
-# generate multiple channel sources, and link up pipeline
-head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
-src = {}
+	if not options.disable_web_service:
+		bottle.default_app.push()
+		# uncomment the next line to show tracebacks when something fails
+		# in the web server
+		#bottle.app().catchall = False
+		import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
+		httpservers = httpinterface.HTTPServers(
+			# FIXME:  either switch to using avahi's native name
+			# uniquification system or adopt a naturally unique naming
+			# scheme (e.g., include a search identifier and job
+			# number).
+			service_name = "gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
+			service_properties = {},
+			verbose = options.verbose
+		)
 
-for channel in channels:
-	# define sampling rates used
-	samp_rate = int(data_source_info.channel_dict[channel]['fsamp'])
-	max_samp_rate = min(2048, samp_rate)
-	min_samp_rate = min(32, max_samp_rate)
-	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
-	rates = [min_samp_rate*2**i for i in range(n_rates)]
+		# Set up a registry of the resources that this job provides
+		@bottle.route("/")
+		@bottle.route("/index.html")
+		def index(channel_list = channel_subset):
+			# get the host and port to report in the links from the
+			# request we've received so that the URLs contain the IP
+			# address by which client has contacted us
+			netloc = bottle.request.urlparts[1]
+			server_address = "http://%s" % netloc
+			yield "<html><body>\n<h3>%s %s</h3>\n<p>\n" % (netloc, " ".join(sorted(channel_list)))
+			for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+				# don't create links back to this page
+				if route.rule in ("/", "/index.html"):
+					continue
+				# only create links for GET methods
+				if route.method != "GET":
+					continue
+				yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
+			yield "</p>\n</body></html>"
+		# FIXME:  get service-discovery working, then don't do this
+		open("registry.txt", "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
-	if options.latency_output:
-		head[channel] = pipeparts.mklatency(pipeline, head[channel], name=idq_utils.latency_name('beforewhitening', 2, channel))
+	#
+	# building the event loop and pipeline
+	#
 
-	# whiten auxiliary channel data
-	for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32).items():
+	logger.info("assembling pipeline...")
+
+	mainloop = GObject.MainLoop()
+	pipeline = Gst.Pipeline(sys.argv[0])
+
+	# dictionary of basis parameters keyed by ifo, rate
+	basis_params = {}
+
+	# generate multiple channel sources, and link up pipeline
+	head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, channel_subset, verbose = options.verbose)
+	src = {}
+
+	for channel in channel_subset:
+		# define sampling rates used
+		samp_rate = int(data_source_info.channel_dict[channel]['fsamp'])
+		max_rate = min(data_source_info.max_sample_rate, samp_rate)
+		min_rate = min(data_source_info.min_sample_rate, max_rate)
+		n_rates = int(numpy.log2(max_rate/min_rate) + 1)
+		rates = [min_rate*2**i for i in range(n_rates)]
+
 		if options.latency_output:
-			thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterwhitening', 3, channel, rate))
+			head[channel] = pipeparts.mklatency(pipeline, head[channel], name=idq_utils.latency_name('beforewhitening', 2, channel))
 
-		# choose range of basis parameters for sine-gaussians
-		# NOTE: scale down frequency range by downsample_factor to deal with rolloff from downsampler
-		downsample_factor = 0.8
-		flow = rate/4. * downsample_factor
-		fhigh = rate/2. * downsample_factor
-		qlow = 4
-		if data_source_info.extension == 'ini':
-			qhigh = data_source_info.channel_dict[channel]['qhigh']  
-		else:
-			qhigh = options.qhigh
+		# whiten auxiliary channel data
+		for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32).items():
+			if options.latency_output:
+				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterwhitening', 3, channel, rate))
 
-		# generate half sine-gaussian templates
-		hsg_waveforms = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
-		basis_params[(channel, rate)] = hsg_waveforms.parameter_grid
-		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
+			# choose range of basis parameters for sine-gaussians
+			# NOTE: scale down frequency range by downsample_factor to deal with rolloff from downsampler
+			downsample_factor = 0.8
+			flow = rate/4. * downsample_factor
+			fhigh = rate/2. * downsample_factor
+			qlow = 4
+			if data_source_info.extension == 'ini':
+				qhigh = data_source_info.channel_dict[channel]['qhigh']
+			else:
+				qhigh = options.qhigh
 
-		# determine whether to do time-domain or frequency-domain convolution
-		time_domain = (hsg_waveforms.max_duration*rate**2) < (5*hsg_waveforms.max_duration*rate*numpy.log2(rate))
+			# generate half sine-gaussian templates
+			hsg_waveforms = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
+			basis_params[(channel, rate)] = hsg_waveforms.parameter_grid
+			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 
-		# create FIR bank of half sine-gaussian templates
-		fir_matrix = numpy.array([waveform for waveform in hsg_waveforms.generate_templates()])
-		thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = 0)
+			# determine whether to do time-domain or frequency-domain convolution
+			time_domain = (hsg_waveforms.max_duration*rate**2) < (5*hsg_waveforms.max_duration*rate*numpy.log2(rate))
 
-		# add queues, change stream format, add tags
-		if options.latency_output:
-			thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterFIRbank', 4, channel, rate))
-		thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
-		thishead = pipeparts.mktogglecomplex(pipeline, thishead)
-		thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
-		thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
+			# create FIR bank of half sine-gaussian templates
+			fir_matrix = numpy.array([waveform for waveform in hsg_waveforms.generate_templates()])
+			thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = 0)
 
-		# extract features from time series
-		thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
-		if options.latency_output:
-			thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('aftertrigger', 5, channel, rate))
+			# add queues, change stream format, add tags
+			if options.latency_output:
+				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterFIRbank', 4, channel, rate))
+			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
+			thishead = pipeparts.mktogglecomplex(pipeline, thishead)
+			thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
+			thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
 
-		# link to src for processing by appsync
-		src[(channel, rate)] = thishead	
+			# extract features from time series
+			thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
+			if options.latency_output:
+				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('aftertrigger', 5, channel, rate))
 
-# define structures to synchronize output streams and extract triggers from buffer
-logger.info("attaching appsinks to pipeline...")
+			# link to src for processing by appsync
+			src[(channel, rate)] = thishead
 
-handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments)
-appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
-appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for channel, rate in src.keys())
-  
-# Allow Ctrl+C or sig term to gracefully shut down the program for online
-# sources, otherwise it will just kill it
-if data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
-	simplehandler.OneTimeSignalHandler(pipeline)
+	# define structures to synchronize output streams and extract triggers from buffer
 
-# Seek
-if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
-	raise RuntimeError("pipeline failed to enter READY state")
-if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
-	datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time)
-#
-# Run pipeline
-#
+	logger.info("setting up pipeline handler...")
+	handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments, job_id = subset_id)
 
-if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-	raise RuntimeError("pipeline failed to enter PLAYING state")
+	logger.info("attaching appsinks to pipeline...")
+	appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
+	appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for channel, rate in src.keys())
+	logger.info("attached %d appsinks to pipeline." % len(appsinks))
 
-logger.info("running pipeline...")
+	# Allow Ctrl+C or sig term to gracefully shut down the program for online
+	# sources, otherwise it will just kill it
+	if data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
+		simplehandler.OneTimeSignalHandler(pipeline)
 
-mainloop.run()
+	# Seek
+	if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+		raise RuntimeError("pipeline failed to enter READY state")
+	if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
+		datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time)
 
-# save remaining triggers
-if options.save_hdf:
-	handler.to_hdf_file()
-	handler.finish_hdf_file()
-else:
-	handler.to_trigger_file()
+	#
+	# Run pipeline
+	#
+
+	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+		raise RuntimeError("pipeline failed to enter PLAYING state")
+
+	logger.info("running pipeline...")
+
+	mainloop.run()
+
+	# save remaining triggers
+	if options.save_hdf:
+		handler.to_hdf_file()
+		handler.finish_hdf_file()
+	else:
+		handler.to_trigger_file()
 
 
-#
-# Shut down pipeline
-#
+	#
+	# Shut down pipeline
+	#
 
-logger.info("shutting down pipeline...")
+	logger.info("shutting down pipeline...")
 
-#
-# Shutdown the web interface servers and garbage collect the Bottle
-# app.  This should release the references the Bottle app's routes
-# hold to the pipeline's data (like template banks and so on).
-#
+	#
+	# Shutdown the web interface servers and garbage collect the Bottle
+	# app.  This should release the references the Bottle app's routes
+	# hold to the pipeline's data (like template banks and so on).
+	#
 
-if not options.disable_web_service:
-	del httpservers
-	bottle.default_app.pop()
+	if not options.disable_web_service:
+		del httpservers
+		bottle.default_app.pop()
 
-#
-# Set pipeline state to NULL and garbage collect the handler
-#
+	#
+	# Set pipeline state to NULL and garbage collect the handler
+	#
 
-if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
-	raise RuntimeError("pipeline could not be set to NULL")
-del handler.pipeline
-del handler
+	if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
+		raise RuntimeError("pipeline could not be set to NULL")
+
+	del handler.pipeline
+	del handler
 
 #
 # close program manually if data source is live
