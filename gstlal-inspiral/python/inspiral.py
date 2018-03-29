@@ -962,6 +962,12 @@ class Data(object):
 				break
 			del event.snr_time_series
 
+		# garbage collect last_coincs
+		# FIXME:  this should not be needed.  something is wrong.
+		# if this is needed, then why don't we have to garbage
+		# collect everything ourselves?
+		self.stream_thinca.last_coincs = {}
+
 	def flush(self):
 		with self.lock:
 			self.__flush()
