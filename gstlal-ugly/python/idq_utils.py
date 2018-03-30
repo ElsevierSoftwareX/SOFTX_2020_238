@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2017  Patrick Godwin
+# Copyright (C) 2017-2018  Patrick Godwin
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -185,12 +185,6 @@ class FeatureData(object):
 	def dump(self, path):
 		raise NotImplementedError
 
-	def load(self, path):
-		raise NotImplementedError
-
-	def pop(self):
-		raise NotImplementedError
-
 	def append(self, key, value):
 		raise NotImplementedError
 
@@ -221,12 +215,6 @@ class HDF5FeatureData(FeatureData):
 				group = os.path.join(str(key[0]), str(key[1]).zfill(4))
 				create_new_dataset(path, base, self.etg_data[key], name=name, group=group, tmp=tmp)
 			self.clear()
-
-	def load(self, path):
-		raise NotImplementedError
-
-	def pop(self):
-		raise NotImplementedError
 
 	def append(self, value, key = None, buftime = None):
 		"""
