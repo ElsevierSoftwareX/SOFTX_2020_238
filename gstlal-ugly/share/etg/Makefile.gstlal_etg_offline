@@ -2,7 +2,7 @@ SHELL := /bin/bash
 # condor commands
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
 ACCOUNTING_TAG=ligo.dev.o3.detchar.onlinedq.idq
-GROUP_USER=duncan.meacher
+GROUP_USER=albert.einstein
 CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
 
 #########################
@@ -19,8 +19,8 @@ FSTART=$(shell echo $$((${START}-${SEG_PAD})))
 STOP  = 1187100000
 
 OUTPATH = $(PWD)
-# Number of threads (N_channels x N_rates_per_channel) that each cpu will process
-N_THREADS = 50
+# Target number of streams (N_channels x N_rates_per_channel) that each cpu will process
+N_STREAMS = 50
 MISMATCH = 0.05
 QHIGH = 100
 
@@ -82,13 +82,14 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--frame-segments-file segments.xml.gz \
 		--frame-segments-name datasegments \
 		--channel-list channel_list.txt \
+		--local-frame-caching \
 		--out-path $(OUTPATH) \
-		--threads $(N_THREADS)\
+		--max-streams $(N_STREAMS)\
 		--mismatch $(MISMATCH) \
 		--qhigh $(QHIGH) \
 		$(CONDOR_COMMANDS) \
-		--request-cpu 4 \
-		--request-memory 3GB \
+		--request-cpu 2 \
+		--request-memory 8GB \
 		--verbose \
 		--disable-web-service
 
