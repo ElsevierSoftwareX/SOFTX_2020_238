@@ -50,7 +50,6 @@
 
 
 #include <gstlal/gstlal_tags.h>
-#include <gstlal_burst_triggergen.h>
 
 
 /*
@@ -68,7 +67,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
-		{"lal_bursttriggergen", GSTLAL_BURST_TRIGGERGEN_TYPE},
 		{NULL, 0},
 	};
 

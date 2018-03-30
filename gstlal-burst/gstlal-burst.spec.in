@@ -1,4 +1,4 @@
-%define gstreamername gstreamer_lscsoft
+%define gstreamername gstreamer1
 
 Name: @PACKAGE_NAME@
 Version: @PACKAGE_VERSION@
@@ -9,15 +9,14 @@ Group: LSC Software/Data Analysis
 
 Requires: gstlal-ugly >= @MIN_GSTLAL_UGLY_VERSION@
 Requires: gstlal >= @MIN_GSTLAL_VERSION@
-Requires: python >= 2.6
+Requires: python >= @MIN_PYTHON_VERSION@
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: glue-segments >= @MIN_GLUE_VERSION@
 Requires: python-pylal >= @MIN_PYLAL_VERSION@
+Requires: python-%{gstreamername}
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
-Requires: %{gstreamername}-plugins-good >= 0.10.27
-Requires: gstreamer_lscsoft-python >= 0.10.21
-Requires: pygobject2
+Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
 Requires: numpy
 Requires: scipy
 Requires: lal >= @MIN_LAL_VERSION@
@@ -25,12 +24,12 @@ Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalburst >= @MIN_LALBURST_VERSION@
 
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@
-BuildRequires: python-devel >= 2.6
+BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 BuildRequires: fftw-devel >= 3
 BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
-BuildRequires: pygobject2-devel
 BuildRequires: lal-devel >= @MIN_LAL_VERSION@
+BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
 BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 
 Conflicts: gstlal-ugly < 0.6.0
@@ -44,7 +43,17 @@ This package contains the plugins and shared libraries required to run the gstla
 %package devel
 Summary: Files and documentation needed for compiling gstlal-based plugins and programs.
 Group: LSC Software/Data Analysis
-Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ gstlal-ugly-devel >= @MIN_GSTLAL_UGLY_VERSION@ python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ pygobject2-devel lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@ lalburst-devel >= @MIN_LALBURST_VERSION@ gsl-devel
+Requires: %{name} = %{version} 
+Requires: gstlal-devel >= @MIN_GSTLAL_VERSION@
+Requires: gstlal-ugly-devel >= @MIN_GSTLAL_UGLY_VERSION@
+Requires: python-devel >= @MIN_PYTHON_VERSION@ 
+Requires: fftw-devel >= 3 
+Requires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
+Requires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ 
+Requires: lal-devel >= @MIN_LAL_VERSION@
+Requires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+Requires: lalburst-devel >= @MIN_LALBURST_VERSION@
+
 %description devel
 This package contains the files needed for building gstlal-burst based plugins
 and programs.
@@ -95,7 +104,7 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %defattr(-,root,root)
 %{_bindir}/*
 %{_prefix}/%{_lib}/python*/site-packages/gstlal
-%{_libdir}/gstreamer-0.10/*.so
+%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.so
 %{_libdir}/*.so.*
 
 %files devel
@@ -103,5 +112,5 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %{_libdir}/*.a
 %{_libdir}/*.so
 %{_libdir}/pkgconfig/*
-%{_libdir}/gstreamer-0.10/*.a
+%{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.a
 %{_includedir}/*

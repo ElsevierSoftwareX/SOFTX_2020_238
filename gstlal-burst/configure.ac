@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-burst],[0.0.3],[gstlal-discuss@ligo.org],[gstlal-burst])
+AC_INIT([gstlal-burst],[0.1.0],[gstlal-discuss@ligo.org],[gstlal-burst])
 AC_COPYRIGHT([Copyright (C) 2011-2014 Chris Pankow])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -103,8 +103,8 @@ PKG_PROG_PKG_CONFIG()
 # Check for Python
 #
 
-
-AM_PATH_PYTHON([2.6],,)
+AC_SUBST([MIN_PYTHON_VERSION],["2.7"])
+AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
 # hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
 # and SL6.  FIXME:  find a way to do this properly
@@ -150,8 +150,8 @@ AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
 #
 
 
-AC_SUBST([GSTREAMER_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
@@ -169,8 +169,8 @@ AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex
 #
 
 
-AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [0.10.32])
+AC_SUBST([GSTREAMER_AUDIO_RELEASE], [1.0])
+AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [1.2.4])
 PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE} >= ${MIN_GSTREAMER_AUDIO_VERSION}])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
@@ -181,7 +181,7 @@ AC_SUBST([gstreamer_audio_LIBS])
 #
 
 
-PKG_CHECK_MODULES([pygobject], [pygobject-2.0])
+PKG_CHECK_MODULES([pygobject], [pygobject-3.0])
 AC_SUBST([pygobject_CFLAGS])
 AC_SUBST([pygobject_LIBS])
 
