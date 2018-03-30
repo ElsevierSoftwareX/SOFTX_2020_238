@@ -40,6 +40,7 @@ import threading
 import shutil
 import traceback
 
+import h5py
 import numpy
 
 import gi
@@ -110,7 +111,7 @@ class MultiChannelHandler(simplehandler.Handler):
 	def __init__(self, *args, **kwargs):
 		self.lock = threading.Lock()
 		self.basis_params = kwargs.pop("basis_params")
-		self.description = kwargs.pop("description")
+		self.basename = kwargs.pop("basename")
 		self.out_path = kwargs.pop("out_path")
 		self.instrument = kwargs.pop("instrument")
 		self.keys = kwargs.pop("keys")
@@ -122,7 +123,6 @@ class MultiChannelHandler(simplehandler.Handler):
 		### iDQ saving properties
 		self.last_save_time = None
 		self.cadence = options.cadence
-		self.tag = '%s-%s' % (self.instrument[:1], self.description)
 
 		# get base temp directory
 		if '_CONDOR_SCRATCH_DIR' in os.environ:
@@ -136,11 +136,11 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.fdata = idq_utils.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
 
 			duration = int(options.gps_end_time) - int(options.gps_start_time)
-			self.fname = '%s-%d-%d' % (self.tag, options.gps_start_time, duration)
+			#self.fname = '%s-%d-%d' % (self.tag, options.gps_start_time, duration)
+			self.fname = os.path.splitext(idq_utils.to_trigger_filename(self.basename, options.gps_start_time, duration, 'h5'))[0]
 
-			trigger_path = os.path.join(self.tag, self.tag+"-"+str(self.fname.split("-")[2])[:5], self.tag+"-"+self.job_id)
-			self.fpath = os.path.join(os.path.abspath(self.out_path), trigger_path)
-			self.tmp_path = os.path.join(tmp_dir, trigger_path)
+			self.fpath = idq_utils.to_trigger_path(os.path.abspath(self.out_path), self.basename, options.gps_start_time, self.job_id)
+			self.tmp_path = idq_utils.to_trigger_path(tmp_dir, self.basename, options.gps_start_time, self.job_id)
 
 			# create temp and output directories if they don't exist
 			aggregator.makedir(self.fpath)
@@ -531,6 +531,7 @@ options, filenames = parse_command_line()
 
 data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument = data_source_info.instrument
+basename = '%s-%s' % (instrument[:1], options.description)
 
 # only load kafka library if triggers are transferred via kafka topic
 if options.use_kafka:
@@ -601,6 +602,32 @@ if options.local_frame_caching:
 #
 
 for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
+
+	#
+	# checkpointing for offline analysis for hdf5 output
+	#
+
+	if options.data_source not in ("lvshm", "framexmit") and options.save_hdf:
+		try:
+			# get path where triggers are located
+			duration = int(options.gps_end_time) - int(options.gps_start_time)
+			fname = idq_utils.to_trigger_filename(basename, options.gps_start_time, duration, 'h5')
+			fpath = idq_utils.to_trigger_path(os.path.abspath(options.out_path), basename, options.gps_start_time, str(subset_id).zfill(4))
+			trg_file = os.path.join(fpath, fname)
+
+			# visit groups within a given hdf5 file
+			with h5py.File(trg_file, 'r') as f:
+				f.visit(lambda item: f[item])
+			# file is OK and there is no need to process it,
+			# skip ahead in the loop
+			continue
+
+		except IOError:
+			# file does not exist or is corrupted, need to
+			# reprocess
+			logger.info("checkpoint: {0} of {1} files completed and continuing with channel subset {2}".format((subset_id - 1), len(data_source_info.channel_subsets), subset_id))
+			pass
+
 	logger.info("processing channel subset %d of %d" % (subset_id, len(data_source_info.channel_subsets)))
 
 	#
@@ -721,7 +748,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	# define structures to synchronize output streams and extract triggers from buffer
 
 	logger.info("setting up pipeline handler...")
-	handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, description = options.description, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments, job_id = subset_id)
+	handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, basename = basename, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments, job_id = subset_id)
 
 	logger.info("attaching appsinks to pipeline...")
 	appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)

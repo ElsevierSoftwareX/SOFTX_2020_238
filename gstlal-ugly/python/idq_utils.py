@@ -101,6 +101,29 @@ def floor_div(x, n):
 	assert n > 0
 	return (x / n) * n
 
+def to_trigger_path(rootdir, basename, start_time, job_id):
+	"""!
+	Given a basepath, instrument, description, start_time, job_id, will return a
+	path pointing to a directory structure in the form:
+		${rootdir}/${basename}/${basename}-${start_time_mod1e5}/${basename}-${job_id}/
+	"""
+	start_time_mod1e5 = str(start_time)[:5]
+	return os.path.join(rootdir, basename, '-'.join([basename, start_time_mod1e5]), '-'.join([basename, job_id]))
+
+def to_trigger_filename(basename, start_time, duration, suffix, tmp=False):
+	"""!
+	Given an instrument, description, start_time, and duration, will return a
+	filename suitable with the T050017 file naming convention, in the form:
+		${basename}-${start_time}-{duration}.${suffix}
+
+	or if a temporary file is requested:
+		${basename}-${start_time}-{duration}.${suffix}.tmp
+	"""
+	if tmp:
+		return '%s-%d-%d.%s.tmp' % (basename, start_time, duration, suffix)
+	else:
+		return '%s-%d-%d.%s' % (basename, start_time, duration, suffix)
+
 def latency_name(stage_name, stage_num, channel, rate=None):
 	"""!
 	Returns a properly formatted latency element name based on stage,
