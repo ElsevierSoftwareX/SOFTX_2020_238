@@ -328,7 +328,6 @@ class StreamThinca(object):
 			map(real_coinc_event_map_table.append, coinc_event_map_table)
 		else:
 			background_coinc_sngls = []
-		coinc_event_map_table.unlink()
 
 		# record boundary
 		self.last_boundary = boundary
