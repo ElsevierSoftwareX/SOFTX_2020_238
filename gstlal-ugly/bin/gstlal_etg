@@ -570,8 +570,7 @@ if options.local_frame_caching:
 	    cache_list=[CacheEntry(cache_file) for cache_file in frame_cache.readlines()]
 
 	# filter out cache entries based on analysis times
-	# FIXME: this doesn't cover frames where analysis segments partially overlap
-	cache_list = [c for c in cache_list if c.segment in data_source_info.seg]
+	cache_list = [c for c in cache_list if c.segment.intersects(data_source_info.seg)]
 
 	# point local cache entries to local path
 	data_source_info.local_cache_list = [copy.copy(cacheentry) for cacheentry in cache_list]
