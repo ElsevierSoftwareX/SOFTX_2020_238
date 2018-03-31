@@ -101,6 +101,9 @@ def plot_snr_chi_pdf(rankingstat, instrument, which, snr_max, event_snr = None, 
 	y = binnedarray.bins[1].centres()[:-1]
 	z = binnedarray.at_centres()[:-1,:-1]
 	if numpy.isnan(z).any():
+		if numpy.isnan(z).all():
+			warnings.warn("%s %s is all NaN, skipping" % (instrument, which))
+			return None
 		warnings.warn("%s %s contains NaNs" % (instrument, which))
 		z = numpy.ma.masked_where(numpy.isnan(z), z)
 
