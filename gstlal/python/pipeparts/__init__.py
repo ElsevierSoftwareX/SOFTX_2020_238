@@ -198,6 +198,15 @@ class framecpp_channeldemux_check_segments(object):
 	segment that will be ignored (for example, to accomodate round-off
 	error in element timestamp computations).  The default is 1 ns.
 	"""
+	# FIXME:  this code now has two conflicting mechanisms for removing
+	# probes from pads:  one code path removes probes when pads get to
+	# EOS, while the othe removes a probe each time the pad for the
+	# probe appears a second or subsequent time on an element (and then
+	# re-installs the probe on the new pad).  it's possible that these
+	# two could attempt to remove the same probe twice, which will
+	# cause a crash, although it should not happen in current use
+	# cases.  the fix is to rework the probe tracking mechanism so that
+	# both code paths agree on what probes are installed
 	def __init__(self, elem, seglists, jitter = LIGOTimeGPS(0, 1)):
 		self.jitter = jitter
 		self.probe_handler_ids = {}
@@ -209,7 +218,7 @@ class framecpp_channeldemux_check_segments(object):
 	def pad_added(self, element, pad, seglists):
 		name = pad.get_name()
 		if name in self.probe_handler_ids:
-			pad.remove_data_probe(self.probe_handler_ids.pop(name))
+			pad.remove_probe(self.probe_handler_ids.pop(name))
 		if name in seglists:
 			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name], self.jitter)
 			assert self.probe_handler_ids[name] > 0
@@ -217,10 +226,15 @@ class framecpp_channeldemux_check_segments(object):
 	@classmethod
 	def set_probe(cls, pad, seglist, jitter = LIGOTimeGPS(0, 1)):
 		# use a copy of the segmentlist so the probe can modify it
-		return pad.add_probe(Gst.PadProbeType.DATA_DOWNSTREAM, cls.probe, (segments.segmentlist(seglist), jitter))
+		seglist = segments.segmentlist(seglist)
+		# mutable object to carry data to probe
+		data = [seglist, jitter, None]
+		# install probe, save ID in data
+		probe_id = data[2] = pad.add_probe(Gst.PadProbeType.DATA_DOWNSTREAM, cls.probe, data)
+		return probe_id
 
 	@staticmethod
-	def probe(pad, probeinfo, (seglist, jitter)):
+	def probe(pad, probeinfo, (seglist, jitter, probe_id)):
 		if probeinfo.type & Gst.PadProbeType.BUFFER:
 			obj = probeinfo.get_buffer()
 			if not obj.mini_object.flags & Gst.BufferFlags.GAP:
@@ -236,6 +250,8 @@ class framecpp_channeldemux_check_segments(object):
 			if seglist.intersects_segment(preceding):
 				raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & segments.segmentlist([preceding])))
 		elif probeinfo.type & Gst.PadProbeType.EVENT_DOWNSTREAM and probeinfo.get_event().type == Gst.EventType.EOS:
+			# detach probe at EOS
+			pad.remove_probe(probe_id)
 			# ignore missing data intervals unless they're
 			# bigger than the jitter
 			iterutils.inplace_filter(lambda seg: abs(seg) > jitter, seglist)
