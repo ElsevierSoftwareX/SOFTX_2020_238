@@ -276,6 +276,18 @@ def subdir_from_T050017_filename(fname):
 	return path
 
 
+def lower_bound_in_seglist(seglist, x):
+	"""
+	Return the index of the segment immediately at or before x in the
+	coalesced segment list seglist.  Operation is O(log n).
+	"""
+	# NOTE:  this is an operation that is performed in a number of
+	# locations in various codes, and is something that I've screwed up
+	# more than once.  maybe this should be put into segments.py itself
+	i = bisect.bisect_right(seglist, x)
+	return i - 1 if i else 0
+
+
 #
 # =============================================================================
 #
@@ -791,7 +803,11 @@ class Data(object):
 			# boundary and a bisection search to clip the lists
 			# to reduce subsequent operation count.
 			discard_boundary = float(self.stream_thinca.discard_boundary)
-			snr_segments = segments.segmentlistdict((instrument, ratebinlist[bisect.bisect_left(ratebinlist, (discard_boundary,)):].segmentlist()) for instrument, ratebinlist in self.rankingstat.denominator.triggerrates.items())
+			snr_segments = segments.segmentlistdict((instrument, ratebinlist[lower_bound_in_seglist(ratebinlist, discard_boundary):].segmentlist()) for instrument, ratebinlist in self.rankingstat.denominator.triggerrates.items())
+
+			# times when SNR was available.  used only for code
+			# correctness checks
+			one_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 1)
 
 			# times when at least 2 instruments were generating
 			# SNR.  used to sieve triggers for inclusion in the
@@ -815,6 +831,7 @@ class Data(object):
 			# necessary for this test to be super precisely
 			# defined.
 			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, snr_segments, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
+				assert event.end in one_or_more_instruments, "trigger at time (%s) with no SNR (%s)" % (str(event.end), str(one_or_more_instruments))
 				if event.end in two_or_more_instruments:
 					self.rankingstat.denominator.increment(event)
 			self.coincs_document.commit()
@@ -912,11 +929,13 @@ class Data(object):
 		# times when at least 2 instruments were generating SNR.
 		# used to sieve triggers for inclusion in the denominator.
 		discard_boundary = float(self.stream_thinca.discard_boundary)
-		snr_segments = segments.segmentlistdict((instrument, ratebinlist[bisect.bisect_left(ratebinlist, (discard_boundary,)):].segmentlist()) for instrument, ratebinlist in self.rankingstat.denominator.triggerrates.items())
+		snr_segments = segments.segmentlistdict((instrument, ratebinlist[lower_bound_in_seglist(ratebinlist, discard_boundary):].segmentlist()) for instrument, ratebinlist in self.rankingstat.denominator.triggerrates.items())
+		one_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 1)
 		two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
 
 		ratebinlists = self.rankingstat.denominator.triggerrates.values()
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, snr_segments, fapfar = self.fapfar):
+			assert event.end in one_or_more_instruments, "trigger at time (%s) with no SNR (%s)" % (str(event.end), str(one_or_more_instruments))
 			if event.end in two_or_more_instruments:
 				self.rankingstat.denominator.increment(event)
 		self.coincs_document.commit()
