@@ -108,7 +108,7 @@ def lal_transferfunction_02(pipeline, name):
 
 	rate = 16384	    	# Hz
 	buffer_length = 1.0	# seconds
-	test_duration = 100.0	# seconds
+	test_duration = 500.0	# seconds
 	width = 64		# bits
 	channels = 1
 	freq = 512		# Hz
@@ -126,7 +126,7 @@ def lal_transferfunction_02(pipeline, name):
 	witness1 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.highpass(pipeline, hoft, rate, fcut = 400), calibration_parts.lowpass(pipeline, noise, rate, fcut = 400)))
 	witness2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_parts.lowpass(pipeline, hoft, rate, fcut = 600), calibration_parts.highpass(pipeline, noise, rate, fcut = 600)))
 
-	clean_data = calibration_parts.clean_data(pipeline, hoft, rate, calibration_parts.list_srcs(pipeline, witness1, witness2), rate, rate / 2, rate / 4, 128, rate * test_duration, filename = "highpass_lowpass_tfs.txt")
+	clean_data = calibration_parts.clean_data(pipeline, hoft, rate, calibration_parts.list_srcs(pipeline, witness1, witness2), rate, rate / 2, rate / 4, 128, rate * test_duration, int(0.75 * rate), 20.0 / rate, filename = "highpass_lowpass_tfs.txt")
 	pipeparts.mknxydumpsink(pipeline, clean_data, "%s_out.txt" % name)
 
 	return pipeline

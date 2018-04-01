@@ -1511,8 +1511,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 						normalization += element->sinc_table[j];
 					for(j = i; j <= element->sinc_length / 2; j += cadence)
 						element->sinc_table[j] /= normalization;
-					for(j = cadence - i; j <= element->sinc_length / 2; j += cadence)
-						element->sinc_table[j] /= normalization;
+					if(i) {
+						for(j = cadence - i; j <= element->sinc_length / 2; j += cadence)
+							element->sinc_table[j] /= normalization;
+					}
 				}
 				/* If cadence is even, we need to account for one more normalization without "over-normalizing." */
 				if(!((cadence) % 2)) {
