@@ -222,10 +222,10 @@ def remove_lines_with_witness(pipeline, signal, witness, freq, caps, filter_leng
 		# Find transfer function between witness channel and signal at this frequency
 		tf_at_f = complex_division(pipeline, line_in_signal, line_in_witness)
 		# Remove worthless data from computation of transfer function if we can
-		if obsready:
+		if obsready is not None:
 			tf_at_f = mkgate(pipeline, tf_at_f, obsready, 1, attack_length = -integration_samples)
 		# Take a running median and average of transfer function
-		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = N_median, avg_array_size = N_avg)
+		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = N_median, avg_array_size = N_avg, default_to_median = True)
 
 		# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
 		reconstructed_line_at_signal = mkmultiplier(pipeline, list_srcs(tf_at_f, line_in_witness))
@@ -330,6 +330,30 @@ def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400):
 
 	# Now apply the filter
 	return pipeparts.mkfirbank(pipeline, head, latency = int(length - 1), fir_matrix = [bandstop], time_domain = True)
+
+def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, zero_latency = True, rate_out = 16):
+	# Find the root mean square amplitude of a signal between two frequencies
+	# Downsample to save computational cost
+	head = mkresample(pipeline, head, 5, zero_latency, "audio/x-raw,rate=%d" % rate)
+
+	# Remove any frequency content we don't care about
+	if (f_min is not None) and (f_max is not None):
+		head = bandpass(pipeline, head, rate, f_low = f_min, f_high = f_max)
+	elif f_min is not None:
+		head = highpass(pipeline, head, fcut = f_min)
+	elif f_max is not None:
+		head = lowpass(pipeline, head, fcut = f_max)
+
+	# Square it
+	head = pipeparts.mkpow(pipeline, head, exponent = 2.0)
+
+	# Downsample again to save computational cost
+	head = mkresample(pipeline, head, 3, zero_latency, "audio/x-raw,rate=%d" % rate_out)
+
+	# Compute running average
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = 0.0, array_size = 1, avg_array_size = average_time * rate_out)
+
+	return head
 
 #
 # Calibration factor related functions
