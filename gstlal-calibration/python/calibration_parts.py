@@ -159,6 +159,85 @@ def list_srcs(pipeline, *args):
 # Various filtering functions
 #
 
+def demodulate(pipeline, head, freq, td, caps, integration_samples, delay, chop_length, prefactor_real = 1.0, prefactor_imag = 0.0):
+	# demodulate input at a given frequency freq
+
+	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
+	head = mkresample(pipeline, head, 5, True, caps)
+	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td, latency = delay)
+	if chop_length != 0:
+		head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", chop_length = chop_length)
+
+	return head
+
+def remove_lines(pipeline, head, freq, caps, filter_length):
+	# remove any line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
+	# function argument caps must be complex caps
+
+	integration_samples = filter_length * 16
+	if type(freq) is not list:
+		freq = [freq]
+
+	head = pipeparts.mktee(pipeline, head)
+	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync = True)
+	mkqueue(pipeline, head).link(elem)
+	for f in freq:
+		line = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = f)
+		line = mkresample(pipeline, line, 5, False, "audio/x-raw,rate=16")
+		line = mkcomplexfirbank(pipeline, line, latency = integration_samples / 2, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
+		line = mkresample(pipeline, line, 3, False, caps)
+		line = pipeparts.mkgeneric(pipeline, line, "lal_demodulate", line_frequency = -1.0 * f, prefactor_real = -2.0)
+		real, imag = split_into_real(pipeline, line)
+		pipeparts.mkfakesink(pipeline, imag)
+		mkqueue(pipeline, real).link(elem)
+
+	return elem
+
+def remove_lines_with_witness(pipeline, signal, witness, freq, caps, filter_length, obsready = None, latency = 0, N_median = 2048, N_avg = 160):
+	# remove line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
+	# function argument caps must be complex caps
+
+	integration_samples = filter_length * 16
+	latency_samples = latency * 16
+	if type(freq) is not list:
+		freq = [freq]
+
+	if len(freq) > 1:
+		witness = pipeparts.mktee(pipeline, witness)
+
+	signal = pipeparts.mktee(pipeline, signal)
+	signal_minus_lines = [signal]
+	for f in freq:
+		# Find amplitude and phase of line in witness channel
+		line_in_witness = pipeparts.mkgeneric(pipeline, witness, "lal_demodulate", line_frequency = f)
+		line_in_witness = mkresample(pipeline, line_in_witness, 5, False, "audio/x-raw,rate=16")
+		line_in_witness = mkcomplexfirbank(pipeline, line_in_witness, latency = latency_samples, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
+		line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
+
+		# Find amplitude and phase of line in signal
+		line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = f)
+		line_in_signal = mkresample(pipeline, line_in_signal, 5, False, "audio/x-raw,rate=16")
+		line_in_signal = mkcomplexfirbank(pipeline, line_in_signal, latency = latency_samples, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
+
+		# Find transfer function between witness channel and signal at this frequency
+		tf_at_f = complex_division(pipeline, line_in_signal, line_in_witness)
+		# Remove worthless data from computation of transfer function if we can
+		if obsready:
+			tf_at_f = mkgate(pipeline, tf_at_f, obsready, 1, attack_length = -integration_samples)
+		# Take a running median and average of transfer function
+		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = N_median, avg_array_size = N_avg)
+
+		# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
+		reconstructed_line_at_signal = mkmultiplier(pipeline, list_srcs(tf_at_f, line_in_witness))
+		reconstructed_line_at_signal = mkresample(pipeline, reconstructed_line_at_signal, 3, False, caps)
+		reconstructed_line_at_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_at_signal, "lal_demodulate", line_frequency = -1.0 * f, prefactor_real = -2.0)
+		reconstructed_line_at_signal, imag = split_into_real(pipeline, reconstructed_line_at_signal)
+		pipeparts.mkfakesink(pipeline, imag)
+
+		signal_minus_lines.append(reconstructed_line_at_signal)
+
+	return mkadder(pipeline, tuple(signal_minus_lines))
+
 def removeDC(pipeline, head, caps):
 	head = pipeparts.mktee(pipeline, head)
 	DC = mkresample(pipeline, head, 4, True, "audio/x-raw, rate=16")
@@ -386,40 +465,6 @@ def split_into_real(pipeline, complex_chan):
 #	pipeparts.src_deferred_link(elem, "src_1", imag.get_static_pad("sink"))
 
 	return real, imag
-
-def demodulate(pipeline, head, freq, td, caps, integration_samples, delay, chop_length, prefactor_real = 1.0, prefactor_imag = 0.0):
-	# demodulate input at a given frequency freq
-
-	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
-	head = mkresample(pipeline, head, 5, True, caps)
-	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td, latency = delay)
-	if chop_length != 0:
-		head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", chop_length = chop_length)
-
-	return head
-
-def remove_lines(pipeline, head, freq, caps, filter_length):
-	# remove any line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
-	# function argument caps must be complex caps
-
-	integration_samples = filter_length * 16
-	if type(freq) is not list:
-		freq = [freq]
-
-	head = pipeparts.mktee(pipeline, head)
-	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync = True)
-	mkqueue(pipeline, head).link(elem)
-	for f in freq:
-		line = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = f)
-		line = mkresample(pipeline, line, 5, False, "audio/x-raw,rate=16")
-		line = mkcomplexfirbank(pipeline, line, latency = integration_samples / 2, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
-		line = mkresample(pipeline, line, 3, False, caps)
-		line = pipeparts.mkgeneric(pipeline, line, "lal_demodulate", line_frequency = -1.0 * f, prefactor_real = -2.0)
-		real, imag = split_into_real(pipeline, line)
-		pipeparts.mkfakesink(pipeline, imag)
-		mkqueue(pipeline, real).link(elem)
-
-	return elem
 
 def complex_audioamplify(pipeline, chan, WR, WI):
 	# Multiply a complex channel chan by a complex number WR+I WI
@@ -663,7 +708,7 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	# anything else.
 	#
 
-	default_fir_filter = numpy.zeros(fft_length)
+	default_fir_filter = numpy.zeros(fir_length)
 
 	signal_tee = pipeparts.mktee(pipeline, signal)
 	witnesses = list(witnesses)
@@ -680,7 +725,7 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = 9, update_after_gap = True, filename = filename)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
-		minus_noise = pipeparts.mkgeneric(pipeline, witness_tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fft_length / 2, taper_length = 20 * fft_length)
+		minus_noise = pipeparts.mkgeneric(pipeline, witness_tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fir_length / 2, taper_length = 20 * fir_length)
 		transfer_functions.connect("notify::fir-filters", update_filter, minus_noise, "fir_filters", "kernel", i)
 		signal_minus_noise.append(mkresample(pipeline, minus_noise, 5, False, "audio/x-raw,rate=%d" % signal_rate))
 

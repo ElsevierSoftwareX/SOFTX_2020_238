@@ -189,9 +189,16 @@ static void write_transfer_functions(complex double *tfs, char *element_name, gi
 
 		j_stop = columns - 1;
 		for(i = 0; i < rows; i++) {
-			for(j = 0; j < j_stop; j++)
-				g_print("%10e + %10ei\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
-			g_print("%10e + %10ei\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
+			for(j = 0; j < j_stop; j++) {
+				if(cimag(tfs[i + j * rows]) < 0.0)
+					g_print("%10e - %10ei\t\t", creal(tfs[i + j * rows]), -cimag(tfs[i + j * rows]));
+				else
+					g_print("%10e + %10ei\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
+			}
+			if(cimag(tfs[i + j_stop * rows]) < 0.0)
+				g_print("%10e - %10ei\n", creal(tfs[i + j_stop * rows]), -cimag(tfs[i + j_stop * rows]));
+			else
+				g_print("%10e + %10ei\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
 		}
 		g_print("\n\n");
 	}
@@ -206,9 +213,16 @@ static void write_transfer_functions(complex double *tfs, char *element_name, gi
 
 		j_stop = columns - 1;
 		for(i = 0; i < rows; i++) {
-			for(j = 0; j < j_stop; j++)
-				g_fprintf(fp, "%10e + %10ei\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
-			g_fprintf(fp, "%10e + %10ei\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
+			for(j = 0; j < j_stop; j++) {
+				if(cimag(tfs[i + j * rows]) < 0.0)
+					g_fprintf(fp, "%10e - %10ei\t\t", creal(tfs[i + j * rows]), -cimag(tfs[i + j * rows]));
+				else
+					g_fprintf(fp, "%10e + %10ei\t\t", creal(tfs[i + j * rows]), cimag(tfs[i + j * rows]));
+			}
+			if(cimag(tfs[i + j_stop * rows]) < 0.0)
+				g_fprintf(fp, "%10e - %10ei\n", creal(tfs[i + j_stop * rows]), -cimag(tfs[i + j_stop * rows]));
+			else
+				g_fprintf(fp, "%10e + %10ei\n", creal(tfs[i + j_stop * rows]), cimag(tfs[i + j_stop * rows]));
 		}
 		g_fprintf(fp, "\n\n");
 		fclose(fp);
@@ -804,7 +818,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a sinc table to resample and/or low-pass filter the transfer functions when we make FIR filters
 			 */
 
-			if(element->fir_length == element->fft_length && element->frequency_resolution < 1.0 / element->fir_length) {
+			if(element->fir_length == element->fft_length && element->frequency_resolution <= (double) element->rate / element->fir_length) {
 				element->workspace.wspf.sinc_length = 1;
 				element->workspace.wspf.sinc_table = g_malloc(sizeof(*element->workspace.wspf.sinc_table));
 				*element->workspace.wspf.sinc_table = 1.0;
@@ -821,7 +835,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 					common_denomimator += long_length;
 				element->workspace.wspf.sinc_taps_per_df = common_denomimator / long_length;
 				/* taps_per_osc is the number of taps per half-oscillation in the sinc table */
-				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length, element->frequency_resolution * element->fft_length), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
+				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length / element->rate, element->frequency_resolution * element->fft_length / element->rate), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
 				element->workspace.wspf.sinc_length = minimum64(element->workspace.wspf.sinc_taps_per_df * maximum64(fd_fir_length / 2, fd_fft_length / 2) - 1, 1 + SINC_LENGTH * taps_per_osc);
 
 				/* To save memory, we use symmetry and record only half of the sinc table */
@@ -976,7 +990,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a sinc table to resample and/or low-pass filter the transfer functions when we make FIR filters
 			 */
 
-			if(element->fir_length == element->fft_length && element->frequency_resolution < 1.0 / element->fir_length) {
+			if(element->fir_length == element->fft_length && element->frequency_resolution < (double) element->rate / element->fir_length) {
 				element->workspace.wdpf.sinc_length = 1;
 				element->workspace.wdpf.sinc_table = g_malloc(sizeof(*element->workspace.wdpf.sinc_table));
 				*element->workspace.wdpf.sinc_table = 1.0;
@@ -993,7 +1007,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 					common_denomimator += long_length;
 				element->workspace.wspf.sinc_taps_per_df = common_denomimator / long_length;
 				/* taps_per_osc is the number of taps per half-oscillation in the sinc table */
-				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length, element->frequency_resolution * element->fft_length), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
+				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length / element->rate, element->frequency_resolution * element->fft_length / element->rate), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
 				element->workspace.wdpf.sinc_length = minimum64(element->workspace.wspf.sinc_taps_per_df * maximum64(fd_fir_length / 2, fd_fft_length / 2) - 1, 1 + SINC_LENGTH * taps_per_osc);
 
 				/* To save memory, we use symmetry and record only half of the sinc table */
@@ -1392,22 +1406,24 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_FREQUENCY_RESOLUTION:
 		element->frequency_resolution = g_value_get_double(value);
-		if(element->make_fir_filters && element->frequency_resolution < 1.0 / element->fir_length)
+		if(element->make_fir_filters && element->frequency_resolution < (double) element->rate / element->fir_length)
 			GST_WARNING_OBJECT(element, "The specified frequency resolution is finer than 1/fir_length, which cannot be achieved. The actual frequency resolution will be reset to 1/MIN(fft_length, fir_length).");
-		if(element->make_fir_filters && element->frequency_resolution < 1.0 / element->fft_length)
+		if(element->make_fir_filters && element->frequency_resolution < (double) element->rate / element->fft_length)
 			GST_WARNING_OBJECT(element, "The specified frequency resolution is finer than 1/fft_length, which cannot be achieved. The actual frequency resolution will be reset to 1/MIN(fft_length, fir_length).");
 		break;
 
 	case ARG_HIGH_PASS:
-		element->high_pass = g_value_get_int(value);
+		element->high_pass = g_value_get_double(value);
+		if(!element->make_fir_filters && element->high_pass != 0)
+			GST_WARNING_OBJECT(element, "A FIR filter high-pass cutoff frequency is set, but no FIR filter is being produced. Set the property make-fir-filters to a nonzero value to make FIR filters.");
 		break;
 
 	case ARG_LOW_PASS:
-		element->low_pass = g_value_get_int(value);
-		if((!element->make_fir_filters) && (element->high_pass != 0 || element->low_pass != 0))
-			GST_WARNING_OBJECT(element, "A FIR filter cutoff frequency is set, but no FIR filter is being produced. Set the property make_fir_filters to a nonzero value to make FIR filters.");
+		element->low_pass = g_value_get_double(value);
+		if(!element->make_fir_filters && element->low_pass != 0)
+			GST_WARNING_OBJECT(element, "A FIR filter low-pass cutoff frequency is set, but no FIR filter is being produced. Set the property make-fir-filters to a nonzero value to make FIR filters.");
 		if(element->high_pass != 0 && element->low_pass != 0 && element->high_pass > element->low_pass)
-			GST_WARNING_OBJECT(element, "The high-pass cutoff frequency of the FIR filters is above the low-pass cutoff frequency. Reset high_pass and/or low_pass to change this.");
+			GST_WARNING_OBJECT(element, "The high-pass cutoff frequency of the FIR filters is above the low-pass cutoff frequency. Reset high-pass and/or low-pass to change this.");
 		break;
 
 	case ARG_TRANSFER_FUNCTIONS:
@@ -1481,11 +1497,11 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case ARG_HIGH_PASS:
-		g_value_set_int(value, element->high_pass);
+		g_value_set_double(value, element->high_pass);
 		break;
 
 	case ARG_LOW_PASS:
-		g_value_set_int(value, element->low_pass);
+		g_value_set_double(value, element->low_pass);
 		break;
 
 	case ARG_TRANSFER_FUNCTIONS:
@@ -1671,27 +1687,30 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	properties[ARG_FREQUENCY_RESOLUTION] = g_param_spec_double(
 		"frequency-resolution",
 		"Frequency resolution",
-		"Frequency resolution of the FIR filters in samples^-1. This must be greater\n\t\t\t"
-		"than or equal to 1/fir-length. When computing multiple FIR filters\n\t\t\t"
+		"Frequency resolution of the FIR filters in Hz. This must be greater\n\t\t\t"
+		"than or equal to sample rate/fir-length and sample rate/fft-length\n\t\t\t"
+		"in order to be effective. When computing multiple FIR filters\n\t\t\t"
 		"simultaneously, it is recommended to set this to a value significantly\n\t\t\t"
 		"larger than 1/fft_length.",
-		0, 1, 0,
+		0, G_MAXDOUBLE, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_HIGH_PASS] = g_param_spec_int(
+	properties[ARG_HIGH_PASS] = g_param_spec_double(
 		"high-pass",
 		"High Pass",
-		"The high-pass cutoff frequency (in Hz) of the FIR filters.\n\t\t\t"
-		"If zero, no high-pass cutoff is added.",
-		0, G_MAXINT, 0,
+		"The high-pass cutoff frequency (in Hz) of the FIR filters. If zero, no\n\t\t\t"
+		"high-pass cutoff is added. The property frequency-resolution takes\n\t\t\t"
+		"precedence over this.",
+		0, G_MAXDOUBLE, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_LOW_PASS] = g_param_spec_int(
+	properties[ARG_LOW_PASS] = g_param_spec_double(
 		"low-pass",
 		"Low Pass",
-		"The low-pass cutoff frequency (in Hz) of the FIR filters.\n\t\t\t"
-		"If zero, no low-pass cutoff is added.",
-		0, G_MAXINT, 0,
+		"The low-pass cutoff frequency (in Hz) of the FIR filters. If zero, no\n\t\t\t"
+		"low-pass cutoff is added. The property frequency-resolution takes\n\t\t\t"
+		"precedence over this.",
+		0, G_MAXDOUBLE, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_TRANSFER_FUNCTIONS] = g_param_spec_value_array(
