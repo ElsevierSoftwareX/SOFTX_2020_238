@@ -808,11 +808,21 @@ class Data(object):
 			# times when SNR was available.  used only for code
 			# correctness checks
 			one_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 1)
+			# FIXME:  this is needed to work around rounding
+			# problems in safety checks below, trying to
+			# compare GPS trigger times to float segment
+			# boundaries (the boundaries don't have enough
+			# precision to know if triggers near the edge are
+			# in or out).  it would be better not to have to
+			# screw around like this.
+			one_or_more_instruments.protract(1e-3)	# 1 ms
 
 			# times when at least 2 instruments were generating
 			# SNR.  used to sieve triggers for inclusion in the
 			# denominator.
 			two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
+			# FIXME:  see comment above.
+			two_or_more_instruments.protract(1e-3)	# 1 ms
 
 			# run stream thinca.  update the parameter
 			# distribution data from sngls that weren't used in
@@ -933,7 +943,11 @@ class Data(object):
 		discard_boundary = float(self.stream_thinca.discard_boundary)
 		snr_segments = segments.segmentlistdict((instrument, ratebinlist[lower_bound_in_seglist(ratebinlist, discard_boundary):].segmentlist()) for instrument, ratebinlist in self.rankingstat.denominator.triggerrates.items())
 		one_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 1)
+		# FIXME:  see comment in appsink_new_buffer()
+		one_or_more_instruments.protract(1e-3)	# 1 ms
 		two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
+		# FIXME:  see comment in appsink_new_buffer()
+		two_or_more_instruments.protract(1e-3)	# 1 ms
 
 		ratebinlists = self.rankingstat.denominator.triggerrates.values()
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, snr_segments, fapfar = self.fapfar):
