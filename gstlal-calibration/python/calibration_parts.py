@@ -193,12 +193,14 @@ def remove_lines(pipeline, head, freq, caps, filter_length):
 
 	return elem
 
-def remove_lines_with_witness(pipeline, signal, witness, freq, caps, filter_length, obsready = None, latency = 0, N_median = 2048, N_avg = 160):
+def remove_lines_with_witness(pipeline, signal, witness, freq, compute_rate = 16, rate_out = 16384, integration_samples = 320, obsready = None, latency_samples = 0, N_median = 2048, N_avg = 160):
 	# remove line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
 
-	integration_samples = filter_length * 16
-	latency_samples = latency * 16
+	if latency_samples == 0:
+		zero_latency = True
+	else:
+		zero_latency = False
 	if type(freq) is not list:
 		freq = [freq]
 
@@ -210,13 +212,13 @@ def remove_lines_with_witness(pipeline, signal, witness, freq, caps, filter_leng
 	for f in freq:
 		# Find amplitude and phase of line in witness channel
 		line_in_witness = pipeparts.mkgeneric(pipeline, witness, "lal_demodulate", line_frequency = f)
-		line_in_witness = mkresample(pipeline, line_in_witness, 5, False, "audio/x-raw,rate=16")
+		line_in_witness = mkresample(pipeline, line_in_witness, 5, zero_latency, "audio/x-raw,rate=%d" % compute_rate)
 		line_in_witness = mkcomplexfirbank(pipeline, line_in_witness, latency = latency_samples, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
 		line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
 
 		# Find amplitude and phase of line in signal
 		line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = f)
-		line_in_signal = mkresample(pipeline, line_in_signal, 5, False, "audio/x-raw,rate=16")
+		line_in_signal = mkresample(pipeline, line_in_signal, 5, zero_latency, "audio/x-raw,rate=%d" % compute_rate)
 		line_in_signal = mkcomplexfirbank(pipeline, line_in_signal, latency = latency_samples, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
 
 		# Find transfer function between witness channel and signal at this frequency
@@ -229,7 +231,7 @@ def remove_lines_with_witness(pipeline, signal, witness, freq, caps, filter_leng
 
 		# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
 		reconstructed_line_at_signal = mkmultiplier(pipeline, list_srcs(tf_at_f, line_in_witness))
-		reconstructed_line_at_signal = mkresample(pipeline, reconstructed_line_at_signal, 3, False, caps)
+		reconstructed_line_at_signal = mkresample(pipeline, reconstructed_line_at_signal, 3, False, "audio/x-raw,rate=%d" % rate_out)
 		reconstructed_line_at_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_at_signal, "lal_demodulate", line_frequency = -1.0 * f, prefactor_real = -2.0)
 		reconstructed_line_at_signal, imag = split_into_real(pipeline, reconstructed_line_at_signal)
 		pipeparts.mkfakesink(pipeline, imag)
