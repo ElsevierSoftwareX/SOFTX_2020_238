@@ -27,6 +27,9 @@ OUTPATH = $(PWD)
 MAX_PARALLEL_STREAMS = 50
 MAX_SERIAL_STREAMS = 100
 
+# Maximum number of concurrent reads from the same frame file, done to prevent I/O locks
+CONCURRENCY = 4
+
 # length of time to process for a given job
 SEGMENT_LENGTH = 6000
 
@@ -96,6 +99,7 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--out-path $(OUTPATH) \
 		--max-serial-streams $(MAX_SERIAL_STREAMS) \
 		--max-parallel-streams $(MAX_PARALLEL_STREAMS) \
+		--concurrency $(CONCURRENCY) \
 		--segment-length $(SEGMENT_LENGTH) \
 		--mismatch $(MISMATCH) \
 		--qhigh $(QHIGH) \
