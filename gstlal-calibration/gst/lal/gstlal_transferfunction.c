@@ -326,8 +326,7 @@ static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions,
 	gboolean success = TRUE; \
 	gint16 i; \
 	gint64 j, k, k_stop, fd_fft_length, fd_fir_length, input0, sinc0, sinc_taps_per_input, sinc_taps_per_output; \
-	DTYPE df, delay; \
-	complex DTYPE exp_arg, smooth_tf; \
+	complex DTYPE smooth_tf; \
  \
 	fd_fft_length = fft_length / 2 + 1; \
 	fd_fir_length = fir_length / 2 + 1; \
@@ -339,15 +338,12 @@ static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions,
 	sinc_taps_per_input = fd_fir_length > fd_fft_length ? sinc_taps_per_df * (fd_fir_length - 1) / (fd_fft_length - 1) : sinc_taps_per_df; \
 	sinc_taps_per_output = fd_fir_length > fd_fft_length ? sinc_taps_per_df : sinc_taps_per_df * (fd_fft_length - 1) / (fd_fir_length - 1); \
  \
-	df = sample_rate / 2.0 / (fd_fir_length - 1); /* frequency spacing is Nyquist frequency / number of frequency increments */ \
-	delay = (fd_fir_length - 1.0) / sample_rate; /* number of samples of delay is length of transfer functions - 1 */ \
-	exp_arg = (complex DTYPE) (-2.0 * M_PI * I * df * delay); \
 	for(i = 0; i < num_tfs; i++) { \
 		for(j = 0; j < fd_fir_length; j++) { \
 			smooth_tf = 0; \
 			/*
 			 * First, apply the sinc filter to higher frequencies. We could hit the edge
-			 * of the sinc table or the Nyquist frequency of the transfer function
+			 * of the sinc table or the Nyquist frequency of the transfer function.
 			 */ \
 			sinc0 = (sinc_taps_per_input - j * sinc_taps_per_output % sinc_taps_per_input) % sinc_taps_per_input; \
 			input0 = i * fd_fft_length + (j * (fd_fft_length - 1) + fd_fir_length - 2) / (fd_fir_length - 1); \
@@ -364,7 +360,7 @@ static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions,
 			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
 			stupid += k_stop; \
 			for(k = 0; k < k_stop; k++) \
-				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (fd_window[(input0 - k) % fd_fft_length] * transfer_functions[input0 - k]); \
+				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (fd_window[(input0 - k) % fd_fft_length] * conj ## F_OR_BLANK(transfer_functions[input0 - k])); \
 			/*
 			 * Now, go back and apply the sinc filter to the lower frequencies. We could hit the edge
 			 * of the sinc table or the DC component of the transfer function.
@@ -384,15 +380,15 @@ static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions,
 			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
 			stupid += k_stop; \
 			for(k = 0; k < k_stop; k++) \
-				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (fd_window[(input0 + k) % fd_fft_length] * transfer_functions[input0 + k]); \
+				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (fd_window[(input0 + k) % fd_fft_length] * conj ## F_OR_BLANK(transfer_functions[input0 + k])); \
  \
-			/*
-			 * Now use smoothed samples from transfer_functions in fir_filter for fftw(f) to take an inverse fft.
-			 * The frequency domain window is applied here to roll off low and high freqneucies.
-			 * A delay is also added in order to center the filter in time.
-			 */ \
-			fir_filter[j] = cexp ## F_OR_BLANK(exp_arg * j) * smooth_tf; \
+			/* Add a delay of half the length of the filter, to center the filter in time. */ \
+			fir_filter[j] = (1 - 2 * (j % 2)) * smooth_tf; \
 		} \
+ \
+		/* Make sure the DC and Nyquist components are purely real */ \
+		fir_filter[0] = creal ## F_OR_BLANK(fir_filter[0]); \
+		fir_filter[fd_fir_length - 1] = creal ## F_OR_BLANK(fir_filter[fd_fir_length - 1]); \
  \
 		/* Take the inverse Fourier transform */ \
 		fftw ## F_OR_BLANK ## _execute(fir_plan); \
@@ -931,7 +927,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			/* flat top of window */
 			i_stop = element->fir_length - edge_to_corner;
 			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wspf.tukey[i] = (float) (element->make_fir_filters / element->fir_length);
+				element->workspace.wspf.tukey[i] = (float) (element->make_fir_filters / (double) element->fir_length);
 
 			/* last curve of window */
 			i_start = i_stop;
@@ -1103,7 +1099,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			/* flat top of window */
 			i_stop = element->fir_length - edge_to_corner;
 			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wdpf.tukey[i] = element->make_fir_filters / element->fir_length;
+				element->workspace.wdpf.tukey[i] = element->make_fir_filters / (double) element->fir_length;
 
 			/* last curve of window */
 			i_start = i_stop;
@@ -1673,7 +1669,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		"Make FIR Filters",
 		"If set to to a non-zero value, FIR filters will be produced each time the\n\t\t\t"
 		"transfer functions are computed with this gain factor relative to the\n\t\t\t"
-		"transfer functions. If unset (or set to 0), no FIR filters are produced.\n\t\t\t",
+		"transfer functions. If unset (or set to 0), no FIR filters are produced.",
 		-G_MAXDOUBLE, G_MAXDOUBLE, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
