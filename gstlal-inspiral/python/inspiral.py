@@ -831,13 +831,15 @@ class Data(object):
 			# necessary for this test to be super precisely
 			# defined.
 			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, snr_segments, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
+				if self.likelihood_url is None:
+					continue
 				assert event.end in one_or_more_instruments, "trigger at time (%s) with no SNR (%s)" % (str(event.end), str(one_or_more_instruments))
 				if event.end in two_or_more_instruments:
 					self.rankingstat.denominator.increment(event)
 			self.coincs_document.commit()
 
 			# update zero-lag bin counts in rankingstat.
-			if self.stream_thinca.last_coincs:
+			if self.stream_thinca.last_coincs and self.likelihood_url is not None:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					if coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
 						for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id):
@@ -935,13 +937,15 @@ class Data(object):
 
 		ratebinlists = self.rankingstat.denominator.triggerrates.values()
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, snr_segments, fapfar = self.fapfar):
+			if self.likelihood_url is None:
+				continue
 			assert event.end in one_or_more_instruments, "trigger at time (%s) with no SNR (%s)" % (str(event.end), str(one_or_more_instruments))
 			if event.end in two_or_more_instruments:
 				self.rankingstat.denominator.increment(event)
 		self.coincs_document.commit()
 
 		# update zero-lag bin counts in rankingstat.
-		if self.stream_thinca.last_coincs:
+		if self.stream_thinca.last_coincs and self.likelihood_url is not None:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				if coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
 					for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id):
