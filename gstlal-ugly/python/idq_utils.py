@@ -101,14 +101,14 @@ def floor_div(x, n):
 	assert n > 0
 	return (x / n) * n
 
-def to_trigger_path(rootdir, basename, start_time, job_id):
+def to_trigger_path(rootdir, basename, start_time, job_id, subset_id):
 	"""!
 	Given a basepath, instrument, description, start_time, job_id, will return a
 	path pointing to a directory structure in the form:
-		${rootdir}/${basename}/${basename}-${start_time_mod1e5}/${basename}-${job_id}/
+		${rootdir}/${basename}/${basename}-${start_time_mod1e5}/${basename}-${job_id}-${subset_id}/
 	"""
 	start_time_mod1e5 = str(start_time)[:5]
-	return os.path.join(rootdir, basename, '-'.join([basename, start_time_mod1e5]), '-'.join([basename, job_id]))
+	return os.path.join(rootdir, basename, '-'.join([basename, start_time_mod1e5]), '-'.join([basename, job_id, subset_id]))
 
 def to_trigger_filename(basename, start_time, duration, suffix, tmp=False):
 	"""!

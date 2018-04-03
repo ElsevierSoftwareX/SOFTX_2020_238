@@ -19,8 +19,18 @@ FSTART=$(shell echo $$((${START}-${SEG_PAD})))
 STOP  = 1187100000
 
 OUTPATH = $(PWD)
+
 # Target number of streams (N_channels x N_rates_per_channel) that each cpu will process
-N_STREAMS = 50
+# NOTE: * if max_serial_streams > max_parallel_streams, all jobs will be parallelized by channel
+#       * if max_parallel_streams > num_channels in channel list, all jobs will be processed serially, with processing driven by max_serial_streams
+#       * any other combination will produce a mix of parallelization by channels and processing channels serially per job
+MAX_PARALLEL_STREAMS = 50
+MAX_SERIAL_STREAMS = 100
+
+# length of time to process for a given job
+SEGMENT_LENGTH = 6000
+
+# Parameter space config of half-sine-gaussians
 MISMATCH = 0.05
 QHIGH = 100
 
@@ -81,10 +91,12 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--frame-cache frame.cache \
 		--frame-segments-file segments.xml.gz \
 		--frame-segments-name datasegments \
-		--channel-list channel_list.txt \
 		--local-frame-caching \
+		--channel-list channel_list.txt \
 		--out-path $(OUTPATH) \
-		--max-streams $(N_STREAMS)\
+		--max-serial-streams $(MAX_SERIAL_STREAMS) \
+		--max-parallel-streams $(MAX_PARALLEL_STREAMS) \
+		--segment-length $(SEGMENT_LENGTH) \
 		--mismatch $(MISMATCH) \
 		--qhigh $(QHIGH) \
 		$(CONDOR_COMMANDS) \
