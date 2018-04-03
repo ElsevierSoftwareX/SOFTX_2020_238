@@ -780,7 +780,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 		rankingstat = rankingstat,
 		zerolag_rankingstatpdf_filename = zerolag_rankingstatpdf_filename,
 		rankingstatpdf_filename = options.marginalized_likelihood_file,
-		likelihood_url_namedtuple = likelihood_url_namedtuple,
+		likelihood_url_namedtuple = likelihood_url_namedtuple if not options.injections else None,
 		likelihood_snapshot_interval = options.likelihood_snapshot_interval,	# seconds
 		thinca_interval = options.thinca_interval,
 		min_log_L = options.min_log_L,

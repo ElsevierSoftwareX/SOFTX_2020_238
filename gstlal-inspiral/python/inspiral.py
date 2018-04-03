@@ -567,6 +567,22 @@ class Data(object):
 		# might be configured to disable ranking statistic output
 		# since they produce nonsense.
 		#
+		# FIXME:  gstlal_inspiral now sets the likelihood_url to
+		# None when doing injections to disable the collection of
+		# ranking statistic information in injection jobs.  this is
+		# now yet another way in which online analyses are broken
+		# following the ranking statistic rewrite and will need to
+		# be looked at.  the reason for doing this is that because
+		# injection jobs skip intervals of SNR reconstruction they
+		# create ranking statistic data that appear to be
+		# inconsistent with the triggers that are being produced
+		# and the inconsistency triggers assertion failures
+		# throughout the new ranking statistic code.  we have
+		# tried, in vain, to work around the problem but in the end
+		# we've had to simply stop injection jobs from even trying.
+		# the data they collect was never used anyway, exactly
+		# because of its inconsistencies.
+		#
 
 		if likelihood_url_namedtuple is not None:
 			self.reference_likelihood_url = likelihood_url_namedtuple.reference_likelihood_url
