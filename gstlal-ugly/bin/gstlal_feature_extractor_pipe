@@ -118,6 +118,12 @@ def feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, parent_nodes, seg
 		# parallelize jobs by segments
 		for seg in segsdict[ifo]:
 
+			# only produce jobs where the analysis runtime after applying segments is nonzero
+			if not data_source_info.frame_segments[ifo].intersects_segment(seg):
+				if options.verbose:
+					print "Skipping %s since there is no analyzable data here" % repr(seg)
+				continue
+
 			# set maximum number of jobs reading concurrently from the same frame file to prevent I/O locks
 			if ii / options.concurrency == 0:
 				dep_nodes = parent_nodes
