@@ -10,6 +10,7 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	aggregator.py \
+	auxcache.py \
 	coherent_inspiral_metric_detector_details.py \
 	coherent_inspiral_metric_plots.py \
 	coherent_inspiral_metric.py \

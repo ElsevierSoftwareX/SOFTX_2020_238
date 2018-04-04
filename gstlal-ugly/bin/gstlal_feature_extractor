@@ -60,6 +60,7 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 
+from gstlal import auxcache
 from gstlal import pipeio
 from gstlal import datasource
 from gstlal import idq_multirate_datasource
@@ -563,31 +564,12 @@ if options.local_frame_caching:
 	local_path = os.path.join(tmp_dir, 'local_frames/')
 	aggregator.makedir(local_path)
 
-	# read in frame cache
-	logger.info("reading in frame cache...")
-	cache_list = []
-	with open(data_source_info.frame_cache, 'r') as frame_cache:
-	    cache_list=[CacheEntry(cache_file) for cache_file in frame_cache.readlines()]
-
-	# filter out cache entries based on analysis times
-	cache_list = [c for c in cache_list if c.segment.intersects(data_source_info.seg)]
-
-	# point local cache entries to local path
-	data_source_info.local_cache_list = [copy.copy(cacheentry) for cacheentry in cache_list]
-	for cacheentry in data_source_info.local_cache_list:
-		_, filename = os.path.split(cacheentry.path)
-		cacheentry.path = os.path.join(local_path, filename)
-
-	# copy frame files over locally
-	logger.info("caching frame data locally to %s" % local_path)
-	for cacheentry, localcacheentry in zip(cache_list, data_source_info.local_cache_list):
-		logger.info("caching %s..." % os.path.basename(localcacheentry.path))
-		shutil.copy(cacheentry.path, localcacheentry.path)
-
 	# save local frame cache
+	logger.info("caching frame data locally to %s" % local_path)
 	f, fname = tempfile.mkstemp(".cache")
 	f = open(fname, "w")
 
+	data_source_info.local_cache_list = auxcache.cache_aux(data_source_info, logger, output_path = local_path, verbose = options.verbose)
 	for cacheentry in data_source_info.local_cache_list:
 		# guarantee a lal cache compliant file with only integer starts and durations
 		cacheentry.segment = segments.segment( int(cacheentry.segment[0]), int(math.ceil(cacheentry.segment[1])) )
