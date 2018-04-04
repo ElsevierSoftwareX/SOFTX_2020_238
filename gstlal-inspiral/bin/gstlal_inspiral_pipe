@@ -791,6 +791,8 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 
 def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, cpJob, innodes, ligolw_add_nodes, options, instruments):
 
+	num_chunks = 50
+
 	if options.vetoes is None:
 		vetoes = []
 	else:
@@ -799,7 +801,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 	chunk_nodes = []
 	dbs_to_delete = []
 	# Process the chirp mass bins in chunks to paralellize the merging process
-	for chunk, nodes in enumerate(chunks(innodes[None], 20)):
+	for chunk, nodes in enumerate(chunks(innodes[None], num_chunks)):
 		try:
 			dbs = [node.input_files[""] for node in nodes]
 			parents = nodes
@@ -868,7 +870,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		# extract only the nodes that were used for injections
 		chunk_nodes = []
 
-		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], 20)):
+		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
 			try:
 				dbs = [injnode.input_files[""] for injnode in injnodes]
 				parents = injnodes
