@@ -17,7 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 """
-This program makes a dag to run gstlal_etg offline
+This program makes a dag to run gstlal_feature_extractor offline
 """
 
 __author__ = 'Duncan Meacher <duncan.meacher@ligo.org>, Patrick Godwin <patrick.godwin@ligo.org>'
@@ -105,11 +105,11 @@ def analysis_segments(ifo, allsegs, boundary_seg, segment_length, max_template_l
 	return segsdict
 
 #
-# get a dictionary of all the channels per gstlal_etg job
+# get a dictionary of all the channels per gstlal_feature_extractor job
 #
 
-def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, data_source_info):
-	etg_nodes = {}
+def feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, parent_nodes, segsdict, ifo, options, data_source_info):
+	feature_extractor_nodes = {}
 	trig_start = options.gps_start_time
 
 	# parallelize jobs by channel subsets
@@ -122,7 +122,7 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, data_s
 			if ii / options.concurrency == 0:
 				dep_nodes = parent_nodes
 			else:
-				dep_nodes = [etg_nodes[(ii - options.concurrency, seg)]]
+				dep_nodes = [feature_extractor_nodes[(ii - options.concurrency, seg)]]
 
 			# creates a list of channel names with entries of the form --channel-name=IFO:CHANNEL_NAME:RATE
 			channels = [''.join(["--channel-name=",':'.join([channel, str(int(data_source_info.channel_dict[channel]['fsamp']))])]) for channel in channel_subset]
@@ -130,10 +130,10 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, data_s
 			# FIXME: hacky way of getting options to get passed correctly for channels
 			channels[0] = channels[0].split('=')[1]
 
-			outpath = os.path.join(options.out_path, "gstlal_etg")
+			outpath = os.path.join(options.out_path, "gstlal_feature_extractor")
 
-			etg_nodes[(ii, seg)] = \
-				inspiral_pipe.generic_node(gstlalETGJob, dag, parent_nodes = dep_nodes,
+			feature_extractor_nodes[(ii, seg)] = \
+				inspiral_pipe.generic_node(gstlalFeatureExtractorJob, dag, parent_nodes = dep_nodes,
 					opts = {"gps-start-time":int(seg[0]),
 						"gps-end-time":int(seg[1]),
 						"trigger-start-time":int(trig_start),
@@ -160,7 +160,7 @@ def etg_node_gen(gstlalETGJob, dag, parent_nodes, segsdict, ifo, options, data_s
 
 			trig_start = int(seg[1])
 
-	return etg_nodes
+	return feature_extractor_nodes
 
 #
 # Main
@@ -216,7 +216,7 @@ options, filenames = parse_command_line()
 
 output_dir = "plots"
 
-listdir = os.path.join(options.out_path, "gstlal_etg/channel_lists")
+listdir = os.path.join(options.out_path, "gstlal_feature_extractor/channel_lists")
 if not os.path.exists(listdir):
     os.makedirs(listdir)
 
@@ -240,21 +240,21 @@ try:
 	os.mkdir("logs")
 except:
 	pass
-dag = inspiral_pipe.DAG("etg_trigger_pipe")
+dag = inspiral_pipe.DAG("feature_extractor_pipe")
 
 #
 # setup the job classes
 #
 
-gstlalETGJob = inspiral_pipe.generic_job("gstlal_etg", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
+gstlalFeatureExtractorJob = inspiral_pipe.generic_job("gstlal_feature_extractor", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
 
 segsdict = analysis_segments(ifo, data_source_info.frame_segments, boundary_seg, options.segment_length, max_template_length=max_template_length)
 
 #
-# ETG jobs
+# feature extractor jobs
 #
 
-etg_nodes = etg_node_gen(gstlalETGJob, dag, [], segsdict, ifo, options, data_source_info)
+feature_extractor_nodes = feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, [], segsdict, ifo, options, data_source_info)
 
 #
 # all done

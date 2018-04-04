@@ -33,8 +33,8 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_dq \
 	gstlal_ll_inspiral_state \
 	gstlal_condor_top \
-	gstlal_etg \
-	gstlal_etg_pipe \
-	gstlal_etg_whitener_check \
-	gstlal_etg_template_overlap \
+	gstlal_feature_extractor \
+	gstlal_feature_extractor_pipe \
+	gstlal_feature_extractor_whitener_check \
+	gstlal_feature_extractor_template_overlap \
 	gstlal_injsplitter

@@ -82,12 +82,12 @@ FRAME_TYPE=R
 ############
 
 all : dag
-	sed -i '/gstlal_etg / s/$$/ |& grep -v '\''XLAL\|GSL\|Generic'\''/' etg_trigger_pipe.sh
-	@echo "Submit with: condor_submit_dag etg_trigger_pipe.dag"
+	sed -i '/gstlal_feature_extractor / s/$$/ |& grep -v '\''XLAL\|GSL\|Generic'\''/' feature_extractor_pipe.sh
+	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
 
 # Run etg pipe to produce dag
 dag : frame.cache plots channel_list.txt segments.xml.gz
-	gstlal_etg_pipe \
+	gstlal_feature_extractor_pipe \
 		--data-source frames \
 		--gps-start-time $(START) \
 		--gps-end-time $(STOP) \

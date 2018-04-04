@@ -106,7 +106,7 @@ class MultiChannelHandler(simplehandler.Handler):
 	multiple channels.
 
 	Implements additional message handling for dealing with spectrum
-	messages and creates trigger files for use in iDQ.
+	messages and creates trigger files containing features for use in iDQ.
 	"""
 	def __init__(self, mainloop, pipeline, data_source_info, options, **kwargs):
 		self.lock = threading.Lock()
@@ -158,20 +158,20 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.fdata = deque(maxlen = 25000)
 			self.fdata.append(self.header)
 
-		# set up ETG bottle related properties
-		self.etg_event = deque(maxlen = 20000)
-		self.etg_event_time = None
+		# set up stream related properties
+		self.stream_event = deque(maxlen = 20000)
+		self.last_stream_event_time = None
 
-		# set up bottle routes for PSDs and extracted ETG data
+		# set up bottle routes for PSDs and extracted feature data
 		self.psds = {}
-		self.etg_data = deque(maxlen = 2000)
+		self.feature_data = deque(maxlen = 2000)
 		if not options.disable_web_service:
 			bottle.route("/psds.xml")(self.web_get_psd_xml)
-			bottle.route("/etg_subset")(self.web_get_etg_data)
+			bottle.route("/feature_subset")(self.web_get_feature_data)
 
 		# set up kafka related properties
 		if options.use_kafka:
-			self.etg_parition = options.etg_partition
+			self.kafka_partition = options.kafka_partition
 			self.kafka_topic = options.kafka_topic
 			self.kafka_conf = {'bootstrap.servers': options.kafka_server}
 			self.producer = Producer(self.kafka_conf)
@@ -216,17 +216,17 @@ class MultiChannelHandler(simplehandler.Handler):
 			buftime = int(buf.pts / 1e9)
 			channel, rate  = sink_dict[elem]
 
-			# push new etg event to queue if done processing current timestamp
-			if self.etg_event_time is None:
-				self.etg_event_time = buftime
-			if self.etg_event_time < buftime:
-				etg_subset = {'timestamp': self.etg_event_time, 'etg_data': list(self.etg_event)}
+			# push new stream event to queue if done processing current timestamp
+			if self.last_stream_event_time is None:
+				self.last_stream_event_time = buftime
+			if self.last_stream_event_time < buftime:
+				feature_subset = {'timestamp': self.last_stream_event_time, 'feature_data': list(self.stream_event)}
 				if options.use_kafka:
-					self.producer.produce(timestamp = self.etg_event_time, topic = self.kafka_topic, value = json.dumps(etg_subset))
+					self.producer.produce(timestamp = self.last_stream_event_time, topic = self.kafka_topic, value = json.dumps(feature_subset))
 				else:
-					self.etg_data.append(etg_subset)
-				self.etg_event.clear()
-				self.etg_event_time = buftime
+					self.feature_data.append(feature_subset)
+				self.stream_event.clear()
+				self.last_stream_event_time = buftime
 
 			# set save time appropriately
 			if self.last_save_time is None:
@@ -285,13 +285,13 @@ class MultiChannelHandler(simplehandler.Handler):
 			# Setting stop time to trigger time for use with half sine gaussians
 			stop_time = trigger_time
 			# append row for data transfer/saving
-			etg_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
+			feature_row = {'timestamp': buftime, 'channel': channel, 'rate': rate, 'start_time': start_time, 'stop_time': stop_time, 'trigger_time': trigger_time,
 			           'frequency': freq, 'q': q, 'phase': row.phase, 'sigmasq': row.sigmasq, 'chisq': row.chisq, 'snr': row.snr}
-			self.etg_event.append(etg_row)
+			self.stream_event.append(feature_row)
 
 			# save iDQ compatible data
 			if options.save_hdf:
-				self.fdata.append(etg_row, key = (channel, rate), buftime = buftime)
+				self.fdata.append(feature_row, key = (channel, rate), buftime = buftime)
 			else:
 				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
 
@@ -352,17 +352,17 @@ class MultiChannelHandler(simplehandler.Handler):
 			output.close()
 		return outstr
 
-	def web_get_etg_data(self):
+	def web_get_feature_data(self):
 		header = {'Content-type': 'application/json'}
 		# if queue is empty, send appropriate response
-		if not self.etg_data:
+		if not self.feature_data:
 			status = 204
 			body = json.dumps({'error': "No Content"})
-		# else, get etg data and send as JSON
+		# else, get feature data and send as JSON
 		else:
 			status = 200
 			with self.lock:
-				body = json.dumps(self.etg_data.popleft())
+				body = json.dumps(self.feature_data.popleft())
 		return bottle.HTTPResponse(status = status, headers = header, body = body)
 
 class LinkedAppSync(pipeparts.AppSync):
@@ -486,10 +486,10 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 	parser.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
-	parser.add_option("--etg-partition", metavar = "string", help = "If using Kafka, sets the partition that this ETG is assigned to.")
-	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this ETG publishes feature vector subsets to.")
+	parser.add_option("--kafka-partition", metavar = "string", help = "If using Kafka, sets the partition that this feature extractor is assigned to.")
+	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this feature extractor publishes feature vector subsets to.")
 	parser.add_option("--kafka-server", metavar = "string", help = "If using Kafka, sets the server url that the kafka topic is hosted on.")
-	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the ETG with a 4 digit integer string code, padded with zeros. Default = 0001")
+	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the feature extractor with a 4 digit integer string code, padded with zeros. Default = 0001")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
 	parser.add_option("--trigger-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
@@ -545,7 +545,7 @@ duration = int(options.gps_end_time) - int(options.gps_start_time)
 logdir = os.path.join(options.out_path, 'logs', options.job_id)
 aggregator.makedir(logdir)
 
-logger = idq_utils.get_logger('gstlal-etg_%d-%d' % (options.gps_start_time, duration), rootdir=logdir, verbose=options.verbose)
+logger = idq_utils.get_logger('gstlal-feature-extractor_%d-%d' % (options.gps_start_time, duration), rootdir=logdir, verbose=options.verbose)
 logger.info("writing log to %s" % logdir)
 
 #

@@ -180,7 +180,7 @@ class FeatureData(object):
 	def __init__(self, columns, keys = None, **kwargs):
 		self.keys = keys
 		self.columns = columns
-		self.etg_data = {}
+		self.feature_data = {}
 
 	def dump(self, path):
 		raise NotImplementedError
@@ -198,7 +198,7 @@ class HDF5FeatureData(FeatureData):
 	def __init__(self, columns, keys, **kwargs):
 		super(HDF5FeatureData, self).__init__(columns, keys = keys, **kwargs)
 		self.cadence = kwargs.pop('cadence')
-		self.etg_data = {key: numpy.empty((self.cadence,), dtype = [(column, 'f8') for column in self.columns]) for key in keys}
+		self.feature_data = {key: numpy.empty((self.cadence,), dtype = [(column, 'f8') for column in self.columns]) for key in keys}
 		self.clear()
 
 	def dump(self, path, base, start_time, key = None, tmp = False):
@@ -208,12 +208,12 @@ class HDF5FeatureData(FeatureData):
 		name = "%d_%d" % (start_time, self.cadence)
 		if key:
 			group = os.path.join(str(key[0]), str(key[1]).zfill(4))
-			create_new_dataset(path, base, self.etg_data[key], name=name, group=group, tmp=tmp)
+			create_new_dataset(path, base, self.feature_data[key], name=name, group=group, tmp=tmp)
 			self.clear(key)
 		else:
 			for key in self.keys:
 				group = os.path.join(str(key[0]), str(key[1]).zfill(4))
-				create_new_dataset(path, base, self.etg_data[key], name=name, group=group, tmp=tmp)
+				create_new_dataset(path, base, self.feature_data[key], name=name, group=group, tmp=tmp)
 			self.clear()
 
 	def append(self, value, key = None, buftime = None):
@@ -222,14 +222,14 @@ class HDF5FeatureData(FeatureData):
 		"""
 		if buftime and key:
 			idx = buftime % self.cadence
-			self.etg_data[key][idx] = numpy.array([value[column] for column in self.columns])
+			self.feature_data[key][idx] = numpy.array([value[column] for column in self.columns])
 
 	def clear(self, key = None):
 		if key:
-			self.etg_data[key][:] = numpy.nan
+			self.feature_data[key][:] = numpy.nan
 		else:
 			for key in self.keys:
-				self.etg_data[key][:] = numpy.nan
+				self.feature_data[key][:] = numpy.nan
 
 class HalfSineGaussianGenerator(object):
 	"""
