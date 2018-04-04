@@ -131,8 +131,8 @@ class MultiChannelHandler(simplehandler.Handler):
 		else:
 			tmp_dir = os.environ['TMPDIR']
 
-		# hdf saving properties
-		if options.save_hdf:
+		# feature saving properties
+		if options.save_format == 'hdf5':
 			columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
 			self.fdata = idq_utils.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
 
@@ -151,8 +151,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			if os.path.isfile(tmp_file):
 				os.remove(tmp_file)
 
-		# ascii saving properties
-		else:
+		elif options.save_format == 'ascii':
 			# create header for trigger file
 			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
 			self.fdata = deque(maxlen = 25000)
@@ -235,9 +234,9 @@ class MultiChannelHandler(simplehandler.Handler):
 			# Save triggers once per cadence
 			if idq_utils.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
 				logger.info("saving features to disk at timestamp = %d" % buftime)
-				if options.save_hdf:
+				if options.save_format == 'hdf5':
 					self.to_hdf_file()
-				else:
+				elif options.save_format == 'ascii':
 					self.to_trigger_file(buftime)
 					self.fdata.clear()
 					self.fdata.append(self.header)
@@ -290,9 +289,9 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.stream_event.append(feature_row)
 
 			# save iDQ compatible data
-			if options.save_hdf:
+			if options.save_format == 'hdf5':
 				self.fdata.append(feature_row, key = (channel, rate), buftime = buftime)
-			else:
+			elif options.save_format == 'ascii':
 				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
 
 
@@ -484,7 +483,7 @@ def parse_command_line():
 	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
+	parser.add_option("--save-format", action = "store_true", default = "hdf5", help = "Specifies the save format (ascii or hdf5) of features written to disk. Default = hdf5")
 	parser.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
 	parser.add_option("--kafka-partition", metavar = "string", help = "If using Kafka, sets the partition that this feature extractor is assigned to.")
 	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this feature extractor publishes feature vector subsets to.")
@@ -607,7 +606,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	# checkpointing for offline analysis for hdf5 output
 	#
 
-	if options.data_source not in ("lvshm", "framexmit") and options.save_hdf:
+	if options.data_source not in ("lvshm", "framexmit") and options.save_format == 'hdf5':
 		try:
 			# get path where triggers are located
 			duration = int(options.gps_end_time) - int(options.gps_start_time)
@@ -777,12 +776,11 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	mainloop.run()
 
 	# save remaining triggers
-	if options.save_hdf:
+	if options.save_format == 'hdf5':
 		handler.to_hdf_file()
 		handler.finish_hdf_file()
-	else:
+	elif options.save_format == 'ascii':
 		handler.to_trigger_file()
-
 
 	#
 	# Shut down pipeline
