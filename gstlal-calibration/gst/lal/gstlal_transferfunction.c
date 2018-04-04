@@ -554,7 +554,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		sample_count_next_fft = element->update_samples + 1 + element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg * stride; \
  \
 	/* Deal with any leftover samples that will remain leftover */ \
-	first_index = (sample_count_next_fft - (element->sample_count - (gint64) src_size - element->workspace.w ## S_OR_D ## pf.num_leftover)) * element->channels; \
+	first_index = (sample_count_next_fft - 1 - (element->sample_count - (gint64) src_size - element->workspace.w ## S_OR_D ## pf.num_leftover)) * element->channels; \
 	k_stop = (element->sample_count - (gint64) src_size + 1 - sample_count_next_fft) * element->channels; \
 	for(k = 0; k < k_stop; k++) \
 		element->workspace.w ## S_OR_D ## pf.leftover_data[k] = element->workspace.w ## S_OR_D ## pf.leftover_data[first_index + k]; \
@@ -635,6 +635,27 @@ static gboolean start(GstBaseSink *sink) {
 	/* If we are writing output to file, and a file already exists with the same name, remove it */
 	if(element->filename)
 		remove(element->filename);
+
+	/* Sanity checks */
+	/* FIXME: find a better place to put these. Putting them in set_property seems problematic. */
+	if(element->num_ffts > 1 && element->fft_overlap >= element->fft_length) {
+		GST_WARNING_OBJECT(element, "fft_overlap must be less than fft_length! Resetting fft_overlap to fft_length - 1.");
+		element->fft_overlap = element->fft_length - 1;
+	}
+	if(element->fir_length % 2) {
+		GST_WARNING_OBJECT(element, "The chosen fir-length must be even. Adding 1 to make it even.");
+		element->fir_length += 1;
+	}
+	if(element->make_fir_filters && element->frequency_resolution < (double) element->rate / element->fir_length)
+		GST_WARNING_OBJECT(element, "The specified frequency resolution is finer than 1/fir_length, which cannot be achieved. The actual frequency resolution will be reset to 1/MIN(fft_length, fir_length).");
+	if(element->make_fir_filters && element->frequency_resolution < (double) element->rate / element->fft_length)
+		GST_WARNING_OBJECT(element, "The specified frequency resolution is finer than 1/fft_length, which cannot be achieved. The actual frequency resolution will be reset to 1/MIN(fft_length, fir_length).");
+	if(!element->make_fir_filters && element->high_pass != 0)
+		GST_WARNING_OBJECT(element, "A FIR filter high-pass cutoff frequency is set, but no FIR filter is being produced. Set the property make-fir-filters to a nonzero value to make FIR filters.");
+	if(!element->make_fir_filters && element->low_pass != 0)
+		GST_WARNING_OBJECT(element, "A FIR filter low-pass cutoff frequency is set, but no FIR filter is being produced. Set the property make-fir-filters to a nonzero value to make FIR filters.");
+	if(element->high_pass != 0 && element->low_pass != 0 && element->high_pass > element->low_pass)
+		GST_WARNING_OBJECT(element, "The high-pass cutoff frequency of the FIR filters is above the low-pass cutoff frequency. Reset high-pass and/or low-pass to change this.");
 
 	return TRUE;
 }
@@ -1180,13 +1201,12 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 	/* Get the data from the buffer */
 	gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
 
-	/* Increment the sample count */
-	element->sample_count += (mapinfo.size / element->unit_size);
-
 	/* Deal with gaps */
 	if(GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP) && mapinfo.size != 0) {
 		if(element->update_after_gap || element->sample_count > element->update_samples)
 			element->sample_count = element->update_samples;
+		else
+			element->sample_count = minimum64(element->sample_count + mapinfo.size / element->unit_size, element->update_samples);
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			element->workspace.wspf.num_ffts_in_avg = 0;
 			element->workspace.wspf.num_leftover = 0;
@@ -1194,10 +1214,13 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 			element->workspace.wdpf.num_ffts_in_avg = 0;
 			element->workspace.wdpf.num_leftover = 0;
 		}
+	} else {
+		/* Increment the sample count */
+		element->sample_count += (mapinfo.size / element->unit_size);
 	}
 
 	/* Check whether we need to do anything with this data */
-	if(element->sample_count > element->update_samples) {
+	if(element->sample_count > element->update_samples && mapinfo.size) {
 		gboolean success;
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
@@ -1366,10 +1389,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_NUM_FFTS:
 		element->num_ffts = g_value_get_int64(value);
-		if(element->num_ffts > 1 && element->fft_overlap >= element->fft_length) {
-			GST_WARNING_OBJECT(element, "fft_overlap must be less than fft_length! Resetting fft_overlap to fft_length - 1.");
-			element->fft_overlap = element->fft_length - 1;
-		}
 		break;
 
 	case ARG_UPDATE_SAMPLES:
@@ -1394,32 +1413,18 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_FIR_LENGTH:
 		element->fir_length = g_value_get_int64(value);
-		if(element->fir_length % 2) {
-			GST_WARNING_OBJECT(element, "The chosen fir-length must be even. Adding 1 to make it even.");
-			element->fir_length += 1;
-		}
 		break;
 
 	case ARG_FREQUENCY_RESOLUTION:
 		element->frequency_resolution = g_value_get_double(value);
-		if(element->make_fir_filters && element->frequency_resolution < (double) element->rate / element->fir_length)
-			GST_WARNING_OBJECT(element, "The specified frequency resolution is finer than 1/fir_length, which cannot be achieved. The actual frequency resolution will be reset to 1/MIN(fft_length, fir_length).");
-		if(element->make_fir_filters && element->frequency_resolution < (double) element->rate / element->fft_length)
-			GST_WARNING_OBJECT(element, "The specified frequency resolution is finer than 1/fft_length, which cannot be achieved. The actual frequency resolution will be reset to 1/MIN(fft_length, fir_length).");
 		break;
 
 	case ARG_HIGH_PASS:
 		element->high_pass = g_value_get_double(value);
-		if(!element->make_fir_filters && element->high_pass != 0)
-			GST_WARNING_OBJECT(element, "A FIR filter high-pass cutoff frequency is set, but no FIR filter is being produced. Set the property make-fir-filters to a nonzero value to make FIR filters.");
 		break;
 
 	case ARG_LOW_PASS:
 		element->low_pass = g_value_get_double(value);
-		if(!element->make_fir_filters && element->low_pass != 0)
-			GST_WARNING_OBJECT(element, "A FIR filter low-pass cutoff frequency is set, but no FIR filter is being produced. Set the property make-fir-filters to a nonzero value to make FIR filters.");
-		if(element->high_pass != 0 && element->low_pass != 0 && element->high_pass > element->low_pass)
-			GST_WARNING_OBJECT(element, "The high-pass cutoff frequency of the FIR filters is above the low-pass cutoff frequency. Reset high-pass and/or low-pass to change this.");
 		break;
 
 	case ARG_TRANSFER_FUNCTIONS:
