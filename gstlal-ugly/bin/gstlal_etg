@@ -108,17 +108,17 @@ class MultiChannelHandler(simplehandler.Handler):
 	Implements additional message handling for dealing with spectrum
 	messages and creates trigger files for use in iDQ.
 	"""
-	def __init__(self, *args, **kwargs):
+	def __init__(self, mainloop, pipeline, data_source_info, options, **kwargs):
 		self.lock = threading.Lock()
+		self.out_path = options.out_path
+		self.instrument = data_source_info.instrument
+		self.frame_segments = data_source_info.frame_segments
+		self.keys = kwargs.pop("keys")
 		self.basis_params = kwargs.pop("basis_params")
 		self.basename = kwargs.pop("basename")
-		self.out_path = kwargs.pop("out_path")
-		self.instrument = kwargs.pop("instrument")
-		self.keys = kwargs.pop("keys")
-		self.frame_segments = kwargs.pop("frame_segments")
 
 		# format id for aesthetics
-		self.job_id = str(kwargs.pop("job_id")).zfill(4)
+		self.job_id = str(options.job_id).zfill(4)
 		self.subset_id = str(kwargs.pop("subset_id")).zfill(4)
 
 		### iDQ saving properties
@@ -176,7 +176,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.kafka_conf = {'bootstrap.servers': options.kafka_server}
 			self.producer = Producer(self.kafka_conf)
 
-		super(MultiChannelHandler, self).__init__(*args, **kwargs)
+		super(MultiChannelHandler, self).__init__(mainloop, pipeline, **kwargs)
 
 	def do_on_message(self, bus, message):
 		"""!
@@ -489,7 +489,7 @@ def parse_command_line():
 	parser.add_option("--etg-partition", metavar = "string", help = "If using Kafka, sets the partition that this ETG is assigned to.")
 	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this ETG publishes feature vector subsets to.")
 	parser.add_option("--kafka-server", metavar = "string", help = "If using Kafka, sets the server url that the kafka topic is hosted on.")
-	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the ETG with a 4 digit integer code padded with zeros, useful for running multiple instances of the same pipeline in parallel. Default = 0001")
+	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the ETG with a 4 digit integer string code, padded with zeros. Default = 0001")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
 	parser.add_option("--trigger-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
@@ -746,9 +746,8 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			src[(channel, rate)] = thishead
 
 	# define structures to synchronize output streams and extract triggers from buffer
-
 	logger.info("setting up pipeline handler...")
-	handler = MultiChannelHandler(mainloop, pipeline, basis_params = basis_params, basename = basename, out_path = options.out_path, instrument = instrument, keys = src.keys(), frame_segments = data_source_info.frame_segments, job_id = options.job_id, subset_id = subset_id)
+	handler = MultiChannelHandler(mainloop, pipeline, data_source_info, options, keys = src.keys(), basis_params = basis_params, basename = basename, subset_id = subset_id)
 
 	logger.info("attaching appsinks to pipeline...")
 	appsync = LinkedAppSync(appsink_new_buffer = handler.bufhandler)
