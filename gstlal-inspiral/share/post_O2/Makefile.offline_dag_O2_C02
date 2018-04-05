@@ -1,6 +1,3 @@
-# main directory containing all requiered files
-MAIN_DIR=/home/gstlalcbc/observing/2/offline/C02
-
 # condor commands
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
 ACCOUNTING_TAG=ligo.prod.o2.cbc.uber.gstlaloffline
