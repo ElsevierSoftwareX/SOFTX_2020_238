@@ -122,6 +122,7 @@ enum property {
 	ARG_LOW_PASS,
 	ARG_TRANSFER_FUNCTIONS,
 	ARG_FIR_FILTERS,
+	ARG_INPUT_MAY_BE_ZERO,
 	ARG_FAKE
 };
 
@@ -423,6 +424,10 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	stride = element->fft_length - element->fft_overlap; \
 	num_tfs = element->channels - 1; \
 	DTYPE *real_fft = (DTYPE *) element->workspace.w ## S_OR_D ## pf.fft; \
+ \
+	/* Check a few inputs to see if we have valid data yet */ \
+	for(i = 0; i < 2 * element->channels; i++) \
+		success &= isnormal(src[i]) || (element->input_may_be_zero && src[i] == 0.0); \
  \
 	/* Determine how many fft's we will calculate from combined leftover and new input data */ \
 	num_ffts = minimum64((element->workspace.w ## S_OR_D ## pf.num_leftover + stride - 1) / stride, element->num_ffts - element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg); \
@@ -1441,6 +1446,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		gstlal_doubles_from_g_value_array(g_value_get_boxed(value), element->fir_filters, &m);
 		break;
 
+	case ARG_INPUT_MAY_BE_ZERO:
+		element->input_may_be_zero = g_value_get_boolean(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1533,6 +1542,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			}
 			g_value_take_boxed(value, val_array);
 		}
+		break;
+
+	case ARG_INPUT_MAY_BE_ZERO:
+		g_value_set_boolean(value, element->input_may_be_zero);
 		break;
 
 	default:
@@ -1752,6 +1765,15 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		),
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
 	);
+	properties[ARG_INPUT_MAY_BE_ZERO] = g_param_spec_boolean(
+		"input-may-be-zero",
+		"Input may be zero",
+		"Set to True if transfer functions should be computed even if an input\n\t\t\t"
+		"channel contains zeros. Default is False, to prevent errors when an\n\t\t\t"
+		"input channel has no data yet at start of stream, etc.",
+		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 
 
 	g_object_class_install_property(
@@ -1823,6 +1845,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_FIR_FILTERS,
 		properties[ARG_FIR_FILTERS]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_INPUT_MAY_BE_ZERO,
+		properties[ARG_INPUT_MAY_BE_ZERO]
 	);
 }
 

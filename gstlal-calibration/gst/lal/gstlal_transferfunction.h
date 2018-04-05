@@ -143,6 +143,7 @@ struct _GSTLALTransferFunction {
 	int low_pass;
 	complex double *transfer_functions;
 	double *fir_filters;
+	gboolean input_may_be_zero;
 };
 
 
