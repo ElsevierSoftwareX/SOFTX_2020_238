@@ -1,0 +1,318 @@
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=ligo.prod.o2.cbc.uber.gstlaloffline
+GROUP_USER=
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+
+############################
+# Template bank parameters #
+############################
+
+# Low frequency cut off for the template bank placement
+LOW_FREQUENCY_CUTOFF = 15.0
+# Highest frequency at which to compute the metric
+HIGH_FREQUENCY_CUTOFF = 1024.0
+# Controls the number of templates in each SVD sub bank
+NUM_SPLIT_TEMPLATES = 200
+# Number of bins of chi to uniformly bin templates into
+NUM_CHI_BINS_0 = 20
+NUM_CHI_BINS_1 = 1
+# Controls the overlap from sub bank to sub bank - helps mitigate edge effects
+# in the SVD.  Redundant templates will be removed
+OVERLAP_0 = 30
+OVERLAP_1 = 30
+# The approximant that you wish to filter with for BANK_MCHIRP1 and BANK_MCHIRP2, respectively.
+MCHIRP_SPLIT = 1.73
+APPROXIMANT1 = 0.00:$(MCHIRP_SPLIT):TaylorF2
+APPROXIMANT2 = $(MCHIRP_SPLIT):1000.0:SEOBNRv4_ROM
+
+#########################
+# Triggering parameters #
+#########################
+
+# The detectors to analyze
+IFOS = H1 L1
+# Minimum number of detecors working to use
+MIN_IFOS = 2
+# The GPS start time for analysis
+START = 
+# The GPS end time for analysis
+STOP = 
+# A user tag for the run
+TAG =
+# Run number
+RUN=run_1
+# A web directory for output
+# cit & uwm
+WEBDIR = ~/public_html/$(TAG)/$(START)-$(STOP)-$(RUN)
+# Atlas
+#WEBDIR = ~/WWW/LSC/$(TAG)/$(START)-$(STOP)-$(RUN)
+# The number of sub banks in each SVD bank file
+NUMBANKS_0 = 5
+NUMBANKS_1 = 5,5,5,5,5,5,5,5,5,5,5,5,5,4,3,3,2,1,1,1
+# The control peak time for the composite detection statistic.  If set to 0 the
+# statistic is disabled
+PEAK = 0
+# The length of autocorrelation chi-squared in sample points
+AC_LENGTH = 351
+# The minimum number of samples to include in a given time slice
+SAMPLES_MIN_0 = 2048
+SAMPLES_MIN_1 = 512
+# The maximum number of samples to include in the 256 Hz or above time slices
+SAMPLES_MAX_256 = 2048
+
+#############################
+# additional options, e.g., #
+#############################
+
+#ADDITIONAL_DAG_OPTIONS = "--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) --blind-injections BNS-MDC1-WIDE.xml"
+ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN_0) --samples-min $(SAMPLES_MIN_1) --samples-max-256 $(SAMPLES_MAX_256)
+
+##############
+# Injections #
+##############
+
+# Change as appropriate, whitespace is important
+MCHIRP_INJECTIONS :=
+
+#######################
+# GSTLAL VETO Options #
+#######################
+
+# Vetoes file names
+# Obtain veto definer from here: https://code.pycbc.phy.syr.edu/detchar/veto-definitions/blob/master/cbc/O1/
+#commit = 77f9ee05342fcb1f7220810805118f45facf82fa
+VETODEF = /path/to/H1L1-CBC_VETO_DEFINER_C02_O1_1126051217-11203200.xml
+
+vetoes_suffix := _vetoes.xml
+VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
+
+CAT1_vetoes_suffix := _CAT1_vetoes.xml
+CAT1_VETOES_FILES  := $(addsuffix $(CAT1_vetoes_suffix),$(IFOS))
+
+###############################
+# Segment and frame type info #
+###############################
+
+# Info from https://wiki.ligo.org/viewauth/LSC/JRPComm/ObsRun2
+# GSTLAL_SEGMENTS Options
+SEG_SERVER=https://segments.ligo.org
+# C00
+#LIGO_SEGMENTS="$*:DMT-ANALYSIS_READY:1"
+# C01
+#LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C01:1"
+# C02
+LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C02:1"
+SEGMENT_TRIM = 0
+SEGMENT_MIN_LENGTH = 512
+
+# The LIGO frame types
+# C00
+#HANFORD_FRAME_TYPE='H1_HOFT_C00'
+#LIVINGSTON_FRAME_TYPE='L1_HOFT_C00'
+# C01
+#HANFORD_FRAME_TYPE='H1_HOFT_C01'
+#LIVINGSTON_FRAME_TYPE='L1_HOFT_C01'
+# C02
+HANFORD_FRAME_TYPE='H1_HOFT_C02'
+LIVINGSTON_FRAME_TYPE='L1_HOFT_C02'
+
+# The Channel names. FIXME sadly you have to change the CHANNEL_NAMES string if
+# you want to analyze a different set of IFOS
+# C00
+#H1_CHANNEL=GDS-CALIB_STRAIN
+#L1_CHANNEL=GDS-CALIB_STRAIN
+# C01
+#H1_CHANNEL=DCS-CALIB_STRAIN_C01
+#L1_CHANNEL=DCS-CALIB_STRAIN_C01
+# C02
+H1_CHANNEL=DCS-CALIB_STRAIN_C02
+L1_CHANNEL=DCS-CALIB_STRAIN_C02
+CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
+
+###################################################################################
+# Get some basic definitions.  NOTE this comes from the share directory probably. #
+###################################################################################
+
+include /path/to/Makefile.offline_analysis_rules
+
+# FIXME Is there a way to put this back in offline analysis rules?
+BANK_CACHE_STRING:=H1=H1_split_bank_0.cache,L1=L1_split_bank_0.cache --bank-cache H1=H1_split_bank_1.cache,L1=L1_split_bank_1.cache
+BANK_CACHE_FILES:=H1_split_bank_0.cache L1_split_bank_0.cache H1_split_bank_1.cache L1_split_bank_1.cache
+# the point of this is to build the string e.g. H1=../bank/H1_bank.cache,L1=../bank/L1_bank.cache
+
+
+############
+# Workflow #
+############
+
+all : dag SNR_sed
+	@echo "Submit with: condor_submit_dag -maxjobs 3000 trigger_pipe.dag"
+	@echo "Monitor with: tail -f trigger_pipe.dag.dagman.out | grep -v -e ULOG -e monitoring"
+
+SNR_sed : dag
+	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=/opt/intel/2015u5/mkl/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
+
+# Run inspiral pipe to produce dag
+dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) gstlal_bank.xml.gz
+	gstlal_inspiral_pipe \
+		--data-source frames \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--frame-cache frame.cache \
+		--frame-segments-file segments.xml.gz \
+		--vetoes vetoes.xml.gz \
+		--frame-segments-name datasegments  \
+		--control-peak-time $(PEAK) \
+		--template-bank gstlal_bank.xml.gz \
+		--num-banks $(NUMBANKS_0) \
+		--num-banks $(NUMBANKS_1) \
+		--fir-stride 1 \
+		--web-dir $(WEBDIR) \
+		--time-slide-file tisi.xml \
+		--inj-time-slide-file inj_tisi.xml \
+		$(INJECTION_LIST) \
+		--bank-cache $(BANK_CACHE_STRING) \
+		--tolerance 0.9999 \
+		--overlap $(OVERLAP_0) \
+		--overlap $(OVERLAP_1) \
+		--flow $(LOW_FREQUENCY_CUTOFF) \
+		$(CHANNEL_NAMES) \
+		--autocorrelation-length $(AC_LENGTH) \
+		$(ADDITIONAL_DAG_OPTIONS) \
+		$(CONDOR_COMMANDS) \
+		--ht-gate-threshold-linear 0.8:15.0-45.0:100.0 \
+		--request-cpu 2 \
+		--request-memory 5GB \
+		--min-instruments $(MIN_IFOS) \
+		--ranking-stat-samples 4194304
+	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
+
+#	sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=0;?" *.sub
+
+# Produce split banks #FIXME REPLACE BANK FILES
+%_split_bank_0.cache : bank_mtotal80split_00.xml.gz
+	mkdir -p $*_split_bank_0
+	gstlal_bank_splitter \
+		--f-low $(LOW_FREQUENCY_CUTOFF) \
+		--group-by-chi $(NUM_CHI_BINS_0) \
+		--output-path $*_split_bank_0 \
+		--approximant $(APPROXIMANT1) \
+		--approximant $(APPROXIMANT2) \
+		--output-cache $@ \
+		--overlap $(OVERLAP_0) \
+		--instrument $* \
+		--n $(NUM_SPLIT_TEMPLATES) \
+		--sort-by mchirp \
+		--max-f-final $(HIGH_FREQUENCY_CUTOFF) \
+		--write-svd-caches \
+		--num-banks $(NUMBANKS_0) \
+		$<
+
+%_split_bank_1.cache : bank_mtotal80split_01.xml.gz
+	mkdir -p $*_split_bank_1
+	gstlal_bank_splitter \
+		--f-low $(LOW_FREQUENCY_CUTOFF) \
+		--group-by-chi $(NUM_CHI_BINS_1) \
+		--output-path $*_split_bank_1 \
+		--approximant $(APPROXIMANT1) \
+		--approximant $(APPROXIMANT2) \
+		--output-cache $@ \
+		--overlap $(OVERLAP_1) \
+		--instrument $* \
+		--n $(NUM_SPLIT_TEMPLATES) \
+		--sort-by template_duration \
+		--max-f-final $(HIGH_FREQUENCY_CUTOFF) \
+		--write-svd-caches \
+		--num-banks $(NUMBANKS_1) \
+		$<
+
+# Copy acrross and produce template bank file
+gstlal_bank.xml.gz : bank_mtotal80split_00.xml.gz bank_mtotal80split_01.xml.gz
+	# Useing original online bank from cit:/home/gstlalcbc/observing/2/online/Makefile.bank
+	ligolw_add --output gstlal_bank.xml.gz bank_mtotal80split_00.xml.gz bank_mtotal80split_01.xml.gz
+
+bank_mtotal80split_00.xml.gz :
+	# On UWM:
+	#cp /home/scaudill/Projects/O2_development/repop_hyperbank/mtotal80cut_seed_refpsd/add_banks/bank_mtotal80split_00.xml.gz $@
+	cp /path/to/bank_mtotal80split_00.xml.gz $@
+
+bank_mtotal80split_01.xml.gz :
+	# On UWM:
+	#cp /home/scaudill/Projects/O2_development/repop_hyperbank/mtotal80cut_seed_refpsd/add_banks/bank_mtotal80split_00.xml.gz $@
+	cp /path/to/bank_mtotal80split_01.xml.gz $@
+
+# Produce time slides file
+tisi.xml : inj_tisi.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 bg_tisi.xml
+	ligolw_add --output $@ bg_tisi.xml $<
+
+# Produce injection time slide file
+inj_tisi.xml :
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
+
+# Produce veto file
+vetoes.xml.gz : $(VETOES_FILES)
+	ligolw_add --output $@ $(VETOES_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
+	gzip $@
+
+%_vetoes.xml : $(VETODEF)
+	gstlal_segments_operations --union --segment-name VETO_CAT3_CUMULATIVE --output-file $@ --output-segment-name vetoes $*-VETOTIME_CAT3-*.xml $*-VETOTIME_CAT3-*.xml
+
+# Produce segments file
+segments.xml.gz : $(SEGMENTS_FILES) frame.cache CAT1_vetoes.xml.gz
+	ligolw_add --output segdb.xml $(SEGMENTS_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
+	gstlal_segments_operations --diff --output-file $@ segdb.xml CAT1_vetoes.xml.gz
+	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
+
+# Produce CAT1 veto file
+CAT1_vetoes.xml.gz : $(CAT1_VETOES_FILES)
+	ligolw_add --output $@ $(CAT1_VETOES_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
+	gzip $@
+
+%_CAT1_vetoes.xml : $(VETODEF)
+	ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
+	gstlal_segments_operations --union --segment-name VETO_CAT1_CUMULATIVE --output-file $@ --output-segment-name datasegments $*-VETOTIME_CAT1-*.xml $*-VETOTIME_CAT1-*.xml
+
+# Produce frame cache files
+frame.cache : $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
+	# FIXME since these frame types were made incorrectly, make sure ligolw_path_to_cache reads ifo names properly
+	sed -i s/H\ $(LIGO_FRAME_TYPE)/H\ H1_$(LIGO_FRAME_TYPE)/g frame.cache
+	sed -i s/L\ $(LIGO_FRAME_TYPE)/L\ L1_$(LIGO_FRAME_TYPE)/g frame.cache
+
+H1_frame.cache :
+	# FIXME force the observatory column to actually be instrument
+	gw_data_find -o H -t $(HANFORD_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
+
+L1_frame.cache :
+	# FIXME force the observatory column to actually be instrument
+	gw_data_find -o L -t $(LIVINGSTON_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
+
+# Produce padded segments files
+%_segmentspadded.xml :
+	ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
+
+# Make webpage directory and copy files across
+$(WEBDIR) : $(MAKEFILE_LIST)
+	mkdir -p $(WEBDIR)/OPEN-BOX
+	cp $(MAKEFILE_LIST) $@
+
+# Makes local plots directory
+plots :
+	mkdir plots
+
+clean :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -vf segments.xml.gz tisi.xml H1-*.xml H1_*.xml L1-*.xml L1_*xml V1-*.xml V1_*xml ?_injections.xml ????-*_split_bank-*.xml vetoes.xml.gz
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf tisi0.xml tisi1.xml
+	-rm -rf *_split_bank*
+	-rm -rf nogaps.xml segdb.xml
+	-rm -rf bank_aligned_spin.xml.gz
+	-rm -rf CAT1*.xml.gz
+
