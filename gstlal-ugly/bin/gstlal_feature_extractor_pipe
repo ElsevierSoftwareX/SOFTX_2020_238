@@ -198,6 +198,7 @@ def parse_command_line():
 	# Condor commands
 	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count, default = 2")
 	parser.add_option("--request-memory", default = "8GB", metavar = "integer", help = "set the requested node memory, default = 8GB")
+	parser.add_option("--request-disk", default = "50GB", metavar = "integer", help = "set the requested node local scratch space size needed, default = 50GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 
 	options, filenames = parser.parse_args()
@@ -253,7 +254,7 @@ dag = inspiral_pipe.DAG("feature_extractor_pipe")
 # setup the job classes
 #
 
-gstlalFeatureExtractorJob = inspiral_pipe.generic_job("gstlal_feature_extractor", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
+gstlalFeatureExtractorJob = inspiral_pipe.generic_job("gstlal_feature_extractor", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "request_disk":options.request_disk, "want_graceful_removal":"True", "kill_sig":"15"}))
 
 segsdict = analysis_segments(ifo, data_source_info.frame_segments, boundary_seg, options.segment_length, max_template_length=max_template_length)
 

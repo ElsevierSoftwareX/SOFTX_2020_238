@@ -106,6 +106,7 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		$(CONDOR_COMMANDS) \
 		--request-cpu 2 \
 		--request-memory 8GB \
+		--request-disk 50GB \
 		--verbose \
 		--disable-web-service
 
