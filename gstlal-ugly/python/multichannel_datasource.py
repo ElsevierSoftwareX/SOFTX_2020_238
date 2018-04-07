@@ -348,8 +348,6 @@ class DataSourceInfo(object):
 		if options.gps_start_time is not None:
 			if options.gps_end_time is None:
 				raise ValueError("must provide both --gps-start-time and --gps-end-time")
-			if options.data_source in self.live_sources:
-				raise ValueError("cannot set --gps-start-time or --gps-end-time with %s" % " or ".join("--data-source=%s" % src for src in sorted(self.live_sources)))
 			try:
 				start = LIGOTimeGPS(options.gps_start_time)
 			except ValueError:
