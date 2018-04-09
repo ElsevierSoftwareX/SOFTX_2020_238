@@ -175,11 +175,11 @@ WHITE="${esc}[m"
 # Determine cluster
 CLUSTER:=$(shell hostname -d)
 
-ICC_CIT:=/ldcg/intel/2018u2/bin/compilervars.sh
-ICC_LHO:=/ldcg/intel/2018u2/bin/compilervars.sh
-ICC_LLO:=/ldcg/intel/2018u2/bin/compilervars.sh
+ICC_CIT:=/ldcg/intel/2017u2/bin/compilervars.sh
+ICC_LHO:=/ldcg/intel/2017u2/bin/compilervars.sh
+ICC_LLO:=/ldcg/intel/2017u2/bin/compilervars.sh
 ICC_UWM:=/opt/intel/2017u4/bin/compilervars.sh
-ICC_ATLAS:=/opt/intel/2018/intel.sh
+ICC_ATLAS:=/opt/intel/2015/intel.sh
 ICC_PSU:=/ligo/apps/intel/2017u4/bin/compilervars.sh
 
 all : $(GSTINSPIRAL_TARGET) $(LOGS_DIR)/gstlal.txt
@@ -212,7 +212,7 @@ env.sh :
 		echo 'LDFLAGS_INTEL="-L$${MKLROOT}/lib/intel64"' >> $@ ; \
 	elif [[ ${CLUSTER} == *"atlas.local" ]] ; then \
 		echo "source ${ICC_ATLAS} intel64" >> $@ ; \
-		echo 'LDFLAGS_INTEL="-L/opt/intel/2018/lib/intel64 -L/opt/intel/2018/mkl/lib/intel64"' >> $@ ; \
+		echo 'LDFLAGS_INTEL="-L/opt/intel/2015/lib/intel64 -L/opt/intel/2015/mkl/lib/intel64"' >> $@ ; \
 	fi
 	@echo 'export LD_LIBRARY_PATH=$${LAL_PATH}/lib:$${LD_LIBRARY_PATH}' >> $@
 	@echo 'export CC="icc"' >> $@
