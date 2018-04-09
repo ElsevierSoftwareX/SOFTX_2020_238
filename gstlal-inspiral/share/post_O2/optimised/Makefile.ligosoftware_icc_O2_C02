@@ -448,12 +448,12 @@ $(LALSIM_TARGET) : $(LALMETAIO_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalsimulation && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalsimulation && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalsimulation && ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) CFLAGS="$(CFLAGS) -lmkl_def” ; \
+		cd $(LALSUITE_REPO)/lalsimulation && ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) CFLAGS="$(CFLAGS) -lmkl_def" ; \
 		cd $(LALSUITE_REPO)/lalsimulation && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALSIMULATION).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALSIMULATION) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALSIMULATION) && ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) CFLAGS="$(CFLAGS) -lmkl_def” ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) CFLAGS="$(CFLAGS) -lmkl_def" ; \
 		cd $(SRC_DIR)/$(LALSIMULATION) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
