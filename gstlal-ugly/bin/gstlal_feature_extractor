@@ -510,7 +510,7 @@ def parse_command_line():
 	parser.add_option("--persist-cadence", type = "int", default = 320, help = "Rate at which to persist trigger files to disk, used with hdf5 files. Only used for live data, and needs to be a multiple of save cadence. Default = 320 seconds.")
 	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--save-format", action = "store_true", default = "hdf5", help = "Specifies the save format (ascii or hdf5) of features written to disk. Default = hdf5")
+	parser.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (ascii or hdf5) of features written to disk. Default = hdf5")
 	parser.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
 	parser.add_option("--kafka-partition", metavar = "string", help = "If using Kafka, sets the partition that this feature extractor is assigned to.")
 	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this feature extractor publishes feature vector subsets to.")
@@ -791,6 +791,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	if options.save_format == 'hdf5':
 		handler.to_hdf_file()
 		handler.finish_hdf_file()
+		logger.info("persisting features to disk...")
 	elif options.save_format == 'ascii':
 		handler.to_trigger_file()
 
