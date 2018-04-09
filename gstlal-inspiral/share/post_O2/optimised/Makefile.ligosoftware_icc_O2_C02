@@ -769,7 +769,6 @@ $(LOGS_DIR) :
 		else \
 			mkdir -p $(GLUE_REPO) ; \
 			git clone -b $(GLUE_GIT_BRANCH) https://git.ligo.org/lscsoft/glue.git $(GLUE_REPO) ; \
-			cd $(GLUE_REPO) && git checkout 614acb4c35d9110eee79f121d3713cf7e720d8c9 ; \
 		fi ; \
 	else \
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
@@ -780,6 +779,7 @@ $(LOGS_DIR) :
 		else \
 			mkdir -p $(GSTLAL_REPO) ; \
 			git clone -b $(GSTLAL_GIT_BRANCH) https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
+			cd $(GSTLAL_REPO) && git checkout tags/post_O2_rates ; \
 		fi ; \
 	else \
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
