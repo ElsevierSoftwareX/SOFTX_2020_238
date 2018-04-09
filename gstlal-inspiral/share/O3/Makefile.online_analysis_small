@@ -1,0 +1,162 @@
+H1_BANK_CACHE = /home/gstlalcbctest/observing/2/online/bank/H1_bank.cache
+L1_BANK_CACHE = /home/gstlalcbctest/observing/2/online/bank/L1_bank.cache
+BANK_DIR = /mnt/qfs6/gstlalcbctest/observing/2/online/bank/gstlal_svd_bank_H1/
+
+WEBDIR=/home/gstlalcbc/public_html/observing/2
+
+H1CHANNEL=GDS-CALIB_STRAIN
+L1CHANNEL=GDS-CALIB_STRAIN
+
+H1STATECHANNEL=GDS-CALIB_STATE_VECTOR
+L1STATECHANNEL=GDS-CALIB_STATE_VECTOR
+H1INJSTATECHANNEL=GDS-CALIB_STATE_VECTOR
+L1INJSTATECHANNEL=GDS-CALIB_STATE_VECTOR
+
+H1DQCHANNEL=DMT-DQ_VECTOR
+L1DQCHANNEL=DMT-DQ_VECTOR
+H1INJDQCHANNEL=DMT-DQ_VECTOR
+L1INJDQCHANNEL=DMT-DQ_VECTOR
+
+H1FRAMEXMIT=224.3.2.221:7096
+L1FRAMEXMIT=224.3.2.222:7097
+H1INJFRAMEXMIT=224.3.2.103:7402
+L1INJFRAMEXMIT=224.3.2.104:7403
+
+# NOTE needed to make 100s duration to get sufficient zero lag triggers
+H1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-100")
+H1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
+L1PRIORSTART=$(shell python -c "print $(shell lalapps_tconvert)-100")
+L1PRIORSTOP=$(shell python -c "print $(shell lalapps_tconvert)")
+H1PRIORRANGE=60
+L1PRIORRANGE=80
+# FIXME currently bit 0 is not required due to an issue with misreported calib stat
+# set bits 1,5,6,7,8 for non-injections jobs (adds up to dec 482) 
+# # set bits 1,5,7,8 for injection jobs (adds up to dec 418)
+#FIXME should be this
+# set bits 0,1,5,6,7,8 for non-injections jobs (adds up to dec 483) 
+# # set bits 0,1,5,7,8 for injection jobs (adds up to dec 419)
+# # 0: HOFT_OK: h(t) was successfully computed
+# # 1: OBSERVATION_INTENT: "observation intent" button is pushed
+# # 2: OBSERVATION_READY: observation ready data is available
+# # 3: HOFT_PROD: h(t) was produced by the calibration pipeline
+# # 4: FILTERS_OK: calibration filters settled in
+# # 5: NO_STOCH_HW_INJ: No stochastic HW injection
+# # 6: NO_CBC_HW_INJ: No CBC HW injection
+# # 7: NO_BURST_HW_INJ: No burst HW injection
+# # 8: NO_DETCHAR_HW_INJ: No HW injections for detector characterization
+# # 9: NO_GAP: No gap in input data
+
+all : dag
+
+tisi.xml :
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
+
+dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml
+	gstlal_ll_inspiral_pipe \
+		--bank-cache H1=$(H1_BANK_CACHE),L1=$(L1_BANK_CACHE) \
+		--max-jobs 1000 \
+		--likelihood-cache prior.cache \
+		--zerolag-likelihood-cache zerolag_prior.cache \
+		--channel-name=H1=$(H1CHANNEL) \
+		--channel-name=L1=$(L1CHANNEL) \
+		--dq-channel-name=L1=$(L1DQCHANNEL) \
+		--dq-channel-name=H1=$(H1DQCHANNEL) \
+		--state-channel-name=L1=$(L1STATECHANNEL) \
+		--state-channel-name=H1=$(H1STATECHANNEL) \
+		--framexmit-addr=H1=$(H1FRAMEXMIT) \
+		--framexmit-addr=L1=$(L1FRAMEXMIT) \
+		--framexmit-iface=10.14.0.1 \
+		--state-vector-on-bits=H1=482 \
+		--state-vector-on-bits=L1=482 \
+		--state-vector-off-bits=H1=0 \
+		--state-vector-off-bits=L1=0 \
+		--dq-vector-on-bits=H1=7 \
+		--dq-vector-on-bits=L1=7 \
+		--dq-vector-off-bits=H1=0 \
+		--dq-vector-off-bits=L1=0 \
+		--gracedb-far-threshold 1e-4 \
+		--control-peak-time 0 \
+		--fir-stride 1 \
+		--psd-fft-length 32 \
+		--marginalized-likelihood-file marginalized_likelihood.xml.gz \
+		--gracedb-group CBC \
+		--gracedb-search HighMass \
+		--thinca-interval 1 \
+		--ht-gate-threshold 50 \
+		--data-source framexmit \
+		--likelihood-snapshot-interval 14400 \
+		--lvalert-listener-program gstlal_inspiral_lvalert_background_plotter \
+		--lvalert-listener-program gstlal_inspiral_lvalert_psd_plotter \
+		--inspiral-condor-command '+Online_CBC_gstlal_Skylake_inspiral=True' \
+		--inspiral-condor-command 'Requirements=(TARGET.Online_CBC_gstlal_Skylake_inspiral=?=True)' \
+		--inspiral-condor-command 'accounting_group = ligo.prod.o2.cbc.em.gstlalonline' \
+		--inspiral-condor-command 'request_cpus = 2' \
+		--inspiral-condor-command 'request_memory = 7000' \
+		--inspiral-condor-command 'accounting_group_user = cody.messick' \
+		--non-inspiral-condor-command '+Online_CBC_gstlal_Skylake_other=True' \
+		--non-inspiral-condor-command 'Requirements=(TARGET.Online_CBC_gstlal_Skylake_other=?=True)' \
+		--non-inspiral-condor-command 'accounting_group = ligo.prod.o2.cbc.em.gstlalonline' \
+		--non-inspiral-condor-command 'accounting_group_user = cody.messick' \
+		--non-inspiral-condor-command 'request_cpus = 8' \
+		--non-inspiral-condor-command 'request_memory = 20000' \
+		--local-condor-command 'accounting_group = ligo.prod.o2.cbc.em.gstlalonline' \
+		--local-condor-command 'accounting_group_user = cody.messick' \
+		--web-dir $(WEBDIR) \
+		--min-instruments 1 \
+		--state-backup-destination gstlalcbc@pcdev3.phys.uwm.edu:/home/gstlalcbc/observing/2/uber_state_backup \
+		--time-slide-file tisi.xml \
+		--min-log-L 4
+
+ll_simplify_and_cluster.sql:
+	wget http://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify_and_cluster.sql
+
+ll_simplify.sql:
+	wget https://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify.sql
+
+plots:
+	mkdir plots
+	mkdir -p $(WEBDIR)
+
+set-min-instruments:
+	gstlal_ll_inspiral_gracedb_min_instruments --min-instruments 1  0*registry.txt
+
+set-min-instruments-2:
+	gstlal_ll_inspiral_gracedb_min_instruments --min-instruments 2  0*registry.txt
+
+set-far-thresh :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold 1e-5 \
+		0*registry.txt
+
+set-high-far-thresh :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold 5e-6 \
+		0*registry.txt
+
+disable-uploads :
+	gstlal_ll_inspiral_gracedb_threshold \
+		--gracedb-far-threshold -1 \
+		0*registry.txt
+
+prior.cache : 0000_prior.xml.gz 0001_prior.xml.gz 
+	ls *[0-9]_prior.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > prior.cache
+	ls *[0-9]_zerolag_prior.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > zerolag_prior.cache
+	ls *[0-9]_RD.xml.gz | lalapps_path2cache -a | sed -e 's@file://localhost@@g' > RD.cache
+	cat zerolag_prior.cache RD.cache > all_marg_files.cache
+
+%_prior.xml.gz:
+	gstlal_inspiral_fake_diststats --svd-bank-file $(BANK_DIR)/H1-GSTLAL_SVD_BANK_$(shell python -c "print int('$*')")-0-0.xml.gz --segment-and-horizon=H1:$(H1PRIORSTART):$(H1PRIORSTOP):$(H1PRIORRANGE) --segment-and-horizon=L1:$(L1PRIORSTART):$(L1PRIORSTOP):$(L1PRIORRANGE) --verbose --min-instruments 1 --output $@
+	gstlal_inspiral_calc_rank_pdfs $@ --ranking-stat-samples 10000 --verbose --output $*_RD.xml.gz
+	gstlal_inspiral_fake_zerolag_counts --input $*_RD.xml.gz --output $*_zerolag_prior.xml.gz
+
+marginalized_likelihood.xml.gz : prior.cache
+	gstlal_inspiral_marginalize_likelihood \
+		--output $@ \
+		--verbose \
+		--likelihood-cache all_marg_files.cache
+
+clean :
+	rm -rf gstlal_ll_inspiral_aggregator gstlal_inspiral gstlal_inspiral_inj gracedb gstlal_inspiral_marginalize_likelihoods_online gstlal_ll_inspiral_get_urls lvalert_listen gstlal_ll_inspiral_calculate_range gstlal_ll_inspiral_save_state
+	rm -rf *.txt lvalert.ini *.gz trigger_pipe.* *.sub logs lvalert*.sh node* *.xml prior.cache
+	rm -rf 0* 1* *.html gstlal_ll_inspiral_daily_page_online *.sqlite toggle.js Images plots zerolag_prior.cache
+	rm -rf dq gstlal_ll_dq gstlal_ll_inspiral_state 

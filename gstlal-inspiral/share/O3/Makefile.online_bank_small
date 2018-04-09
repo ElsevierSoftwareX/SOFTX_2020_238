@@ -1,0 +1,29 @@
+# Template bank parameters
+LOW_FREQUENCY_CUTOFF = 30.0
+HIGH_FREQUENCY_CUTOFF = 1024
+SAMPLE_RATE = 2048
+NUM_SPLIT_TEMPLATES = 500
+NUM_CHI_BINS = 1
+OVERLAP = 50
+MCHIRP_SPLIT = 10.0
+APPROXIMANT1 = 0.00:$(MCHIRP_SPLIT):TaylorF2
+NUMBANKS = 4
+
+all : bank.dag
+
+gstlal_bank.xml.gz : H1L1-REFERENCE_PSD_HARMONIC_MEAN_FIXED_3-1164686417-32400.xml.gz
+	lalapps_cbc_sbank --verbose --approximant TaylorF2 --mass1-min 1.1 --mass1-max 1.9 --mass2-min 1.1 --mass2-max 1.9 --flow $(LOW_FREQUENCY_CUTOFF) --reference-psd H1L1-REFERENCE_PSD_HARMONIC_MEAN_FIXED_3-1164686417-32400.xml.gz --instrument H1 --spin1-min 0 --spin1-max 0 --checkpoint 50 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned-spin --output-filename $@ --match-min 0.97 --fhigh-max 1024 --spin2-max 0 --spin2-min 0
+
+%_split_bank.cache : gstlal_bank.xml.gz
+	mkdir -p $*_split_bank
+	gstlal_bank_splitter --f-low $(LOW_FREQUENCY_CUTOFF) --group-by-chi $(NUM_CHI_BINS) --output-path $*_split_bank --approximant $(APPROXIMANT1) --output-cache $@ --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --max-f-final $(HIGH_FREQUENCY_CUTOFF) $<
+
+%_bank.dag : %_split_bank.cache H1L1-REFERENCE_PSD_HARMONIC_MEAN_FIXED_3-1164686417-32400.xml.gz
+	gstlal_inspiral_svd_bank_pipe --autocorrelation-length 351 --instrument $* --reference-psd H1L1-REFERENCE_PSD_HARMONIC_MEAN_FIXED_3-1164686417-32400.xml.gz --bank-cache $< --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name $@ --num-banks $(NUMBANKS) --samples-max-256 2048 --samples-min 2048
+
+bank.dag : H1_bank.dag L1_bank.dag
+	cat $^ > bank.dag
+	rm -f $^
+
+clean :
+	rm -rf *.sub* *.dag* *.cache *.sh logs gstlal_svd_bank* *split_bank*
