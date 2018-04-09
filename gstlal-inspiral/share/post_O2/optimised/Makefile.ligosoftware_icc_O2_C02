@@ -729,7 +729,7 @@ $(GSTREAMER_TAR_TARGET) : $(GINTRO_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gstreamer/$(GSTREAMER).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(GINTRO_TAR_TARGET) : $(GSL_TAR_TARGET)
-	if [[ ${CLUSTER} == *"nemo.uwm.edu" ] || [ ${CLUSTER} == *"atlas.local" ]] ; then \
+	if [[ ${CLUSTER} == *"nemo.uwm.edu" ]] || [[ ${CLUSTER} == *"atlas.local" ]] ; then \
 		wget --no-check-certificate http://ftp.gnome.org/pub/gnome/sources/gobject-introspection/1.42/$(GINTRO).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
 	else \
 		wget --no-check-certificate http://ftp.gnome.org/pub/gnome/sources/gobject-introspection/1.50/$(GINTRO).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
