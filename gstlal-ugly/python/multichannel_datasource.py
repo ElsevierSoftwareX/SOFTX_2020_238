@@ -570,8 +570,9 @@ def mkbasicmultisrc(pipeline, data_source_info, channels, verbose = False):
 		# thread
 		head = dict.fromkeys(channels, None)
 		for channel in head:	
-			head[channel] = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * Gst.SECOND)
+			head[channel] = pipeparts.mkreblock(pipeline, None, block_duration = 4 * Gst.SECOND)
 			pipeparts.src_deferred_link(demux, channel, head[channel].get_static_pad("sink"))
+			head[channel] = pipeparts.mkqueue(pipeline, head[channel], max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * Gst.SECOND)
 			if data_source_info.frame_segments[data_source_info.instrument]:
 				# FIXME:  make segmentsrc generate segment samples at the channel sample rate?
 				# FIXME:  make gate leaky when I'm certain that will work.
