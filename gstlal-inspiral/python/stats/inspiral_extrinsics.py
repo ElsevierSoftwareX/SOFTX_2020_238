@@ -965,7 +965,7 @@ class InspiralExtrinsics(object):
 		# FIXME compute this more reliably or expose it as a property
 		# or something
 		self.sigma = {"time": 0.001, "phase": numpy.pi / 8, "deff": 0.2}
-
+		self.norm = (4 * numpy.pi**2)**2
 		self.tree_data = tree_data
 		self.margsky = margsky
 
@@ -1133,5 +1133,5 @@ class InspiralExtrinsics(object):
 		nearestpoint = self.tree_data[nearestix, treedataslices]
 		D = (point - nearestpoint)[0]
 		D2 = numpy.dot(D,D)
-		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix]
+		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix] / self.norm
 
