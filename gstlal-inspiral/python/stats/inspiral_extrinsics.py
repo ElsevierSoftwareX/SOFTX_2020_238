@@ -857,7 +857,16 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 		raise NotImplementedError
 
 	def __iadd__(self, other):
+		# the total count is meaningless, it serves only to set the
+		# scale by which the density estimation kernel chooses its
+		# size, so we preserve the count across this operation.  if
+		# the two arguments have different counts, use the
+		# geometric mean unless one of the two is 0 in which case
+		# don't screw with the total count
+		self_count, other_count = self.array.sum(), other.array.sum()
 		super(rate.BinnedLnPDF, self).__iadd__(other)
+		if self_count and other_count:
+			self.array *= numpy.exp((numpy.log(self_count) + numpy.log(other_count)) / 2.) / self.array.sum()
 		self.norm = numpy.log(numpy.exp(self.norm) + numpy.exp(other.norm))
 		return self
 
