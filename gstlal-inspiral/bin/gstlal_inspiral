@@ -607,8 +607,9 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 			# lines uses less memory
 			for line in gzip.open(ligolw_utils.local_path_from_url(output_url)):
 				pass
-			for line in gzip.open(ligolw_utils.local_path_from_url(likelihood_url_namedtuple[0])):
-				pass
+			if not options.injections:
+				for line in gzip.open(ligolw_utils.local_path_from_url(likelihood_url_namedtuple[0])):
+					pass
 			# File is OK and there is no need to process it,
 			# skip ahead in the loop
 			continue
