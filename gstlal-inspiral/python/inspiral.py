@@ -470,7 +470,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_filename = None, rankingstatpdf_filename = None, likelihood_url_namedtuple = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_filename = None, rankingstatpdf_filename = None, likelihood_url = None, reference_likelihood_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -550,45 +550,20 @@ class Data(object):
 		# their non-injection cousins instead of using whatever
 		# statistics they've collected internally.
 		# reference_likelihood_url is not used when running
-		# offline.  NOTE:  historically this option was used to
-		# provide the name of the file from which ranking statistic
-		# information was loaded for the purpose of implementing
-		# the --min-log-L cut when running offline, but that is now
-		# accomplished with an internal virtual ranking statistic
-		# object.
+		# offline.
 		#
 		# likelihood_url provides the name of the file to which the
 		# internally-collected ranking statistic information is to
 		# be written whenever output is written to disk.  if set to
 		# None, then only the trigger file will be written, no
 		# ranking statistic information will be written.  normally
-		# it is set to a non-null value, but, again, injection jobs
-		# might be configured to disable ranking statistic output
-		# since they produce nonsense.
-		#
-		# FIXME:  gstlal_inspiral now sets the likelihood_url to
-		# None when doing injections to disable the collection of
-		# ranking statistic information in injection jobs.  this is
-		# now yet another way in which online analyses are broken
-		# following the ranking statistic rewrite and will need to
-		# be looked at.  the reason for doing this is that because
-		# injection jobs skip intervals of SNR reconstruction they
-		# create ranking statistic data that appear to be
-		# inconsistent with the triggers that are being produced
-		# and the inconsistency triggers assertion failures
-		# throughout the new ranking statistic code.  we have
-		# tried, in vain, to work around the problem but in the end
-		# we've had to simply stop injection jobs from even trying.
-		# the data they collect was never used anyway, exactly
-		# because of its inconsistencies.
+		# it is set to a non-null value, but injection jobs might
+		# be configured to disable ranking statistic output since
+		# they produce nonsense.
 		#
 
-		if likelihood_url_namedtuple is not None:
-			self.reference_likelihood_url = likelihood_url_namedtuple.reference_likelihood_url
-			self.likelihood_url = likelihood_url_namedtuple.likelihood_url
-		else:
-			self.reference_likelihood_url = None
-			self.likelihood_url = None
+		self.likelihood_url = likelihood_url
+		self.reference_likelihood_url = reference_likelihood_url
 		self.rankingstat = rankingstat
 
 		#
