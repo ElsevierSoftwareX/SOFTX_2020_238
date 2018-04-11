@@ -505,8 +505,10 @@ class Data(object):
 		bottle.route("/latency_history.txt")(self.web_get_latency_history)
 		bottle.route("/snr_history.txt")(self.web_get_snr_history)
 		# FIXME don't hardcode the ifos
-		bottle.route("/H1_snr_history.txt")(self.web_get_H1_snr_history)
-		bottle.route("/L1_snr_history.txt")(self.web_get_L1_snr_history)
+		bottle.route("/H1_snr_history.txt")(lambda : self.web_get_sngl_snr_history(ifo = "H1"))
+		bottle.route("/L1_snr_history.txt")(lambda : self.web_get_sngl_snr_history(ifo = "L1"))
+		bottle.route("/V1_snr_history.txt")(lambda : self.web_get_sngl_snr_history(ifo = "V1"))
+		bottle.route("/K1_snr_history.txt")(lambda : self.web_get_sngl_snr_history(ifo = "K1"))
 		bottle.route("/likelihood_history.txt")(self.web_get_likelihood_history)
 		bottle.route("/far_history.txt")(self.web_get_far_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
@@ -652,7 +654,7 @@ class Data(object):
 		self.far_history = deque(maxlen = 1000)
 		self.ram_history = deque(maxlen = 2)
 		# FIXME don't hardcode
-		self.ifo_snr_history = {"H1": deque(maxlen = 10000), "L1": deque(maxlen = 10000)}
+		self.ifo_snr_history = {"H1": deque(maxlen = 10000), "L1": deque(maxlen = 10000), "V1": deque(maxlen = 10000), "K1": deque(maxlen = 10000)}
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -1229,16 +1231,10 @@ class Data(object):
 				yield "%f %e\n" % (time, snr)
 
 	# FIXME, don't hardcode these routes
-	def web_get_H1_snr_history(self):
+	def web_get_sngl_snr_history(self, ifo = "H1"):
 		with self.lock:
 			# first one in the list is sacrificed for a time stamp
-			for time, snr in self.ifo_snr_history["H1"]:
-				yield "%f %e\n" % (time, snr)
-
-	def web_get_L1_snr_history(self):
-		with self.lock:
-			# first one in the list is sacrificed for a time stamp
-			for time, snr in self.ifo_snr_history["L1"]:
+			for time, snr in self.ifo_snr_history[ifo]:
 				yield "%f %e\n" % (time, snr)
 
 	def web_get_likelihood_history(self):
