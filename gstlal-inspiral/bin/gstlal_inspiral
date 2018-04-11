@@ -755,6 +755,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url_namedtupl
 			raise ValueError("\"%s\" is for the wrong templates")
 	else:
 		rankingstat = far.RankingStat(template_ids = template_ids, instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
+		rankingstat.numerator.add_signal_model(df = 40)
 
 
 	#
