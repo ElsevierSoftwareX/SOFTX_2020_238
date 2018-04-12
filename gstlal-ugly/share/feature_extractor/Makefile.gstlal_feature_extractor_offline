@@ -20,18 +20,21 @@ STOP  = 1187100000
 
 OUTPATH = $(PWD)
 
+# channel list for analysis
+CHANNEL_LIST = H1_O2_standard_channel_list.txt
+
 # Target number of streams (N_channels x N_rates_per_channel) that each cpu will process
 # NOTE: * if max_serial_streams > max_parallel_streams, all jobs will be parallelized by channel
 #       * if max_parallel_streams > num_channels in channel list, all jobs will be processed serially, with processing driven by max_serial_streams
 #       * any other combination will produce a mix of parallelization by channels and processing channels serially per job
-MAX_PARALLEL_STREAMS = 50
-MAX_SERIAL_STREAMS = 100
+MAX_PARALLEL_STREAMS = 300
+MAX_SERIAL_STREAMS = 110
 
 # Maximum number of concurrent reads from the same frame file, done to prevent I/O locks
-CONCURRENCY = 4
+CONCURRENCY = 1
 
-# length of time to process for a given job
-SEGMENT_LENGTH = 6000
+# Length of time to process for a given job
+SEGMENT_LENGTH = 3500
 
 # Parameter space config of half-sine-gaussians
 MISMATCH = 0.05
@@ -86,7 +89,7 @@ all : dag
 	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
 
 # Run etg pipe to produce dag
-dag : frame.cache plots channel_list.txt segments.xml.gz
+dag : frame.cache plots $(CHANNEL_LIST) segments.xml.gz
 	gstlal_feature_extractor_pipe \
 		--data-source frames \
 		--gps-start-time $(START) \
@@ -95,7 +98,7 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--frame-segments-file segments.xml.gz \
 		--frame-segments-name datasegments \
 		--local-frame-caching \
-		--channel-list channel_list.txt \
+		--channel-list $(CHANNEL_LIST) \
 		--out-path $(OUTPATH) \
 		--max-serial-streams $(MAX_SERIAL_STREAMS) \
 		--max-parallel-streams $(MAX_PARALLEL_STREAMS) \
@@ -105,8 +108,8 @@ dag : frame.cache plots channel_list.txt segments.xml.gz
 		--qhigh $(QHIGH) \
 		$(CONDOR_COMMANDS) \
 		--request-cpu 2 \
-		--request-memory 8GB \
-		--request-disk 50GB \
+		--request-memory 14GB \
+		--request-disk 12GB \
 		--verbose \
 		--disable-web-service
 
