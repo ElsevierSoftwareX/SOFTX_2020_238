@@ -199,6 +199,12 @@ gstreamer_VERSION=`$PKG_CONFIG --modversion gstreamer-${GSTREAMER_RELEASE}`
 AX_COMPARE_VERSION([$gstreamer_VERSION], [ge], [1.6.0], [
 	AC_DEFINE([HAVE_GSTREAMER_1_6], [1], [Defined if gstreamer >= 1.6.x])
 ])
+AX_COMPARE_VERSION([$gstreamer_VERSION], [ge], [1.14.0], [
+	GSTPLUGINPREFIX="gst"
+], [
+	GSTPLUGINPREFIX=""
+])
+AC_SUBST([GSTPLUGINPREFIX])
 
 
 #

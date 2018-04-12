@@ -4,9 +4,9 @@ AM_CPPFLAGS = -I$(top_srcdir)/lib -I$(top_builddir)/lib
 EXTRA_DIST = \
 	gstfdmemory.h gstfdmemory.c
 
-plugin_LTLIBRARIES = libgstlal.la
+plugin_LTLIBRARIES = lib@GSTPLUGINPREFIX@gstlal.la
 
-libgstlal_la_SOURCES = \
+lib@GSTPLUGINPREFIX@gstlal_la_SOURCES = \
 	gstlal.c \
 	gstlal_audioundersample.h gstlal_audioundersample.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
@@ -26,6 +26,6 @@ libgstlal_la_SOURCES = \
 	gstlal_togglecomplex.h gstlal_togglecomplex.c \
 	gstlal_whiten.h gstlal_whiten.c \
 	gstlal_shift.h gstlal_shift.c
-libgstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
-libgstlal_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlal.la $(top_builddir)/lib/gstlal/libgstlaltags.la $(top_builddir)/lib/gstlal/libgstlaltypes.la
-libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+lib@GSTPLUGINPREFIX@gstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
+lib@GSTPLUGINPREFIX@gstlal_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlal.la $(top_builddir)/lib/gstlal/libgstlaltags.la $(top_builddir)/lib/gstlal/libgstlaltypes.la
+lib@GSTPLUGINPREFIX@gstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)

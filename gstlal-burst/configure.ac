@@ -163,6 +163,14 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\|gstlal_\|GstLAL_\|GSTLAL_\).*"])
 
+gstreamer_VERSION=`$PKG_CONFIG --modversion gstreamer-${GSTREAMER_RELEASE}`
+AX_COMPARE_VERSION([$gstreamer_VERSION], [ge], [1.14.0], [
+	GSTPLUGINPREFIX="gst"
+], [
+	GSTPLUGINPREFIX=""
+])
+AC_SUBST([GSTPLUGINPREFIX])
+
 
 #
 # Check for GStreamer Audio Library

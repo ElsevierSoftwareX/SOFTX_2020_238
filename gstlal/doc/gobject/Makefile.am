@@ -98,8 +98,8 @@ GTKDOC_LIBS = $(AM_LDFLAGS) -static \
 	$(top_builddir)/lib/gstlal/libgstlal.la \
 	$(top_builddir)/lib/gstlal/libgstlaltags.la \
 	$(top_builddir)/lib/gstlal/libgstlaltypes.la \
-	$(top_builddir)/gst/lal/libgstlal.la \
-	$(top_builddir)/gst/gst/libgstlaladder.la \
+	$(top_builddir)/gst/lal/lib@GSTPLUGINPREFIX@gstlal.la \
+	$(top_builddir)/gst/gst/libgstlal_adder.la \
 	$(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS)
 
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
