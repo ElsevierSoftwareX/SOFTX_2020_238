@@ -68,7 +68,7 @@ def parse_command_line():
 	parser.add_option("--horizon-distance-flow", metavar = "Hz", default = 10., type = "float", help = "When obtaining horizon distances from a collection PSD files, start horizon distance integral at this frequency in Hertz (default = 10 Hz).")
 	parser.add_option("--horizon-distance-masses", metavar = "m1,m2", action = "append", default = ["1.4,1.4"], help = "When obtaining horizon distances from a collection of PSD files, compute them for these masses in solar mass units (default = 1.4,1.4).  Can be given multiple times.")
 	parser.add_option("--instruments", metavar = "name[,name,...]", help = "Set the instruments to include in the network.  If PSD files alone are to be used to provide horizon distances, or --full is selected, then this option is required, otherwise it is optional.  If both --instruments and --horizon-distances are given, they must list the same instruments.")
-	parser.add_option("--min-instruments", metavar = "count", action = "append", default = [2], type = "int", help = "Set the minimum number of instruments required to form a candidate (default = 2).  Can be given multiple times.")
+	parser.add_option("--min-instruments", metavar = "count", action = "append", default = [1, 2], type = "int", help = "Set the minimum number of instruments required to form a candidate;  can be given multiple times (default is 1 and 2).  Note that the probability that a recovered signal is recovered by a given set of instruments depends on how many instruments are required to participate.  The PDF cache must contain entries for every value of this parameter one will use to conduct searches.")
 	parser.add_option("--output", "-o", metavar = "filename", help = "Write SNR PDF cache to this file (required).")
 	parser.add_option("--seed", metavar = "filename", action = "append", default = [], help = "Seed the SNR PDF cache by loading pre-computed SNR PDFs from this file.  Can be given multiple times.")
 	parser.add_option("--seed-cache", metavar = "filename", help = "Seed the SNR PDF cache by loading pre-computed SNR PDFs from the files named in this LAL cache.")
@@ -113,7 +113,7 @@ def parse_command_line():
 	if options.instruments:
 		options.instruments = set(options.instruments.split(","))
 		if len(options.instruments) < min(options.min_instruments):
-			raise ValueError("--instruments must have at least --min-instruments entries")
+			raise ValueError("--instruments must list at least --min-instruments (%d) instruments" % options.min_instruments)
 
 	if options.horizon_distances is not None:
 		options.horizon_distances = (items.split(",") for items in options.horizon_distances)
