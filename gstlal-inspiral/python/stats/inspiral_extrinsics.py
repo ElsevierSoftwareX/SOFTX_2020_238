@@ -423,7 +423,7 @@ class SNRPDF(object):
 				with numpy.errstate(divide = "ignore"):
 					lnbinnedarray.array = numpy.log(lnbinnedarray.array)
 				pdf = rate.InterpBinnedArray(lnbinnedarray, fill_value = NegInf)
-				self.snr_joint_pdf_cache[key] = self.cacheentry(math.log(P_instruments[instruments]), pdf, binnedarray)
+				self.snr_joint_pdf_cache[key] = self.cacheentry(math.log(P_instruments[instruments]) if P_instruments[instruments] else NegInf, pdf, binnedarray)
 
 
 	@staticmethod
