@@ -392,7 +392,7 @@ class SNRPDF(object):
 		#
 
 		if verbose:
-			print >>sys.stderr, "For horizon distances %s:" % ", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items()))
+			print >>sys.stderr, "For horizon distances %s, requiring %d instrument(s):" % (", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items())), min_instruments)
 
 		P_instruments = P_instruments_given_signal(
 			self.quantized_horizon_distances(self.quantize_horizon_distances(horizon_distances).items()),
