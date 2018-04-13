@@ -110,6 +110,7 @@ def parse_command_line():
 	parser.add_option("--output-name", help = "set the base name of the output, required")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
+	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 	options, filenames = parser.parse_args()
 
 	if options.overlap % 2:
@@ -140,7 +141,7 @@ try:
 except:
 	pass
 dag = inspiral_pipe.DAG(options.output_name)
-svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", tag_base = "gstlal_svd_bank_%s" % ifo, condor_commands = {"request_memory":"1999"})
+svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", tag_base = "gstlal_svd_bank_%s" % ifo, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 # Assumes cache is sorted by chirpmass or whatever the SVD sorting algorithm that was chosen
 files = [CacheEntry(line).path for line in open(options.bank_cache)]
 
