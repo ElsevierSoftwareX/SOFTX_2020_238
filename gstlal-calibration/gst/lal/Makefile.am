@@ -1,6 +1,6 @@
-plugin_LTLIBRARIES = libgstlalcalibration.la
+plugin_LTLIBRARIES = lib@GSTPLUGINPREFIX@gstlalcalibration.la
 
-libgstlalcalibration_la_SOURCES = \
+lib@GSTPLUGINPREFIX@gstlalcalibration_la_SOURCES = \
 	gstlalcalibration.c \
 	gstlal_add_constant.c gstlal_add_constant.h \
 	gstlal_pyfuncsrc.c gstlal_pyfuncsrc.h \
@@ -15,6 +15,6 @@ libgstlalcalibration_la_SOURCES = \
 	gstlal_insertgap.c gstlal_insertgap.h \
 	gstlal_fccupdate.c gstlal_fccupdate.h \
 	gstlal_transferfunction.c gstlal_transferfunction.h
-libgstlalcalibration_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
-libgstlalcalibration_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
-libgstlalcalibration_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSTLAL_LIBS) $(PYTHON_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+lib@GSTPLUGINPREFIX@gstlalcalibration_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
+lib@GSTPLUGINPREFIX@gstlalcalibration_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
+lib@GSTPLUGINPREFIX@gstlalcalibration_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSTLAL_LIBS) $(PYTHON_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
