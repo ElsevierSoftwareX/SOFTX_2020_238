@@ -151,7 +151,7 @@
 #	+ `--reference-likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events.  Can only use with --data-source lvshm or framexmit, must also set --likelihood-snapshot-interval.
 #	+ `--zerolag-rankingstatpdf-filename` [filename]: Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingStatPDF object.  The counts will be added to the file.  Optional.  Can be given multiple times.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.
-#	+ `--marginalized-likelihood-file` [filename]: Set the name of the file from which to load initial marginalized likelihood ratio data.  This is required for online operation (when --data-source is framexmit or lvshm) and is forbidden for offline operation (all other data sources).
+#	+ `--ranking-stat-pdf` [url]: Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources).
 #	+ `--gracedb-far-threshold` (float): False-alarm rate threshold for gracedb uploads in Hertz (default = do not upload to gracedb).
 #	+ `--gracedb-search`: Name of search to provide in GracedB uploads (default is LowMass).
 #	+ `--gracedb-pipeline`: Name of pipeline to provide in GracedB uploads (default is gstlal).
@@ -300,7 +300,7 @@ def parse_command_line():
 	group.add_option("--likelihood-file", metavar = "filename", action = "append", default = [], help = "Set the name of the file to which to write ranking statistic data collected from triggers (optional).  Can be given more than once.  If given, exactly as many must be provided as there are --svd-bank options and they will be writen to in order.")
 	group.add_option("--likelihood-file-cache", metavar = "filename", help = "Provide a cache of likelihood files.  This can be used instead of giving multiple --likelihood-file options.  Cannot be combined with --likelihood-file.")
 	group.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.")
-	group.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data.  This is required for online operation (when --data-source is framexmit or lvshm) and is forbidden for offline operation (all other data sources).")
+	group.add_option("--ranking-stat-pdf", metavar = "url", help = "Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources)")
 	group.add_option("--reference-likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use for ranking events.  Can only use with --data-source lvshm or framexmit, must also set --likelihood-snapshot-interval.")
 	group.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (required).")
 	group.add_option("--zerolag-rankingstatpdf-filename", metavar = "filename", action = "append", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingStatPDF object.  The counts will be added to the file.  Optional.  Can be given multiple times.")
@@ -429,7 +429,7 @@ def parse_command_line():
 
 	if options.data_source in ("lvshm", "framexmit"):
 		missing_options = []
-		for option in ["job_tag", "marginalized_likelihood_file"]:
+		for option in ["job_tag", "ranking_stat_pdf"]:
 			if getattr(options, option) is None:
 				missing_options.append("--%s" %option.replace("_","-"))
 
@@ -446,7 +446,7 @@ def parse_command_line():
 		os.environ['GSTLAL_LL_JOB'] = options.job_tag
 	else:
 		bad_options = []
-		for option in ["job_tag", "marginalized_likelihood_file", "likelihood_snapshot_interval"]:
+		for option in ["job_tag", "ranking_stat_pdf", "likelihood_snapshot_interval"]:
 			if getattr(options, option) is not None:
 				bad_options.append("--%s" % option.replace("_","-"))
 		if bad_options:
@@ -809,7 +809,7 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url, zerolag_
 		pipeline = pipeline,
 		rankingstat = rankingstat,
 		zerolag_rankingstatpdf_filename = zerolag_rankingstatpdf_filename,
-		rankingstatpdf_filename = options.marginalized_likelihood_file,
+		rankingstatpdf_url = options.ranking_stat_pdf,
 		likelihood_url = likelihood_url,
 		reference_likelihood_url = options.reference_likelihood_file,
 		likelihood_snapshot_interval = options.likelihood_snapshot_interval,

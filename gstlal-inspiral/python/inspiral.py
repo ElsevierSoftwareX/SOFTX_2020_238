@@ -470,7 +470,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_filename = None, rankingstatpdf_filename = None, likelihood_url = None, reference_likelihood_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_filename = None, rankingstatpdf_url = None, likelihood_url = None, reference_likelihood_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -584,18 +584,18 @@ class Data(object):
 
 		#
 		# rankingstatpdf contains the RankingStatPDF object (loaded
-		# from rankingstatpdf_filename) used to initialize the
-		# FAPFAR object for on-the-fly FAP and FAR assignment.
-		# except to initialize the FAPFAR object it is not used for
-		# anything, but is retained so that it can be exposed
-		# through the web interface for diagnostic purposes and
-		# uploaded to gracedb with candidates.  the extinction
-		# model is applied to initialize the FAPFAR object but the
-		# original is retained for upload to gracedb, etc.
+		# from rankingstatpdf_url) used to initialize the FAPFAR
+		# object for on-the-fly FAP and FAR assignment.  except to
+		# initialize the FAPFAR object it is not used for anything,
+		# but is retained so that it can be exposed through the web
+		# interface for diagnostic purposes and uploaded to gracedb
+		# with candidates.  the extinction model is applied to
+		# initialize the FAPFAR object but the original is retained
+		# for upload to gracedb, etc.
 		#
 
 		# None to disable
-		self.rankingstatpdf_filename = rankingstatpdf_filename
+		self.rankingstatpdf_url = rankingstatpdf_url
 		self.rankingstatpdf = None
 		self.fapfar = None
 
@@ -730,7 +730,7 @@ class Data(object):
 				# overwritten.
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 
-				if self.rankingstatpdf_filename is not None:
+				if self.rankingstatpdf_url is not None:
 					# enable streamthinca's likelihood
 					# ratio assignment using our own,
 					# local, parameter distribution
@@ -757,9 +757,9 @@ class Data(object):
 					# been updated asynchronously and
 					# initialize a FAP/FAR assignment
 					# machine from it.
-					_, self.rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(self.rankingstatpdf_filename, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+					_, self.rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.rankingstatpdf_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
 					if self.rankingstatpdf is None:
-						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.rankingstatpdf_filename)
+						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.rankingstatpdf_url)
 					if not self.rankingstat.template_ids <= self.rankingstatpdf.template_ids:
 						raise ValueError("\"%s\" is for the wrong templates")
 					self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())

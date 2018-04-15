@@ -422,7 +422,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"min-log-L":options.min_log_L,
 			"time-slide-file":options.time_slide_file
 			},
-		input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file},
+		input_files = {"ranking-stat-pdf":options.marginalized_likelihood_file},
 		output_files = {"output":"not_used.xml.gz",
 				"likelihood-file":likefile,
 				"zerolag-rankingstatpdf-filename":zerolikefile,
@@ -468,7 +468,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 				"min-log-L":options.min_log_L,
 				"time-slide-file":options.time_slide_file
 				},
-			input_files = {"marginalized-likelihood-file":options.marginalized_likelihood_file,
+			input_files = {"ranking-stat-pdf":options.marginalized_likelihood_file,
 			"reference-likelihood-file":[likefile]},
 			output_files = {"output":"not_used.xml.gz",
 				}

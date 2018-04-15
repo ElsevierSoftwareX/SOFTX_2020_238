@@ -75,7 +75,7 @@ def get_likelihood_files(gid_list, gracedb):
 	for gid in gid_list:
 		coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
 		likelihood_files_dict.setdefault(ligolw_process.get_process_params(coinc_xmldoc, "gstlal_inspiral", "--likelihood-file")[0], []).append([gid, coinc_xmldoc])
-		marg_files_dict.setdefault(ligolw_process.get_process_params(coinc_xmldoc, "gstlal_inspiral", "--marginalized-likelihood-file")[0], []).append(gid)
+		marg_files_dict.setdefault(ligolw_process.get_process_params(coinc_xmldoc, "gstlal_inspiral", "--ranking-stat-pdf")[0], []).append(gid)
 
 	if len(marg_files_dict.keys()) > 1:
 		raise ValueError("the gracedb events specified have different marginalized likelihood files, all specified events need to come from the same analysis and thus share the same marginalized likelihood file")
