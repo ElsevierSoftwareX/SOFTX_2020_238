@@ -470,7 +470,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_filename = None, rankingstatpdf_url = None, likelihood_url = None, reference_likelihood_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_filename = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -540,8 +540,8 @@ class Data(object):
 		#
 		# setup likelihood ratio book-keeping.
 		#
-		# in online mode, if reference_likelihood_url is set then
-		# on each snapshot interval, and before providing stream
+		# in online mode, if ranking_stat_input_url is set then on
+		# each snapshot interval, and before providing stream
 		# thinca with its ranking statistic information, the
 		# current rankingstat object is replaced with the contents
 		# of that file.  this is intended to be used by trigger
@@ -549,10 +549,9 @@ class Data(object):
 		# analysis to import ranking statistic information from
 		# their non-injection cousins instead of using whatever
 		# statistics they've collected internally.
-		# reference_likelihood_url is not used when running
-		# offline.
+		# ranking_stat_input_url is not used when running offline.
 		#
-		# likelihood_url provides the name of the file to which the
+		# ranking_stat_output_url provides the name of the file to which the
 		# internally-collected ranking statistic information is to
 		# be written whenever output is written to disk.  if set to
 		# None, then only the trigger file will be written, no
@@ -562,8 +561,8 @@ class Data(object):
 		# they produce nonsense.
 		#
 
-		self.likelihood_url = likelihood_url
-		self.reference_likelihood_url = reference_likelihood_url
+		self.ranking_stat_output_url = ranking_stat_output_url
+		self.ranking_stat_input_url = ranking_stat_input_url
 		self.rankingstat = rankingstat
 
 		#
@@ -698,7 +697,7 @@ class Data(object):
 			if self.likelihood_snapshot_interval is not None and (self.likelihood_snapshot_timestamp is None or buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 
-				# if a reference likelihood file is given,
+				# if a ranking statistic source url is set,
 				# overwrite rankingstat with its contents.
 				# FIXME There is currently no guarantee
 				# that the reference_likelihood_file on
@@ -707,11 +706,11 @@ class Data(object):
 				# not have that large of an effect. The
 				# data loaded should never be older than
 				# the snapshot before last
-				if self.reference_likelihood_url is not None:
+				if self.ranking_stat_input_url is not None:
 					params_before = self.rankingstat.template_ids, self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t
-					self.rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.reference_likelihood_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+					self.rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.ranking_stat_input_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
 					if params_before != (self.rankingstat.template_ids, self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t):
-						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.reference_likelihood_url)
+						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.ranking_stat_input_url)
 
 				# post a checkpoint message.
 				# FIXME:  make sure this triggers
@@ -722,11 +721,11 @@ class Data(object):
 				# should be responsible for it somehow, no?
 				# NOTE: self.snapshot_output_url() writes
 				# the current rankingstat object to the
-				# location identified by .likelihood_url,
+				# location identified by .ranking_stat_output_url,
 				# so if that is either not set or at least
 				# set to a different name than
-				# .reference_likelihood_url the file that
-				# has just been loaded above will not be
+				# .ranking_stat_input_url the file that has
+				# just been loaded above will not be
 				# overwritten.
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 
@@ -830,7 +829,7 @@ class Data(object):
 			# necessary for this test to be super precisely
 			# defined.
 			for event in itertools.chain(self.stream_thinca.add_events(self.coincs_document.xmldoc, self.coincs_document.process_id, events, buf_timestamp, snr_segments, fapfar = self.fapfar), self.stream_thinca.last_coincs.single_sngl_inspirals() if self.stream_thinca.last_coincs else ()):
-				if self.likelihood_url is None:
+				if self.ranking_stat_output_url is None:
 					continue
 				assert event.end in one_or_more_instruments, "trigger at time (%s) with no SNR (%s)" % (str(event.end), str(one_or_more_instruments))
 				if event.end in two_or_more_instruments:
@@ -838,7 +837,7 @@ class Data(object):
 			self.coincs_document.commit()
 
 			# update zero-lag bin counts in rankingstat.
-			if self.stream_thinca.last_coincs and self.likelihood_url is not None:
+			if self.stream_thinca.last_coincs and self.ranking_stat_output_url is not None:
 				for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 					if coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
 						for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id):
@@ -940,7 +939,7 @@ class Data(object):
 
 		ratebinlists = self.rankingstat.denominator.triggerrates.values()
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, snr_segments, fapfar = self.fapfar):
-			if self.likelihood_url is None:
+			if self.ranking_stat_output_url is None:
 				continue
 			assert event.end in one_or_more_instruments, "trigger at time (%s) with no SNR (%s)" % (str(event.end), str(one_or_more_instruments))
 			if event.end in two_or_more_instruments:
@@ -948,7 +947,7 @@ class Data(object):
 		self.coincs_document.commit()
 
 		# update zero-lag bin counts in rankingstat.
-		if self.stream_thinca.last_coincs and self.likelihood_url is not None:
+		if self.stream_thinca.last_coincs and self.ranking_stat_output_url is not None:
 			for coinc_event_id, coinc_event in self.stream_thinca.last_coincs.coinc_event_index.items():
 				if coinc_event.time_slide_id in self.stream_thinca.last_coincs.zero_lag_time_slide_ids:
 					for event in self.stream_thinca.last_coincs.sngl_inspirals(coinc_event_id):
@@ -1293,18 +1292,8 @@ class Data(object):
 		# can't be used anymore
 		del self.coincs_document
 
-	def __write_likelihood_url(self, url, description, snapshot = False, verbose = False):
-		# write the parameter PDF file.  NOTE;  this file contains
-		# raw bin counts, and might or might not contain smoothed,
-		# normalized, PDF arrays but if it does they will not
-		# necessarily correspond to the bin counts. 
-		#
-		# the parameter PDF arrays cannot be re-computed here
-		# because it would interfer with their use by stream
-		# thinca.  we want to know precisely when the arrays get
-		# updated so we can have a hope of computing the likelihood
-		# ratio PDFs correctly.
-
+	def __write_ranking_stat_url(self, url, description, snapshot = False, verbose = False):
+		# write the ranking statistic file.
 		ligolw_utils.write_url(self.__get_likelihood_xmldoc(), ligolw_utils.local_path_from_url(url), gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 		# Snapshots get their own custom file and path
 		if snapshot:
@@ -1317,8 +1306,8 @@ class Data(object):
 	def write_output_url(self, url = None, description = "", verbose = False):
 		with self.lock:
 			self.__write_output_url(url = url, verbose = verbose)
-			if self.likelihood_url is not None:
-				self.__write_likelihood_url(self.likelihood_url, description, verbose = verbose)
+			if self.ranking_stat_output_url is not None:
+				self.__write_ranking_stat_url(self.ranking_stat_output_url, description, verbose = verbose)
 
 	def snapshot_output_url(self, description, extension, verbose = False):
 		with self.lock:
@@ -1329,8 +1318,8 @@ class Data(object):
 			fname = self.T050017_filename(description, extension)
 			fname = os.path.join(subdir_from_T050017_filename(fname), fname)
 			self.__write_output_url(url = fname, verbose = verbose)
-			if self.likelihood_url is not None:
-				self.__write_likelihood_url(self.likelihood_url, description, snapshot = True, verbose = verbose)
+			if self.ranking_stat_output_url is not None:
+				self.__write_ranking_stat_url(self.ranking_stat_output_url, description, snapshot = True, verbose = verbose)
 			if self.zerolag_rankingstatpdf is not None:
 				self.__write_zero_lag_ranking_stats_file(self.zerolag_rankingstatpdf_filename, verbose = verbose)
 			self.coincs_document = coincs_document

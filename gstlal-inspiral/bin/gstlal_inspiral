@@ -138,7 +138,7 @@
 #	+ `--chisq-type" [type]: Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.
 #	+ `--coincidence-threshold` [seconds] (float): Set the coincidence window in seconds (default = 0.005 s).  The light-travel time between instruments will be added automatically in the coincidence test.
 #	+ `--min-instruments` [count] (int): Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).
-#	+ `--min-log-L` [log likelihood ratio] (float): Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).
+#	+ `--min-log-L` [log likelihood ratio] (float): Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).  When used without --ranking-stat-input, the cut is decided based on an internal approximate ranking statistic.
 #	+ `--write-pipeline` [filename]: Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.
 #	+ `--comment`: Set the string to be recorded in comment and tag columns in various places in the output file (optional).
 #	+ `--check-time-stamps`: Turn on time stamp checking.
@@ -146,11 +146,11 @@
 #	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
 #	+ `--blind-injections` [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case.
 #	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..
-#	+ `--likelihood-file` [filename]: Set the name of the file to which to write ranking statistic data collected from triggers (optional).  Can be given more than once.  If given, exactly as many must be provided as there are --svd-bank options and they will be writen to in order.
-#	+ `--likelihood-file-cache` [filename]: Provide a cache of likelihood files.  This can be used instead of giving multiple --likelihood-file options.  Cannot be combined with --likelihood-file.
-#	+ `--reference-likelihood-file` [filename]: Set the name of the likelihood ratio data file to use for ranking events.  Can only use with --data-source lvshm or framexmit, must also set --likelihood-snapshot-interval.
+#	+ `--ranking-stat-output` [filename]: Set the name of the file to which to write ranking statistic data collected from triggers (optional).  Can be given more than once.  If given, exactly as many must be provided as there are --svd-bank options and they will be writen to in order.
+#	+ `--ranking-stat-output-cache` [filename]: Provide a cache of ranking statistic output files.  This can be used instead of giving multiple --ranking-stat-output options.  Cannot be combined with --ranking-stat-output.
+#	+ `--ranking-stat-input` [filename]: Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly, and the --min-log-L cut will be applied based on the assigned values.  Can only use with --data-source lvshm or framexmit;  must also set --likelihood-snapshot-interval.
 #	+ `--zerolag-rankingstatpdf-filename` [filename]: Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingStatPDF object.  The counts will be added to the file.  Optional.  Can be given multiple times.
-#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.
+#	+ `--likelihood-snapshot-interval` [seconds] (float): How often to snapshot candidate and ranking statistic data to disk when running online.
 #	+ `--ranking-stat-pdf` [url]: Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources).
 #	+ `--gracedb-far-threshold` (float): False-alarm rate threshold for gracedb uploads in Hertz (default = do not upload to gracedb).
 #	+ `--gracedb-search`: Name of search to provide in GracedB uploads (default is LowMass).
@@ -296,12 +296,12 @@ def parse_command_line():
 	group.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	group.add_option("--coincidence-threshold", metavar = "seconds", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005 s).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	group.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
-	group.add_option("--min-log-L", metavar = "log likelihood ratio", type = "float", help = "Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).")
-	group.add_option("--likelihood-file", metavar = "filename", action = "append", default = [], help = "Set the name of the file to which to write ranking statistic data collected from triggers (optional).  Can be given more than once.  If given, exactly as many must be provided as there are --svd-bank options and they will be writen to in order.")
-	group.add_option("--likelihood-file-cache", metavar = "filename", help = "Provide a cache of likelihood files.  This can be used instead of giving multiple --likelihood-file options.  Cannot be combined with --likelihood-file.")
-	group.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to reread the marginalized likelihoood data. If --likelihood-file is provided, the likelihood file will be overwritten by a snapshot of the trigger files and a duplicate snapshot will be generated to keep a record of past ranking statistics.")
+	group.add_option("--min-log-L", metavar = "log likelihood ratio", type = "float", help = "Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).  When used without --ranking-stat-input, the cut is decided based on an internal approximate ranking statistic.")
+	group.add_option("--ranking-stat-input", metavar = "url", help = "Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly, and the --min-log-L cut will be applied based on the assigned values.  Can only use with --data-source lvshm or framexmit;  must also set --likelihood-snapshot-interval.")
+	group.add_option("--ranking-stat-output", metavar = "filename", action = "append", default = [], help = "Set the name of the file to which to write ranking statistic data collected from triggers (optional).  Can be given more than once.  If given, exactly as many must be provided as there are --svd-bank options and they will be writen to in order.")
+	group.add_option("--ranking-stat-output-cache", metavar = "filename", help = "Provide a cache of ranking statistic output files.  This can be used instead of giving multiple --ranking-stat-output options.  Cannot be combined with --ranking-stat-output.")
+	group.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to snapshot candidate and ranking statistic data to disk when running online.")
 	group.add_option("--ranking-stat-pdf", metavar = "url", help = "Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources)")
-	group.add_option("--reference-likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use for ranking events.  Can only use with --data-source lvshm or framexmit, must also set --likelihood-snapshot-interval.")
 	group.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (required).")
 	group.add_option("--zerolag-rankingstatpdf-filename", metavar = "filename", action = "append", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingStatPDF object.  The counts will be added to the file.  Optional.  Can be given multiple times.")
 	parser.add_option_group(group)
@@ -378,14 +378,14 @@ def parse_command_line():
 	else:
 		missing_options.append("either --output-cache or at least one --output")
 
-	if options.likelihood_file:
-		if options.likelihood_file_cache:
-			raise ValueError("cannot supply both --likelihood-file and --likelihood-file-cache")
-	elif options.likelihood_file_cache:
+	if options.ranking_stat_output:
+		if options.ranking_stat_output_cache:
+			raise ValueError("cannot supply both --ranking-stat-output and --ranking-stat-output-cache")
+	elif options.ranking_stat_output_cache:
 		# do this out-of-place to preserve process_params' contents
-		options.likelihood_file = [CacheEntry(line).url for line in open(options.likelihood_file_cache)]
-		if not options.likelihood_file:
-			raise ValueError("--likelihood-file-cache is empty")
+		options.ranking_stat_output = [CacheEntry(line).url for line in open(options.ranking_stat_output_cache)]
+		if not options.ranking_stat_output:
+			raise ValueError("--ranking-stat-output-cache is empty")
 
 	if not options.time_slide_file:
 		missing_options.append("--time-slide-file")
@@ -399,10 +399,10 @@ def parse_command_line():
 
 	if len(svd_banks) != len(options.output):
 		raise ValueError("must supply exactly as many --svd-bank options as --output")
-	if options.likelihood_file and len(options.likelihood_file) != len(options.output):
-		raise ValueError("must supply either none or exactly as many --likelihood-file options as --output")
-	if options.likelihood_snapshot_interval and not options.likelihood_file:
-		raise ValueError("must set --likelihood-file when --likelihood-snapshot-interval is set")
+	if options.ranking_stat_output and len(options.ranking_stat_output) != len(options.output):
+		raise ValueError("must supply either none or exactly as many --ranking-stat-output options as --output")
+	if options.likelihood_snapshot_interval and not options.ranking_stat_output:
+		raise ValueError("must set --ranking-stat-output when --likelihood-snapshot-interval is set")
 
 	required_urls = [options.time_slide_file]
 	for svd_bank_set in svd_banks: 
@@ -463,9 +463,9 @@ def parse_command_line():
 
 	if options.likelihood_snapshot_interval is not None and options.likelihood_snapshot_interval <= 0.:
 		raise ValueError("--likelihood-snapshot-interval cannot be <= 0")
-	if options.reference_likelihood_file:
+	if options.ranking_stat_input:
 		if not options.likelihood_snapshot_interval:
-			raise ValueError("must set --likelihood-snapshot-interval when --reference-likelihood-file is set")
+			raise ValueError("must set --likelihood-snapshot-interval when --ranking-stat-input is set")
 
 	if not options.ht_gate_threshold:
 		# default threshold is +inf = disable feature.
@@ -625,7 +625,7 @@ else:
 #
 
 
-for output_file_number, (svd_bank_url_dict, output_url, likelihood_url, zerolag_rankingstatpdf_filename, ht_gate_threshold) in enumerate(zip(svd_banks, options.output, options.likelihood_file, options.zerolag_rankingstatpdf_filename, options.ht_gate_threshold)):
+for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url, zerolag_rankingstatpdf_filename, ht_gate_threshold) in enumerate(zip(svd_banks, options.output, options.ranking_stat_output, options.zerolag_rankingstatpdf_filename, options.ht_gate_threshold)):
 	#
 	# Checkpointing only supported for gzip files in offline analysis
 	# FIXME Implement a means by which to check for sqlite file
@@ -638,8 +638,8 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url, zerolag_
 			# lines uses less memory
 			for line in gzip.open(ligolw_utils.local_path_from_url(output_url)):
 				pass
-			if likelihood_url is not None:
-				for line in gzip.open(ligolw_utils.local_path_from_url(likelihood_url)):
+			if ranking_stat_output_url is not None:
+				for line in gzip.open(ligolw_utils.local_path_from_url(ranking_stat_output_url)):
 					pass
 			# File is OK and there is no need to process it,
 			# skip ahead in the loop
@@ -767,16 +767,16 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url, zerolag_
 
 
 	if options.data_source in ("lvshm", "framexmit"):
-		assert likelihood_url is not None
-		rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(likelihood_url, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+		assert ranking_stat_output_url is not None
+		rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(ranking_stat_output_url, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
 		if rankingstat is None:
-			raise ValueError("\"%s\" does not contain parameter distribution data" % likelihood_url)
+			raise ValueError("\"%s\" does not contain parameter distribution data" % ranking_stat_output_url)
 		if rankingstat.delta_t != options.coincidence_threshold:
-			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (likelihood_url, rankingstat.denominator.delta_t, options.coincidence_threshold))
+			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (ranking_stat_output_url, rankingstat.denominator.delta_t, options.coincidence_threshold))
 		if rankingstat.min_instruments != options.min_instruments:
-			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (likelihood_url, rankingstat.denominator.min_instruments, options.min_instruments))
+			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (ranking_stat_output_url, rankingstat.denominator.min_instruments, options.min_instruments))
 		if rankingstat.instruments != all_instruments:
-			raise ValueError("\"%s\" is for %s but we need %s" % (likelihood_url, ", ".join(sorted(rankingstat.instruments)), ", ".join(sorted(all_instruments))))
+			raise ValueError("\"%s\" is for %s but we need %s" % (ranking_stat_output_url, ", ".join(sorted(rankingstat.instruments)), ", ".join(sorted(all_instruments))))
 		if rankingstat.template_ids is None:
 			rankingstat.template_ids = template_ids
 		elif rankingstat.template_ids != template_ids:
@@ -809,9 +809,9 @@ for output_file_number, (svd_bank_url_dict, output_url, likelihood_url, zerolag_
 		pipeline = pipeline,
 		rankingstat = rankingstat,
 		zerolag_rankingstatpdf_filename = zerolag_rankingstatpdf_filename,
+		ranking_stat_input_url = options.ranking_stat_input,
+		ranking_stat_output_url = ranking_stat_output_url,
 		rankingstatpdf_url = options.ranking_stat_pdf,
-		likelihood_url = likelihood_url,
-		reference_likelihood_url = options.reference_likelihood_file,
 		likelihood_snapshot_interval = options.likelihood_snapshot_interval,
 		thinca_interval = options.thinca_interval,
 		min_log_L = options.min_log_L,

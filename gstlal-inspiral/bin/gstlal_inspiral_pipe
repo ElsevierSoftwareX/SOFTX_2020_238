@@ -403,7 +403,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 							input_cache_files = {"svd-bank-cache":svd_bank_cache_maker(svd_bank_strings)},
 							output_cache_files = {
 									"output-cache":output_names,
-									"likelihood-file-cache":dist_stat_names
+									"ranking-stat-output-cache":dist_stat_names
 								}
 							)
 					# Set a post script to check for file integrity
