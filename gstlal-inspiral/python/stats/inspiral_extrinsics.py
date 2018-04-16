@@ -43,7 +43,6 @@ from scipy import stats
 from scipy import spatial
 import sys
 import h5py
-import healpy
 
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -941,10 +940,10 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 #
 
 
-class TPhiDeffPDF(object):
+class InspiralExtrinsics(object):
 	def __init__(self):
 		DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
-		self.IE = InspiralExtrinsics.from_hdf5(DEFAULT_FILENAME)
+		self.TimePhaseSNR = TimePhaseSNR.from_hdf5(DEFAULT_FILENAME)
 
 
 def chunker(seq, size):
@@ -968,7 +967,7 @@ def margprob(Dmat):
 	return out
 
 
-class InspiralExtrinsics(object):
+class TimePhaseSNR(object):
 
 	# NOTE to save a couple hundred megs of ram we do not
 	# include kagra for now...
@@ -985,7 +984,7 @@ class InspiralExtrinsics(object):
 		self.margsky = margsky
 
 		if self.tree_data is None:
-			time, phase, deff = InspiralExtrinsics.tile()
+			time, phase, deff = TimePhaseSNR.tile()
 			self.tree_data = self.dtdphideffpoints(time, phase, deff, self.slices)
 
 		# produce KD trees for all the combinations.  NOTE we slice
@@ -999,7 +998,7 @@ class InspiralExtrinsics(object):
 			self.KDTree[combo] = spatial.cKDTree(self.tree_data[:,slcs])
 
 		# NOTE: This is super slow we have a premarginalized h5 file in
-		# the tree, see the helper class TPhiDeffPDF
+		# the tree, see the helper class InspiralExtrinsics
 		if self.margsky is None:
 			self.margsky = {}
 			for combo in self.combos:
@@ -1040,7 +1039,7 @@ class InspiralExtrinsics(object):
 		for combo in dgrp["marg"]:
 			key = tuple(combo.split(","))
 			margsky[key] = numpy.array(dgrp["marg"][combo])
-		return InspiralExtrinsics(tree_data = tree_data, margsky = margsky)
+		return TimePhaseSNR(tree_data = tree_data, margsky = margsky)
 
 	@property
 	def combos(self):
@@ -1102,6 +1101,10 @@ class InspiralExtrinsics(object):
 
 	@classmethod
 	def tile(cls, NSIDE = 16, NANGLE = 33):
+		# FIXME should be put at top, but do we require healpy?  It
+		# isn't necessary for running at the moment since cached
+		# versions of this will be used.
+		import healpy
 		healpix_idxs = numpy.arange(healpy.nside2npix(NSIDE))
 		# We are concerned with a shell on the sky at some fiducial
 		# time (which simply fixes Earth as a natural coordinate
@@ -1133,7 +1136,8 @@ class InspiralExtrinsics(object):
 		print "\n...done"
 		return time, phase, deff
 
-	def __call__(self, time, phase, deff):
+	def __call__(self, time, phase, snr, horizon):
+		deff = dict((k, horizon[k] / snr[k] * 8.0) for k in snr)
 		slices = dict((pair, [3*n,3*n+1,3*n+2]) for n,pair in enumerate(self.instrument_pairs(time)))
 		point = self.dtdphideffpoints(time, phase, deff, slices)
 		combo = tuple(sorted(time))
@@ -1142,7 +1146,11 @@ class InspiralExtrinsics(object):
 		nearestpoint = self.tree_data[nearestix, treedataslices]
 		D = (point - nearestpoint)[0]
 		D2 = numpy.dot(D,D)
-		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix] / self.norm
+		# FIXME 4. / (sum(s**2 for s in S.values())**.5)**4 is the term
+		# that goes like rho^-4 with a somewhat arbitrary
+		# normilization.  Could use the network snr minimum to
+		# normalize it properly
+		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix] / self.norm * 4. / (sum(s**2 for s in snr.values())**.5)**4
 
 
 class p_of_instruments_given_horizons(object):
@@ -1157,7 +1165,7 @@ class p_of_instruments_given_horizons(object):
 		if histograms is not None:
 			self.histograms = histograms
 		else:
-			combos = inspiral_extrinsics.InspiralExtrinsics.instrument_combos(self.instruments, min_instruments = 1)
+			combos = TimePhaseSNR.instrument_combos(self.instruments, min_instruments = 1)
 			self.histograms = {}
 			bins = []
 			for i in range(len(self.instruments) - 1):
@@ -1166,7 +1174,7 @@ class p_of_instruments_given_horizons(object):
 				print combo
 				self.histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
 
-			_, _, deff = inspiral_extrinsics.InspiralExtrinsics.tile(NSIDE = 8, NANGLE = 17)
+			_, _, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
 			alldeff = []
 			for v in deff.values():
 				alldeff.extend(v)
@@ -1246,7 +1254,7 @@ class p_of_instruments_given_horizons(object):
 		bins = []
 		for i in range(len(instruments) - 1):
 			bins.append(rate.LogarithmicBins(hmin, hmax, nbins))
-		for combo in inspiral_extrinsics.InspiralExtrinsics.instrument_combos(instruments, min_instruments = 1):
+		for combo in TimePhaseSNR.instrument_combos(instruments, min_instruments = 1):
 			histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
 			histograms[combo].array[:] = numpy.array(grp[",".join(combo)])[:]
 		f.close()
