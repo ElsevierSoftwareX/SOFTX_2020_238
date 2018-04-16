@@ -43,6 +43,7 @@ from scipy import stats
 from scipy import spatial
 import sys
 import h5py
+import healpy
 
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -939,16 +940,20 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 # =============================================================================
 #
 
+
 class TPhiDeffPDF(object):
 	def __init__(self):
 		DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
 		self.IE = InspiralExtrinsics.from_hdf5(DEFAULT_FILENAME)
 
+
 def chunker(seq, size):
 	return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
-	
+
+
 def normsq_along_one(x):
 	return numpy.add.reduce(x * x, axis=(1,))
+
 
 def margprob(Dmat):
 	out = []
@@ -962,14 +967,15 @@ def margprob(Dmat):
 			out.append(step * scipy.integrate.simps(numpy.exp(-D**2/2.)))
 	return out
 
+
 class InspiralExtrinsics(object):
 
-	def __init__(self, tree_data = None, margsky = None):
+	# NOTE to save a couple hundred megs of ram we do not
+	# include kagra for now...
+	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
+	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 
-		# NOTE to save a couple hundred megs of ram we do not
-		# include kagra for now...
-		self.responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
-		self.locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
+	def __init__(self, tree_data = None, margsky = None):
 
 		# FIXME compute this more reliably or expose it as a property
 		# or something
@@ -979,9 +985,8 @@ class InspiralExtrinsics(object):
 		self.margsky = margsky
 
 		if self.tree_data is None:
-			time, phase, deff = self.tile()
+			time, phase, deff = InspiralExtrinsics.tile()
 			self.tree_data = self.dtdphideffpoints(time, phase, deff, self.slices)
-
 
 		# produce KD trees for all the combinations.  NOTE we slice
 		# into the same array for memory considerations.  the KDTree
@@ -1002,7 +1007,7 @@ class InspiralExtrinsics(object):
 				slcs = sorted(sum(self.instrument_pair_slices(self.instrument_pairs(combo)).values(),[]))
 				#
 				# NOTE we approximate the marginalization
-				# integral with 10% of the sky points 
+				# integral with 10% of the sky points
 				#
 				num_points = int(self.tree_data.shape[0] / 10.)
 
@@ -1011,12 +1016,12 @@ class InspiralExtrinsics(object):
 				# in the reference platforms, but this doesn't
 				# get used in practice during an actual
 				# analysis.  This will use 8GB of RAM and keep
-				# a box pretty busy. 
+				# a box pretty busy.
 				for points in chunker(self.tree_data[:,slcs], 1000):
 					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 3.5, n_jobs=-1)[0]
 					marg.extend(margprob(Dmat))
 				self.margsky[combo] = numpy.array(marg, dtype="float32")
-				
+
 	def to_hdf5(self, fname):
 		f = h5py.File(fname, "w")
 		dgrp = f.create_group("gstlal_extparams")
@@ -1027,7 +1032,7 @@ class InspiralExtrinsics(object):
 		f.close()
 
 	@staticmethod
-	def from_hdf5(fname):	
+	def from_hdf5(fname):
 		f = h5py.File(fname, "r")
 		dgrp = f["gstlal_extparams"]
 		tree_data = numpy.array(dgrp["treedata"])
@@ -1056,13 +1061,13 @@ class InspiralExtrinsics(object):
 	def instrument_pair_slices(self, pairs):
 		s = self.slices
 		return dict((pair, s[pair]) for pair in pairs)
-				
-	def instrument_combos(self, instruments):
+
+	@classmethod
+	def instrument_combos(cls, instruments, min_instruments = 2):
 		combos = set()
 		# FIXME this probably should be exposed, but 1 doesn't really make sense anyway
-		min_instruments = 2
-		for i in range(min_instruments, len(self.responses) + 1):
-			for choice in itertools.combinations(self.responses, i):
+		for i in range(min_instruments, len(instruments,) + 1):
+			for choice in itertools.combinations(instruments, i):
 				# NOTE the reference IFO is always the first in
 				# alphabetical order for any given combination,
 				# hence the sort here
@@ -1095,13 +1100,8 @@ class InspiralExtrinsics(object):
 
 		return out
 
-	def tile(self):
-		# NOTE an OK low res approximation
-		#NSIDE = 8
-		#NANGLE = 17 
-		# NOTE a very good high res approximation
-		NSIDE = 16
-		NANGLE = 33 
+	@classmethod
+	def tile(cls, NSIDE = 16, NANGLE = 33):
 		healpix_idxs = numpy.arange(healpy.nside2npix(NSIDE))
 		# We are concerned with a shell on the sky at some fiducial
 		# time (which simply fixes Earth as a natural coordinate
@@ -1109,9 +1109,9 @@ class InspiralExtrinsics(object):
 		T = lal.LIGOTimeGPS(0)
 		GMST = lal.GreenwichMeanSiderealTime(T)
 		D = 1.
-		phase = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in self.responses)
-		deff = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in self.responses)
-		time = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in self.responses)
+		phase = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in cls.responses)
+		deff = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in cls.responses)
+		time = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in cls.responses)
 
 		print "tiling sky: \n"
 		cnt = 0
@@ -1123,11 +1123,11 @@ class InspiralExtrinsics(object):
 				hplus = 0.5 * (1.0 + COSIOTA**2)
 				hcross = COSIOTA
 				for PSI in numpy.linspace(0, numpy.pi * 2, NANGLE):
-					for ifo in self.responses:
-						Fplus, Fcross = lal.ComputeDetAMResponse(self.responses[ifo], RA, DEC, PSI, GMST)
+					for ifo in cls.responses:
+						Fplus, Fcross = lal.ComputeDetAMResponse(cls.responses[ifo], RA, DEC, PSI, GMST)
 						phase[ifo][cnt] = -numpy.arctan2(Fcross * hcross, Fplus * hplus)
 						deff[ifo][cnt] = D / ((Fplus * hplus)**2 + (Fcross * hcross)**2)**0.5
-						time[ifo][cnt] = lal.TimeDelayFromEarthCenter(self.locations[ifo], RA, DEC, T)
+						time[ifo][cnt] = lal.TimeDelayFromEarthCenter(cls.locations[ifo], RA, DEC, T)
 					cnt += 1
 
 		print "\n...done"
@@ -1144,3 +1144,110 @@ class InspiralExtrinsics(object):
 		D2 = numpy.dot(D,D)
 		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix] / self.norm
 
+
+class p_of_instruments_given_horizons(object):
+	def __init__(self, instruments = ("H1", "L1", "V1"), snr_thresh = 4., nbins = 41, hmin = 0.05, hmax = 20.0, histograms = None):
+		self.instruments = tuple(sorted(list(instruments)))
+		self.snr_thresh = snr_thresh
+		self.nbins = nbins
+		self.hmin = hmin
+		self.hmax = hmax
+		# NOTE should be sorted
+
+		if histograms is not None:
+			self.histograms = histograms
+		else:
+			combos = inspiral_extrinsics.InspiralExtrinsics.instrument_combos(self.instruments, min_instruments = 1)
+			self.histograms = {}
+			bins = []
+			for i in range(len(self.instruments) - 1):
+				bins.append(rate.LogarithmicBins(self.hmin, self.hmax, self.nbins))
+			for combo in combos:
+				print combo
+				self.histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
+
+			_, _, deff = inspiral_extrinsics.InspiralExtrinsics.tile(NSIDE = 8, NANGLE = 17)
+			alldeff = []
+			for v in deff.values():
+				alldeff.extend(v)
+			mindeff = min(alldeff)
+			maxdeff = max(alldeff)
+			print mindeff, maxdeff
+
+			for horizontuple in itertools.product(*[b.centres() for b in bins]):
+				horizondict = {}
+				# NOTE by defn the first instrument in alpha order will always have a horizon of 1
+				horizondict[self.instruments[0]] = 1.0
+				for i, ifo in enumerate(self.instruments[1:]):
+					horizondict[ifo] = horizontuple[i]
+				snrs = {}
+				snrs_above_thresh = {}
+				snrs_below_thresh = {}
+				prob = []
+				for cnt, ifo in enumerate(horizondict):
+					# FIXME remember to carefully comment this logic
+					LOW = self.hmin * 8. / self.snr_thresh / maxdeff
+					HIGH = max(horizontuple + (1,)) * 8. / self.snr_thresh / mindeff
+					for D in numpy.linspace(LOW, HIGH, 200):
+						#blah = 8 * horizondict[ifo] / (D * deff[ifo])
+						#print ifo, len(blah), D, 8 * horizondict[ifo], len(blah[blah > 4])
+						snrs.setdefault(ifo,[]).extend(8 * horizondict[ifo] / (D * deff[ifo]))
+						if cnt == 0:
+							prob.extend([D**2] * len(deff[ifo]))
+					snrs[ifo] = stats.ncx2.rvs(2, numpy.array(snrs[ifo])**2)**.5
+					snrs_above_thresh[ifo] = snrs[ifo] >= self.snr_thresh
+					snrs_below_thresh[ifo] = snrs[ifo] < self.snr_thresh
+					print horizontuple, ifo, len(snrs_above_thresh[ifo][snrs_above_thresh[ifo]])
+					prob = numpy.array(prob)
+				total = 0.
+				for combo in combos:
+					for cnt, ifo in enumerate(combo):
+						if cnt == 0:
+							must_be_above = snrs_above_thresh[ifo].copy()
+						else:
+							must_be_above &= snrs_above_thresh[ifo]
+					# the ones above thresh must be accompanied with the compliment to this combo being below thresh
+					for ifo in set(self.instruments) - set(combo):
+						must_be_above &= snrs_below_thresh[ifo]
+					# sum up the prob
+					count = sum(prob[must_be_above])
+					self.histograms[combo][horizontuple] += count
+					total += count
+				for I in self.histograms:
+					self.histograms[I][horizontuple] /= total
+					print horizontuple, I, self.histograms[I][horizontuple]
+
+	def __call__(self, instruments, horizon_distances):
+		H = [horizon_distances[k] for k in sorted(horizon_distances)]
+		return self.histograms[tuple(sorted(instruments))][[h / H[0] for h in H[1:]]]
+
+	def to_hdf5(self, fname):
+		f = h5py.File(fname, "w")
+		grp = f.create_group("gstlal_p_of_instruments")
+		grp.attrs["snr_thresh"] = self.snr_thresh
+		grp.attrs["hmin"] = self.hmin
+		grp.attrs["hmax"] = self.hmax
+		grp.attrs["nbins"] = self.nbins
+		grp.attrs["instruments"] = ",".join(self.instruments)
+		for combo in self.histograms:
+			grp.create_dataset(",".join(combo), data = self.histograms[combo].array, compression="gzip")
+		f.close()
+
+	@staticmethod
+	def from_hdf5(fname):
+		f = h5py.File(fname, "r")
+		grp = f["gstlal_p_of_instruments"]
+		snr_thresh = grp.attrs["snr_thresh"]
+		hmin = grp.attrs["hmin"]
+		hmax = grp.attrs["hmax"]
+		nbins = grp.attrs["nbins"]
+		instruments = tuple(sorted(grp.attrs["instruments"].split(",")))
+		histograms = {}
+		bins = []
+		for i in range(len(instruments) - 1):
+			bins.append(rate.LogarithmicBins(hmin, hmax, nbins))
+		for combo in inspiral_extrinsics.InspiralExtrinsics.instrument_combos(instruments, min_instruments = 1):
+			histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
+			histograms[combo].array[:] = numpy.array(grp[",".join(combo)])[:]
+		f.close()
+		return p_of_instruments_given_horizons(instruments = instruments, snr_thresh = snr_thresh, nbins = nbins, hmin = hmin, hmax = hmax, histograms = histograms)
