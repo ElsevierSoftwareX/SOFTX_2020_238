@@ -944,7 +944,14 @@ class InspiralExtrinsics(object):
 	def __init__(self):
 		DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
 		self.TimePhaseSNR = TimePhaseSNR.from_hdf5(DEFAULT_FILENAME)
+		self.p_of_ifos = {}
+		self.p_of_ifos[("H1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1_p_of_instruments_given_H_d.h5"))
 
+	def p_of_instruments_given_horizons(self, instruments, horizons):
+		horizons = dict((k,v) for k,v in horizons.items() if v != 0)
+		on_ifos = tuple(sorted(horizons.keys()))
+		print self.p_of_ifos
+		return self.p_of_ifos[on_ifos](instruments, horizons)
 
 def chunker(seq, size):
 	return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
@@ -1164,6 +1171,10 @@ class p_of_instruments_given_horizons(object):
 
 		if histograms is not None:
 			self.histograms = histograms
+			self.first_center = histograms.values()[0].centres()[0][0]
+			self.last_center = histograms.values()[0].centres()[0][-1]
+			for combo in histograms:
+				histograms[combo] = rate.InterpBinnedArray(histograms[combo])
 		else:
 			combos = TimePhaseSNR.instrument_combos(self.instruments, min_instruments = 1)
 			self.histograms = {}
@@ -1174,6 +1185,8 @@ class p_of_instruments_given_horizons(object):
 				print combo
 				self.histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
 
+			self.first_center = histograms.values()[0].centres()[0][0]
+			self.last_center = histograms.values()[0].centres()[0][-1]
 			_, _, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
 			alldeff = []
 			for v in deff.values():
@@ -1224,10 +1237,11 @@ class p_of_instruments_given_horizons(object):
 				for I in self.histograms:
 					self.histograms[I][horizontuple] /= total
 					print horizontuple, I, self.histograms[I][horizontuple]
+					self.histograms[I] = rate.InterpBinnedArray(histograms[I])
 
 	def __call__(self, instruments, horizon_distances):
 		H = [horizon_distances[k] for k in sorted(horizon_distances)]
-		return self.histograms[tuple(sorted(instruments))][[h / H[0] for h in H[1:]]]
+		return self.histograms[tuple(sorted(instruments))]([min(max(h / H[0], self.first_center), self.last_center) for h in H[1:]])
 
 	def to_hdf5(self, fname):
 		f = h5py.File(fname, "w")
