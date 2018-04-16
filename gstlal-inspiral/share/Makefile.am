@@ -1,5 +1,7 @@
 dist_pkgdata_DATA = \
 	de_calc_likelihood.sql \
+	H1L1_p_of_instruments_given_H_d.h5 \
+	H1L1V1_p_of_instruments_given_H_d.h5 \
 	inj_simplify_and_cluster.sql \
 	inspiral_dtdphi_pdf.h5 \
 	inspiral_snr_pdf.xml.gz \
