@@ -945,12 +945,22 @@ class InspiralExtrinsics(object):
 		DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
 		self.TimePhaseSNR = TimePhaseSNR.from_hdf5(DEFAULT_FILENAME)
 		self.p_of_ifos = {}
+		# FIXME these need to be renormalized based on a
+		# min_instruments which this class will need to take as a
+		# parameter
+		self.p_of_ifos[("H1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1V1_p_of_instruments_given_H_d.h5"))
 		self.p_of_ifos[("H1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1_p_of_instruments_given_H_d.h5"))
+		self.p_of_ifos[("H1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1V1_p_of_instruments_given_H_d.h5"))
+		self.p_of_ifos[("L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "L1V1_p_of_instruments_given_H_d.h5"))
 
 	def p_of_instruments_given_horizons(self, instruments, horizons):
 		horizons = dict((k,v) for k,v in horizons.items() if v != 0)
+		# if only one instrument is on the probability is 1.0
+		if set(horizons) & set(instruments) != set(instruments):
+			raise ValueError("A trigger exists for a detector with zero horizon distance")
+		if len(horizons) == 1:
+			return 1.0
 		on_ifos = tuple(sorted(horizons.keys()))
-		print self.p_of_ifos
 		return self.p_of_ifos[on_ifos](instruments, horizons)
 
 def chunker(seq, size):
@@ -1241,7 +1251,7 @@ class p_of_instruments_given_horizons(object):
 
 	def __call__(self, instruments, horizon_distances):
 		H = [horizon_distances[k] for k in sorted(horizon_distances)]
-		return self.histograms[tuple(sorted(instruments))]([min(max(h / H[0], self.first_center), self.last_center) for h in H[1:]])
+		return self.histograms[tuple(sorted(instruments))](*[min(max(h / H[0], self.first_center), self.last_center) for h in H[1:]])
 
 	def to_hdf5(self, fname):
 		f = h5py.File(fname, "w")
