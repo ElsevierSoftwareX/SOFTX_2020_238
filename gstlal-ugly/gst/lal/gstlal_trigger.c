@@ -462,6 +462,7 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 {
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
+	gsl_error_handler_t *old_gsl_error_handler;
 	union {
 		float complex * as_complex;
 		double complex * as_double_complex;
@@ -472,7 +473,10 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 	element->maxdata->thresh = element->snr_thresh;
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 	gst_audioadapter_copy_samples(element->adapter, element->data, copysamps, NULL, NULL);
-	
+
+	/* turn off error handling for interpolation */
+	old_gsl_error_handler=gsl_set_error_handler_off();
+
 	/* put the data pointer one pad length in */
 	if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 		dataptr.as_complex = ((float complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
@@ -486,6 +490,9 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 		}
 	else
 		g_assert_not_reached();
+
+	/* turn error handling back on */
+	gsl_set_error_handler(old_gsl_error_handler);
 
 	/* compute \chi^2 values if we can */
 	if (element->autocorrelation_matrix) {
