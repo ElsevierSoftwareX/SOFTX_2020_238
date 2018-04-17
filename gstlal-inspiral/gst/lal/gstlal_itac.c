@@ -83,6 +83,7 @@
 #include <gst/controller/controller.h>
 #include <math.h>
 #include <string.h>
+#include <gsl/gsl_errno.h>
 
 /*
  * our own stuff
@@ -556,16 +557,22 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 {
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
+	gsl_error_handler_t *old_gsl_error_handler;
 	union {
 		float complex * as_complex;
 		double complex * as_double_complex;
 		void * as_void;
 		} dataptr;
 
+
 	/* make sure the snr threshold is up-to-date */
 	element->maxdata->thresh = element->snr_thresh;
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 	gst_audioadapter_copy_samples(element->adapter, element->data, copysamps, NULL, NULL);
+
+
+	/*AEP- 180417 Turning XLAL Errors off*/
+	old_gsl_error_handler=gsl_set_error_handler_off();
 	
 	/* put the data pointer one pad length in */
 	if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
@@ -580,6 +587,10 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		}
 	else
 		g_assert_not_reached();
+
+	/*AEP- 180417 Turning XLAL Errors back on*/
+	gsl_set_error_handler(old_gsl_error_handler);
+
 
 	/* compute \chi^2 values if we can */
 	if (element->autocorrelation_matrix) {
