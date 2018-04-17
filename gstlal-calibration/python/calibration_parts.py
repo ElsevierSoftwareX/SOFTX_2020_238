@@ -164,9 +164,9 @@ def demodulate(pipeline, head, freq, td, caps, integration_samples, delay, chop_
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
 	head = mkresample(pipeline, head, 5, True, caps)
-	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td, latency = delay)
 	if chop_length != 0:
 		head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", chop_length = chop_length)
+	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td, latency = delay)
 
 	return head
 
@@ -213,12 +213,16 @@ def remove_lines_with_witness(pipeline, signal, witness, freq, compute_rate = 16
 		# Find amplitude and phase of line in witness channel
 		line_in_witness = pipeparts.mkgeneric(pipeline, witness, "lal_demodulate", line_frequency = f)
 		line_in_witness = mkresample(pipeline, line_in_witness, 5, zero_latency, "audio/x-raw,rate=%d" % compute_rate)
+		if latency_samples > integration_samples:
+			line_in_witness = pipeparts.mkgeneric(pipeline, line_in_witness, "lal_insertgap", chop_length = 1000000000 * (latency_samples - integration_samples) / compute_rate)
 		line_in_witness = mkcomplexfirbank(pipeline, line_in_witness, latency = latency_samples, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
 		line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
 
 		# Find amplitude and phase of line in signal
 		line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = f)
 		line_in_signal = mkresample(pipeline, line_in_signal, 5, zero_latency, "audio/x-raw,rate=%d" % compute_rate)
+		if latency_samples > integration_samples:
+			line_in_signal = pipeparts.mkgeneric(pipeline, line_in_signal, "lal_insertgap", chop_length = 1000000000 * (latency_samples - integration_samples) / compute_rate)
 		line_in_signal = mkcomplexfirbank(pipeline, line_in_signal, latency = latency_samples, fir_matrix = [numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = True)
 
 		# Find transfer function between witness channel and signal at this frequency
@@ -230,15 +234,17 @@ def remove_lines_with_witness(pipeline, signal, witness, freq, compute_rate = 16
 		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = N_median, avg_array_size = N_avg, default_to_median = True)
 
 		# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
-		reconstructed_line_at_signal = mkmultiplier(pipeline, list_srcs(tf_at_f, line_in_witness))
-		reconstructed_line_at_signal = mkresample(pipeline, reconstructed_line_at_signal, 3, False, "audio/x-raw,rate=%d" % rate_out)
-		reconstructed_line_at_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_at_signal, "lal_demodulate", line_frequency = -1.0 * f, prefactor_real = -2.0)
-		reconstructed_line_at_signal, imag = split_into_real(pipeline, reconstructed_line_at_signal)
+		reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tf_at_f, line_in_witness))
+		reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, 3, False, "audio/x-raw,rate=%d" % rate_out)
+		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * f, prefactor_real = -2.0)
+		reconstructed_line_in_signal, imag = split_into_real(pipeline, reconstructed_line_in_signal)
 		pipeparts.mkfakesink(pipeline, imag)
 
-		signal_minus_lines.append(reconstructed_line_at_signal)
+		signal_minus_lines.append(reconstructed_line_in_signal)
 
-	return mkadder(pipeline, tuple(signal_minus_lines))
+	clean_signal = mkadder(pipeline, tuple(signal_minus_lines))
+
+	return clean_signal
 
 def removeDC(pipeline, head, caps):
 	head = pipeparts.mktee(pipeline, head)
@@ -727,11 +733,9 @@ def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_n
 def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, update_samples, fir_length, frequency_resolution, obsready = None, filename = None):
 
 	#
-	# Note: this function can cause pipelines to lock up. Adding queues does not seem to help.
-	# What does seem to help is one of two things: either replace lal_transferfunction with
-	# another sink element, or be sure to give it inputs that feed into this function before
-	# going anywhere else (e.g., if there is a tee, hook this function to the tee before
-	# anything else.
+	# Use witness channels that monitor the environment to remove environmental noise
+	# from a signal of interest.  This function accounts for potential correlation
+	# between witness channels.
 	#
 
 	default_fir_filter = numpy.zeros(fir_length)

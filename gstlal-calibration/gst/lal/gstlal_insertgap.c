@@ -492,13 +492,19 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		if(element->t0 == GST_CLOCK_TIME_NONE)
 			element->t0 = GST_BUFFER_PTS(sinkbuf) + element->chop_length;
 
-		/* If we are throwing away any initial data, do it now */
-		if(GST_BUFFER_PTS(sinkbuf) + GST_BUFFER_DURATION(sinkbuf) < element->t0) {
+		/* If we are throwing away any initial data, do it now, and send a zero-length buffer downstream to let other elements know when to expect the first buffer */
+		if(element->chop_length && GST_BUFFER_PTS(sinkbuf) + GST_BUFFER_DURATION(sinkbuf) <= element->t0) {
+			GstBuffer *srcbuf = gst_buffer_new();
+			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + gst_util_uint64_scale_round(element->t0 - GST_BUFFER_PTS(sinkbuf), (guint64) element->rate, 1000000000);
+			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf);
+			GST_BUFFER_PTS(srcbuf) = element->t0;
+			GST_BUFFER_DURATION(srcbuf) = 0;
+			result = gst_pad_push(element->srcpad, srcbuf);
 			gst_buffer_unref(sinkbuf);
 			goto done;
 		} else if(GST_BUFFER_PTS(sinkbuf) < element->t0) {
-			guint64 size_removed = element->unit_size * gst_util_uint64_scale_int_round(element->t0 - GST_BUFFER_PTS(sinkbuf), element->rate, 1000000000);
-			guint64 time_removed = gst_util_uint64_scale_int_round(size_removed / element->unit_size, 1000000000, element->rate);
+			guint64 size_removed = element->unit_size * gst_util_uint64_scale_round(element->t0 - GST_BUFFER_PTS(sinkbuf), (guint64) element->rate, 1000000000);
+			guint64 time_removed = gst_util_uint64_scale_round(size_removed / element->unit_size, 1000000000, (guint64) element->rate);
 			guint64 newsize = element->unit_size * (GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf)) - size_removed;
 			gst_buffer_resize(sinkbuf, size_removed, newsize);
 			GST_BUFFER_OFFSET(sinkbuf) = GST_BUFFER_OFFSET(sinkbuf) + size_removed / element->unit_size;
@@ -560,7 +566,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	GstClockTime sinkbuf_pts = GST_BUFFER_PTS(sinkbuf);
 
 	g_assert_cmpuint(inmap.size % element->unit_size, ==, 0);
-	g_assert_cmpuint((sinkbuf_offset_end - sinkbuf_offset), ==, inmap.size / element->unit_size); /*sanity checks */
+	if(!element->chop_length || sinkbuf_pts > element->t0)
+		g_assert_cmpuint((sinkbuf_offset_end - sinkbuf_offset), ==, inmap.size / element->unit_size); /* sanity checks */
 
 	/* outdata will be filled with the data that goes on the outgoing buffer(s) */
 	void *outdata;

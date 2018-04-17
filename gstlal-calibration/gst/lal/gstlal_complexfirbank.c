@@ -301,8 +301,14 @@ static void set_metadata(GSTLALComplexFIRBank *element, GstBuffer *buf, guint64 
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)) - GST_BUFFER_PTS(buf);
+	if(GST_BUFFER_OFFSET(buf) >= element->offset0)
+		GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
+	else
+		GST_BUFFER_PTS(buf) = element->t0 - gst_util_uint64_scale_int_round(element->offset0 - GST_BUFFER_OFFSET(buf), GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
+	if(GST_BUFFER_OFFSET_END(buf) >= element->offset0)
+		GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)) - GST_BUFFER_PTS(buf);
+	else
+		GST_BUFFER_DURATION(buf) = element->t0 - gst_util_uint64_scale_int_round(element->offset0 - GST_BUFFER_OFFSET_END(buf), GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)) - GST_BUFFER_PTS(buf);
 	if(G_UNLIKELY(element->need_discont)) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -1758,7 +1764,7 @@ static GstFlowReturn do_new_segment(GSTLALComplexFIRBank *element)
 	case GST_FORMAT_TIME:
 		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position), GST_AUDIO_INFO_RATE(&element->audio_info), element->latency);
 		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_AUDIO_INFO_RATE(&element->audio_info), GST_SECOND);
-		segment->start += samples_lost - element->latency;
+		segment->start += element->offset0 + samples_lost - element->latency;
 		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
 		if(segment->stop != GST_CLOCK_TIME_NONE) {
 			segment->stop = gst_util_uint64_scale_int_round(segment->stop, GST_AUDIO_INFO_RATE(&element->audio_info), GST_SECOND);
@@ -2143,6 +2149,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * new segment events */
 
 	if(G_UNLIKELY(element->need_new_segment)) {
+		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		do_new_segment(element);
 		element->need_new_segment = FALSE;
 	}
