@@ -30,8 +30,8 @@ gstlal_bank.xml.gz : H1L1-REFERENCE_PSD_HARMONIC_MEAN_FIXED_3-1164686417-32400.x
 		--num-banks $(NUMBANKS) \
 		--samples-max-256 2048 \
 		--samples-min 2048 \
-		--condor-command 'accounting_group = ligo.prod.o2.cbc.em.gstlalonline' \
-		--condor-command 'accounting_group_user = chad.hanna'
+		--condor-command 'accounting_group = ligo.dev.o3.cbc.em.gstlalonline' \
+		--condor-command 'accounting_group_user = kipp.cannon'
 
 bank.dag : H1_bank.dag L1_bank.dag
 	cat $^ > bank.dag
