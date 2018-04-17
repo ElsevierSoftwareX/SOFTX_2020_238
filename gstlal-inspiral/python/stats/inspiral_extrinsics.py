@@ -941,7 +941,7 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 
 
 class InspiralExtrinsics(object):
-	def __init__(self):
+	def __init__(self, min_instruments = 1):
 		DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
 		self.TimePhaseSNR = TimePhaseSNR.from_hdf5(DEFAULT_FILENAME)
 		self.p_of_ifos = {}
@@ -952,6 +952,18 @@ class InspiralExtrinsics(object):
 		self.p_of_ifos[("H1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1_p_of_instruments_given_H_d.h5"))
 		self.p_of_ifos[("H1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1V1_p_of_instruments_given_H_d.h5"))
 		self.p_of_ifos[("L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "L1V1_p_of_instruments_given_H_d.h5"))
+		self.min_instruments = min_instruments
+		# remove combinations less than one instrument and renormalize
+		for pofI in self.p_of_ifos.values():
+			total = numpy.zeros(pofI.histograms.values()[0].array.shape)
+			for combo in list(pofI.histograms.keys()):
+				if len(combo) < self.min_instruments:
+					del pofI.histograms[combo]
+				else:
+					total += pofI.histograms[combo].array
+			for combo in pofI.histograms:
+				pofI.histograms[combo].array /= total
+			pofI.mkinterp()
 
 	def p_of_instruments_given_horizons(self, instruments, horizons):
 		horizons = dict((k,v) for k,v in horizons.items() if v != 0)
@@ -1183,8 +1195,8 @@ class p_of_instruments_given_horizons(object):
 			self.histograms = histograms
 			self.first_center = histograms.values()[0].centres()[0][0]
 			self.last_center = histograms.values()[0].centres()[0][-1]
-			for combo in histograms:
-				histograms[combo] = rate.InterpBinnedArray(histograms[combo])
+			#for combo in histograms:
+			#	histograms[combo] = rate.InterpBinnedArray(histograms[combo])
 		else:
 			combos = TimePhaseSNR.instrument_combos(self.instruments, min_instruments = 1)
 			self.histograms = {}
@@ -1246,12 +1258,18 @@ class p_of_instruments_given_horizons(object):
 					total += count
 				for I in self.histograms:
 					self.histograms[I][horizontuple] /= total
-					print horizontuple, I, self.histograms[I][horizontuple]
-					self.histograms[I] = rate.InterpBinnedArray(histograms[I])
+					#print horizontuple, I, self.histograms[I][horizontuple]
+					#self.histograms[I] = rate.InterpBinnedArray(histograms[I])
+		self.mkinterp()
+
+	def mkinterp(self):
+		self.interps = {}
+		for I in self.histograms:
+			self.interps[I] = rate.InterpBinnedArray(self.histograms[I])
 
 	def __call__(self, instruments, horizon_distances):
 		H = [horizon_distances[k] for k in sorted(horizon_distances)]
-		return self.histograms[tuple(sorted(instruments))](*[min(max(h / H[0], self.first_center), self.last_center) for h in H[1:]])
+		return self.interps[tuple(sorted(instruments))](*[min(max(h / H[0], self.first_center), self.last_center) for h in H[1:]])
 
 	def to_hdf5(self, fname):
 		f = h5py.File(fname, "w")
