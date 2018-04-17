@@ -1764,7 +1764,11 @@ static GstFlowReturn do_new_segment(GSTLALComplexFIRBank *element)
 	case GST_FORMAT_TIME:
 		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")", GST_TIME_SECONDS_ARGS(segment->start), GST_TIME_SECONDS_ARGS(segment->stop), GST_TIME_SECONDS_ARGS(segment->position), GST_AUDIO_INFO_RATE(&element->audio_info), element->latency);
 		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_AUDIO_INFO_RATE(&element->audio_info), GST_SECOND);
-		segment->start += samples_lost - element->latency;
+		segment->start += samples_lost;
+		if((gint64) segment->start >= element->latency)
+			segment->start -= element->latency;
+		else
+			segment->start = 0;
 		segment->start = gst_util_uint64_scale_int_round(segment->start, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
 		if(segment->stop != GST_CLOCK_TIME_NONE) {
 			segment->stop = gst_util_uint64_scale_int_round(segment->stop, GST_AUDIO_INFO_RATE(&element->audio_info), GST_SECOND);
