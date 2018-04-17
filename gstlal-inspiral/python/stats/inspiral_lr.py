@@ -532,6 +532,52 @@ class DatalessLnSignalDensity(LnSignalDensity):
 		raise NotImplementedError
 
 
+class OnlineFrakensteinLnSignalDensity(LnSignalDensity):
+	"""
+	Version of LnSignalDensity with horizon distance history spliced in
+	from another instance.  Used to solve a chicken-or-egg problem and
+	assign ranking statistic values in an aonline anlysis.  NOTE:  the
+	horizon history is not copied from the donor, instances of this
+	class hold a reference to the donor's data, so as it is modified
+	those modifications are immediately reflected here.
+
+	For safety's sake, instances cannot be written to or read from
+	files, cannot be marginalized together with other instances, nor
+	accept updates from new data.
+	"""
+	@classmethod
+	def splice(cls, src, Dh_donor):
+		self = cls(src.template_ids, src.instruments, src.delta_t, src.min_instruments)
+		for key, lnpdf in self.densities.items():
+			self.densities[key] = lnpdf.copy()
+		# NOTE:  not a copy.  we hold a reference to the donor's
+		# data so that as it is updated, we get the updates.
+		self.horizon_history = Dh_donor.horizon_history
+		return self
+
+	def __iadd__(self, other):
+		raise NotImplementedError
+
+	def increment(self, *args, **kwargs):
+		raise NotImplementedError
+
+	def copy(self):
+		raise NotImplementedError
+
+	def to_xml(self, name):
+		# I/O not permitted:  the on-disk version would be
+		# indistinguishable from a real ranking statistic and could
+		# lead to accidents
+		raise NotImplementedError
+
+	@classmethod
+	def from_xml(cls, xml, name):
+		# I/O not permitted:  the on-disk version would be
+		# indistinguishable from a real ranking statistic and could
+		# lead to accidents
+		raise NotImplementedError
+
+
 #
 # =============================================================================
 #
@@ -843,6 +889,52 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 	def random_params(self):
 		# won't work
 		raise NotImplementedError
+
+	def __iadd__(self, other):
+		raise NotImplementedError
+
+	def increment(self, *args, **kwargs):
+		raise NotImplementedError
+
+	def copy(self):
+		raise NotImplementedError
+
+	def to_xml(self, name):
+		# I/O not permitted:  the on-disk version would be
+		# indistinguishable from a real ranking statistic and could
+		# lead to accidents
+		raise NotImplementedError
+
+	@classmethod
+	def from_xml(cls, xml, name):
+		# I/O not permitted:  the on-disk version would be
+		# indistinguishable from a real ranking statistic and could
+		# lead to accidents
+		raise NotImplementedError
+
+
+class OnlineFrakensteinLnNoiseDensity(LnNoiseDensity):
+	"""
+	Version of LnNoiseDensity with trigger rate data spliced in from
+	another instance.  Used to solve a chicken-or-egg problem and
+	assign ranking statistic values in an aonline anlysis.  NOTE:  the
+	trigger rate data is not copied from the donor, instances of this
+	class hold a reference to the donor's data, so as it is modified
+	those modifications are immediately reflected here.
+
+	For safety's sake, instances cannot be written to or read from
+	files, cannot be marginalized together with other instances, nor
+	accept updates from new data.
+	"""
+	@classmethod
+	def splice(cls, src, rates_donor):
+		self = cls(src.template_ids, src.instruments, src.delta_t, src.min_instruments)
+		for key, lnpdf in self.densities.items():
+			self.densities[key] = lnpdf.copy()
+		# NOTE:  not a copy.  we hold a reference to the donor's
+		# data so that as it is updated, we get the updates.
+		self.triggerrates = rates_donor.triggerrates
+		return self
 
 	def __iadd__(self, other):
 		raise NotImplementedError

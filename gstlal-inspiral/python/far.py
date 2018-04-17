@@ -215,6 +215,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		self.numerator.finish()
 		self.denominator.finish()
 		self.zerolag.finish()
+		return self
 
 	@classmethod
 	def get_xml_root(cls, xml, name):
@@ -270,6 +271,35 @@ class DatalessRankingStat(RankingStat):
 		# no zero-lag
 		self.numerator.finish()
 		self.denominator.finish()
+		return self
+
+
+class OnlineFrakensteinRankingStat(RankingStat):
+	"""
+	Version of RankingStat with horizon distance history and trigger
+	rate history spliced in from another instance.  Used to solve a
+	chicken-or-egg problem and assign ranking statistic values in an
+	aonline anlysis.  NOTE:  the donor data is not copied, instances of
+	this class hold references to the donor's data, so as it is
+	modified those modifications are immediately reflected here.
+
+	For safety's sake, instances cannot be written to or read from
+	files, cannot be marginalized together with other instances, nor
+	accept updates from new data.
+	"""
+	# NOTE:  .__iadd__(), .copy() and I/O are forbidden, but these
+	# operations will be blocked by the .numerator and .denominator
+	# instances, no need to add extra code here to prevent these
+	# operations
+	def __init__(self, src, donor):
+		self.numerator = inspiral_lr.OnlineFrakensteinLnSignalDensity.splice(src.numerator, donor.numerator)
+		self.denominator = inspiral_lr.OnlineFrakensteinLnNoiseDensity.splice(src.denominator, donor.denominator)
+
+	def finish(self):
+		# no zero-lag
+		self.numerator.finish()
+		self.denominator.finish()
+		return self
 
 
 #
@@ -360,6 +390,13 @@ class RankingStatPDF(object):
 		if rankingstat.template_ids is None:
 			raise ValueError("cannot be initialized from a RankingStat that is not for a specific set of templates")
 		self.template_ids = rankingstat.template_ids
+
+		#
+		# bailout used by codes that want all-zeros histograms
+		#
+
+		if not nsamples:
+			return
 
 		#
 		# run importance-weighted random sampling to populate

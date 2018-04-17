@@ -470,7 +470,7 @@ class CoincsDocument(object):
 
 
 class Data(object):
-	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_filename = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
+	def __init__(self, coincs_document, pipeline, rankingstat, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, gracedb_far_threshold = None, gracedb_min_instruments = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", gracedb_service_url = "https://gracedb.ligo.org/api/", upload_auxiliary_data_to_gracedb = True, verbose = False):
 		#
 		# initialize
 		#
@@ -509,8 +509,8 @@ class Data(object):
 		bottle.route("/likelihood_history.txt")(self.web_get_likelihood_history)
 		bottle.route("/far_history.txt")(self.web_get_far_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
-		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
-		bottle.route("/zerolag_rankingstatpdf.xml")(self.web_get_zero_lag_ranking_stats_file)
+		bottle.route("/rankingstat.xml")(self.web_get_rankingstat)
+		bottle.route("/zerolag_rankingstatpdf.xml")(self.web_get_zerolag_rankingstatpdf)
 		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
 		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
 		bottle.route("/gracedb_min_instruments.txt", method = "GET")(self.web_get_gracedb_min_instruments)
@@ -551,19 +551,38 @@ class Data(object):
 		# statistics they've collected internally.
 		# ranking_stat_input_url is not used when running offline.
 		#
-		# ranking_stat_output_url provides the name of the file to which the
-		# internally-collected ranking statistic information is to
-		# be written whenever output is written to disk.  if set to
-		# None, then only the trigger file will be written, no
-		# ranking statistic information will be written.  normally
-		# it is set to a non-null value, but injection jobs might
-		# be configured to disable ranking statistic output since
-		# they produce nonsense.
+		# ranking_stat_output_url provides the name of the file to
+		# which the internally-collected ranking statistic
+		# information is to be written whenever output is written
+		# to disk.  if set to None, then only the trigger file will
+		# be written, no ranking statistic information will be
+		# written.  normally it is set to a non-null value, but
+		# injection jobs might be configured to disable ranking
+		# statistic output since they produce nonsense.
 		#
 
-		self.ranking_stat_output_url = ranking_stat_output_url
 		self.ranking_stat_input_url = ranking_stat_input_url
+		self.ranking_stat_output_url = ranking_stat_output_url
 		self.rankingstat = rankingstat
+
+		#
+		# if we have been supplied with external ranking statistic
+		# information then use it to enable ranking statistic
+		# assignment in streamthinca.  otherwise, if we have not
+		# been and yet we have been asked to apply the min log L
+		# cut anyway then enable ranking statistic assignment using
+		# the dataless ranking statistic variant
+		#
+
+		if self.ranking_stat_input_url is not None:
+			self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
+		elif min_log_L is not None:
+			self.stream_thinca.rankingstat = far.DatalessRankingStat(
+				template_ids = rankingstat.template_ids,
+				instruments = rankingstat.instruments,
+				min_instruments = rankingstat.min_instruments,
+				delta_t = rankingstat.delta_t
+			).finish()
 
 		#
 		# zero_lag_ranking_stats is a RankingStatPDF object that is
@@ -572,14 +591,22 @@ class Data(object):
 		# to implement the extinction model for low-significance
 		# events during online running but otherwise is optional.
 		#
+		# FIXME:  if the file does not exist or is not readable,
+		# the code silently initializes a new, empty, histogram.
+		# it would be better to determine whether or not the file
+		# is required and fail when it is missing
+		#
 
-		if zerolag_rankingstatpdf_filename is None:
-			self.zerolag_rankingstatpdf = None
-		else:
-			_, self.zerolag_rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(zerolag_rankingstatpdf_filename, verbose = verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+		if zerolag_rankingstatpdf_url is not None and os.access(ligolw_utils.local_path_from_url(zerolag_rankingstatpdf_url), os.R_OK):
+			_, self.zerolag_rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_url(zerolag_rankingstatpdf_url, verbose = verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
 			if self.zerolag_rankingstatpdf is None:
-				raise ValueError("\"%s\" does not contain ranking statistic PDF data" % zerolag_rankingstatpdf_filename)
-		self.zerolag_rankingstatpdf_filename = zerolag_rankingstatpdf_filename
+				raise ValueError("\"%s\" does not contain ranking statistic PDF data" % zerolag_rankingstatpdf_url)
+		elif zerolag_rankingstatpdf_url is not None:
+			# initialize an all-zeros set of PDFs
+			self.zerolag_rankingstatpdf = far.RankingStatPDF(rankingstat, nsamples = 0)
+		else:
+			self.zerolag_rankingstatpdf = None
+		self.zerolag_rankingstatpdf_url = zerolag_rankingstatpdf_url
 
 		#
 		# rankingstatpdf contains the RankingStatPDF object (loaded
@@ -593,26 +620,8 @@ class Data(object):
 		# for upload to gracedb, etc.
 		#
 
-		# None to disable
 		self.rankingstatpdf_url = rankingstatpdf_url
-		self.rankingstatpdf = None
-		self.fapfar = None
-
-		#
-		# if we are not in online mode but we need to compute LRs
-		# to apply an LR threshold, then enable LR assignment using
-		# the dataless ranking statistic variant
-		#
-
-		if self.likelihood_snapshot_interval is None and min_log_L is not None:
-			dataless_rankingstat = far.DatalessRankingStat(
-				template_ids = rankingstat.template_ids,
-				instruments = rankingstat.instruments,
-				min_instruments = rankingstat.min_instruments,
-				delta_t = rankingstat.delta_t
-			)
-			dataless_rankingstat.finish()
-			self.stream_thinca.rankingstat = dataless_rankingstat
+		self.load_rankingstat_pdf()
 
 		#
 		# Fun output stuff
@@ -625,6 +634,22 @@ class Data(object):
 		self.far_history = deque(maxlen = 1000)
 		self.ram_history = deque(maxlen = 2)
 		self.ifo_snr_history = dict((instrument, deque(maxlen = 10000)) for instrument in rankingstat.instruments)
+
+	def load_rankingstat_pdf(self):
+		# FIXME:  if the file can't be accessed the code silently
+		# disables FAP/FAR assignment.  need to figure out when
+		# failure is OK and when it's not OK and put a better check
+		# here.
+		if self.rankingstatpdf_url is not None and os.access(ligolw_utils.local_path_from_url(self.rankingstatpdf_url), os.R_OK):
+			_, self.rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.rankingstatpdf_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+			if self.rankingstatpdf is None:
+				raise ValueError("\"%s\" does not contain ranking statistic PDFs" % url)
+			if not self.rankingstat.template_ids <= self.rankingstatpdf.template_ids:
+				raise ValueError("\"%s\" is for the wrong templates")
+			self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())
+		else:
+			self.rankingstatpdf = None
+			self.fapfar = None
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -697,21 +722,6 @@ class Data(object):
 			if self.likelihood_snapshot_interval is not None and (self.likelihood_snapshot_timestamp is None or buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 
-				# if a ranking statistic source url is set,
-				# overwrite rankingstat with its contents.
-				# FIXME There is currently no guarantee
-				# that the reference_likelihood_file on
-				# disk will have updated since the last
-				# snapshot, but for our purpose it should
-				# not have that large of an effect. The
-				# data loaded should never be older than
-				# the snapshot before last
-				if self.ranking_stat_input_url is not None:
-					params_before = self.rankingstat.template_ids, self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t
-					self.rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.ranking_stat_input_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
-					if params_before != (self.rankingstat.template_ids, self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t):
-						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.ranking_stat_input_url)
-
 				# post a checkpoint message.
 				# FIXME:  make sure this triggers
 				# self.snapshot_output_url() to be invoked.
@@ -729,39 +739,27 @@ class Data(object):
 				# overwritten.
 				self.pipeline.get_bus().post(message_new_checkpoint(self.pipeline, timestamp = buf_timestamp.ns()))
 
-				if self.rankingstatpdf_url is not None:
-					# enable streamthinca's likelihood
-					# ratio assignment using our own,
-					# local, parameter distribution
-					# data
-				# FIXME:  this won't work, because this
-				# object only has horizon distance and
-				# trigger rate information up to the
-				# current point in time.  it cannot be used
-				# to rank candidates collected after this
-				# time, which is exactly what we intend to
-				# do with it.  to fix this, I anticipate
-				# writing an "online" variant of the
-				# ranking statistic class that
-				# frankensteins together the snr and \chi^2
-				# densities from one rankingstat instance
-				# with the horizons and trigger rate
-				# densities from another
-					rankingstat = self.rankingstat.copy()
-					rankingstat.finish()
-					self.stream_thinca.rankingstat = rankingstat
+				# if a ranking statistic source url is set
+				# and is not the same as the file to which
+				# we are writing our ranking statistic data
+				# then overwrite rankingstat with its
+				# contents.  the use case is online
+				# injection jobs that need to periodically
+				# grab new ranking statistic data from
+				# their corresponding non-injection partner
+				if self.ranking_stat_input_url is not None and self.ranking_stat_input_url != self.ranking_stat_output_url:
+					params_before = self.rankingstat.template_ids, self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t
+					self.rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.ranking_stat_input_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
+					if params_before != (self.rankingstat.template_ids, self.rankingstat.instruments, self.rankingstat.min_instruments, self.rankingstat.delta_t):
+						raise ValueError("'%s' contains incompatible ranking statistic configuration" % self.ranking_stat_input_url)
 
-					# read the marginalized likelihood
-					# ratio distributions that have
-					# been updated asynchronously and
-					# initialize a FAP/FAR assignment
-					# machine from it.
-					_, self.rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_url(self.rankingstatpdf_url, verbose = self.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
-					if self.rankingstatpdf is None:
-						raise ValueError("\"%s\" does not contain ranking statistic PDFs" % self.rankingstatpdf_url)
-					if not self.rankingstat.template_ids <= self.rankingstatpdf.template_ids:
-						raise ValueError("\"%s\" is for the wrong templates")
-					self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())
+				# update streamthinca's ranking statistic
+				# data
+				self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
+
+				# optionally get updated ranking statistic
+				# PDF data and enable FAP/FAR assignment
+				self.load_rankingstat_pdf()
 
 			# add triggers to trigger rate record.  this needs
 			# to be done without any cuts on coincidence, etc.,
@@ -874,6 +872,9 @@ class Data(object):
 			# we encounter the first trigger whose SNR series
 			# might still be needed, save its index, and start
 			# the search from there next time
+			# FIXME:  could also trim segment and V data from
+			# ranking stat object if ranking_stat_output_url is
+			# not set because the info won't be used
 			discard_boundary = self.stream_thinca.discard_boundary
 			for self.snr_time_series_cleanup_index, event in enumerate(self.coincs_document.sngl_inspiral_table[self.snr_time_series_cleanup_index:], self.snr_time_series_cleanup_index):
 				if event.end >= discard_boundary:
@@ -885,7 +886,7 @@ class Data(object):
 		start, end = int(math.floor(start)), int(math.ceil(end))
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
 
-	def __get_likelihood_xmldoc(self):
+	def __get_rankingstat_xmldoc(self):
 		# generate a coinc parameter distribution document.  NOTE:
 		# likelihood ratio PDFs *are* included if they were present in
 		# the --likelihood-file that was loaded.
@@ -896,15 +897,15 @@ class Data(object):
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
-	def web_get_likelihood_file(self):
+	def web_get_rankingstat(self):
 		with self.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.__get_likelihood_xmldoc(), output)
+			ligolw_utils.write_fileobj(self.__get_rankingstat_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
 
-	def __get_zero_lag_ranking_stats_xmldoc(self):
+	def __get_zerolag_rankingstatpdf_xmldoc(self):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {}, ifos = self.rankingstat.instruments)
@@ -912,10 +913,10 @@ class Data(object):
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
-	def web_get_zero_lag_ranking_stats_file(self):
+	def web_get_zerolag_rankingstatpdf(self):
 		with self.lock:
 			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.__get_zero_lag_ranking_stats_xmldoc(), output)
+			ligolw_utils.write_fileobj(self.__get_zerolag_rankingstatpdf_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
@@ -998,6 +999,10 @@ class Data(object):
 			self.__flush()
 
 	def __do_gracedb_alerts(self, retries = 5, retry_delay = 5.):
+		# sanity check
+		if self.farpfar is None:
+			raise ValueError("gracedb alerts cannot be enabled without fap/far data")
+
 		# no-op short circuit
 		if not self.stream_thinca.last_coincs:
 			return
@@ -1120,7 +1125,7 @@ class Data(object):
 			if self.verbose:
 				print >>sys.stderr, "generating ranking_data.xml.gz ..."
 			fobj = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.__get_likelihood_xmldoc(), fobj, gz = True)
+			ligolw_utils.write_fileobj(self.__get_rankingstat_xmldoc(), fobj, gz = True)
 			message, filename, tag, contents = ("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", fobj.getvalue())
 			del fobj
 			self.__upload_gracedb_aux_data(message, filename, tag, contents, gracedb_ids, retries, gracedb_client)
@@ -1294,14 +1299,14 @@ class Data(object):
 
 	def __write_ranking_stat_url(self, url, description, snapshot = False, verbose = False):
 		# write the ranking statistic file.
-		ligolw_utils.write_url(self.__get_likelihood_xmldoc(), ligolw_utils.local_path_from_url(url), gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		ligolw_utils.write_url(self.__get_rankingstat_xmldoc(), ligolw_utils.local_path_from_url(url), gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 		# Snapshots get their own custom file and path
 		if snapshot:
 			fname = self.T050017_filename(description + '_DISTSTATS', 'xml.gz')
 			shutil.copy(ligolw_utils.local_path_from_url(url), os.path.join(subdir_from_T050017_filename(fname), fname))
 
-	def __write_zero_lag_ranking_stats_file(self, filename, verbose = False):
-		ligolw_utils.write_filename(self.__get_zero_lag_ranking_stats_xmldoc(), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+	def __write_zero_lag_ranking_stat_url(self, url, verbose = False):
+		ligolw_utils.write_url(self.__get_zerolag_rankingstatpdf_xmldoc(), url, gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 	def write_output_url(self, url = None, description = "", verbose = False):
 		with self.lock:
@@ -1321,6 +1326,6 @@ class Data(object):
 			if self.ranking_stat_output_url is not None:
 				self.__write_ranking_stat_url(self.ranking_stat_output_url, description, snapshot = True, verbose = verbose)
 			if self.zerolag_rankingstatpdf is not None:
-				self.__write_zero_lag_ranking_stats_file(self.zerolag_rankingstatpdf_filename, verbose = verbose)
+				self.__write_zero_lag_ranking_stat_url(self.zerolag_rankingstatpdf_url, verbose = verbose)
 			self.coincs_document = coincs_document
 			self.snr_time_series_cleanup_index = 0

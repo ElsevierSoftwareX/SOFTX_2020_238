@@ -148,8 +148,8 @@
 #	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..
 #	+ `--ranking-stat-output` [filename]: Set the name of the file to which to write ranking statistic data collected from triggers (optional).  Can be given more than once.  If given, exactly as many must be provided as there are --svd-bank options and they will be writen to in order.
 #	+ `--ranking-stat-output-cache` [filename]: Provide a cache of ranking statistic output files.  This can be used instead of giving multiple --ranking-stat-output options.  Cannot be combined with --ranking-stat-output.
-#	+ `--ranking-stat-input` [filename]: Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly, and the --min-log-L cut will be applied based on the assigned values.  Can only use with --data-source lvshm or framexmit;  must also set --likelihood-snapshot-interval.
-#	+ `--zerolag-rankingstatpdf-filename` [filename]: Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingStatPDF object.  The counts will be added to the file.  Optional.  Can be given multiple times.
+#	+ `--ranking-stat-input` [filename]: Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly, and the --min-log-L cut will be applied based on the assigned values.  Required when --data-source is lvshm or framexmit;  must also set --likelihood-snapshot-interval.
+#	+ `--zerolag-rankingstat-pdf` [url]: Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file.  This is used to construct the extinction model and set the overall false-alarm rate normalization during online running.  If it does not exist at start-up, a new file will be initialized, otherwise the counts will be added to the file's contents.  Required when --data-source is lvshm or framexmit;  optional otherwise.  If given, exactly as many must be provided as there are --svd-bank options and they will be used in order.
 #	+ `--likelihood-snapshot-interval` [seconds] (float): How often to snapshot candidate and ranking statistic data to disk when running online.
 #	+ `--ranking-stat-pdf` [url]: Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources).
 #	+ `--gracedb-far-threshold` (float): False-alarm rate threshold for gracedb uploads in Hertz (default = do not upload to gracedb).
@@ -297,13 +297,13 @@ def parse_command_line():
 	group.add_option("--coincidence-threshold", metavar = "seconds", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005 s).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	group.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
 	group.add_option("--min-log-L", metavar = "log likelihood ratio", type = "float", help = "Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).  When used without --ranking-stat-input, the cut is decided based on an internal approximate ranking statistic.")
-	group.add_option("--ranking-stat-input", metavar = "url", help = "Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly, and the --min-log-L cut will be applied based on the assigned values.  Can only use with --data-source lvshm or framexmit;  must also set --likelihood-snapshot-interval.")
+	group.add_option("--ranking-stat-input", metavar = "url", help = "Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly, and the --min-log-L cut will be applied based on the assigned values.  Required when --data-source is lvshm or framexmit;  must also set --likelihood-snapshot-interval.")
 	group.add_option("--ranking-stat-output", metavar = "filename", action = "append", default = [], help = "Set the name of the file to which to write ranking statistic data collected from triggers (optional).  Can be given more than once.  If given, exactly as many must be provided as there are --svd-bank options and they will be writen to in order.")
 	group.add_option("--ranking-stat-output-cache", metavar = "filename", help = "Provide a cache of ranking statistic output files.  This can be used instead of giving multiple --ranking-stat-output options.  Cannot be combined with --ranking-stat-output.")
 	group.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to snapshot candidate and ranking statistic data to disk when running online.")
 	group.add_option("--ranking-stat-pdf", metavar = "url", help = "Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources)")
 	group.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (required).")
-	group.add_option("--zerolag-rankingstatpdf-filename", metavar = "filename", action = "append", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file, which must exist at start up and contain a RankingStatPDF object.  The counts will be added to the file.  Optional.  Can be given multiple times.")
+	group.add_option("--zerolag-rankingstat-pdf", metavar = "url", action = "append", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file.  This is used to construct the extinction model and set the overall false-alarm rate normalization during online running.  If it does not exist at start-up, a new file will be initialized, otherwise the counts will be added to the file's contents.  Required when --data-source is lvshm or framexmit;  optional otherwise.  If given, exactly as many must be provided as there are --svd-bank options and they will be used in order.")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "GracedB Options", "Adjust GracedB interaction")
@@ -429,7 +429,7 @@ def parse_command_line():
 
 	if options.data_source in ("lvshm", "framexmit"):
 		missing_options = []
-		for option in ["job_tag", "ranking_stat_pdf"]:
+		for option in ["job_tag", "ranking_stat_input", "ranking_stat_pdf", "zerolag_rankingstat_pdf"]:
 			if getattr(options, option) is None:
 				missing_options.append("--%s" %option.replace("_","-"))
 
@@ -473,10 +473,10 @@ def parse_command_line():
 	elif len(options.ht_gate_threshold) != len(svd_banks):
 		raise ValueError("must supply either none or exactly as many --ht-gate-threshold values options as --svd-bank")
 
-	if not options.zerolag_rankingstatpdf_filename:
-		options.zerolag_rankingstatpdf_filename = [None] * len(svd_banks)
-	elif len(options.zerolag_rankingstatpdf_filename) != len(svd_banks):
-		raise ValueError("must supply either none or exactly as many --zerolag-rankingstatpdf-filename options as --svd-bank")
+	if not options.zerolag_rankingstat_pdf:
+		options.zerolag_rankingstat_pdf = [None] * len(svd_banks)
+	elif len(options.zerolag_rankingstat_pdf) != len(svd_banks):
+		raise ValueError("must supply either none or exactly as many --zerolag-rankingstat-pdf options as --svd-bank")
 
 	if options.min_instruments < 1:
 		raise ValueError("--min-instruments must be >= 1")
@@ -625,7 +625,7 @@ else:
 #
 
 
-for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url, zerolag_rankingstatpdf_filename, ht_gate_threshold) in enumerate(zip(svd_banks, options.output, options.ranking_stat_output, options.zerolag_rankingstatpdf_filename, options.ht_gate_threshold)):
+for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url, zerolag_rankingstat_pdf, ht_gate_threshold) in enumerate(zip(svd_banks, options.output, options.ranking_stat_output, options.zerolag_rankingstat_pdf, options.ht_gate_threshold)):
 	#
 	# Checkpointing only supported for gzip files in offline analysis
 	# FIXME Implement a means by which to check for sqlite file
@@ -766,22 +766,27 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	#
 
 
-	if options.data_source in ("lvshm", "framexmit"):
-		assert ranking_stat_output_url is not None
-		rankingstat, _ = far.parse_likelihood_control_doc(ligolw_utils.load_url(ranking_stat_output_url, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
-		if rankingstat is None:
-			raise ValueError("\"%s\" does not contain parameter distribution data" % ranking_stat_output_url)
-		if rankingstat.delta_t != options.coincidence_threshold:
-			raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (ranking_stat_output_url, rankingstat.denominator.delta_t, options.coincidence_threshold))
-		if rankingstat.min_instruments != options.min_instruments:
-			raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (ranking_stat_output_url, rankingstat.denominator.min_instruments, options.min_instruments))
-		if rankingstat.instruments != all_instruments:
-			raise ValueError("\"%s\" is for %s but we need %s" % (ranking_stat_output_url, ", ".join(sorted(rankingstat.instruments)), ", ".join(sorted(all_instruments))))
-		if rankingstat.template_ids is None:
-			rankingstat.template_ids = template_ids
-		elif rankingstat.template_ids != template_ids:
-			raise ValueError("\"%s\" is for the wrong templates")
-	else:
+	rankingstat = None
+	if options.ranking_stat_input:
+		try:
+			xmldoc = ligolw_utils.load_url(options.ranking_stat_input, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler)
+		except IOError:
+			print >>sys.stderr, "warning:  '%s' not found or cannot be loaded;  will fall back to newly-initialized ranking statistic" % options.ranking_stat_input
+		else:
+			rankingstat, _ = far.parse_likelihood_control_doc(xmldoc)
+			if rankingstat is None:
+				raise ValueError("\"%s\" does not contain parameter distribution data" % options.ranking_stat_input)
+			if rankingstat.delta_t != options.coincidence_threshold:
+				raise ValueError("\"%s\" is for delta_t=%g, we need %g" % (options.ranking_stat_input, rankingstat.denominator.delta_t, options.coincidence_threshold))
+			if rankingstat.min_instruments != options.min_instruments:
+				raise ValueError("\"%s\" is for min instruments = %d but we need %d" % (options.ranking_stat_input, rankingstat.denominator.min_instruments, options.min_instruments))
+			if rankingstat.instruments != all_instruments:
+				raise ValueError("\"%s\" is for %s but we need %s" % (options.ranking_stat_input, ", ".join(sorted(rankingstat.instruments)), ", ".join(sorted(all_instruments))))
+			if rankingstat.template_ids is None:
+				rankingstat.template_ids = template_ids
+			elif rankingstat.template_ids != template_ids:
+				raise ValueError("\"%s\" is for the wrong templates")
+	if rankingstat is None:
 		rankingstat = far.RankingStat(template_ids = template_ids, instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
 		rankingstat.numerator.add_signal_model(df = 40)
 
@@ -808,7 +813,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		),
 		pipeline = pipeline,
 		rankingstat = rankingstat,
-		zerolag_rankingstatpdf_filename = zerolag_rankingstatpdf_filename,
+		zerolag_rankingstatpdf_url = zerolag_rankingstat_pdf,
 		ranking_stat_input_url = options.ranking_stat_input,
 		ranking_stat_output_url = ranking_stat_output_url,
 		rankingstatpdf_url = options.ranking_stat_pdf,

@@ -63,8 +63,8 @@ shift
 # paths to data objects on each job's web management interface
 #
 
-LIKELIHOOD_PATH="likelihood.xml"
-ZEROLAG_COUNTS_PATH="zero_lag_ranking_stats.xml"
+LIKELIHOOD_PATH="rankingstat.xml"
+ZEROLAG_COUNTS_PATH="zerolag_rankingstatpdf.xml"
 
 #
 # pause for each iteration (seconds)
@@ -98,7 +98,7 @@ while true ; do
 	# sum the noise and signal model ranking statistic histograms
 	# across jobs
 	date +"%H:%M:%S" >&2
-	gstlal_inspiral_marginalize_likelihood --verbose --ranking-stat-pdf --output ${BACKGROUND_COUNTS} ${RANKING_PDF_FILES} || break
+	gstlal_inspiral_marginalize_likelihood --verbose --marginalize ranking-stat-pdf --output ${BACKGROUND_COUNTS} ${RANKING_PDF_FILES} || break
 	rm -vf ${RANKING_PDF_FILES}
 
 	# collect and sum the current observed zero-lag ranking statistic
@@ -114,7 +114,7 @@ while true ; do
 		ZEROLAG_COUNTS_URLS="${ZEROLAG_COUNTS_URLS} ${SERVER}${ZEROLAG_COUNTS_PATH}"
 	done || break
 	date +"%H:%M:%S" >&2
-	gstlal_inspiral_marginalize_likelihood --verbose --ranking-stat-pdf --output ${OUTPUT}.next.gz ${BACKGROUND_COUNTS} ${ZEROLAG_COUNTS_URLS} || break
+	gstlal_inspiral_marginalize_likelihood --verbose --marginzlize ranking-stat-pdf --output ${OUTPUT}.next.gz ${BACKGROUND_COUNTS} ${ZEROLAG_COUNTS_URLS} || break
 	mv -f ${OUTPUT}.next.gz ${OUTPUT} || break
 done
 rm -vf ${BACKGROUND_COUNTS}

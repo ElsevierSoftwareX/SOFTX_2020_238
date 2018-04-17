@@ -248,6 +248,8 @@ def parse_command_line():
 
 	if options.injection_file:
 		inj_name_dict = datasource.injection_dict_from_channel_list_with_node_range(options.injection_file)
+	else:
+		inj_name_dict = {}
 
 	#FIXME add consistency check?
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
@@ -421,13 +423,17 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"min-instruments":options.min_instruments,
 			"min-log-L":options.min_log_L,
 			"time-slide-file":options.time_slide_file
-			},
-		input_files = {"ranking-stat-pdf":options.marginalized_likelihood_file},
-		output_files = {"output":"not_used.xml.gz",
-				"ranking-stat-output":likefile,
-				"zerolag-rankingstatpdf-filename":zerolikefile,
-			}
-		)
+		},
+		input_files = {
+			"ranking-stat-input":[likefile],
+			"ranking-stat-pdf":options.marginalized_likelihood_file
+		},
+		output_files = {
+			"output":"/dev/null",
+			"ranking-stat-output":likefile,
+			"zerolag-rankingstat-pdf":zerolikefile
+		}
+	)
 
 	if str("%04d" %num_insp_nodes) in inj_channel_dict:
 		# FIXME The node number for injection jobs currently follows the same
@@ -467,12 +473,15 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 				"min-instruments":options.min_instruments,
 				"min-log-L":options.min_log_L,
 				"time-slide-file":options.time_slide_file
-				},
-			input_files = {"ranking-stat-pdf":options.marginalized_likelihood_file,
-			"ranking-stat-input":[likefile]},
-			output_files = {"output":"not_used.xml.gz",
-				}
-			)
+			},
+			input_files = {
+				"ranking-stat-input":[likefile],
+				"ranking-stat-pdf":options.marginalized_likelihood_file
+			},
+			output_files = {
+				"output":"/dev/null"
+			}
+		)
 
 def groups(l, n):
 	for i in xrange(0, len(l), n):
@@ -538,13 +547,15 @@ dag.write_cache()
 #
 
 
-shutil.copy2(dagparts.which('gstlalcbcsummary'), os.path.expanduser("~/public_html/cgi-bin"))
-shutil.copy2(dagparts.which('gstlalcbcnode'), os.path.expanduser("~/public_html/cgi-bin"))
+cgibinpath = os.path.expanduser("~/public_html/cgi-bin")
+if not os.path.isdir(cgibinpath):
+	os.makedirs(cgibinpath)
+shutil.copy2(dagparts.which('gstlalcbcsummary'), cgibinpath)
+shutil.copy2(dagparts.which('gstlalcbcnode'), cgibinpath)
 query = "id=%s,%s&dir=%s&ifos=%s" % (jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
 # Write the analysis to a special file that the summary page can find by default
-webfile = open(os.path.join(os.path.expanduser("~/public_html/cgi-bin"), "gstlalcbc_analysis.txt"), "w")
-webfile.write(query)
-webfile.close()
+with open(os.path.join(cgibinpath, "gstlalcbc_analysis.txt"), "w") as webfile:
+	webfile.write(query)
 print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], query)
 if inj_jobTags:
 	print >>sys.stderr, "\n\n NOTE! You can monitor the injection analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], inj_jobTags[0], inj_jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
