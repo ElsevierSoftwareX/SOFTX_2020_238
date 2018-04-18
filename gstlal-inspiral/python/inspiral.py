@@ -887,7 +887,7 @@ class Data(object):
 				del event.snr_time_series
 
 	def T050017_filename(self, description, extension):
-		segs = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values())
+		segs = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values() if any(seglistdict.values()))
 		if segs:
 			start, end = segs.extent()
 		else:
