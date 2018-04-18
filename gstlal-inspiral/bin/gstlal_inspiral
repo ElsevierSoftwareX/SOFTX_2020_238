@@ -191,7 +191,6 @@ import signal
 import socket
 import sys
 import tempfile
-import time
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -243,10 +242,6 @@ setrlimit(resource.RLIMIT_RSS, None)
 # possible that SL7 has lowered the default stack size from SL6 and we
 # don't need to do this anymore.  remove?
 setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
-
-
-def now():
-	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()))
 
 
 #
@@ -547,7 +542,7 @@ class OneTimeSignalHandler(object):
 			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
 			try:
 				#FIXME how do I choose a timestamp?
-				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
+				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp = inspiral.now().ns()))
 				if not self.pipeline.send_event(Gst.Event.new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
 			except Exception as e:
@@ -725,7 +720,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	@bottle.route("/bank.txt")
 	def get_filter_length_and_chirpmass(banks = banks):
 		bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
-		yield '%.14g %.4g %.4g' % (float(now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
+		yield '%.14g %.4g %.4g' % (float(inspiral.now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
 
 
 	#

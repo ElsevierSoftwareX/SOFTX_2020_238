@@ -133,6 +133,10 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 #
 
 
+def now():
+	return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()))
+
+
 def message_new_checkpoint(src, timestamp = None):
 	s = Gst.Structure.new_empty("CHECKPOINT")
 	message = Gst.Message.new_application(src, s)
@@ -883,7 +887,13 @@ class Data(object):
 				del event.snr_time_series
 
 	def T050017_filename(self, description, extension):
-		start, end = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
+		segs = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values())
+		if segs:
+			start, end = segs.extent()
+		else:
+			# silence errors at start-up.
+			# FIXME:  this is probably dumb.  who cares.
+			start = end = now()
 		start, end = int(math.floor(start)), int(math.ceil(end))
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
 
