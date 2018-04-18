@@ -1000,7 +1000,7 @@ class Data(object):
 
 	def __do_gracedb_alerts(self, retries = 5, retry_delay = 5.):
 		# sanity check
-		if self.farpfar is None:
+		if self.fapfar is None:
 			raise ValueError("gracedb alerts cannot be enabled without fap/far data")
 
 		# no-op short circuit
