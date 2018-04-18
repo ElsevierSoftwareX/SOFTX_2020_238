@@ -98,6 +98,7 @@ import lal
 from lal import LIGOTimeGPS
 from lal import rate
 from lal import series as lalseries
+from lal.utils import CacheEntry
 
 from gstlal import bottle
 from gstlal import reference_psd
@@ -268,7 +269,7 @@ def parse_iirbank_files(iir_banks, verbose, snr_threshold = 4.0):
 
 
 def subdir_from_T050017_filename(fname):
-	path = str(fname.split("-")[2])[:5]
+	path = str(CacheEntry.from_T050017(fname).segment[0])[:5]
 	try:
 		os.mkdir(path)
 	except OSError:
@@ -492,7 +493,7 @@ class Data(object):
 		self.gracedb_service_url = gracedb_service_url
 
 		#
-		# seglistsdicts is populated the pipeline handler.
+		# seglistdicts is populated the pipeline handler.
 		#
 
 		self.seglistdicts = None
@@ -882,7 +883,7 @@ class Data(object):
 				del event.snr_time_series
 
 	def T050017_filename(self, description, extension):
-		start, end = self.seglistdicts.extent_all()
+		start, end = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
 		start, end = int(math.floor(start)), int(math.ceil(end))
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
 
