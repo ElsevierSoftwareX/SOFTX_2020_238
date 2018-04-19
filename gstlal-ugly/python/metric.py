@@ -18,6 +18,7 @@
 import lalsimulation as lalsim
 import lal
 from lal import series
+from scipy import integrate
 import numpy
 from gstlal import reference_psd
 from glue.ligolw import utils as ligolw_utils
@@ -154,7 +155,8 @@ class Metric(object):
 		self.df = 1. / self.duration
 		self.flow = flow
 		self.fhigh = fhigh
-		self.working_length = int(round(self.duration * 2 * self.fhigh))
+		self.working_length = int(round(self.duration * 2 * self.fhigh)) + 1
+		print self.working_length
 		self.psd = reference_psd.interpolate_psd(series.read_psd_xmldoc(ligolw_utils.load_filename(psd_xml, verbose = True, contenthandler = series.PSDContentHandler)).values()[0], self.df)
 		self.metric_tensor = None
 		self.metric_is_valid = False
@@ -222,10 +224,12 @@ class Metric(object):
 
 	def match_minus_1(self, w1, w2, t_factor = 1.0):
 		def norm(w):
-			n = numpy.abs((numpy.conj(w) * w).sum())**.5
+			n = numpy.abs(integrate.romb(numpy.conj(w) * w))**.5
+			#n = numpy.abs((numpy.conj(w) * w).sum())**.5
 			return n
 		def ip(w1, w2):
-			return numpy.abs((numpy.conj(w1) * w2).sum())
+			#return numpy.abs((numpy.conj(w1) * w2).sum())
+			return numpy.abs(integrate.romb(numpy.conj(w1) * w2))
 
 		try:
 			x = numpy.copy(w1.data.data)
