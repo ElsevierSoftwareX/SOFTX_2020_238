@@ -140,7 +140,8 @@ marginalized = far.marginalize_pdf_urls(
 #
 
 
-rankingstatpdf.density_estimate_zero_lag_rates()
+if options.density_estimate_zero_lag:
+	marginalized.density_estimate_zero_lag_rates()
 
 
 #
