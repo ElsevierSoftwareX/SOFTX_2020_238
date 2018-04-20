@@ -895,7 +895,7 @@ class Data(object):
 			# FIXME:  this is probably dumb.  who cares.
 			start = end = now()
 		start, end = int(math.floor(start)), int(math.ceil(end))
-		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.process.instruments)), description, start, end - start, extension)
+		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.rankingstat.instruments)), description, start, end - start, extension)
 
 	def __get_rankingstat_xmldoc(self):
 		# generate a coinc parameter distribution document.  NOTE:
