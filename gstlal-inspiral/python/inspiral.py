@@ -1340,7 +1340,7 @@ class Data(object):
 			self.__write_output_url(url = fname, verbose = verbose)
 			if self.ranking_stat_output_url is not None:
 				self.__write_ranking_stat_url(self.ranking_stat_output_url, description, snapshot = True, verbose = verbose)
-			if self.zerolag_rankingstatpdf is not None:
+			if self.zerolag_rankingstatpdf_url is not None:
 				self.__write_zero_lag_ranking_stat_url(self.zerolag_rankingstatpdf_url, verbose = verbose)
 			self.coincs_document = coincs_document
 			self.snr_time_series_cleanup_index = 0
