@@ -898,9 +898,16 @@ class Data(object):
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.rankingstat.instruments)), description, start, end - start, extension)
 
 	def __get_rankingstat_xmldoc(self):
-		# generate a coinc parameter distribution document.  NOTE:
-		# likelihood ratio PDFs *are* included if they were present in
-		# the --likelihood-file that was loaded.
+		# generate a ranking statistic output document.  NOTE:  if
+		# we are in possession of ranking statistic PDFs then those
+		# are included in the output.  this allows a single
+		# document to be uploaded to gracedb.  in an online
+		# analysis, those PDFs come from the marginlization process
+		# and represent the full distribution of ranking statistics
+		# across the search, and include with them the analysis'
+		# total observed zero-lag ranking statistic histogram ---
+		# everything required to re-evaluate the FAP and FAR for an
+		# uploaded candidate.
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {}, ifos = self.rankingstat.instruments)
@@ -1328,9 +1335,6 @@ class Data(object):
 	def snapshot_output_url(self, description, extension, verbose = False):
 		with self.lock:
 			coincs_document = self.coincs_document.get_another()
-			# We require the likelihood file to have the same name
-			# as the input to this program to accumulate statistics
-			# as we go
 			fname = self.T050017_filename(description, extension)
 			fname = os.path.join(subdir_from_T050017_filename(fname), fname)
 			self.__write_output_url(url = fname, verbose = verbose)
