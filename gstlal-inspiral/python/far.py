@@ -581,7 +581,7 @@ WHERE
 
 		# masked array containing the zerolag data for the fit.
 		# the mask selects the bins to be *ignored* for the fit.
-		# this is indended to decouple the fit from bins that
+		# this is intended to decouple the fit from bins that
 		# potentially contain a genuine zero-lag population and/or
 		# that have too small a count to have been well measured,
 		# and/or can't be modelled correctly by this fit anyway.
@@ -592,7 +592,7 @@ WHERE
 
 		def ssr((norm, rate_eff, m)):
 			# explicitly exclude disallowed parameter values
-			if not (0. < norm and rate_eff > 0. and m > 0.):
+			if norm <= 0. or rate_eff <= 0. or m <= 0.:
 				return PosInf
 
 			# the extinction model applied to the background
