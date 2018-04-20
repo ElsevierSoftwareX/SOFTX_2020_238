@@ -1317,7 +1317,7 @@ class Data(object):
 
 	def __write_ranking_stat_url(self, url, description, snapshot = False, verbose = False):
 		# write the ranking statistic file.
-		ligolw_utils.write_url(self.__get_rankingstat_xmldoc(), ligolw_utils.local_path_from_url(url), gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		ligolw_utils.write_url(self.__get_rankingstat_xmldoc(), url, gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 		# Snapshots get their own custom file and path
 		if snapshot:
 			fname = self.T050017_filename(description + '_DISTSTATS', 'xml.gz')
