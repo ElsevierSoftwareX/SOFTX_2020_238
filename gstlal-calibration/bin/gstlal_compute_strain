@@ -418,34 +418,9 @@ try:
 	src_pcal_line_freq = float(filters["src_pcal_line_freq"])
 	pcal_corr_at_src_freq_real = float(filters["src_pcal_corr_re"])
 	pcal_corr_at_src_freq_imag = float(filters["src_pcal_corr_im"])
-	if src_pcal_line_freq > 10.0:
-		remove_src_pcal_line = True
-	else:
-		remove_src_pcal_line = False
 except:
-	remove_src_pcal_line = False
 	if not options.no_srcQ or not options.no_fs:
 		raise ValueError("Cannot compute SRC spring frequency or Q, as the calibration line frequency is not contained in the specified filters file.")
-try:
-	high_pcal_line_freq = float(filters["high_pcal_line_freq"])
-	pcal_corr_at_high_line_freq_real = float(filters["high_pcal_corr_re"])
-	pcal_corr_at_high_line_freq_imag = float(filters["high_pcal_corr_im"])
-	if high_pcal_line_freq > 0:
-		remove_high_pcal_line = True
-	else:
-		remove_high_pcal_line = False
-except:
-	remove_high_pcal_line = False
-try:
-	roaming_pcal_line_freq = float(filters["roaming_pcal_line_freq"])
-	pcal_corr_at_roaming_line_real = float(filters["roaming_pcal_corr_re"])
-	pcal_corr_at_roaming_line_imag = float(filters["roaming_pcal_corr_im"])
-	if roaming_pcal_line_freq > 0.0:
-		remove_roaming_pcal_line = True
-	else:
-		remove_roaming_pcal_line = False
-except:
-	remove_roaming_pcal_line = False
 try:
 	fcc_default = float(filters["fcc"])
 except:
