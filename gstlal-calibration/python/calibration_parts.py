@@ -51,11 +51,15 @@ def mkinsertgap(pipeline, head, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35
 #	return head
 
 def mkstockresample(pipeline, head, caps):
+	if type(caps) is int:
+		caps = "audio/x-raw,rate=%d,channel-mask=(bitmask)0x0" % caps
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	return head
 
 def mkresample(pipeline, head, quality, zero_latency, caps):
+	if type(caps) is int:
+		caps = "audio/x-raw,rate=%d,channel-mask=(bitmask)0x0" % caps
 	head = pipeparts.mkgeneric(pipeline, head, "lal_resample", quality = quality, zero_latency = zero_latency)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	return head
@@ -159,18 +163,16 @@ def list_srcs(pipeline, *args):
 # Various filtering functions
 #
 
-def demodulate(pipeline, head, freq, td, caps, integration_samples, delay, chop_length, prefactor_real = 1.0, prefactor_imag = 0.0):
+def demodulate(pipeline, head, freq, td, rate, filter_time, filter_latency, prefactor_real = 1.0, prefactor_imag = 0.0):
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
-	head = mkresample(pipeline, head, 5, True, caps)
-	if chop_length != 0:
-		head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", chop_length = chop_length)
-	head = mkcomplexfirbank(pipeline, head, fir_matrix=[numpy.hanning(integration_samples + 1) * 2 / integration_samples], time_domain = td, latency = delay)
+	head = mkresample(pipeline, head, 5, filter_latency == 0.0, rate)
+	head = lowpass(pipeline, head, rate, length = filter_time, fcut = 0, filter_latency = filter_latency, td = td)
 
 	return head
 
-def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, zero_latency, compute_rate = 16, rate_out = 16384):
+def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, filter_latency, compute_rate = 16, rate_out = 16384):
 	# remove any line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
 
@@ -179,9 +181,9 @@ def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, zero_latency, 
 	mkqueue(pipeline, head).link(elem)
 	for i in range(1, num_harmonics + 1):
 		line = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = i * f0)
-		line = mkresample(pipeline, line, 5, zero_latency, "audio/x-raw,rate=%d" % compute_rate)
-		line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, zero_latency = zero_latency)
-		line = mkresample(pipeline, line, 3, False, "audio/x-raw,rate=%d" % rate_out)
+		line = mkresample(pipeline, line, 5, filter_latency == 0, compute_rate)
+		line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, filter_latency = filter_latency)
+		line = mkresample(pipeline, line, 3, filter_latency == 0.0, rate_out)
 		line = pipeparts.mkgeneric(pipeline, line, "lal_demodulate", line_frequency = -1.0 * i * f0, prefactor_real = -2.0)
 		real, imag = split_into_real(pipeline, line)
 		pipeparts.mkfakesink(pipeline, imag)
@@ -189,7 +191,7 @@ def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, zero_latency, 
 
 	return elem
 
-def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, f0_var, zero_latency, compute_rate = 16, rate_out = 16384, num_avg = 320, obsready = None):
+def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, f0_var, filter_latency, compute_rate = 16, rate_out = 16384, num_avg = 320, obsready = None):
 	# remove line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
 
@@ -201,14 +203,14 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 	for i in range(1, num_harmonics + 1):
 		# Find amplitude and phase of line in witness channel
 		line_in_witness = pipeparts.mkgeneric(pipeline, witness, "lal_demodulate", line_frequency = i * f0)
-		line_in_witness = mkresample(pipeline, line_in_witness, 5, zero_latency, "audio/x-raw,rate=%d" % compute_rate)
-		line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, zero_latency = zero_latency)
+		line_in_witness = mkresample(pipeline, line_in_witness, 5, filter_latency == 0.0, compute_rate)
+		line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, filter_latency = filter_latency)
 		line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
 
 		# Find amplitude and phase of line in signal
 		line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = i * f0)
-		line_in_signal = mkresample(pipeline, line_in_signal, 5, zero_latency, "audio/x-raw,rate=%d" % compute_rate)
-		line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, zero_latency = zero_latency)
+		line_in_signal = mkresample(pipeline, line_in_signal, 5, filter_latency == 0.0, compute_rate)
+		line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, filter_latency = filter_latency)
 
 		# Find transfer function between witness channel and signal at this frequency
 		tf_at_f = complex_division(pipeline, line_in_signal, line_in_witness)
@@ -216,11 +218,11 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 		# Remove worthless data from computation of transfer function if we can
 		if obsready is not None:
 			tf_at_f = mkgate(pipeline, tf_at_f, obsready, 1, attack_length = -integration_samples)
-		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = 1, avg_array_size = num_avg, default_to_median = True)
+		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = 1, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
 		# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
 		reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tf_at_f, line_in_witness))
-		reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, 3, False, "audio/x-raw,rate=%d" % rate_out)
+		reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, 3, filter_latency == 0.0, rate_out)
 		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * i * f0, prefactor_real = -2.0)
 		reconstructed_line_in_signal, imag = split_into_real(pipeline, reconstructed_line_in_signal)
 		pipeparts.mkfakesink(pipeline, imag)
@@ -231,16 +233,16 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 
 	return clean_signal
 
-def removeDC(pipeline, head, caps):
+def removeDC(pipeline, head, rate):
 	head = pipeparts.mktee(pipeline, head)
-	DC = mkresample(pipeline, head, 4, True, "audio/x-raw, rate=16")
+	DC = mkresample(pipeline, head, 4, True, 16)
 	#DC = pipeparts.mkgeneric(pipeline, DC, "lal_smoothkappas", default_kappa_re = 0, array_size = 1, avg_array_size = 64)
-	DC = mkresample(pipeline, DC, 4, True, caps)
+	DC = mkresample(pipeline, DC, 4, True, rate)
 	DC = pipeparts.mkaudioamplify(pipeline, DC, -1)
 
 	return mkadder(pipeline, list_srcs(pipeline, head, DC))
 
-def lowpass(pipeline, head, rate, length = 1.0, fcut = 500, zero_latency = False):
+def lowpass(pipeline, head, rate, length = 1.0, fcut = 500, filter_latency = 0.5, td = True):
 	length = int(length * rate)
 	if not length % 2:
 		length += 1 # Make sure the filter length is odd
@@ -251,9 +253,9 @@ def lowpass(pipeline, head, rate, length = 1.0, fcut = 500, zero_latency = False
 	lowpass /= numpy.sum(lowpass)
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = 0 if zero_latency else int((length - 1) / 2), fir_matrix = [lowpass], time_domain = True)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency), fir_matrix = [lowpass], time_domain = td)
 
-def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0, zero_latency = False):
+def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0, filter_latency = 0.5, td = True):
 	length = int(length * rate)
 	if not length % 2:
 		length += 1 # Make sure the filter length is odd
@@ -268,9 +270,9 @@ def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0, zero_latency = Fals
 	highpass[int((length - 1) / 2)] += 1
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = 0 if zero_latency else int((length - 1) / 2), fir_matrix = [highpass], time_domain = True)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency), fir_matrix = [highpass], time_domain = td)
 
-def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, zero_latency = False):
+def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filter_latency = 0.5, td = True):
 	length = int(length * rate / 2)
 	if not length % 2:
 		length += 1 # Make sure the filter length is odd
@@ -293,9 +295,9 @@ def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, zero
 	bandpass = numpy.convolve(highpass, lowpass)
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = 0 if zero_latency else int(length - 1), fir_matrix = [bandpass], time_domain = True)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency), fir_matrix = [bandpass], time_domain = td)
 
-def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400):
+def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filter_latency = 0.5, td = True):
 	length = int(length * rate / 2)
 	if not length % 2:
 		length += 1 # Make sure the filter length is odd
@@ -322,29 +324,29 @@ def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400):
 	bandstop[length - 1] += 1
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = 0 if zero_latency else int(length - 1), fir_matrix = [bandstop], time_domain = True)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency), fir_matrix = [bandstop], time_domain = td)
 
-def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, zero_latency = True, rate_out = 16):
+def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, filter_latency = 0.5, rate_out = 16, td = True):
 	# Find the root mean square amplitude of a signal between two frequencies
 	# Downsample to save computational cost
-	head = mkresample(pipeline, head, 5, zero_latency, "audio/x-raw,rate=%d" % rate)
+	head = mkresample(pipeline, head, 5, filter_latency == 0.0, rate)
 
 	# Remove any frequency content we don't care about
 	if (f_min is not None) and (f_max is not None):
-		head = bandpass(pipeline, head, rate, f_low = f_min, f_high = f_max)
+		head = bandpass(pipeline, head, rate, f_low = f_min, f_high = f_max, filter_latency = filter_latency, td = td)
 	elif f_min is not None:
-		head = highpass(pipeline, head, fcut = f_min)
+		head = highpass(pipeline, head, fcut = f_min, filter_latency = filter_latency, td = td)
 	elif f_max is not None:
-		head = lowpass(pipeline, head, fcut = f_max)
+		head = lowpass(pipeline, head, fcut = f_max, filter_latency = filter_latency, td = td)
 
 	# Square it
 	head = pipeparts.mkpow(pipeline, head, exponent = 2.0)
 
 	# Downsample again to save computational cost
-	head = mkresample(pipeline, head, 3, zero_latency, "audio/x-raw,rate=%d" % rate_out)
+	head = mkresample(pipeline, head, 3, filter_latency == 0.0, rate_out)
 
 	# Compute running average
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = 0.0, array_size = 1, avg_array_size = average_time * rate_out)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = 0.0, array_size = 1, avg_array_size = average_time * rate_out, filter_latency = filter_latency)
 
 	return head
 
@@ -352,63 +354,63 @@ def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, 
 # Calibration factor related functions
 #
 
-def smooth_kappas_no_coherence(pipeline, head, var, expected, N, Nav, default_to_median):
+def smooth_kappas_no_coherence(pipeline, head, var, expected, N, Nav, default_to_median, filter_latency):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
 	# Use the maximum_offset_re property to determine whether input kappas are good or not
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median, filter_latency = filter_latency)
 	return head
 
-def smooth_complex_kappas_no_coherence(pipeline, head, real_var, imag_var, real_expected, imag_expected, N, Nav, default_to_median):
+def smooth_complex_kappas_no_coherence(pipeline, head, real_var, imag_var, real_expected, imag_expected, N, Nav, default_to_median, filter_latency):
 	# Find median of complex calibration factors array with size N, split into real and imaginary parts, and smooth out medians with an average over Nav samples
 	# Use the maximum_offset_re and maximum_offset_im properties to determine whether input kappas are good or not
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = real_var, maximum_offset_im = imag_var, default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = real_var, maximum_offset_im = imag_var, default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median, filter_latency = filter_latency)
 	re, im = split_into_real(pipeline, head)
 	return re, im
 
-def smooth_kappas(pipeline, head, expected, N, Nav, default_to_median):
+def smooth_kappas(pipeline, head, expected, N, Nav, default_to_median, filter_latency):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
 	# Assume input was previously gated with coherence uncertainty to determine if input kappas are good or not
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median, filter_latency = filter_latency)
 	return head
 
-def smooth_complex_kappas(pipeline, head, real_expected, imag_expected, N, Nav, default_to_median):
+def smooth_complex_kappas(pipeline, head, real_expected, imag_expected, N, Nav, default_to_median, filter_latency):
 	# Find median of complex calibration factors array with size N and smooth out medians with an average over Nav samples
 	# Assume input was previously gated with coherence uncertainty to determine if input kappas are good or not
 
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median, filter_latency = filter_latency)
 	re, im = split_into_real(pipeline, head)
 	return re, im
 
-def track_bad_kappas_no_coherence(pipeline, head, var, expected, N, Nav, default_to_median):
+def track_bad_kappas_no_coherence(pipeline, head, var, expected, N, Nav, default_to_median, filter_latency):
 	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) based on whether median of input array is defualt value.
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N, avg_array_size = Nav if default_to_median else 1, track_bad_kappa = True, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N, avg_array_size = Nav if default_to_median else 1, track_bad_kappa = True, default_to_median = default_to_median, filter_latency = filter_latency)
 	return head
 
-def track_bad_complex_kappas_no_coherence(pipeline, head, real_var, imag_var, real_expected, imag_expected, N, Nav, default_to_median):
+def track_bad_complex_kappas_no_coherence(pipeline, head, real_var, imag_var, real_expected, imag_expected, N, Nav, default_to_median, filter_latency):
 	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) based on whether median of input array is defualt value.
 	# Real and imaginary parts are done separately (outputs of lal_smoothkappas can be 1+i, 1, i, or 0)
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = real_var, maximum_offset_im = imag_var, default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav if default_to_median else 1, track_bad_kappa = True, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = real_var, maximum_offset_im = imag_var, default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav if default_to_median else 1, track_bad_kappa = True, default_to_median = default_to_median, filter_latency = filter_latency)
 	re, im = split_into_real(pipeline, head)
 	return re, im
 
-def track_bad_kappas(pipeline, head, expected, N, Nav, default_to_median):
+def track_bad_kappas(pipeline, head, expected, N, Nav, default_to_median, filter_latency):
 	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) based on whether median of input array is defualt value.
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = expected, array_size = N, avg_array_size = Nav if default_to_median else 1, track_bad_kappa = True, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = expected, array_size = N, avg_array_size = Nav if default_to_median else 1, track_bad_kappa = True, default_to_median = default_to_median, filter_latency = filter_latency)
 	return head
 
-def track_bad_complex_kappas(pipeline, head, real_expected, imag_expected, N, Nav, default_to_median):
+def track_bad_complex_kappas(pipeline, head, real_expected, imag_expected, N, Nav, default_to_median, filter_latency):
 	# Produce output of 1's or 0's that correspond to median not corrupted (1) or corrupted (0) based on whether median of input array is defualt value.
 	# Real and imaginary parts are done separately (outputs of lal_smoothkappas can be 1+i, 1, i, or 0)
 
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav if default_to_median else 1, track_bad_kappa = True, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = real_expected, default_kappa_im = imag_expected, array_size = N, avg_array_size = Nav if default_to_median else 1, track_bad_kappa = True, default_to_median = default_to_median, filter_latency = filter_latency)
 	re, im = split_into_real(pipeline, head)
 	return re, im
 
-def smooth_kappas_no_coherence_test(pipeline, head, var, expected, N, Nav, default_to_median):
+def smooth_kappas_no_coherence_test(pipeline, head, var, expected, N, Nav, default_to_median, filter_latency):
 	# Find median of calibration factors array with size N and smooth out medians with an average over Nav samples
 	head = pipeparts.mktee(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, head, "raw_kappatst.txt")
-	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", maximum_offset_re = var, default_kappa_re = expected, array_size = N, avg_array_size = Nav, default_to_median = default_to_median, filter_latency = filter_latency)
 	head = pipeparts.mktee(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, head, "smooth_kappatst.txt")
 	return head
@@ -729,11 +731,11 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	witnesses = list(witnesses)
 	witness_tees = []
 	for i in range(0, len(witnesses)):
-		witnesses[i] = mkresample(pipeline, witnesses[i], 5, False, "audio/x-raw,rate=%d" % witness_rate)
+		witnesses[i] = mkresample(pipeline, witnesses[i], 5, False, witness_rate)
 		witnesses[i] = highpass(pipeline, witnesses[i], witness_rate)
 		witness_tees.append(pipeparts.mktee(pipeline, witnesses[i]))
 
-	resampled_signal = mkresample(pipeline, signal_tee, 5, False, "audio/x-raw,rate=%d" % witness_rate)
+	resampled_signal = mkresample(pipeline, signal_tee, 5, False, witness_rate)
 	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
 	if obsready is not None:
 		transfer_functions = mkgate(pipeline, transfer_functions, obsready, 1)
@@ -742,7 +744,7 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	for i in range(0, len(witnesses)):
 		minus_noise = pipeparts.mkgeneric(pipeline, witness_tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fir_length / 2, taper_length = 20 * fir_length)
 		transfer_functions.connect("notify::fir-filters", update_filter, minus_noise, "fir_filters", "kernel", i)
-		signal_minus_noise.append(mkresample(pipeline, minus_noise, 5, False, "audio/x-raw,rate=%d" % signal_rate))
+		signal_minus_noise.append(mkresample(pipeline, minus_noise, 5, False, signal_rate))
 
 	return mkadder(pipeline, tuple(signal_minus_noise))
 
