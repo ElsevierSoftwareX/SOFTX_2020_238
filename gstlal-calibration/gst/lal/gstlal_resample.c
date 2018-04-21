@@ -1064,11 +1064,8 @@ static void set_metadata(GSTLALResample *element, GstBuffer *buf, guint64 outsam
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
-	if(gap || element->need_gap) {
+	if(gap)
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
-		if(outsamples > 0)
-			element->need_gap = FALSE;
-	}
 	else
 		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 }
@@ -1374,7 +1371,6 @@ static gboolean start(GstBaseTransform *trans)
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
 	element->next_out_offset = GST_BUFFER_OFFSET_NONE;
 	element->need_discont = TRUE;
-	element->need_gap = FALSE;
 	element->dxdt0 = 0.0;
 	element->end_samples = NULL;
 	element->sinc_table = NULL;
@@ -1620,8 +1616,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
 		memset(outmap.data, 0, outmap.size);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, TRUE);
-		if(outmap.size / element->unit_size == 0)
-			element->need_gap = TRUE;
 		gst_buffer_unmap(outbuf, &outmap);
 	}
 

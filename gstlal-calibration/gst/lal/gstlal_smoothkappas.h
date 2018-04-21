@@ -60,8 +60,24 @@ typedef struct _GSTLALSmoothKappasClass GSTLALSmoothKappasClass;
 struct _GSTLALSmoothKappas {
 	GstBaseTransform element;
 
+	/* stream information */
 	gint unit_size;
 	gint rate;
+	enum gstlal_smoothkappas_data_type {
+		GSTLAL_SMOOTHKAPPAS_F32 = 0,
+		GSTLAL_SMOOTHKAPPAS_F64,
+		GSTLAL_SMOOTHKAPPAS_Z64,
+		GSTLAL_SMOOTHKAPPAS_Z128
+	} data_type;
+
+	/* timestamp bookkeeping */
+	GstClockTime t0;
+	guint64 offset0;
+	guint64 next_in_offset;
+	guint64 next_out_offset;
+	gboolean need_discont;
+
+	/* filter memory */
 	double current_median_re;
 	double current_median_im;
 	double *fifo_array_re;
@@ -74,12 +90,7 @@ struct _GSTLALSmoothKappas {
 	int avg_index_im;
 	int num_bad_in_avg_re;
 	int num_bad_in_avg_im;
-	enum gstlal_smoothkappas_data_type {
-		GSTLAL_SMOOTHKAPPAS_F32 = 0,
-		GSTLAL_SMOOTHKAPPAS_F64,
-		GSTLAL_SMOOTHKAPPAS_Z64,
-		GSTLAL_SMOOTHKAPPAS_Z128
-	} data_type;
+	int samples_in_filter;
 
 	/* properties */
 	int array_size;
@@ -90,6 +101,7 @@ struct _GSTLALSmoothKappas {
 	double maximum_offset_im;
 	gboolean default_to_median;
 	gboolean track_bad_kappa;
+	double filter_latency;
 };
 
 

@@ -83,7 +83,6 @@ struct _GSTLALResample {
 	guint64 next_in_offset;
 	guint64 next_out_offset;
 	gboolean need_discont;
-	gboolean need_gap;
 
 	/* properties */
 	guint quality;
