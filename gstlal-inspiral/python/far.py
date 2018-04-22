@@ -649,7 +649,8 @@ WHERE
 		self.noise_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"noise_lr_lnpdf")
 		self.signal_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"signal_lr_lnpdf")
 		self.zero_lag_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"zero_lag_lr_lnpdf")
-		self.segments = segmentsUtils.from_range_strings(ligolw_param.get_pyvalue(xml, u"segments").strip().split(","), float)
+		self.segments = ligolw_param.get_pyvalue(xml, u"segments").strip()
+		self.segments = segmentsUtils.from_range_strings(self.segments.split(",") if self.segments else [], float)
 		self.template_ids = frozenset(map(int, ligolw_param.get_pyvalue(xml, u"template_ids").split(",")))
 		return self
 
