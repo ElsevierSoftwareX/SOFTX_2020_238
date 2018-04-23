@@ -102,10 +102,11 @@ if options.verbose:
 
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
+handler = simplehandler.Handler(mainloop, pipeline)
 
 # generate multiple channel sources, and link up pipeline
 whiten = {}
-head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, instrument, verbose = options.verbose)
+head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, data_source_info.channel_subsets[0], verbose = options.verbose)
 for channel in channels:
 
 	if options.verbose:
