@@ -514,7 +514,7 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 				for f in node.output_files["output-cache"]:
 					# Store the output files and the node for use as a parent dependency
 					lloid_output[None].setdefault(CacheEntry.from_T050017(f).description.split("_")[0], []).append((f, [node]))
-				for f in node.output_files["likelihood-file-cache"]:
+				for f in node.output_files["ranking-stat-output-cache"]:
 					lloid_diststats.setdefault(CacheEntry.from_T050017(f).description.split("_")[0] ,[]).append(f)
 			for inj in options.injections:
 				for injnode in inspiral_nodes[(ifos, sim_tag_from_inj_file(inj))][seg]:
