@@ -144,8 +144,9 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 			} \
 		} \
  \
+		/* Reset the step size to search the next cycle */ \
 		if(*current_frequency) \
-			*check_step = (int) (0.2 * rate / *current_frequency + 0.5); \
+			*check_step = (int) (0.2 * rate / *current_frequency + 0.61); \
 		else \
 			*check_step = 1; \
 	} \
@@ -233,8 +234,9 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 			} \
 		} \
  \
+		/* Reset the step size to search the next cycle */ \
 		if(*current_frequency) \
-			*check_step = (int) (0.2 * rate / *current_frequency + 0.5); \
+			*check_step = (int) (0.2 * rate / fabs(*current_frequency) + 0.61); \
 		else \
 			*check_step = 1; \
 	} \
@@ -246,7 +248,7 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 		double ETA_from_next_pts = 1.0 / *current_frequency - (ets - crossover_times[*num_stored - 1]) / 1000000000.0; \
 		if(ETA_from_next_pts < 0.0) \
 			ETA_from_next_pts = 0; \
-		*check_step = (int) (0.2 * rate * ETA_from_next_pts + 0.5); \
+		*check_step = (int) (0.2 * rate * ETA_from_next_pts + 1.0); \
 	} else \
 		*check_step = 1; \
 }
@@ -659,18 +661,18 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * process buffer
 	 */
 
-	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
+	gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
+	gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
+
+	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && inmap.size) {
 
 		/*
 		 * input is not gap.
 		 */
 
-		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
-		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
 		trackfrequency(inmap.data, outmap.data, inmap.size, GST_BUFFER_PTS(inbuf), GST_BUFFER_PTS(inbuf) + GST_BUFFER_DURATION(inbuf), element);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, FALSE);
-		gst_buffer_unmap(outbuf, &outmap);
-		gst_buffer_unmap(inbuf, &inmap);
+
 	} else {
 
 		/*
@@ -680,11 +682,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->num_stored = 0;
 		element->sign = 0;
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
 		memset(outmap.data, 0, outmap.size);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, TRUE);
-		gst_buffer_unmap(outbuf, &outmap);
 	}
+
+	gst_buffer_unmap(outbuf, &outmap);
+	gst_buffer_unmap(inbuf, &inmap);
 
 	/*
 	 * done

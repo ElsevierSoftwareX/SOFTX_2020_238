@@ -215,7 +215,7 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 	# If f0 strays from its nominal value and there is a timestamp shift in the signal
         # (e.g., to achieve zero latency), we need to correct the phase in the reconstructed
         # signal. Start by finding the beat frequency between f0 and the actual frequency.
-	f0_beat_frequency = pipeparts.mkgeneric(pipeline, line_in_witness0, "lal_trackfrequency", frequency = 0.0)
+	f0_beat_frequency = pipeparts.mkgeneric(pipeline, line_in_witness0, "lal_trackfrequency", num_halfcycles = 10)
 	f0_beat_frequency = pipeparts.mktee(pipeline, f0_beat_frequency)
 
 	for i in range(1, num_harmonics + 1):
