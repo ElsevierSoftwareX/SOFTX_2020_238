@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2015 Madeline Wade
+# Copyright (C) 2015 Madeline Wade, Aaron Viets
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -176,13 +176,14 @@ def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, filter_latency
 	# remove any line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
 
+	filter_param = 0.0625
 	head = pipeparts.mktee(pipeline, head)
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync = True)
 	mkqueue(pipeline, head).link(elem)
 	for i in range(1, num_harmonics + 1):
 		line = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = i * f0)
 		line = mkresample(pipeline, line, 5, filter_latency == 0, compute_rate)
-		line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, filter_latency = filter_latency)
+		line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = filter_param / (f0_var * i), fcut = 0, filter_latency = filter_latency)
 		line = mkresample(pipeline, line, 3, filter_latency == 0.0, rate_out)
 		line = pipeparts.mkgeneric(pipeline, line, "lal_demodulate", line_frequency = -1.0 * i * f0, prefactor_real = -2.0)
 		real, imag = split_into_real(pipeline, line)
@@ -195,22 +196,53 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 	# remove line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
 
-	if num_harmonics > 1:
-		witness = pipeparts.mktee(pipeline, witness)
+	filter_param = 0.0625
+	downsample_quality = 5
+	upsample_quality = 4
+	resample_shift = 96.0 + 16.5
+	zero_latency = filter_latency == 0.0
 
+	witness = pipeparts.mktee(pipeline, witness)
 	signal = pipeparts.mktee(pipeline, signal)
 	signal_minus_lines = [signal]
+
+	# Find amplitude and phase of first harmonic in witness channel
+	line_in_witness0 = pipeparts.mkgeneric(pipeline, witness, "lal_demodulate", line_frequency = f0)
+	line_in_witness0 = mkresample(pipeline, line_in_witness0, downsample_quality, zero_latency, compute_rate)
+	line_in_witness0 = lowpass(pipeline, line_in_witness0, compute_rate, length = filter_param / f0_var, fcut = 0, filter_latency = filter_latency)
+	line_in_witness0 = pipeparts.mktee(pipeline, line_in_witness0)
+
+	# If f0 strays from its nominal value and there is a timestamp shift in the signal
+        # (e.g., to achieve zero latency), we need to correct the phase in the reconstructed
+        # signal. Start by finding the beat frequency between f0 and the actual frequency.
+	f0_beat_frequency = pipeparts.mkgeneric(pipeline, line_in_witness0, "lal_trackfrequency", frequency = 0.0)
+	f0_beat_frequency = pipeparts.mktee(pipeline, f0_beat_frequency)
+
 	for i in range(1, num_harmonics + 1):
-		# Find amplitude and phase of line in witness channel
-		line_in_witness = pipeparts.mkgeneric(pipeline, witness, "lal_demodulate", line_frequency = i * f0)
-		line_in_witness = mkresample(pipeline, line_in_witness, 5, filter_latency == 0.0, compute_rate)
-		line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, filter_latency = filter_latency)
-		line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
+		# Length of low-pass filter
+		filter_length = filter_param / (f0_var * i)
+		filter_samples = int(filter_length * compute_rate) + (1 - int(filter_length * compute_rate) % 2)
+		sample_shift = filter_samples / 2 - int((filter_samples - 1) * filter_latency + 0.5)
+		# shift of timestamp relative to data
+		time_shift = float(sample_shift) / compute_rate + zero_latency * resample_shift / compute_rate
+
+		# Find phase shift due to timestamp shift for each harmonic
+		phase_shift = complex_audioamplify(pipeline, f0_beat_frequency, 0, 2 * i * numpy.pi * time_shift)
+		phase_factor = pipeparts.mkgeneric(pipeline, phase_shift, "cexp")
+
+		if i == 1:
+			line_in_witness = line_in_witness0
+		else:
+			# Find amplitude and phase of higher harmonics in witness channel
+			line_in_witness = pipeparts.mkgeneric(pipeline, witness, "lal_demodulate", line_frequency = i * f0)
+			line_in_witness = mkresample(pipeline, line_in_witness, downsample_quality, zero_latency, compute_rate)
+			line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
+			line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
 
 		# Find amplitude and phase of line in signal
 		line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = i * f0)
-		line_in_signal = mkresample(pipeline, line_in_signal, 5, filter_latency == 0.0, compute_rate)
-		line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = 0.0625 / (f0_var * i), fcut = 0, filter_latency = filter_latency)
+		line_in_signal = mkresample(pipeline, line_in_signal, downsample_quality, zero_latency, compute_rate)
+		line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
 
 		# Find transfer function between witness channel and signal at this frequency
 		tf_at_f = complex_division(pipeline, line_in_signal, line_in_witness)
@@ -221,8 +253,8 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = 1, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
 		# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
-		reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tf_at_f, line_in_witness))
-		reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, 3, filter_latency == 0.0, rate_out)
+		reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tf_at_f, line_in_witness, phase_factor))
+		reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, upsample_quality, zero_latency, rate_out)
 		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * i * f0, prefactor_real = -2.0)
 		reconstructed_line_in_signal, imag = split_into_real(pipeline, reconstructed_line_in_signal)
 		pipeparts.mkfakesink(pipeline, imag)
@@ -253,7 +285,7 @@ def lowpass(pipeline, head, rate, length = 1.0, fcut = 500, filter_latency = 0.5
 	lowpass /= numpy.sum(lowpass)
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency), fir_matrix = [lowpass], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency + 0.5), fir_matrix = [lowpass], time_domain = td)
 
 def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0, filter_latency = 0.5, td = True):
 	length = int(length * rate)
@@ -270,7 +302,7 @@ def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0, filter_latency = 0.
 	highpass[int((length - 1) / 2)] += 1
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency), fir_matrix = [highpass], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency + 0.5), fir_matrix = [highpass], time_domain = td)
 
 def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filter_latency = 0.5, td = True):
 	length = int(length * rate / 2)
@@ -295,7 +327,7 @@ def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filt
 	bandpass = numpy.convolve(highpass, lowpass)
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency), fir_matrix = [bandpass], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency + 0.5), fir_matrix = [bandpass], time_domain = td)
 
 def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filter_latency = 0.5, td = True):
 	length = int(length * rate / 2)
@@ -324,7 +356,7 @@ def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filt
 	bandstop[length - 1] += 1
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency), fir_matrix = [bandstop], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency + 0.5), fir_matrix = [bandstop], time_domain = td)
 
 def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, filter_latency = 0.5, rate_out = 16, td = True):
 	# Find the root mean square amplitude of a signal between two frequencies

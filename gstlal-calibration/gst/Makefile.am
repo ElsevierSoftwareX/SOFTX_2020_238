@@ -1,1 +1,1 @@
-SUBDIRS = lal
+SUBDIRS = lal cmath
