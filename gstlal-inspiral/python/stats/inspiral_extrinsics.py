@@ -945,15 +945,13 @@ class InspiralExtrinsics(object):
 		DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
 		self.TimePhaseSNR = TimePhaseSNR.from_hdf5(DEFAULT_FILENAME)
 		self.p_of_ifos = {}
-		# FIXME these need to be renormalized based on a
-		# min_instruments which this class will need to take as a
-		# parameter
+		# FIXME add Kagra
 		self.p_of_ifos[("H1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1V1_p_of_instruments_given_H_d.h5"))
 		self.p_of_ifos[("H1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1_p_of_instruments_given_H_d.h5"))
 		self.p_of_ifos[("H1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1V1_p_of_instruments_given_H_d.h5"))
 		self.p_of_ifos[("L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "L1V1_p_of_instruments_given_H_d.h5"))
 		self.min_instruments = min_instruments
-		# remove combinations less than one instrument and renormalize
+		# remove combinations less than min instruments and renormalize
 		for pofI in self.p_of_ifos.values():
 			total = numpy.zeros(pofI.histograms.values()[0].array.shape)
 			for combo in list(pofI.histograms.keys()):
@@ -1003,7 +1001,7 @@ class TimePhaseSNR(object):
 	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
 	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 
-	def __init__(self, tree_data = None, margsky = None):
+	def __init__(self, tree_data = None, margsky = None, verbose = False):
 
 		# FIXME compute this more reliably or expose it as a property
 		# or something
@@ -1022,7 +1020,8 @@ class TimePhaseSNR(object):
 		# modify it afterward
 		self.KDTree = {}
 		for combo in self.combos:
-			print "initializing tree for: ", combo
+			if verbose:
+				print >> sys.stderr, "initializing tree for: ", combo
 			slcs = sorted(sum(self.instrument_pair_slices(self.instrument_pairs(combo)).values(),[]))
 			self.KDTree[combo] = spatial.cKDTree(self.tree_data[:,slcs])
 
@@ -1031,7 +1030,8 @@ class TimePhaseSNR(object):
 		if self.margsky is None:
 			self.margsky = {}
 			for combo in self.combos:
-				print "marginalizing tree for: ", combo
+				if verbose:
+					print >> sys.stderr, "marginalizing tree for: ", combo
 				slcs = sorted(sum(self.instrument_pair_slices(self.instrument_pairs(combo)).values(),[]))
 				#
 				# NOTE we approximate the marginalization
@@ -1129,7 +1129,7 @@ class TimePhaseSNR(object):
 		return out
 
 	@classmethod
-	def tile(cls, NSIDE = 16, NANGLE = 33):
+	def tile(cls, NSIDE = 16, NANGLE = 33, verbose = False):
 		# FIXME should be put at top, but do we require healpy?  It
 		# isn't necessary for running at the moment since cached
 		# versions of this will be used.
@@ -1145,10 +1145,12 @@ class TimePhaseSNR(object):
 		deff = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in cls.responses)
 		time = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in cls.responses)
 
-		print "tiling sky: \n"
+		if verbose:
+			print >> sys.stderr, "tiling sky: \n"
 		cnt = 0
 		for i in healpix_idxs:
-			print "sky %04d of %04d\r" % (i, len(healpix_idxs)),
+			if verbose:
+				print >> sys.stderr, "sky %04d of %04d\r" % (i, len(healpix_idxs)),
 			DEC, RA = healpy.pix2ang(NSIDE, i)
 			DEC -= numpy.pi / 2
 			for COSIOTA in numpy.linspace(-1, 1, NANGLE):
@@ -1162,7 +1164,8 @@ class TimePhaseSNR(object):
 						time[ifo][cnt] = lal.TimeDelayFromEarthCenter(cls.locations[ifo], RA, DEC, T)
 					cnt += 1
 
-		print "\n...done"
+		if verbose:
+			print >> sys.stderr, "\n...done"
 		return time, phase, deff
 
 	def __call__(self, time, phase, snr, horizon):
@@ -1176,10 +1179,10 @@ class TimePhaseSNR(object):
 		D = (point - nearestpoint)[0]
 		D2 = numpy.dot(D,D)
 		# FIXME 4. / (sum(s**2 for s in S.values())**.5)**4 is the term
-		# that goes like rho^-4 with a somewhat arbitrary
-		# normilization.  Could use the network snr minimum to
-		# normalize it properly
-		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix] / self.norm * 4. / (sum(s**2 for s in snr.values())**.5)**4
+		# that goes like rho^-4 with a somewhat arbitrary normilization
+		# which comes form 5.66 ~ (4**2 + 4**2)**.5, so that the factor
+		# is 1 for a double right at threshold.
+		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix] / self.norm * 5.66 / (sum(s**2 for s in snr.values())**.5)**4
 
 
 class p_of_instruments_given_horizons(object):
@@ -1195,8 +1198,6 @@ class p_of_instruments_given_horizons(object):
 			self.histograms = histograms
 			self.first_center = histograms.values()[0].centres()[0][0]
 			self.last_center = histograms.values()[0].centres()[0][-1]
-			#for combo in histograms:
-			#	histograms[combo] = rate.InterpBinnedArray(histograms[combo])
 		else:
 			combos = TimePhaseSNR.instrument_combos(self.instruments, min_instruments = 1)
 			self.histograms = {}
@@ -1204,7 +1205,6 @@ class p_of_instruments_given_horizons(object):
 			for i in range(len(self.instruments) - 1):
 				bins.append(rate.LogarithmicBins(self.hmin, self.hmax, self.nbins))
 			for combo in combos:
-				print combo
 				self.histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
 
 			self.first_center = histograms.values()[0].centres()[0][0]
@@ -1215,7 +1215,6 @@ class p_of_instruments_given_horizons(object):
 				alldeff.extend(v)
 			mindeff = min(alldeff)
 			maxdeff = max(alldeff)
-			print mindeff, maxdeff
 
 			for horizontuple in itertools.product(*[b.centres() for b in bins]):
 				horizondict = {}
@@ -1232,15 +1231,12 @@ class p_of_instruments_given_horizons(object):
 					LOW = self.hmin * 8. / self.snr_thresh / maxdeff
 					HIGH = max(horizontuple + (1,)) * 8. / self.snr_thresh / mindeff
 					for D in numpy.linspace(LOW, HIGH, 200):
-						#blah = 8 * horizondict[ifo] / (D * deff[ifo])
-						#print ifo, len(blah), D, 8 * horizondict[ifo], len(blah[blah > 4])
 						snrs.setdefault(ifo,[]).extend(8 * horizondict[ifo] / (D * deff[ifo]))
 						if cnt == 0:
 							prob.extend([D**2] * len(deff[ifo]))
 					snrs[ifo] = stats.ncx2.rvs(2, numpy.array(snrs[ifo])**2)**.5
 					snrs_above_thresh[ifo] = snrs[ifo] >= self.snr_thresh
 					snrs_below_thresh[ifo] = snrs[ifo] < self.snr_thresh
-					print horizontuple, ifo, len(snrs_above_thresh[ifo][snrs_above_thresh[ifo]])
 					prob = numpy.array(prob)
 				total = 0.
 				for combo in combos:
@@ -1258,8 +1254,6 @@ class p_of_instruments_given_horizons(object):
 					total += count
 				for I in self.histograms:
 					self.histograms[I][horizontuple] /= total
-					#print horizontuple, I, self.histograms[I][horizontuple]
-					#self.histograms[I] = rate.InterpBinnedArray(histograms[I])
 		self.mkinterp()
 
 	def mkinterp(self):
