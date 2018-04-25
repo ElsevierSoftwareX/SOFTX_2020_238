@@ -80,7 +80,7 @@ def parse_command_line():
 
 	if options.marginalize not in ("ranking-stat", "ranking-stat-pdf"):
 		raise ValueError("--marginalize must be one of 'ranking-stat' or 'ranking-stat-pdf'")
-	if options.density_estimate_zero_land and options.marginalize != "ranking-stat-pdf":
+	if options.density_estimate_zero_lag and options.marginalize != "ranking-stat-pdf":
 		raise ValueError("--density-estimate-zero-lag cannot be set unless --marginalize=ranking-stat-pdf")
 
 	if options.likelihood_cache:
