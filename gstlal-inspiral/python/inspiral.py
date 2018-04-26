@@ -252,6 +252,7 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 		raise ValueError("Could not parse bank files into valid bank dictionary.\n\t- Perhaps you are using out-of-date svd bank files?  Please ensure that they were generated with the same code version as the parsing code")
 	return banks
 
+
 def parse_iirbank_files(iir_banks, verbose, snr_threshold = 4.0):
 	"""
 	given a dictionary of lists of iir template bank file names parse them
@@ -884,6 +885,11 @@ class Data(object):
 				del event.snr_time_series
 
 	def T050017_filename(self, description, extension):
+		# input check
+		if "-" in description:
+			raise ValueError("invalid characters in description '%s'" % description)
+
+		# determine current extent
 		segs = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values() if any(seglistdict.values()))
 		if segs:
 			start, end = segs.extent()
@@ -891,6 +897,8 @@ class Data(object):
 			# silence errors at start-up.
 			# FIXME:  this is probably dumb.  who cares.
 			start = end = now()
+
+		# construct and return filename
 		start, end = int(math.floor(start)), int(math.ceil(end))
 		return "%s-%s-%d-%d.%s" % ("".join(sorted(self.rankingstat.instruments)), description, start, end - start, extension)
 
@@ -953,7 +961,6 @@ class Data(object):
 		# FIXME:  see comment in appsink_new_buffer()
 		two_or_more_instruments.protract(1e-3)	# 1 ms
 
-		ratebinlists = self.rankingstat.denominator.triggerrates.values()
 		for event in self.stream_thinca.flush(self.coincs_document.xmldoc, self.coincs_document.process_id, snr_segments, fapfar = self.fapfar):
 			if self.ranking_stat_output_url is None:
 				continue
@@ -1320,24 +1327,21 @@ class Data(object):
 			fname = self.T050017_filename(description + '_DISTSTATS', 'xml.gz')
 			shutil.copy(ligolw_utils.local_path_from_url(url), os.path.join(subdir_from_T050017_filename(fname), fname))
 
-	def __write_zero_lag_ranking_stat_url(self, url, verbose = False):
-		ligolw_utils.write_url(self.__get_zerolag_rankingstatpdf_xmldoc(), url, gz = (url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
-
 	def write_output_url(self, url = None, description = "", verbose = False):
 		with self.lock:
-			self.__write_output_url(url = url, verbose = verbose)
 			if self.ranking_stat_output_url is not None:
 				self.__write_ranking_stat_url(self.ranking_stat_output_url, description, verbose = verbose)
+			self.__write_output_url(url = url, verbose = verbose)
 
 	def snapshot_output_url(self, description, extension, verbose = False):
 		with self.lock:
-			coincs_document = self.coincs_document.get_another()
 			fname = self.T050017_filename(description, extension)
 			fname = os.path.join(subdir_from_T050017_filename(fname), fname)
-			self.__write_output_url(url = fname, verbose = verbose)
 			if self.ranking_stat_output_url is not None:
 				self.__write_ranking_stat_url(self.ranking_stat_output_url, description, snapshot = True, verbose = verbose)
 			if self.zerolag_rankingstatpdf_url is not None:
-				self.__write_zero_lag_ranking_stat_url(self.zerolag_rankingstatpdf_url, verbose = verbose)
+				ligolw_utils.write_url(self.__get_zerolag_rankingstatpdf_xmldoc(), self.zerolag_rankingstatpdf_url, gz = (self.zerolag_rankingstatpdf_url or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+			coincs_document = self.coincs_document.get_another()
+			self.__write_output_url(url = fname, verbose = verbose)
 			self.coincs_document = coincs_document
 			self.snr_time_series_cleanup_index = 0

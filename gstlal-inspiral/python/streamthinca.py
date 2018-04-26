@@ -310,9 +310,6 @@ class StreamThinca(object):
 			# table, so we take rows from the end until one is
 			# encountered whose ID is not in the
 			# coinc_event_map table, then bail out
-			# FIXME:  this code does not work with
-			# database-backed tables in versions of glue <=
-			# 1.58
 			coinc_event_ids = frozenset(coinc_event_map_table.getColumnByName("coinc_event_id"))
 			zero_lag_multi_instrument_coinc_event_ids = frozenset(row.coinc_event_id for row in itertools.takewhile(lambda row: row.coinc_event_id in coinc_event_ids, reversed(lsctables.CoincTable.get_table(xmldoc))) if row.nevents >= 2 and row.time_slide_id in self.zero_lag_time_slide_ids)
 

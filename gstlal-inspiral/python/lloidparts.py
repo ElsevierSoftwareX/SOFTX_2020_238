@@ -89,6 +89,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
 from gstlal import bottle
 from gstlal import datasource
+from gstlal import inspiral
 from gstlal import multirate_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
@@ -293,7 +294,7 @@ class Handler(simplehandler.Handler):
 				# get the instrument, psd, and timestamp.
 				# the "stability" is a measure of the
 				# fraction of the configured averaging
-				# timescale has been used to yield this
+				# timescale used to obtain this
 				# measurement.
 				# NOTE: epoch is used for the timestamp,
 				# this is the middle of the most recent FFT
@@ -402,34 +403,20 @@ class Handler(simplehandler.Handler):
 			seglistdicts = dict((key, value.copy()) for key, value in self.seglistdicts.items())
 
 			# keep everything before timestamp in the current
-			# segmentlistdicts.
+			# segmentlistdicts.  keep everything after
+			# timestamp in the copy we need to apply the cut
+			# this way around so that the T050017 filename
+			# constructed below has the desired start and
+			# duration
 			for seglistdict in self.seglistdicts.values():
 				seglistdict -= seglistdict.fromkeys(seglistdict, segments.segmentlist([segments.segment(timestamp, segments.PosInfinity)]))
-			# keep everything after timestamp in the copy
 			for seglistdict in seglistdicts.values():
 				seglistdict -= seglistdict.fromkeys(seglistdict, segments.segmentlist([segments.segment(segments.NegInfinity, timestamp)]))
 
-			# construct a filename for the current (clipped)
-			# segmentlistdicts
-			try:
-				instruments = set(instrument for seglistdict in self.seglistdicts.values() for instrument in seglistdict)
-				start, end = segments.segmentlist(seglistdict.extent_all() for seglistdict in self.seglistdicts.values()).extent()
-			except ValueError:
-				print >>sys.stderr, "Warning: couldn't build segment list on checkpoint, probably there aren't any segments"
-				return
-			start = int(math.floor(start))
-			duration = int(math.ceil(end)) - start
-			# FIXME integrate with the Data class snapshotting
-			# directories
-			path = str(start)[:5]
-			try:
-				os.mkdir(path)
-			except OSError:
-				pass
-			fname = os.path.join(path, "%s-%s_SEGMENTS-%d-%d.xml.gz" % ("".join(sorted(instruments)), self.tag, start, duration))
-
 			# write the current (clipped) segmentlistdicts to
 			# disk
+			fname = self.dataclass.T050017_filename("%s_SEGMENTS" % self.tag, ".xml.gz")
+			fname = os.path.join(inspiral.subdir_from_T050017_filename(fname), fname)
 			ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
 			# continue with the (clipped) copy
@@ -542,12 +529,12 @@ class Handler(simplehandler.Handler):
 		A method to update the recent segment histories
 		"""
 		current_gps_time = lal.GPSTimeNow()
-		interval_to_keep = segments.segmentlist([segments.segment(current_gps_time - self.segment_history_duration, current_gps_time)])
+		interval_to_discard = segments.segmentlist((segments.segment(segments.NegInfinity, current_gps_time - self.segment_history_duration),))
 		for segtype, seglistdict in self.recent_segment_histories.items():
 			seglistdict.extend(self.seglistdicts[segtype])
 			seglistdict.coalesce()
 			for seglist in seglistdict.values():
-				seglist &= interval_to_keep
+				seglist -= interval_to_discard
 
 	def gen_recent_segment_history_xmldoc(self):
 		"""!
