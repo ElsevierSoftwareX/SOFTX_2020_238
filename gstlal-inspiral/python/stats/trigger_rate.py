@@ -123,6 +123,10 @@ class ratebin(segments.segment):
 	3.75@[5,10)
 	>>> (x & y).density
 	0.75
+	>>> x & x
+	10@[0,10)
+	>>> x
+	5@[0,10)
 
 	BUGS:  comparisons and hash behaviour are inherited from the
 	segment class, specifically this means the count attribute is
@@ -180,13 +184,13 @@ class ratebin(segments.segment):
 	def __and__(self, other):
 		new = super(ratebin, self).__and__(other)
 		if self._count is not None or other._count is not None:
-			new._count = (self.density + other.density) * float(abs(new))
+			return type(self)(new, count = (self.density + other.density) * float(abs(new)))
 		return new
 
 	def __or__(self, other):
 		new = super(ratebin, self).__or__(other)
 		if self._count is not None or other._count is not None:
-			new._count = (self._count or 0) + (other._count or 0)
+			return type(self)(new, count = (self._count or 0) + (other._count or 0))
 		return new
 
 	__add__ = __or__
@@ -194,7 +198,7 @@ class ratebin(segments.segment):
 	def __sub__(self, other):
 		new = super(ratebin, self).__sub__(other)
 		if self._count is not None:
-			new._count = self._count - other.density * (float(abs(self)) - float(abs(new)))
+			return type(self)(new, count = self._count - other.density * (float(abs(self)) - float(abs(new))))
 		return new
 
 	#
