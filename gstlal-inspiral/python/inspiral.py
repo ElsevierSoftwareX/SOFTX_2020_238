@@ -877,9 +877,6 @@ class Data(object):
 			# we encounter the first trigger whose SNR series
 			# might still be needed, save its index, and start
 			# the search from there next time
-			# FIXME:  could also trim segment and V data from
-			# ranking stat object if ranking_stat_output_url is
-			# not set because the info won't be used
 			discard_boundary = self.stream_thinca.discard_boundary
 			for self.snr_time_series_cleanup_index, event in enumerate(self.coincs_document.sngl_inspiral_table[self.snr_time_series_cleanup_index:], self.snr_time_series_cleanup_index):
 				if event.end >= discard_boundary:

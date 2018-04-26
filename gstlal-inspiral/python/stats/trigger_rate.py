@@ -1,4 +1,4 @@
-# Copyright (C) 2017  Kipp Cannon
+# Copyright (C) 2017,2018  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -53,7 +53,7 @@ class ratebin(segments.segment):
 	count of things.  Arithmetic operations update the count by
 	interpreting the count as a uniform density of things throughout
 	the interval spanned by the segment.  For example, the intersection
-	of two ratebins is the interval they have in comment, and the
+	of two ratebins is the interval they have in common, and the
 	intersection's count is given by the sum of the densities of the
 	two multiplied by the size of the intersection.
 
