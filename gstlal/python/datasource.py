@@ -791,10 +791,11 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	"""
 	dqvector = statevector = None
 
+	# NOTE: timestamp_offset is a hack to allow seeking with fake sources, a real solution should be fixing the general timestamp problem which would allow seeking to work properly
 	if gw_data_source_info.data_source == "white":
-		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, volume = 1.0)
+		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, volume = 1.0, timestamp_offset = int(gw_data_source_info.seg[0]) * Gst.SECOND)
 	elif gw_data_source_info.data_source == "silence":
-		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, wave = 4)
+		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, wave = 4, timestamp_offset = int(gw_data_source_info.seg[0]) * Gst.SECOND)
 	elif gw_data_source_info.data_source == "LIGO":
 		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
 	elif gw_data_source_info.data_source == "AdvLIGO":

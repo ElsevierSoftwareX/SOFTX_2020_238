@@ -421,12 +421,12 @@ def mkaudiotestsrc(pipeline, **properties):
 
 
 ## see documentation for mktaginject() mkcapsfilter() and mkaudiotestsrc()
-def mkfakesrc(pipeline, instrument, channel_name, blocksize = None, volume = 1e-20, is_live = False, wave = 9, rate = 16384):
+def mkfakesrc(pipeline, instrument, channel_name, blocksize = None, volume = 1e-20, is_live = False, wave = 9, rate = 16384, **properties):
 	if blocksize is None:
 		# default blocksize is 1 second * rate samples/second * 8
 		# bytes/sample (assume double-precision floats)
 		blocksize = 1 * rate * 8
-	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw, format=F64%s, rate=%d" % (BYTE_ORDER, rate)), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live, **properties), "audio/x-raw, format=F64%s, rate=%d" % (BYTE_ORDER, rate)), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-audiofirfilter.html">audiofirfilter</a> element to a pipeline with useful default properties
