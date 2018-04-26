@@ -518,6 +518,7 @@ def parse_command_line():
 	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the feature extractor with a 4 digit integer string code, padded with zeros. Default = 0001")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
+	parser.add_option("--waveform", metavar = "string", default = "half_sine_gaussian", help = "Specifies the waveform used for matched filtering. Possible options: (half_sine_gaussian, sine_gaussian). Default = half_sine_gaussian")
 	parser.add_option("--trigger-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
 	parser.add_option("--trigger-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
 
@@ -717,7 +718,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			if options.latency_output:
 				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterwhitening', 3, channel, rate))
 
-			# choose range of basis parameters for sine-gaussians
+			# choose range of basis parameters
 			# NOTE: scale down frequency range by downsample_factor to deal with rolloff from downsampler
 			downsample_factor = 0.8
 			flow = rate/4. * downsample_factor
@@ -728,17 +729,23 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			else:
 				qhigh = options.qhigh
 
-			# generate half sine-gaussian templates
-			hsg_waveforms = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
-			basis_params[(channel, rate)] = hsg_waveforms.parameter_grid
+			# generate templates
+			if options.waveform == 'half_sine_gaussian':
+				waveforms = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
+			elif options.waveform == 'sine_gaussian':
+				waveforms = idq_utils.SineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
+			else:
+				raise NotImplementedError
+
+			basis_params[(channel, rate)] = waveforms.parameter_grid
 			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 
 			# determine whether to do time-domain or frequency-domain convolution
-			time_domain = (hsg_waveforms.max_duration*rate**2) < (5*hsg_waveforms.max_duration*rate*numpy.log2(rate))
+			time_domain = (waveforms.max_duration*rate**2) < (5*waveforms.max_duration*rate*numpy.log2(rate))
 
 			# create FIR bank of half sine-gaussian templates
-			fir_matrix = numpy.array([waveform for waveform in hsg_waveforms.generate_templates()])
-			thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = 0)
+			fir_matrix = numpy.array([waveform for waveform in waveforms.generate_templates()])
+			thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = int(numpy.ceil(waveforms.latency * rate)))
 
 			# add queues, change stream format, add tags
 			if options.latency_output:

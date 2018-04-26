@@ -146,6 +146,7 @@ def feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, parent_nodes, seg
 						"trigger-end-time":int(seg[1]),
 						"data-source":"frames",
 						"mismatch":options.mismatch,
+						"waveform":options.waveform,
 						"qhigh":options.qhigh,
 						"channel-name":' '.join(channels),
 						"job-id":str(ii + 1).zfill(4),
@@ -192,6 +193,7 @@ def parse_command_line():
 	parser.add_option("--concurrency", type = "int", default = 4, help = "Maximum allowed number of parallel jobs reading from the same file, done to prevent I/O locks")
 	parser.add_option("--segment-length", type = "int", default = 6000, help = "Maximum segment length to process per job. Default = 6000 seconds.")
 	parser.add_option("-l", "--latency", action = "store_true", help = "Print latency to output ascii file. Temporary.")
+	parser.add_option("--waveform", metavar = "string", default = "half_sine_gaussian", help = "Specifies the waveform used for matched filtering. Possible options: (half_sine_gaussian, sine_gaussian). Default = half_sine_gaussian")
 	parser.add_option("--save-hdf", action = "store_true", default = False, help = "If set, will save hdf5 files to disk straight from dataframe once every cadence")
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 

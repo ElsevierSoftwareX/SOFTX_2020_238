@@ -233,7 +233,7 @@ class HDF5FeatureData(FeatureData):
 
 class HalfSineGaussianGenerator(object):
 	"""
-	Generates sine gaussian templates based on a f, Q range and a sampling frequency.
+	Generates half sine gaussian templates based on a f, Q range and a sampling frequency.
 	"""
 	def __init__(self, f_range, q_range, f_samp, mismatch=0.2, tolerance=5e-3):
 		### define parameter range
@@ -244,11 +244,12 @@ class HalfSineGaussianGenerator(object):
 		self.tol = tolerance
 
 		### define grid and template duration
-		self.parameter_grid = [(f, q, self.duration(f, q)/2.) for f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high)]
+		self.parameter_grid = [(f, q, self.duration(f, q)) for f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high)]
 		self.max_duration = max(duration for f, q, duration in self.parameter_grid)
 
 		self.phases = [0., numpy.pi/2.]
-		self.times = numpy.linspace(-self.max_duration/2., self.max_duration/2., int(numpy.floor(self.max_duration*self.f_samp)+1))
+		self.times = numpy.linspace(-self.max_duration, 0, int(numpy.ceil(self.max_duration*self.f_samp)), endpoint=True)
+		self.latency = 0
 
 	def generate_templates(self, quadrature = True):
 		"""
@@ -263,13 +264,13 @@ class HalfSineGaussianGenerator(object):
 
 	def duration(self, f, q):
 		"""
-		return the duration of the full sine-gaussian waveform such that its edges will die out to tolerance of the peak.
+		return the duration of a half sine-gaussian waveform such that its edges will die out to tolerance of the peak.
 		"""
-		return (q/(2.*numpy.pi*f)) * numpy.log(1./self.tol)
+		return 0.5 * (q/(2.*numpy.pi*f)) * numpy.log(1./self.tol)
 	
 	def waveform(self, f, q, phase):
 		"""
-		construct sine gaussian waveforms that taper to tolerance at edges of window
+		construct half sine gaussian waveforms that taper to tolerance at edges of window
 		f is the central frequency of the waveform
 		"""
 		dt = self.times[1] - self.times[0]
@@ -278,17 +279,13 @@ class HalfSineGaussianGenerator(object):
 	
 		# phi is the central frequency of the sine gaussian
 		tau = q/(2.*numpy.pi*f)
-		sg_vals = numpy.cos(2.*numpy.pi*f*self.times + phase)*numpy.exp(-1.*self.times**2./tau**2.)
+		template = numpy.cos(2.*numpy.pi*f*self.times + phase)*numpy.exp(-1.*self.times**2./tau**2.)
 	
-		# only take first half of sine gaussian + peak
-		samples = sg_vals.size/2 + 1
-		hsg_vals = sg_vals[:samples]
-		
 		# normalize sine gaussians to have unit length in their vector space
-		inner_product = numpy.sum(hsg_vals*hsg_vals)
+		inner_product = numpy.sum(template*template)
 		norm_factor = 1./(inner_product**0.5)
 	
-		return norm_factor*hsg_vals
+		return norm_factor * template
 	
 	def num_q_templates(self, q_min, q_max):
 		"""
@@ -319,3 +316,18 @@ class HalfSineGaussianGenerator(object):
 				f = f_min * (f_max/f_min)**( (0.5+l) /num_f)
 				if f < f_max / (1 + (numpy.sqrt(11)/q)):
 					yield (f, q)
+
+class SineGaussianGenerator(HalfSineGaussianGenerator):
+	"""
+	Generates sine gaussian templates based on a f, Q range and a sampling frequency.
+	"""
+	def __init__(self, f_range, q_range, f_samp, mismatch=0.2, tolerance=5e-3):
+		super(SineGaussianGenerator, self).__init__(f_range, q_range, f_samp, mismatch=mismatch, tolerance=tolerance)
+		self.times = numpy.linspace(-self.max_duration/2., self.max_duration/2., int(numpy.ceil(self.max_duration*self.f_samp)), endpoint=True)
+		self.latency = self.max_duration / 2.
+
+	def duration(self, f, q):
+		"""
+		return the duration of a sine-gaussian waveform such that its edges will die out to tolerance of the peak.
+		"""
+		return 2 * super(SineGaussianGenerator, self).duration(f, q)

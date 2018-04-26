@@ -36,7 +36,8 @@ CONCURRENCY = 1
 # Length of time to process for a given job
 SEGMENT_LENGTH = 3500
 
-# Parameter space config of half-sine-gaussians
+# Waveform type and parameter space settings
+WAVEFORM = half_sine_gaussian
 MISMATCH = 0.05
 QHIGH = 100
 
@@ -98,6 +99,7 @@ dag : frame.cache plots $(CHANNEL_LIST) segments.xml.gz
 		--frame-segments-file segments.xml.gz \
 		--frame-segments-name datasegments \
 		--local-frame-caching \
+		--waveform $(WAVEFORM) \
 		--channel-list $(CHANNEL_LIST) \
 		--out-path $(OUTPATH) \
 		--max-serial-streams $(MAX_SERIAL_STREAMS) \
