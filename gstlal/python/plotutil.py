@@ -74,7 +74,10 @@ floatpattern = re.compile("([+-]?[.0-9]+)[Ee]([+-]?[0-9]+)")
 def latexnumber(s):
 	"""
 	Convert a string of the form "d.dddde-dd" to "d.dddd \\times
-	10^{-dd}"
+	10^{-dd}".  Strings that contain neither an "e" nor an "E" are
+	returned unchanged.
 	"""
+	if "e" not in s and "E" not in s:
+		return s
 	m, e = floatpattern.match(s).groups()
 	return r"%s \times 10^{%d}" % (m, int(e))
