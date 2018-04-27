@@ -643,7 +643,7 @@ WHERE
 	def is_healthy(self):
 		# do we believe the PDFs are sufficiently well-defined to
 		# compute FAPs and FARs?
-		return self.noise_lr_lnpdf.array.sum() > 1000000 and self.zero_lag_lr_lnpdf.sum() > 10000
+		return self.noise_lr_lnpdf.array.sum() > 1000000 and self.zero_lag_lr_lnpdf.array.sum() > 10000
 
 
 	@classmethod
