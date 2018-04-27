@@ -511,8 +511,10 @@ WHERE
 		# apply density estimation preserving total count, then
 		# normalize PDF
 		count_before = self.zero_lag_lr_lnpdf.array.sum()
-		self.density_estimate(self.zero_lag_lr_lnpdf, "zero lag")
-		self.zero_lag_lr_lnpdf.array *= count_before / self.zero_lag_lr_lnpdf.array.sum()
+		# FIXME:  should .normalize() be able to handle NaN?
+		if count_before:
+			self.density_estimate(self.zero_lag_lr_lnpdf, "zero lag")
+			self.zero_lag_lr_lnpdf.array *= count_before / self.zero_lag_lr_lnpdf.array.sum()
 		self.zero_lag_lr_lnpdf.normalize()
 
 
