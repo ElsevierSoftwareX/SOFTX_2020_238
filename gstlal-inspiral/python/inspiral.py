@@ -652,7 +652,10 @@ class Data(object):
 				raise ValueError("\"%s\" does not contain ranking statistic PDFs" % url)
 			if not self.rankingstat.template_ids <= self.rankingstatpdf.template_ids:
 				raise ValueError("\"%s\" is for the wrong templates")
-			self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())
+			if self.rankingstatpdf.is_healthy():
+				self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())
+			else:
+				self.fapfar = None
 		else:
 			self.rankingstatpdf = None
 			self.fapfar = None
