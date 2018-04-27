@@ -43,10 +43,11 @@ def colour_from_instruments(instruments, colours = {
 	"H1": numpy.array((1.0, 0.0, 0.0)),
 	"H2": numpy.array((0.0, 0.0, 1.0)),
 	"L1": numpy.array((0.0, 0.7, 0.0)),
-	"V1": numpy.array((1.0, 0.0, 1.0)),
 	"E1": numpy.array((1.0, 0.0, 0.0)),
 	"E2": numpy.array((0.0, 0.8, 0.0)),
 	"E3": numpy.array((1.0, 0.0, 1.0)),
+	"V1": numpy.array((1.0, 0.0, 1.0)),
+	"K1": numpy.array((0.0, 0.0, 1.0)),
 }):
 	# mix colours additively
 	colour = sum(map(colours.__getitem__, instruments))
