@@ -1,0 +1,58 @@
+#!/usr/bin/python
+# Copyright 2018 Chad Hanna
+#
+import sys
+import os
+import subprocess
+
+def process_source(prog, outfile):
+	for line in open(prog):
+		if not line.startswith("###"):
+			continue
+		outfile.write(line.replace("### ", "").replace("###",""))
+		
+
+if len(sys.argv) == 1:
+	print "USAGE: sphinx-bindoc <output directory> <input directory>"
+	sys.exit()
+
+assert(len(sys.argv) == 3)
+
+indir = sys.argv[2]
+outdir = sys.argv[1]
+
+tocf = open(os.path.join(outdir, "bin.rst"), "w")
+tocf.write("""bin
+===
+
+.. toctree::
+   :maxdepth: 1
+""")
+
+for prog in os.listdir(indir):
+	# Don't document make files
+	if "Makefile" in prog:
+		continue
+
+	path_to_prog = os.path.join(indir, prog)
+
+	# Write the rst file that contains command line arguments
+	fname = os.path.join(outdir, prog+".rst")
+	print >> sys.stderr, "Creating file ", fname
+	f = open(fname, "w", 0)
+
+	# parse the bin program itself for additional documentation
+	f.write("%s\n%s\n\n" % (prog, "".join(["="] * len(prog))))
+	process_source(path_to_prog, f)
+
+	# write the output of --help
+	f.write("%s\n%s\n\n" % ("Command line options", "".join(["-"] * len("Command line options"))))
+	subprocess.call([path_to_prog, "--help"], stdout = f)
+
+	# close the file
+	f.close()
+
+	# register this program in the master list of programs
+	tocf.write("\n   %s" % os.path.split(fname)[-1].replace(".rst",""))
+
+tocf.close()
