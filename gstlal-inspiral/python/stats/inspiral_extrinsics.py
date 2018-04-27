@@ -940,39 +940,6 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 #
 
 
-class InspiralExtrinsics(object):
-	def __init__(self, min_instruments = 1):
-		DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
-		self.TimePhaseSNR = TimePhaseSNR.from_hdf5(DEFAULT_FILENAME)
-		self.p_of_ifos = {}
-		# FIXME add Kagra
-		self.p_of_ifos[("H1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1V1_p_of_instruments_given_H_d.h5"))
-		self.p_of_ifos[("H1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1_p_of_instruments_given_H_d.h5"))
-		self.p_of_ifos[("H1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1V1_p_of_instruments_given_H_d.h5"))
-		self.p_of_ifos[("L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "L1V1_p_of_instruments_given_H_d.h5"))
-		self.min_instruments = min_instruments
-		# remove combinations less than min instruments and renormalize
-		for pofI in self.p_of_ifos.values():
-			total = numpy.zeros(pofI.histograms.values()[0].array.shape)
-			for combo in list(pofI.histograms.keys()):
-				if len(combo) < self.min_instruments:
-					del pofI.histograms[combo]
-				else:
-					total += pofI.histograms[combo].array
-			for combo in pofI.histograms:
-				pofI.histograms[combo].array /= total
-			pofI.mkinterp()
-
-	def p_of_instruments_given_horizons(self, instruments, horizons):
-		horizons = dict((k,v) for k,v in horizons.items() if v != 0)
-		# if only one instrument is on the probability is 1.0
-		if set(horizons) & set(instruments) != set(instruments):
-			raise ValueError("A trigger exists for a detector with zero horizon distance")
-		if len(horizons) == 1:
-			return 1.0
-		on_ifos = tuple(sorted(horizons.keys()))
-		return self.p_of_ifos[on_ifos](instruments, horizons)
-
 def chunker(seq, size):
 	return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
 
@@ -1295,3 +1262,44 @@ class p_of_instruments_given_horizons(object):
 			histograms[combo].array[:] = numpy.array(grp[",".join(combo)])[:]
 		f.close()
 		return p_of_instruments_given_horizons(instruments = instruments, snr_thresh = snr_thresh, nbins = nbins, hmin = hmin, hmax = hmax, histograms = histograms)
+
+
+class InspiralExtrinsics(object):
+
+	time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"))
+	p_of_ifos = {}
+	# FIXME add Kagra
+	p_of_ifos[("H1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1V1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("H1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("H1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1V1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "L1V1_p_of_instruments_given_H_d.h5"))
+
+	def __init__(self, min_instruments = 1):
+		#
+		# NOTE every instance will repeat this min_instruments
+		# normalization.  Therefore different min_instruments are not
+		# supported in the same process. You will get incorrect
+		# results.
+		#
+		self.min_instruments = min_instruments
+		# remove combinations less than min instruments and renormalize
+		for pofI in self.p_of_ifos.values():
+			total = numpy.zeros(pofI.histograms.values()[0].array.shape)
+			for combo in list(pofI.histograms.keys()):
+				if len(combo) < self.min_instruments:
+					del pofI.histograms[combo]
+				else:
+					total += pofI.histograms[combo].array
+			for combo in pofI.histograms:
+				pofI.histograms[combo].array /= total
+			pofI.mkinterp()
+
+	def p_of_instruments_given_horizons(self, instruments, horizons):
+		horizons = dict((k,v) for k,v in horizons.items() if v != 0)
+		# if only one instrument is on the probability is 1.0
+		if set(horizons) & set(instruments) != set(instruments):
+			raise ValueError("A trigger exists for a detector with zero horizon distance")
+		if len(horizons) == 1:
+			return 1.0
+		on_ifos = tuple(sorted(horizons.keys()))
+		return self.p_of_ifos[on_ifos](instruments, horizons)
