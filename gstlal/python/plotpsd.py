@@ -107,6 +107,18 @@ def axes_plot_cummulative_snr(axes, psds, coinc_xmldoc):
 	axes.legend(loc = "upper left")
 
 
+def latex_horizon_distance(Mpc):
+	if Mpc >= 0.25:
+		# :-)
+		return "%s Mpc" % plotutil.latexnumber("%.4g" % Mpc)
+	elif Mpc >= 2**-12:
+		# :-(
+		return "%s kpc" % plotutil.latexnumber("%.4g" % (Mpc * 1e3))
+	else:
+		# X-P
+		return "%s pc" % plotutil.latexnumber("%.4g" % (Mpc * 1e6))
+
+
 def axes_plot_psds(axes, psds, coinc_xmldoc = None):
 	"""!
 	Places a PSD plot into a matplotlib Axes object.
@@ -150,11 +162,11 @@ def axes_plot_psds(axes, psds, coinc_xmldoc = None):
 		if instrument in on_instruments:
 			alpha = 0.8
 			linestyle = "-"
-			label = "%s (%.4g Mpc Horizon)" % (instrument, horizon_distance(psd, 8.)[0])
+			label = "%s (%s Horizon)" % (instrument, latex_horizon_distance(horizon_distance(psd, 8.)[0]))
 		else:
 			alpha = 0.6
 			linestyle = ":"
-			label = "%s (Off, Last Seen With %.4g Mpc Horizon)" % (instrument, horizon_distance(psd, 8.)[0])
+			label = "%s (Off, Last Seen With %s Horizon)" % (instrument, latex_horizon_distance(horizon_distance(psd, 8.)[0]))
 		axes.loglog(f, psd_data, color = plotutil.colour_from_instruments([instrument]), alpha = alpha, linestyle = linestyle, label = label)
 		if instrument in sngl_inspirals:
 			logging.info("found %s event with SNR %g" % (instrument, sngl_inspirals[instrument].snr))
