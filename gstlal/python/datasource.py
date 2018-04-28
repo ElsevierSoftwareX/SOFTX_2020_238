@@ -827,20 +827,20 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			raise ValueError(gw_data_source_info.data_source)
 
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True)
+
+		# extract strain with 1 minute of buffering
+		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1)
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_static_pad("sink"))
 		pipeparts.framecpp_channeldemux_set_units(src, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
 
-		# strain
-		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1) # 1 minutes of buffering
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_static_pad("sink"))
-		# State vector and DQ vector
-		# FIXME:  don't hard-code channel name
-		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1) # 1 minutes of buffering
-		dqvector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1) # 1 minutes of buffering
+		# extract state vector and DQ vector with 1 minute of
+		# buffering
+		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1)
+		dqvector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1)
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
-		if gw_data_source_info.state_channel_type == "ODC" or gw_data_source_info.state_channel_dict[instrument] == "Hrec_Flag_Quality":
-			# FIXME: This goes away when the ODC channel format is fixed.
-			statevector = pipeparts.mkgeneric(pipeline, statevector, "lal_fixodc")
+
+		# convert state vector and DQ vector to booleans
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
 		dqvector = pipeparts.mkstatevector(pipeline, dqvector, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
@@ -850,7 +850,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			off = elem.get_property("off-samples")
 			gap = elem.get_property("gap-samples")
 			return "%.9f %d %d %d" % (t, on, off, gap)
-
 		@bottle.route("/%s/dq_vector_on_off_gap.txt" % instrument)
 		def dq_vector_state(elem = dqvector):
 			t = float(lal.UTCToGPS(time.gmtime()))
@@ -858,31 +857,29 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			off = elem.get_property("off-samples")
 			gap = elem.get_property("gap-samples")
 			return "%.9f %d %d %d" % (t, on, off, gap)
-
 		statevector = pipeparts.mktee(pipeline, statevector)
 		dqvector = pipeparts.mktee(pipeline, dqvector)
-		# use state vector to gate strain
-		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector), default_state = False, name = "%s_state_vector_gate" % instrument)
 
-		# use dq vector to gate strain
+		# use state vector and DQ vector to gate strain
+		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector), default_state = False, name = "%s_state_vector_gate" % instrument)
 		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector), default_state = False, name = "%s_dq_vector_gate" % instrument)
 
 		# fill in holes, skip duplicate data
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
+		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, silent = False)
+		dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
 		@bottle.route("/%s/strain_add_drop.txt" % instrument)
-		def strain_add(elem = src):
+		# FIXME don't hard code the sample rate
+		def strain_add(elem = src, rate = 16384):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			add = elem.get_property("add")
 			drop = elem.get_property("drop")
-			# FIXME don't hard code the sample rate
-			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
+			return "%.9f %d %d" % (t, add // rate, drop // rate)
 
 		# 10 minutes of buffering
-		dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
-		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, silent = False)
-		statevector = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 12)
-		dqvector = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 12)
 		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
+		statevector = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
+		dqvector = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
 	else:
