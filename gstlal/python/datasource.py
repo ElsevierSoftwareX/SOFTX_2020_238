@@ -246,26 +246,17 @@ def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vec
 		>>> state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list,{})
 		{'V1': [7, 598], 'H1': [7, 850], 'L1': [7, 850]}
 	"""
-	for line in on_bit_list:
-		ifo = line.split("=")[0]
-		bits = "".join(line.split("=")[1:])
-		try:
-			val = int(bits)
-		except ValueError: # could be hex, that is all we support other than int
-			val = int(bits, 16)
+	for ifo, bits in [line.strip().split("=", 1) for line in on_bit_list]:
+		bits = int(bits, 16) if bits.startswith("0x") else int(bits)
 		try:
 			state_vector_on_off_dict[ifo][0] = val
 		except KeyError:
 			state_vector_on_off_dict[ifo] = [val, 0]
-	
-	for line in off_bit_list:
-		ifo = line.split("=")[0]
-		bits = "".join(line.split("=")[1:])
+
+	for ifo, bits in [line.strip().split("=", 1) for line in off_bit_list]:
+		bits = int(bits, 16) if bits.startswith("0x") else int(bits)
 		# shouldn't have to worry about key errors at this point
-		try:
-			state_vector_on_off_dict[ifo][1] = int(bits)
-		except ValueError: # must be hex
-			state_vector_on_off_dict[ifo][1] = int(bits, 16)
+		state_vector_on_off_dict[ifo][1] = bits
 
 	return state_vector_on_off_dict
 
