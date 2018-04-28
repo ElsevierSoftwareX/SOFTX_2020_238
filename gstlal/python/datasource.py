@@ -249,9 +249,9 @@ def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vec
 	for ifo, bits in [line.strip().split("=", 1) for line in on_bit_list]:
 		bits = int(bits, 16) if bits.startswith("0x") else int(bits)
 		try:
-			state_vector_on_off_dict[ifo][0] = val
+			state_vector_on_off_dict[ifo][0] = bits
 		except KeyError:
-			state_vector_on_off_dict[ifo] = [val, 0]
+			state_vector_on_off_dict[ifo] = [bits, 0]
 
 	for ifo, bits in [line.strip().split("=", 1) for line in off_bit_list]:
 		bits = int(bits, 16) if bits.startswith("0x") else int(bits)
