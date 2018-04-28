@@ -65,10 +65,6 @@
 #include <framecpp/FrVect.hh>
 #include <framecpp/IFrameStream.hh>
 
-#if defined(FRAMECPP_VERSION_NUMBER) && ( FRAMECPP_VERSION_NUMBER >= 205000 )
-#define VERIFY_THROWS_EXCEPTION 1
-#endif /* */
-
 
 /*
  * our own stuff
