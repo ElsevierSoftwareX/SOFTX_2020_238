@@ -20,7 +20,6 @@ from glue.ligolw import dbtables
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import table
-from pylal import db_thinca_rings
 from lal import rate
 import numpy
 import math
@@ -31,6 +30,59 @@ from glue.ligolw.utils import process
 from lalsimulation import SimInspiralTaylorF2ReducedSpinComputeChi, SimIMRPhenomBComputeChi
 
 import sqlite3
+
+def get_thinca_zero_lag_segments(connection, program_name = "thinca"):
+	"""
+	Return the thinca rings from the database at the given connection.  The
+	rings are returned as a coalesced glue.segments.segmentlistdict indexed
+	by instrument.
+
+	Example:
+
+	>>> seglists = get_thinca_zero_lag_segments(connection)
+	>>> print(seglists.keys())
+	['H1', 'L1']
+
+	This function is most useful if only zero-lag segments are desired
+	because it allows for more convenient manipulation of the segment lists
+	using the methods in glue.segments.  If information about background
+	segments or the original ring boundaries is desired the data returned by
+	get_thinca_rings_by_available_instruments() is required.
+	"""
+	# extract the raw rings indexed by instrument
+
+	xmldoc = dbtables.get_xml(connection)
+	seglists = ligolw_search_summary.segmentlistdict_fromsearchsummary(xmldoc, program_name)
+	xmldoc.unlink()
+
+	# remove rings that are exact duplicates on the assumption that there are
+	# zero-lag and time-slide thinca jobs represented in the same document
+
+	seglists = segments.segmentlistdict((key, segments.segmentlist(set(value))) for key, value in seglists.items())
+
+	# coalesce the remaining segments making sure we don't loose livetime in
+	# the process
+
+	durations_before = abs(seglists)
+	seglists.coalesce()
+	if abs(seglists) != durations_before:
+		raise ValueError, "detected overlapping thinca rings"
+
+	# done
+
+	return seglists
+
+
+def get_veto_segments(connection, name):
+	"""
+	Return a coalesced glue.segments.segmentlistdict object containing the
+	segments of the given name extracted from the database at the given
+	connection.
+	"""
+	xmldoc = dbtables.get_xml(connection)
+	seglists = ligolw_segments.segmenttable_get_by_name(xmldoc, name).coalesce()
+	xmldoc.unlink()
+	return seglists
 
 
 def allowed_analysis_table_names():
@@ -188,11 +240,11 @@ def get_segments(connection, xmldoc, table_name, live_time_program, veto_segment
 		if live_time_program == "gstlal_inspiral":
 			segs = ligolw_segments.segmenttable_get_by_name(xmldoc, data_segments_name).coalesce()
 		elif live_time_program == "thinca":
-			segs = db_thinca_rings.get_thinca_zero_lag_segments(connection, program_name = live_time_program).coalesce()
+			segs = get_thinca_zero_lag_segments(connection, program_name = live_time_program).coalesce()
 		else:
 			raise ValueError("for burst tables livetime program must be one of gstlal_inspiral, thinca")
 		if veto_segments_name is not None:
-			veto_segs = db_thinca_rings.get_veto_segments(connection, veto_segments_name)
+			veto_segs = get_veto_segments(connection, veto_segments_name)
 			segs -= veto_segs
 		return segs
 	elif table_name == dbtables.lsctables.CoincRingdownTable.tableName:
@@ -208,9 +260,9 @@ def get_segments(connection, xmldoc, table_name, live_time_program, veto_segment
 				veto_segs = ligolw_segments.segmenttable_get_by_name(xmldoc, veto_segments_name).coalesce()
 				segs -= veto_segs
 		elif live_time_program == "waveburst":
-			segs = db_thinca_rings.get_thinca_zero_lag_segments(connection, program_name = live_time_program).coalesce()
+			segs = get_thinca_zero_lag_segments(connection, program_name = live_time_program).coalesce()
 			if veto_segments_name is not None:
-				veto_segs = db_thinca_rings.get_veto_segments(connection, veto_segments_name)
+				veto_segs = get_veto_segments(connection, veto_segments_name)
 				segs -= veto_segs
 		else:
 			raise ValueError("for burst tables livetime program must be one of omega_to_coinc, waveburst")
