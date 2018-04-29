@@ -118,6 +118,11 @@ def webserver_url():
 		return "https://ldas-jobs.ligo.caltech.edu"
 	if ".phys.uwm.edu" in host or ".cgca.uwm.edu" in host or ".nemo.uwm.edu" in host:
 		return "https://ldas-jobs.cgca.uwm.edu"
+	# FIXME:  this next system does not have a web server, but not
+	# having a web server is treated as a fatal error so we have to
+	# make something up if we want to make progress
+	if ".icrr.u-tokyo.ac.jp" in host:
+		return "https://ldas-jobs.icrr.u-tokyo.ac.jp"
 
 	raise NotImplementedError("I don't know where the webserver is for this environment")
 
