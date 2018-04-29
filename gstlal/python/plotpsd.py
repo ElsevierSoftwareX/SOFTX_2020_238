@@ -108,7 +108,10 @@ def axes_plot_cummulative_snr(axes, psds, coinc_xmldoc):
 
 
 def latex_horizon_distance(Mpc):
-	if Mpc >= 0.25:
+	if Mpc >= 256.:
+		# :-O
+		return "%s Gpc" % plotutil.latexnumber("%.4g" % (Mpc * 1e-3))
+	elif Mpc >= 0.25:
 		# :-)
 		return "%s Mpc" % plotutil.latexnumber("%.4g" % Mpc)
 	elif Mpc >= 2**-12:
