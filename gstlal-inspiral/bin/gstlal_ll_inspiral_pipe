@@ -274,8 +274,8 @@ def parse_command_line():
 			if not ( set(inj_channel_dict[nodes].keys()) == set(channel_dict.keys()) ):
 				raise ValueError("Either no injection jobs must be given or the injection and non-injection channels must be specified for the same set of detectors")
 
-	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
-	options.dq_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits)
+	options.state_vector_on_off_dict = datasource.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
+	options.dq_vector_on_off_dict = datasource.state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits)
 
 	options.likelihood_files = [CacheEntry(line).url for line in open(options.likelihood_cache)]
 	options.zerolag_likelihood_files = [CacheEntry(line).url for line in open(options.zerolag_likelihood_cache)]

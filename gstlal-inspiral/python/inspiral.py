@@ -101,11 +101,11 @@ from lal import series as lalseries
 from lal.utils import CacheEntry
 
 from gstlal import bottle
+from gstlal import cbc_template_iir
+from gstlal import far
 from gstlal import reference_psd
 from gstlal import streamthinca
 from gstlal import svd_bank
-from gstlal import cbc_template_iir
-from gstlal import far
 
 
 #
@@ -143,46 +143,6 @@ def message_new_checkpoint(src, timestamp = None):
 	if timestamp is not None:
 		message.timestamp = timestamp
 	return message
-
-
-def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vector_on_off_dict = {"H1" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}):
-	"""
-	"""
-
-	for line in on_bit_list:
-		ifo = line.split("=")[0]
-		bits = "".join(line.split("=")[1:])
-		try:
-			state_vector_on_off_dict[ifo][0] = int(bits)
-		except ValueError: # must be hex
-			state_vector_on_off_dict[ifo][0] = int(bits, 16)
-	
-	for line in off_bit_list:
-		ifo = line.split("=")[0]
-		bits = "".join(line.split("=")[1:])
-		try:
-			state_vector_on_off_dict[ifo][1] = int(bits)
-		except ValueError: # must be hex
-			state_vector_on_off_dict[ifo][1] = int(bits, 16)
-
-	return state_vector_on_off_dict
-
-
-def state_vector_on_off_list_from_bits_dict(bit_dict):
-	"""
-	"""
-
-	onstr = ""
-	offstr = ""
-	for i, ifo in enumerate(bit_dict):
-		if i == 0:
-			onstr += "%s=%s " % (ifo, bit_dict[ifo][0])
-			offstr += "%s=%s " % (ifo, bit_dict[ifo][1])
-		else:
-			onstr += "--state-vector-on-bits=%s=%s " % (ifo, bit_dict[ifo][0])
-			offstr += "--state-vector-off-bits=%s=%s " % (ifo, bit_dict[ifo][1])
-
-	return onstr, offstr
 
 
 def parse_svdbank_string(bank_string):
