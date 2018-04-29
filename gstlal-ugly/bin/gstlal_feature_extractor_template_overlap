@@ -29,12 +29,152 @@ import itertools
 from optparse import OptionParser
 import os
 import sys
+import urlparse
 
 import numpy
 
 import lal
+from glue import markup
 
 from gstlal import idq_utils
+from gstlal import plotutil
+from gstlal import aggregator
+
+import matplotlib
+matplotlib.use('Agg')
+from mpl_toolkits.axes_grid import make_axes_locatable
+from matplotlib.colorbar import Colorbar
+from matplotlib import pyplot as plt
+from matplotlib import ticker as tkr
+import matplotlib.cm as cm
+
+matplotlib.rcParams.update({
+	"font.size": 13.0,
+	"axes.titlesize": 13.0,
+	"axes.labelsize": 13.0,
+	"xtick.labelsize": 13.0,
+	"ytick.labelsize": 13.0,
+	"legend.fontsize": 13.0,
+	"figure.dpi": 300,
+	"savefig.dpi": 300,
+	"text.usetex": False,
+	"path.simplify": True
+})
+
+cluster_urls = {'CIT': 'https://ldas-jobs.ligo.caltech.edu/',
+                'LHO': 'https://ldas-jobs.ligo-wa.caltech.edu/',
+                'LLO': 'https://ldas-jobs.ligo-la.caltech.edu/',
+                'uwm': 'https://ldas-jobs.cgca.uwm.edu/'
+               }
+
+####################
+#
+#    functions
+#
+####################
+
+def plot_waveform(time, waveform, waveform_type='', waveform_params=None):
+
+	fig, axes = plt.subplots()
+
+	axes.plot(time, waveform, color = '#2c7fb8', alpha = 0.7, lw=2)
+
+	axes.set_title(r"%s waveform" % (waveform_type))
+	axes.set_ylabel(r"Amplitude [arb. unit]")
+	axes.set_xlabel(r"Time [seconds]")
+	axes.set_xlim(time[0], time[-1])
+	if waveform_params:
+		axes.text(0.98 * max(time), 0.9 * min(waveform), r"params: %s" % repr(waveform_params), size=10, ha='right')
+
+	return fig
+
+def plot_waveforms(times, waveforms, waveform_type='', waveform_params=None):
+	"""
+	Plots multiple waveforms in one plot (up to 4 at one time)
+	"""
+	assert len(times) <= 4
+
+	# determine waveform limits
+	amp_min = min(numpy.min(waveform) for waveform in waveforms)
+	amp_max = max(numpy.max(waveform) for waveform in waveforms)
+
+	colors = ['#2c7fb8', '#e66101', '#5e3c99', '#d01c8b']
+	fig, axes = plt.subplots(len(times), sharex=True, sharey=True)
+
+	for ax, key, color in zip(axes, truedat.keys(), colors):
+
+		ax.plot(time, timeseries, color = color, alpha = 0.7, lw=2)
+		ax.set_ylim(amp_min, amp_max)
+		ax.set_xlim(time[0], time[-1])
+		ax.set_xlabel(r"Time [seconds]")
+		if waveform_params:
+			ax.text(0.98 * max(times), 0.97 * amp_min, r"%s" % repr(waveform_params), size=10, ha='right')
+
+	axes[0].set_title(r"Waveforms")
+
+	fig.text(0.04, 0.5, r"Amplitude [arb. unit]", ha='center', va='center', rotation='vertical')
+
+	fig.subplots_adjust(hspace=0)
+	plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
+
+	return fig
+
+def generate_html_file(plot_paths, waveform_type=''):
+	if options.verbose:
+		print >>sys.stderr, "Creating html report..."
+
+	channels = set()
+	#
+	### head
+	#
+	title = "Whitener Results"
+	metainfo = {'charset': 'utf-8', 'name': 'viewport', 'content': 'width=device-width, initial-scale=1'}
+	doctype = '<!DOCTYPE html>'
+	css = 'https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css'
+	bootstrap = ['https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js']
+
+	page = markup.page()
+	page.init(title = title, metainfo = metainfo, doctype = doctype, css = css, script = bootstrap)
+
+	#
+	### body
+	#
+	page.div(class_ = 'container')
+
+	# header
+	page.h2('Waveform report for %s' % waveform_type)
+
+	# plots
+	plot_paths = sorted(plot_paths, key=lambda x: x[1])
+	for key in plot_paths:
+		num, plot = key
+		plot_url = to_output_url(options.output_dir) + '/' + plot
+		#if channel not in channels:
+		#	channels.add(channel)
+		#	page.div(_class = 'col-md-12')
+		#	page.h5('Whitened timeseries and histograms for %s' % channel, align = 'center')
+		#	page.div.close()
+		page.div(_class = 'col-md-6')
+		page.div(_class = 'thumbnail')
+		page.a(markup.oneliner.img(src = plot_url, alt = '', style = 'width:100%', _class='img-responsive'), href = plot_url, target = '_blank')
+		page.div.close()
+		page.div.close()
+	#
+	### generate page
+	#
+	page.div.close()
+	with open(os.path.join(options.output_dir, 'index.html'), 'w') as f:
+		print >> f, page
+
+	if options.verbose:
+		print >>sys.stderr, "done."
+
+def to_output_url(output_dir):
+	username = os.getlogin()
+	basepath = os.path.join(os.path.join('/home/', username), 'public_html')
+	extension_url = os.path.relpath(os.path.abspath(output_dir), basepath)
+	base_url = urlparse.urljoin(cluster_urls[options.cluster], '~' + username)
+	return base_url + '/' + extension_url
 
 ###############################
 # 
@@ -49,6 +189,9 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.05, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.05.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 100, help = "Q high value for half sine-gaussian waveforms. Default = 100.")
+	parser.add_option("--output-dir", metavar = "filename", default = ".", help = "Set the location of the output (plots, etc).")
+	parser.add_option("--cluster", help = "Set the cluster that this script is being run on (for proper public_html linking)")
+	parser.add_option("--waveform", default = "sine_gaussian",  help = "Set the type of waveform to plot. options=[sine_gaussian, half_sine_gaussian].")
 
 	# parse the arguments and sanity check
 	options, args = parser.parse_args()
@@ -64,13 +207,20 @@ def parse_command_line():
 if __name__ == '__main__':
 	options, args = parse_command_line()
 
+	# create directory if it doesn't exist
+	aggregator.makedir(options.output_dir)
+
     # common parameters we will use throughout
 	max_samp_rate = 2048
 	min_samp_rate = 32
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
 
+	if options.verbose:
+		print >>sys.stderr, "Creating templates..."
+
 	# generate templates for each rate considered
 	rates = [min_samp_rate*2**i for i in range(n_rates)]
+	waveforms = {}
 	templates = {}
 	basis_params = {}
 	for rate in rates:
@@ -78,27 +228,49 @@ if __name__ == '__main__':
 		fhigh = rate/2.*0.8
 		qhigh = options.qhigh
 		qlow = 4
-		hsg_waveforms = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
-		basis_params[rate] = hsg_waveforms.parameter_grid
-		templates[rate] = [waveform for waveform in hsg_waveforms.generate_templates(quadrature=False)]
+		if options.waveform == 'sine_gaussian':
+			waveforms[rate] = idq_utils.SineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
+		elif options.waveform == 'half_sine_gaussian':
+			waveforms[rate] = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
+		else:
+			raise NotImplementedError
+		basis_params[rate] = waveforms[rate].parameter_grid
+		templates[rate] = [waveform for waveform in waveforms[rate].generate_templates(quadrature=False)]
 
-	# show frequency Q grid for each rate
-	if options.verbose:
-		for rate in rates:
-			print "(f, Q) values for rate %d" % rate
-			for point in basis_params[rate]:
-				print "    "+repr(point)
-
-	# get all templates
-	templates = list(itertools.chain(*templates.values()))
+	# get all templates and params
+	all_templates = list(itertools.chain(*templates.values()))
+	all_params = list(itertools.chain(*basis_params.values()))
 
 	# calculate overlap for each template and find maximum
 	overlaps = []
-	for this_template in templates:
-		overlaps.append(max([numpy.dot(this_template,template) for template in templates if not numpy.array_equal(template, this_template)]))
+	for this_template in all_templates:
+		overlaps.append(max([numpy.dot(this_template,template) for template in all_templates if not numpy.array_equal(template, this_template)]))
 
 	print >>sys.stderr, "min overlap specified: %f" % (1 - options.mismatch)
 	print >>sys.stderr, "max template overlap: %f" % max(overlaps)
 	print >>sys.stderr, "min template overlap: %f" % min(overlaps)
 
+	# generate template plots
+	plot_paths = []
+
+	if options.verbose:
+		print >>sys.stderr, "Creating waveform plots..."
+
+	# cast params to a nicer format
+	# FIXME: should really be passing a dict of params instead
+	param_names = ['f', 'Q', 'duration']
+	for rate in rates:
+		for template_id, template in enumerate(templates[rate]):
+			waveform_params = ["%s: %.3f" % (name, param) for param, name in zip(basis_params[rate][template_id], param_names)]
+			if options.verbose:
+				print >>sys.stderr, "\tCreating waveform plot with parameters: %s" % repr(waveform_params)
+			series_fig = plot_waveform(waveforms[rate].times, template, options.waveform, waveform_params)
+			fname = 'plot_%s_%s-timeseries.png' % (rate, str(template_id).zfill(4))
+			plot_paths.append((template_id*int(rate),fname))
+			series_fig.savefig(os.path.join(options.output_dir, fname))
+			plt.close(fname)
+
 	# generate template overlap map
+
+	# generate html page
+	generate_html_file(plot_paths, waveform_type=options.waveform)
