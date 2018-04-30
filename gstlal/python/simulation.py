@@ -25,15 +25,17 @@ from glue.ligolw import utils as ligolw_utils
 from lal import LIGOTimeGPS
 import math
 
-## @file
-# the simulation module
-#
-# Review status
-#
-# | Names                                 | Hash                                     | Date       | Diff to Head of Master      |
-# | ------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-05-02 | <a href="@gstlal_cgit_diff/python/simulation.py?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">simulation.py</a> |
-#
+__doc__ = """
+
+**Review status**
+
++---------------------------------------+------------------------------------------+------------+
+| Names                                 | Hash                                     | Date       |
++=======================================+==========================================+============+
+| Sathya, Duncan Me, Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-05-02 |
++---------------------------------------+------------------------------------------+------------+
+
+"""
 
 
 ## @package python.simulation
@@ -50,7 +52,7 @@ lsctables.use_in(ContentHandler)
 
 ## Turn a file containing a sim inspiral into a segment list
 def sim_inspiral_to_segment_list(fname, pad=1, verbose=False):
-	"""!
+	"""
 	Given an xml file create a segment list that marks the time of an
 	injection with padding
 
