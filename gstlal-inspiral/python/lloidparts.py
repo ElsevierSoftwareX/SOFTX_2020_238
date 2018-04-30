@@ -415,7 +415,7 @@ class Handler(simplehandler.Handler):
 
 			# write the current (clipped) segmentlistdicts to
 			# disk
-			fname = self.dataclass.T050017_filename("%s_SEGMENTS" % self.tag, ".xml.gz")
+			fname = self.dataclass.T050017_filename("%s_SEGMENTS" % self.tag, "xml.gz")
 			fname = os.path.join(inspiral.subdir_from_T050017_filename(fname), fname)
 			ligolw_utils.write_filename(self.gen_segments_xmldoc(), fname, gz = fname.endswith('.gz'), verbose = self.verbose, trap_signals = None)
 
