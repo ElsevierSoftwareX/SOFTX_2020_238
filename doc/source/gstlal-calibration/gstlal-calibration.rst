@@ -1,5 +1,5 @@
-GstLAL project
-==============
+GstLAL calibration project
+==========================
 
 .. toctree::
    :maxdepth: 2

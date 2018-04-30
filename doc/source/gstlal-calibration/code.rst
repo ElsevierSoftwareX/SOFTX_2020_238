@@ -1,5 +1,5 @@
-GstLAL Code
-===========
+GstLAL calibration code
+=======================
 
 .. toctree::
    :maxdepth: 2

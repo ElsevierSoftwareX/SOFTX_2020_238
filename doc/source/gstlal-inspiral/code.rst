@@ -1,5 +1,5 @@
-GstLAL Code
-===========
+GstLAL inspiral code
+====================
 
 .. toctree::
    :maxdepth: 2

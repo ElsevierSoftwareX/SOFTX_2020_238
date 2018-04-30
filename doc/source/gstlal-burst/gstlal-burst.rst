@@ -1,5 +1,5 @@
-GstLAL project
-==============
+GstLAL burst project
+====================
 
 .. toctree::
    :maxdepth: 2

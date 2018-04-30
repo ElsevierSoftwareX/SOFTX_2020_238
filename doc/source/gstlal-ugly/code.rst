@@ -1,5 +1,5 @@
-GstLAL Code
-===========
+GstLAL ugly code
+================
 
 .. toctree::
    :maxdepth: 2

@@ -5,4 +5,6 @@ GstLAL project
    :maxdepth: 2
 
    overview
+   tutorials/tutorials
    code
+

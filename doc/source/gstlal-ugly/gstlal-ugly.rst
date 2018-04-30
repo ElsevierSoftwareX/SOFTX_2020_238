@@ -1,5 +1,5 @@
-GstLAL project
-==============
+GstLAL ugly project
+===================
 
 .. toctree::
    :maxdepth: 2

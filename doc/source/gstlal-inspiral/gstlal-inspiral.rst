@@ -1,5 +1,5 @@
-GstLAL project
-==============
+GstLAL inspiral project
+=======================
 
 .. toctree::
    :maxdepth: 2
