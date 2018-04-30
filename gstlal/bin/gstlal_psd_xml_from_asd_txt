@@ -23,49 +23,45 @@ from gstlal import reference_psd
 import lal
 from optparse import OptionParser
 
-## @file
-# gstlal_psd_xml_from_asd_txt
-#
-#
-# A program to turn an ASCII PSD or ASD into an xml file suitable for consumption by various gstlal programs; see gstlal_psd_xml_from_asd_txt for details
-#
-# 
-# ### Usage
-#
-# -# an early V1 input ASD from <a href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/share/v1_early_asd.txt>here</a>.
-#
-#		$ gstlal_psd_xml_from_asd_txt --instrument=V1 --output v1psd.xml.gz v1_early_asd.txt
-#
-#
-# -# other things possible, please add some!
-#
-# ### Command line options
-#
-# 	+ `--instrument` [string]: Instrument, e.g. H1
-#	+ `--output` [filename]: Set the name of the LIGO light-weight XML file to output
-#	+ `--df` [float] (Hz): Set the frequency resolution to interpolate to, default = 0.25
-#	+ `--type` [ASD|PSD]: Input is ASD or PSD, default ASD
-#
-# specify the ASD or PSD text file as a file argument at the end
-#
-#
-# ### Notes
-#
-# - The PSD will be interpolated with with linear interpolation if needed.  The user is highly encouraged to plot the result to see if it is satisfactory.  See, e.g., gstlal_plot_psd
-#
-#
-# ### Review status
-#
-# | Reviewers			                    | Hash		                               | Date 		| Diff to Head of Master      |
-# | --------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Florent, Duncan Me., Jolien, Kipp, Chad | e5b22699b049f7a35dff468febad471ca6c737f3 | 2014-04-29 | <a href="@gstlal_cgit_diff/bin/gstlal_psd_xml_from_asd_txt?id=HEAD&id2=e5b22699b049f7a35dff468febad471ca6c737f3">gstlal_psd_xml_from_asd_txt</a> |
-#
+### A program to turn an ASCII PSD or ASD into an xml file suitable for
+### consumption by various gstlal programs
+###
+###
+### Usage
+### -----
+###
+### 1. An early V1 input ASD from <a href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/share/v1_early_asd.txt>here</a>.
+###
+### .. code-block:: bash
+###
+###	gstlal_psd_xml_from_asd_txt --instrument=V1 --output v1psd.xml.gz v1_early_asd.txt
+###
+###
+### 2. Other things possible, please add some!
+###
+###
+### Notes
+### -----
+###
+### * The PSD will be interpolated with with linear interpolation if needed.
+###   The user is highly encouraged to plot the result to see if it is satisfactory.
+###
+###
+### Review status
+### -------------
+###
+### +-----------------------------------------+------------------------------------------+------------+
+### | Reviewers                               | Hash                                     | Date       |
+### +=========================================+==========================================+============+
+### | Florent, Duncan Me., Jolien, Kipp, Chad | e5b22699b049f7a35dff468febad471ca6c737f3 | 2014-04-29 |
+### +-----------------------------------------+------------------------------------------+------------+
+###
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--instrument", help="instrument, e.g. H1")
 parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML file to output")
 parser.add_option("--df", metavar = "float", type = "float", default = 0.25, help = "set the frequency resolution to interpolate to, default = 0.25")
-parser.add_option("--type", metavar = "ASD|PSD", default = "ASD", help = "input is ASD or PSD, default ASD")
+parser.add_option("--type", metavar = "type", default = "ASD", help = "input is ASD or PSD, default ASD")
 
 options, filenames = parser.parse_args()
 
