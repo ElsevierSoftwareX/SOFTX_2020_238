@@ -34,25 +34,17 @@ from gi.repository import Gst
 Gst.init(None)
 import signal
 
+__doc__="""
 
-## @file
-# The simplehander module
-#
-# ### Review Status
-#
-# | Names                                           | Hash                                     | Date       | Diff to Head of Master      |
-# | ----------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa | 2014-05-01 | <a href="@gstlal_cgit_diff/python/simplehandler.py?id=HEAD&id2=b3ef077fe87b597578000f140e4aa780f3a227aa">simplehandler.py</a> |
+**Review Status**
 
-# #### Action items
-#
-# - Get event based programming expert to have a look?
-#
++-------------------------------------------------+------------------------------------------+------------+
+| Names                                           | Hash                                     | Date       |
++=================================================+==========================================+============+
+| Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa | 2014-05-01 |
++-------------------------------------------------+------------------------------------------+------------+
 
-## @package python.simplehandler
-# The simplehander module
-#
-
+"""
 
 
 #
@@ -65,7 +57,7 @@ import signal
 
 
 class Handler(object):
-	"""!
+	"""
 	A simple handler that prints pipeline error messages to stderr, and
 	stops the pipeline and terminates the mainloop at EOS.  Complex
 	applications will need to write their own pipeline handler, but for
@@ -109,7 +101,7 @@ class Handler(object):
 		self.mainloop.quit()
 
 	def do_on_message(self, bus, message):
-		"""!
+		"""
 		Add extra message handling by overriding this in your
 		subclass.  If this method returns True, no further message
 		handling is performed.  If this method returns False,
@@ -139,7 +131,7 @@ class Handler(object):
 
 
 class OneTimeSignalHandler(object):
-	"""!
+	"""
 	A helper class for application signal handling.  Use this to help your
 	application to cleanly shutdown gstreamer pipelines when responding to e.g.,
 	ctrl+c.
@@ -151,7 +143,7 @@ class OneTimeSignalHandler(object):
 			signal.signal(sig, self)
 
 	def do_on_call(self, signum, frame):
-		"""!
+		"""
 		Over ride this for your subclass
 		"""
 		pass
