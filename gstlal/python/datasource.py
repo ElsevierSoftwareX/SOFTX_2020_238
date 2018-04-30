@@ -23,27 +23,19 @@
 # =============================================================================
 #
 
-## 
-# @file
-#
-# A file that contains the datasource module code
-#
-# ### Review Status
-#
-# | Names                                       | Hash                                         | Date       | Diff to Head of Master      |
-# | ------------------------------------------- | -------------------------------------------- | ---------- | --------------------------- |
-# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa | 2014-05-01 | <a href="@gstlal_cgit_diff/python/datasource.py?id=HEAD&id2=b3ef077fe87b597578000f140e4aa780f3a227aa">datasource.py</a> |
-#
-# #### Action items
-#
-# - State vector, DQ, etc must be in place by November and should be coordinated with JRPC/DAC/DetChar/CBC/etc
-# - Consider a dynamic data time out that seneses when data is not going to arrive for a while
+__doc__ = """
 
-##
-# @package python.datasource
-#
-# datasource module
-#
+A file that contains the datasource module code
+
+*Review Status*
+
++-------------------------------------------------+------------------------------------------+------------+
+| Names                                           | Hash                                     | Date       |
++=================================================+==========================================+============+
+| Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa | 2014-05-01 |
++-------------------------------------------------+------------------------------------------+------------+
+
+"""
 
 
 import optparse
@@ -72,7 +64,7 @@ from lal import LIGOTimeGPS
 
 
 def channel_dict_from_channel_list(channel_list):
-	"""!
+	"""
 	Given a list of channels, produce a dictionary keyed by ifo of channel names:
 
 	The list here typically comes from an option parser with options that
@@ -86,7 +78,7 @@ def channel_dict_from_channel_list(channel_list):
 	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
 def channel_dict_from_channel_list_with_node_range(channel_list):
-	"""!
+	"""
 	Given a list of channels with a range of mass bins, produce a dictionary
 	keyed by ifo of channel names:
 
@@ -111,7 +103,7 @@ def channel_dict_from_channel_list_with_node_range(channel_list):
 	return outdict
 
 def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "channel-name"):
-	"""!
+	"""
 	Creates a string of channel names options from a dictionary keyed by ifos.
 
 	FIXME: This function exists to work around pipeline.py's inability to
@@ -145,7 +137,7 @@ def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "ch
 	return outstr
 
 def pipeline_channel_list_from_channel_dict_with_node_range(channel_dict, node = 0, ifos = None, opt = "channel-name"):
-	"""!
+	"""
 	Creates a string of channel names options from a dictionary keyed by ifos.
 
 	FIXME: This function exists to work around pipeline.py's inability to
@@ -158,14 +150,14 @@ def pipeline_channel_list_from_channel_dict_with_node_range(channel_dict, node =
 
 	Examples:
 
-	>--->>> pipeline_channel_list_from_channel_dict({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0)
-	>---'H2=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
+		>>> pipeline_channel_list_from_channel_dict({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0)
+		'H2=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
 
-	>--->>> pipeline_channel_list_from_channel_dict({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, ifos=["H1"])
-	>---'H1=LSC-STRAIN '
+		>>> pipeline_channel_list_from_channel_dict({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, ifos=["H1"])
+		'H1=LSC-STRAIN '
 
-	>--->>> pipeline_channel_list_from_channel_dict('0000': {{'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, opt="test-string")
-	>---'H2=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
+		>>> pipeline_channel_list_from_channel_dict('0000': {{'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, opt="test-string")
+		'H2=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
 	"""
 	outstr = ""
 	node = str(node).zfill(4)
@@ -180,7 +172,7 @@ def pipeline_channel_list_from_channel_dict_with_node_range(channel_dict, node =
 	return outstr
 
 def injection_dict_from_channel_list_with_node_range(injection_list):
-	"""!
+	"""
 	Given a list of injection xml files with a range of mass bins, produce a
 	dictionary keyed by bin number:
 
@@ -222,7 +214,7 @@ dq_vector_on_off_dict = {
 
 
 def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vector_on_off_dict = state_vector_on_off_dict):
-	"""!
+	"""
 	Produce a dictionary (keyed by detector) of on / off bit tuples from a
 	list provided on the command line.
 
@@ -262,7 +254,7 @@ def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vec
 
 
 def state_vector_on_off_list_from_bits_dict(bit_dict):
-	"""!
+	"""
 	Produce a tuple of useful command lines from a dictionary of on / off state
 	vector bits keyed by detector
 	
@@ -309,7 +301,7 @@ framexmit_ports = {
 
 
 def framexmit_dict_from_framexmit_list(framexmit_list):
-	"""!
+	"""
 	Given a list of framexmit addresses with ports, produce a dictionary keyed by ifo:
 
 	The list here typically comes from an option parser with options that
@@ -329,7 +321,7 @@ def framexmit_dict_from_framexmit_list(framexmit_list):
 
 
 def framexmit_list_from_framexmit_dict(framexmit_dict, ifos = None, opt = "framexmit-addr"):
-	"""!
+	"""
 	Creates a string of framexmit address options from a dictionary keyed by ifos.
 
 	Examples:
@@ -350,7 +342,7 @@ def framexmit_list_from_framexmit_dict(framexmit_dict, ifos = None, opt = "frame
 
 
 def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.SeekFlags.FLUSH):
-	"""!
+	"""
 	Create a new seek event, i.e., Gst.Event.new_seek()  for a given
 	gps_start_time and gps_end_time, with optional flags.  
 
@@ -428,7 +420,7 @@ def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.Se
 
 
 class GWDataSourceInfo(object):
-	"""!
+	"""
 	Hold the data associated with data source command lines.
 	"""
 	## See datasource.append_options()
@@ -547,7 +539,7 @@ class GWDataSourceInfo(object):
 
 
 def append_options(parser):
-	"""!
+	"""
 	Append generic data source options to an OptionParser object in order
 	to have consistent an unified command lines and parsing throughout the project
 	for applications that read GW data.
@@ -562,11 +554,11 @@ def append_options(parser):
 
 -	--frame-cache [filename]
 		Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).
-		This is required iff --data-sourceframes)
+		This is required iff --data-sourceframes
 
 -	--gps-start-time [int] (seconds)
 		Set the start time of the segment to analyze in GPS seconds.
-		Required unless --data-source in lvshm,framexmit
+		Required unless --data-source is lvshm or framexmit
 
 -	--gps-end-time  [int] (seconds)
 		Set the end time of the segment to analyze in GPS seconds.  
@@ -639,21 +631,24 @@ def append_options(parser):
 		The default is 0x0 for all detectors. Override with IFO=bits can be given multiple times.
 		Only currently has meaning for online (lvshm, framexmit) data
 
-	#### Typical usage case examples
+	**Typical usage case examples**
 
-	-# Reading data from frames
+	1. Reading data from frames::
 
-		--data-source=frames --gps-start-time=999999000 --gps-end-time=999999999 --channel-name=H1=LDAS-STRAIN --frame-segments-file=segs.xml --frame-segments-name=datasegments
+		--data-source=frames --gps-start-time=999999000 --gps-end-time=999999999 \\
+		--channel-name=H1=LDAS-STRAIN --frame-segments-file=segs.xml \\
+		--frame-segments-name=datasegments
 
-	-# Reading data from a fake LIGO source
+	2. Reading data from a fake LIGO source::
 		
-		--data-source=LIGO --gps-start-time=999999000 --gps-end-time=999999999 --channel-name=H1=FAIKE-STRAIN
+		--data-source=LIGO --gps-start-time=999999000 --gps-end-time=999999999 \\
+		--channel-name=H1=FAIKE-STRAIN
 
-	-# Reading online data via framexmit
+	3. Reading online data via framexmit::
 
 		--data-source=framexmit --channel-name=H1=FAIKE-STRAIN
 
-	-# Many other combinations possible, please add some!
+	4. Many other combinations possible, please add some!
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
 	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmit|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].  Required.")
@@ -680,95 +675,34 @@ def append_options(parser):
 	parser.add_option_group(group)
 
 
-##
-# _Gstreamer graph describing this function:_
-#
-# @dot
-# digraph G {
-#	compound=true;
-#	node [shape=record fontsize=10 fontname="Verdana"];
-#	rankdir=LR;
-#	lal_segmentsrc [URL="\ref pipeparts.mksegmentsrc()"];
-#	lal_gate [URL="\ref pipeparts.mkgate()"];
-#	in [label="?"];
-#	out [label="?"];
-#	in -> lal_gate -> out;
-#	lal_segmentsrc -> lal_gate;
-# }
-# @enddot
-#
-#
 def mksegmentsrcgate(pipeline, src, segment_list, invert_output = False, rate = 1, **kwargs):
-	"""!
+	"""
 	Takes a segment list and produces a gate driven by it. Hook up your own input and output.
 
 	@param kwargs passed through to pipeparts.mkgate(), e.g., used to set the gate's name.
+
+	Gstreamer graph describing this function:
+
+	.. graphviz::
+
+	   digraph G {
+	     compound=true;
+	     node [shape=record fontsize=10 fontname="Verdana"];
+	     rankdir=LR;
+	     lal_segmentsrc;
+	     lal_gate;
+	     in [label="\<src\>"];
+	     out [label="\<return value\>"];
+	     in -> lal_gate -> out;
+	     lal_segmentsrc -> lal_gate;
+	   }
+
 	"""
 	return pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkcapsfilter(pipeline, pipeparts.mksegmentsrc(pipeline, segment_list, invert_output = invert_output), caps = "audio/x-raw, rate=%d" % rate), **kwargs)
 
 
-##
-# _Gstreamer graph describing this function:_
-#
-# @dot
-# digraph mkbasicsrc {
-#      compound=true;
-#      node [shape=record fontsize=10 fontname="Verdana"];
-#      subgraph clusterfakesrc {
-#              fake_0 [label="fakesrc: white, silence, AdvVirgo, LIGO, AdvLIGO", URL="\ref pipeparts.mkfakesrc()"];
-#              color=black;
-#              label="Possible path #1";
-#      }
-#      subgraph clusterframes {
-#              color=black;
-#              frames_0 [label="lalcachesrc: frames", URL="\ref pipeparts.mklalcachesrc()"];
-#              frames_1 [label ="framecppchanneldemux", URL="\ref pipeparts.mkframecppchanneldemux()"];
-#              frames_2 [label ="queue", URL="\ref pipeparts.mkqueue()"];
-#              frames_3 [label ="gate (if user provides segments)", style=filled, color=lightgrey, URL="\ref pipeparts.mkgate()"];
-#              frames_4 [label ="audiorate", URL="\ref pipeparts.mkaudiorate()"];
-#              frames_0 -> frames_1 -> frames_2 -> frames_3 ->frames_4;
-#              label="Possible path #2";
-#      }
-#	subgraph clusteronline {
-#		color=black;
-#		online_0 [label="lvshmsrc|framexmit", URL="\ref pipeparts.mklvshmsrc()"];
-#		online_1 [label ="framecppchanneldemux", URL="\ref pipeparts.mkframecppchanneldemux()"];
-#		online_2a [label ="strain queue", URL="\ref pipeparts.mkqueue()"];
-#		online_2b [label ="statevector queue", URL="\ref pipeparts.mkqueue()"];
-#		online_3 [label ="statevector", URL="\ref pipeparts.mkstatevector()"];
-#		online_4 [label ="gate", URL="\ref pipeparts.mkgate()"];
-#		online_5 [label ="audiorate", URL="\ref pipeparts.mkaudiorate()"];
-#		online_6 [label ="queue", URL="\ref pipeparts.mkqueue()"];
-#		online_0 -> online_1;
-#		online_1 -> online_2a;
-#		online_1 -> online_2b;
-#		online_2b -> online_3;
-#		online_2a -> online_4;
-#		online_3 -> online_4 -> online_5 -> online_6;
-#		label="Possible path #3";
-#	}
-#	subgraph clusternds {
-#		nds_0 [label="ndssrc", URL="\ref pipeparts.mkndssrc()"];
-#		color=black;
-#		label="Possible path #4";
-#	}
-#	audioconv [label="audioconvert", URL="\ref pipeparts.mkaudioconvert()"];
-#	progress [label="progressreport (if verbose)", style=filled, color=lightgrey, URL="\ref pipeparts.mkprogressreport()"];
-#	sim [label="lalsimulation (if injections requested)", style=filled, color=lightgrey, URL="\ref pipeparts.mkinjections()"];
-#	queue [label="queue (if injections requested)", style=filled, color=lightgrey, URL="\ref pipeparts.mkqueue()"];
-#
-#	// The connections
-#	fake_0 -> audioconv [ltail=clusterfakesrc];
-#	frames_4 -> audioconv [ltail=clusterframes];
-#	online_6 -> audioconv [ltail=clusteronline];
-#	nds_0 -> audioconv [ltail=clusternds];
-#	audioconv -> progress -> sim -> queue -> "?"
-# }
-# @enddot
-#
-#
 def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
-	"""!
+	"""
 	All the conditionals and stupid pet tricks for reading real or
 	simulated h(t) data in one place.
 
@@ -779,6 +713,64 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	specifying the instrument when calling this function you will get ony a single
 	instrument source.  A code wishing to have multiple basicsrcs will need to call
 	this function for each instrument.
+
+	**Gstreamer Graph**
+
+	.. graphviz::
+
+	   digraph mkbasicsrc {
+		compound=true;
+		node [shape=record fontsize=10 fontname="Verdana"];
+		subgraph clusterfakesrc {
+			fake_0 [label="fakesrc: white, silence, AdvVirgo, LIGO, AdvLIGO"];
+			color=black;
+			label="Possible path #1";
+		}
+		subgraph clusterframes {
+			color=black;
+			frames_0 [label="lalcachesrc: frames"];
+			frames_1 [label ="framecppchanneldemux"];
+			frames_2 [label ="queue"];
+			frames_3 [label ="gate (if user provides segments)", style=filled, color=lightgrey];
+			frames_4 [label ="audiorate"];
+			frames_0 -> frames_1 -> frames_2 -> frames_3 ->frames_4;
+			label="Possible path #2";
+		}
+		  subgraph clusteronline {
+			color=black;
+			online_0 [label="lvshmsrc|framexmit"];
+			online_1 [label ="framecppchanneldemux"];
+			online_2a [label ="strain queue"];
+			online_2b [label ="statevector queue"];
+			online_3 [label ="statevector"];
+			online_4 [label ="gate"];
+			online_5 [label ="audiorate"];
+			online_6 [label ="queue"];
+			online_0 -> online_1;
+			online_1 -> online_2a;
+			online_1 -> online_2b;
+			online_2b -> online_3;
+			online_2a -> online_4;
+			online_3 -> online_4 -> online_5 -> online_6;
+			label="Possible path #3";
+		  }
+		  subgraph clusternds {
+			nds_0 [label="ndssrc"];
+			color=black;
+			label="Possible path #4";
+		  }
+		  audioconv [label="audioconvert"];
+		  progress [label="progressreport (if verbose)", style=filled, color=lightgrey];
+		  sim [label="lalsimulation (if injections requested)", style=filled, color=lightgrey];
+		  queue [label="queue (if injections requested)", style=filled, color=lightgrey];
+
+		  // The connections
+		  fake_0 -> audioconv [ltail=clusterfakesrc];
+		  frames_4 -> audioconv [ltail=clusterframes];
+		  online_6 -> audioconv [ltail=clusteronline];
+		  nds_0 -> audioconv [ltail=clusternds];
+		  audioconv -> progress -> sim -> queue -> "?"
+	   }
 	"""
 	dqvector = statevector = None
 
@@ -916,33 +908,32 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	return src, statevector, dqvector
 
 
-## 
-# _Gstreamer graph describing the pipeline_
-#
-# @dot
-# digraph G {
-#	compound=true;
-#	node [shape=record fontsize=10 fontname="Verdana"];
-#	rankdir=LR;
-# 	tee [URL="\ref pipeparts.mktee()"];
-# 	inputqueue [URL="\ref pipeparts.mkqueue()"];
-#	lal_gate [URL="\ref pipeparts.mkgate()"];
-#	in [label="?"];
-#	out [label="?"];
-#	in -> tee -> inputqueue -> lal_gate -> out;
-#	tee -> lal_gate;
-# }
-# @enddot
-#
-#
 def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = 128, hold_length = 128, **kwargs):
-	"""!
+	"""
 	A convenience function to provide thresholds on input data.  This can
 	be used to remove large spikes / glitches etc.  Of course you can use it for
 	other stuff by plugging whatever you want as input and ouput
 
 	NOTE:  the queues constructed by this code assume the attack and
 	hold lengths combined are less than 1 second in duration.
+
+	**Gstreamer Graph**
+
+	.. graphviz::
+
+	   digraph G {
+		compound=true;
+		node [shape=record fontsize=10 fontname="Verdana"];
+		rankdir=LR;
+		tee ;
+		inputqueue ;
+		lal_gate ;
+		in [label="\<src\>"];
+		out [label="\<return\>"];
+		in -> tee -> inputqueue -> lal_gate -> out;
+		tee -> lal_gate;
+	   }
+
 	"""
 	# FIXME someday explore a good bandpass filter
 	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
