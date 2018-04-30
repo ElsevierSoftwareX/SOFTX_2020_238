@@ -15,10 +15,11 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file gstlal_inspiral_recalc_likelihood_with_zerolag
-#
-# This program re-calculates the likelihood ratios in an arbitrary number of
-# databases, including zerolag in the background. 
+
+### This program re-calculates the likelihood ratios in an arbitrary number of
+### databases, including zerolag in the background.
+
+
 from collections import namedtuple
 from optparse import OptionParser
 import sqlite3
