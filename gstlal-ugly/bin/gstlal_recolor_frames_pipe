@@ -206,14 +206,14 @@ class gstlal_median_psd_node(pipeline.CondorDAGNode):
 # classes for generating recolored frames
 #
 
-class gstlal_recolor_frames_job(pipeline.CondorDAGJob):
+class gstlal_fake_frames_job(pipeline.CondorDAGJob):
 	"""
-	A gstlal_recolor_frames job
+	A gstlal_fake_frames job
 	"""
-	def __init__(self, executable=which('gstlal_recolor_frames'), tag_base='gstlal_recolor_frames'):
+	def __init__(self, executable=which('gstlal_fake_frames'), tag_base='gstlal_fake_frames'):
 		"""
 		"""
-		self.__prog__ = 'gstlal_recolor_frames'
+		self.__prog__ = 'gstlal_fake_frames'
 		self.__executable = executable
 		self.__universe = 'vanilla'
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
@@ -226,9 +226,9 @@ class gstlal_recolor_frames_job(pipeline.CondorDAGJob):
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
 
-class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
+class gstlal_fake_frames_node(pipeline.CondorDAGNode):
 	"""
-	A gstlal_recolor_frames node
+	A gstlal_fake_frames node
 	"""
 	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, recolor_psd, injections=None, output_channel_name = None, duration = 4096, output_path = None, frame_type = None, p_node=[]):
 
@@ -313,7 +313,7 @@ breakupsegs(seglists, options.min_segment_length)
 psdJob = gstlal_reference_psd_job()
 smoothJob = gstlal_ninja_smooth_reference_psd_job()
 medianJob = gstlal_median_psd_job()
-colorJob = gstlal_recolor_frames_job()
+colorJob = gstlal_fake_frames_job()
 
 smoothnode = {}
 mediannode = {}
@@ -334,7 +334,7 @@ for instrument, seglist in seglists.iteritems():
 	except KeyError:
 		output_path = None
 	for seg in seglist:
-		gstlal_recolor_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], reference_psd=mediannode[instrument].output_name, recolor_psd = options.recolor_psd, injections=options.injections, output_channel_name = outchannels[instrument], output_path = output_path, frame_type = frametypes[instrument], p_node=[mediannode[instrument]])
+		gstlal_fake_frames_node(colorJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, inchannels[instrument], reference_psd=mediannode[instrument].output_name, recolor_psd = options.recolor_psd, injections=options.injections, output_channel_name = outchannels[instrument], output_path = output_path, frame_type = frametypes[instrument], p_node=[mediannode[instrument]])
 		
 dag.write_sub_files()
 dag.write_dag()
