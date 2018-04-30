@@ -47,7 +47,7 @@ from gstlal import aggregator
 ### hdf5 utilities
 
 def get_dataset(path, base, name = 'data', group = None):
-	"""!
+	"""
 	open a dataset at @param path with name @param base and return the data
 	"""
 	fname = os.path.join(path, "%s.h5" % base)
@@ -62,7 +62,7 @@ def get_dataset(path, base, name = 'data', group = None):
 		return fname, []
 
 def create_new_dataset(path, base, data, name = 'data', group = None, tmp = False):
-	"""!
+	"""
 	A function to create a new dataset with data @param data.
 	The data will be stored in an hdf5 file at path @param path with
 	base name @param base.  You can also make a temporary file.
@@ -91,14 +91,14 @@ def create_new_dataset(path, base, data, name = 'data', group = None, tmp = Fals
 ### gps time utilities
 
 def in_new_epoch(new_gps_time, prev_gps_time, gps_epoch):
-	"""!
+	"""
 	Returns whether new and old gps times are in different
 	epochs.
 	"""
 	return (new_gps_time - floor_div(prev_gps_time, gps_epoch)) >= gps_epoch
 
 def floor_div(x, n):
-	"""!
+	"""
 	Floor an integer by removing its remainder
 	from integer division by another integer n.
 	e.g. floor_div(163, 10) = 160
@@ -111,21 +111,24 @@ def floor_div(x, n):
 ### pathname utilities
 
 def to_trigger_path(rootdir, basename, start_time, job_id, subset_id):
-	"""!
+	"""
 	Given a basepath, instrument, description, start_time, job_id, will return a
-	path pointing to a directory structure in the form:
+	path pointing to a directory structure in the form::
+
 		${rootdir}/${basename}/${basename}-${start_time_mod1e5}/${basename}-${job_id}-${subset_id}/
 	"""
 	start_time_mod1e5 = str(start_time)[:5]
 	return os.path.join(rootdir, basename, '-'.join([basename, start_time_mod1e5]), '-'.join([basename, job_id, subset_id]))
 
 def to_trigger_filename(basename, start_time, duration, suffix, tmp=False):
-	"""!
+	"""
 	Given an instrument, description, start_time, and duration, will return a
-	filename suitable with the T050017 file naming convention, in the form:
+	filename suitable with the T050017 file naming convention, in the form::
+
 		${basename}-${start_time}-{duration}.${suffix}
 
-	or if a temporary file is requested:
+	or if a temporary file is requested::
+
 		${basename}-${start_time}-{duration}.${suffix}.tmp
 	"""
 	if tmp:
@@ -134,7 +137,7 @@ def to_trigger_filename(basename, start_time, duration, suffix, tmp=False):
 		return '%s-%d-%d.%s' % (basename, start_time, duration, suffix)
 
 def latency_name(stage_name, stage_num, channel, rate=None):
-	"""!
+	"""
 	Returns a properly formatted latency element name based on stage,
 	channel, and rate information.
 	"""
@@ -188,7 +191,7 @@ def gen_formatter():
 ### Feature I/O structures
 
 class FeatureData(object):
-	"""!
+	"""
 	Base class for saving feature data.
 	Extend for a specific file-based implementation.
 	"""
@@ -207,7 +210,7 @@ class FeatureData(object):
 		raise NotImplementedError
 
 class HDF5FeatureData(FeatureData):
-	"""!
+	"""
 	Saves feature data to hdf5.
 	"""
 	def __init__(self, columns, keys, **kwargs):
