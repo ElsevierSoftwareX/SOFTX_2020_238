@@ -16,25 +16,25 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file gstlal_ll_inspiral_calculate_range
-#
-# This program queries simdb and uses the results to plot information about the
-# effective range of the analysis in a while True loop.
-#
-# This program is not meant to be executed standalone by a user. It should be
-# part of a DAG managing a running gstlal_inspiral online analysis.
-#
-# This program takes nine arguments;
-#
-# - The path of the injection xml file
-# - The path of the cumulative segments xml file
-# - The path of the marginalized likelihood xml file
-# - The simdb service URL
-# - The gracedb pipeline
-# - The gracedb group
-# - The gracedb search
-# - The minimum injection distance in Mpc
-# - The maximum injection distance in Mpc
+
+### This program queries simdb and uses the results to plot information about the
+### effective range of the analysis in a while True loop.
+###
+### This program is not meant to be executed standalone by a user. It should be
+### part of a DAG managing a running gstlal_inspiral online analysis.
+###
+### This program takes nine arguments;
+###
+### - The path of the injection xml file
+### - The path of the cumulative segments xml file
+### - The path of the marginalized likelihood xml file
+### - The simdb service URL
+### - The gracedb pipeline
+### - The gracedb group
+### - The gracedb search
+### - The minimum injection distance in Mpc
+### - The maximum injection distance in Mpc
+
 
 #
 # Close stdout file descripter and redirect stdout to stderr
