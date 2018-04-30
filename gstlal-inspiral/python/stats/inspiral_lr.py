@@ -198,10 +198,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 	def to_xml(self, name):
 		xml = super(LnLRDensity, self).to_xml(name)
-		# None is mapped to an empty string
-		# FIXME:  glue can now encode None-valued Params, but we
-		# don't rely on that mechanism.  switch to it
-		xml.appendChild(ligolw_param.Param.from_pyvalue(u"template_ids", ",".join("%d" % template_id for template_id in sorted(self.template_ids if self.template_ids else []))))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"template_ids", ",".join("%d" % template_id for template_id in sorted(self.template_ids)) if self.template_ids is not None else None))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(self.instruments)))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"delta_t", self.delta_t))
@@ -215,13 +212,11 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	@classmethod
 	def from_xml(cls, xml, name):
 		xml = cls.get_xml_root(xml, name)
+		template_ids = ligolw_param.get_pyvalue(xml, u"template_ids"),
+		if template_ids is not None:
+			template_ids = frozenset(int(i) for i in template_ids.split(","))
 		self = cls(
-			# an empty string is assumed to mean None
-			# FIXME:  remove or "" after glue is upgraded
-			# FIXME:  glue can now encode None-valued Params,
-			# but we don't rely on that mechanism.  switch to
-			# it
-			template_ids = frozenset(int(i) for i in (ligolw_param.get_pyvalue(xml, u"template_ids") or "").split(",") if i) or None,
+			template_ids = template_ids,
 			instruments = lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(xml, u"instruments")),
 			delta_t = ligolw_param.get_pyvalue(xml, u"delta_t"),
 			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments")
