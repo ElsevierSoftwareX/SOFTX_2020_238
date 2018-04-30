@@ -14,29 +14,33 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file
-# The python module to implement SVD decomposed FIR filtering
-#
-# ### Review Status
-#
-# STATUS: reviewed with actions
-#
-# | Names                                               | Hash                                     | Date       | Diff to Head of Master      |
-# | --------------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad      | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-04-30 | --------------------------- |
-# | Florent, Surabhi, Tjonnie, Kent, Jolien, Kipp, Chad | d84a8446a056ce92625b042148c2d9ef9cd8bb0d | 2015-05-12 | <a href="@gstlal_inspiral_cgit_diff/python/cbc_template_fir.py?id=HEAD&id2=d84a8446a056ce92625b042148c2d9ef9cd8bb0d">cbc_template_fir.py</a> |
-#
-# #### Action items
-#
-# - Consider changing the order of interpolation and smoothing the PSD
-# - move sigma squared calculation somewhere and get them updated dynamically
-# - possibly use ROM stuff, possibly use low-order polynomial approx computed on the fly from the template as it's generated
-# - remove lefttukeywindow()
-# - use template_bank_row.coa_phase == 0. in SimInspiralFD() call, make sure itac adjusts the phase it assigns to triggers from the template coa_phase
-# - change "assumes fhigh" to "asserts fhigh"
-# - move assert epoch_time into condition_imr_waveform(), should be assert -len(data) <= epoch_time * sample_rate < 0
-#
-## @package cbc_template_fir
+
+__doc__= """
+The python module to implement SVD decomposed FIR filtering
+
+**Review Status**
+
+STATUS: reviewed with actions
+
++-----------------------------------------------------+------------------------------------------+------------+
+| Names                                               | Hash                                     | Date       |
++=====================================================+==========================================+============+
+| Florent, Sathya, Duncan Me, Jolien, Kipp, Chad      | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-04-30 |
++-----------------------------------------------------+------------------------------------------+------------+
+| Florent, Surabhi, Tjonnie, Kent, Jolien, Kipp, Chad | d84a8446a056ce92625b042148c2d9ef9cd8bb0d | 2015-05-12 |
++-----------------------------------------------------+------------------------------------------+------------+
+
+**Action items**
+
+- Consider changing the order of interpolation and smoothing the PSD
+- move sigma squared calculation somewhere and get them updated dynamically
+- possibly use ROM stuff, possibly use low-order polynomial approx computed on the fly from the template as it's generated
+- remove lefttukeywindow()
+- use template_bank_row.coa_phase == 0. in SimInspiralFD() call, make sure itac adjusts the phase it assigns to triggers from the template coa_phase
+- change "assumes fhigh" to "asserts fhigh"
+- move assert epoch_time into condition_imr_waveform(), should be assert -len(data) <= epoch_time * sample_rate < 0
+"""
+
 
 #
 # =============================================================================
@@ -100,9 +104,9 @@ def tukeywindow(data, samps = 200.):
 def generate_template(template_bank_row, approximant, sample_rate, duration, f_low, f_high, amporder = 0, order = 7, fwdplan = None, fworkspace = None):
 	"""
 	Generate a single frequency-domain template, which
-	 (1) is band-limited between f_low and f_high,
-	 (2) has an IFFT which is duration seconds long and
-	 (3) has an IFFT which is sampled at sample_rate Hz
+	1. is band-limited between f_low and f_high,
+	2. has an IFFT which is duration seconds long and
+	3. has an IFFT which is sampled at sample_rate Hz
 	"""
 	if approximant not in templates.gstlal_approximants:
 		raise ValueError("Unsupported approximant given %s" % approximant)
@@ -250,9 +254,9 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
 	"""!
 	Generate a bank of templates, which are
-	 (1) broken up into time slice,
-	 (2) down-sampled in each time slice and
-	 (3) whitened with the given psd.
+	1. broken up into time slice,
+	2. down-sampled in each time slice and
+	3. whitened with the given psd.
 	"""
 	sample_rate_max = max(time_slices['rate'])
 	duration = max(time_slices['end'])
