@@ -24,28 +24,20 @@ from gstlal import reference_psd
 from optparse import OptionParser
 from glue.ligolw import utils as ligolw_utils
 
-## @file
-# A program to fit a PSD to a polynomial
-#
-#
-# ### Usage cases
-#
-# -# Fit a PSD to a polynomial with default settings (consider using gstlal_plot_psd to compare the results)
-#
-#		$ gstlal_psd_polyfit --output smooth.xml.gz H1refpsd.xml.gz
-#
-#
-# -# Please add more
-#
-#
-# ### Command line options
-#
-# - `--median-window` [int]: Median window in sample points to apply running median for removing sharp features. Default 8.  Setting it to 1 effectively disables this filter.
-# - `--output` [filename]: Set the name of the LIGO light-weight XML file to output
-# - `--poly-order` [int]: Set the order of the fitting polynomial. default 10
-# - `--low-fit-freq` [float]: Set the low frequency at which to begin fitting in Hz. default 30
-# - `--high-fit-freq` [float]: Set the high frequency at which to stop fitting in Hz. default 6500
-# 
+### A program to fit a PSD to a polynomial
+###
+###
+### Usage cases
+### -----------
+###
+### 1. Fit a PSD to a polynomial with default settings (consider using gstlal_plot_psd to compare the results)::
+###
+###	$ gstlal_psd_polyfit --output smooth.xml.gz H1refpsd.xml.gz
+###
+###
+### 2. Please add more
+###
+###
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--median-window", type = int, default = 8, help="Median window in sample points to apply running median for removing sharp features. Default 8.  Setting it to 1 effectively disables this filter.")
