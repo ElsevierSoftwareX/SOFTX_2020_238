@@ -16,14 +16,8 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file
-# A program to split a set of injections up into a smaller set of files grouped together by chirp mass
-#
-# ### Command line interface
-#
-#	+ `--target-injection-rate` [float] : Desired injection rate of output files (default: 0.01)
-#	+ `--injection-rate-tolerance` [float] : Acceptable tolerance for target injection rate, files will be written to disk once a splitting has been found such that the injection rate is target-injection-rate +- (injection-rate-tolerance*target-injection-rate) (default: 0.1)
-#       + `--generate-inj-string-only` : Do not combine files, generate an injection string specifying which chirp mass bounds to use to search for the provided injection files
+
+### A program to split a set of injections up into a smaller set of files grouped together by chirp mass
 
 
 from optparse import OptionParser
