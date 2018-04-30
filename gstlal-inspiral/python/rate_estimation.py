@@ -83,7 +83,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 	of the probability density, up to a constant offset.  n_dim sets
 	the number of dimensions of the parameter space over which the PDF
 	is defined and args gives any additional arguments to be passed to
-	lnprobfunc, whose signature must be
+	lnprobfunc, whose signature must be::
 
 		ln(P) = lnprobfunc(X, *args)
 
