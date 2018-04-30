@@ -16,14 +16,11 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
-## @file gstlal_ll_inspiral_reset_likelihood
-# A program to reset likelihood data after a burn in
-#
-# ### Command line interface
-#
-#		--verbose, action = "store_true", help = "Be verbose."
-#		--likelihood-file", metavar = "filename", help = "Write likelihood files to disk and include the names in this cachefile file."
-#		--zerolag-likelihood-file", metavar = "filename", help = "Write zerolag likelihood files to disk and include the names in this cachefile file."
+
+
+### A program to reset likelihood data after a burn in
+
+
 #
 #
 # =============================================================================
