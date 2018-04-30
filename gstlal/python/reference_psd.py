@@ -61,25 +61,16 @@ from gstlal import pipeio
 from gstlal import simplehandler
 
 
-## @file
-# module for reference psds
-#
-# ### Review Status
-#
-# | Names                                           | Hash                                     | Date       | Diff to Head of Master      |
-# | ----------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa | 2014-05-01 | <a href="@gstlal_cgit_diff/python/reference_psd.py?id=HEAD&id2=b3ef077fe87b597578000f140e4aa780f3a227aa">reference_psd.py</a> |
-#
-# #### Action items
-#
-# - Make graphs of code and compare with gstreamer graphs
-# - Link spectrum movie from DCC
-# - Consider exposing the average samples property
-# - Check FIR kernel normalization norm
+__doc__ = """
+**Review Status**
 
++-------------------------------------------------+------------------------------------------+------------+
+| Names                                           | Hash                                     | Date       |
++=================================================+==========================================+============+
+| Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | b3ef077fe87b597578000f140e4aa780f3a227aa | 2014-05-01 |
++-------------------------------------------------+------------------------------------------+------------+
 
-## @package python.reference_psd
-# the reference_psd module
+"""
 
 
 #
@@ -112,31 +103,35 @@ class PSDHandler(simplehandler.Handler):
 # measure_psd()
 #
 
-## A pipeline to measure a PSD
-#
-# @dot
-# digraph G {
-#	// graph properties
-#
-#	rankdir=LR;
-#	compound=true;
-#	node [shape=record fontsize=10 fontname="Verdana"];
-#	edge [fontsize=8 fontname="Verdana"];
-#
-#	// nodes
-#
-#	"mkbasicsrc()" [URL="\ref datasource.mkbasicsrc()"];
-#	capsfilter1 [URL="\ref pipeparts.mkcapsfilter()"];
-#	resample [URL="\ref pipeparts.mkresample()"];
-#	capsfilter2  [URL="\ref pipeparts.mkcapsfilter()"];
-#	queue [URL="\ref pipeparts.mkqueue()"];
-#	whiten [URL="\ref pipeparts.mkwhiten()"];
-#	fakesink [URL="\ref pipeparts.mkfakesink()"];
-#
-#	"mkbasicsrc()" -> capsfilter1 -> resample -> capsfilter2 -> queue -> whiten -> fakesink;
-# } 
-# @enddot
+
 def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbose = False):
+	"""
+**Gstreamer graph**
+
+.. graphviz::
+
+   digraph G {
+      // graph properties
+
+      rankdir=LR;
+      compound=true;
+      node [shape=record fontsize=10 fontname="Verdana"];
+      edge [fontsize=8 fontname="Verdana"];
+
+      // nodes
+
+      "mkbasicsrc()" ;
+      capsfilter1 ;
+      resample ;
+      capsfilter2  ;
+      queue ;
+      whiten ;
+      fakesink ;
+
+      "mkbasicsrc()" -> capsfilter1 -> resample -> capsfilter2 -> queue -> whiten -> fakesink;
+   }
+	"""
+
 	#
 	# 8 FFT-lengths is just a ball-parky estimate of how much data is
 	# needed for a good PSD, this isn't a requirement of the code (the
