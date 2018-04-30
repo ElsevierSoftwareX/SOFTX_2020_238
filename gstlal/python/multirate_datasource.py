@@ -43,6 +43,17 @@ from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import datasource
 
+__doc__ = """
+
+**Review Status**
+
++------------------------------------------------+------------------------------------------+------------+
+| Names                                          | Hash                                     | Date       |
++================================================+==========================================+============+
+| Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e | 2014-06-18 |
++------------------------------------------------+------------------------------------------+------------+
+"""
+
 # a macro to switch between a conventional whitener and a fir whitener below
 try:
 	if int(os.environ["GSTLAL_FIR_WHITEN"]):
@@ -53,96 +64,9 @@ except KeyError as e:
 	print >> sys.stderr, "You must set the environment variable GSTLAL_FIR_WHITEN to either 0 or 1.  1 enables causal whitening. 0 is the traditional acausal whitening filter"
 	raise
 
-## 
-# @file
-#
-# A file that contains the multirate_datasource module code
-#
-# ###Review Status
-#
-# | Names                                          | Hash                                     | Date       | Diff to Head of Master      |
-# | ---------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Florent, Sathya, Duncan Me, Jolien, Kipp, Chad | 8a6ea41398be79c00bdc27456ddeb1b590b0f68e | 2014-06-18 | <a href="@gstlal_cgit_diff/python/multirate_datasource.py?id=HEAD&id2=8a6ea41398be79c00bdc27456ddeb1b590b0f68e">multirate_datasource.py</a> |
 
-# #### Actions
-#
-# - Is the h(t) gate really necessary? It shouldn't really be used unless
-# there is something really wrong with the data. Wishlist: Tee off from 
-# the control panel and record on/off (This is already done).
-#
-# - Task for the review team: Check what data was analysed and how much
-# data was "lost" due to application of internal data quality.
-#
-# - There seems to be a bug in resampler (even) in the latest version of gstreamer; 
-# (produces one few sample). We need to better understand the consequence of this bug.
-
-##
-# @package python.multirate_datasource
-#
-# multirate_datasource module
-
-## #### produced whitened h(t) at (possibly) multiple sample rates
-# ##### Gstreamer graph describing this function
-#
-# @dot
-# digraph mkbasicsrc {
-#	rankdir = LR;
-#	compound=true;
-#	node [shape=record fontsize=10 fontname="Verdana"];
-#	edge [fontsize=8 fontname="Verdana"];
-#
-#	capsfilter1 [URL="\ref pipeparts.mkcapsfilter()"];
-#	audioresample [URL="\ref pipeparts.mkresample()"];
-#	capsfilter2 [URL="\ref pipeparts.mkcapsfilter()"];
-#	reblock [URL="\ref pipeparts.mkreblock()"];
-#	whiten [URL="\ref pipeparts.mkwhiten()"];
-#	audioconvert [URL="\ref pipeparts.mkaudioconvert()"];
-#	capsfilter3 [URL="\ref pipeparts.mkcapsfilter()"];
-#	"segmentsrcgate()" [URL="\ref datasource.mksegmentsrcgate()", label="segmentsrcgate() \n [iff veto segment list provided]", style=filled, color=lightgrey];
-#	tee [URL="\ref pipeparts.mktee()"];
-#	audioamplifyr1 [URL="\ref pipeparts.mkaudioamplify()"];
-#	capsfilterr1 [URL="\ref pipeparts.mkcapsfilter()"];
-#	htgater1 [URL="\ref datasource.mkhtgate()", label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
-#	tee1 [URL="\ref pipeparts.mktee()"];
-#	audioamplifyr2 [URL="\ref pipeparts.mkaudioamplify()"];
-#	capsfilterr2 [URL="\ref pipeparts.mkcapsfilter()"];
-#	htgater2 [URL="\ref datasource.mkhtgate()", label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
-#	tee2 [URL="\ref pipeparts.mktee()"];
-#	audioamplify_rn [URL="\ref pipeparts.mkaudioamplify()"];
-#	capsfilter_rn [URL="\ref pipeparts.mkcapsfilter()"];
-#	htgate_rn [URL="\ref datasource.mkhtgate()", style=filled, color=lightgrey, label="htgate() \n [iff ht gate specified]"];
-#	tee [URL="\ref pipeparts.mktee()"];
-#
-#	// nodes
-#
-#	"?" -> capsfilter1 -> audioresample;
-#	audioresample -> capsfilter2;
-#	capsfilter2 -> reblock;
-#	reblock -> whiten;
-#	whiten -> audioconvert;
-#	audioconvert -> capsfilter3;
-#	capsfilter3 -> "segmentsrcgate()";
-#	"segmentsrcgate()" -> tee;
-#
-#	tee -> audioamplifyr1 [label="Rate 1"];
-#	audioamplifyr1 -> capsfilterr1;
-#	capsfilterr1 -> htgater1;
-#	htgater1 -> tee1 -> "? 1";
-#
-#	tee -> audioamplifyr2 [label="Rate 2"];
-#	audioamplifyr2 -> capsfilterr2;
-#	capsfilterr2 -> htgater2;
-#	htgater2 -> tee2 -> "? 2";
-#
-#	tee ->  audioamplify_rn [label="Rate N"];
-#	audioamplify_rn -> capsfilter_rn;
-#	capsfilter_rn -> htgate_rn;
-#	htgate_rn -> tee_n -> "? 3";
-#
-# }
-# @enddot
 def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = None, width = 64, unit_normalize = True, statevector = None, dqvector = None):
-	"""!
+	"""
 	Build pipeline stage to whiten and downsample h(t).
 
 	- pipeline: the gstreamer pipeline to add this to
@@ -155,6 +79,66 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	- veto_segments: segments to mark as gaps after whitening
 	- track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
 	- width: type convert to either 32 or 64 bit float
+
+	**Gstreamer graph describing this function**
+
+	.. graphviz::
+
+	   digraph mkbasicsrc {
+		rankdir = LR;
+		compound=true;
+		node [shape=record fontsize=10 fontname="Verdana"];
+		edge [fontsize=8 fontname="Verdana"];
+
+		capsfilter1 ;
+		audioresample ;
+		capsfilter2 ;
+		reblock ;
+		whiten ;
+		audioconvert ;
+		capsfilter3 ;
+		"segmentsrcgate()" [label="segmentsrcgate() \n [iff veto segment list provided]", style=filled, color=lightgrey];
+		tee ;
+		audioamplifyr1 ;
+		capsfilterr1 ;
+		htgater1 [label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
+		tee1 ;
+		audioamplifyr2 ;
+		capsfilterr2 ;
+		htgater2 [label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
+		tee2 ;
+		audioamplify_rn ;
+		capsfilter_rn ;
+		htgate_rn [style=filled, color=lightgrey, label="htgate() \n [iff ht gate specified]"];
+		tee ;
+
+		// nodes
+
+		"\<src\>" -> capsfilter1 -> audioresample;
+		audioresample -> capsfilter2;
+		capsfilter2 -> reblock;
+		reblock -> whiten;
+		whiten -> audioconvert;
+		audioconvert -> capsfilter3;
+		capsfilter3 -> "segmentsrcgate()";
+		"segmentsrcgate()" -> tee;
+
+		tee -> audioamplifyr1 [label="Rate 1"];
+		audioamplifyr1 -> capsfilterr1;
+		capsfilterr1 -> htgater1;
+		htgater1 -> tee1 -> "\<return\> 1";
+
+		tee -> audioamplifyr2 [label="Rate 2"];
+		audioamplifyr2 -> capsfilterr2;
+		capsfilterr2 -> htgater2;
+		htgater2 -> tee2 -> "\<return\> 2";
+
+		tee ->  audioamplify_rn [label="Rate N"];
+		audioamplify_rn -> capsfilter_rn;
+		capsfilter_rn -> htgate_rn;
+		htgate_rn -> tee_n -> "\<return\> 3";
+
+	   }
 	"""
 	#
 	# input sanity checks
