@@ -27,7 +27,6 @@
 
 from optparse import OptionParser
 from collections import deque
-import copy
 import json
 import math
 import os
@@ -54,6 +53,7 @@ from lal import LIGOTimeGPS
 
 from glue import iterutils
 from glue import segments
+from glue import segmentsUtils
 from glue.lal import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
@@ -516,6 +516,7 @@ def parse_command_line():
 	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this feature extractor publishes feature vector subsets to.")
 	parser.add_option("--kafka-server", metavar = "string", help = "If using Kafka, sets the server url that the kafka topic is hosted on.")
 	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the feature extractor with a 4 digit integer string code, padded with zeros. Default = 0001")
+	parser.add_option("--nxydump-segment", metavar = "start:stop", help = "Set the time interval to dump from nxydump elements (optional).")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
 	parser.add_option("--waveform", metavar = "string", default = "half_sine_gaussian", help = "Specifies the waveform used for matched filtering. Possible options: (half_sine_gaussian, sine_gaussian). Default = half_sine_gaussian")
@@ -544,6 +545,10 @@ def parse_command_line():
 	# check if persist and save cadence times are sensible
 	assert options.persist_cadence >= options.cadence
 	assert (options.persist_cadence % options.cadence) == 0
+
+	# check if there are any segments to dump to disk
+	if options.nxydump_segment:
+		options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	return options, filenames
 
@@ -714,7 +719,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			head[channel] = pipeparts.mklatency(pipeline, head[channel], name=idq_utils.latency_name('beforewhitening', 2, channel))
 
 		# whiten auxiliary channel data
-		for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32).items():
+		for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32, nxydump_segment=options.nxydump_segment).items():
 			if options.latency_output:
 				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterwhitening', 3, channel, rate))
 
@@ -723,7 +728,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			downsample_factor = 0.8
 			flow = rate/4. * downsample_factor
 			fhigh = rate/2. * downsample_factor
-			qlow = 4
+			qlow = 3.3166
 			if data_source_info.extension == 'ini':
 				qhigh = data_source_info.channel_dict[channel]['qhigh']
 			else:
@@ -755,8 +760,14 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
 			thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
 
+			# dump segments to disk if specified
+			tee = pipeparts.mktee(pipeline, thishead)
+			if options.nxydump_segment:
+				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "snrtimeseries_%s_%s.txt" % (channel, repr(rate)), segment = options.nxydump_segment)
+
 			# extract features from time series
-			thishead = pipeparts.mktrigger(pipeline, thishead, rate, max_snr = True)
+			thishead = pipeparts.mktrigger(pipeline, tee, rate, max_snr = True)
+
 			if options.latency_output:
 				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('aftertrigger', 5, channel, rate))
 
