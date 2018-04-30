@@ -123,7 +123,7 @@ def latex_horizon_distance(Mpc):
 
 
 def axes_plot_psds(axes, psds, coinc_xmldoc = None):
-	"""!
+	"""
 	Places a PSD plot into a matplotlib Axes object.
 
 	@param axes An Axes object into which the plot will be placed.
@@ -201,7 +201,7 @@ def axes_plot_psds(axes, psds, coinc_xmldoc = None):
 
 
 def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
-	"""!
+	"""
 	Produces a matplotlib figure of PSDs.
 
 	@param psds A dictionary of PSDs as REAL8FrequencySeries keyed by
@@ -222,7 +222,7 @@ def plot_psds(psds, coinc_xmldoc = None, plot_width = 640):
 
 
 def plot_cumulative_snrs(psds, coinc_xmldoc, plot_width = 640):
-	"""!
+	"""
 	Produces a matplotlib figure of cumulative SNRs.
 
 	@param psds A dictionary of PSDs as REAL8FrequencySeries keyed by
