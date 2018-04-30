@@ -35,107 +35,98 @@ from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw.utils import segments as ligolw_segments
 
-## @file gstlal_play
-# This program will play data in a variety of ways; See gstlal_play for help and usage.
-#
-# This program will play data in a variety of ways.  Its input is anything
-# supported by datasource.py.  You can additionally whiten the data or apply a
-# band pass filtering.  It can direct its output to either your sound card,
-# various audio file formats, or stderr/stdout in tab delimited ASCII text.
-#
-# #### Graph of the gsreamer pipeline
-#
-# - gray boxes are optional and depend on the command line given
-#
-# @dot
-# digraph G {
-#	// graph properties
-#
-#	rankdir=LR;
-#	compound=true;
-#	node [shape=record fontsize=10 fontname="Verdana"];
-#	edge [fontsize=8 fontname="Verdana"];
-#
-#	// nodes
-#
-#	"mkbasicsrc()" [URL="\ref datasource.mkbasicsrc()"];
-#	"whitened_multirate_src()" [label="whitened_multirate_src()", URL="\ref multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
-#	"mkresample()" [URL="\ref pipeparts.mkresample()", style=filled, color=lightgrey];
-#	"mkcapsfilter()" [URL="\ref pipeparts.mkcapsfilter()", style=filled, color=lightgrey];
-#	"mkaudiochebband()" [URL="\ref pipeparts.mkaudiochebband()", style=filled, color=lightgrey];
-#	"mkaudiocheblimit()" [URL="\ref pipeparts.mkaudiocheblimit()", style=filled, color=lightgrey];
-#	"mkaudioconvert()" [URL="\ref pipeparts.mkaudioconvert()"];
-#	"mkaudioamplify()" [URL="\ref pipeparts.mkaudioamplify()"];
-#	"mkautoaudiosink()" [URL="\ref pipeparts.mkautoaudiosink()", style=filled, color=lightgrey];
-#	"mkwavenc()" [URL="\ref pipeparts.mkwavenc()", style=filled, color=lightgrey];
-#	"mkflacenc()" [URL="\ref pipeparts.mkflacenc()", style=filled, color=lightgrey];
-#	"mkvorbisenc()" [URL="\ref pipeparts.mkvorbisenc()", style=filled, color=lightgrey];
-#	"mkfilesink()" [URL="\ref pipeparts.mkfilesink()", style=filled, color=lightgrey];
-#	"mknxydumpsink()" [URL="\ref pipeparts.mknxydumpsink()", style=filled, color=lightgrey];
-#
-#	// connections
-#
-#	"mkbasicsrc()" -> "mkresample()" [label=" --whiten not provided"];
-#	"mkresample()" -> "mkcapsfilter()";
-#	"mkcapsfilter()" -> "mkaudioconvert()" [label=" neither --low-pass-filter nor --high-pass-filter provided"];
-#	"mkcapsfilter()" -> "mkaudiochebband()" [label=" --low-pass-filter and --high-pass-filter provided"];
-#	"mkcapsfilter()" -> "mkaudiocheblimit()" [label=" --low-pass-filter or --high-pass-filter provided"];
-#
-#	"mkbasicsrc()" -> "whitened_multirate_src()" [label=" --whiten provided"];
-#	"whitened_multirate_src()" -> "mkaudioconvert()" [label=" neither --low-pass-filter nor --high-pass-filter provided"];
-#	"whitened_multirate_src()" -> "mkaudiochebband()" [label=" --low-pass-filter and --high-pass-filter provided"];
-#	"whitened_multirate_src()" -> "mkaudiocheblimit()" [label=" --low-pass-filter or --high-pass-filter provided"];
-#
-#	"mkaudiochebband()" -> "mkaudioconvert()";
-#	"mkaudiocheblimit()" -> "mkaudioconvert()";
-#
-#	"mkaudioconvert()" -> "mkaudioamplify()";
-#
-#	"mkaudioamplify()" -> "mkautoaudiosink()" [label=" --output not provided"];
-#	"mkaudioamplify()" -> "mkwavenc()" [label=" --output ends with '.wav'"];
-#	"mkaudioamplify()" -> "mkflacenc()" [label=" --output ends with '.flac'"];
-#	"mkaudioamplify()" -> "mkvorbisenc()" [label=" --output ends with '.ogg'"];
-#	"mkaudioamplify()" -> "mknxydumpsink()" [label=" --output ends with '.txt' or is /dev/stderr or /dev/stdout"];
-#	"mkwavenc()" -> "mkfilesink()";
-#	"mkvorbisenc()" -> "mkfilesink()";
-#	"mkflacenc()" -> "mkfilesink()";
-# }
-# @enddot
-#
-# ### Usage cases
-#
-# See datasource.append_options() for additional usage cases for datasource specific command line options
-#
-# -# Viewing low latency data in stdout (e.g. on CIT cluster)
-#	- Note ctrl+c kills this
-#
-#			gstlal_play --data-source framexmit --channel-name=L1=FAKE-STRAIN  --output /dev/stdout
-#
-# -# Pipe low latency data to an ogg file narrowing in on the sweet spot and
-# add amplification to make it audible.  
-#	- Note ctrl+c kills this
-#
-#			gstlal_play --data-source framexmit --channel-name=L1=FAKE-STRAIN  --high-pass-filter 40 --low-pass-filter 1000 --amplification 1e21 --output test.ogg
-#
-# -# Write injection time series from an xml file into an ASCII delimited text file
-#
-#			gstlal_play --data-source silence --gps-start-time 966383960 --gps-end-time 966384960 --channel-name=L1=FAKE-STRAIN  --injections=BNS-MDC1-FIXEDMASS.xml --output test.txt
-#
-# -# Other things are certainly possible.  Please add some!
-#
-# ### Command line options ###
-#
-# See datasource.append_options() for common command line options shared among different programs
-#
-#	+ `--output` [filename]: Set the filename in which to save the output.  If not given, output is sent to the default audio device.  The filename's extension determines the format, the following are recognized:  .wav, .flac, .ogg, .txt, /dev/stdout, /dev/stderr
-#	+ `--rate` [int] (Hz): Downsample input to this sample rate. Default = 4096 Hz.  Must be @f$ \leq @f$ input sample rate or else you will get a caps negotiation error.
-#	+ `--whiten`: Whiten the time series (default = do not whiten.
-#	+ `--reference-psd` [filename]: When whitening, normalize the time series to the spectrum described in this XML file.  If this option is not given, the spectrum is measured from the data.
-#	+ `--low-pass-filter` [float] (Hz): Low pass filter frequency (default = no low-pass filter).  Low-pass filter is applied after whitening.
-#	+ `--high-pass-filter` [float] (Hz): High pass filter frequency (default = no high-pass filter).  High-pass filter is applied after whitening.
-#	+ `--amplification` [float] (dimensionless): Amplify the timeseries this much (default = no amplification).  Amplification is applied after low- and high-pass filtering. For unwhitened h(t) that is bandpassed to the most sensitive region you might need to set this to 1e20 to make it audible
-#	+ `--verbose`: Be verbose.
-#
+### This program will play data in a variety of ways
+###
+### This program will play data in a variety of ways.  Its input is anything
+### supported by :any:`datasource`.  You can additionally whiten the data
+### or apply a band pass filtering.  It can direct its output to either your
+### sound card, various audio file formats, or stderr/stdout in tab delimited
+### ASCII text.
+###
+### Graph of the gsreamer pipeline
+### ------------------------------
+###
+### - gray boxes are optional and depend on the command line given
+###
+### .. graphviz::
+###
+###    digraph G {
+###	// graph properties
+###
+###	rankdir=LR;
+###	compound=true;
+###	node [shape=record fontsize=10 fontname="Verdana"];
+###	edge [fontsize=8 fontname="Verdana"];
+###
+###	// nodes
+###
+###	"mkbasicsrc()" [URL="\ref datasource.mkbasicsrc()"];
+###	"whitened_multirate_src()" [label="whitened_multirate_src()", URL="\ref multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
+###	"mkresample()" [URL="\ref pipeparts.mkresample()", style=filled, color=lightgrey];
+###	"mkcapsfilter()" [URL="\ref pipeparts.mkcapsfilter()", style=filled, color=lightgrey];
+###	"mkaudiochebband()" [URL="\ref pipeparts.mkaudiochebband()", style=filled, color=lightgrey];
+###	"mkaudiocheblimit()" [URL="\ref pipeparts.mkaudiocheblimit()", style=filled, color=lightgrey];
+###	"mkaudioconvert()" [URL="\ref pipeparts.mkaudioconvert()"];
+###	"mkaudioamplify()" [URL="\ref pipeparts.mkaudioamplify()"];
+###	"mkautoaudiosink()" [URL="\ref pipeparts.mkautoaudiosink()", style=filled, color=lightgrey];
+###	"mkwavenc()" [URL="\ref pipeparts.mkwavenc()", style=filled, color=lightgrey];
+###	"mkflacenc()" [URL="\ref pipeparts.mkflacenc()", style=filled, color=lightgrey];
+###	"mkvorbisenc()" [URL="\ref pipeparts.mkvorbisenc()", style=filled, color=lightgrey];
+###	"mkfilesink()" [URL="\ref pipeparts.mkfilesink()", style=filled, color=lightgrey];
+###	"mknxydumpsink()" [URL="\ref pipeparts.mknxydumpsink()", style=filled, color=lightgrey];
+###
+###	// connections
+###
+###	"mkbasicsrc()" -> "mkresample()" [label=" --whiten not provided"];
+###	"mkresample()" -> "mkcapsfilter()";
+###	"mkcapsfilter()" -> "mkaudioconvert()" [label=" neither --low-pass-filter nor --high-pass-filter provided"];
+###	"mkcapsfilter()" -> "mkaudiochebband()" [label=" --low-pass-filter and --high-pass-filter provided"];
+###	"mkcapsfilter()" -> "mkaudiocheblimit()" [label=" --low-pass-filter or --high-pass-filter provided"];
+###
+###	"mkbasicsrc()" -> "whitened_multirate_src()" [label=" --whiten provided"];
+###	"whitened_multirate_src()" -> "mkaudioconvert()" [label=" neither --low-pass-filter nor --high-pass-filter provided"];
+###	"whitened_multirate_src()" -> "mkaudiochebband()" [label=" --low-pass-filter and --high-pass-filter provided"];
+###	"whitened_multirate_src()" -> "mkaudiocheblimit()" [label=" --low-pass-filter or --high-pass-filter provided"];
+###
+###	"mkaudiochebband()" -> "mkaudioconvert()";
+###	"mkaudiocheblimit()" -> "mkaudioconvert()";
+###
+###	"mkaudioconvert()" -> "mkaudioamplify()";
+###
+###	"mkaudioamplify()" -> "mkautoaudiosink()" [label=" --output not provided"];
+###	"mkaudioamplify()" -> "mkwavenc()" [label=" --output ends with '.wav'"];
+###	"mkaudioamplify()" -> "mkflacenc()" [label=" --output ends with '.flac'"];
+###	"mkaudioamplify()" -> "mkvorbisenc()" [label=" --output ends with '.ogg'"];
+###	"mkaudioamplify()" -> "mknxydumpsink()" [label=" --output ends with '.txt' or is /dev/stderr or /dev/stdout"];
+###	"mkwavenc()" -> "mkfilesink()";
+###	"mkvorbisenc()" -> "mkfilesink()";
+###	"mkflacenc()" -> "mkfilesink()";
+###   }
+###
+### Usage cases
+### -----------
+###
+### See :py:func:`datasource.append_options` for additional usage cases for datasource specific command line options
+###
+### 1. Viewing low latency data in stdout (e.g. on CIT cluster) Note ctrl+c kills this::
+###
+###	$ gstlal_play --data-source framexmit --channel-name=L1=FAKE-STRAIN  \
+###	--output /dev/stdout
+###
+### 2. Pipe low latency data to an ogg file narrowing in on the sweet spot and
+### add amplification to make it audible.  Note ctrl+c kills this::
+###
+###	$ gstlal_play --data-source framexmit --channel-name=L1=FAKE-STRAIN  \
+###	--high-pass-filter 40 --low-pass-filter 1000 --amplification 1e21 --output test.ogg
+###
+### 3. Write injection time series from an xml file into an ASCII delimited text file::
+###
+###	$ gstlal_play --data-source silence --gps-start-time 966383960 \
+###	--gps-end-time 966384960 --channel-name=L1=FAKE-STRAIN  \
+###	--injections=BNS-MDC1-FIXEDMASS.xml --output test.txt
+###
+### 4. Other things are certainly possible.  Please add some!
+###
 
 
 def parse_command_line():
@@ -152,10 +143,10 @@ def parse_command_line():
 	parser.add_option("--sample-format", metavar = "name", help = "Force a specific sample format for the output.  If not specified, the format is chosen by auto-negotiation with the encoder.  Allowed values are any GStreamer-recognized format that is compatible with the requested encoder.  Examples include \"F32LE\", \"F64LE\".")
 	parser.add_option("--rate", metavar = "Hz", type = "int", default = 4096, help = "Downsample input to this sample rate. Default = 4096 Hz.  Must be <= input sample rate or else you will get a caps negotiation error.")
 	parser.add_option("--whiten", action = "store_true", help = "Whiten the time series (default = do not whiten).")
-	parser.add_option("--reference-psd", metavar = "filename", help = "When whitening, normalize the time series to the spectrum described in this XML file.  If this option is not given, the spectrum is measured from the data.") 
+	parser.add_option("--reference-psd", metavar = "file", help = "When whitening, normalize the time series to the spectrum described in this XML file.  If this option is not given, the spectrum is measured from the data.") 
 	parser.add_option("--low-pass-filter", metavar = "Hz", type = "float", help = "Low pass filter frequency (default = no low-pass filter).  Low-pass filter is applied after whitening.")
 	parser.add_option("--high-pass-filter", metavar = "Hz", type = "float", help = "High pass filter frequency (default = no high-pass filter).  High-pass filter is applied after whitening.")
-	parser.add_option("--amplification", metavar = "factor", type = "float", default = 1.0, help = "Amplify the timeseries this much (default = no amplification).  Amplification is applied after low- and high-pass filtering. For unwhitened h(t) that is bandpassed to the most sensitive region you might need to set this to 1e20 to make it audible")
+	parser.add_option("--amplification", metavar = "num", type = "float", default = 1.0, help = "Amplify the timeseries this much (default = no amplification).  Amplification is applied after low- and high-pass filtering. For unwhitened h(t) that is bandpassed to the most sensitive region you might need to set this to 1e20 to make it audible")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	#
