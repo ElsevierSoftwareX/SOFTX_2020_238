@@ -36,148 +36,149 @@ from gstlal import datasource
 from gstlal import multirate_datasource
 from glue.ligolw import utils as ligolw_utils
 
-## @file gstlal_fake_frames
-# This program will make fake data in a variety of ways; see gstlal_fake_frames for help and usage
-#
-# This program will make fake data in a variety of ways.  Its input is anything
-# supported by datasource.py.  You can additionally whiten the data or apply a
-# frequency domain coloring filter.  It writes its output to frame files.
-#
-# #### Overview graph of the pipeline ####
-#
-# - gray boxes are optional and depend on the command line given
-#
-# @dot
-# digraph G {
-#	// graph properties
-#
-#	rankdir=LR;
-#	compound=true;
-#	node [shape=record fontsize=10 fontname="Verdana"];	
-#	edge [fontsize=8 fontname="Verdana"];
-#
-#	// nodes
-#
-#	"mkbasicsrc()" [URL="\ref datasource.mkbasicsrc()"];
-#	"whitened_multirate_src()" [label="whitened_multirate_src()", URL="\ref multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
-#	capsfilter [style=filled, color=lightgrey, URL="\ref pipeparts.mkcapsfilter()"];
-#	resample [style=filled, color=lightgrey, URL="\ref pipeparts.mkresample()"];
-#	audioamplify [style=filled, color=lightgrey, URL="\ref pipeparts.mkaudioamplify()", label="audioamplify \n if --data-source=white \n in order to have unit variance \n after resampling"];
-#	lal_shift[style=filled, color=lightgrey, URL="\ref pipeparts.mkshift()", label="lal_shift \n [iff --shift provided]"];
-#	progressreport1 [URL="\ref pipeparts.mkprogressreport()", label="progressreport \n [iff --verbose provided]"];
-#	progressreport2 [style=filled, color=lightgrey, URL="\ref pipeparts.mkprogressreport()", label="progressreport \n [iff --verbose provided]"];
-#	lal_firbank [style=filled, color=lightgrey, URL="\ref pipeparts.mkfirbank()", label="lal_firbank \n [iff --color-psd provided]"];
-#	taginject [URL="\ref pipeparts.mktaginject()"];
-#	lal_simulation [style=filled, color=lightgrey, URL="\ref pipeparts.mkinjections()", label="lal_simulation \n [iff --injections provided]"];
-#	framecppchannelmux [URL="\ref pipeparts.mkframecppchannelmux()"];
-#	framecppfilesink [URL="\ref pipeparts.mkframecppfilesink()"];
-#
-#	// connect it up
-#
-#	"mkbasicsrc()" -> progressreport1-> lal_shift  -> progressreport2;
-#	progressreport2 -> "whitened_multirate_src()" [label="if --whiten given"];
-#	"whitened_multirate_src()" -> lal_firbank;
-#	progressreport2 -> resample [label="if --whiten not given"];
-#	resample -> capsfilter;
-#	capsfilter -> audioamplify
-#	audioamplify -> lal_firbank;
-#	lal_firbank -> taginject -> lal_simulation -> framecppchannelmux -> framecppfilesink;
-# }
-# @enddot
-#
-#
-# ### Usage cases ###
-#
-#
-# -# Making initial LIGO colored noise, Advanced LIGO noise, etc for different
-# instruments.   See datasource.append_options() for other choices
-#
-#		$ gstlal_fake_frames --data-source=LIGO --channel-name=H1=FAKE-STRAIN --frame-type=H1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
-#
-#		$ gstlal_fake_frames --data-source=AdvLIGO --channel-name=L1=FAKE-STRAIN --frame-type=L1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
-#
-#
-# -# Custom colored noise.
-#
-#	Obviously it is not practical to code up every possible noise curve to
-#	simulate as a custom data source.  However, it is possible to provide your
-#	own custom noise curve as an ASCII file with frequency in one column and
-#	strain/Hz in the second. e.g., early advanced ligo noise curve found <a
-#	href=http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/share/v1_early_asd.txt>here</a>.
-#	You will need to convert ASD text files to PSD xml files using
-#	gstlal_psd_xml_from_asd_txt first.
-#
-#		$ gstlal_fake_frames --data-source=white --color-psd v1psd.xml.gz --channel-name=V1=FAKE-STRAIN --frame-type=V1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
-#
-#
-# -# Recoloring existing frame data
-#
-#	This procedure is very similar to the above except that instead of
-#	using white noise to drive the fake frame generation, we start with
-#	real frame data and whiten it.  Recoloring can be thought of as first
-#	whitening data and then applying a coloring filter.  You must first
-#	make a reference PSD of the data with e.g. gstlal_reference_psd.  You
-#	will need to make a frame cache of the frames to recolor.
-#
-#		gstlal_fake_frames --whiten-reference-psd reference_psd.xml.gz --color-psd recolor_psd.xml.gz --data-source frames --output-path /path/to/output --output-channel-name h_16384Hz --gps-start-time 966384031 --frame-type T1300121_V1_EARLY_RECOLORED_V2 --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --frame-cache frame.cache --channel-name=V1=h_16384Hz --verbose
-#
-#
-# -# Creating injections into silence (assumes you have an injection xml file from e.g. lalapps_inspinj)
-#
-#		gstlal_fake_frames --data-source silence --output-path /path/to/output --gps-start-time 966384031 --frame-type V1_INJECTIONS --gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 --verbose --channel-name=V1=INJECTIONS --injections injections.xml
-#
-#
-# -# Other things are certainly possible, please add some!
-#
-# ### Command line options ###
-#
-# See datasource.append_options() for common command line options shared among different programs
-#
-#	+ `--shift` [int] (ns): Number of nanoseconds, \f$\tau\f$ to delay (negative) or advance (positive) the input time series \f$x\f$ relative to the output time series \f$y\f$. \f$ y(t) = x(t+\tau)\f$
-#	+ `--sample-rate` [int] (Hz): Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided.  Default = 16384 Hz, max 16384 Hz.
-# 	+ `--whiten-reference-psd` [file name]: Set the name of psd xml file to whiten the data with.
-#	+ `--whiten-track-psd` []: Calculate PSD from input data and track with time.  Always enabled if --whiten-reference-psd is not given.
-#	+ `--color-psd` [file name]: Set the name of psd xml file to color the data with
-#	+ `--output-path` [file path]: Path to output frame files. Default = "."
-#	+ `--output-channel-name` [string]: The name of the channel in the output frames. The default is the same as the channel name.
-#	+ `--frame-type` [string]: Frame type, required.
-#	+ `--frame-duration` [int] (s): Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default is 16s.
-#	+ `--frames-per-file` [int]: Set the number of frames per file.  Default is 256.
-#	+ `--verbose` []: Be verbose.
-#
-# ### Debug
-#
-# It is possible to check the pipeline graph by interupting the running process
-# with ctrl+c if you have the GST_DEBUG_DUMP_DOT_DIR evironment set.  A dot
-# graph will be written to gstlal_fake_frames.  Here is an example:
-#
-#		$ GST_DEBUG_DUMP_DOT_DIR="." gstlal_fake_frames --data-source=LIGO --channel-name=H1=FAKE-STRAIN --frame-type=H1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 --output-path=testframes  --verbose
-#
-# You should see:
-#
-#		Wrote pipeline to ./gstlal_fake_frames_PLAYING.dot
-#
-# After Ctrl+c you should see:
-# 
-#		^C*** SIG 2 attempting graceful shutdown (this might take several minutes) ... ***
-#		Wrote pipeline to ./gstlal_fake_frames.dot
-#
-# You can then turn the pipeline graph into an image with dot, e.g.,
-#
-#		dot -Tpng gstlal_fake_frames_PLAYING.dot > test.png
-#
-# ### Review
-# 
-# 
+### This program will make fake data in a variety of ways.  Its input is anything
+### supported by datasource.py.  You can additionally whiten the data or apply a
+### frequency domain coloring filter.  It writes its output to frame files.
+###
+### Overview graph of the pipeline
+### ------------------------------
+###
+### Gray boxes are optional and depend on the command line given
+###
+### .. graphviz::
+###
+###    digraph G {
+###
+###        // graph properties
+###
+###        rankdir=LR;
+###        compound=true;
+###        node [shape=record fontsize=10 fontname="Verdana"];
+###        edge [fontsize=8 fontname="Verdana"];
+###
+###        // nodes
+###
+###        "mkbasicsrc()" [URL="\ref datasource.mkbasicsrc()"];
+###        "whitened_multirate_src()" [label="whitened_multirate_src()", URL="\ref multirate_datasource.mkwhitened_multirate_src()", style=filled, color=lightgrey];
+###        capsfilter [style=filled, color=lightgrey, URL="\ref pipeparts.mkcapsfilter()"];
+###        resample [style=filled, color=lightgrey, URL="\ref pipeparts.mkresample()"];
+###        audioamplify [style=filled, color=lightgrey, URL="\ref pipeparts.mkaudioamplify()", label="audioamplify \n if --data-source=white \n in order to have unit variance \n after resampling"];
+###        lal_shift[style=filled, color=lightgrey, URL="\ref pipeparts.mkshift()", label="lal_shift \n [iff --shift provided]"];
+###        progressreport1 [URL="\ref pipeparts.mkprogressreport()", label="progressreport \n [iff --verbose provided]"];
+###        progressreport2 [style=filled, color=lightgrey, URL="\ref pipeparts.mkprogressreport()", label="progressreport \n [iff --verbose provided]"];
+###        lal_firbank [style=filled, color=lightgrey, URL="\ref pipeparts.mkfirbank()", label="lal_firbank \n [iff --color-psd provided]"];
+###        taginject [URL="\ref pipeparts.mktaginject()"];
+###        lal_simulation [style=filled, color=lightgrey, URL="\ref pipeparts.mkinjections()", label="lal_simulation \n [iff --injections provided]"];
+###        framecppchannelmux [URL="\ref pipeparts.mkframecppchannelmux()"];
+###        framecppfilesink [URL="\ref pipeparts.mkframecppfilesink()"];
+###
+###        // connect it up
+###
+###        "mkbasicsrc()" -> progressreport1-> lal_shift  -> progressreport2;
+###        progressreport2 -> "whitened_multirate_src()" [label="if --whiten given"];
+###        "whitened_multirate_src()" -> lal_firbank;
+###        progressreport2 -> resample [label="if --whiten not given"];
+###        resample -> capsfilter;
+###        capsfilter -> audioamplify
+###        audioamplify -> lal_firbank;
+###        lal_firbank -> taginject -> lal_simulation -> framecppchannelmux -> framecppfilesink;
+###    }
+###
+###
+### Usage cases
+### -----------
+###
+### 1. Making initial LIGO colored noise, Advanced LIGO noise, etc for different
+### instruments.   See datasource.append_options() for other choices::
+###
+###    $ gstlal_fake_frames --data-source=LIGO --channel-name=H1=FAKE-STRAIN \
+###    --frame-type=H1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 \
+###    --output-path=testframes  --verbose
+###
+###    $ gstlal_fake_frames --data-source=AdvLIGO --channel-name=L1=FAKE-STRAIN \
+###    --frame-type=L1_FAKE --gps-start-time=900000000 --gps-end-time=900005000 \
+###    --output-path=testframes  --verbose
+###
+###
+### 2. Custom colored noise.
+###
+### Obviously it is not practical to code up every possible noise curve to
+### simulate as a custom data source.  However, it is possible to provide your
+### own custom noise curve as an ASCII file with frequency in one column and
+### strain/Hz in the second. e.g., early advanced ligo noise curve
+### https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal/share/early_aligo_asd.txt
+### You will need to convert ASD text files to PSD xml files using
+### gstlal_psd_xml_from_asd_txt first.::
+###
+###	$ gstlal_fake_frames --data-source=white --color-psd v1psd.xml.gz \
+###	--channel-name=V1=FAKE-STRAIN --frame-type=V1_FAKE --gps-start-time=900000000 \
+###	--gps-end-time=900005000 --output-path=testframes  --verbose
+###
+###
+### 3. Recoloring existing frame data
+###
+### This procedure is very similar to the above except that instead of
+### using white noise to drive the fake frame generation, we start with
+### real frame data and whiten it.  Recoloring can be thought of as first
+### whitening data and then applying a coloring filter.  You must first
+### make a reference PSD of the data with e.g. gstlal_reference_psd.  You
+### will need to make a frame cache of the frames to recolor.::
+###
+###	$ gstlal_fake_frames --whiten-reference-psd reference_psd.xml.gz \
+###	--color-psd recolor_psd.xml.gz --data-source frames \
+###	--output-path /path/to/output --output-channel-name h_16384Hz \
+###	--gps-start-time 966384031 --frame-type T1300121_V1_EARLY_RECOLORED_V2 \
+###	--gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 \
+###	--frame-cache frame.cache --channel-name=V1=h_16384Hz --verbose
+###
+###
+### 4. Creating injections into silence (assumes you have an injection xml file from e.g. lalapps_inspinj)::
+###
+###	$ gstlal_fake_frames --data-source silence --output-path /path/to/output \
+###	--gps-start-time 966384031 --frame-type V1_INJECTIONS \
+###	--gps-end-time 966389031 --frame-duration 16 --frames-per-file 256 \
+###	--verbose --channel-name=V1=INJECTIONS --injections injections.xml
+###
+###
+### 5. Other things are certainly possible, please add some!
+###
+### Debug
+### -----
+###
+### It is possible to check the pipeline graph by interupting the running process
+### with ctrl+c if you have the GST_DEBUG_DUMP_DOT_DIR evironment set.  A dot
+### graph will be written to gstlal_fake_frames.  Here is an example::
+###
+###	$ GST_DEBUG_DUMP_DOT_DIR="." gstlal_fake_frames --data-source=LIGO \
+###	--channel-name=H1=FAKE-STRAIN --frame-type=H1_FAKE \
+###	--gps-start-time=900000000 --gps-end-time=900005000 \
+###	--output-path=testframes  --verbose``
+###
+### You should see::
+###
+###	Wrote pipeline to ./gstlal_fake_frames_PLAYING.dot
+###
+### After Ctrl+c you should see::
+###
+###	^C*** SIG 2 attempting graceful shutdown (this might take several minutes) ... ***
+###		Wrote pipeline to ./gstlal_fake_frames.dot
+###
+### You can then turn the pipeline graph into an image with dot, e.g.,::
+###
+###	$ dot -Tpng gstlal_fake_frames_PLAYING.dot > test.png
+###
+### Review
+### ------
+###
 
 ##
 # Return the number of digits in a number
 #
 def digits(num):
-        if float(num) == 0:
-                return 1
-        else:
-                return int(numpy.ceil(numpy.log10(float(num))))
+	if float(num) == 0:
+		return 1
+	else:
+		return int(numpy.ceil(numpy.log10(float(num))))
 
 
 ##
@@ -325,9 +326,9 @@ if injections is not None:
 
 if not os.path.isdir(options.output_path):
 	try:
-        	os.makedirs(options.output_path)
+		os.makedirs(options.output_path)
 	except:
-        	print >> sys.stderr, "Unable to make directory ", options.output_path
+		print >> sys.stderr, "Unable to make directory ", options.output_path
 		pass
 else:
 	print "Target output directory already exists."
