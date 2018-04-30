@@ -16,20 +16,21 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file
-# This program queries running gstlal inspiral jobs in the low latency analysis and downloads pertinent data, e.g., SNR trigger history, segment files, etc.
 
-#
-# ### Review status
-#
-# | Names                                       | Hash                                        | Date       | Diff to Head of Master      |
-# | ------------------------------------------- | ------------------------------------------- | ---------- | --------------------------- |
-# | Florent, Jolien, Kipp, Chad                 | 8aad48d2d796642a2925c7d70dd207c06c0e9a70    | 2015-05-14 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_ll_inspiral_get_urls?id=HEAD&id2=8aad48d2d796642a2925c7d70dd207c06c0e9a70">gstlal_ll_inspiral_get_urls</a> |
-#
-# #### Action
-# - none
+### This program queries running gstlal inspiral jobs in the low latency
+### analysis and downloads pertinent data, e.g., SNR trigger history, segment
+### files, etc.
+###
+### Review status
+### -------------
+###
+### +---------------------------------------------+---------------------------------------------+------------+
+### | Names                                       | Hash                                        | Date       |
+### +=============================================+=============================================+============+
+### | Florent, Jolien, Kipp, Chad                 | 8aad48d2d796642a2925c7d70dd207c06c0e9a70    | 2015-05-14 |
+### +---------------------------------------------+---------------------------------------------+------------+
+###
 
-## @package gstlal_ll_inspiral_get_urls
 
 while true ; do
 	for f in $@; do
