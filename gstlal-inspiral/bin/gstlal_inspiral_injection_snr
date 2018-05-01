@@ -16,17 +16,14 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file gstlal_inspiral_injection_snr
-# Used to assign characteristic SNRs to injections
-#
-# ### Usage:
-# Takes an injection xml and a cache of reference PSDs and calculated characteristic SNRs. The values
-# will be written to the alpha1 and alpha2 columns in the sim_inspiral table.
-#
-# ### Command line options
-#	+ `--reference-psd-cache[filename]: Set the reference PSD cache file.
-#	+ `--injection-file[filename]: Set the injection xml file.
-#	+ `--flow [float]: Set the low frequency for waveform generation and SNR integral.
+### Used to assign characteristic SNRs to injections
+###
+### Usage:
+### ------
+###
+### Takes an injection xml and a cache of reference PSDs and calculated characteristic SNRs. The values
+### will be written to the alpha1 and alpha2 columns in the sim_inspiral table.
+###
 
 """
 This program calculates characteristic SNRs given an injection xml and a cache of reference PSDs.
