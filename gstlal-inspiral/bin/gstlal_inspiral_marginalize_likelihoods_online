@@ -16,41 +16,39 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file gstlal_inspiral_marginalize_likelihoods_online
-#
-# This program runs gstlal_inspiral_marginalize_likelihood in a while True
-# loop; See gstlal_inspiral_marginalize_likelihoods_online for more details
-#
-#
-# This program is not meant to be executed standalone by a user. It should be
-# part of a DAG managing a running gstlal_inspiral online analysis.
-#
-# This program takes two or more arguments;
-#
-# - The path of the output file name
-# - One or more paths to text files each containing a single line giving
-#   the root URL of a web server from which to retrieve event parameter
-#   distribution data (e.g., "http://node001.ligo.caltech.edu")
-#
-# This program queries each running gstlal_inspiral job via the URL,
-# computes PDFs of the likelihood ratio ranking statistics from the
-# parameter distribution data, then marginalizes the ranking statistic PDFs
-# across jobs and writes the result to the given output file.
-#
-# It continues to do that in an infinite loop with a 10 minute pause on
-# each iteration.  Files are not overwritten directly, but rather via a
-# temporary file and mv operation to ensure that no files are corrupted in
-# a POSIX file environment.
-#
-# ### Review status
-#
-# | Names                                       | Hash                                        | Date       |
-# | ------------------------------------------- | ------------------------------------------- | ---------- |
-# | Florent, Jolien, Kipp, Chad                 | 0e96523b8846e5a4597ba3477c8462443470cd94    | 2015-05-15 |
-#
-# #### Action
-#
-
+### This program runs gstlal_inspiral_marginalize_likelihood in a while True
+### loop; See gstlal_inspiral_marginalize_likelihoods_online for more details
+###
+###
+### This program is not meant to be executed standalone by a user. It should be
+### part of a DAG managing a running gstlal_inspiral online analysis.
+###
+### This program takes two or more arguments;
+###
+### 1. The path of the output file name
+### 2. One or more paths to text files each containing a single line giving
+###    the root URL of a web server from which to retrieve event parameter
+###    distribution data (e.g., "http://node001.ligo.caltech.edu")
+###
+### This program queries each running gstlal_inspiral job via the URL,
+### computes PDFs of the likelihood ratio ranking statistics from the
+### parameter distribution data, then marginalizes the ranking statistic PDFs
+### across jobs and writes the result to the given output file.
+###
+### It continues to do that in an infinite loop with a 10 minute pause on
+### each iteration.  Files are not overwritten directly, but rather via a
+### temporary file and mv operation to ensure that no files are corrupted in
+### a POSIX file environment.
+###
+### Review status
+### -------------
+###
+### +---------------------------------------------+---------------------------------------------+------------+
+### | Names                                       | Hash                                        | Date       |
+### +=============================================+=============================================+============+
+### | Florent, Jolien, Kipp, Chad                 | 0e96523b8846e5a4597ba3477c8462443470cd94    | 2015-05-15 |
+### +---------------------------------------------+---------------------------------------------+------------+
+###
 
 #
 # get the output file name
