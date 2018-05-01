@@ -17,15 +17,9 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-## @file gstlal_inspiral_lvalert_sim_equiv
-# A program to listen to lvalerts, download the candidate data from gstlal gracedb events, and upload XML documents containing sim_inspiral entries to reproduce simulations of the candidates
-#
-# ### Command line interface
-#
-#	+ `--no-upload`: Write plots to disk.
-#	+ `--skip-404`: Skip events that give 404 (file not found) errors (default is to abort)
-#	+ `--gracedb-service-url`: GraceDb service url to upload (default is gracedb.DEFAULT_SERVICE_URL)
-#	+ `--verbose`: Be verbose.
+### A program to listen to lvalerts, download the candidate data from gstlal
+### gracedb events, and upload XML documents containing sim_inspiral entries to
+### reproduce simulations of the candidates
 
 
 #
