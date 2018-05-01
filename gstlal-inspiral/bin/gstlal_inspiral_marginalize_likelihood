@@ -16,26 +16,19 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-##@file gstlal_inspiral_marginalize_likelihood
-# A program to marginalize the likelihood pdfs in noise across mass bins for a gstlal inspiral analysis.
-#
-# ### Command line interface
-#
-#	+ `--ignore-missing`: Ignore and skip missing input documents.
-#	+ `--marginalize` {ranking-stat|ranking-stat-pdf}: Set which set of PDFs to marginalize, the ranking statistics themselves, or the distributions of ranking statistic values (default: ranking-stat).
-#	+ `--density-estimate-zero-lag`: Apply density estimation algorithm to zero-lag PDFs (default: do not).  Requires --marginalize=ranking-stat-pdf.  In the online analysis, the ingested zero-lag histograms contain raw bin counts, but the consumer of this program's output requires the PDFs to be properly density-estimated, so we provide the option of performing that operation here as a courtesy.  This will probably work differently one day.
-#	+ `--output` [filename]: Set the output file name (default = write to stdout).
-#	+ `--likelihood-cache` [filename]: Set the cache file name from which to read likelihood files
-#	+ `--verbose`: Be verbose.
-#
-# ### Review status
-#
-# | Names 	                    | Hash 					                   | Date       | Diff to Head of Master      |
-# | --------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Florent, Jolien, Kipp, Chad | 1dbbbd963c9dc076e1f7f5f659f936e44005f33b | 2015-05-14 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral_marginalize_likelihood?id=HEAD&id2=1dbbbd963c9dc076e1f7f5f659f936e44005f33b">gstlal_inspiral_marginalize_likelihood</a> |
-#
-# #### Action
-# - none
+### A program to marginalize the likelihood pdfs in noise across mass bins for a gstlal inspiral analysis.
+###
+### Review status
+### -------------
+###
+### +-----------------------------+------------------------------------------+------------+
+### | Names                       | Hash                                     | Date       |
+### +=============================+==========================================+============+
+### | Florent, Jolien, Kipp, Chad | 1dbbbd963c9dc076e1f7f5f659f936e44005f33b | 2015-05-14 |
+### +-----------------------------+------------------------------------------+------------+
+###  
+
+
 #
 # =============================================================================
 #
