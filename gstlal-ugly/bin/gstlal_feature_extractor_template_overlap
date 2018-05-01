@@ -28,6 +28,7 @@
 import itertools
 from optparse import OptionParser
 import os
+import random
 import sys
 import urlparse
 
@@ -84,7 +85,7 @@ def plot_waveform(time, waveform, waveform_type='', waveform_params=None):
 	axes.set_xlabel(r"Time [seconds]")
 	axes.set_xlim(time[0], time[-1])
 	if waveform_params:
-		axes.text(0.98 * max(time), 0.9 * min(waveform), r"params: %s" % repr(waveform_params), size=10, ha='right')
+		axes.text(0.96 * max(time), 0.98 * min(waveform), r"%s" % repr(waveform_params), size=10, ha='right')
 
 	return fig
 
@@ -149,11 +150,6 @@ def generate_html_file(plot_paths, waveform_type=''):
 	for key in plot_paths:
 		num, plot = key
 		plot_url = to_output_url(options.output_dir) + '/' + plot
-		#if channel not in channels:
-		#	channels.add(channel)
-		#	page.div(_class = 'col-md-12')
-		#	page.h5('Whitened timeseries and histograms for %s' % channel, align = 'center')
-		#	page.div.close()
 		page.div(_class = 'col-md-6')
 		page.div(_class = 'thumbnail')
 		page.a(markup.oneliner.img(src = plot_url, alt = '', style = 'width:100%', _class='img-responsive'), href = plot_url, target = '_blank')
@@ -211,7 +207,8 @@ if __name__ == '__main__':
 	aggregator.makedir(options.output_dir)
 
     # common parameters we will use throughout
-	max_samp_rate = 2048
+	#max_samp_rate = 2048
+	max_samp_rate = 8192
 	min_samp_rate = 32
 	n_rates = int(numpy.log2(max_samp_rate/min_samp_rate) + 1)
 
@@ -227,7 +224,7 @@ if __name__ == '__main__':
 		flow = rate/4.*0.8
 		fhigh = rate/2.*0.8
 		qhigh = options.qhigh
-		qlow = 4
+		qlow = 3.3166
 		if options.waveform == 'sine_gaussian':
 			waveforms[rate] = idq_utils.SineGaussianGenerator((flow, fhigh), (qlow, qhigh), rate, mismatch = options.mismatch)
 		elif options.waveform == 'half_sine_gaussian':
@@ -241,6 +238,9 @@ if __name__ == '__main__':
 	all_templates = list(itertools.chain(*templates.values()))
 	all_params = list(itertools.chain(*basis_params.values()))
 
+	if options.verbose:
+		print >>sys.stderr, "Creating template overlaps..."
+
 	# calculate overlap for each template and find maximum
 	overlaps = []
 	for this_template in all_templates:
@@ -253,17 +253,23 @@ if __name__ == '__main__':
 	# generate template plots
 	plot_paths = []
 
-	if options.verbose:
-		print >>sys.stderr, "Creating waveform plots..."
-
 	# cast params to a nicer format
 	# FIXME: should really be passing a dict of params instead
 	param_names = ['f', 'Q', 'duration']
+
+	# limit the number of waveforms plotted per frequency band
+	num_samples = 3
+
+	if options.verbose:
+		print >>sys.stderr, "Creating waveform plots..."
+
 	for rate in rates:
-		for template_id, template in enumerate(templates[rate]):
+		for template_id, template in enumerate(random.sample(templates[rate], num_samples)):
 			waveform_params = ["%s: %.3f" % (name, param) for param, name in zip(basis_params[rate][template_id], param_names)]
+
 			if options.verbose:
 				print >>sys.stderr, "\tCreating waveform plot with parameters: %s" % repr(waveform_params)
+
 			series_fig = plot_waveform(waveforms[rate].times, template, options.waveform, waveform_params)
 			fname = 'plot_%s_%s-timeseries.png' % (rate, str(template_id).zfill(4))
 			plot_paths.append((template_id*int(rate),fname))
