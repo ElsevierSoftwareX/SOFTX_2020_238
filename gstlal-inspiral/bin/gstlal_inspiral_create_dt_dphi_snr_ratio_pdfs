@@ -16,7 +16,12 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+import sys
 from gstlal.stats import inspiral_extrinsics
+
+if len(sys.argv) > 1:
+	print "USAGE: %s" % sys.argv[0]
+	sys.exit()
 
 IE = inspiral_extrinsics.InspiralExtrinsics()
 IE.to_hdf5("inspiral_dtdphi_pdf.h5")
