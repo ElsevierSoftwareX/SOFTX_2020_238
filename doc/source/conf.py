@@ -60,8 +60,8 @@ master_doc = 'index'
 # General information about the project.
 # FIXME get from autotools
 project = u'GstLAL'
-copyright = u'2018, Kipp Cannon, Chad Hanna'
-author = u'Kipp Cannon, Chad Hanna'
+copyright = u'2018, GstLAL developers'
+author = u'GstLAL developers'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
