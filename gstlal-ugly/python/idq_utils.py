@@ -43,6 +43,9 @@ from gstlal import aggregator
 #
 ####################
 
+#----------------------------------
+### hdf5 utilities
+
 def get_dataset(path, base, name = 'data', group = None):
 	"""!
 	open a dataset at @param path with name @param base and return the data
@@ -84,6 +87,9 @@ def create_new_dataset(path, base, data, name = 'data', group = None, tmp = Fals
 
 	return fname
 
+#----------------------------------
+### gps time utilities
+
 def in_new_epoch(new_gps_time, prev_gps_time, gps_epoch):
 	"""!
 	Returns whether new and old gps times are in different
@@ -100,6 +106,9 @@ def floor_div(x, n):
 	"""
 	assert n > 0
 	return (x / n) * n
+
+#----------------------------------
+### pathname utilities
 
 def to_trigger_path(rootdir, basename, start_time, job_id, subset_id):
 	"""!
@@ -134,8 +143,11 @@ def latency_name(stage_name, stage_num, channel, rate=None):
 	else:
 		return 'stage%d_%s_%s' % (stage_num, stage_name, channel)
 
-# logging functions
+#----------------------------------
+### logging utilities
+
 # FIXME: shamelessly copied from iDQ's logs module, until this dependency is added in to gstlal-iDQ proper.
+
 def get_logger(logname, log_level=10, rootdir='.', verbose=False):
     '''
     standardize how we instantiate loggers
@@ -171,6 +183,9 @@ def gen_formatter():
 #     classes
 #
 ####################
+
+#----------------------------------
+### Feature I/O structures
 
 class FeatureData(object):
 	"""!
@@ -230,6 +245,49 @@ class HDF5FeatureData(FeatureData):
 		else:
 			for key in self.keys:
 				self.feature_data[key][:] = numpy.nan
+
+class HDF5SeriesFeatureData(FeatureData):
+	"""!
+	Saves feature data with varying dataset lengths to hdf5.
+	"""
+	def __init__(self, columns, keys, **kwargs):
+		super(HDF5SeriesFeatureData, self).__init__(columns, keys = keys, **kwargs)
+		self.cadence = kwargs.pop('cadence')
+		self.dtype = [(column, '<f8') for column in self.columns]
+		self.feature_data = {key: [] for key in keys}
+		self.clear()
+
+	def dump(self, path, base, start_time, key = None, tmp = False):
+		"""
+		Saves the current cadence of gps triggers to disk and clear out data
+		"""
+		name = "%d_%d" % (start_time, self.cadence)
+		if key:
+			group = os.path.join(str(key[0]), str(key[1]).zfill(4))
+			create_new_dataset(path, base, numpy.array(self.feature_data[key], dtype=self.dtype), name=name, group=group, tmp=tmp)
+			self.clear(key)
+		else:
+			for key in self.keys:
+				group = os.path.join(str(key[0]), str(key[1]).zfill(4))
+				create_new_dataset(path, base, numpy.array(self.feature_data[key], dtype=self.dtype), name=name, group=group, tmp=tmp)
+			self.clear()
+
+	def append(self, value, key = None, buftime = None):
+		"""
+		Append a trigger row to data structure
+		"""
+		if buftime and key:
+			self.feature_data[key].append(value)
+
+	def clear(self, key = None):
+		if key:
+			self.feature_data[key] = []
+		else:
+			for key in self.keys:
+				self.feature_data[key] = []
+
+#----------------------------------
+### structures to generate basis waveforms
 
 class HalfSineGaussianGenerator(object):
 	"""
