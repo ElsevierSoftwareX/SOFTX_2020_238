@@ -16,23 +16,8 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file gstlal_inspiral_plot_background
-# A program to plot the likelihood distributions in noise of a gstlal inspiral analysis
-#
-# ### Command line interface
-#
-#	+ `--database` [filename]: Retrieve search results from this database (optional).  Can be given multiple times.
-#	+ `--database-cache` [filename]: Retrieve search results from all databases in this LAL cache (optional).  See lalapps_path2cache.
-#	+ `--max-snr` [value] (float): Plot SNR PDFs up to this value of SNR (default = 200).
-#	+ `--max-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., up to this value of the natural logarithm of the likelihood ratio (default = 40).
-#	+ `--min-log-lambda` [value] (float): Plot ranking statistic CDFs, etc., down to this value of the natural logarithm of the likelihood ratio (default = -5).
-#	+ `--output-dir` [path]: Write output to this directory (default = ".").
-#	+ `--output-format` [extension]: Select output format by setting the filename extension (default = ".png").
-#	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
-#	+ `--add-zerolag-to-background`: Add zerolag events to background before populating coincident parameter PDF histograms.
-#	+ `--user-tag` [tag]: Set the adjustable component of the description fields in the output filenames (default = "ALL").
-#	+ `--plot-snr-snr-pdfs`: Plot the full cache of snr-snr-pdfs.
-#	+ `--verbose`: Be verbose.
+
+### A program to plot the likelihood distributions in noise of a gstlal inspiral analysis
 
 
 #
