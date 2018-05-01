@@ -736,7 +736,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			frames_0 -> frames_1 -> frames_2 -> frames_3 ->frames_4;
 			label="Possible path #2";
 		}
-		  subgraph clusteronline {
+		subgraph clusteronline {
 			color=black;
 			online_0 [label="lvshmsrc|framexmit"];
 			online_1 [label ="framecppchanneldemux"];
@@ -753,24 +753,25 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			online_2a -> online_4;
 			online_3 -> online_4 -> online_5 -> online_6;
 			label="Possible path #3";
-		  }
-		  subgraph clusternds {
+		}
+		subgraph clusternds {
 			nds_0 [label="ndssrc"];
 			color=black;
 			label="Possible path #4";
-		  }
-		  audioconv [label="audioconvert"];
-		  progress [label="progressreport (if verbose)", style=filled, color=lightgrey];
-		  sim [label="lalsimulation (if injections requested)", style=filled, color=lightgrey];
-		  queue [label="queue (if injections requested)", style=filled, color=lightgrey];
+		}
+		audioconv [label="audioconvert"];
+		progress [label="progressreport (if verbose)", style=filled, color=lightgrey];
+		sim [label="lalsimulation (if injections requested)", style=filled, color=lightgrey];
+		queue [label="queue (if injections requested)", style=filled, color=lightgrey];
 
-		  // The connections
-		  fake_0 -> audioconv [ltail=clusterfakesrc];
-		  frames_4 -> audioconv [ltail=clusterframes];
-		  online_6 -> audioconv [ltail=clusteronline];
-		  nds_0 -> audioconv [ltail=clusternds];
-		  audioconv -> progress -> sim -> queue -> "?"
+		// The connections
+		fake_0 -> audioconv [ltail=clusterfakesrc];
+		frames_4 -> audioconv [ltail=clusterframes];
+		online_6 -> audioconv [ltail=clusteronline];
+		nds_0 -> audioconv [ltail=clusternds];
+		audioconv -> progress -> sim -> queue -> "?";
 	   }
+
 	"""
 	dqvector = statevector = None
 
