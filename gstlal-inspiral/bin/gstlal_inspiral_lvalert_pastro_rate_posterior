@@ -16,16 +16,16 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
-# @file gstlal_inspiral_lvalert_pastro
-# A program to calculate P(astro) from a running gstlal_inspiral job
-# based on gracedb submissions notified by lvalert, plots rate posteriors
-# and writes P(astro), the credible interval values to file
 
-# Details:
-# Compute P(terrestrial) (1-P(astro)) for an event - given graceid
-# Calculate the rate posteriors and uploads a plot of the posteriors for the event
-# Default threshold of log likelihood = 6
-# Default confidence intervals = [0.68, 0.9, 0.99]
+### A program to calculate P(astro) from a running gstlal_inspiral job
+### based on gracedb submissions notified by lvalert, plots rate posteriors
+### and writes P(astro), the credible interval values to file
+###
+### Details:
+### Compute P(terrestrial) (1-P(astro)) for an event - given graceid
+### Calculate the rate posteriors and uploads a plot of the posteriors for the event
+### Default threshold of log likelihood = 6
+### Default confidence intervals = [0.68, 0.9, 0.99]
 
 #
 # =============================================================================
