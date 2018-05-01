@@ -212,7 +212,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	@classmethod
 	def from_xml(cls, xml, name):
 		xml = cls.get_xml_root(xml, name)
-		template_ids = ligolw_param.get_pyvalue(xml, u"template_ids"),
+		template_ids = ligolw_param.get_pyvalue(xml, u"template_ids")
 		if template_ids is not None:
 			template_ids = frozenset(int(i) for i in template_ids.split(","))
 		self = cls(
