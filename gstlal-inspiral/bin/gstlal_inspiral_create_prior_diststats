@@ -16,18 +16,8 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
-## @file gstlal_inspiral_create_prior_diststats
-# A program to create some prior likelihood data to seed an offline analysis
-#
-# ### Command line interface
-	
-#			("-v", "--verbose", action = "store_true", help = "Be verbose.")
-#			("-s", "--synthesize-numerator", action = "store_true", help = "Synthesize a numerator (SNR, \\chi^2) distribution.")
-#			("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
-#			("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
-#			("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
-#			("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
-#			("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 1")
+
+### A program to create some prior likelihood data to seed an offline analysis
 
 #
 # =============================================================================
