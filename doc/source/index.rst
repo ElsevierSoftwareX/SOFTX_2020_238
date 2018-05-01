@@ -13,8 +13,4 @@ The GstLAL project documentation
    overview
    getting-started
    projects
-
-
-+-----------------+-----------------+---------------+
-| :ref:`genindex` | :ref:`modindex` | :ref:`search` |
-+-----------------+-----------------+---------------+
+   publications

@@ -11,7 +11,7 @@ gstlal-calibration-modules :
 #	sphinx-apidoc -o source/gstlal-burst/python-modules ../gstlal-burst/python
 
 gstlal-ugly-modules :
-	sphinx-apidoc -o source/gstlal-ugly/python-modules ../gstlal-ugly/python ../gstlal-ugly/python/gviz_api.py ../gstlal-ugly/python/coherent_inspiral_metric.py  ../gstlal-ugly/python/coherent_inspiral_metric_plots.py ../gstlal-ugly/python/coherent_inspiral_metric_detector_details.py ../gstlal-ugly/python/sngltriggertable.py  
+	sphinx-apidoc -o source/gstlal-ugly/python-modules ../gstlal-ugly/python ../gstlal-ugly/python/gviz_api.py ../gstlal-ugly/python/coherent_inspiral_metric.py  ../gstlal-ugly/python/coherent_inspiral_metric_plots.py ../gstlal-ugly/python/coherent_inspiral_metric_detector_details.py ../gstlal-ugly/python/sngltriggertable.py ../gstlal-ugly/python/aggregator.py 
 
 gstlal-bin :
 	./sphinx-bindoc source/gstlal/bin ../gstlal/bin gstlal_ligo_data_find_check
