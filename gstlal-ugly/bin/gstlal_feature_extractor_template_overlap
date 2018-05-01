@@ -68,6 +68,8 @@ cluster_urls = {'CIT': 'https://ldas-jobs.ligo.caltech.edu/',
                 'uwm': 'https://ldas-jobs.cgca.uwm.edu/'
                }
 
+colors = ['#2c7fb8', '#e66101', '#5e3c99', '#d01c8b']
+
 ####################
 #
 #    functions
@@ -99,7 +101,6 @@ def plot_waveforms(times, waveforms, waveform_type='', waveform_params=None):
 	amp_min = min(numpy.min(waveform) for waveform in waveforms)
 	amp_max = max(numpy.max(waveform) for waveform in waveforms)
 
-	colors = ['#2c7fb8', '#e66101', '#5e3c99', '#d01c8b']
 	fig, axes = plt.subplots(len(times), sharex=True, sharey=True)
 
 	for ax, key, color in zip(axes, truedat.keys(), colors):
@@ -117,6 +118,31 @@ def plot_waveforms(times, waveforms, waveform_type='', waveform_params=None):
 
 	fig.subplots_adjust(hspace=0)
 	plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
+
+	return fig
+
+def plot_template_bank(waveform_param1, waveform_param2, overlaps, waveform_type='', waveform_params=None):
+
+	fig, axes = plt.subplots()
+
+	axes.scatter(waveform_param1, waveform_param2, c = overlaps, cmap = cm.coolwarm, alpha = 0.8, lw=0)
+	norm = matplotlib.colors.Normalize(vmin=min(overlaps), vmax=numpy.max(overlaps), clip=True)
+
+	axes.set_title(r"Template Bank Placement for %s" % (waveform_type))
+	axes.set_xlabel(r"%s" % waveform_params[0])
+	axes.set_ylabel(r"%s" % waveform_params[1])
+	axes.set_xlim(min(waveform_param1) - 0.1 * min(waveform_param1), 1.1 * max(waveform_param1))
+	axes.set_ylim(min(waveform_param2) - 0.1 * min(waveform_param2), 1.1 * max(waveform_param2))
+	axes.loglog()
+
+	# set up colorbar
+	divider = make_axes_locatable(axes)
+	cax = divider.append_axes( "right", size="5%", pad=0.1)
+	cbl = matplotlib.colorbar.ColorbarBase(cax, cmap = cm.coolwarm, norm=norm, orientation="vertical")
+	cbl.set_label(r"Overlap")
+
+	plt.tight_layout()
+
 
 	return fig
 
@@ -256,6 +282,7 @@ if __name__ == '__main__':
 	# cast params to a nicer format
 	# FIXME: should really be passing a dict of params instead
 	param_names = ['f', 'Q', 'duration']
+	waveform_type = options.waveform.replace('_', ' ').title()
 
 	# limit the number of waveforms plotted per frequency band
 	num_samples = 3
@@ -270,13 +297,24 @@ if __name__ == '__main__':
 			if options.verbose:
 				print >>sys.stderr, "\tCreating waveform plot with parameters: %s" % repr(waveform_params)
 
-			series_fig = plot_waveform(waveforms[rate].times, template, options.waveform, waveform_params)
-			fname = 'plot_%s_%s-timeseries.png' % (rate, str(template_id).zfill(4))
+			series_fig = plot_waveform(waveforms[rate].times, template, waveform_type, waveform_params)
+			fname = 'plot_%s_%s-timeseries.png' % (str(rate).zfill(4), str(template_id).zfill(4))
 			plot_paths.append((template_id*int(rate),fname))
 			series_fig.savefig(os.path.join(options.output_dir, fname))
 			plt.close(fname)
 
 	# generate template overlap map
+	freqs = [param[0] for param in all_params]
+	Qs = [param[1] for param in all_params]
+
+	if options.verbose:
+		print >>sys.stderr, "Creating template overlap plot..."
+
+	overlap_fig = plot_template_bank(freqs, Qs, overlaps, waveform_type, param_names[:2])
+	fname = 'plot-template_overlap.png'
+	plot_paths.append((0,fname))
+	overlap_fig.savefig(os.path.join(options.output_dir, fname))
+	plt.close(fname)
 
 	# generate html page
-	generate_html_file(plot_paths, waveform_type=options.waveform)
+	generate_html_file(plot_paths, waveform_type=waveform_type)
