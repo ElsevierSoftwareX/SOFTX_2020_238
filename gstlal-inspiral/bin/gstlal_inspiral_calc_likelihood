@@ -16,17 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file
-# A program to compute the likelhood ratios of inspiral triggers
-#
-# ### Command line interface
-#
-#	+ `--input-cache` [filename]: Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
-#	+ `--likelihood-url` [URL]: Set the name of the likelihood ratio data file to use.  Can be given more than once.  Filenames and URLs are accepted.
-#	+ `--likelihood-cache` [filename]: Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
-#	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
-#	+ `--vetoes-name` [name]: Set the name of the segment lists to use as vetoes (default = do not apply vetoes).
-#	+ `--verbose`: Be verbose.
+### A program to compute the likelhood ratios of inspiral triggers
 
 
 #
