@@ -13,7 +13,7 @@
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
 # Public License for more details.
-#   
+#
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -33,48 +33,33 @@ from gstlal import chirptime
 import lal
 from lal.utils import CacheEntry
 
-## @file gstlal_bank_splitter
-#
-# This program splits template banks into sub banks suitable for singular value decomposition; see gstlal_bank_splitter for more information
-# 
-# ### Usage examples
-#
-# - split up bank file for H1; sort by mchirp; add final frequency and specify a maximum frequency
-#
-#		$ gstlal_bank_splitter --overlap 10 --instrument H1 --n 100 --sort-by mchirp --add-f-final --max-f-final 2048 H1-TMPLTBANK-871147516-2048.xml
-#
-# - Please add more!
-#
-# ### Command line interface
-#
-#	+ `--output-path` [path]: Set the path to the directory where output files will be written.  Default is "."
-#	+ `--output-cache` [file]: Set the file name for the output cache.
-#	+ `--n` [count] (int): Set the number of templates per output file (required).  It will be rounded to make all sub banks approximately the same size.
-#	+ `--overlap` [count] (int): Overlap the templates in each file by this amount, must be even.
-#	+ `--sort-by` [column]: Select the template sort order column (required).
-#	+ `--max-f-final` [max final freq] (float): Max f_final to populate table with; if f_final > max, use max.
-#	+ `--instrument` [ifo]: Override the instrument, required
-#	+ `--verbose`: Be verbose.
-#	+ `--approximant` [mchirp_min:mchirp_max:string]: Must specify an approximant and validity range, can be given more than once
-#	+ `--f-low` [frequency] (floate): Lower frequency cutoff
-#	+ `--group-by-chi` [Number] (int): group templates into N chi bins with uniform number of templates - helps with SVD.
-#
-# ### Review status
-#
-# Compared original bank with the split banks.  Verified that they are the same, e.g., add sub bank files into test.xml.gz and run (except that lalapps_tmpltbank adds redundant templates):
-#
-#		ligolw_print -t sngl_inspiral -c mass1 -c mass2 ../H1-TMPLTBANK-871147516-2048.xml | sort -u | wc
-#		ligolw_print -t sngl_inspiral -c mass1 -c mass2 test.xml.gz | sort -u | wc
-#
-# | Names 	                                        | Hash 					                   | Date       | Diff to Head of Master      |
-# | ----------------------------------------------- | ---------------------------------------- | ---------- | --------------------------- |
-# | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-04-28 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_bank_splitter?id=HEAD&id2=7536db9d496be9a014559f4e273e1e856047bf71">gstlal_bank_splitter</a> |
-# | Sathya, Duncan Me., Jolien, Kipp, Chad          | 72875f5cb241e8d297cd9b3f9fe309a6cfe3f716 | 2015-11-06 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_bank_splitter?id=HEAD&id2=72875f5cb241e8d297cd9b3f9fe309a6cfe3f716">gstlal_bank_splitter</a> |
-#
-# #### Action
-#
-# - [COMPLETED] Consider cleanup once additional bank programs are used and perhaps have additional metadata
-#
+### This program splits template banks into sub banks suitable for singular value decomposition; see gstlal_bank_splitter for more information
+###
+### Usage examples
+### --------------
+###
+### 1. split up bank file for H1; sort by mchirp; add final frequency and specify a maximum frequency::
+###
+###	gstlal_bank_splitter --overlap 10 --instrument H1 --n 100 --sort-by mchirp --add-f-final --max-f-final 2048 H1-TMPLTBANK-871147516-2048.xml
+###
+### 2. Please add more!
+###
+### Review status
+### -------------
+###
+### Compared original bank with the split banks.  Verified that they are the same, e.g., add sub bank files into test.xml.gz and run (except that lalapps_tmpltbank adds redundant templates)::
+###
+###	ligolw_print -t sngl_inspiral -c mass1 -c mass2 ../H1-TMPLTBANK-871147516-2048.xml | sort -u | wc
+###	ligolw_print -t sngl_inspiral -c mass1 -c mass2 test.xml.gz | sort -u | wc
+###
+### +-------------------------------------------------+------------------------------------------+------------+
+### | Names                                           | Hash                                     |            |
+### +=================================================+==========================================+============+
+### | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-04-28 |
+### +-------------------------------------------------+------------------------------------------+------------+
+### | Sathya, Duncan Me., Jolien, Kipp, Chad          | 72875f5cb241e8d297cd9b3f9fe309a6cfe3f716 | 2015-11-06 |
+### +-------------------------------------------------+------------------------------------------+------------+
+###
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
