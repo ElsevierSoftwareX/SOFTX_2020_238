@@ -69,16 +69,16 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	"""
 	Build pipeline stage to whiten and downsample h(t).
 
-	- pipeline: the gstreamer pipeline to add this to
-	- src: the gstreamer element that will be providing data to this 
-	- rates: a list of the requested sample rates, e.g., [512,1024].
-	- instrument: the instrument to process
-	- psd: a psd frequency series
-	- psd_fft_length: length of fft used for whitening
-	- ht_gate_threshold: gate h(t) if it crosses this value
-	- veto_segments: segments to mark as gaps after whitening
-	- track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
-	- width: type convert to either 32 or 64 bit float
+	* pipeline: the gstreamer pipeline to add this to
+	* src: the gstreamer element that will be providing data to this 
+	* rates: a list of the requested sample rates, e.g., [512,1024].
+	* instrument: the instrument to process
+	* psd: a psd frequency series
+	* psd_fft_length: length of fft used for whitening
+	* ht_gate_threshold: gate h(t) if it crosses this value
+	* veto_segments: segments to mark as gaps after whitening
+	* track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
+	* width: type convert to either 32 or 64 bit float
 
 	**Gstreamer graph describing this function**
 
@@ -97,19 +97,19 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		whiten ;
 		audioconvert ;
 		capsfilter3 ;
-		"segmentsrcgate()" [label="segmentsrcgate() \n [iff veto segment list provided]", style=filled, color=lightgrey];
+		"segmentsrcgate()" [label="segmentsrcgate() \\n [iff veto segment list provided]", style=filled, color=lightgrey];
 		tee ;
 		audioamplifyr1 ;
 		capsfilterr1 ;
-		htgater1 [label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
+		htgater1 [label="htgate() \\n [iff ht gate specified]", style=filled, color=lightgrey];
 		tee1 ;
 		audioamplifyr2 ;
 		capsfilterr2 ;
-		htgater2 [label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
+		htgater2 [label="htgate() \\n [iff ht gate specified]", style=filled, color=lightgrey];
 		tee2 ;
 		audioamplify_rn ;
 		capsfilter_rn ;
-		htgate_rn [style=filled, color=lightgrey, label="htgate() \n [iff ht gate specified]"];
+		htgate_rn [style=filled, color=lightgrey, label="htgate() \\n [iff ht gate specified]"];
 		tee ;
 
 		// nodes
@@ -137,8 +137,8 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		audioamplify_rn -> capsfilter_rn;
 		capsfilter_rn -> htgate_rn;
 		htgate_rn -> tee_n -> "\<return\> 3";
-
 	   }
+
 	"""
 	#
 	# input sanity checks
