@@ -25,6 +25,8 @@
 #################### 
 
 
+import bisect
+from collections import defaultdict
 import glob
 import logging
 import os
@@ -296,32 +298,59 @@ class HalfSineGaussianGenerator(object):
 	"""
 	Generates half sine gaussian templates based on a f, Q range and a sampling frequency.
 	"""
-	def __init__(self, f_range, q_range, f_samp, mismatch=0.2, tolerance=5e-3):
+	def __init__(self, f_range, q_range, rates, mismatch=0.2, tolerance=5e-3, downsample_factor=0.8):
+
 		### define parameter range
-		self.f_low, self.f_high = f_range
+		self.f_low, self.f_high = (downsample_factor * f_range[0], downsample_factor * f_range[1])
 		self.q_low, self.q_high = q_range
-		self.f_samp = f_samp
+
+		### define grid spacing and edge rolloff for templates
 		self.mismatch = mismatch
 		self.tol = tolerance
 
+		### determine how to scale down templates considered
+		### in frequency band to deal with low pass rolloff
+		self.downsample_factor = downsample_factor
+
+		### determine frequency bands considered
+		self.rates = sorted(set(rates))
+
+		### determine lower frequency limits for rate conversion based on downsampling factor
+		self.freq_breakpoints = [self.downsample_factor * rate / 2. for rate in self.rates[:-1]]
+
 		### define grid and template duration
-		self.parameter_grid = [(f, q, self.duration(f, q)) for f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high)]
-		self.max_duration = max(duration for f, q, duration in self.parameter_grid)
+		self.parameter_grid = defaultdict(list)
+		for rate, f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high):
+			self.parameter_grid[rate].append((f, q, self.duration(f, q)))
 
+		self.max_duration = {rate: max(duration for f, q, duration in parameters) for rate, parameters in self.parameter_grid.items()}
+
+		### determine rest of waveform properties
 		self.phases = [0., numpy.pi/2.]
-		self.times = numpy.linspace(-self.max_duration, 0, int(numpy.ceil(self.max_duration*self.f_samp)), endpoint=True)
-		self.latency = 0
+		self.times = {rate: numpy.linspace(-self.max_duration[rate], 0, self.round_to_next_odd(self.max_duration[rate]*rate), endpoint=True) for rate in self.rates}
+		self.latency = {rate: 0 for rate in self.rates}
 
-	def generate_templates(self, quadrature = True):
+	def frequency_to_rate(self, frequency):
+		"""
+		Maps a frequency to the correct sampling rate considered.
+		"""
+		idx = bisect.bisect(self.freq_breakpoints, frequency)
+		return self.rates[idx]
+
+	def round_to_next_odd(self, n):
+			return int(numpy.ceil(n) // 2 * 2 + 1)
+
+	def generate_templates(self, rate, quadrature = True):
 		"""
 		generate all half sine gaussian templates corresponding to a parameter range and template duration
+		for a given sampling rate.
 		"""
-		for f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high):
+		for f, q, _ in self.parameter_grid[rate]:
 			if quadrature:
 				for phase in self.phases:
 					yield self.waveform(f, q, phase)
 			else:
-				yield self.waveform(f, q, self.phases[0])
+				yield self.waveform(f, q, self.phases[0], rate)
 
 	def duration(self, f, q):
 		"""
@@ -329,18 +358,16 @@ class HalfSineGaussianGenerator(object):
 		"""
 		return 0.5 * (q/(2.*numpy.pi*f)) * numpy.log(1./self.tol)
 	
-	def waveform(self, f, q, phase):
+	def waveform(self, f, q, phase, rate):
 		"""
 		construct half sine gaussian waveforms that taper to tolerance at edges of window
 		f is the central frequency of the waveform
 		"""
-		dt = self.times[1] - self.times[0]
-		rate = 1./dt
 		assert f < rate/2. 
 	
 		# phi is the central frequency of the sine gaussian
 		tau = q/(2.*numpy.pi*f)
-		template = numpy.cos(2.*numpy.pi*f*self.times + phase)*numpy.exp(-1.*self.times**2./tau**2.)
+		template = numpy.cos(2.*numpy.pi*f*self.times[rate] + phase)*numpy.exp(-1.*self.times[rate]**2./tau**2.)
 	
 		# normalize sine gaussians to have unit length in their vector space
 		inner_product = numpy.sum(template*template)
@@ -369,23 +396,26 @@ class HalfSineGaussianGenerator(object):
 	
 	def generate_f_q_grid(self, f_min, f_max, q_min, q_max):
 		"""
-		Generates (f, Q) pairs based on f, Q ranges
+		Generates (f_samp, f, Q) pairs based on f, Q ranges
 		"""
 		for q in self.generate_q_values(q_min, q_max):
 			num_f = self.num_f_templates(f_min, f_max, q)
 			for l in range(num_f):
 				f = f_min * (f_max/f_min)**( (0.5+l) /num_f)
-				if f < f_max / (1 + (numpy.sqrt(11)/q)):
-					yield (f, q)
+				rate = self.frequency_to_rate(f)
+				if f < (rate/2) / (1 + (numpy.sqrt(11)/q)):
+					yield rate, f, q
+				elif rate != max(self.rates):
+					yield (2 * rate), f, q
 
 class SineGaussianGenerator(HalfSineGaussianGenerator):
 	"""
 	Generates sine gaussian templates based on a f, Q range and a sampling frequency.
 	"""
-	def __init__(self, f_range, q_range, f_samp, mismatch=0.2, tolerance=5e-3):
-		super(SineGaussianGenerator, self).__init__(f_range, q_range, f_samp, mismatch=mismatch, tolerance=tolerance)
-		self.times = numpy.linspace(-self.max_duration/2., self.max_duration/2., int(numpy.ceil(self.max_duration*self.f_samp)), endpoint=True)
-		self.latency = self.max_duration / 2.
+	def __init__(self, f_range, q_range, rates, mismatch=0.2, tolerance=5e-3, downsample_factor=0.8):
+		super(SineGaussianGenerator, self).__init__(f_range, q_range, rates, mismatch=mismatch, tolerance=tolerance, downsample_factor=0.8)
+		self.times = {rate: numpy.linspace(-self.max_duration[rate]/2., self.max_duration[rate]/2., self.round_to_next_odd(self.max_duration[rate]*rate), endpoint=True) for rate in self.rates}
+		self.latency = {rate: self.max_duration[rate] / 2. for rate in self.rates}
 
 	def duration(self, f, q):
 		"""
