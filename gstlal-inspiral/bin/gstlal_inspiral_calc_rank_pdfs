@@ -16,15 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file
-# A program to compute the noise probability distributions of likehood ratios for inspiral triggers
-#
-# ### Command line interface
-#
-#	+ `--likelihood-cache` [filename]: Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.
-#	+ `--verbose`: Be verbose.
-#	+ `--ranking-stat-samples` [N] (int): Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 2^24).
-#	+ `--output` [filename]: Write merged raw likelihood data and likelihood ratio histograms to this LIGO Light-Weight XML file.
+### A program to compute the noise probability distributions of likehood ratios for inspiral triggers
 
 #
 # =============================================================================
