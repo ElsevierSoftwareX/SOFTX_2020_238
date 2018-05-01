@@ -16,69 +16,22 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## @file gstlal_inspiral_pipe
-# The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to run CBC workflows
-#
-# ### Usage:
-# It is rare that you would invoke this program in a standalone mode. Usually the inputs are complicated and best automated via a Makefile, e.g., Makefile.triggers_example
-#
-# ### Command line options
-#
-# See datasource.append_options() for generic options
-#
-#	+ '--psd-fft-length's' [int] (s) : FFT length, default 32s.  Note that 50% will be used for zero-padding.
-#	+ '--reference-psd' : Do not measure PSDs, use this one instead 
-#	+ '--template-bank' : Set the template bank xml file
-#	+ '--overlap' [int] : set the factor that describes the overlap of the sub banks, must be even!
-#	+ '--autocorrelation-length' [int] : The minimum number of samples to use for auto-chisquared, default 201 should be odd
-#	+ '--samples-min' [int] : The minimum number of samples to use for time slices default 1024
-#	+ '--samples-max-256' [int] : The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024
-#	+ '--samples-max-64' [int] : The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048
-#	+ '--samples-max' [int] : The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096
-#	+ '--bank-cache' [filename] : Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..
-#	+ '--tolerance' [float] : set the SVD tolerance, default 0.9999
-#	+ '--flow'num' [float] : set the low frequency cutoff, default 40 (Hz) 
-#	+ '--identity-transform' : Use identity transform, i.e. no SVD
-#	+ '--vetoes' [filename] : Set the veto xml file.
-#	+ '--time-slide-file' [filename] : Set the time slide table xml file
-#	+ '--inj-time-slide-file' [filename] : Set the time slide table xml file for injections
-#	+ '--web-dir'directory' [filename] : Set the web directory like /home/USER/public_html
-#	+ '--fir-stride' [int] : Set the duration of the fft output blocks, default 8
-#	+ '--control-peak-time' [int] (s) : Set the peak finding time for the control signal, default 8
-#	+ '--coincidence-threshold' [int] (s) : Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.
-#	+ '--min-instruments'count' [int] : Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).
-#	+ '--min-log-L'log likelihood ratio' [float] : Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).
-#	+ '--reference-likelihood-file' [filename] : Set a reference likelihood file to compute initial likelihood ratios for the min-log-L cut. Required
-#	+ '--num-banks' [str] : The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.
-#	+ '--max-inspiral-jobs' [int] : Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.
-#	+ '--ht-gate-threshold' [float] : Set a threshold on whitened h(t) to veto glitches
-#	+ '--ht-gate-threshold-linear' [string] : Set threshold on whitened h(t) on a linear scale based on the maximum mchirp of the svd bin. set as mchirp_min:ht_gate_threshold_min-mchirp_max:ht_gate_threshold_max (example: --ht-gate-threshold-linear 0.8:12.0-45.0:100.0)
-#	+ '--inspiral-executable' [str] : Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral
-#	+ '--blind-injections' [filename] : Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.
-#	+ '--singles-threshold' [float] : Record all (including non-coincident) single detector triggers above the specified SNR threshold (by default = 8).
-#	+ '--copy-raw-results' : Copy raw gstlal_inspiral results before applying clustering and other lossy operations.
-#	+ '--gzip-test' : Perform gzip --test on all output files.
-#	+ '--verbose' : Be verbose 
-#	+ '--disable-calc-inj-snr' : Disable injection SNR calculation
-#	+ '--injections' [filename] : append injection files to analyze. Must prepend filename with X:Y:, where X and Y are floats, e.g. 1.2:3.1:filename, so that the injections are only searched for in regions of the template bank with X <= chirp mass < Y.
-#	+ '--dist-stats-cache' [filename] : Set the cache file for dist stats (required iff running injection-only analysis)
-#	+ '--svd-bank-cache' [filename] : Set the cache file for svd banks (required iff running injection-only analysis)
-#	+ '--psd-cache' [filename] : Set the cache file for psd (required iff running injection-only analysis)
-#	+ '--non-injection-db' [filename] : Set the non injection data base file (required iff running injection-only analysis)
-#	+ '--marginalized-likelihood-file' [filename] : Set the marginalized likelihood file (required iff running injection-only analysis)
-#	+ '--marginalized-likelihood-with-zerolag-file' [filename] : Set the marginalized likelihood with zerolag file (required iff running injection-only analysis)
-#	+ '--lloid-cache' [filename] : Set the cache file for lloid (required iff starting an analysis at the merger step)
-#	+ '--inj-lloid-cache' [filename] : Set the cache file for injection lloid files (required iff starting an analysis at the merger step) (can be given multiple times, should be given once per injection file)
-#	+ '--rank-pdf-cache [filename] : Set the cache file for rank pdfs (required iff starting an analysis at the merger step)
-#	+ '--num-files-per-background-bin [int] : Set the number of files per background bin for analyses which start at the merger step but are seeded by runs not following the current naming conventions
-#	+ '--injections-for-merger [filename] : append injection files used in previous run, must be provided in same order as corresponding inj-lloid-cache (required iff starting an analysis at the merger step)
-#	+ '--request-cpu' [int] : set the inspiral CPU count, default = 4
-#	+ '--request-memory' [int] : set the inspiral memory, default = 7GB
-#	+ '--condor-command' : set condor commands of the form command=value; can be given multiple times
-#
-# ### Diagram of the HTCondor workfow produced
-# @dotfile trigger_pipe.dot
-# 
+
+### The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to run CBC workflows
+###
+### Usage:
+### ------
+###
+### It is rare that you would invoke this program in a standalone mode. Usually
+### the inputs are complicated and best automated via a Makefile, e.g.,
+### Makefile.triggers_example
+###
+### Diagram of the HTCondor workfow produced
+### ----------------------------------------
+###
+### .. graphviz:: ../images/trigger_pipe.dot
+### 
+
 
 """
 This program makes a dag to run gstlal_inspiral offline
