@@ -189,7 +189,8 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		reference = min(events, key = lambda event: event.end)
 		ref_end, ref_offset = reference.end, offsetvector[reference.ifo]
 		# FIXME:  use a proper ID column when one is available
-		if reference.Gamma0 not in self.template_ids:
+		template_id = reference.Gamma0
+		if template_id not in self.template_ids:
 			raise ValueError("event IDs %s are from the wrong template" % ", ".join(sorted(str(event.event_id) for event in events)))
 		# segment spanned by reference event
 		seg = segments.segment(ref_end - reference.template_duration, ref_end)
@@ -206,6 +207,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 				snrs = dict((event.ifo, event.snr) for event in events),
 				phase = dict((event.ifo, event.coa_phase) for event in events),
 				dt = dict((event.ifo, float(event.end - ref_end) + offsetvector[event.ifo] - ref_offset) for event in events),
+				template_id = template_id,
 				**dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2.)) for event in events)
 			)
 		except (ValueError, AssertionError) as e:

@@ -253,7 +253,7 @@ class LnSignalDensity(LnLRDensity):
 		# network
 		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in self.instruments)
 
-	def __call__(self, segments, snrs, phase, dt, **kwargs):
+	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
 		assert frozenset(segments) == self.instruments
 		# FIXME:  remove V1 from consideration.  delete after O2
 		kwargs.pop("V1_snr_chi", None)
@@ -490,7 +490,7 @@ class DatalessLnSignalDensity(LnSignalDensity):
 		# so we're ready to go!
 		self.add_signal_model()
 
-	def __call__(self, segments, snrs, phase, dt, **kwargs):
+	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
 		# evaluate P(t) \propto number of templates
 		lnP = math.log(len(self.template_ids))
 
@@ -613,7 +613,7 @@ class LnNoiseDensity(LnLRDensity):
 	def segmentlists(self):
 		return self.triggerrates.segmentlistdict()
 
-	def __call__(self, segments, snrs, phase, dt, **kwargs):
+	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
 		assert frozenset(segments) == self.instruments
 		# FIXME:  remove V1 from consideration.  delete after O2
 		kwargs.pop("V1_snr_chi", None)
@@ -858,7 +858,7 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 		mchirp = 0.8
 		self.add_noise_model(number_of_events = 10000000, prefactors_range = ((1. / mchirp)**.33, 25.), df = 40, inv_snr_pow = 3.)
 
-	def __call__(self, segments, snrs, phase, dt, **kwargs):
+	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
 		# assume all instruments are on, 1 trigger per second per
 		# template
 		triggers_per_second_per_template = dict.fromkeys(segments, 1.)
