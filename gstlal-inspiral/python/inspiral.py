@@ -541,7 +541,10 @@ class Data(object):
 		#
 
 		if self.ranking_stat_input_url is not None:
-			self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
+			if self.rankingstat.is_healthy():
+				self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
+			else:
+				del self.stream_thinca.rankingstat
 		elif min_log_L is not None:
 			self.stream_thinca.rankingstat = far.DatalessRankingStat(
 				template_ids = rankingstat.template_ids,
@@ -724,7 +727,10 @@ class Data(object):
 
 				# update streamthinca's ranking statistic
 				# data
-				self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
+				if self.rankingstat.is_health():
+					self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
+				else:
+					del self.stream_thinca.rankingstat
 
 				# optionally get updated ranking statistic
 				# PDF data and enable FAP/FAR assignment

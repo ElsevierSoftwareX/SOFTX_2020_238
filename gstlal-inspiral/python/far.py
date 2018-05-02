@@ -217,6 +217,11 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		self.zerolag.finish()
 		return self
 
+	def is_healthy(self):
+		# do we believe the PDFs are sufficiently well-defined to
+		# compute ln L?
+		return min(self.denominator.triggerrates.counts.values()) > 10000000
+
 	@classmethod
 	def get_xml_root(cls, xml, name):
 		"""
@@ -272,6 +277,9 @@ class DatalessRankingStat(RankingStat):
 		self.numerator.finish()
 		self.denominator.finish()
 		return self
+
+	def is_healthy(self):
+		return True
 
 
 class OnlineFrakensteinRankingStat(RankingStat):
