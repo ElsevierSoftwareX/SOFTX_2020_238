@@ -303,6 +303,7 @@ class HalfSineGaussianGenerator(object):
 		### define parameter range
 		self.f_low, self.f_high = (downsample_factor * f_range[0], downsample_factor * f_range[1])
 		self.q_low, self.q_high = q_range
+		self.phases = [0., numpy.pi/2.]
 
 		### define grid spacing and edge rolloff for templates
 		self.mismatch = mismatch
@@ -323,12 +324,12 @@ class HalfSineGaussianGenerator(object):
 		for rate, f, q in self.generate_f_q_grid(self.f_low, self.f_high, self.q_low, self.q_high):
 			self.parameter_grid[rate].append((f, q, self.duration(f, q)))
 
-		self.max_duration = {rate: max(duration for f, q, duration in parameters) for rate, parameters in self.parameter_grid.items()}
+		self.sample_pts = {rate: self.round_to_next_odd(max(duration for f, q, duration in parameters) * rate) for rate, parameters in self.parameter_grid.items()}
 
-		### determine rest of waveform properties
-		self.phases = [0., numpy.pi/2.]
-		self.times = {rate: numpy.linspace(-self.max_duration[rate], 0, self.round_to_next_odd(self.max_duration[rate]*rate), endpoint=True) for rate in self.rates}
+		### determine timing properties
+		self.times = {rate: numpy.linspace(-float(self.sample_pts[rate] - 1) / rate, 0, self.sample_pts[rate], endpoint=True) for rate in self.rates}
 		self.latency = {rate: 0 for rate in self.rates}
+		self.filter_duration = {rate: (self.times[rate][-1] - self.times[rate][0]) for rate in self.rates}
 
 	def frequency_to_rate(self, frequency):
 		"""
@@ -414,8 +415,9 @@ class SineGaussianGenerator(HalfSineGaussianGenerator):
 	"""
 	def __init__(self, f_range, q_range, rates, mismatch=0.2, tolerance=5e-3, downsample_factor=0.8):
 		super(SineGaussianGenerator, self).__init__(f_range, q_range, rates, mismatch=mismatch, tolerance=tolerance, downsample_factor=0.8)
-		self.times = {rate: numpy.linspace(-self.max_duration[rate]/2., self.max_duration[rate]/2., self.round_to_next_odd(self.max_duration[rate]*rate), endpoint=True) for rate in self.rates}
-		self.latency = {rate: self.max_duration[rate] / 2. for rate in self.rates}
+		self.times = {rate: numpy.linspace(-((self.sample_pts[rate] - 1)  / 2.) / rate, ((self.sample_pts[rate] - 1)  / 2.) / rate, self.sample_pts[rate], endpoint=True) for rate in self.rates}
+		self.latency = {rate: self.times[rate][-1] for rate in self.rates}
+		self.filter_duration = {rate: (self.times[rate][-1] - self.times[rate][0]) for rate in self.rates}
 
 	def duration(self, f, q):
 		"""
