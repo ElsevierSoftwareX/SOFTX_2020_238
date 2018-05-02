@@ -265,9 +265,9 @@ class StreamThinca(object):
 			ntuple_comparefunc = ntuple_comparefunc,
 			seglists = seglists,
 			likelihood_func = self.ln_likelihood_func,
-			fapfar = fapfar,
+			fapfar = fapfar if self.ln_likelihood_func is not None else None,
 			min_instruments = self.min_instruments,
-			min_log_L = self.min_log_L
+			min_log_L = self.min_log_L if self.ln_likelihood_func is not None else None
 		)
 
 		# construct a coinc extractor from the XML document while
