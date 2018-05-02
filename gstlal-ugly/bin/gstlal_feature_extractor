@@ -286,15 +286,20 @@ class MultiChannelHandler(simplehandler.Handler):
 			trigger_seg = segments.segment(LIGOTimeGPS(row.end_time, row.end_time_ns), LIGOTimeGPS(row.end_time, row.end_time_ns))
 
 		if not self.frame_segments[self.instrument] or self.frame_segments[self.instrument].intersects_segment(trigger_seg):
-			stop_time = row.end_time + row.end_time_ns * 1e-9
-			freq, q, duration = self.basis_params[(channel, rate)][row.channel_index]
-			start_time = stop_time - duration
+			freq, q, duration = self.basis_params[(channel, rate)].parameter_grid[row.channel_index]
+			filter_duration = self.basis_params[(channel, rate)].max_duration
+			filter_stop_time = row.end_time + row.end_time_ns * 1e-9
 
 			# set trigger time based on waveform
 			if self.waveform == 'sine_gaussian':
-				trigger_time = stop_time - (duration / 2.)
+				trigger_time = filter_stop_time - (filter_duration / 2.)
+				start_time = trigger_time - duration / 2.
+				stop_time = trigger_time + duration / 2.
+
 			elif self.waveform == 'half_sine_gaussian':
-				trigger_time = stop_time
+				trigger_time = filter_stop_time
+				start_time = trigger_time - duration
+				stop_time = trigger_time
 
 			# append row for data transfer/saving
 			feature_row = self.Row(start_time=start_time, stop_time=stop_time, trigger_time=trigger_time,
@@ -750,7 +755,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			else:
 				raise NotImplementedError
 
-			basis_params[(channel, rate)] = waveforms.parameter_grid
+			basis_params[(channel, rate)] = waveforms
 			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
 
 			# determine whether to do time-domain or frequency-domain convolution
