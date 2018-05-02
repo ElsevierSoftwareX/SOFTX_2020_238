@@ -727,7 +727,7 @@ class Data(object):
 
 				# update streamthinca's ranking statistic
 				# data
-				if self.rankingstat.is_health():
+				if self.rankingstat.is_healthy():
 					self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
 				else:
 					del self.stream_thinca.rankingstat
