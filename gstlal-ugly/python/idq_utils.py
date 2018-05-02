@@ -349,7 +349,7 @@ class HalfSineGaussianGenerator(object):
 		for f, q, _ in self.parameter_grid[rate]:
 			if quadrature:
 				for phase in self.phases:
-					yield self.waveform(f, q, phase)
+					yield self.waveform(f, q, phase, rate)
 			else:
 				yield self.waveform(f, q, self.phases[0], rate)
 
@@ -416,7 +416,7 @@ class SineGaussianGenerator(HalfSineGaussianGenerator):
 	def __init__(self, f_range, q_range, rates, mismatch=0.2, tolerance=5e-3, downsample_factor=0.8):
 		super(SineGaussianGenerator, self).__init__(f_range, q_range, rates, mismatch=mismatch, tolerance=tolerance, downsample_factor=0.8)
 		self.times = {rate: numpy.linspace(-((self.sample_pts[rate] - 1)  / 2.) / rate, ((self.sample_pts[rate] - 1)  / 2.) / rate, self.sample_pts[rate], endpoint=True) for rate in self.rates}
-		self.latency = {rate: self.times[rate][-1] for rate in self.rates}
+		self.latency = {rate: int((self.sample_pts[rate] - 1)  / 2) for rate in self.rates}
 		self.filter_duration = {rate: (self.times[rate][-1] - self.times[rate][0]) for rate in self.rates}
 
 	def duration(self, f, q):
