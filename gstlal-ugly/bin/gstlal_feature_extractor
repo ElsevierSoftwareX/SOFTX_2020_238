@@ -292,7 +292,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 			# set trigger time based on waveform
 			if self.waveform_type == 'sine_gaussian':
-				trigger_time = filter_stop_time - (filter_duration / 2.)
+				trigger_time = filter_stop_time
 				start_time = trigger_time - duration / 2.
 				stop_time = trigger_time + duration / 2.
 
