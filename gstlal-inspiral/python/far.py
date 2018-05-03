@@ -221,8 +221,21 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 
 	def is_healthy(self):
 		# do we believe the PDFs are sufficiently well-defined to
-		# compute ln L?
-		return min(self.denominator.triggerrates.counts.values()) > 10000000
+		# compute ln L?  not healthy until at least one instrument
+		# in the analysis has produced triggers, and until all that
+		# have produced triggers have each produced at least 10
+		# million.
+		# NOTE:  this will go badly if a detector that has never
+		# produced triggers, say because it joins an observing run
+		# late, suddenly starts producing triggers between snapshot
+		# cycles of an online analysis.  we're assuming, here, that
+		# detectors join science runs not at random times, but at
+		# scheduled times, say, during maintenance breaks, and that
+		# the analysis will not be collecting any candidates for
+		# approximately one snapshot interval around the addition
+		# of the new detector.
+		nonzero_counts = [count for count in self.denominator.triggerrates.counts.values() if count]
+		return nonzero_counts and min(nonzero_counts) > 10000000
 
 	@classmethod
 	def get_xml_root(cls, xml, name):
