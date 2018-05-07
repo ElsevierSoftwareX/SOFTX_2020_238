@@ -254,17 +254,9 @@ class LnSignalDensity(LnLRDensity):
 		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in self.instruments)
 
 	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
+		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
+
 		assert frozenset(segments) == self.instruments
-		# FIXME:  remove V1 from consideration.  delete after O2
-		kwargs.pop("V1_snr_chi", None)
-		segments = dict(segments)
-		segments.pop("V1", None)
-		snrs = dict(snrs)
-		snrs.pop("V1", None)
-		phase = dict(phase)
-		phase.pop("V1", None)
-		dt = dict(dt)
-		dt.pop("V1", None)
 		if len(snrs) < self.min_instruments:
 			return float("-inf")
 
@@ -298,11 +290,19 @@ class LnSignalDensity(LnLRDensity):
 			return float("-inf")
 		lnP = 3. * math.log(horizon) + math.log(len(self.template_ids))
 
-		# multiply by P(instruments | t) * P(SNRs | t, instruments).
-		lnP += self.SNRPDF.lnP_instruments(snrs.keys(), horizons, self.min_instruments) + self.SNRPDF.lnP_snrs(snrs, horizons, self.min_instruments)
+		# Add P(instruments | horizon distances)
+		try:
+			lnP += math.log(self.InspiralExtrinsics.p_of_instruments_given_horizons(snrs.keys(), horizons))
+		except ValueError:
+			# The code raises a value error when a needed horizon distance is zero
+			return float("-inf")
 
-		# evaluate dt and dphi parameters
-		lnP += inspiral_extrinsics.lnP_dt_dphi_signal(snrs, phase, dt, horizons, self.delta_t)
+		# Evaluate dt, dphi, snr probability
+		try:
+			lnP += math.log(self.InspiralExtrinsics.time_phase_snr(dt, phase, snrs, horizons))
+		# FIXME need to make sure this is really a math domain error
+		except ValueError:
+			return float("-inf")
 
 		# evalute the (snr, \chi^2 | snr) PDFs (same for all
 		# instruments)
@@ -602,9 +602,8 @@ class LnNoiseDensity(LnLRDensity):
 		# clusters this issue will go away (can use qhull's
 		# algebraic geometry code for the probability
 		# calculations).
-		# FIXME:  remove V1 from rates model.  delete after O2
 		self.coinc_rates = snglcoinc.CoincRates(
-			instruments = self.instruments - frozenset(("V1",)),
+			instruments = self.instruments,
 			delta_t = self.delta_t,
 			min_instruments = self.min_instruments
 		)
@@ -615,16 +614,6 @@ class LnNoiseDensity(LnLRDensity):
 
 	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
 		assert frozenset(segments) == self.instruments
-		# FIXME:  remove V1 from consideration.  delete after O2
-		kwargs.pop("V1_snr_chi", None)
-		segments = dict(segments)
-		segments.pop("V1", None)
-		snrs = dict(snrs)
-		snrs.pop("V1", None)
-		phase = dict(phase)
-		phase.pop("V1", None)
-		dt = dict(dt)
-		dt.pop("V1", None)
 		if len(snrs) < self.min_instruments:
 			return float("-inf")
 
@@ -655,7 +644,8 @@ class LnNoiseDensity(LnLRDensity):
 		lnP += self.coinc_rates.lnP_instruments(**triggers_per_second_per_template)[frozenset(snrs)]
 
 		# evaluate dt and dphi parameters
-		lnP += inspiral_extrinsics.lnP_dt_dphi_uniform(self.delta_t)
+		# NOTE: uniform and normalized so that the log should be zero, but there is no point in doing that
+		# lnP += 0
 
 		# evaluate the rest
 		interps = self.interps
