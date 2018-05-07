@@ -9,7 +9,6 @@ variables:
   GSTLAL_DIR: $CI_PROJECT_DIR/opt/gstlal
 
 before_script:
-    #- docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - export PATH="${GSTLAL_DIR}/bin:${PATH}"
     - export PKG_CONFIG_PATH="${GSTLAL_DIR}/lib/pkgconfig:${GSTLAL_DIR}/lib64/pkgconfig:${PKG_CONFIG_PATH}"
     - export GI_TYPELIB_PATH="${GSTLAL_DIR}/lib/girepository-1.0:${GI_TYPELIB_PATH}"
@@ -29,7 +28,7 @@ pages:
     - echo "Building GstLAL"
     - apt update
     # Pull installation dependencies:
-    - apt-get --assume-yes install automake
+    - apt-get --assume-yes install automake graphviz
     # Pull GstLAL-specific dependencies:
     - apt-get --assume-yes install doxygen gtk-doc-tools libfftw3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev liborc-0.4-0 gobject-introspection python-gobject-dev python-numpy python-scipy lscsoft-gds
     - cd gstlal; ./00init.sh; ./configure --prefix=${GSTLAL_DIR}; make; make install
