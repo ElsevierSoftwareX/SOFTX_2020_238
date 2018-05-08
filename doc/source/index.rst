@@ -6,11 +6,28 @@
 The GstLAL project documentation
 ================================
 
+`GstLAL` provides a suite of GStreamer elements that expose gravitational-wave data analysis tools from the LALSuite library for use in GStreamer signal-processing pipelines.
+
+Examples include an element to add simulated gravitational waves to an h(t) stream, and a source element to provide the contents of .gwf frame files to a GStreamer pipeline.
+
+.. _welcome-contents:
+
+Contents
+-------------------------
+
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    overview
    getting-started
    projects
    publications
+
+.. _welcome-indices:
+
+Indices and tables
+-------------------------
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
