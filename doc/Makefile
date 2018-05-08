@@ -1,5 +1,5 @@
 gstlal-modules :
-	sphinx-apidoc -o source/gstlal/python-modules ../gstlal/python ../gstlal/python/misc.py ../gstlal/python/bottle.py ../gstlal/python/coherent_null.py ../gstlal/python/matplotlibhelper.py
+	sphinx-apidoc -o source/gstlal/python-modules ../gstlal/python ../gstlal/python/__init__.py ../gstlal/python/misc.py ../gstlal/python/bottle.py ../gstlal/python/coherent_null.py ../gstlal/python/matplotlibhelper.py
 
 gstlal-inspiral-modules :
 	sphinx-apidoc -o source/gstlal-inspiral/python-modules ../gstlal-inspiral/python ../gstlal-inspiral/python/cbc_template_iir.py ../gstlal-inspiral/python/spawaveform.py ../gstlal-inspiral/python/emcee.py ../gstlal-inspiral/python/spiirparts.py ../gstlal-inspiral/python/snglinspiraltable.py
