@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (C) 2017 Sydney J. Chamberlin, Patrick Godwin, Chad Hanna, Duncan Meacher
+# Copyright (C) 2017-2018  Sydney J. Chamberlin, Patrick Godwin, Chad Hanna, Duncan Meacher
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -18,26 +18,128 @@
 
 
 
-####################
+# =============================
 # 
-#     preamble
+#           preamble
 #
-####################   
+# =============================
 
+### A program to extract features from auxiliary channel data in real time or in offline mode
+###
+### .. graphviz::
+###
+###    digraph llpipe {
+###    	labeljust = "r";
+###    	label="gstlal_feature_extractor"
+###    	rankdir=LR;
+###    	graph [fontname="Roman", fontsize=24];
+###    	edge [ fontname="Roman", fontsize=10 ];
+###    	node [fontname="Roman", shape=box, fontsize=11];
+###
+###
+###    	subgraph clusterNodeN {
+###
+###    		style=rounded;
+###    		label="gstreamer pipeline";
+###    		labeljust = "r";
+###    		fontsize = 14;
+###
+###    		H1L1src [label="H1(L1) data source:\n mkbasicmultisrc()", color=red4];
+###
+###    		Aux1 [label="Auxiliary channel 1", color=red4];
+###    		Aux2 [label="Auxiliary channel 2", color=green4];
+###    		AuxN [label="Auxiliary channel N", color=magenta4];
+###
+###    		Multirate1 [label="Auxiliary channel 1 whitening and downsampling:\nmkwhitened_multirate_src()", color=red4];
+###    		Multirate2 [label="Auxiliary channel 2 whitening and downsampling:\nmkwhitened_multirate_src()", color=green4];
+###    		MultirateN [label="Auxiliary channel N whitening and downsampling:\nmkwhitened_multirate_src()", color=magenta4];
+###
+###    		FilterBankAux1Rate1 [label="Auxiliary Channel 1:\nGlitch Filter Bank", color=red4];
+###    		FilterBankAux1Rate2 [label="Auxiliary Channel 1:\nGlitch Filter Bank", color=red4];
+###    		FilterBankAux1RateN [label="Auxiliary Channel 1:\nGlitch Filter Bank", color=red4];
+###    		FilterBankAux2Rate1 [label="Auxiliary Channel 2:\nGlitch Filter Bank", color=green4];
+###    		FilterBankAux2Rate2 [label="Auxiliary Channel 2:\nGlitch Filter Bank", color=green4];
+###    		FilterBankAux2RateN [label="Auxiliary Channel 2:\nGlitch Filter Bank", color=green4];
+###    		FilterBankAuxNRate1 [label="Auxiliary Channel N:\nGlitch Filter Bank", color=magenta4];
+###    		FilterBankAuxNRate2 [label="Auxiliary Channel N:\nGlitch Filter Bank", color=magenta4];
+###    		FilterBankAuxNRateN [label="Auxiliary Channel N:\nGlitch Filter Bank", color=magenta4];
+###
+###    		TriggerAux1Rate1 [label="Auxiliary Channel 1:\nTrigger Max (1 sec)", color=red4];
+###    		TriggerAux1Rate2 [label="Auxiliary Channel 1:\nTrigger Max (1 sec)", color=red4];
+###    		TriggerAux1RateN [label="Auxiliary Channel 1:\nTrigger Max (1 sec)", color=red4];
+###    		TriggerAux2Rate1 [label="Auxiliary Channel 2:\nTrigger Max (1 sec)", color=green4];
+###    		TriggerAux2Rate2 [label="Auxiliary Channel 2:\nTrigger Max (1 sec)", color=green4];
+###    		TriggerAux2RateN [label="Auxiliary Channel 2:\nTrigger Max (1 sec)", color=green4];
+###    		TriggerAuxNRate1 [label="Auxiliary Channel N:\nTrigger Max (1 sec)", color=magenta4];
+###    		TriggerAuxNRate2 [label="Auxiliary Channel N:\nTrigger Max (1 sec)", color=magenta4];
+###    		TriggerAuxNRateN [label="Auxiliary Channel N:\nTrigger Max (1 sec)", color=magenta4];
+###
+###    		H1L1src -> Aux1;
+###    		H1L1src -> Aux2;
+###    		H1L1src -> AuxN;
+###
+###    		Aux1 -> Multirate1;
+###    		Aux2 -> Multirate2;
+###    		AuxN -> MultirateN;
+###
+###    		Multirate1 -> FilterBankAux1Rate1 [label="Aux 1 4096Hz"];
+###    		Multirate2 -> FilterBankAux2Rate1 [label="Aux 2 4096Hz"];
+###    		MultirateN -> FilterBankAuxNRate1 [label="Aux N 4096Hz"];
+###    		Multirate1 -> FilterBankAux1Rate2 [label="Aux 1 2048Hz"];
+###    		Multirate2 -> FilterBankAux2Rate2 [label="Aux 2 2048Hz"];
+###    		MultirateN -> FilterBankAuxNRate2 [label="Aux N 2048Hz"];
+###    		Multirate1 -> FilterBankAux1RateN [label="Aux 1 Nth-pow-of-2 Hz"];
+###    		Multirate2 -> FilterBankAux2RateN [label="Aux 2 Nth-pow-of-2 Hz"];
+###    		MultirateN -> FilterBankAuxNRateN [label="Aux N Nth-pow-of-2 Hz"];
+###
+###    		FilterBankAux1Rate1 -> TriggerAux1Rate1;
+###    		FilterBankAux1Rate2 -> TriggerAux1Rate2;
+###    		FilterBankAux1RateN -> TriggerAux1RateN;
+###    		FilterBankAux2Rate1 -> TriggerAux2Rate1;
+###    		FilterBankAux2Rate2 -> TriggerAux2Rate2;
+###    		FilterBankAux2RateN -> TriggerAux2RateN;
+###    		FilterBankAuxNRate1 -> TriggerAuxNRate1;
+###    		FilterBankAuxNRate2 -> TriggerAuxNRate2;
+###    		FilterBankAuxNRateN -> TriggerAuxNRateN;
+###    	}
+###
+###
+###    	Synchronize [label="Synchronize buffers by timestamp"];
+###    	Extract [label="Extract features from buffer"];
+###    	Save [label="Save triggers to disk"];
+###    	Kafka [label="Push features to queue"];
+###
+###    	TriggerAux1Rate1 -> Synchronize;
+###    	TriggerAux1Rate2 -> Synchronize;
+###    	TriggerAux1RateN -> Synchronize;
+###    	TriggerAux2Rate1 -> Synchronize;
+###    	TriggerAux2Rate2 -> Synchronize;
+###    	TriggerAux2RateN -> Synchronize;
+###    	TriggerAuxNRate1 -> Synchronize;
+###    	TriggerAuxNRate2 -> Synchronize;
+###    	TriggerAuxNRateN -> Synchronize;
+###
+###    	Synchronize -> Extract;
+###
+###    	Extract -> Save [label="Option 1"];
+###    	Extract -> Kafka [label="Option 2"];
+###
+###    }
+###
 
-from optparse import OptionParser
 from collections import deque, namedtuple
 import json
 import math
+from optparse import OptionParser, OptionGroup
 import os
-import sys
-import socket
 import resource
 import StringIO
+import socket
+import sys
 import tempfile
 import threading
-import shutil
 import traceback
+import shutil
 
 import h5py
 import numpy
@@ -60,18 +162,18 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 
+from gstlal import aggregator
 from gstlal import auxcache
-from gstlal import pipeio
+from gstlal import bottle
 from gstlal import datasource
+from gstlal import httpinterface
 from gstlal import idq_multirate_datasource
+from gstlal import idq_utils
 from gstlal import multichannel_datasource
-from gstlal import sngltriggertable
+from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
-from gstlal import aggregator
-from gstlal import idq_utils
-from gstlal import httpinterface
-from gstlal import bottle
+from gstlal import sngltriggertable
 
 #
 # Make sure we have sufficient resources
@@ -94,11 +196,11 @@ setrlimit(resource.RLIMIT_RSS, None)
 setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
-####################
+# =============================
 # 
-#      classes
+#           classes
 #
-####################   
+# =============================
 
 
 class MultiChannelHandler(simplehandler.Handler):
@@ -501,40 +603,49 @@ class LinkedAppSync(pipeparts.AppSync):
 				self.appsinks[elem] = None
 				self.appsink_new_buffer(elem, self.sink_dict)
 
-###############################
+# =============================
 # 
-#       command line parser
+#     command line parser
 #
-###############################
+# =============================
 
 def parse_command_line():
 
 	parser = OptionParser(description = __doc__)
 
-	#
 	# First append the datasource common options
-	#
-
 	multichannel_datasource.append_options(parser)
-	parser.add_option("--local-frame-caching", action = "store_true", help = "Pre-reads frame data and stores to local filespace.")
-	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
-	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
-	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
-	parser.add_option("--persist-cadence", type = "int", default = 320, help = "Rate at which to persist trigger files to disk, used with hdf5 files. Only used for live data, and needs to be a multiple of save cadence. Default = 320 seconds.")
-	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
-	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (ascii or hdf5) of features written to disk. Default = hdf5")
-	parser.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
-	parser.add_option("--kafka-partition", metavar = "string", help = "If using Kafka, sets the partition that this feature extractor is assigned to.")
-	parser.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this feature extractor publishes feature vector subsets to.")
-	parser.add_option("--kafka-server", metavar = "string", help = "If using Kafka, sets the server url that the kafka topic is hosted on.")
-	parser.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the feature extractor with a 4 digit integer string code, padded with zeros. Default = 0001")
-	parser.add_option("--nxydump-segment", metavar = "start:stop", help = "Set the time interval to dump from nxydump elements (optional).")
-	parser.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
-	parser.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
-	parser.add_option("--waveform", metavar = "string", default = "half_sine_gaussian", help = "Specifies the waveform used for matched filtering. Possible options: (half_sine_gaussian, sine_gaussian). Default = half_sine_gaussian")
-	parser.add_option("--trigger-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
-	parser.add_option("--trigger-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
+
+	group = OptionGroup(parser, "Waveform Options", "Adjust waveforms/parameter space used for feature extraction")
+	group.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
+	group.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
+	group.add_option("--waveform", metavar = "string", default = "half_sine_gaussian", help = "Specifies the waveform used for matched filtering. Possible options: (half_sine_gaussian, sine_gaussian). Default = half_sine_gaussian")
+	parser.add_option_group(group)
+
+	group = OptionGroup(parser, "Saving Options", "Adjust parameters used for saving/persisting features to disk as well as directories specified")
+	group.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
+	group.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
+	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (ascii or hdf5) of features written to disk. Default = hdf5")
+	group.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
+	group.add_option("--persist-cadence", type = "int", default = 320, help = "Rate at which to persist trigger files to disk, used with hdf5 files. Only used for live data, and needs to be a multiple of save cadence. Default = 320 seconds.")
+	parser.add_option_group(group)
+
+	group = OptionGroup(parser, "Kafka Options", "Adjust settings used for pushing extracted features to a Kafka topic.")
+	group.add_option("--use-kafka", action = "store_true", default = False, help = "If set, will output feature vector subsets to a Kafka topic.")
+	group.add_option("--kafka-partition", metavar = "string", help = "If using Kafka, sets the partition that this feature extractor is assigned to.")
+	group.add_option("--kafka-topic", metavar = "string", help = "If using Kafka, sets the topic name that this feature extractor publishes feature vector subsets to.")
+	group.add_option("--kafka-server", metavar = "string", help = "If using Kafka, sets the server url that the kafka topic is hosted on.")
+	group.add_option("--job-id", type = "string", default = "0001", help = "Sets the job identication of the feature extractor with a 4 digit integer string code, padded with zeros. Default = 0001")
+	parser.add_option_group(group)
+
+	group = OptionGroup(parser, "Program Behavior")
+	group.add_option("--local-frame-caching", action = "store_true", help = "Pre-reads frame data and stores to local filespace.")
+	group.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
+	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	group.add_option("--nxydump-segment", metavar = "start:stop", help = "Set the time interval to dump from nxydump elements (optional).")
+	group.add_option("--trigger-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
+	group.add_option("--trigger-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
+	parser.add_option_group(group)
 
 	#
 	# parse the arguments and sanity check
@@ -566,11 +677,11 @@ def parse_command_line():
 	return options, filenames
 
 
-####################
+# =============================
 # 
-#       main
+#             main
 #
-####################   
+# =============================
 
 #  
 # parsing and setting up some core structures
