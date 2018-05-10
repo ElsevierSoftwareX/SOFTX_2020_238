@@ -39,6 +39,7 @@ import math
 import numpy
 import os
 import random
+import scipy
 from scipy import stats
 from scipy import spatial
 import sys
@@ -941,14 +942,42 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 
 
 def chunker(seq, size):
+	"""
+	A generator to break up a sequence into chunks of length size, plus the
+	remainder, e.g.,
+
+	>>> for x in chunker([1, 2, 3, 4, 5, 6, 7], 3):
+	...     print x
+	...
+	[1, 2, 3]
+	[4, 5, 6]
+	[7]
+	"""
 	return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
 
 
 def normsq_along_one(x):
+	"""
+	Compute the dot product squared along the first dimension in a fast
+	way.  Only works for real floats and numpy arrays.  Not really for
+	general use.
+
+	>>> normsq_along_one(numpy.array([[1., 2., 3.], [2., 4., 6.]]))
+	array([ 14.,  56.])
+
+	"""
 	return numpy.add.reduce(x * x, axis=(1,))
 
 
 def margprob(Dmat):
+	"""
+	Compute the marginalized probability along the second dimension of a
+	matrix Dmat.  Assumes the probability is the form exp(-x_i^2/2.)
+
+	>>> margprob(numpy.array([[1.,2.,3.,4.], [2.,3.,4.,5.]]))
+	[0.41150885406464954, 0.068789418217400547]
+	"""
+
 	out = []
 	for D in Dmat:
 		D = D[numpy.isfinite(D)]
@@ -962,13 +991,92 @@ def margprob(Dmat):
 
 
 class TimePhaseSNR(object):
+	"""
+	The goal of this is to compute:
 
+	.. math::
+
+		P(D_{\mathrm{eff}\,H}, D_{\mathrm{eff}\,L}, D_{\mathrm{eff}\,V}, t_H, t_L, t_V, \phi_H, \phi_L, \phi_V | s, t_g = 0, \phi_c = 0 \, \mathrm{s}, D = 1 \, \mathrm{Mpc})
+
+	We reduce the dimensionality by computing things relative to the first
+	instrument in alphabetical order, e.g.,
+
+	.. math::
+
+		\\begin{align*}
+		P(D_{\mathrm{eff}\,H} / D_{\mathrm{eff}\,L}, D_{\mathrm{eff}\,H} / D_{\mathrm{eff}\,V}, t_H - t_L, t_H - t_V, \phi_H - \phi_L, \phi_H - \phi_V | s, D = 1 \, \mathrm{Mpc}) &= \\
+		P(\\vec\lambda|s,  D = 1 \, \mathrm{Mpc}) &
+		\end{align*}
+
+	where now the absolute geocenter end time or coalescence phase does not
+	matter.  We then assert that physical signals have a uniform distribution in
+	earth based coordinates, :math:`\mathrm{RA}, \cos(\mathrm{DEC}),
+	\cos(\iota), \psi`.  We lay down a uniform densly sampled grid in these
+	coordinates and assert that any signal should ``exactly" land
+	on one of the grid points. We transform that regularly spaced grid
+	into a grid of (irregularly spaced) points in :math:`\\vec{\lambda}`,
+	which we denote as :math:`\\vec{\lambda_{\mathrm{m}i}}` for the *i*\ th model lambda vector.
+	We consider that the **only** mechanism to push a signal away from one
+	of these exact *i*\ th grid points is Gaussian noise.  Furthermore we assume the
+	probability distribution is of the form:
+
+	.. math::
+
+		P(\\vec{\lambda}, \\vec{\lambda_{mi}}) = \\frac{1}{\sqrt{(2\pi)^k |\pmb{\Sigma}|}} \exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda}^T \, \pmb{\Sigma}^{-1} \, \\vec{\Delta\lambda} \\right] }
+
+	where :math:`\\vec{\Delta\lambda_i} = \\vec{\lambda} -
+	\\vec{\lambda_{\mathrm{m}i}}` and :math:`\pmb{\Sigma}` is diagonal.
+	For simplicity here forward we will set :math:`\pmb{\Sigma} = 1` and will drop the normalization, i.e.,
+
+	.. math::
+
+		P(\\vec{\lambda}, \\vec{\lambda_{mi}}) \propto \exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda_i}^2 \\right] }
+
+	Then we assert that:
+
+	.. math::
+
+		P(\\vec\lambda|s,  D = 1 \, \mathrm{Mpc}) \propto \sum_i P(\\vec{\lambda}, \\vec{\lambda_{mi}})
+
+	Computing this probability on the fly is tough since the grid might
+	have millions of points.  Therefore we make another simplifying
+	assumption that the noise only adds a contribution which is orthogonal to the
+	hypersurface defined by the signal.  In other words, we assume that noise cannot
+	push a signal from one grid point towards another along the signal manifold.
+	In this case we can simplify the marginalization step with a precomputation since
+
+	.. math::
+
+		\sum_i P(\\vec{\lambda}, \\vec{\lambda_{mi}}) \\approx P(\\vec{\lambda}, \\vec{\lambda_{m0}}) \\times \sum_{i > 0} \exp{ \left[ -\\frac{1}{2} \\vec{\Delta x_i}^2 \\right] }
+
+
+	Where :math:`\\vec{\lambda_{m0}}` is the **nearest neighbor** to the
+	measured :math:`\\vec{\lambda}`.  The :math:`\\vec{\Delta x_i}^2` term is the
+	distance squared for the *i*\ th grid point and the nearest neighbor point 0.
+	This entire sum can be precomputed and stored.
+
+	The geometric interpretation is shown in the following figure:
+
+	.. image:: ../images/TimePhaseSNR01.png
+
+	In order for this endeavor to be successful, we still need a fast way
+	to find the nearest neighbor. We use scipy KDTree to accomplish this.
+
+
+	"""
 	# NOTE to save a couple hundred megs of ram we do not
 	# include kagra for now...
 	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
 	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 
 	def __init__(self, tree_data = None, margsky = None, verbose = False):
+		"""
+		Initialize a new class from scratch via explicit computation
+		of the tree data and marginalized probability distributions or by providing
+		these.  **NOTE** generally speaking a user will not initialize
+		one of these from scratch, but instead will read the data from disk using the
+		from_hdf() method below.
+		"""
 
 		# FIXME compute this more reliably or expose it as a property
 		# or something
@@ -1018,6 +1126,10 @@ class TimePhaseSNR(object):
 				self.margsky[combo] = numpy.array(marg, dtype="float32")
 
 	def to_hdf5(self, fname):
+		"""
+		If you have initialized one of these from scratch and want to
+		save it to disk, do so.
+		"""
 		f = h5py.File(fname, "w")
 		dgrp = f.create_group("gstlal_extparams")
 		dgrp.create_dataset("treedata", data = self.tree_data, compression="gzip")
@@ -1028,6 +1140,9 @@ class TimePhaseSNR(object):
 
 	@staticmethod
 	def from_hdf5(fname):
+		"""
+		Initialize one of these from a file instead of computing it from scratch
+		"""
 		f = h5py.File(fname, "r")
 		dgrp = f["gstlal_extparams"]
 		tree_data = numpy.array(dgrp["treedata"])
@@ -1039,10 +1154,23 @@ class TimePhaseSNR(object):
 
 	@property
 	def combos(self):
+		"""
+		return instrument combos for all the instruments internally stored in self.responses
+
+		>>> TPS.combos
+		(('H1', 'L1'), ('H1', 'L1', 'V1'), ('H1', 'V1'), ('L1', 'V1'))
+		"""
 		return self.instrument_combos(self.responses)
 
 	@property
 	def pairs(self):
+		"""
+		Return all possible pairs of instruments for the
+		instruments internally stored in self.responses
+		>>> TPS.pairs
+		(('H1', 'L1'), ('H1', 'V1'), ('L1', 'V1'))
+		"""
+
 		out = []
 		for combo in self.combos:
 			out.extend(self.instrument_pairs(combo))
@@ -1050,15 +1178,40 @@ class TimePhaseSNR(object):
 
 	@property
 	def slices(self):
+		"""
+		This provides a way to index into the internal tree data for
+		the delta T, delta phi, and deff ratios for each instrument pair.
+
+		>>> TPS.slices
+		{('H1', 'L1'): [0, 1, 2], ('H1', 'V1'): [3, 4, 5], ('L1', 'V1'): [6, 7, 8]}
+		"""
 		# we will define indexes for slicing into a subset of instrument data
 		return dict((pair, [3*n,3*n+1,3*n+2]) for n,pair in enumerate(self.pairs))
 
 	def instrument_pair_slices(self, pairs):
+		"""
+		define slices into tree data for a given set of instrument
+		pairs (which is possibly a subset of the full availalbe pairs)
+		"""
 		s = self.slices
 		return dict((pair, s[pair]) for pair in pairs)
 
 	@classmethod
 	def instrument_combos(cls, instruments, min_instruments = 2):
+		"""
+		Given a list of instrument produce all the possible combinations of min_instruents or greater, e.g.,
+
+		>>> TPS.instrument_combos(("H1","V1","L1"), min_instruments = 3)
+		(('H1', 'L1', 'V1'),)
+		>>> TPS.instrument_combos(("H1","V1","L1"), min_instruments = 2)
+		(('H1', 'L1'), ('H1', 'L1', 'V1'), ('H1', 'V1'), ('L1', 'V1'))
+		>>> TPS.instrument_combos(("H1","V1","L1"), min_instruments = 1)
+		(('H1',), ('H1', 'L1'), ('H1', 'L1', 'V1'), ('H1', 'V1'), ('L1',), ('L1', 'V1'), ('V1',))
+
+		**NOTE**: these combos are always returned in alphabetical order
+
+		"""
+
 		combos = set()
 		# FIXME this probably should be exposed, but 1 doesn't really make sense anyway
 		for i in range(min_instruments, len(instruments,) + 1):
@@ -1070,7 +1223,14 @@ class TimePhaseSNR(object):
 		return tuple(sorted(list(combos)))
 
 	def instrument_pairs(self, instruments):
-		# They should be sorted, but it doesn't hurt
+		"""
+		Given a list of instruments, construct all possible pairs
+
+		>>> TPS.instrument_pairs(("H1","K1","V1","L1"))
+		(('H1', 'K1'), ('H1', 'L1'), ('H1', 'V1'))
+
+		**NOTE**: These are always in alphabetical order
+		"""
 		out = []
 		instruments = tuple(sorted(instruments))
 		for i in instruments[1:]:
@@ -1078,6 +1238,20 @@ class TimePhaseSNR(object):
 		return tuple(out)
 
 	def dtdphideffpoints(self, time, phase, deff, slices):
+		"""
+		Given a dictionary of time, phase and deff, which could be
+		lists of values, pack the delta t delta phi and eff distance
+		ratios divided by the values in self.sigma into an output array according to
+		the rules provided by slices.
+
+		>>> TPS.dtdphideffpoints({"H1":0, "L1":-.001, "V1":.001}, {"H1":0, "L1":0, "V1":1}, {"H1":1, "L1":3, "V1":4}, TPS.slices)
+		array([[ 1.        ,  0.        , -5.        , -1.        , -2.54647899,
+			-5.        , -2.        , -2.54647899, -5.        ]], dtype=float32)
+
+		**NOTE** You must have the same ifos in slices as in the time,
+		phase, deff dictionaries.  The result of self.slices gives slices for all the
+		instruments stored in self.responses
+		"""
 		# order is dt, dphi and effective distance ratio for each combination
 		# NOTE the instruments argument here really needs to come from calling instrument_pairs()
 		if hasattr(time.values()[0], "__iter__"):
@@ -1097,6 +1271,14 @@ class TimePhaseSNR(object):
 
 	@classmethod
 	def tile(cls, NSIDE = 16, NANGLE = 33, verbose = False):
+		"""
+		Tile the sky with equal area tiles defined by the healpix NSIDE
+		and NANGLE parameters.  Also tile polarization uniformly and inclination
+		uniform in cosine.  Convert these sky coordinates to time, phase and deff for
+		each instrument in self.responses.  Return the sky tiles in the detector
+		coordinates as dictionaries.  The default values have millions
+		of points in the 4D grid
+		"""
 		# FIXME should be put at top, but do we require healpy?  It
 		# isn't necessary for running at the moment since cached
 		# versions of this will be used.
@@ -1136,7 +1318,17 @@ class TimePhaseSNR(object):
 		return time, phase, deff
 
 	def __call__(self, time, phase, snr, horizon):
+		"""
+		Compute the probability of obtaining time, phase and SNR values
+		for the instruments specified by the input dictionaries.  We also need the
+		horizon distance because we convert to effective distance internally.
+
+		>>> TPS({"H1":0, "L1":0.001, "V1":0.001}, {"H1":0., "L1":1., "V1":1.}, {"H1":5., "L1":7., "V1":7.}, {"H1":1., "L1":1., "V1":1.})
+		array([  9.51668418e-14], dtype=float32)
+
+		"""
 		deff = dict((k, horizon[k] / snr[k] * 8.0) for k in snr)
+		# FIXME can this be a function call??
 		slices = dict((pair, [3*n,3*n+1,3*n+2]) for n,pair in enumerate(self.instrument_pairs(time)))
 		point = self.dtdphideffpoints(time, phase, deff, slices)
 		combo = tuple(sorted(time))
