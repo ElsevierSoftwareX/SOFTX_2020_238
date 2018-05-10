@@ -66,10 +66,15 @@ from gstlal import paths as gstlal_config_paths
 
 
 __all__ = [
-	"instruments_rate_given_noise",
 	"P_instruments_given_signal",
 	"SNRPDF",
-	"NumeratorSNRCHIPDF"
+	"NumeratorSNRCHIPDF",
+	"chunker",
+	"normsq_along_one",
+	"margprob",
+	"TimePhaseSNR",
+	"p_of_instruments_given_horizons",
+	"InspiralExtrinsics"
 ]
 
 
