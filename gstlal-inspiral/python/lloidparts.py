@@ -404,7 +404,7 @@ class Handler(simplehandler.Handler):
 
 			# keep everything before timestamp in the current
 			# segmentlistdicts.  keep everything after
-			# timestamp in the copy we need to apply the cut
+			# timestamp in the copy.  we need to apply the cut
 			# this way around so that the T050017 filename
 			# constructed below has the desired start and
 			# duration
