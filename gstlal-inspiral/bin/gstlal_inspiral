@@ -268,7 +268,7 @@ def parse_command_line():
 	group.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
 	group.add_option("--comment", metavar = "message", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	group.add_option("--fir-stride", metavar = "seconds", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
-	group.add_option("--job-tag", metavar = "tag", help = "Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc..")
+	group.add_option("--job-tag", metavar = "tag", help = "Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc.;  may not contain \".\" nor \"-\".")
 	group.add_option("--local-frame-caching", action = "store_true", help = "Pre-reads frame data, performs downsampling, and stores to local filespace. ")
 	group.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
 	group.add_option("--thinca-interval", metavar = "seconds", type = "float", default = 30.0, help = "Set the thinca interval (default = 30 s).")
@@ -352,12 +352,6 @@ def parse_command_line():
 		raise ValueError("must supply either none or exactly as many --ranking-stat-output options as --output")
 	if options.likelihood_snapshot_interval and not options.ranking_stat_output:
 		raise ValueError("must set --ranking-stat-output when --likelihood-snapshot-interval is set")
-
-	#
-	# Once we are sure that options.ranking_stat_output is set correctly,
-	# check if it is None and turn it into a list of Nones
-	#
-
 	if options.ranking_stat_output is None or len(options.ranking_stat_output) == 0:
 		options.ranking_stat_output = [None] * len(options.output)
 
@@ -392,6 +386,9 @@ def parse_command_line():
 
 		if missing_options:
 			raise ValueError("missing required option(s) %s when --data-source is lvshm or framexmit" % ", ".join(missing_options))
+
+		if "-" in options.job_tag or "." in options.job_tag:
+			raise ValueError("invalid characters in --job-tag \"%s\"" % options.job_tag)
 
 		if len(svd_banks) > 1:
 			raise ValueError("more than one --svd-bank not allowed when --datasource is lvshm or framexmit, have %d" % len(svd_banks))
