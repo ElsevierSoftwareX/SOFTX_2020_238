@@ -762,9 +762,11 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	   }
 
 	"""
-	dqvector = statevector = None
+	statevector = dqvector = None
 
-	# NOTE: timestamp_offset is a hack to allow seeking with fake sources, a real solution should be fixing the general timestamp problem which would allow seeking to work properly
+	# NOTE: timestamp_offset is a hack to allow seeking with fake
+	# sources, a real solution should be fixing the general timestamp
+	# problem which would allow seeking to work properly
 	if gw_data_source_info.data_source == "white":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, volume = 1.0, timestamp_offset = int(gw_data_source_info.seg[0]) * Gst.SECOND)
 	elif gw_data_source_info.data_source == "silence":
@@ -777,7 +779,9 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkfakeadvvirgosrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
 	elif gw_data_source_info.data_source == "frames":
 		if instrument == "V1":
-			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
+			# FIXME Hack because virgo often just uses "V" in
+			# the file names rather than "V1".  We need to
+			# sieve on "V"
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = "V")
 		else:
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
@@ -788,8 +792,10 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * Gst.SECOND)
 		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_static_pad("sink"))
 		if gw_data_source_info.frame_segments[instrument] is not None:
-			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
-			# FIXME:  make gate leaky when I'm certain that will work.
+			# FIXME:  make segmentsrc generate segment samples
+			# at the sample rate of h(t)?
+			# FIXME:  make gate leaky when I'm certain that
+			# will work.
 			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]), name = "%s_frame_segments_gate" % instrument)
 			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_static_pad("src"), gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove this when pipeline can handle disconts
@@ -800,7 +806,8 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		dq_vector_on_bits, dq_vector_off_bits = gw_data_source_info.dq_vector_on_off_bits[instrument]
 
 		if gw_data_source_info.data_source == "lvshm":
-			# FIXME make wait_time adjustable through web interface or command line or both
+			# FIXME make wait_time adjustable through web
+			# interface or command line or both
 			src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
 		elif gw_data_source_info.data_source == "framexmit":
 			src = pipeparts.mkframexmitsrc(pipeline, multicast_iface = gw_data_source_info.framexmit_iface, multicast_group = gw_data_source_info.framexmit_addr[instrument][0], port = gw_data_source_info.framexmit_addr[instrument][1], wait_time = 120)
@@ -808,23 +815,16 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			# impossible code path
 			raise ValueError(gw_data_source_info.data_source)
 
+		# 10 minutes of buffering, then demux
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True)
 
-		# extract strain with 1 minute of buffering
-		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1)
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_static_pad("sink"))
-		pipeparts.framecpp_channeldemux_set_units(src, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
-
-		# extract state vector and DQ vector with 1 minute of
-		# buffering
-		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1)
-		dqvector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 1)
+		# extract state vector and DQ vector and convert to
+		# booleans
+		statevector = pipeparts.mkstatevector(pipeline, None, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
+		dqvector = pipeparts.mkstatevector(pipeline, None, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits)
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
-
-		# convert state vector and DQ vector to booleans
-		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
-		dqvector = pipeparts.mkstatevector(pipeline, dqvector, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			t = float(lal.UTCToGPS(time.gmtime()))
@@ -839,17 +839,16 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			off = elem.get_property("off-samples")
 			gap = elem.get_property("gap-samples")
 			return "%.9f %d %d %d" % (t, on, off, gap)
-		statevector = pipeparts.mktee(pipeline, statevector)
-		dqvector = pipeparts.mktee(pipeline, dqvector)
 
-		# use state vector and DQ vector to gate strain
-		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector), default_state = False, name = "%s_state_vector_gate" % instrument)
-		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector), default_state = False, name = "%s_dq_vector_gate" % instrument)
+		# extract strain with 1 buffer of buffering
+		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_static_pad("sink"))
+		pipeparts.framecpp_channeldemux_set_units(src, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
 
 		# fill in holes, skip duplicate data
-		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, silent = False)
 		dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
+		src = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 		@bottle.route("/%s/strain_add_drop.txt" % instrument)
 		# FIXME don't hard code the sample rate
 		def strain_add(elem = src, rate = 16384):
@@ -858,10 +857,17 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			drop = elem.get_property("drop")
 			return "%.9f %d %d" % (t, add // rate, drop // rate)
 
-		# 10 minutes of buffering
-		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
-		statevector = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
-		dqvector = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 60 * 10)
+		# use state vector and DQ vector to gate strain.  the sizes
+		# of the queues on the control inputs are not important.
+		# they must be large enough to buffer the state vector
+		# streams until they are needed, but the streams will be
+		# consumed immediately when needed so there is no risk that
+		# these queues actually fill up or add latency.  be
+		# generous.
+		statevector = pipeparts.mktee(pipeline, statevector)
+		dqvector = pipeparts.mktee(pipeline, dqvector)
+		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, name = "%s_state_vector_gate" % instrument)
+		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, name = "%s_dq_vector_gate" % instrument)
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
 	else:

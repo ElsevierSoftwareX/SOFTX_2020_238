@@ -251,15 +251,24 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			firkernel.set_phase(fir_whiten_reference_psd)
 		whiten.connect_after("notify::mean-psd", set_fir_psd, head, firkernel)
 
-		# Gate after gaps
+		# Gate after gaps.  the queue sizes on the control inputs
+		# need only be large enough to hold the state vector
+		# streams until they are required.  the streams will be
+		# consumed immediately when needed, so there is no risk
+		# that these queues add to the latency, so make them
+		# generously large.
 		# FIXME the -max(rates) extra padding is for the high pass
 		# filter: NOTE it also needs to be big enough for the
 		# downsampling filter, but that is typically smaller than the
 		# HP filter (192 samples at Qual 9)
-		if statevector:
-			head = pipeparts.mkgate(pipeline, head, control = statevector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
-		if dqvector:
-			head = pipeparts.mkgate(pipeline, head, control = dqvector, default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
+		# FIXME: this first queue should not be needed.  what is
+		# going on!?
+		if statevector is not None or dqvector is not None:
+			head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * (psd_fft_length + 2))
+		if statevector is not None:
+			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
+		if dqvector is not None:
+			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, threshold = 1, hold_length = -max(rates), attack_length = -max(rates) * (psd_fft_length + 1))
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
