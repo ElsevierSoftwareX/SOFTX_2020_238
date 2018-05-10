@@ -758,7 +758,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			if rankingstat.template_ids is None:
 				rankingstat.template_ids = template_ids
 			elif rankingstat.template_ids != template_ids:
-				raise ValueError("\"%s\" is for the wrong templates")
+				raise ValueError("\"%s\" is for the wrong templates" % options.ranking_stat_input)
 	if rankingstat is None:
 		rankingstat = far.RankingStat(template_ids = template_ids, instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
 		rankingstat.numerator.add_signal_model(df = 40)
