@@ -664,8 +664,27 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 
 	banks = inspiral.parse_bank_files(svd_bank_url_dict, verbose = options.verbose)
+	# assume all instruments have the same templates, just extract them
+	# from one of the instruments at random
+	sngl_inspiral_table = banks.values()[0][0].sngl_inspiral_table.copy()
+	for bank in banks.values()[0]:
+		sngl_inspiral_table.extend(bank.sngl_inspiral_table)
+	@bottle.route("/template_bank.xml.gz")
+	def get_template_bank_xml(sngl_inspiral_table = sngl_inspiral_table):
+		xmldoc = ligolw.Document()
+		xmldoc.appendChild(ligolw.LIGO_LW())
+		map(xmldoc.childNodes[-1].appendChild(sngl_inspiral_table.copy()).append, sngl_inspiral_table)
+		output = StringIO.StringIO()
+		ligolw_utils.write_fileobj(xmldoc, output, gz = True)
+		outstr = output.getvalue()
+		output.close()
+		return outstr
 	# FIXME:  don't use Gamma0, switch to a proper column
-	template_ids = reduce(lambda a, b: a | b, (frozenset(bank.sngl_inspiral_table.getColumnByName("Gamma0")) for banklist in banks.values() for bank in banklist))
+	template_ids = frozenset(sngl_inspiral_table.getColumnByName("Gamma0"))
+	@bottle.route("/template_ids.txt")
+	def get_template_ids(template_ids = sorted(template_ids)):
+		return "\n".join("%d" % template_id for template_id in template_ids)
+
 
 	# Choose to optionally reconstruct segments around injections (not
 	# blind injections!)
