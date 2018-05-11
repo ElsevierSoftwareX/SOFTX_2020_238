@@ -213,7 +213,7 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 			{
 				if(fabsf(state->values.as_float[i]) > max_val)
 				{
-					max_val = state->values.as_float[i];
+					max_val = fabsf(state->values.as_float[i]);
 					out = i;
 				}
 			}
@@ -228,7 +228,7 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 			{
 				if(fabs(state->values.as_double[i]) > max_val)
 				{
-					max_val = state->values.as_double[i];
+					max_val = fabs(state->values.as_double[i]);
 					out = i;
 				}
 			}
@@ -243,7 +243,7 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 			{
 				if(cabsf(state->values.as_float_complex[i]) > max_val)
 				{
-					max_val = state->values.as_float_complex[i];
+					max_val = cabsf(state->values.as_float_complex[i]);
 					out = i;
 				}
 			}
@@ -258,7 +258,7 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 			{
 				if(cabs(state->values.as_double_complex[i]) > max_val)
 				{
-					max_val = state->values.as_double_complex[i];
+					max_val = cabs(state->values.as_double_complex[i]);
 					out = i;
 				}
 			}
