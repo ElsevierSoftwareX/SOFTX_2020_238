@@ -221,6 +221,13 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.basename = kwargs.pop("basename")
 		self.waveform_type = options.waveform
 
+		# format keys used for saving, etc.
+		self.aggregate_rate = True
+		if self.aggregate_rate:
+			self.keys = list(set([key[0] for key in self.keys]))
+		else:
+			self.keys = [os.path.join(key[0], str(key[1]).zfill(4)) for key in self.keys]
+
 		# format id for aesthetics
 		self.job_id = str(options.job_id).zfill(4)
 		self.subset_id = str(kwargs.pop("subset_id")).zfill(4)
@@ -246,7 +253,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# feature saving properties
 		if options.save_format == 'hdf5':
-			self.fdata = idq_utils.HDF5SeriesFeatureData(columns, keys = self.keys, cadence = self.cadence)
+			self.fdata = idq_utils.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
 
 			if self.is_live:
 				duration = idq_utils.floor_div(int(options.gps_start_time) + self.persist_cadence, self.persist_cadence) - int(options.gps_start_time)
@@ -410,7 +417,11 @@ class MultiChannelHandler(simplehandler.Handler):
 
 			# save iDQ compatible data
 			if options.save_format == 'hdf5':
-				self.fdata.append(feature_row, key = (channel, rate), buftime = buftime)
+				if self.aggregate_rate:
+					key = channel
+				else:
+					key = os.path.join(channel, str(rate).zfill(4))
+				self.fdata.append(feature_row, key = key, buftime = buftime)
 			elif options.save_format == 'ascii':
 				channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
 				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
