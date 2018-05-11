@@ -203,7 +203,12 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 	zero_latency = filter_latency == 0.0
 
 	witness = pipeparts.mktee(pipeline, witness)
+	pipeparts.mknxydumpsink(pipeline, witness, "witness.txt")
+	f0_measured = pipeparts.mkgeneric(pipeline, witness, "lal_trackfrequency", num_halfcycles = 1024)
+	pipeparts.mknxydumpsink(pipeline, f0_measured, "f0_measured.txt")
 	signal = pipeparts.mktee(pipeline, signal)
+	signal_at_60 = bandpass(pipeline, signal, 16384, f_low = 58, f_high = 62)
+	pipeparts.mknxydumpsink(pipeline, signal_at_60, "signal_at_60.txt")
 	signal_minus_lines = [signal]
 
 	# Find amplitude and phase of first harmonic in witness channel
@@ -225,9 +230,12 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 		sample_shift = filter_samples / 2 - int((filter_samples - 1) * filter_latency + 0.5)
 		# shift of timestamp relative to data
 		time_shift = float(sample_shift) / compute_rate + zero_latency * resample_shift / compute_rate
+		phase_angle = -2 * i * numpy.pi * time_shift
+		print "phase_angle = %f" % phase_angle
 
 		# Find phase shift due to timestamp shift for each harmonic
-		phase_shift = complex_audioamplify(pipeline, f0_beat_frequency, 0, 2 * i * numpy.pi * time_shift)
+		phase_shift = pipeparts.mkmatrixmixer(pipeline, f0_beat_frequency, matrix=[[0, phase_angle]])
+		phase_shift = pipeparts.mktogglecomplex(pipeline, phase_shift)
 		phase_factor = pipeparts.mkgeneric(pipeline, phase_shift, "cexp")
 
 		if i == 1:
@@ -258,6 +266,9 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * i * f0, prefactor_real = -2.0)
 		reconstructed_line_in_signal, imag = split_into_real(pipeline, reconstructed_line_in_signal)
 		pipeparts.mkfakesink(pipeline, imag)
+		if i == 1:
+			reconstructed_line_in_signal = pipeparts.mktee(pipeline, reconstructed_line_in_signal)
+			pipeparts.mknxydumpsink(pipeline, reconstructed_line_in_signal, "reconstructed_line_in_signal.txt")
 
 		signal_minus_lines.append(reconstructed_line_in_signal)
 
@@ -500,7 +511,7 @@ def compute_kappa_bits_only_real(pipeline, smooth, dq, expected, ok_var, min_sam
 def merge_into_complex(pipeline, real, imag):
 	# Merge real and imag into one complex channel with complex caps
 	head = mkinterleave(pipeline, list_srcs(pipeline, real, imag))
-	head = pipeparts.mktogglecomplex(pipeline,head)
+	head = pipeparts.mktogglecomplex(pipeline, head)
 	return head
 
 def split_into_real(pipeline, complex_chan):
