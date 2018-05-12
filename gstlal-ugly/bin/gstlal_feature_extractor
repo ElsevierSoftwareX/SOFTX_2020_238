@@ -237,6 +237,8 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.last_persist_time = None
 		self.cadence = options.cadence
 		self.persist_cadence = options.persist_cadence
+		self.feature_start_time = options.feature_start_time
+		self.feature_end_time = options.feature_end_time
 
 		# set whether data source is live
 		self.is_live = data_source_info.data_source in data_source_info.live_sources
@@ -256,11 +258,11 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.fdata = idq_utils.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
 
 			if self.is_live:
-				duration = idq_utils.floor_div(int(options.gps_start_time) + self.persist_cadence, self.persist_cadence) - int(options.gps_start_time)
+				duration = idq_utils.floor_div(self.feature_start_time + self.persist_cadence, self.persist_cadence) - self.feature_start_time
 			else:
-				duration = int(options.gps_end_time) - int(options.gps_start_time)
+				duration = self.feature_end_time - self.feature_start_time
 
-			self.set_hdf_file_properties(int(options.gps_start_time), duration)
+			self.set_hdf_file_properties(self.feature_start_time, duration)
 
 		elif options.save_format == 'ascii':
 			# create header for trigger file
@@ -344,7 +346,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.last_persist_time = buftime
 
 			# Save triggers once per cadence
-			if idq_utils.in_new_epoch(buftime, self.last_save_time, self.cadence) or (options.trigger_end_time and buftime == int(options.trigger_end_time)):
+			if idq_utils.in_new_epoch(buftime, self.last_save_time, self.cadence) or (buftime == self.feature_end_time):
 				logger.info("saving features to disk at timestamp = %d" % buftime)
 				if options.save_format == 'hdf5':
 					self.to_hdf_file()
@@ -377,7 +379,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				# declaration then terrible terrible things
 				# will happen
 				if mapinfo.data:
-					if not options.trigger_end_time or (buftime >= int(options.trigger_start_time) and buftime < int(options.trigger_end_time)):
+					if (buftime >= self.feature_start_time and buftime <= self.feature_end_time):
 						for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
 							self.process_row(channel, rate, buftime, row)
 				memory.unmap(mapinfo)
@@ -635,7 +637,7 @@ def parse_command_line():
 
 	group = OptionGroup(parser, "Saving Options", "Adjust parameters used for saving/persisting features to disk as well as directories specified")
 	group.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
-	group.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_TRIGGERS", help = "Set the filename description in which to save the output.")
+	group.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Set the filename description in which to save the output.")
 	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (ascii or hdf5) of features written to disk. Default = hdf5")
 	group.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
 	group.add_option("--persist-cadence", type = "int", default = 320, help = "Rate at which to persist trigger files to disk, used with hdf5 files. Only used for live data, and needs to be a multiple of save cadence. Default = 320 seconds.")
@@ -654,8 +656,8 @@ def parse_command_line():
 	group.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	group.add_option("--nxydump-segment", metavar = "start:stop", help = "Set the time interval to dump from nxydump elements (optional).")
-	group.add_option("--trigger-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output triggers in GPS seconds. Required unless --data-source=lvshm")
-	group.add_option("--trigger-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output triggers in GPS seconds.  Required unless --data-source=lvshm")
+	group.add_option("--feature-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output features in GPS seconds. Required unless --data-source=lvshm")
+	group.add_option("--feature-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output features in GPS seconds.  Required unless --data-source=lvshm")
 	parser.add_option_group(group)
 
 	#
@@ -667,15 +669,15 @@ def parse_command_line():
 	# Sanity check the options
 
 	# set gps ranges for live and offline sources
-	if options.data_source not in ("lvshm", "framexmit"):
-		if options.trigger_start_time is None:
-			options.trigger_start_time = options.gps_start_time
-		if options.trigger_end_time is None:
-			options.trigger_end_time = options.gps_end_time
-	else:
+	if options.data_source in ("lvshm", "framexmit"):
 		options.gps_start_time = int(aggregator.now())
 		# NOTE: set the gps end time to be "infinite"
 		options.gps_end_time = 2000000000
+
+	if options.feature_start_time is None:
+		options.feature_start_time = int(options.gps_start_time)
+	if options.feature_end_time is None:
+		options.feature_end_time = int(options.gps_end_time)
 
 	# check if persist and save cadence times are sensible
 	assert options.persist_cadence >= options.cadence
@@ -713,11 +715,11 @@ if options.use_kafka:
 # set up logging
 #
 
-duration = int(options.gps_end_time) - int(options.gps_start_time)
+duration = options.feature_end_time - options.feature_start_time
 logdir = os.path.join(options.out_path, 'logs', options.job_id)
 aggregator.makedir(logdir)
 
-logger = idq_utils.get_logger('gstlal-feature-extractor_%d-%d' % (options.gps_start_time, duration), rootdir=logdir, verbose=options.verbose)
+logger = idq_utils.get_logger('gstlal-feature-extractor_%d-%d' % (options.feature_start_time, duration), rootdir=logdir, verbose=options.verbose)
 logger.info("writing log to %s" % logdir)
 
 #
@@ -763,9 +765,9 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	if options.data_source not in ("lvshm", "framexmit") and options.save_format == 'hdf5':
 		try:
 			# get path where triggers are located
-			duration = int(options.gps_end_time) - int(options.gps_start_time)
-			fname = idq_utils.to_trigger_filename(basename, options.gps_start_time, duration, 'h5')
-			fpath = idq_utils.to_trigger_path(os.path.abspath(options.out_path), basename, options.gps_start_time, options.job_id, str(subset_id).zfill(4))
+			duration = options.feature_end_time - options.feature_start_time
+			fname = idq_utils.to_trigger_filename(basename, options.feature_start_time, duration, 'h5')
+			fpath = idq_utils.to_trigger_path(os.path.abspath(options.out_path), basename, options.feature_start_time, options.job_id, str(subset_id).zfill(4))
 			trg_file = os.path.join(fpath, fname)
 
 			# visit groups within a given hdf5 file
