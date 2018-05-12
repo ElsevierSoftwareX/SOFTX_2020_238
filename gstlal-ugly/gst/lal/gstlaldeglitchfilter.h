@@ -72,7 +72,6 @@ struct _GstLALDeglitchFilter
 {
 	GstElement element;
 	GstPad *sinkpad, *srcpad;
-	gboolean silent;
 	GMutex                      segment_matrix_lock;
 	struct gstlal_segment_list  *seglist;
 	gint                        rate;

@@ -43,18 +43,6 @@
  * Boston, MA 02111-1307, USA.
  */
 
-/**
- * SECTION:element-laldeglitchfilter
- *
- * FIXME:Describe laldeglitchfilter here.
- *
- * <refsect2>
- * <title>Example launch line</title>
- * |[
- * gst-launch -v -m fakesrc ! laldeglitchfilter ! fakesink silent=TRUE
- * ]|
- * </refsect2>
- */
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -81,7 +69,6 @@ enum
 enum
 {
 	PROP_0,
-	PROP_SILENT,
 	ARG_SEGMENT_LIST
 };
 
@@ -161,8 +148,6 @@ gst_laldeglitch_filter_class_init (GstLALDeglitchFilterClass * klass)
 	gobject_class->set_property = gst_laldeglitch_filter_set_property;
 	gobject_class->get_property = gst_laldeglitch_filter_get_property;
 
-	g_object_class_install_property (gobject_class, PROP_SILENT, g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?", FALSE, G_PARAM_READWRITE));
-
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SEGMENT_LIST,
@@ -221,8 +206,6 @@ gst_laldeglitch_filter_init (GstLALDeglitchFilter * filter)
 	GST_PAD_SET_PROXY_CAPS (filter->srcpad);
 	gst_element_add_pad (GST_ELEMENT (filter), filter->srcpad);
 
-	filter->silent = FALSE;
-
 	filter->seglist = NULL;
 	filter->rate = 0;
 	filter->width = 0;
@@ -241,10 +224,6 @@ gst_laldeglitch_filter_set_property (GObject * object, guint prop_id, const GVal
 			gstlal_segment_list_free(filter->seglist);
 			filter->seglist = gstlal_segment_list_from_g_value_array(g_value_get_boxed(value));
 			g_mutex_unlock(&filter->segment_matrix_lock);
-			break;
-
-		case PROP_SILENT:
-			filter->silent = g_value_get_boolean (value);
 			break;
 
 		default:
@@ -266,10 +245,6 @@ gst_laldeglitch_filter_get_property (GObject * object, guint prop_id, GValue * v
 				g_value_take_boxed(value, g_value_array_from_gstlal_segment_list(filter->seglist));
 			/* FIXME:  else? */
 			g_mutex_unlock(&filter->segment_matrix_lock);
-			break;
-
-		case PROP_SILENT:
-			g_value_set_boolean (value, filter->silent);
 			break;
 
 		default:
@@ -414,9 +389,6 @@ gst_laldeglitch_filter_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
 	GstLALDeglitchFilter *filter;
 	filter = GST_LALDEGLITCHFILTER (parent);
-
-	if (filter->silent == FALSE)
-		g_print ("Processing buffer \n");
 
 	return process_buffer(filter, buf);
 }
