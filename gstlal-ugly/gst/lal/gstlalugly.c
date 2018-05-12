@@ -60,6 +60,7 @@
 #include <audioratefaker.h>
 #include <gstlal_trigger.h>
 #include <gstlal_latency.h>
+#include <gstlaldeglitchfilter.h>
 
 
 /*
@@ -87,6 +88,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"audioratefaker", GST_TYPE_AUDIO_RATE_FAKER},
 		{"lal_trigger", GSTLAL_TRIGGER_TYPE},
 		{"lal_latency", GSTLAL_LATENCY_TYPE},
+		{"lal_deglitcher", GST_TYPE_LALDEGLITCHFILTER},
 		{NULL, 0},
 	};
 

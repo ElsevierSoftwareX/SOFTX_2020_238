@@ -6,6 +6,7 @@ lib@GSTPLUGINPREFIX@gstlalugly_la_SOURCES = \
 	gstlalugly.c \
 	audioratefaker.h audioratefaker.c \
 	gstlal_bitvectorgen.h gstlal_bitvectorgen.c \
+	gstlaldeglitchfilter.h gstlaldeglitchfilter.c \
 	gstlal_iirbank.h gstlal_iirbank.c \
 	gstlal_interpolator.h gstlal_interpolator.c \
 	gstlal_tdwhiten.h gstlal_tdwhiten.c \
