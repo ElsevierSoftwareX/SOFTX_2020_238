@@ -785,6 +785,11 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 	pipeline.add(*elems)
 	Gst.element_link_many(src, *elems) # MOD: Error line [733]: element_link_many not yet implemented. See web page **
 
+
+def mkdeglitcher(pipeline, src, segment_list):
+	return mkgeneric(pipeline, src, "lal_deglitcher", segment_list = segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list))
+
+
 # FIXME no specific alias for this url since this library only has one element.
 # DO NOT DOCUMENT OTHER CODES THIS WAY! Use @gstdoc @gstpluginsbasedoc etc.
 ## Adds a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-libs/html/gstreamer-app.html">appsink</a> element to a pipeline with useful default properties
