@@ -544,7 +544,7 @@ class OnlineFrakensteinLnSignalDensity(LnSignalDensity):
 	@classmethod
 	def splice(cls, src, Dh_donor):
 		self = cls(src.template_ids, src.instruments, src.delta_t, src.min_instruments)
-		for key, lnpdf in self.densities.items():
+		for key, lnpdf in src.densities.items():
 			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
 		# data so that as it is updated, we get the updates.
@@ -915,7 +915,7 @@ class OnlineFrakensteinLnNoiseDensity(LnNoiseDensity):
 	@classmethod
 	def splice(cls, src, rates_donor):
 		self = cls(src.template_ids, src.instruments, src.delta_t, src.min_instruments)
-		for key, lnpdf in self.densities.items():
+		for key, lnpdf in src.densities.items():
 			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
 		# data so that as it is updated, we get the updates.
