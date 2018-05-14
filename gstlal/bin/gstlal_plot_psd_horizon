@@ -29,6 +29,7 @@ import numpy
 import lal
 import lal.series
 from glue.ligolw import utils as ligolw_utils
+from gstlal import plotutil
 from gstlal import reference_psd
 
 if len(sys.argv) < 3:
@@ -36,23 +37,22 @@ if len(sys.argv) < 3:
 	sys.exit()
 
 outname = sys.argv[1]
-colors = {"H1":"r", "H2":"b", "L1":"g", "V1":"m", "H1H2":"c", "E1":"b", "E2":"r", "E3":"g"}
-horizons = dict((k, []) for k in colors)
-times = dict((k, []) for k in colors)
+horizons = {}
+times = {}
 for f in sys.argv[2:]:
 	psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(f, verbose = True, contenthandler = lal.series.PSDContentHandler))
 	for ifo, psd in psds.items():
 		if psd is not None:
-			times[ifo].append(int(psd.epoch))
-			horizons[ifo].append(reference_psd.HorizonDistance(10., 2048., psd.deltaF, 1.4, 1.4)(psd, 8.)[0])
+			times.setdefault(ifo, []).append(int(psd.epoch))
+			horizons.setdefault(ifo, []).append(reference_psd.HorizonDistance(10., 2048., psd.deltaF, 1.4, 1.4)(psd, 8.)[0])
 
 pyplot.figure(figsize=(12,4))
 pyplot.subplot(121)
 minh, maxh = (float("inf"), 0)
 mint = min([min(t) for t in times.values() if t])
-for ifo in colors:
+for ifo in horizons:
 	if len(horizons[ifo]) > 0:
-		pyplot.semilogy((numpy.array(times[ifo]) - mint) / 1000., horizons[ifo], 'x', color = colors[ifo], label = ifo)
+		pyplot.semilogy((numpy.array(times[ifo]) - mint) / 1000., horizons[ifo], 'x', color = plotutil.colour_from_instruments([ifo]), label = ifo)
 		maxh = max(maxh, max(horizons[ifo]))
 		minh = min(minh, min(horizons[ifo]))
 #pyplot.legend()
@@ -61,9 +61,9 @@ pyplot.ylabel('Mpc')
 pyplot.grid()
 pyplot.subplot(122)
 binvec = numpy.linspace(minh, maxh, 25)
-for ifo in colors:
+for ifo in horizons:
 	if len(horizons[ifo]) > 0:
-		pyplot.hist(horizons[ifo], binvec, color = colors[ifo], alpha = 0.5, label = ifo)
+		pyplot.hist(horizons[ifo], binvec, color = plotutil.colour_from_instruments([ifo]), alpha = 0.5, label = ifo)
 pyplot.legend()
 pyplot.xlabel("Mpc")
 pyplot.ylabel("Count")
