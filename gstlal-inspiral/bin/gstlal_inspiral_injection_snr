@@ -67,99 +67,68 @@ def parse_command_line():
 
 	return options, filenames
 
+
 def calc_expected_snr(inj):
-
-	cachelist = []
-
-	# Make a segment that is the injection time.
-	geocent_end_time = segments.segment(inj.geocent_end_time+1e-9*inj.geocent_end_time_ns, inj.geocent_end_time+1e-9*inj.geocent_end_time_ns)
+	injtime = inj.time_geocent
 
 	# Determine which PSD files have GPS times covering the injection time.
-	cachelist = Cache(reference_psd_files).sieve(segment=geocent_end_time)
+	psds = dict((seg, psd) for seg, psd in allPSDs.items() if injtim in seg)
 
-	if len(cachelist) < 1:
+	if len(psds) < 1:
 		# We know no PSD covers the injection.
 		return 0.0, 0.0, 0.0
-	elif len(cachelist) >= 2:
-		# More than one PSD covers the injection time.
-		# Find the one that encompasses the injection the most.
-		def dist_from_center(time0, time1, injtime):
-			#Return the distance of the injection from the center of each segment
-			return numpy.absolute(((time1-time0)/2.0 + 1.0*time0) - injtime)
-
-		# FIXME If there are overlapping PSD files for both triple and double
-		# ifo times, then use the triple coinc files. Will need fixing when singles
-		# doubles and triples are enabled
-		if len(cachelist.sieve(ifos='H1L1V1')) > 0:
-			cachelist = cachelist.sieve(ifos='H1L1V1')
-
-		seg_start = int(sorted([(dist_from_center(cachelist[index].segment[0], cachelist[index].segment[1], geocent_end_time[0]), cachelist[index].segment[0]) for index in range(len(cachelist))])[0][1])
-		chosenPSD = allPSDs[seg_start]
-	else:
+	elif len(psds) == 1:
 		# Only one PSD covers the injection time.
-		seg_start = int(cachelist[0].segment[0])
-		chosenPSD = allPSDs[seg_start]
+		seg, chosenPSD = psds.popitem()
+	else:
+		# More than one PSD covers the injection time.  Find the
+		# one whose segment is closest to being centred on the
+		# injection.  Compute segment centre using overflow-safe
+		# arithmetic.
+		seg, chosenPSD = min(psds.items(), key = lambda (seg, psd): abs(seg[0] + abs(seg) / 2. - injtime))
 
 	# FIXME have better scheme for calculating the needed sample_rate
 	sample_rate = 16384.0
 
-	parameters = {}
-	parameters['m1'] = inj.mass1*lal.MSUN_SI
-	parameters['m2'] = inj.mass2*lal.MSUN_SI
-	parameters['S1x'] = inj.spin1x
-	parameters['S1y'] = inj.spin1y
-	parameters['S1z'] = inj.spin1z
-	parameters['S2x'] = inj.spin2x
-	parameters['S2y'] = inj.spin2y
-	parameters['S2z'] = inj.spin2z
-	parameters['distance'] = inj.distance*1e6*lal.PC_SI
-	parameters['inclination'] = inj.inclination
-	parameters['phiRef'] = inj.coa_phase
-	parameters['longAscNodes'] = 0.0
-	parameters['eccentricity'] = 0.0
-	parameters['meanPerAno'] = 0.0
-	parameters['deltaT'] = 1.0 / sample_rate
-	parameters['f_min'] = options.flow
-	parameters['f_ref'] = 0.0
-	parameters['LALparams'] = None
-	parameters['approximant'] = lalsimulation.GetApproximantFromString(str(inj.waveform))
+	h_plus, h_cross = lalsimulation.SimInspiralTD(
+		m1 = inj.mass1*lal.MSUN_SI,
+		m2 = inj.mass2*lal.MSUN_SI,
+		S1x = inj.spin1x,
+		S1y = inj.spin1y,
+		S1z = inj.spin1z,
+		S2x = inj.spin2x,
+		S2y = inj.spin2y,
+		S2z = inj.spin2z,
+		distance = inj.distance*1e6*lal.PC_SI,
+		inclination = inj.inclination,
+		phiRef = inj.coa_phase,
+		longAscNodes = 0.0,
+		eccentricity = 0.0,
+		meanPerAno = 0.0,
+		deltaT = 1.0 / sample_rate,
+		f_min = options.flow,
+		f_ref = 0.0,
+		LALparams = None,
+		approximant = lalsimulation.GetApproximantFromString(str(inj.waveform))
+	)
 
-	h_plus, h_cross = lalsimulation.SimInspiralTD(**parameters)
-
-	h_plus.epoch += inj.geocent_end_time
-	h_cross.epoch += inj.geocent_end_time
+	h_plus.epoch += injtime
+	h_cross.epoch += injtime
 
 	# Compute strain in each detector. If one detector wasn't on, snr will be set to zero.
-	detector = lalsimulation.DetectorPrefixToLALDetector('H1')
-	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
+	# FIXME:  don't hard-code detectores
+	snr = dict.fromkeys(("H1", "L1", "V1"), 0.0)
+	for instrument in snr:
+		if instrument not in chosenPSD:
+			continue
+		h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, lalsimulation.DetectorPrefixToLALDetector(instrument))
+		snr[instrument] = lalsimulation.MeasureSNR(h, chosenPSD[instrument], options.flow, 0.85 * (sample_rate / 2.))
 
-	try:
-		h1snr = lalsimulation.MeasureSNR(h,chosenPSD['H1'],options.flow,0.85*(sample_rate/2.))
-	except KeyError:
-		h1snr = 0.0
+	return snr
 
-	detector = lalsimulation.DetectorPrefixToLALDetector('L1')
-	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
-
-	try:
-		l1snr = lalsimulation.MeasureSNR(h,chosenPSD['L1'],options.flow,0.85*(sample_rate/2.))
-	except KeyError:
-		l1snr = 0.0
-
-	detector = lalsimulation.DetectorPrefixToLALDetector('V1')
-	h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, detector)
-
-	try:
-		v1snr = lalsimulation.MeasureSNR(h,chosenPSD['V1'],options.flow,0.85*(sample_rate/2.))
-	except KeyError:
-		v1snr = 0.0
-
-	return h1snr, l1snr, v1snr
-
+@lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
-
-lsctables.use_in(LIGOLWContentHandler)
 
 ###################################
 #
@@ -170,38 +139,32 @@ lsctables.use_in(LIGOLWContentHandler)
 options, filenames = parse_command_line()
 
 # Now we need to read in from the sim_inspiral table
-simxmldoc = ligolw_utils.load_filename(options.injection_file, verbose = True, contenthandler = LIGOLWContentHandler)
-sim_inspiral_table = lsctables.SimInspiralTable.get_table(simxmldoc)
-sorted_inj_times = sorted([inj.geocent_end_time+1e-9*inj.geocent_end_time_ns for inj in sim_inspiral_table])
-inj_segment = segments.segment(sorted_inj_times[0], sorted_inj_times[-1])
-
-# Read the PSD cache for only files we are interested in
-reference_psd_files = Cache([CacheEntry(line) for line in open(options.reference_psd_cache)]).sieve(segment=inj_segment)
+xmldoc = ligolw_utils.load_filename(options.injection_file, verbose = True, contenthandler = LIGOLWContentHandler)
+sim_inspiral_table = lsctables.SimInspiralTable.get_table(xmldoc)
+if sim_inspiral_table:
+	inj_segment = segments.segment(min(inj.time_geocent for inj in sim_inspiral_table), max(inj.time_geocent for inj in sim_inspiral_table))
+else:
+	inj_segment = None
 
 # Load all PSDs so that they don't need to be loaded for every injection.
-allPSDs = {}
-for cacheentry in reference_psd_files:
-	seg = cacheentry.segment
-	start = int(seg[0])
-	xmldoc = ligolw_utils.load_url(cacheentry.path, verbose = True, contenthandler = PSDContentHandler)
-	PSDs = read_psd_xmldoc(xmldoc)
-	allPSDs[start] = PSDs
+allPSDs = dict(
+	(seg, read_psd_xmldoc(ligolw_utils.load_url(cacheentry.url, verbose = True, contenthandler = PSDContentHandler)))
+	for cacheentry in map(CacheEntry, open(options.reference_psd_cache)) if inj_segment is not None and cacheentry.seg.intersects(inj_segment)
+)
 
 pool = multiprocessing.Pool(options.npool)
-h1snr = []
-l1snr = []
-v1snr = []
+snr = []
 #print pool.map(calc_expected_snr,[inj for idx, inj in enumerate(sim_inspiral_table)])
-for h1sim, l1sim, v1sim in pool.map(calc_expected_snr,[inj for idx, inj in enumerate(sim_inspiral_table)]):
-	h1snr.append(h1sim)
-	l1snr.append(l1sim)
-	v1snr.append(v1sim)
+for simsnr in pool.map(calc_expected_snr,[inj for idx, inj in enumerate(sim_inspiral_table)]):
+	snr.append(simsnr)
 pool.close()
 pool.join()
 
+# FIXME:  get proper columns
+# FIXME:  broken for KAGRA
 for idx, inj in enumerate(sim_inspiral_table):
-	inj.alpha4 = h1snr[idx]
-	inj.alpha5 = l1snr[idx]
-	inj.alpha6 = v1snr[idx]
+	inj.alpha4 = snr[idx]["H1"]
+	inj.alpha5 = snr[idx]["L1"]
+	inj.alpha6 = snr[idx]["V1"]
 
-ligolw_utils.write_filename(simxmldoc,options.injection_file,verbose = True)
+ligolw_utils.write_filename(xmldoc,options.injection_file,verbose = True)
