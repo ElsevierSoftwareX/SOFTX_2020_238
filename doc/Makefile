@@ -1,17 +1,17 @@
 gstlal-modules :
-	sphinx-apidoc -o source/gstlal/python-modules ../gstlal/python ../gstlal/python/misc.py ../gstlal/python/bottle.py ../gstlal/python/coherent_null.py ../gstlal/python/matplotlibhelper.py
+	sphinx-apidoc -e -o source/gstlal/python-modules ../gstlal/python ../gstlal/python/misc.py ../gstlal/python/bottle.py ../gstlal/python/coherent_null.py ../gstlal/python/matplotlibhelper.py
 
 gstlal-inspiral-modules :
-	sphinx-apidoc -o source/gstlal-inspiral/python-modules ../gstlal-inspiral/python ../gstlal-inspiral/python/cbc_template_iir.py ../gstlal-inspiral/python/spawaveform.py ../gstlal-inspiral/python/emcee.py ../gstlal-inspiral/python/spiirparts.py ../gstlal-inspiral/python/snglinspiraltable.py
+	sphinx-apidoc -e -o source/gstlal-inspiral/python-modules ../gstlal-inspiral/python ../gstlal-inspiral/python/cbc_template_iir.py ../gstlal-inspiral/python/spawaveform.py ../gstlal-inspiral/python/emcee.py ../gstlal-inspiral/python/spiirparts.py ../gstlal-inspiral/python/snglinspiraltable.py
 
 gstlal-calibration-modules :
-	sphinx-apidoc -o source/gstlal-calibration/python-modules ../gstlal-calibration/python
+	sphinx-apidoc -e -o source/gstlal-calibration/python-modules ../gstlal-calibration/python
 
 #gstlal-burst-modules :
-#	sphinx-apidoc -o source/gstlal-burst/python-modules ../gstlal-burst/python
+#	sphinx-apidoc -e -o source/gstlal-burst/python-modules ../gstlal-burst/python
 
 gstlal-ugly-modules :
-	sphinx-apidoc -o source/gstlal-ugly/python-modules ../gstlal-ugly/python ../gstlal-ugly/python/gviz_api.py ../gstlal-ugly/python/coherent_inspiral_metric.py  ../gstlal-ugly/python/coherent_inspiral_metric_plots.py ../gstlal-ugly/python/coherent_inspiral_metric_detector_details.py ../gstlal-ugly/python/sngltriggertable.py ../gstlal-ugly/python/aggregator.py 
+	sphinx-apidoc -e -o source/gstlal-ugly/python-modules ../gstlal-ugly/python ../gstlal-ugly/python/gviz_api.py ../gstlal-ugly/python/coherent_inspiral_metric.py  ../gstlal-ugly/python/coherent_inspiral_metric_plots.py ../gstlal-ugly/python/coherent_inspiral_metric_detector_details.py ../gstlal-ugly/python/sngltriggertable.py ../gstlal-ugly/python/aggregator.py 
 
 gstlal-bin :
 	./sphinx-bindoc source/gstlal/bin ../gstlal/bin gstlal_ligo_data_find_check
