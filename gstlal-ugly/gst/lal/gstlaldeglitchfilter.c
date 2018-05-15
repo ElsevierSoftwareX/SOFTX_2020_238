@@ -347,9 +347,9 @@ static GstFlowReturn process_buffer(GstLALDeglitchFilter *filter, GstBuffer * in
 			 */
 
 			guint64 duration = segstop - segstart;
-			g_assert(duration >= 0.5 * GST_SECOND); /* must be greater than 0.5s */
+			g_assert(duration >= 1.0 * GST_SECOND); /* must be greater than or equal to 1.0s */
 			g_assert(filter->rate >= 128); /* This probably doesnt make sense for low sample rates, so this is just here as a safety check. FIXME */
-			gdouble beta = 0.5 * GST_SECOND / duration;
+			gdouble beta = 1.0 * GST_SECOND / duration;
 			guint length = stopix - startix;
 
 			REAL8Window *window = XLALCreateTukeyREAL8Window(length, beta);
