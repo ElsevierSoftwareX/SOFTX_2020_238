@@ -30,6 +30,7 @@ from matplotlib import pyplot
 import os
 import sys
 from optparse import OptionParser
+import itertools
 
 from gstlal import inspiral_pipe
 from gstlal import plotutil
@@ -84,7 +85,7 @@ class upper_limit(object):
     def __init__(self, opts):
         ## Instance variables ######################################
         self.opts = opts
-        self.instruments = []
+        self.instrument_combos = []
         self.segments = segments.segmentlistdict()
         self.zero_lag_segments = segments.segmentlistdict()
         self.start_time = None
@@ -99,7 +100,6 @@ class upper_limit(object):
             connection = sqlite3.connect(working_filename)
 
             # find out which instruments were on and when
-            self.get_on_instruments(connection)
             self.get_segments(connection)                   #get single ifo segments with vetoes applied
 
             # done with zl database
@@ -107,6 +107,7 @@ class upper_limit(object):
             dbtables.discard_connection_filename(f, working_filename, verbose = self.opts.verbose)
 
         # derived quantities
+        self.get_instrument_combos()
         self.get_zero_lag_segments()          #make coincident ifo segments from single ifo segments
         self.get_livetime()                   #get the livetime for the chosen set of instruments
 
@@ -119,7 +120,7 @@ class upper_limit(object):
                 print "Reading results of injection analysis from %s ..."%f
             working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
             connection = sqlite3.connect(working_filename)
-            for inst in self.instruments:
+            for inst in self.instrument_combos:
                 self.found_injections_fars.setdefault(inst,[])
                 self.found_injections_snrs.setdefault(inst,[])
                 self.total_injections.setdefault(inst,[])
@@ -137,7 +138,7 @@ class upper_limit(object):
 
         # remove injections that violate user-imposed constraints and
         # symmetrize between m1-m2
-        for instr in self.instruments:
+        for instr in self.instrument_combos:
             self.total_injections[instr] = imr_utils.symmetrize_sims(self.total_injections[instr], "mass1", "mass2")
             self.total_injections[instr] = self.filter_injections(self.total_injections[instr])
             self.found_injections_fars[instr] = self.filter_injections(self.found_injections_fars[instr])
@@ -149,16 +150,18 @@ class upper_limit(object):
                 print >>sys.stdout,"Number of total injections: %d" % len(self.total_injections[instr])
 
 
-    def get_on_instruments(self,connection):
-        '''
-        Retrieve the sets of instruments which were on during the search.
-        '''
-	for inst in connection.cursor().execute("""SELECT DISTINCT(ifos) FROM process WHERE ifos NOTNULL""").fetchall():
-        	inst =  frozenset(lsctables.instrumentsproperty.get(inst[0]))
-        	if not inst in self.instruments:
-         		self.instruments.append(inst)
-
-        return self.instruments
+    def get_instrument_combos(self, min_instruments = 1):
+	instruments = self.segments.keys()
+        combos = set()
+        for i in range(min_instruments, len(instruments,) + 1):
+            for choice in itertools.combinations(instruments, i):
+                # NOTE the reference IFO is always the first in
+                # alphabetical order for any given combination,
+                # hence the sort here
+                combos.add(frozenset(sorted(choice)))
+		print combos
+	self.instrument_combos = tuple(sorted(list(combos)))
+	return self.instrument_combos
 
 
     def get_segments(self,connection):
@@ -178,18 +181,8 @@ class upper_limit(object):
         if not self.end_time or end_time < self.end_time:
             self.end_time = end_time
 
-
-        # get single ifos from ifo sets
-        ifos = set()
-        for inst in self.instruments:
-            ifos |= inst
-
         # retrieve single-ifo segments
-        segs = imr_utils.get_segments( connection, dbtables.get_xml(connection), opts.coinc_table_name, opts.live_time_program, opts.veto_segments_name, opts.data_segments_name)
-
-        for ifo in ifos:
-            self.segments.setdefault(ifo,segments.segmentlist())
-            self.segments[ifo] |=  segs[ifo]
+        self.segments += imr_utils.get_segments( connection, dbtables.get_xml(connection), opts.coinc_table_name, opts.live_time_program, opts.veto_segments_name, opts.data_segments_name)
 
         return self.segments
 
@@ -201,24 +194,18 @@ class upper_limit(object):
         if self.opts.verbose:
             print >>sys.stdout,"\nForming coincident segments from single IFO segments..."
 
-        for inst in self.instruments[:]:
+        for inst in self.instrument_combos[:]:
             # intersect single ifo segments
             self.zero_lag_segments.setdefault(inst,segments.segmentlist())
             self.segments.union(set(self.segments.keys()) - inst)
             self.zero_lag_segments[inst] = self.segments.intersection(inst) - self.segments.union(set(self.segments.keys()) - inst)
             if self.opts.verbose:
-                print >>sys.stdout,"\t%s were on for %d seconds (after vetoes, including playground)" % (','.join(sorted(list(inst))),abs(self.zero_lag_segments[inst]))
-
-            # subtract playground segments
-            if not self.opts.include_play:
-                self.zero_lag_segments[inst] -= segmentsUtils.S2playground(self.zero_lag_segments[inst].extent())
-                if self.opts.verbose:
-                    print >>sys.stdout,"\t%s were on for %d seconds (after vetoes, excluding playground)" % (','.join(sorted(list(inst))),abs(self.zero_lag_segments[inst]))
+                print >>sys.stdout,"\t%s were on for %d seconds (after vetoes)" % (','.join(sorted(list(inst))),abs(self.zero_lag_segments[inst]))
 
             # remove instrument sets that were never on
             if abs(self.zero_lag_segments[inst]) == 0:
                 print >>sys.stderr, "No livetime for in %s observation time. Skipping..."%("".join(sorted(list(inst))))
-                self.instruments.remove(inst)
+                self.instrument_combos.remove(inst)
 
         return self.zero_lag_segments
 
@@ -260,7 +247,7 @@ class upper_limit(object):
         Remove injections from those found in the database based on
         user-imposed restrictions.
         '''
-        for inst in self.instruments:
+        for inst in self.instrument_combos:
             newinjs = []
             for sim_params in sims:
 
@@ -319,7 +306,6 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--max-snr", default = 15, type = "float", help = "Specify the maximum SNR for volume calculation.")
 
     # Input data options
-    parser.add_option("--include-play", default = True, action = "store_true", help = "Include playground data in computing the livetime and volume.")
     parser.add_option("--zero-lag-database", default = [], action = "append", help = "Name of database containing the zero lag segments and triggers.")
     parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers.")
     parser.add_option("--live-time-program", default = "gstlal_inspiral", metavar = "name", help = "Set the name of the program whose rings will be extracted from the search_summary table.  Default = \"gstlal_inspiral\".")
@@ -433,7 +419,7 @@ snrs = numpy.logspace(numpy.log10(opts.min_snr), numpy.log10(opts.max_snr), opts
 #
 for bin_type in opts.bin_types:
 
-    for instr in UL.instruments:
+    for instr in UL.instrument_combos:
 
         if opts.verbose:
             print "\n\nComputing sensitive volume for %s observation time binning by %s...\n" % ("".join(sorted(list(instr))),bin_type)
