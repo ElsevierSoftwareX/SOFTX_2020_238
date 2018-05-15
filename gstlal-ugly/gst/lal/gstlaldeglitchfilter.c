@@ -154,7 +154,7 @@ gst_laldeglitch_filter_class_init (GstLALDeglitchFilterClass * klass)
 		g_param_spec_value_array(
 			"segment-list",
 			"Segment List",
-			"List of Segments.  This is an Nx2 array where N (the rows) is the number of segments. The columns are the start and stop times of each segment.",
+			"List of Segments: MUST BE COALESCED.  This is an Nx2 array where N (the rows) is the number of segments. The columns are the start and stop times of each segment.",
 				g_param_spec_value_array(
 				"segment",
 				"[start, stop)",
@@ -177,7 +177,7 @@ gst_laldeglitch_filter_class_init (GstLALDeglitchFilterClass * klass)
 	gst_element_class_set_details_simple(gstelement_class,
 		"LALDeglitchFilter",
 		"Removes glitches",
-		"Removes glitches",
+		"Removes glitches based on a segment list.  MUST BE COALESCED.",
 		"Chad Hanna <<chad.hanna@ligo.org>>");
 
 	gst_element_class_add_pad_template (gstelement_class,
