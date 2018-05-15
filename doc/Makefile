@@ -1,5 +1,8 @@
 gstlal-modules :
+	# FIXME FIXME FIXME total hack to work around unique python packaging
+	mv ../gstlal/python/__init__.py ../gstlal/python/__init__.py.bk
 	sphinx-apidoc -e -o source/gstlal/python-modules ../gstlal/python ../gstlal/python/misc.py ../gstlal/python/bottle.py ../gstlal/python/coherent_null.py ../gstlal/python/matplotlibhelper.py
+	mv ../gstlal/python/__init__.py.bk ../gstlal/python/__init__.py
 
 gstlal-inspiral-modules :
 	sphinx-apidoc -e -o source/gstlal-inspiral/python-modules ../gstlal-inspiral/python ../gstlal-inspiral/python/cbc_template_iir.py ../gstlal-inspiral/python/spawaveform.py ../gstlal-inspiral/python/emcee.py ../gstlal-inspiral/python/spiirparts.py ../gstlal-inspiral/python/snglinspiraltable.py
@@ -17,7 +20,7 @@ gstlal-bin :
 	./sphinx-bindoc source/gstlal/bin ../gstlal/bin gstlal_ligo_data_find_check
 
 gstlal-inspiral-bin :
-	./sphinx-bindoc source/gstlal-inspiral/bin ../gstlal-inspiral/bin gstlal_inspiral_flopulator gstlal_inspiral_lvalert_omegascan gstlal_ll_inspiral_calculate_range gstlal_ll_inspiral_daily_page_online gstlal_iir_inspiral gstlal_inspiral_iir_bank_pipe gstlal_ll_inspiral_save_state gstlal_inspiral_marginalize_likelihoods_online gstlal_inspiral_plot_extrinsic_params gstlal_ll_inspiral_get_urls gstlal_inspiral_plot_svd_bank
+	./sphinx-bindoc source/gstlal-inspiral/bin ../gstlal-inspiral/bin gstlal_inspiral_flopulator gstlal_inspiral_lvalert_omegascan gstlal_ll_inspiral_calculate_range gstlal_ll_inspiral_daily_page_online gstlal_iir_inspiral gstlal_inspiral_iir_bank_pipe gstlal_ll_inspiral_save_state gstlal_inspiral_marginalize_likelihoods_online gstlal_inspiral_plot_extrinsic_params gstlal_ll_inspiral_get_urls gstlal_inspiral_plot_svd_bank gstlal_inspiral_lvalert_background_plotter 
 
 gstlal-calibration-bin :
 	./sphinx-bindoc source/gstlal-calibration/bin ../gstlal-calibration/bin
