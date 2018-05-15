@@ -6,3 +6,6 @@ stats_PYTHON = \
 	inspiral_extrinsics.py \
 	inspiral_lr.py \
 	trigger_rate.py
+
+noinst_DATA = \
+	__init__.py
