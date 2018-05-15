@@ -66,16 +66,96 @@ from gstlal import paths as gstlal_config_paths
 
 
 __all__ = [
-	"P_instruments_given_signal",
-	"SNRPDF",
-	"NumeratorSNRCHIPDF",
-	"chunker",
-	"normsq_along_one",
-	"margprob",
+	"InspiralExtrinsics",
 	"TimePhaseSNR",
 	"p_of_instruments_given_horizons",
-	"InspiralExtrinsics"
+	"margprob",
+	"chunker",
 ]
+
+
+__doc__ = """
+
+The goal of this module is to implement the probability of getting a given set
+of extrinsics parameters for each detector (snr, horizon distance, end time and
+phase) assuming that the event is a gravitational wave signal, *s*, coming from
+an isotropic distribution uniform in location, orientation and the volume of
+space.  The implementation of this in the calling code can be found in
+:py:mod:`stats.inspiral_lr`.
+
+The probabilities are factored in the following way:
+
+.. math::
+
+	P(\\vec{\\rho}, \\vec{t}, \\vec{\phi}, \\vec{O} | \\vec{D_H}, s)
+	= 
+	\underbrace{P(\\vec{\\rho}, \\vec{t}, \\vec{\phi} | \\vec{O}, \\vec{D_H}, s)}_{\mathrm{1:\,TimePhaseSNR()}} 
+	\\times 
+	\underbrace{P(\\vec{O} | \\vec{D_H}, s)}_{\mathrm{2:\,p\_of\_instruments\_given\_horizons()}}
+
+where:
+
+* :math:`\\vec{\\rho}` denotes the vector of SNRs with one component from each detector
+* :math:`\\vec{t}`     denotes the vector of end time with one component from each detector
+* :math:`\\vec{\phi}`  denotes the vector of measured phases with one component from each detector
+* :math:`\\vec{O}`    denotes the vector of observing IFOs with one component from each detector
+* :math:`\\vec{D_H}`   denotes the vector of horizon distances with one component from each detector
+* :math:`s`            denotes the signal hypothesis
+
+See the following for details:
+
+* :py:class:`InspiralExtrinsics` -- helper class to implement the full probability expression
+* :py:class:`TimePhaseSNR` -- implementation of term 1 above
+* :py:class:`p_of_instruments_given_horizons` -- implementation of term 2 above
+
+and :any:`gstlal_inspiral_plot_extrinsic_params` for some visualizations of
+these PDFs.
+
+
+Sanity Checks
+-------------
+
+The code here is new for O3.  We compared the result to the O2 code on 100,000
+seconds of data searching for binary neutron stars in H and L.  The injection
+set was identical.
+
+.. |O2_O3_O2_LR_range| image:: ../images/O2_O3_O2_LR_range.png
+   :width: 400px
+
+.. |O2_O3_O3_LR_range| image:: ../images/O2_O3_O3_LR_range.png
+   :width: 400px
+
+.. |O2_O3_O2_cnt_vs_LR| image:: ../images/O2_O3_O2_cnt_vs_LR.png
+   :width: 400px
+
+.. |O2_O3_O3_cnt_vs_LR| image:: ../images/O2_O3_O3_cnt_vs_LR.png
+   :width: 400px
+
++-------------------+-------------------------+-------------------------+
+|                   | O2 Code                 | O3 Code                 |
++===================+=========================+=========================+
+| **Found/Missed**  | 939 / 2270              | 951 / 2258              |
++-------------------+-------------------------+-------------------------+
+| **Range**         | |O2_O3_O2_LR_range|     | |O2_O3_O3_LR_range|     |
++-------------------+-------------------------+-------------------------+
+| **Count vs LR**   | |O2_O3_O2_cnt_vs_LR|    | |O2_O3_O3_cnt_vs_LR|    |
++-------------------+-------------------------+-------------------------+
+
+
+Review Status
+-------------
+
++-------------------------------------------------+------------------------------------------+------------+
+| Names                                           | Hash                                     | Date       |
++=================================================+==========================================+============+
+| --                                              | --                                       | --         |
++-------------------------------------------------+------------------------------------------+------------+
+
+
+Documentation of classes and functions
+--------------------------------------
+
+"""
 
 
 #
@@ -86,7 +166,7 @@ __all__ = [
 # =============================================================================
 #
 
-
+# FIXME: This code is no longer used.
 def P_instruments_given_signal(horizon_distances, n_samples = 500000, min_instruments = 2, min_distance = 0.):
 	"""
 	Example:
@@ -258,6 +338,7 @@ def P_instruments_given_signal(horizon_distances, n_samples = 500000, min_instru
 #
 
 
+# FIXME: This code is no longer used.
 class SNRPDF(object):
 	#
 	# cache of pre-computed P(instruments | horizon distances, signal)
@@ -712,6 +793,7 @@ class SNRPDF(object):
 #
 
 
+# FIXME: This code is no longer used.
 class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 	"""
 	Reports ln P(chi^2/rho^2 | rho, signal)
@@ -873,33 +955,55 @@ class TimePhaseSNR(object):
 
 	.. math::
 
-		P(D_{\mathrm{eff}\,H}, D_{\mathrm{eff}\,L}, D_{\mathrm{eff}\,V}, t_H, t_L, t_V, \phi_H, \phi_L, \phi_V | s, t_g = 0, \phi_c = 0 \, \mathrm{s}, D = 1 \, \mathrm{Mpc})
+		P(\\vec{\\rho}, \\vec{t}, \\vec{\phi} | \\vec{O}, \\vec{D_H}, s)
 
-	We reduce the dimensionality by computing things relative to the first
-	instrument in alphabetical order, e.g.,
+	Instead of evaluating the above probability we will parameterize it by
+	pulling out an overall term that scales as the network SNR to the negative
+	fourth power.
 
 	.. math::
 
-		\\begin{align*}
-		P(D_{\mathrm{eff}\,H} / D_{\mathrm{eff}\,L}, D_{\mathrm{eff}\,H} / D_{\mathrm{eff}\,V}, t_H - t_L, t_H - t_V, \phi_H - \phi_L, \phi_H - \phi_V | s, D = 1 \, \mathrm{Mpc}) &= \\
-		P(\\vec\lambda|s,  D = 1 \, \mathrm{Mpc}) &
-		\end{align*}
+		P(\\vec{\\rho}, \\vec{t}, \\vec{\phi} | \\vec{O}, \\vec{D_H}, s)
+		\\approx
+		P(\\vec{\\rho_{\mathrm{1\,Mpc}}}, \\vec{t}, \\vec{\phi} | \\vec{O}, \\vec{D_H}, s) \\times |\\vec{\\rho}|^{-4}
+
+
+	We reduce the dimensionality by computing things relative to the first
+	instrument in alphabetical order and use effective distance instead of SNR,
+	e.g.,
+
+	.. math::
+			P(\\vec{D_{\mathrm{eff}}} / D_{\mathrm{eff}\,0}, \\vec{t} - t_0, \\vec{\phi} - \phi_0 | \\vec{O}, \\vec{D_H}, s) 
+		\\times
+			|\\vec{\\rho}|^{-4} 
+		\equiv
+			P(\\vec\lambda|\\vec{O}, \\vec{D_H}, s)
+		\\times
+			|\\vec{\\rho}|^{-4}
 
 	where now the absolute geocenter end time or coalescence phase does not
-	matter.  We then assert that physical signals have a uniform distribution in
-	earth based coordinates, :math:`\mathrm{RA}, \cos(\mathrm{DEC}),
-	\cos(\iota), \psi`.  We lay down a uniform densly sampled grid in these
-	coordinates and assert that any signal should ``exactly" land
-	on one of the grid points. We transform that regularly spaced grid
-	into a grid of (irregularly spaced) points in :math:`\\vec{\lambda}`,
-	which we denote as :math:`\\vec{\lambda_{\mathrm{m}i}}` for the *i*\ th model lambda vector.
-	We consider that the **only** mechanism to push a signal away from one
-	of these exact *i*\ th grid points is Gaussian noise.  Furthermore we assume the
+	matter since our new variables are relative to the first instrument in
+	alphabetical order (denoted with 0 subscript).  Since the first component of
+	each of the new vectors is one by construction we don't track it and have
+	reduced the dimensionality by three.
+
+	In order to evaluate this distribution, we then assert that physical signals have
+	a uniform distribution in earth based coordinates, :math:`\mathrm{RA},
+	\cos(\mathrm{DEC}), \cos(\iota), \psi`.  We lay down a uniform densly sampled
+	grid in these coordinates and assert that any signal should ``exactly" land on
+	one of the grid points. We transform that regularly spaced grid into a grid of
+	(irregularly spaced) points in :math:`\\vec{\lambda}`, which we denote as
+	:math:`\\vec{\lambda_{\mathrm{m}i}}` for the *i*\ th model lambda vector.  We
+	consider that the **only** mechanism to push a signal away from one of these
+	exact *i*\ th grid points is Gaussian noise.  Furthermore we assume the
 	probability distribution is of the form:
 
 	.. math::
 
-		P(\\vec{\lambda}, \\vec{\lambda_{mi}}) = \\frac{1}{\sqrt{(2\pi)^k |\pmb{\Sigma}|}} \exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda}^T \, \pmb{\Sigma}^{-1} \, \\vec{\Delta\lambda} \\right] }
+		P(\\vec{\lambda}, \\vec{\lambda_{mi}})
+		= 
+			\\frac{1}{\sqrt{(2\pi)^k |\pmb{\Sigma}|}} 
+			\exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda}^T \, \pmb{\Sigma}^{-1} \, \\vec{\Delta\lambda} \\right] }
 
 	where :math:`\\vec{\Delta\lambda_i} = \\vec{\lambda} -
 	\\vec{\lambda_{\mathrm{m}i}}` and :math:`\pmb{\Sigma}` is diagonal.
@@ -907,13 +1011,15 @@ class TimePhaseSNR(object):
 
 	.. math::
 
-		P(\\vec{\lambda}, \\vec{\lambda_{mi}}) \propto \exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda_i}^2 \\right] }
+		P(\\vec{\lambda}, \\vec{\lambda_{mi}})
+		\propto
+			\exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda_i}^2 \\right] }
 
 	Then we assert that:
 
 	.. math::
 
-		P(\\vec\lambda|s,  D = 1 \, \mathrm{Mpc}) \propto \sum_i P(\\vec{\lambda}, \\vec{\lambda_{mi}})
+		P(\\vec\lambda|\\vec{O}, \\vec{D_H}, s) \propto \sum_i P(\\vec{\lambda}, \\vec{\lambda_{mi}})
 
 	Computing this probability on the fly is tough since the grid might
 	have millions of points.  Therefore we make another simplifying
@@ -935,6 +1041,7 @@ class TimePhaseSNR(object):
 	The geometric interpretation is shown in the following figure:
 
 	.. image:: ../images/TimePhaseSNR01.png
+	   :width: 400px
 
 	In order for this endeavor to be successful, we still need a fast way
 	to find the nearest neighbor. We use scipy KDTree to accomplish this.
