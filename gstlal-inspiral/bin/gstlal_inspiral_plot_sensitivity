@@ -90,6 +90,7 @@ class upper_limit(object):
         self.zero_lag_segments = segments.segmentlistdict()
         self.start_time = None
         self.end_time = None
+        self.searched_instruments = None
         ############################################################
 
         # read the zero lag databases first
@@ -101,6 +102,7 @@ class upper_limit(object):
 
             # find out which instruments were on and when
             self.get_segments(connection)                   #get single ifo segments with vetoes applied
+            self.get_searched_instruments(connection)
 
             # done with zl database
             connection.commit()
@@ -150,8 +152,20 @@ class upper_limit(object):
                 print >>sys.stdout,"Number of total injections: %d" % len(self.total_injections[instr])
 
 
+    def get_searched_instruments(self,connection):
+        '''
+        Retrieve the sets of instruments which were on during the search.
+        '''
+        for inst in connection.cursor().execute("""SELECT DISTINCT(ifos) FROM process WHERE ifos NOTNULL""").fetchall():
+            if self.searched_instruments is None:
+                self.searched_instruments = inst[0].replace(",","")
+            else:
+                if self.searched_instruments != inst:
+                    raise ValueError("Detected different searched instruments between databases")
+
+
     def get_instrument_combos(self, min_instruments = 1):
-	instruments = self.segments.keys()
+        instruments = self.segments.keys()
         combos = set()
         for i in range(min_instruments, len(instruments,) + 1):
             for choice in itertools.combinations(instruments, i):
@@ -159,9 +173,10 @@ class upper_limit(object):
                 # alphabetical order for any given combination,
                 # hence the sort here
                 combos.add(frozenset(sorted(choice)))
-		print combos
-	self.instrument_combos = tuple(sorted(list(combos)))
-	return self.instrument_combos
+        # NOTE add an "ALL" key which will be used to provide a summary plot of the entire analysis not broken down by livetime
+        combos.add(frozenset(("ALL",)))
+        self.instrument_combos = tuple(sorted(list(combos)))
+        return self.instrument_combos
 
 
     def get_segments(self,connection):
@@ -197,15 +212,12 @@ class upper_limit(object):
         for inst in self.instrument_combos[:]:
             # intersect single ifo segments
             self.zero_lag_segments.setdefault(inst,segments.segmentlist())
-            self.segments.union(set(self.segments.keys()) - inst)
-            self.zero_lag_segments[inst] = self.segments.intersection(inst) - self.segments.union(set(self.segments.keys()) - inst)
+            if inst == frozenset(("ALL",)):
+                self.zero_lag_segments[inst] = self.segments.union(self.segments.keys())
+            else:
+                self.zero_lag_segments[inst] = self.segments.intersection(inst) - self.segments.union(set(self.segments.keys()) - inst)
             if self.opts.verbose:
                 print >>sys.stdout,"\t%s were on for %d seconds (after vetoes)" % (','.join(sorted(list(inst))),abs(self.zero_lag_segments[inst]))
-
-            # remove instrument sets that were never on
-            if abs(self.zero_lag_segments[inst]) == 0:
-                print >>sys.stderr, "No livetime for in %s observation time. Skipping..."%("".join(sorted(list(inst))))
-                self.instrument_combos.remove(inst)
 
         return self.zero_lag_segments
 
@@ -557,7 +569,7 @@ for bin_type in opts.bin_types:
         #
         # finish xml document
         #
-        output_filename = "%s-SEARCH_VOLUME_BINNED_BY_%s_%s-%d-%d.xml" % ("".join(sorted(list(instr))), bin_type.upper(), opts.user_tag, UL.start_time, UL.end_time-UL.start_time)
+        output_filename = "%s_%s-SEARCH_VOLUME_BINNED_BY_%s_%s-%d-%d.xml" % (UL.searched_instruments, "".join(sorted(list(instr))), bin_type.upper(), opts.user_tag, UL.start_time, UL.end_time-UL.start_time)
         ligolw_utils.write_filename(xmldoc, output_filename)
         cache_list.append( CacheEntry( "".join(sorted(list(instr))), bin_type,segments.segment(UL.start_time, UL.end_time), "file://localhost%s/%s" % (os.getcwd(), output_filename)) )
 
@@ -694,19 +706,21 @@ for bin_type in opts.bin_types:
         fig_eff.tight_layout(pad = .8)
 
         # save and close figures
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+        ifostr = "%s_%s" % (UL.searched_instruments, "".join(sorted(instr)))
+
+        tag = inspiral_pipe.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_far.savefig(tag)
         pyplot.close(fig_far)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_far_range.savefig(tag)
         pyplot.close(fig_far_range)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_snr.savefig(tag)
         pyplot.close(fig_snr)
 
-        tag = inspiral_pipe.T050017_filename(instr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+        tag = inspiral_pipe.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_eff.savefig(tag)
         pyplot.close(fig_eff)
 
