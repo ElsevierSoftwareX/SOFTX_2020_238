@@ -260,7 +260,6 @@ class StreamThinca(object):
 		thinca.ligolw_thinca(
 			xmldoc,
 			process_id = process_id,
-			coinc_definer_row = thinca.InspiralCoincDef,
 			delta_t = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc,
 			seglists = seglists,
