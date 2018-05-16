@@ -149,7 +149,7 @@ else:
 # Load all PSDs so that they don't need to be loaded for every injection.
 allPSDs = dict(
 	(seg, read_psd_xmldoc(ligolw_utils.load_url(cacheentry.url, verbose = True, contenthandler = PSDContentHandler)))
-	for cacheentry in map(CacheEntry, open(options.reference_psd_cache)) if inj_segment is not None and cacheentry.seg.intersects(inj_segment)
+	for cacheentry in map(CacheEntry, open(options.reference_psd_cache)) if inj_segment is not None and cacheentry.segment.intersects(inj_segment)
 )
 
 pool = multiprocessing.Pool(options.npool)
