@@ -1,0 +1,173 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011-2018 Chad Hanna, Duncan Meacher, Patrick Godwin
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+"""
+This program makes a dag to run gstlal_feature_extractor offline
+"""
+
+__author__ = 'Duncan Meacher <duncan.meacher@ligo.org>, Patrick Godwin <patrick.godwin@ligo.org>'
+
+##############################################################################
+# import standard modules and append the lalapps prefix to the python path
+import sys, os, stat
+import itertools
+import numpy
+import math
+from optparse import OptionParser
+
+##############################################################################
+# import the modules we need to build the pipeline
+import lal
+import lal.series
+from lal.utils import CacheEntry
+from glue import pipeline
+from glue.lal import Cache
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+import glue.ligolw.utils as ligolw_utils
+import glue.ligolw.utils.segments as ligolw_segments
+from gstlal import inspiral, inspiral_pipe
+from gstlal import dagparts as gstlaldagparts
+from gstlal import datasource
+from gstlal import multichannel_datasource
+from gstlal import idq_multirate_datasource
+from gstlal import idq_utils
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+#
+# get a dictionary of all the channels per gstlal_feature_extractor job
+#
+
+def feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, parent_nodes, ifo, options, data_source_info):
+	feature_extractor_nodes = {}
+
+	# parallelize jobs by channel subsets
+	for ii, channel_subset in enumerate(data_source_info.channel_subsets):
+
+		# creates a list of channel names with entries of the form --channel-name=IFO:CHANNEL_NAME:RATE
+		channels = [''.join(["--channel-name=",':'.join([channel, str(int(data_source_info.channel_dict[channel]['fsamp']))])]) for channel in channel_subset]
+
+		# FIXME: hacky way of getting options to get passed correctly for channels
+		channels[0] = channels[0].split('=')[1]
+
+		outpath = os.path.join(options.out_path, "gstlal_feature_extractor")
+
+		feature_extractor_nodes[ii] = \
+			inspiral_pipe.generic_node(gstlalFeatureExtractorJob, dag, parent_nodes = parent_nodes,
+				opts = {"data-source":"framexmit",
+					"mismatch":options.mismatch,
+					"waveform":options.waveform,
+					"qhigh":options.qhigh,
+					"max-streams":options.max_streams,
+					"channel-name":' '.join(channels),
+					"job-id":str(ii + 1).zfill(4),
+					"cadence":options.cadence,
+					"disable-web-service":options.disable_web_service,
+					"save-format": options.save_format,
+					"verbose":options.verbose
+				},
+				output_files = {"out-path":outpath}
+			)
+		if options.verbose:
+			print "Creating node for channel subset %d" % ii
+
+	return feature_extractor_nodes
+
+#
+# Main
+#
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	# generic data source options
+	multichannel_datasource.append_options(parser)
+
+	# trigger generation options
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
+	parser.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Set the filename description in which to save the output.")
+	parser.add_option("--save-format", action = "store_true", default = "hdf5", help = "Specifies the save format (ascii or hdf5) of features written to disk. Default = hdf5")
+	parser.add_option("--cadence", type = "int", default = 32, help = "Rate at which to write trigger files to disk. Default = 32 seconds.")
+	parser.add_option("-m", "--mismatch", type = "float", default = 0.05, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.05.")
+	parser.add_option("-q", "--qhigh", type = "float", default = 100, help = "Q high value for half sine-gaussian waveforms. Default = 100.")
+	parser.add_option("--waveform", metavar = "string", default = "sine_gaussian", help = "Specifies the waveform used for matched filtering. Possible options: (half_sine_gaussian, sine_gaussian). Default = half_sine_gaussian")
+	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
+
+	# Condor commands
+	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count, default = 2")
+	parser.add_option("--request-memory", default = "20GB", metavar = "integer", help = "set the requested node memory, default = 8GB")
+	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+#
+# Useful variables
+#
+
+options, filenames = parse_command_line()
+
+output_dir = "plots"
+
+listdir = os.path.join(options.out_path, "gstlal_feature_extractor/channel_lists")
+if not os.path.exists(listdir):
+    os.makedirs(listdir)
+
+#
+#
+#
+
+data_source_info = multichannel_datasource.DataSourceInfo(options)
+ifo = data_source_info.instrument
+channels = data_source_info.channel_dict.keys()
+
+#
+# Setup the dag
+#
+
+try:
+	os.mkdir("logs")
+except:
+	pass
+dag = inspiral_pipe.DAG("feature_extractor_pipe")
+
+#
+# setup the job classes
+#
+
+gstlalFeatureExtractorJob = inspiral_pipe.generic_job("gstlal_feature_extractor", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
+
+#
+# feature extractor jobs
+#
+
+feature_extractor_nodes = feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, [], ifo, options, data_source_info)
+
+#
+# all done
+#
+
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
