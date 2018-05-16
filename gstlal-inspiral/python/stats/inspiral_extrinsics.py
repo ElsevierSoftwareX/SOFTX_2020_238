@@ -973,11 +973,11 @@ class TimePhaseSNR(object):
 	e.g.,
 
 	.. math::
-			P(\\vec{D_{\mathrm{eff}}} / D_{\mathrm{eff}\,0}, \\vec{t} - t_0, \\vec{\phi} - \phi_0 | \\vec{O}, \\vec{D_H}, s) 
+			P(\\vec{D_{\mathrm{eff}}} / D_{\mathrm{eff}\,0}, \\vec{t} - t_0, \\vec{\phi} - \phi_0 | \\vec{O}, s) 
 		\\times
 			|\\vec{\\rho}|^{-4} 
 		\equiv
-			P(\\vec\lambda|\\vec{O}, \\vec{D_H}, s)
+			P(\\vec\lambda|\\vec{O}, s)
 		\\times
 			|\\vec{\\rho}|^{-4}
 
@@ -987,20 +987,21 @@ class TimePhaseSNR(object):
 	each of the new vectors is one by construction we don't track it and have
 	reduced the dimensionality by three.
 
-	In order to evaluate this distribution, we then assert that physical signals have
-	a uniform distribution in earth based coordinates, :math:`\mathrm{RA},
-	\cos(\mathrm{DEC}), \cos(\iota), \psi`.  We lay down a uniform densly sampled
-	grid in these coordinates and assert that any signal should ``exactly" land on
-	one of the grid points. We transform that regularly spaced grid into a grid of
-	(irregularly spaced) points in :math:`\\vec{\lambda}`, which we denote as
-	:math:`\\vec{\lambda_{\mathrm{m}i}}` for the *i*\ th model lambda vector.  We
-	consider that the **only** mechanism to push a signal away from one of these
-	exact *i*\ th grid points is Gaussian noise.  Furthermore we assume the
-	probability distribution is of the form:
+	We won't necessarily evalute exactly this distribution, but something
+	that should be proportional to it.  In order to evaluate this distribution. We
+	assert that physical signals have a uniform distribution in earth based
+	coordinates, :math:`\mathrm{RA}, \cos(\mathrm{DEC}), \cos(\iota), \psi`.  We
+	lay down a uniform densly sampled grid in these coordinates and assert that any
+	signal should ``exactly" land on one of the grid points. We transform that
+	regularly spaced grid into a grid of (irregularly spaced) points in
+	:math:`\\vec{\lambda}`, which we denote as :math:`\\vec{\lambda_{\mathrm{m}i}}`
+	for the *i*\ th model lambda vector.  We consider that the **only** mechanism
+	to push a signal away from one of these exact *i*\ th grid points is Gaussian
+	noise.  Furthermore we assume the probability distribution is of the form:
 
 	.. math::
 
-		P(\\vec{\lambda}, \\vec{\lambda_{mi}})
+		P(\\vec{\lambda} | \\vec{O}, \\vec{\lambda_{mi}})
 		= 
 			\\frac{1}{\sqrt{(2\pi)^k |\pmb{\Sigma}|}} 
 			\exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda}^T \, \pmb{\Sigma}^{-1} \, \\vec{\Delta\lambda} \\right] }
@@ -1011,7 +1012,7 @@ class TimePhaseSNR(object):
 
 	.. math::
 
-		P(\\vec{\lambda}, \\vec{\lambda_{mi}})
+		P(\\vec{\lambda} | \\vec{O}, \\vec{\lambda_{mi}})
 		\propto
 			\exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda_i}^2 \\right] }
 
@@ -1019,18 +1020,20 @@ class TimePhaseSNR(object):
 
 	.. math::
 
-		P(\\vec\lambda|\\vec{O}, \\vec{D_H}, s) \propto \sum_i P(\\vec{\lambda}, \\vec{\lambda_{mi}})
+		P(\\vec\lambda|\\vec{O}, \\vec{D_H}, s) \propto \sum_i P(\\vec{\lambda} | \\vec{O}, \\vec{\lambda_{mi}}) \, p(\\vec{\lambda_{mi}})
 
-	Computing this probability on the fly is tough since the grid might
-	have millions of points.  Therefore we make another simplifying
-	assumption that the noise only adds a contribution which is orthogonal to the
-	hypersurface defined by the signal.  In other words, we assume that noise cannot
-	push a signal from one grid point towards another along the signal manifold.
-	In this case we can simplify the marginalization step with a precomputation since
+	Where by construction :math:`p(\\vec{\lambda_{mi}})` doesn't depend on
+	*i* since they were chosen uniform in prior signal probabality. Computing this
+	probability on the fly is tough since the grid might have millions of points.
+	Therefore we make another simplifying assumption that the noise only adds a
+	contribution which is orthogonal to the hypersurface defined by the signal.  In
+	other words, we assume that noise cannot push a signal from one grid point
+	towards another along the signal manifold.  In this case we can simplify the
+	marginalization step with a precomputation since
 
 	.. math::
 
-		\sum_i P(\\vec{\lambda}, \\vec{\lambda_{mi}}) \\approx P(\\vec{\lambda}, \\vec{\lambda_{m0}}) \\times \sum_{i > 0} \exp{ \left[ -\\frac{1}{2} \\vec{\Delta x_i}^2 \\right] }
+		\sum_i P(\\vec{\lambda} |\\vec{O}, \\vec{\lambda_{mi}}) \\approx P(\\vec{\lambda} |\\vec{O}, \\vec{\lambda_{m0}}) \\times \sum_{i > 0} \exp{ \left[ -\\frac{1}{2} \\vec{\Delta x_i}^2 \\right] }
 
 
 	Where :math:`\\vec{\lambda_{m0}}` is the **nearest neighbor** to the
@@ -1338,7 +1341,31 @@ class TimePhaseSNR(object):
 
 
 class p_of_instruments_given_horizons(object):
+	"""
+	The goal of this class is to compute :math:`P(\\vec{O} | \\vec{D_H},
+	s)`.  In order to compute it, the SNR is calculated for an ideal signal as a
+	function of given sky location and distance and then integrated over the
+	extrinsic parameters to figure out the probability that a signal produces and
+	above SNR event in each of the :math:`\\vec{O}` detectors.  This probability is
+	computed for many possible horizon distance combinations.
+	"""
 	def __init__(self, instruments = ("H1", "L1", "V1"), snr_thresh = 4., nbins = 41, hmin = 0.05, hmax = 20.0, histograms = None):
+		"""
+		for each sub-combintation of the "on" instruments, e.g.,
+		"H1","L1" out of "H1","L1","V1", the probability of getting a trigger above the
+		snr_thresh in each of e.g., "H1", "L1" is computed for different horizon
+		distance ratios bracketed from hmin to hmax in nbins per dimension.  Horizon
+		distance ratios form an N-1 dimensional function where N is the number of
+		instruments in the sub combination.  Thus computing the probability of a triple
+		coincidence detection requires a two dimensional histogram with nbins^2 mnumber
+		of points.  The probability is interpolated over the bins with linear
+		interpolation.
+
+		NOTE! This is a very slow class to initialize from scratch in
+		normal circumstances you would use the from_hdf5() method to load precomputed
+		values.  NOTE the :py:class`InspiralExtrinsics` provides a helper class to load
+		precomputed data.
+		"""
 		self.instruments = tuple(sorted(list(instruments)))
 		self.snr_thresh = snr_thresh
 		self.nbins = nbins
@@ -1348,6 +1375,9 @@ class p_of_instruments_given_horizons(object):
 
 		if histograms is not None:
 			self.histograms = histograms
+			# NOTE we end up pushing any value outside of our
+			# histogram to just be the value in the last(first)
+			# bin, so we track those center values here.  
 			self.first_center = histograms.values()[0].centres()[0][0]
 			self.last_center = histograms.values()[0].centres()[0][-1]
 		else:
@@ -1355,22 +1385,35 @@ class p_of_instruments_given_horizons(object):
 			self.histograms = {}
 			bins = []
 			for i in range(len(self.instruments) - 1):
+				# There are N-1 possible horizon distance ratio combinations
 				bins.append(rate.LogarithmicBins(self.hmin, self.hmax, self.nbins))
 			for combo in combos:
+				# Each possible sub combination of ifos gets its own histogram.
 				self.histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
 
+			# NOTE we end up pushing any value outside of our
+			# histogram to just be the value in the last(first)
+			# bin, so we track those center values here.  
 			self.first_center = histograms.values()[0].centres()[0][0]
 			self.last_center = histograms.values()[0].centres()[0][-1]
+			# The sky tile resolution here is lower than the
+			# TimePhaseSNR calculation, but it seems good enough.
 			_, _, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
 			alldeff = []
 			for v in deff.values():
 				alldeff.extend(v)
+			# Figure out the min and max effective distances to help with the integration over physical distance
 			mindeff = min(alldeff)
 			maxdeff = max(alldeff)
 
+			# Iterate over the N-1 horizon distance ratios for all
+			# of the instruments that could have produced coincs
 			for horizontuple in itertools.product(*[b.centres() for b in bins]):
 				horizondict = {}
-				# NOTE by defn the first instrument in alpha order will always have a horizon of 1
+				# Calculate horizon distances for each of the
+				# instruments based on these ratios NOTE by
+				# defn the first instrument in alpha order will
+				# always have a horizon of 1
 				horizondict[self.instruments[0]] = 1.0
 				for i, ifo in enumerate(self.instruments[1:]):
 					horizondict[ifo] = horizontuple[i]
@@ -1379,18 +1422,29 @@ class p_of_instruments_given_horizons(object):
 				snrs_below_thresh = {}
 				prob = []
 				for cnt, ifo in enumerate(horizondict):
-					# FIXME remember to carefully comment this logic
+					# We want to integrate over physical
+					# distance with limits set by the min
+					# and max effective distance
 					LOW = self.hmin * 8. / self.snr_thresh / maxdeff
 					HIGH = max(horizontuple + (1,)) * 8. / self.snr_thresh / mindeff
 					for D in numpy.linspace(LOW, HIGH, 200):
+						# go from horizon distance to an expected SNR
 						snrs.setdefault(ifo,[]).extend(8 * horizondict[ifo] / (D * deff[ifo]))
+						# We store the probability
+						# associated with this
+						# distance, but we only need to
+						# do it the first time through
 						if cnt == 0:
 							prob.extend([D**2] * len(deff[ifo]))
+					# Modify the the SNR by a chi
+					# distribution with two degrees of
+					# freedom.
 					snrs[ifo] = stats.ncx2.rvs(2, numpy.array(snrs[ifo])**2)**.5
 					snrs_above_thresh[ifo] = snrs[ifo] >= self.snr_thresh
 					snrs_below_thresh[ifo] = snrs[ifo] < self.snr_thresh
 					prob = numpy.array(prob)
 				total = 0.
+				# iterate over all subsets
 				for combo in combos:
 					for cnt, ifo in enumerate(combo):
 						if cnt == 0:
@@ -1402,22 +1456,33 @@ class p_of_instruments_given_horizons(object):
 						must_be_above &= snrs_below_thresh[ifo]
 					# sum up the prob
 					count = sum(prob[must_be_above])
+					# record this probability in the histograms
 					self.histograms[combo][horizontuple] += count
 					total += count
+				# normalize the result so that the sum at this horizon ratio is one over all the combinations
 				for I in self.histograms:
 					self.histograms[I][horizontuple] /= total
 		self.mkinterp()
 
 	def mkinterp(self):
+		"""
+		Create an interpolated represenation over the grid of horizon ratios
+		"""
 		self.interps = {}
 		for I in self.histograms:
 			self.interps[I] = rate.InterpBinnedArray(self.histograms[I])
 
 	def __call__(self, instruments, horizon_distances):
+		"""
+		Calculate the probability of getting a trigger in instruments given the horizon distances.
+		"""
 		H = [horizon_distances[k] for k in sorted(horizon_distances)]
 		return self.interps[tuple(sorted(instruments))](*[min(max(h / H[0], self.first_center), self.last_center) for h in H[1:]])
 
 	def to_hdf5(self, fname):
+		"""
+		Record the class data to a file so that you don't have to remake it from scratch
+		"""
 		f = h5py.File(fname, "w")
 		grp = f.create_group("gstlal_p_of_instruments")
 		grp.attrs["snr_thresh"] = self.snr_thresh
@@ -1431,6 +1496,9 @@ class p_of_instruments_given_horizons(object):
 
 	@staticmethod
 	def from_hdf5(fname):
+		"""
+		Read data from a file so that you don't have to remake it from scratch
+		"""
 		f = h5py.File(fname, "r")
 		grp = f["gstlal_p_of_instruments"]
 		snr_thresh = grp.attrs["snr_thresh"]
@@ -1459,7 +1527,11 @@ class p_of_instruments_given_horizons(object):
 
 
 class InspiralExtrinsics(object):
-
+	"""
+	Helper class to use preinitialized data for the extrinsic parameter
+	calculation. Presently only H,L,V is supported. K could be added by making new
+	data files.
+	"""
 	time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"))
 	p_of_ifos = {}
 	# FIXME add Kagra
