@@ -77,10 +77,11 @@ __all__ = [
 __doc__ = """
 
 The goal of this module is to implement the probability of getting a given set
-of extrinsics parameters for each detector (snr, horizon distance, end time and
-phase) assuming that the event is a gravitational wave signal, *s*, coming from
-an isotropic distribution uniform in location, orientation and the volume of
-space.  The implementation of this in the calling code can be found in
+of extrinsic parameters for a set of detectors parameterized by n-tuples of
+trigger parameters: (snr, horizon distance, end time and phase) assuming that
+the event is a gravitational wave signal, *s*, coming from an isotropic
+distribution in location, orientation and the volume of space.  The
+implementation of this in the calling code can be found in
 :py:mod:`stats.inspiral_lr`.
 
 The probabilities are factored in the following way:
@@ -98,7 +99,7 @@ where:
 * :math:`\\vec{\\rho}` denotes the vector of SNRs with one component from each detector
 * :math:`\\vec{t}`     denotes the vector of end time with one component from each detector
 * :math:`\\vec{\phi}`  denotes the vector of measured phases with one component from each detector
-* :math:`\\vec{O}`    denotes the vector of observing IFOs with one component from each detector
+* :math:`\\vec{O}`     denotes the vector of observing IFOs with one component from each detector.  Strictly speaking this is just a label that desribes what detectors the components of the other vectors correspond to
 * :math:`\\vec{D_H}`   denotes the vector of horizon distances with one component from each detector
 * :math:`s`            denotes the signal hypothesis
 
@@ -117,7 +118,8 @@ Sanity Checks
 
 The code here is new for O3.  We compared the result to the O2 code on 100,000
 seconds of data searching for binary neutron stars in H and L.  The injection
-set was identical.
+set was identical.  Although an improvement for an HL search was not expected,
+in fact it appears that the reimplementation is a bit more sensitive.
 
 .. |O2_O3_O2_LR_range| image:: ../images/O2_O3_O2_LR_range.png
    :width: 400px
@@ -1530,7 +1532,36 @@ class InspiralExtrinsics(object):
 	"""
 	Helper class to use preinitialized data for the extrinsic parameter
 	calculation. Presently only H,L,V is supported. K could be added by making new
-	data files.
+	data files with :py:class:`TimePhaseSNR` and :py:class:`p_of_instruments_given_horizons`.
+
+	This class is used to compute p_of_instruments_given_horizons
+	and the probability of getting time phase and snrs from 
+	a given instrument combination.  The argument min_instruments will be
+	used to normalize the p_of_instruments_given_horizons to set the probability of
+	a combination with fewer than min_instruments to be 0.
+
+	>>> IE = InspiralExtrinsics()
+	>>> IE.p_of_instruments_given_horizons(("H1","L1"), {"H1":200, "L1":200})
+	0.36681567679586446
+	>>> IE.p_of_instruments_given_horizons(("H1","L1"), {"H1":20, "L1":200})
+	0.0021601523270060085
+	>>> IE.p_of_instruments_given_horizons(("H1","L1"), {"H1":200, "L1":200, "V1":200})
+	0.14534898937680402
+
+	>>> IE.time_phase_snr({"H1":0.001, "L1":0.0, "V1":0.004}, {"H1":1.3, "L1":4.6, "V1":5.3}, {"H1":20, "L1":20, "V1":4}, {"H1":200, "L1":200, "V1":50})
+	array([  1.01240596e-06], dtype=float32)
+	>>> IE.time_phase_snr({"H1":0.001, "L1":0.0, "V1":0.004}, {"H1":1.3, "L1":1.6, "V1":5.3}, {"H1":20, "L1":20, "V1":4}, {"H1":200, "L1":200, "V1":50})
+	array([  1.47201028e-15], dtype=float32)
+
+	The total probability would be the product, e.g.,
+
+	>>> IE.time_phase_snr({"H1":0.001, "L1":0.0, "V1":0.004}, {"H1":1.3, "L1":4.6, "V1":5.3}, {"H1":20, "L1":20, "V1":8}, {"H1":200, "L1":200, "V1":200}) * IE.p_of_instruments_given_horizons(("H1","L1","V1"), {"H1":200, "L1":200, "V1":200})
+	array([  2.00510986e-08], dtype=float32)
+
+	See the following for more details:
+
+	* :py:class:`TimePhaseSNR`
+	* :py:class:`p_of_instruments_given_horizons`
 	"""
 	time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"))
 	p_of_ifos = {}
