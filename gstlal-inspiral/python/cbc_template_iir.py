@@ -291,28 +291,32 @@ def normalized_convolv(a, b, autocorrelation_length = 201):
     return auto_bank
 
 
-def matched_filt(template, data, sampleRate = 4096.0):
+def matched_filt(template, strain, sampleRate = 4096.0):
 
     '''
     matched filtering using numpy fft
     template: complex
-    data: real
+    data: time, real value
     the template is produced from using the gen_whitened_fir_template or gen_whitened_spiir_template_and_reconstructed_waveform.
     The unit of template is s^-1/2. the data is generated from gstlal_whiten where the unit is dimensionless.
     It needs to be normalized so the unit is s^-1/2, same as the template for unit consistency.
     '''
     # the data is generated from gstlal_play --whiten where the unit is dimensionless.
     # needs to be normalized so the unit is s^-1/2, i.e., *1/sqrt(dt). 
+    time = strain[:, 0]
+    data = strain[:, 1]
     data /= numpy.sqrt(2.0/sampleRate)
     # if the template inner product is normalized to 2, need to convert its unit by doing the following:
     #template /= numpy.sqrt(2.0/sampleRate)
-    working_length = max(len(template), len(data))
+    # need to extend to 2 times to avoid cyclic artifacts
+    working_length = max(len(template), len(data)) * 2
+    template_len = len(template)
     fs = float(sampleRate)
     df = 1.0/ (working_length/ fs)
     template_pad = numpy.zeros(working_length, dtype = "cdouble")
-    template_pad[-len(template):] = template
+    template_pad[:len(template)] = template
     data_pad = numpy.zeros(working_length, dtype = "double")
-    data_pad[-len(data):] = data
+    data_pad[:len(data)] = data
 
     data_pad *= tukeywindow(data_pad, samps = 32.)
 
@@ -326,7 +330,19 @@ def matched_filt(template, data, sampleRate = 4096.0):
     #pdb.set_trace()
     # normalize snr
     snr_time /= sigma
-    return snr_time, sigma
+    # need to shift the SNR because cross-correlation FFT plays integration on cyclic template_pad,
+    # so the first value of snr_time is out(0) = data(0:) times template(0:), we actually need out(0) = data(0:) times template(-1)
+    # for the first value where N is the len of template, so that out(N-1) = data(0:) times template (-N:)
+    roll_len = template_len - 1 # note here is N - 1
+    snr_time = numpy.roll(snr_time, roll_len)
+    # find the time and SNR value at maximum:
+    SNR = abs(snr_time)
+    indmax = numpy.argmax(SNR)
+    try:
+    	timemax = time[indmax]
+    except:
+	    raise ValueError("max SNR is outside the data, need to collect more data for a more correct SNR estimation")
+    return SNR, sigma, indmax, timemax
 
 # working length, length_max deprecated
 def M_chi2_readline(flower=30., sampleRate=2048.):
