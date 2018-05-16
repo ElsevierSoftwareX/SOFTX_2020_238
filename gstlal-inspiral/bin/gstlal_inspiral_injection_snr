@@ -69,6 +69,9 @@ def parse_command_line():
 
 
 def calc_expected_snr(inj):
+	# FIXME:  don't hard-code detectors
+	snr = dict.fromkeys(("H1", "L1", "V1"), 0.0)
+
 	injtime = inj.time_geocent
 
 	# Determine which PSD files have GPS times covering the injection time.
@@ -76,7 +79,7 @@ def calc_expected_snr(inj):
 
 	if len(psds) < 1:
 		# We know no PSD covers the injection.
-		return 0.0, 0.0, 0.0
+		return snr
 	elif len(psds) == 1:
 		# Only one PSD covers the injection time.
 		seg, chosenPSD = psds.popitem()
@@ -116,8 +119,6 @@ def calc_expected_snr(inj):
 	h_cross.epoch += injtime
 
 	# Compute strain in each detector. If one detector wasn't on, snr will be set to zero.
-	# FIXME:  don't hard-code detectores
-	snr = dict.fromkeys(("H1", "L1", "V1"), 0.0)
 	for instrument in snr:
 		if instrument not in chosenPSD:
 			continue
