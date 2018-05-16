@@ -77,7 +77,7 @@ process_name = u"gstlal_inspiral_rate_posterior"
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
-__version__ = "git id %s" % ""	# FIXME
+__version__ = ""	# FIXME
 __date__ = ""	# FIXME
 
 
@@ -92,30 +92,33 @@ __date__ = ""	# FIXME
 
 def parse_command_line():
 	parser = OptionParser(
-		version = "Name: %%prog\n%s" % "" # FIXME
+		version = "Name: %%prog\n%s" %  __version__,
+		usage = "%prog [options] candidates_database [...]"
 	)
 	parser.add_option("-c", "--credible-intervals", metavar = "credibility[,...]", default = "0.68,0.95,0.999999", help = "Compute and report credible intervals in the signal count for these credibilities (default = \".68,.95,.999999\", clear to disable).")
-	parser.add_option("-i", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("-i", "--input-cache", metavar = "filename", help = "Also process the candidate databases named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("--chain-file", metavar = "filename", help = "Read chain from this file, save chain to this file.")
-	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Load ranking statistic PDFs from this file.  Can be given multiple times.")
-	parser.add_option("--likelihood-cache", metavar = "filename", help = "Load ranking statistic PDFs from the files in this LAL cache.")
+	parser.add_option("--ranking-stat-pdf", metavar = "filename", action = "append", help = "Load ranking statistic PDFs for the signal and noise models from this file.  Can be given multiple times.")
+	parser.add_option("--ranking-stat-pdf-cache", metavar = "filename", help = "Load ranking statistic PDFs for the signal and noise models from the files in this LAL cache.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
 	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to 0 to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
-	paramdict = options.__dict__
+	paramdict = options.__dict__.copy()
 
 	options.credible_intervals = map(float, options.credible_intervals.split(","))
 
-	options.likelihood_filenames = []
-	if options.likelihood_cache is not None:
-		options.likelihood_filenames += [CacheEntry(line).path for line in open(options.likelihood_cache)]
-	if options.likelihood_file is not None:
-		options.likelihood_filenames += options.likelihood_file
-	if not options.likelihood_filenames and options.samples > 0:
-		raise ValueError("must provide --likelihood-cache and/or one or more --likelihood-file options")
+	if options.samples is not None and options.samples < 0:
+		raise ValueError("--samples cannot be negative")
+
+	if options.ranking_stat_pdf_cache is not None:
+		if options.ranking_stat_pdf is None:
+			options.ranking_stat_pdf = []
+		options.ranking_stat_pdf += [CacheEntry(line).path for line in open(options.ranking_stat_pdf_cache)]
+	if not options.ranking_stat_pdf and options.samples > 0:
+		raise ValueError("must provide ranking statistic PDF data if --samples is non-zero")
 
 	if options.input_cache:
 		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
@@ -267,8 +270,8 @@ options, paramdict, filenames = parse_command_line()
 #
 
 
-if options.likelihood_filenames:
-	rankingstatpdf, ln_likelihood_ratio_threshold = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
+if options.ranking_stat_pdf:
+	rankingstatpdf, ln_likelihood_ratio_threshold = load_ranking_data(options.ranking_stat_pdf, verbose = options.verbose)
 else:
 	rankingstatpdf, ln_likelihood_ratio_threshold = None, None
 
