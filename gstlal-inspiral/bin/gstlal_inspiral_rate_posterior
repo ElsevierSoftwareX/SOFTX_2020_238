@@ -102,7 +102,6 @@ def parse_command_line():
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--with-background", action = "store_true", help = "Show background posterior on plot.")
 	parser.add_option("--samples", metavar = "count", type = "int", help = "Run this many samples.  Set to 0 to load and plot the contents of a previously-recorded chain file without doing any additional samples.")
-	parser.add_option("--threshold", metavar = "log likelihood ratio", type = "float", help = "Derive the rate posterior by considering only events ranked at or above this value of the log likelihood ratio ranking statistic (default = use all events).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -133,25 +132,38 @@ def parse_command_line():
 #
 
 
-def load_ranking_data(filenames, ln_likelihood_ratio_threshold = None, verbose = False):
+def load_ranking_data(filenames, verbose = False):
 	if not filenames:
 		raise ValueError("no likelihood files!")
 	rankingstatpdf = far.marginalize_pdf_urls(filenames, "RankingStatPDF", verbose = verbose)
+
+	# determine the treshold below which the extinction model will be
+	# invalid.  FIXME:  this shouldn't have to be repeated in code like
+	# this, the extinction model itself should provide this information
+	# somehow.
+	zl = rankingstatpdf.zero_lag_lr_lnpdf.copy()
+	zl.array[:40] = 0.
+	if not zl.array.any():
+		raise ValueError("zero-lag counts are all zero")
+	ln_likelihood_ratio_threshold, = zl.argmax()
+
+	# apply the extinction model
+	rankingstatpdf = rankingstatpdf.new_with_extinction()
+
 	# affect the zeroing of the PDFs below threshold by hacking the
 	# histograms.  do the indexing ourselves to not 0 the bin @
 	# threshold
-	if ln_likelihood_ratio_threshold is not None:
-		rankingstatpdf.noise_lr_lnpdf.array[:rankingstatpdf.noise_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
-		rankingstatpdf.noise_lr_lnpdf.normalize()
-		rankingstatpdf.signal_lr_lnpdf.array[:rankingstatpdf.signal_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
-		rankingstatpdf.signal_lr_lnpdf.normalize()
-		rankingstatpdf.zero_lag_lr_lnpdf.array[:rankingstatpdf.zero_lag_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
-		rankingstatpdf.zero_lag_lr_lnpdf.normalize()
+	rankingstatpdf.noise_lr_lnpdf.array[:rankingstatpdf.noise_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+	rankingstatpdf.noise_lr_lnpdf.normalize()
+	rankingstatpdf.signal_lr_lnpdf.array[:rankingstatpdf.signal_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+	rankingstatpdf.signal_lr_lnpdf.normalize()
+	rankingstatpdf.zero_lag_lr_lnpdf.array[:rankingstatpdf.zero_lag_lr_lnpdf.bins[0][ln_likelihood_ratio_threshold]] = 0.
+	rankingstatpdf.zero_lag_lr_lnpdf.normalize()
 
-	return rankingstatpdf
+	return rankingstatpdf, ln_likelihood_ratio_threshold
 
 
-def load_search_results(filenames, ln_likelihood_ratio_threshold = None, tmp_path = None, verbose = False):
+def load_search_results(filenames, ln_likelihood_ratio_threshold, tmp_path = None, verbose = False):
 	background_ln_likelihood_ratios = []
 	zerolag_ln_likelihood_ratios = []
 
@@ -256,9 +268,9 @@ options, paramdict, filenames = parse_command_line()
 
 
 if options.likelihood_filenames:
-	rankingstatpdf = load_ranking_data(options.likelihood_filenames, ln_likelihood_ratio_threshold = options.threshold, verbose = options.verbose)
+	rankingstatpdf, ln_likelihood_ratio_threshold = load_ranking_data(options.likelihood_filenames, verbose = options.verbose)
 else:
-	rankingstatpdf = None
+	rankingstatpdf, ln_likelihood_ratio_threshold = None, None
 
 
 #
@@ -266,7 +278,7 @@ else:
 #
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ln_likelihood_ratio_threshold = options.threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ln_likelihood_ratio_threshold = ln_likelihood_ratio_threshold, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
