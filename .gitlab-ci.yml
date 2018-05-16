@@ -28,7 +28,7 @@ pages:
     - echo "Building GstLAL"
     - apt update
     # Pull installation dependencies:
-    - apt-get --assume-yes install automake graphviz
+    - apt-get --assume-yes install automake graphviz texlive-full
     # Pull GstLAL-specific dependencies:
     - apt-get --assume-yes install doxygen gtk-doc-tools libfftw3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev liborc-0.4-0 gobject-introspection python-gobject-dev python-numpy python-scipy lscsoft-gds
     - cd gstlal; ./00init.sh; ./configure --prefix=${GSTLAL_DIR}; make; make install
