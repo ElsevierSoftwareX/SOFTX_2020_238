@@ -75,7 +75,7 @@ def calc_expected_snr(inj):
 	injtime = inj.time_geocent
 
 	# Determine which PSD files have GPS times covering the injection time.
-	psds = dict((seg, psd) for seg, psd in allPSDs.items() if injtim in seg)
+	psds = dict((seg, psd) for seg, psd in allPSDs.items() if injtime in seg)
 
 	if len(psds) < 1:
 		# We know no PSD covers the injection.
