@@ -753,8 +753,9 @@ class LnNoiseDensity(LnLRDensity):
 		"""
 		snr_slope = 0.8 / len(self.instruments)**3
 
-		# FIXME:  the dt portion is only correct for the H1L1 pair
-		lnP_dt_dphi = inspiral_extrinsics.lnP_dt_dphi_uniform_H1L1(self.delta_t)
+		# evaluate dt and dphi parameters
+		# NOTE: uniform and normalized so that the log should be zero, but there is no point in doing that
+		#lnP_dt_dphi = 0
 		snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next) for instrument in self.instruments)
 		t_and_rate_gen = iter(self.triggerrates.random_uniform()).next
 		t_offsets_gen = dict((instruments, self.coinc_rates.plausible_toas(instruments).next) for instruments in self.coinc_rates.all_instrument_combos)
@@ -810,7 +811,7 @@ class LnNoiseDensity(LnLRDensity):
 			# so the documentation doesn't promise that it is.
 			# FIXME:  no, it's not normalized until the dt_dphi
 			# bit is corrected for other than H1L1
-			yield (), kwargs, sum(seq[1::2], lnP_t + lnP_instruments + lnP_dt_dphi)
+			yield (), kwargs, sum(seq[1::2], lnP_t + lnP_instruments)
 
 	def to_xml(self, name):
 		xml = super(LnNoiseDensity, self).to_xml(name)
