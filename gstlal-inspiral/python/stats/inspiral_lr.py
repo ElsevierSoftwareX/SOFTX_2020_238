@@ -804,6 +804,10 @@ class LnNoiseDensity(LnLRDensity):
 			# off at "t"
 			kwargs["dt"] = t_offsets_gen[instruments]()
 			kwargs["phase"] = dict((instrument, random_uniform(0., twopi)) for instrument in instruments)
+			# FIXME random_params needs to be given a meaningful
+			# template_id, but for now it is not used in the
+			# likelihood-ratio assignment so we don't care
+			kwargs["template_id"] = None
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
 			# it to be (only that it be correct up to an
