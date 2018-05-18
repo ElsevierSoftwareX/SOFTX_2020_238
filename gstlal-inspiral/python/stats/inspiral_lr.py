@@ -765,6 +765,8 @@ class LnNoiseDensity(LnLRDensity):
 		segment = segments.segment
 		twopi = 2. * math.pi
 		ln_1_2 = math.log(0.5)
+		lnP_template_id = -math.log(len(self.template_ids))
+		template_ids = tuple(self.template_ids)
 		def nCk(n, k):
 			return math.factorial(n) // math.factorial(k) // math.factorial(n - k)
 		while 1:
@@ -807,7 +809,7 @@ class LnNoiseDensity(LnLRDensity):
 			# FIXME random_params needs to be given a meaningful
 			# template_id, but for now it is not used in the
 			# likelihood-ratio assignment so we don't care
-			kwargs["template_id"] = None
+			kwargs["template_id"] = random.choice(template_ids)
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
 			# it to be (only that it be correct up to an
@@ -815,7 +817,7 @@ class LnNoiseDensity(LnLRDensity):
 			# so the documentation doesn't promise that it is.
 			# FIXME:  no, it's not normalized until the dt_dphi
 			# bit is corrected for other than H1L1
-			yield (), kwargs, sum(seq[1::2], lnP_t + lnP_instruments)
+			yield (), kwargs, sum(seq[1::2], lnP_t + lnP_instruments + lnP_template_id)
 
 	def to_xml(self, name):
 		xml = super(LnNoiseDensity, self).to_xml(name)
