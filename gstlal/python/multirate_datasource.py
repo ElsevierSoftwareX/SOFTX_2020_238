@@ -37,6 +37,7 @@ GObject.threads_init()
 Gst.init(None)
 
 import lal
+from glue import segments
 
 from gstlal import bottle
 from gstlal import pipeparts
@@ -190,8 +191,14 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# optionally add vetoes
 	#
 
+	# FIXME NOTE The pre whitening vetoes are only applied via the
+	# deglitcher if they are impulse like.  What that means is that they
+	# have to be shorter than 2s (it is assumed that gate vetoes already
+	# have 1 second of padding which means the gate itself is 1 second or
+	# less).  This should be revisted for O3.
 	if veto_segments is not None:
-		head = pipeparts.mkdeglitcher(pipeline, head, veto_segments)
+		short_veto_segments = segments.segmentlist([seg for seg in veto_segments if abs(seg) <= 2.0])
+		head = pipeparts.mkdeglitcher(pipeline, head, short_veto_segments)
 
 	#
 	# construct whitener.
