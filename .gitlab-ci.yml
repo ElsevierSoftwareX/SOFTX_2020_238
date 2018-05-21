@@ -21,7 +21,7 @@ stages:
 
 pages:
   #Build from the nightly lalsuite container:
-  image: containers.ligo.org/lscsoft/lalsuite:nightly
+  image: aepace/gstlal-dev:stretch
   stage: nightly-pages
   script:
     - mkdir public
