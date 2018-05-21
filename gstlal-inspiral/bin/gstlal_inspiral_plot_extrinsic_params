@@ -17,32 +17,35 @@ from gstlal.stats import inspiral_extrinsics
 TPDPDF = inspiral_extrinsics.InspiralExtrinsics()
 
 num = 100
-dts = numpy.linspace(-0.010, 0.010, num)
+dts = numpy.linspace(-0.030, 0.030, num)
 dphis = numpy.linspace(-numpy.pi*.99, numpy.pi*.99, num)
 jointpdf = numpy.zeros((num,num))
 tpdf = numpy.zeros((num))
 phipdf = numpy.zeros((num))
 
-s = time.time()
-for i, dt in enumerate(dts):
-	for j, dphi in enumerate(dphis):
-		t = {"H1": 0, "L1": dt}
-		phi = {"H1": 0, "L1": dphi}
-		deff = {"H1": 20., "L1": 20.}
-		prob = TPDPDF.IE(t, phi, deff)
-		tpdf[i] += prob
-		phipdf[j] += prob
-		jointpdf[i,j] = prob
-print "evaluated %d probabilities in %f seconds" % (num**2, time.time()-s)
-f = pyplot.figure(figsize=(10,10))
-pyplot.subplot(222)
-pyplot.plot(dts, tpdf)#, drawstyle="steps-mid")
-pyplot.subplot(223)
-pyplot.plot(phipdf, dphis)#, drawstyle="steps-mid")
-pyplot.gca().invert_xaxis()
-pyplot.subplot(224)
-pyplot.pcolor(dts, dphis, jointpdf.T)
-pyplot.xlabel("delta time")
-pyplot.ylabel("delta phase")
-pyplot.savefig("dtdphdeff.png")
+for detector in ("H1", "L1"):
+	s = time.time()
+	for i, dt in enumerate(dts):
+		for j, dphi in enumerate(dphis):
+			t = {detector: 0, "V1": dt}
+			phi = {detector: 0, "V1": dphi}
+			snr = {detector: 10., "V1": 10.}
+			horizon = {detector: 200., "V1": 200.}
+			# signature is (time, phase, snr, horizon)
+			prob = TPDPDF.time_phase_snr(t, phi, snr, horizon)
+			tpdf[i] += prob
+			phipdf[j] += prob
+			jointpdf[i,j] = prob
+	print "evaluated %d probabilities in %f seconds" % (num**2, time.time()-s)
+	f = pyplot.figure(figsize=(10,10))
+	pyplot.subplot(222)
+	pyplot.plot(dts, tpdf)#, drawstyle="steps-mid")
+	pyplot.subplot(223)
+	pyplot.plot(phipdf, dphis)#, drawstyle="steps-mid")
+	pyplot.gca().invert_xaxis()
+	pyplot.subplot(224)
+	pyplot.pcolor(dts, dphis, jointpdf.T)
+	pyplot.xlabel(r"$t_V -t_H$")
+	pyplot.ylabel(r"$\phi_V-\phi_H$")
+	pyplot.savefig("%sV1dtdphdeff.png" % detector)
 
