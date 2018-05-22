@@ -498,7 +498,16 @@ def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
 
     data = tseries.data
 
-    #data *= tukeywindow(data, samps = 32)
+    # FIXME: need to condition for IMR wave templates
+    data *= tukeywindow(data, samps = 32)
+    # This is to normalize whitened template so it = h_{whitened at 1MPC}(t)
+    # NOTE: because
+    # XLALWhitenCOMPLEX16FrequencySeries() computed
+    #
+    # \tilde{h}'_{k} = \sqrt{2 \Delta f} \tilde{h}_{k} / \sqrt{S_{k}}
+    # need to devide the time domain whitened waveform by \sqrt{2 \Delta f}
+    data /= numpy.sqrt(2./working_state["working_duration"])
+
     #pdb.set_trace()    
     return data
 
@@ -645,7 +654,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     return data, autocorrelation_bank
 
 
-def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, irow, psd, sampleRate = 4096, waveform_domain = "TD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, verbose = False):
+def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, approximant, irow, psd, sampleRate = 4096, waveform_domain = "TD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, verbose = False):
     
     working_state = gen_template_working_state(sngl_inspiral_table, flower, sampleRate = sampleRate)
     # Smooth the PSD and interpolate to required resolution
@@ -681,7 +690,7 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     if verbose:
         logging.info("working_duration %f, chirp time %f, final frequency %f" % (working_state["working_duration"], this_tchirp, fFinal))
 
-    amp, phase, norm_data = gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
+    amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
 
     # This is to normalize whitened template so it = h_{whitened at 1MPC}(t)
     # NOTE: because
@@ -690,7 +699,6 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     # \tilde{h}'_{k} = \sqrt{2 \Delta f} \tilde{h}_{k} / \sqrt{S_{k}}
     # need to devide the time domain whitened waveform by \sqrt{2 \Delta f}
     amp /= numpy.sqrt(2./working_state["working_duration"])
-    norm_data /= numpy.sqrt(2./working_state["working_duration"])
 
     iir_type_flag = 1
     spiir_match = -1
@@ -699,18 +707,25 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
 
     while(spiir_match < req_min_match and epsilon > epsilon_min and n_filters < 2000):
         #a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, epsilon = epsilon)
-        a1, b0, delay, u_rev_pad, h_pad = gen_spiir_coeffs(amp, phase, epsilon = epsilon)
+        a1, b0, delay, u_rev_pad, h_pad = gen_spiir_coeffs(amp, phase, len(data_full), epsilon = epsilon)
             
         # compute the SNR
         # deprecated: spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad_real)))
         # the following definition is more close to the reality         
         norm_u = abs(numpy.dot(u_rev_pad, numpy.conj(u_rev_pad)))
         norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
+
+    	data_full_pad = numpy.zeros(len(u_rev_pad), dtype='cdouble')
+	data_full_pad[-len(data_full):] = data_full
+	norm_data_full = abs(numpy.dot(data_full_pad, numpy.conj(data_full_pad)))
+	# overlap of spiir reconstructed waveform with cut template (spiir_template)
         spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad))/numpy.sqrt(norm_u * norm_h))
+	# overlap of spiir reconstructed waveform with full template (data_full)
+	u_full_match = abs(numpy.dot(u_rev_pad, numpy.conj(data_full_pad))/numpy.sqrt(norm_u * norm_data_full))
         n_filters = len(delay)
 
         if verbose:
-            logging.info("number of rounds %d, epsilon %f, spiir overlap %f, number of filters %d" % (nround, epsilon, spiir_match, n_filters))
+            logging.info("number of rounds %d, epsilon %f, spiir overlap with cut template %f, spiir overlap with original template %f, number of filters %d" % (nround, epsilon, spiir_match, u_full_match, n_filters))
 
                
         if(abs(original_epsilon - epsilon) < 1e-5):
@@ -722,11 +737,11 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
 
 	nround += 1
     if verbose:
-        logging.info("norm of spiir template h_pad %f, norm of spiir response u_rev_pad %f" % (norm_h, norm_u))
+        logging.info("norm of the original template %f, norm of spiir template h_pad %f, norm of spiir response u_rev_pad %f" % (norm_data_full, norm_h, norm_u))
 
     # normalize the spiir response
-    u_rev_pad = u_rev_pad * numpy.sqrt(norm_h / norm_u)
-    return u_rev_pad, h_pad
+    u_rev_pad = u_rev_pad * numpy.sqrt(norm_h / norm_u) * spiir_match
+    return u_rev_pad, h_pad, data_full
 
 def gen_lalsim_waveform(row, flower, sampleRate):
     # FIXME: currently only works for the non-spin or spin-aligned case,
@@ -768,7 +783,7 @@ def gen_lalsim_waveform(row, flower, sampleRate):
     return hp, hc
 
 
-def gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = False):
+def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = False):
     """ Generates whitened waveform from given parameters and PSD, then returns the amplitude and the phase.
     
     Parameters
@@ -818,7 +833,6 @@ def gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_sta
 
 
     if waveform_domain == "FD" and is_frequency_whiten == 1:
-        approximant = "IMRPhenomB"
         #
         # generate "cosine" component of frequency-domain template.
         # waveform is generated for a canonical distance of 1 Mpc.
@@ -826,10 +840,12 @@ def gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_sta
         fseries = cbc_template_fir.generate_template(row, approximant, sampleRate, working_state["working_duration"], flower, sampleRate / 2., fwdplan = fwdplan, fworkspace = fworkspace)
     
         # whiten the FD waveform and transform it back to TD 
-        data = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
+        data_full = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
         if verbose:
             logging.info("waveform chose from FD")
+
     elif waveform_domain == "TD" and is_frequency_whiten == 1:
+	logging.error("TD waveform here not conditioned, caution to use.")
 	# get the TD waveform
         hplus, hcross = gen_lalsim_waveform(row, flower, sampleRate)
         # transfomr the TD waveform to FD
@@ -858,7 +874,7 @@ def gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_sta
             data = tmpfseries 
         )
         # whiten the FD waveform and transform it back to TD 
-        data = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
+        data_full = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
         if verbose:
             logging.info("waveform chose from TD")
     else:
@@ -893,31 +909,29 @@ def gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_sta
 
         return amp, phase
 
-    hp, hc = gen_lalsim_waveform(row, flower, sampleRate)
     #
     # extract the portion to be used for filtering
     #
-
+    hp, hc = gen_lalsim_waveform(row, flower, sampleRate)
     filter_len = min(working_state["length_max"], 1.0 * len(hp.data.data))
     # the time domain whitened data is chosen to be the same length as the original
     # template. The length_max from tchirp and the working_length are too
     # long, may cause too many spiir filters. 
     # FIXME: should we allow a little more time for low-frequency boundary?
-    data = data[-filter_len:]
-    norm = abs(numpy.dot(data, numpy.conj(data)))
+    data = data_full[-filter_len:]
     amp_lalwhiten, phase_lalwhiten = calc_amp_phase(numpy.imag(data), numpy.real(data))
 
     if verbose:
-        logging.info("spiir template length %d" % (len(data)))
+        logging.info("original template length %d, cut to construct spiir coeffs %d" % (len(data_full), len(data)))
 
-    return amp_lalwhiten, phase_lalwhiten, norm
+    return amp_lalwhiten, phase_lalwhiten, data, data_full
 
-def gen_spiir_coeffs(amp, phase, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
+def gen_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
         # make the iir filter coeffs
         a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
     
         # get the chirptime (nearest power of two)
-        length = templates.ceil_pow_2(amp.shape[0]+autocorrelation_length)
+        length = templates.ceil_pow_2(data_full_len+autocorrelation_length)
 
         # get the IIR response
         u = spawaveform.iirresponse(length, a1, b0, delay)
@@ -937,12 +951,12 @@ def gen_spiir_coeffs(amp, phase, padding = 1.3, epsilon = 0.02, alpha = .99, bet
         return a1, b0, delay, u_rev_pad, h_pad
             
 
-def gen_norm_spiir_coeffs(amp, phase, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
+def gen_norm_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
         # make the iir filter coeffs
         a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
     
-        # get the chirptime (nearest power of two)
-        length = templates.ceil_pow_2(amp.shape[0]+autocorrelation_length)
+	# pad the iir response to be nearest power of 2 of:
+        length = templates.ceil_pow_2(data_full_len + autocorrelation_length)
 
         # get the IIR response
         u = spawaveform.iirresponse(length, a1, b0, delay)
@@ -1069,20 +1083,31 @@ class Bank(object):
                 
             fFinal = row.f_final
 
-            amp, phase, norm_data = gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
+            amp, phase, data, data_full = gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
             
             iir_type_flag = 1
 	    nround = 1
 
             while(spiir_match < req_min_match and epsilon > epsilon_min and n_filters < 2000):
                 
-                a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, epsilon = epsilon, alpha = alpha, beta = beta, padding = padding, iir_type_flag = iir_type_flag, autocorrelation_length = autocorrelation_length)
+                a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, len(data_full), epsilon = epsilon, alpha = alpha, beta = beta, padding = padding, iir_type_flag = iir_type_flag, autocorrelation_length = autocorrelation_length)
                     
                 # compute the SNR
                 # deprecated: spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad_real)))
                 # the following definition is more close to the reality         
-                spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0
-                
+                spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0 # still need to use the spiir template
+
+		# compute the expected SNR ratio compared to given the original template
+		data_full_pad = numpy.zeros(len(u_rev_pad), dtype='cdouble')
+		data_full_pad[-len(data_full):] = data_full
+        	# normalize the original waveform so its inner-product is 2
+        	norm_data_full = abs(numpy.dot(data_full_pad, numpy.conj(data_full_pad)))
+        	data_full_pad *= cmath.sqrt(2 / norm_data_full)
+		# overlap of spiir constructed waveform with original template
+                u_full_match = abs(numpy.dot(u_rev_pad, numpy.conj(data_full_pad)))/2.0
+
+
+ 
                 if(abs(original_epsilon - epsilon) < 1e-5):
                     original_match = spiir_match
                     original_filters = len(a1)
@@ -1092,7 +1117,7 @@ class Bank(object):
 
                 n_filters = len(delay)
                 if verbose:
-                    logging.info("number of rounds %d, epsilon %f, spiir overlap %f, number of filters %d" % (nround, epsilon, spiir_match, n_filters))
+            	    logging.info("number of rounds %d, epsilon %f, spiir overlap with cut template %f, spiir overlap with original template %f, number of filters %d" % (nround, epsilon, spiir_match, u_full_match, n_filters))
 		nround += 1
 
 
@@ -1137,7 +1162,8 @@ class Bank(object):
 
 
             #self.sigmasq.append(1.0 * norm_h / sampleRate)
-            self.sigmasq.append(norm_data * working_state["working_length"] / sampleRate**2. )
+            norm_data = abs(numpy.dot(data, numpy.conj(data)))
+            self.sigmasq.append(norm_data * spiir_match * spiir_match * working_state["working_length"] / sampleRate**2. )
             
             # This is actually the cross correlation between the original waveform and this approximation
             # FIXME: also update the waveform

@@ -42,12 +42,12 @@ template = numpy.loadtxt(options.template_fname).view(complex)
 data = numpy.loadtxt(options.data_fname, usecols = (0,1)) # gps_time, value
 snr, sigma, indmax, timemax = matched_filt(template, data, sampleRate = options.sampleRate)
 if options.verbose:
-	print "max snr is %f, sigma %f, indmax %f, timemax %f" % (max(snr), sigma, indmax, timemax)
+	print "max snr is %f, sigma %f, indmax %f, timemax %f" % (max(abs(snr)), sigma, indmax, timemax)
 
 if options.snr_prefix:
 	pyplot.figure()
 	p1 = pyplot.plot(data[:,0] - timemax, snr[0:len(data[:,0])])
 	pyplot.xlabel("Time since {0:.4f}".format(timemax))
 	pyplot.savefig("%s.svg" % options.snr_prefix, format = "svg", dpi = 1200)
-	numpy.savetxt("%s.txt" % options.snr_prefix, abs(snr))
+	numpy.savetxt("%s.txt" % options.snr_prefix, snr.view(float))
 

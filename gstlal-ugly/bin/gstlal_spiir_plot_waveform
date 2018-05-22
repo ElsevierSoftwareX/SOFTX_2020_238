@@ -126,7 +126,6 @@ elif options.template_bank_type == "sim":
 if options.verbose:
 	print "read %s bank table" % options.template_bank_type
 
-hp, hc = cbc_template_iir.gen_lalsim_waveform(bank_table[int(options.template_id)], options.flow, options.sampleRate)
 
 if options.output_item == "all" or options.output_item == "fir":
 	# Choose how to break up templates in time
@@ -151,23 +150,24 @@ if options.output_item == "all" or options.output_item == "fir":
 		sampleRate = options.sampleRate, 
 		autocorrelation_length = options.autocorrelation_length,
 		verbose = options.verbose)
-	template_len = len(fir_template)
+	fir_template_len = len(fir_template)
 
 	# plot whitened fir template
 	pyplot.figure()
-	p1, = pyplot.plot(fir_template.real, label = 'fir template')
+	p1, = pyplot.plot(fir_template.real, label = 'whitened fir template')
 	pyplot.xlabel('samples')	
-	pyplot.ylabel('fir template')	
+	pyplot.ylabel('whitened fir template')	
 	pyplot.legend()
 	pyplot.savefig("%s_whitened_fir_template.svg" % options.output_prefix, format = "svg", dpi = 1200)
 	if options.dump_txt is not None:
-		numpy.savetxt("%s_fir_template.txt" % options.output_prefix, fir_template.view(float))
+		numpy.savetxt("%s_whitened_fir_template.txt" % options.output_prefix, fir_template.view(float))
 
 if options.output_item == "all" or options.output_item == "spiir":
 	# generate the normalized spiir-reconstructed waveform and original whitened waveform for spiir reconstruction
 	# h_pad spiir_template, u_rev_pad spiir_reconstructed
-	u_rev_pad, h_pad  = cbc_template_iir.gen_whitened_spiir_template_and_reconstructed_waveform(
+	u_rev_pad, h_pad, spiir_data_full  = cbc_template_iir.gen_whitened_spiir_template_and_reconstructed_waveform(
 		bank_table,
+		options.approximant,
 		int(options.template_id),
 		psd, 
 		sampleRate = options.sampleRate, 
@@ -182,38 +182,47 @@ if options.output_item == "all" or options.output_item == "spiir":
 	u_len = len(u_rev_pad)
 	# plot whitened templates individually
 	pyplot.figure()
-	p1, = pyplot.plot(h_pad.real, label = 'spiir template')
+	p1, = pyplot.plot(h_pad.real, label = 'whitened spiir template')
 	pyplot.xlabel('samples')	
 	pyplot.ylabel('spiir')	
 	pyplot.legend()
 	pyplot.savefig("%s_whitened_spiir_template.svg" % options.output_prefix, format = "svg", dpi = 1200)
 	if options.dump_txt is not None:
-		numpy.savetxt("%s_spiir_template.txt" % options.output_prefix, h_pad.view(float))
-		numpy.savetxt("%s_spiir_reconstructed.txt" % options.output_prefix, u_rev_pad.view(float))
+		numpy.savetxt("%s_whitened_spiir_full_template.txt" % options.output_prefix, spiir_data_full.view(float))
+		numpy.savetxt("%s_whitened_spiir_template.txt" % options.output_prefix, h_pad.view(float))
 
 	pyplot.figure()
-	p1, = pyplot.plot(u_rev_pad.real, label = 'spiir reconstructed')
+	p1, = pyplot.plot(u_rev_pad.real, label = 'whitened spiir reconstructed')
 	pyplot.xlabel('samples')	
 	pyplot.ylabel('spiir')	
 	pyplot.legend()
 	pyplot.savefig("%s_whitened_spiir_reconstructed.svg" % options.output_prefix, format = "svg", dpi = 1200)
 	if options.dump_txt is not None:
-		numpy.savetxt("%s_spiir_reconstructed.txt" % options.output_prefix, u_rev_pad.view(float))
+		numpy.savetxt("%s_whitened_spiir_reconstructed.txt" % options.output_prefix, u_rev_pad.view(float))
 		
 if options.output_item == "all":
+	hp, hc = cbc_template_iir.gen_lalsim_waveform(bank_table[int(options.template_id)], options.flow, options.sampleRate)
 	pyplot.figure()
-	p1, = pyplot.plot(hp.data.data, label = 'waveform hp')
+	p1, = pyplot.plot(hp.data.data, label = 'noncondition waveform hp')
 	pyplot.xlabel('samples')	
 	pyplot.ylabel('hp')	
 	pyplot.legend()
-	pyplot.savefig("%s_hp_waveform.svg" % options.output_prefix, format = "svg", dpi = 1200)
+	pyplot.savefig("%s_noncondition_hp_waveform.svg" % options.output_prefix, format = "svg", dpi = 1200)
 	
 	
-	align_len = max(template_len, u_len)
+	align_len = max(fir_template_len, u_len, len(spiir_data_full))
 	# pad fir_template to be the same length as align_len
 	fir_pad = numpy.zeros(align_len, dtype = "cdouble")
 	fir_pad[-len(fir_template):] = fir_template
-	
+	norm_fir = abs(numpy.dot(fir_pad, numpy.conj(fir_pad)))
+
+
+	spiir_full_pad = numpy.zeros(align_len, dtype = "cdouble")
+	spiir_full_pad[-len(spiir_data_full):] = spiir_data_full
+	norm_spiir_full = abs(numpy.dot(spiir_full_pad, numpy.conj(spiir_full_pad)))
+	# overlap between fir template and the original spiir full template:
+	overlap_fir_spiir_full = abs(numpy.dot(fir_pad, numpy.conj(spiir_full_pad)))/numpy.sqrt(norm_fir*norm_spiir_full)
+
 	# pad u_rev_pad, h_pad to be the same length as align_len
 	u_rev_pad2 = numpy.zeros(align_len, dtype = "cdouble")
 	u_rev_pad2[-len(u_rev_pad):] = u_rev_pad
@@ -221,15 +230,20 @@ if options.output_item == "all":
 	h_pad2 = numpy.zeros(align_len, dtype = "cdouble")
 	h_pad2[-len(h_pad):] = h_pad
 	
+	norm_h = abs(numpy.dot(h_pad2, numpy.conj(h_pad2)))
+	# overlap between fir template and the spiir template:
+	overlap_fir_h = abs(numpy.dot(fir_pad, numpy.conj(h_pad2)))/numpy.sqrt(norm_fir*norm_h)
+
+	print "overlap of fir and spiir full: %f, of fir and h (spiir template) %f" % (overlap_fir_spiir_full, overlap_fir_h)
 	
 	# plot all the whitened templates in one figure
 	pyplot.figure()
-	p1, = pyplot.plot(u_rev_pad2.real, label = 'spiir reconstructed')
-	p2, = pyplot.plot(h_pad2.real, label = 'spiir template')
-	p3, = pyplot.plot(fir_pad.real, label = 'fir template')
+	p1, = pyplot.plot(u_rev_pad2.real, label = 'whitened spiir reconstructed')
+	p2, = pyplot.plot(h_pad2.real, label = 'whitened spiir template')
+	p3, = pyplot.plot(fir_pad.real, label = 'whitened fir template')
 	pyplot.xlabel('samples')	
 	pyplot.ylabel('u, h')	
 	pyplot.legend()
-	pyplot.savefig("%s_all_templates.svg" % options.output_prefix, format = "svg", dpi = 1200)
+	pyplot.savefig("%s_all_whitened_templates.svg" % options.output_prefix, format = "svg", dpi = 1200)
 	
 
