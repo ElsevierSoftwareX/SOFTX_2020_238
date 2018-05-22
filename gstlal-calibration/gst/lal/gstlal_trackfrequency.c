@@ -101,6 +101,7 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 	gint64 j = 0; \
 	while(i < size - 1) { \
  \
+		gboolean shift = FALSE; \
 		while(*check_step) { \
 			if(*sign * src[i] < 0) { \
 				*check_step = -(*check_step) / 2; \
@@ -112,9 +113,16 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 			if(*check_step >= size - i) \
 				*check_step = (size - i) / 2; \
 			i += *check_step; \
+			if(*check_step == -1) \
+				shift = TRUE; \
+		} \
+		/* Make sure we are after the transition */ \
+		if(shift) { \
+			i ++; \
+			*sign = -(*sign); \
 		} \
  \
-		/* At this point, we could be on either side of a +/- transition, and/or at the end of the buffer */ \
+		/* At this point, we are either after a +/- transition or at the end of the buffer */ \
 		if(i == 0) { \
 			/* There is a transition at the beginning of a buffer */ \
 			*dst = (DTYPE) *current_frequency; \
@@ -182,6 +190,7 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 	gint64 j = 0; \
 	while(i < size - 1) { \
  \
+		gboolean shift = FALSE; \
 		while(*check_step) { \
 			if(*sign * creal ## F_OR_BLANK(src[i]) < 0) { \
 				*check_step = -(*check_step) / 2; \
@@ -193,9 +202,16 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 			if(*check_step >= size - i) \
 				*check_step = (size - i) / 2; \
 			i += *check_step; \
+			if(*check_step == -1) \
+				shift = TRUE; \
+		} \
+		/* Make sure we are after the transition */ \
+		if(shift) { \
+			i ++; \
+			*sign = -(*sign); \
 		} \
  \
-		/* At this point, we could be on either side of a +/- transition, and/or at the end of the buffer */ \
+		/* At this point, we are either after a +/- transition or at the end of the buffer */ \
 		if(i == 0) { \
 			/* There is a transition at the beginning of a buffer */ \
 			*dst = (DTYPE) *current_frequency; \
