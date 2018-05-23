@@ -1,0 +1,17 @@
+# time of GW170817 1187008882
+START = 1187007882 # Thu Aug 17 12:24:24 GMT 2017
+END = 1187008582 # Thu Aug 17 12:36:04 GMT 2017
+FILTERS = 'L1DCS_1175961600.npz'
+# Filters file from aligocalibration/trunk/Runs/O2/GDSFilters/L1DCS_1175961600.npz
+
+all: L1_hoft_frames.cache
+
+L1_raw_frames.cache: 
+	gw_data_find -o L -t L1_R -s $(START) -e $(END) -l --url-type file > $@
+
+L1_hoft_frames.cache: L1_raw_frames.cache
+	gstlal_compute_strain --data-source frames --frame-cache L1_raw_frames.cache --gps-start-time $(START) --gps-end-time $(END) --frame-duration=4 --frames-per-file=1 --filters-file $(FILTERS) --ifo L1 --frame-type L1_TEST --compression-scheme=6 --compression-level=3 --full-calibration --control-sample-rate 16384 --factors-from-filters-file --expected-fcc 376.0 --no-fs --no-srcQ --coherence-uncertainty-threshold 0.02 --kappas-default-to-median --apply-kappatst --apply-kappapu --apply-kappac --verbose
+	ls *.gwf | lalapps_path2cache > $@
+
+clean: 
+	rm *.cache *.gwf
