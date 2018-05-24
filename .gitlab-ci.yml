@@ -1,4 +1,4 @@
-image: ligo/software:stretch
+image: docker:latest
 
 variables:
   DOCKER_DRIVER: overlay
@@ -9,44 +9,146 @@ variables:
   GSTLAL_DIR: $CI_PROJECT_DIR/opt/gstlal
 
 before_script:
-    - export PATH="${GSTLAL_DIR}/bin:${PATH}"
+    # Set up directory structure and copy over built-dependencies from container:
+    - mkdir public
+    - mkdir -p ${GSTLAL_DIR}
+    - cp -r /opt/gstlal/* ${GSTLAL_DIR}/
+    
+    # Update apt info
+    - apt update
+    
+    # Define GstLAL build parameters:
+    - export PATH="${GSTLAL_DIR}/bin:/usr/lib/ccache:/opt/local/libexec/ccache:${PATH}"
+    - export LD_LIBRARY_PATH="${GSTLAL_DIR}/lib:${GSTLAL_DIR}/lib64:${LD_LIBRARY_PATH}"
+    - export LIBRARY_PATH="${GSTLAL_DIR}/lib:${GSTLAL_DIR}/lib64:${LIBRARY_PATH}"
     - export PKG_CONFIG_PATH="${GSTLAL_DIR}/lib/pkgconfig:${GSTLAL_DIR}/lib64/pkgconfig:${PKG_CONFIG_PATH}"
     - export GI_TYPELIB_PATH="${GSTLAL_DIR}/lib/girepository-1.0:${GI_TYPELIB_PATH}"
-    - export GST_PLUGIN_PATH="/opt/gstlal/lib/gstreamer-1.0:${GST_PLUGIN_PATH}"
+    - export GST_PLUGIN_PATH="${GSTLAL_DIR}/lib/gstreamer-1.0:${GST_PLUGIN_PATH}"
     - export PYTHONPATH="${GSTLAL_DIR}/lib64/python2.7/site-packages:${GSTLAL_DIR}/lib/python2.7/site-packages:${PYTHONPATH}"
+    - export CCACHE_DIR=${PWD}/ccache
+    
+    # Define build and linking parameters:
+    - export CFLAGS="-O3 -fPIC -march=native -I${GSTLAL_DIR}/include"
+    - export LDFLAGS="-L${GSTLAL_DIR}/lib -L${GSTLAL_DIR}/lib64 ${LDFLAGS}"
     - export GSTLAL_FIR_WHITEN=1
+    
+cache:
+  key: $CI_JOB_NAME
+  paths:
+    - ccache
 
 stages:
+    - level0
+    - level1
+    - level2
+    - offline-test
     - nightly-pages
 
+level0:gstlal:
+  image: aepace/gstlal-dev:stretch
+  stage: level0
+  script:
+    - cd gstlal
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+  artifacts:
+    expire_in: 3h
+    paths:
+      - ${GSTLAL_DIR}
+      - gstlal
+  only:
+    - pushes
+    
+level1:gstlal-ugly:
+  image: aepace/gstlal-dev:stretch
+  stage: level1
+  dependencies:
+    - level0:gstlal
+  script:
+    - cd gstlal-ugly
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+  artifacts:
+    expire_in: 3h
+    paths:
+      - ${GSTLAL_DIR}
+      - gstlal-ugly
+  only:
+    - pushes
+
+level2:gstlal-calibration:
+  image: aepace/gstlal-dev:stretch
+  stage: level2
+  dependencies:
+    - level1:gstlal-ugly
+  script:
+    - cd gstlal-calibration
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+  artifacts:
+    expire_in: 3h
+    paths:
+      - ${GSTLAL_DIR}
+      - gstlal-calibration
+  only:
+    - pushes
+
+level2:gstlal-inspiral:
+  image: aepace/gstlal-dev:stretch
+  stage: level2
+  dependencies:
+    - level1:gstlal-ugly
+  script:
+    - cd gstlal-inspiral
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+  artifacts:
+    expire_in: 3h
+    paths:
+      - ${GSTLAL_DIR}
+      - gstlal-inspiral
+  only:
+    - pushes
+  
+offline-test:
+  image: aepace/gstlal-dev:stretch
+  stage: offline-test
+  dependencies:
+    - level2:gstlal-inspiral
+  script:
+    - cd gstlal-inspiral/tests
+    - make -f Makefile_offline_tutorial_test
+  artifacts:
+    expire_in: 3h
+    paths:
+      - gstlal-inspiral/tests
+  only:
+    - pushes
+  allow_failure: true
+  
 pages:
-  #Build from the nightly lalsuite container:
-  image: containers.ligo.org/lscsoft/lalsuite:nightly
+  image: aepace/gstlal-dev:stretch
   stage: nightly-pages
   script:
-    - mkdir public
-    - echo "Building GstLAL"
-    - apt update
-    # Pull installation dependencies:
-    - apt-get --assume-yes install automake graphviz texlive-full
-    # Pull GstLAL-specific dependencies:
-    - apt-get --assume-yes install doxygen gtk-doc-tools libfftw3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev liborc-0.4-0 gobject-introspection python-gobject-dev python-numpy python-scipy lscsoft-gds
-    - cd gstlal; ./00init.sh; ./configure --prefix=${GSTLAL_DIR}; make; make install
-    - cd ../gstlal-ugly; ./00init.sh; ./configure --prefix=${GSTLAL_DIR}; make; make install
-    - cd ../gstlal-calibration; ./00init.sh; ./configure --prefix=${GSTLAL_DIR}; make; make install
-    - cd ../gstlal-inspiral; ./00init.sh; ./configure --prefix=${GSTLAL_DIR}; make; make install
     - echo "Building Documentation"
-    - apt-get --assume-yes install python-sphinx
     - export TMPDIR=tmp/
-    - cd ../doc; make html
+    - cd doc; make html
     - cd ..; cp -rf doc/_build/* public/
-    
-  dependencies: []
+  dependencies:
+    - level2:gstlal-inspiral
+    - level2:gstlal-calibration
   artifacts:
     paths:
       - public
   only:
-    - master@alexander-pace/gstlal
     - pushes
   except:
     - web

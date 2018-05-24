@@ -1,8 +1,8 @@
 gstlal-modules :
 	# FIXME FIXME FIXME total hack to work around unique python packaging
-	mv ../gstlal/python/__init__.py ../gstlal/python/__init__.py.bk
+	#mv ../gstlal/python/__init__.py ../gstlal/python/__init__.py.bk
 	sphinx-apidoc -e -o source/gstlal/python-modules ../gstlal/python ../gstlal/python/misc.py ../gstlal/python/bottle.py ../gstlal/python/coherent_null.py ../gstlal/python/matplotlibhelper.py
-	mv ../gstlal/python/__init__.py.bk ../gstlal/python/__init__.py
+	#mv ../gstlal/python/__init__.py.bk ../gstlal/python/__init__.py
 
 gstlal-inspiral-modules :
 	sphinx-apidoc -e -o source/gstlal-inspiral/python-modules ../gstlal-inspiral/python ../gstlal-inspiral/python/cbc_template_iir.py ../gstlal-inspiral/python/spawaveform.py ../gstlal-inspiral/python/emcee.py ../gstlal-inspiral/python/spiirparts.py ../gstlal-inspiral/python/snglinspiraltable.py
