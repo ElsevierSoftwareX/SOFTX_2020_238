@@ -201,6 +201,7 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 	upsample_quality = 4
 	resample_shift = 16.0 + 16.5
 	zero_latency = filter_latency == 0.0
+	filter_latency = min(0.5, filter_latency)
 
 	witness = pipeparts.mktee(pipeline, witness)
 	signal = pipeparts.mktee(pipeline, signal)

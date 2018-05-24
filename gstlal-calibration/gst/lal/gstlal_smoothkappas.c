@@ -477,24 +477,25 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
 
 	gsize unit_size;
+	if(!get_unit_size(trans, caps, &unit_size)) {
+		GST_DEBUG_OBJECT(element, "function 'get_unit_size' failed");
+		return FALSE;
+	}
+
+	/* buffer size in bytes should be a multiple of unit_size in bytes */
+	if(G_UNLIKELY(size % unit_size)) {
+		GST_DEBUG_OBJECT(element, "buffer size %" G_GSIZE_FORMAT " is not a multiple of %" G_GSIZE_FORMAT, size, unit_size);
+		return FALSE;
+	}
+
+	size /= unit_size;
 
 	/* How many samples do we need to throw away based on the filter latency? */
 	int waste_samples = (int) (element->filter_latency * (element->array_size + element->avg_array_size - 2));
 
 	switch(direction) {
 	case GST_PAD_SRC:
-		/*We have the size of the output buffer, and we set the size of the input buffer. */
-		if(!get_unit_size(trans, caps, &unit_size)) {
-			GST_DEBUG_OBJECT(element, "function 'get_unit_size' failed");
-			return FALSE;
-		}
-
-		/* buffer size in bytes should be a multiple of unit_size in bytes */
-		if(G_UNLIKELY(size % unit_size)) {
-			GST_DEBUG_OBJECT(element, "buffer size %" G_GSIZE_FORMAT " is not a multiple of %" G_GSIZE_FORMAT, size, unit_size);
-			return FALSE;
-		}
-
+		/* We have the size of the output buffer, and we set the size of the input buffer. */
 		/* Check if we need to clip the output buffer */
 		if(element->samples_in_filter >= waste_samples)
 			*othersize = size;
@@ -505,21 +506,10 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 	case GST_PAD_SINK:
 		/* We have the size of the input buffer, and we set the size of the output buffer. */
-		if(!get_unit_size(trans, caps, &unit_size)) {
-			GST_DEBUG_OBJECT(element, "function 'get_unit_size' failed");
-			return FALSE;
-		}
-
-		/* buffer size in bytes should be a multiple of unit_size in bytes */
-		if(G_UNLIKELY(size % unit_size)) {
-			GST_DEBUG_OBJECT(element, "buffer size %" G_GSIZE_FORMAT " is not a multiple of %" G_GSIZE_FORMAT, size, unit_size);
-			return FALSE;
-		}
-
 		/* Check if we need to clip the output buffer */
 		if(element->samples_in_filter >= waste_samples)
 			*othersize = size;
-		else if(size > (guint) (waste_samples + element->samples_in_filter))
+		else if(size > (guint) (waste_samples - element->samples_in_filter))
 			*othersize = size - waste_samples + element->samples_in_filter;
 		else
 			*othersize = 0;
@@ -530,6 +520,8 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
 		return FALSE;
 	}
+
+	*othersize *= unit_size;
 
 	return TRUE;
 }
