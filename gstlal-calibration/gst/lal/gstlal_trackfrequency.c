@@ -87,7 +87,7 @@ static void update_frequency(double *current_frequency, guint64 *crossover_times
 
 
 #define DEFINE_TRACK_FREQUENCY(DTYPE) \
-static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, int rate, guint64 pts, guint64 ets, double *current_frequency, guint64 *crossover_times, guint64 num_halfcycles, int *sign, gint64 *check_step, guint64 *num_stored) { \
+static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, int rate, guint64 pts, guint64 ets, double *current_frequency, guint64 *crossover_times, guint64 num_halfcycles, int *sign, gint64 *check_step, guint64 *num_stored, double *last_buffer_end) { \
  \
 	/* Check if we have information about previous data. If not, test whether the first sample is positive or negative */ \
 	if(*sign == 0) { \
@@ -99,6 +99,7 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
  \
 	gint64 i = 0; \
 	gint64 j = 0; \
+	double fractional_sample; \
 	while(i < size - 1) { \
  \
 		gboolean shift = FALSE; \
@@ -118,7 +119,7 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 		} \
 		/* Make sure we are after the transition */ \
 		if(shift) { \
-			i ++; \
+			i++; \
 			*sign = -(*sign); \
 		} \
  \
@@ -127,23 +128,18 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 			/* There is a transition at the beginning of a buffer */ \
 			*dst = (DTYPE) *current_frequency; \
 			j++; \
-			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts); \
+			/* The transition actually occurred before the presentation timestamp. What fraction of a sample period before? */ \
+			fractional_sample = *src / (*src - *last_buffer_end); \
+			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts - (guint64) (fractional_sample * (double) GST_SECOND / rate + 0.5)); \
 		} else if(src[i] * src[i - 1] < 0) { \
 			/* We are just after a transition (and possibly at the end of the buffer) */ \
 			while(j <= i) { \
 				dst[j] = (DTYPE) *current_frequency; \
 				j++; \
 			} \
-			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts + gst_util_uint64_scale_int_round(i, GST_SECOND, rate)); \
-		} else if(i != size - 1 && src[i] * src[i + 1] < 0) { \
-			/* We are before a transition */ \
-			i++; \
-			*sign = -(*sign); \
-			while(j <= i) { \
-				dst[j] = (DTYPE) *current_frequency; \
-				j++; \
-			} \
-			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts + gst_util_uint64_scale_int_round(i, GST_SECOND, rate)); \
+			/* The transition actually occurred before the timestamp of sample i. What fraction of a sample period before? */ \
+			fractional_sample = (double) src[i] / (src[i] - src[i - 1]); \
+			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts + (guint64) (((double) i - fractional_sample) * (double) GST_SECOND / rate + 0.5)); \
 		} else { \
 			/* We are at the end of the buffer, and there is no transition here */ \
 			while(j <= i) { \
@@ -169,6 +165,9 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 		*check_step = (int) (0.2 * rate * ETA_from_next_pts + 1.0); \
 	} else \
 		*check_step = 1; \
+ \
+	/* Record the last sample in this buffer for possible use in the next one */ \
+	*last_buffer_end = (double) src[size - 1]; \
 }
 
 DEFINE_TRACK_FREQUENCY(float)
@@ -176,7 +175,7 @@ DEFINE_TRACK_FREQUENCY(double)
 
 
 #define DEFINE_TRACK_FREQUENCY_COMPLEX(DTYPE, F_OR_BLANK) \
-static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *dst, gint64 size, int rate, guint64 pts, guint64 ets, double *current_frequency, guint64 *crossover_times, guint64 num_halfcycles, int *sign, gint64 *check_step, guint64 *num_stored) { \
+static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *dst, gint64 size, int rate, guint64 pts, guint64 ets, double *current_frequency, guint64 *crossover_times, guint64 num_halfcycles, int *sign, gint64 *check_step, guint64 *num_stored, double *last_buffer_end) { \
  \
 	/* Check if we have information about previous data. If not, test whether the first sample is positive or negative */ \
 	if(*sign == 0) { \
@@ -188,6 +187,7 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
  \
 	gint64 i = 0; \
 	gint64 j = 0; \
+	double fractional_sample; \
 	while(i < size - 1) { \
  \
 		gboolean shift = FALSE; \
@@ -207,7 +207,7 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 		} \
 		/* Make sure we are after the transition */ \
 		if(shift) { \
-			i ++; \
+			i++; \
 			*sign = -(*sign); \
 		} \
  \
@@ -216,7 +216,9 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 			/* There is a transition at the beginning of a buffer */ \
 			*dst = (DTYPE) *current_frequency; \
 			j++; \
-			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts); \
+			/* The transition actually occurred before the presentation timestamp. What fraction of a sample period before? */ \
+			fractional_sample = creal ## F_OR_BLANK(*src) / (creal ## F_OR_BLANK(*src) - *last_buffer_end); \
+			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts - (guint64) (fractional_sample * (double) GST_SECOND / rate + 0.5)); \
 			/* Check if the frequency is negative */ \
 			if(creal ## F_OR_BLANK(src[i]) * cimag ## F_OR_BLANK(src[i]) > 0) \
 				*current_frequency = -(*current_frequency); \
@@ -226,19 +228,9 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 				dst[j] = (DTYPE) *current_frequency; \
 				j++; \
 			} \
-			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts + gst_util_uint64_scale_int_round(i, GST_SECOND, rate)); \
-			/* Check if the frequency is negative */ \
-			if(creal ## F_OR_BLANK(src[i]) * cimag ## F_OR_BLANK(src[i]) > 0) \
-				*current_frequency = -(*current_frequency); \
-		} else if(i != size - 1 && creal ## F_OR_BLANK(src[i]) * creal ## F_OR_BLANK(src[i + 1]) < 0) { \
-			/* We are before a transition */ \
-			i++; \
-			*sign = -(*sign); \
-			while(j <= i) { \
-				dst[j] = (DTYPE) *current_frequency; \
-				j++; \
-			} \
-			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts + gst_util_uint64_scale_int_round(i, GST_SECOND, rate)); \
+			/* The transition actually occurred before the timestamp of sample i. What fraction of a sample period before? */ \
+			fractional_sample = (double) creal ## F_OR_BLANK(src[i]) / creal ## F_OR_BLANK(src[i] - src[i - 1]); \
+			update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts + (guint64) (((double) i - fractional_sample) * (double) GST_SECOND / rate + 0.5)); \
 			/* Check if the frequency is negative */ \
 			if(creal ## F_OR_BLANK(src[i]) * cimag ## F_OR_BLANK(src[i]) > 0) \
 				*current_frequency = -(*current_frequency); \
@@ -267,6 +259,9 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 		*check_step = (int) (0.2 * rate * ETA_from_next_pts + 1.0); \
 	} else \
 		*check_step = 1; \
+ \
+	/* Record the last sample in this buffer for possible use in the next one */ \
+	*last_buffer_end = (double) creal ## F_OR_BLANK(src[size - 1]); \
 }
 
 DEFINE_TRACK_FREQUENCY_COMPLEX(float, f)
@@ -277,16 +272,16 @@ static void trackfrequency(const void *src, void *dst, guint64 src_size, guint64
 
 	switch(element->data_type) {
 	case GSTLAL_TRACKFREQUENCY_F32:
-		trackfrequency_float(src, dst, (gint64) src_size / element->unit_size, element->rate, pts, ets, &element->current_frequency, element->crossover_times, element->num_halfcycles, &element->sign, &element->check_step, &element->num_stored);
+		trackfrequency_float(src, dst, (gint64) src_size / element->unit_size, element->rate, pts, ets, &element->current_frequency, element->crossover_times, element->num_halfcycles, &element->sign, &element->check_step, &element->num_stored, &element->last_buffer_end);
 		break;
 	case GSTLAL_TRACKFREQUENCY_F64:
-		trackfrequency_double(src, dst, (gint64) src_size / element->unit_size, element->rate, pts, ets, &element->current_frequency, element->crossover_times, element->num_halfcycles, &element->sign, &element->check_step, &element->num_stored);
+		trackfrequency_double(src, dst, (gint64) src_size / element->unit_size, element->rate, pts, ets, &element->current_frequency, element->crossover_times, element->num_halfcycles, &element->sign, &element->check_step, &element->num_stored, &element->last_buffer_end);
 		break;
 	case GSTLAL_TRACKFREQUENCY_Z64:
-		trackfrequency_complex_float(src, dst, (gint64) src_size / element->unit_size, element->rate, pts, ets, &element->current_frequency, element->crossover_times, element->num_halfcycles, &element->sign, &element->check_step, &element->num_stored);
+		trackfrequency_complex_float(src, dst, (gint64) src_size / element->unit_size, element->rate, pts, ets, &element->current_frequency, element->crossover_times, element->num_halfcycles, &element->sign, &element->check_step, &element->num_stored, &element->last_buffer_end);
 		break;
 	case GSTLAL_TRACKFREQUENCY_Z128:
-		trackfrequency_complex_double(src, dst, (gint64) src_size / element->unit_size, element->rate, pts, ets, &element->current_frequency, element->crossover_times, element->num_halfcycles, &element->sign, &element->check_step, &element->num_stored);
+		trackfrequency_complex_double(src, dst, (gint64) src_size / element->unit_size, element->rate, pts, ets, &element->current_frequency, element->crossover_times, element->num_halfcycles, &element->sign, &element->check_step, &element->num_stored, &element->last_buffer_end);
 		break;
 	default:
 		g_assert_not_reached();
@@ -827,6 +822,7 @@ static void gstlal_trackfrequency_init(GSTLALTrackFrequency *element)
 	element->check_step = 1;
 	element->num_stored = 0;
 	element->sign = 0;
+	element->last_buffer_end = 0.0;
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }

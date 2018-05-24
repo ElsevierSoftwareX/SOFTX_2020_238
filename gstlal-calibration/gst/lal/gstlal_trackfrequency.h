@@ -76,6 +76,7 @@ struct _GSTLALTrackFrequency {
 	double current_frequency;
 	guint64 num_stored;
 	int sign;
+	double last_buffer_end;
 
 	/* timestamp book-keeping */
 	GstClockTime t0;

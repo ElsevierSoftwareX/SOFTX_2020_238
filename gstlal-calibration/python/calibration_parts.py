@@ -197,9 +197,9 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 	# function argument caps must be complex caps
 
 	filter_param = 0.0625
-	downsample_quality = 5
+	downsample_quality = 4
 	upsample_quality = 4
-	resample_shift = 96.0 + 16.5
+	resample_shift = 16.0 + 16.5
 	zero_latency = filter_latency == 0.0
 
 	witness = pipeparts.mktee(pipeline, witness)
@@ -211,10 +211,9 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 	# frequency between that and the nominal frequency f0.
 	if filter_latency != 0.5:
 		# The low-pass and resampling filters are not centered in time
-		f0_measured = pipeparts.mkgeneric(pipeline, witness, "lal_trackfrequency", num_halfcycles = int(2.0 * f0))
+		f0_measured = pipeparts.mkgeneric(pipeline, witness, "lal_trackfrequency", num_halfcycles = int(round((filter_param / f0_var / 2 + resample_shift / compute_rate) * f0)))
 		f0_measured = mkresample(pipeline, f0_measured, 3, zero_latency, compute_rate)
-		f0_measured = pipeparts.mkgeneric(pipeline, f0_measured, "splitcounter")
-		f0_measured = pipeparts.mkgeneric(pipeline, f0_measured, "lal_smoothkappas", array_size = 1, avg_array_size = compute_rate, default_kappa_re = 0, default_to_median = True, filter_latency = filter_latency)
+		f0_measured = pipeparts.mkgeneric(pipeline, f0_measured, "lal_smoothkappas", array_size = 1, avg_array_size = int(round((filter_param / f0_var / 2 * compute_rate + resample_shift) / 2)), default_kappa_re = 0, default_to_median = True, filter_latency = filter_latency)
 		f0_beat_frequency = pipeparts.mkgeneric(pipeline, f0_measured, "lal_add_constant", value = -f0)
 		f0_beat_frequency = pipeparts.mktee(pipeline, f0_beat_frequency)
 
