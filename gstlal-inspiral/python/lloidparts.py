@@ -390,6 +390,9 @@ class Handler(simplehandler.Handler):
 			self.dataclass.snapshot_output_url("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
 		except TypeError as te:
 			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
+		# Resync seglistdicts in dataclass and here
+		# FIXME:  don't do this, get rid of the Data class
+		self.dataclass.seglistdicts = self.seglistdicts
 
 	def flush_segments_to_disk(self, timestamp):
 		"""!
