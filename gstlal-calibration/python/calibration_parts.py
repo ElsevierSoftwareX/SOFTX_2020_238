@@ -186,9 +186,8 @@ def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, filter_latency
 		line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = filter_param / (f0_var * i), fcut = 0, filter_latency = filter_latency)
 		line = mkresample(pipeline, line, 3, filter_latency == 0.0, rate_out)
 		line = pipeparts.mkgeneric(pipeline, line, "lal_demodulate", line_frequency = -1.0 * i * f0, prefactor_real = -2.0)
-		real, imag = split_into_real(pipeline, line)
-		pipeparts.mkfakesink(pipeline, imag)
-		mkqueue(pipeline, real).link(elem)
+		line = pipeparts.mkgeneric(pipeline, line, "creal")
+		mkqueue(pipeline, line).link(elem)
 
 	return elem
 
@@ -262,8 +261,7 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 			reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tf_at_f, line_in_witness, phase_factor))
 		reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, upsample_quality, zero_latency, rate_out)
 		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * n * f0, prefactor_real = -2.0)
-		reconstructed_line_in_signal, imag = split_into_real(pipeline, reconstructed_line_in_signal)
-		pipeparts.mkfakesink(pipeline, imag)
+		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "creal")
 
 		signal_minus_lines.append(reconstructed_line_in_signal)
 

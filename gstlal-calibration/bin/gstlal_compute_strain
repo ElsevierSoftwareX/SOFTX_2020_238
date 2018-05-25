@@ -966,11 +966,11 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 		elif options.factors_from_filters_file:
 			Xi = calibration_parts.compute_Xi_from_filters_file(pipeline, pcal_at_src_freq, derr_at_src_freq, src_pcal_line_freq, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc)
 
-		XiR, XiI = calibration_parts.split_into_real(pipeline, Xi)
-
 		if options.no_srcQ:
-			# the imaginary part is only used to compute Q
-			pipeparts.mkfakesink(pipeline, XiI)
+                        # the imaginary part is only used to compute Q
+			XiR = pipeparts.mkgeneric(pipeline, Xi, "creal")
+		else:
+			XiR, XiI = calibration_parts.split_into_real(pipeline, Xi)
 
 		sqrtXiR = pipeparts.mkpow(pipeline, XiR, exponent = 0.5)
 		if not options.no_fs and not options.no_srcQ:
@@ -1491,8 +1491,7 @@ if options.remove_callines:
 	# Reconstruct a calibrated pcal at only the ~30 Hz pcal line
 	pcaly_line1 = calibration_parts.mkresample(pipeline, pcal_at_darm_act_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 	pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "lal_demodulate", line_frequency = -1.0 * darm_act_line_freq, prefactor_real = 2.0)
-	remove_pcaly_line1, trash = calibration_parts.split_into_real(pipeline, pcaly_line1)
-	pipeparts.mkfakesink(pipeline, trash)
+	remove_pcaly_line1 = pipeparts.mkgeneric(pipeline, pcaly_line1, "creal")
 
 	# Make sure we have demodulated pcal at the ~300 Hz pcal line
 	if options.no_kappac and options.no_fcc and options.no_srcQ and options.no_fs:
@@ -1500,8 +1499,7 @@ if options.remove_callines:
 	# Reconstruct a calibrated pcal at only the ~300 Hz pcal line
 	pcaly_line2 = calibration_parts.mkresample(pipeline, pcal_at_opt_gain_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 	pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "lal_demodulate", line_frequency = -1.0 * opt_gain_fcc_line_freq, prefactor_real = 2.0)
-	remove_pcaly_line2, trash = calibration_parts.split_into_real(pipeline, pcaly_line2)
-	pipeparts.mkfakesink(pipeline, trash)
+	remove_pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "creal")
 
 	# Add the first two components together. We will add this to h(t) to remove these lines
 	calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, remove_pcaly_line1, remove_pcaly_line2))
@@ -1522,8 +1520,7 @@ if options.remove_callines:
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, esd_act_line, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_ktstRtee, matrix=[[1.0, 0.0]]))))
 		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = 2.0)
-		esd_act_line_remove, trash = calibration_parts.split_into_real(pipeline, esd_act_line_remove)
-		pipeparts.mkfakesink(pipeline, trash)
+		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line_remove, "creal")
 		# Add into the total line removal stream
 		calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_lines, esd_act_line_remove))
 
@@ -1533,8 +1530,7 @@ if options.remove_callines:
 		# Reconstruct a calibrated pcal at only the ~1kHz pcal line
 		pcaly_line3 = calibration_parts.mkresample(pipeline, pcaly_line3, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * high_pcal_line_freq, prefactor_real = 2.0)
-		remove_pcaly_line3, trash = calibration_parts.split_into_real(pipeline, pcaly_line3)
-		pipeparts.mkfakesink(pipeline, trash)
+		remove_pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "creal")
 		# Add into the total line removal stream
 		calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_lines, remove_pcaly_line3))
 
@@ -1544,8 +1540,7 @@ if options.remove_callines:
 		# Reconstruct a calibrated pcal at only the ~3kHz pcal line
 		pcaly_line4 = calibration_parts.mkresample(pipeline, pcaly_line4, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		pcaly_line4 = pipeparts.mkgeneric(pipeline, pcaly_line4, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = 2.0)
-		remove_pcaly_line4, trash = calibration_parts.split_into_real(pipeline, pcaly_line4)
-		pipeparts.mkfakesink(pipeline, trash)
+		remove_pcaly_line4 = pipeparts.mkgeneric(pipeline, pcaly_line4, "creal")
 		# Add into the total line removal stream
 		calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_lines, remove_pcaly_line4))
 
@@ -1556,8 +1551,7 @@ if options.remove_callines:
 		# Reconstruct a calibrated pcal at only the ~3kHz pcal line
 		pcaly_line0 = calibration_parts.mkresample(pipeline, pcal_at_src_freq, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		pcaly_line0 = pipeparts.mkgeneric(pipeline, pcaly_line0, "lal_demodulate", line_frequency = -1.0 * src_pcal_line_freq, prefactor_real = 2.0)
-		remove_pcaly_line0, trash = calibration_parts.split_into_real(pipeline, pcaly_line0)
-		pipeparts.mkfakesink(pipeline, trash)
+		remove_pcaly_line0 = pipeparts.mkgeneric(pipeline, pcaly_line0, "creal")
 		# Add into the total line removal stream
 		calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_lines, remove_pcaly_line0))
 
