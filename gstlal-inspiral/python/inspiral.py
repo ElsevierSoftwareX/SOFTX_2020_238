@@ -837,7 +837,8 @@ class Data(object):
 
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
-				self.__do_gracedb_alerts()
+				if self.rankingstatpdf is not None and self.rankingstatpdf.is_healthy():
+					self.__do_gracedb_alerts()
 				self.__update_eye_candy()
 
 			# after doing alerts, no longer need per-trigger
@@ -964,7 +965,7 @@ class Data(object):
 					self.zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc_event.likelihood,] += 1
 
 		# do GraceDB alerts
-		if self.gracedb_far_threshold is not None:
+		if self.gracedb_far_threshold is not None and self.rankingstatpdf is not None and self.rankingstatpdf.is_healthy():
 			self.__do_gracedb_alerts()
 
 		# after doing alerts, no longer need per-trigger SNR data
