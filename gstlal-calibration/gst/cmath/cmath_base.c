@@ -22,6 +22,8 @@
  * https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseTransform.html#GstBaseTransform-struct
  */
 
+
+#include <gst/audio/audio.h>
 #include <cmath_base.h>
 
 
@@ -36,7 +38,7 @@
 
 #define CAPS \
 		"audio/x-raw, " \
-		"format = (string) { F32LE, F32BE, F64LE, F64BE, Z64LE, Z64BE, Z128LE, Z128BE }, " \
+		"format = (string) {"GST_AUDIO_NE(F32)", "GST_AUDIO_NE(F64)", "GST_AUDIO_NE(Z64)", "GST_AUDIO_NE(Z128)"}, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
 		"layout = (string) {interleaved, non-interleaved}, " \
@@ -111,7 +113,7 @@ gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps,
 		GstCaps *outcaps)
 {
 	gboolean success = TRUE;
-	static char *formats[] = {"Z128LE", "Z64LE", "F64LE", "F32LE"};
+	static char *formats[] = {GST_AUDIO_NE(Z128), GST_AUDIO_NE(Z64), GST_AUDIO_NE(F64), GST_AUDIO_NE(F32)};
 	static int is_complex[] = {1, 1, 0, 0};
 	static int bits[] = {128, 64, 64, 32};
 	const gchar *format;

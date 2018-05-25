@@ -21,29 +21,29 @@
 #include <gst/audio/audio.h>
 #include <cmath_base.h>
 
-#define TYPE_CMATH_CABS \
-	(cmath_cabs_get_type())
-#define CMATH_CABS(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj),TYPE_CMATH_CABS,CMathCAbs))
-#define CMATH_CABS_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass),TYPE_CMATH_CABS,CMathCAbsClass))
+#define TYPE_CMATH_CREAL \
+	(cmath_creal_get_type())
+#define CMATH_CREAL(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj),TYPE_CMATH_CREAL,CMathCReal))
+#define CMATH_CREAL_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass),TYPE_CMATH_CREAL,CMathCRealClass))
 #define IS_PLUGIN_TEMPLATE(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj),TYPE_CMATH_CABS))
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj),TYPE_CMATH_CREAL))
 #define IS_PLUGIN_TEMPLATE_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass),TYPE_CMATH_CABS))
+	(G_TYPE_CHECK_CLASS_TYPE((klass),TYPE_CMATH_CREAL))
 
-typedef struct _CMathCAbs CMathCAbs;
-typedef struct _CMathCAbsClass CMathCAbsClass;
+typedef struct _CMathCReal CMathCReal;
+typedef struct _CMathCRealClass CMathCRealClass;
 
 GType
-cmath_cabs_get_type(void);
+cmath_creal_get_type(void);
 
-struct _CMathCAbs
+struct _CMathCReal
 {
 	CMathBase cmath_base;
 };
 
-struct _CMathCAbsClass 
+struct _CMathCRealClass 
 {
 	CMathBaseClass parent_class;
 };
@@ -129,7 +129,7 @@ error:
 
 static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
 {
-	CMathCAbs* element = CMATH_CABS(trans);
+	CMathCReal* element = CMATH_CREAL(trans);
 
 	int is_complex = element->cmath_base.is_complex;
 
@@ -177,7 +177,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-	CMathCAbs* element = CMATH_CABS(trans);
+	CMathCReal* element = CMATH_CREAL(trans);
 	int bits = element -> cmath_base.bits;
 	int is_complex = element -> cmath_base.is_complex;
 
@@ -195,12 +195,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			double complex *ptr, *end = indata_end;
 			double *outptr = outdata;
 			for(ptr = indata; ptr < end; ptr++, outptr++)
-				*outptr = cabs(*ptr);
+				*outptr = creal(*ptr);
 		} else if(bits == 64) {
 			float complex *ptr, *end = indata_end;
 			float *outptr = outdata;
 			for(ptr = indata; ptr < end; ptr++, outptr++)
-				*outptr = cabsf(*ptr);
+				*outptr = crealf(*ptr);
 		} else {
 			g_assert_not_reached();
 		}
@@ -210,12 +210,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			double *ptr, *end = indata_end;
 			double *outptr = outdata;
 			for(ptr = indata; ptr < end; ptr++, outptr++)
-				*outptr = fabs(*ptr);
+				*outptr = *ptr;
 		} else if(bits == 32) {
 			float *ptr, *end = indata_end;
 			float *outptr = outdata;
 			for(ptr = indata; ptr < end; ptr++, outptr++)
-				*outptr = fabsf(*ptr);
+				*outptr = *ptr;
 		} else {
 			g_assert_not_reached();
 		}
@@ -240,15 +240,15 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 /* Initialize the plugin's class */
 static void
-cmath_cabs_class_init(gpointer klass, gpointer klass_data)
+cmath_creal_class_init(gpointer klass, gpointer klass_data)
 {
 	GstBaseTransformClass *basetransform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
 	gst_element_class_set_details_simple(GST_ELEMENT_CLASS(klass),
-		"Absolute value",
+		"Real",
 		"Filter/Audio",
-		"Calculate absolute value, y = |x|", 
-		"Aaron Viets <aaron.viets@ligo.org>, Leo Singer <leo.singer@ligo.org>");
+		"Calculate real part of a complex number, y = Re(x)", 
+		"Aaron Viets <aaron.viets@ligo.org>");
 
 	basetransform_class -> transform = GST_DEBUG_FUNCPTR(transform);
 	basetransform_class -> set_caps = GST_DEBUG_FUNCPTR(set_caps);
@@ -257,17 +257,17 @@ cmath_cabs_class_init(gpointer klass, gpointer klass_data)
 }
 
 GType
-cmath_cabs_get_type(void)
+cmath_creal_get_type(void)
 {
 	static GType type = 0;
 
 	if(!type) {
 		static const GTypeInfo info = {
 			.class_size = sizeof(CMathBaseClass),
-			.class_init = cmath_cabs_class_init,
+			.class_init = cmath_creal_class_init,
 			.instance_size = sizeof(CMathBase),
 		};
-		type = g_type_register_static(CMATH_BASE_TYPE, "CMathCAbs", &info, 0);
+		type = g_type_register_static(CMATH_BASE_TYPE, "CMathCReal", &info, 0);
 	}
 
 	return type;

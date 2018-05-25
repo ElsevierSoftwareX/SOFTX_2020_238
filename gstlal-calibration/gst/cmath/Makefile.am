@@ -5,6 +5,8 @@ libgstcmath_la_SOURCES = \
 	cmath.c \
 	cmath_base.h cmath_base.c \
 	cmath_cabs.c \
+	cmath_creal.c \
+	cmath_cimag.c \
 	cmath_cexp.c \
 	cmath_cln.c \
 	cmath_clog.c \

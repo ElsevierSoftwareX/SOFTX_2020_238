@@ -47,7 +47,6 @@
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/audio/audio.h>
 
 
 /*
