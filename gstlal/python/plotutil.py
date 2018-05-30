@@ -81,3 +81,11 @@ def latexnumber(s):
 		return s
 	m, e = floatpattern.match(s).groups()
 	return r"%s \times 10^{%d}" % (m, int(e))
+
+
+def latexfilename(s):
+	"""
+	Escapes "\\" and "_" characters, and replaces " " with "~"
+	(non-breaking space).
+	"""
+	return s.replace("\\", "\\\\").replace("_", "\\_").replace(" ", "~")
