@@ -477,7 +477,7 @@ class PSDFirKernel(object):
 		#
 
 		data = psd.data.data / 2
-		sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
+		sample_rate = 2 * int(round(psd.f0 + (len(data) - 1) * psd.deltaF))
 
 		#
 		# remove LAL normalization
