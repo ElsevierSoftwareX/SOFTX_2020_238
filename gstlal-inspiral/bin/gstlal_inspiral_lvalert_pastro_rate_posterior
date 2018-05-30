@@ -293,11 +293,7 @@ def plot_rates(rv, credible_intervals = None):
 			y = numpy.array([rv.pdf(xx / rv.Rb) / rv.Rb for xx in x])
 			signal_axes.fill_between(x, y, 1e-8, color = "k", alpha = alpha)
 
-	try:
-		fig.tight_layout()
-	except AttributeError:
-		# old matplotlib. auto-layout not available
-		pass
+	fig.tight_layout()
 	return fig
 
 def get_ln_f_over_b(rankingstatpdf, ln_likelihood_ratios):

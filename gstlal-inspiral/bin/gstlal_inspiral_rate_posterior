@@ -237,11 +237,7 @@ def plot_rates(signal_rate, credible_intervals = None):
 			for lo, hi in segs:
 				signal_axes.fill_between(x[lo:hi+1], y[lo:hi+1], 1e-8, color = "k", alpha = alphas[cred])
 
-	try:
-		fig.tight_layout()
-	except AttributeError:
-		# old matplotlib. auto-layout not available
-		pass
+	fig.tight_layout()
 	return fig
 
 

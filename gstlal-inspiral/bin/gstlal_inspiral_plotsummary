@@ -1821,14 +1821,7 @@ filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PL
 while len(plots):
 	plot_group, plot = plots.pop(0)
 	for fig, filename_fragment, is_open_box in plot.finish():
-		try:
-			fig.tight_layout(rect=(0.03, 0.02, 0.98, 0.98))
-		except AttributeError:
-			# old matplotlib
-			pass
-		except ValueError:
-			# broken at UWM
-			pass
+		fig.tight_layout(rect=(0.03, 0.02, 0.98, 0.98))
 		for fmt in options.format:
 			if filename_fragment and fig:
 				filename = filename_template % (options.user_tag, plot_group, filename_fragment, ("openbox" if is_open_box else "closedbox"), fmt)
