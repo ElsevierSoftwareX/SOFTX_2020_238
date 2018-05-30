@@ -265,7 +265,7 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 	GST_DEBUG_OBJECT(element->srcpad, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
 	return gst_pad_push(element->srcpad, outbuf);
 */
-	return GST_FLOW_OK
+	return GST_FLOW_OK;
 }
 
 
