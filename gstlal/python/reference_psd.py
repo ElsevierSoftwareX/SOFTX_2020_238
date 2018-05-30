@@ -29,7 +29,6 @@
 import math
 import numpy
 import os
-import scipy
 try:
 	from pyfftw.interfaces import scipy_fftpack as fftpack
 except ImportError:
@@ -529,7 +528,6 @@ class PSDFirKernel(object):
 			sampleUnits = lal.Unit("strain")
 		)
 
-
 		# FIXME check for change in length
 		if self.revplan is None:
 			self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(len(data), 1)
@@ -646,39 +644,35 @@ class PSDFirKernel(object):
 		)
 
 		lal.COMPLEX16TimeFreqFFT(absX, kernel_tseries, self.fwdplan)
-		absX.data.data[:] = numpy.roll(abs(absX.data.data), -working_length // 2 + 1) * sample_rate
+		absX.data.data[:] = abs(absX.data.data)
 
 		#
 		# compute the cepstrum of the kernel (i.e., the iFFT of the
 		# log of the abs of the FFT of the kernel)
 		#
 
-		logabsX.data.data[:] = numpy.roll(numpy.log(absX.data.data), +working_length // 2 + 1)
+		logabsX.data.data[:] = numpy.log(absX.data.data)
 		lal.COMPLEX16FreqTimeFFT(cepstrum, logabsX, self.revplan)
-		cepstrum.data.data /= sample_rate
 
 		#
-		# compute sgn
+		# multiply cepstrum by sgn
 		#
 
-		sgn = scipy.ones(working_length)
-		sgn[0] = 0.
-		sgn[(len(sgn) + 1) // 2] = 0.
-		sgn[(len(sgn) + 1) // 2:] *= -1
-		cepstrum.data.data *= sgn
+		cepstrum.data.data[0] = 0.
+		cepstrum.data.data[working_length // 2] = 0.
+		cepstrum.data.data[working_length // 2 + 1:] = -cepstrum.data.data[working_length // 2 + 1:]
 
 		#
 		# compute theta
 		#
 
 		lal.COMPLEX16TimeFreqFFT(theta, cepstrum, self.fwdplan)
-		theta.data.data[:] = numpy.roll(-1.j * theta.data.data, -working_length // 2) * sample_rate
 
 		#
 		# compute minimum phase kernel
 		#
 
-		absX.data.data[:] = numpy.roll(absX.data.data * scipy.exp(1.j * theta.data.data), +working_length // 2 + 1) / sample_rate
+		absX.data.data *= numpy.exp(theta.data.data)
 		lal.COMPLEX16FreqTimeFFT(min_phase_kernel, absX, self.revplan)
 
 		kernel = min_phase_kernel.data.data.real
@@ -691,10 +685,20 @@ class PSDFirKernel(object):
 		kernel = kernel[-1::-1]
 
 		#
+		# compute the gain and phase of the zero-phase
+		# approximation relative to the original linear-phase
+		# filter
+		#
+
+		theta = theta.data.data[working_length // 2:]
+		#gain = numpy.exp(theta.real)
+		phase = -theta.imag
+
+		#
 		# done
 		#
 
-		return kernel, -theta.data.data
+		return kernel, phase
 
 
 def interpolate_psd(psd, deltaF):
