@@ -486,7 +486,8 @@ class PSDFirKernel(object):
 		data *= sample_rate
 
 		#
-		# Change Nyquist frequency if requested
+		# change Nyquist frequency if requested.  round to nearest
+		# available bin
 		#
 
 		if nyquist is not None:
@@ -495,8 +496,8 @@ class PSDFirKernel(object):
 			data = data[:int(nyquist / psd.deltaF) + 1]
 
 		#
-		# compute the FIR kernel.  it always has an odd number of samples
-		# and no DC offset.
+		# compute the FIR kernel.  it always has an odd number of
+		# samples and no DC offset.
 		#
 
 		data[0] = data[-1] = 0.0
@@ -561,16 +562,18 @@ class PSDFirKernel(object):
 
 	def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(self, linear_phase_kernel, sample_rate):
 		"""
-		Compute the minimum-phase response filter (zero latency) associated with a
-		linear-phase response filter (latency equal to half the filter length). 
+		Compute the minimum-phase response filter (zero latency)
+		associated with a linear-phase response filter (latency
+		equal to half the filter length).
 
-		From "Design of Optimal Minimum-Phase Digital FIR Filters Using
-		Discrete Hilbert Transforms", IEEE Trans. Signal Processing, vol. 48,
-		pp. 1491-1495, May 2000.
+		From "Design of Optimal Minimum-Phase Digital FIR Filters
+		Using Discrete Hilbert Transforms", IEEE Trans. Signal
+		Processing, vol. 48, pp. 1491-1495, May 2000.
 
-		The return value is the tuple (kernel, phase response).  The kernel is
-		a numpy array containing the filter kernel.  The kernel can be used,
-		for example, with gstreamer's stock audiofirfilter element.
+		The return value is the tuple (kernel, phase response).
+		The kernel is a numpy array containing the filter kernel.
+		The kernel can be used, for example, with gstreamer's stock
+		audiofirfilter element.
 		"""
 		#
 		# compute abs of FFT of kernel
@@ -645,8 +648,8 @@ class PSDFirKernel(object):
 		absX.data.data[:] = numpy.roll(abs(absX.data.data), -working_length // 2 + 1) * sample_rate
 
 		#
-		# compute the cepstrum of the kernel
-		# (i.e., the iFFT of the log of the abs of the FFT of the kernel)
+		# compute the cepstrum of the kernel (i.e., the iFFT of the
+		# log of the abs of the FFT of the kernel)
 		#
 
 		logabsX.data.data[:] = numpy.roll(numpy.log(absX.data.data), +working_length // 2 + 1)
@@ -680,8 +683,8 @@ class PSDFirKernel(object):
 		kernel = min_phase_kernel.data.data.real
 
 		#
-		# this kernel needs to be reversed to follow conventions used with the
-		# audiofirfilter and lal_firbank elements
+		# this kernel needs to be reversed to follow conventions
+		# used with the audiofirfilter and lal_firbank elements
 		#
 
 		kernel = kernel[-1::-1]
