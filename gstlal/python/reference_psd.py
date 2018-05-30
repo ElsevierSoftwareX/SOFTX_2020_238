@@ -491,9 +491,10 @@ class PSDFirKernel(object):
 		#
 
 		if nyquist is not None:
-			assert nyquist <= sample_rate / 2.
-			sample_rate = nyquist * 2
-			data = data[:int(nyquist / psd.deltaF) + 1]
+			i = int(round((nyquist * 2. - psd.f0) / psd.deltaF))
+			assert i < len(data)
+			data = data[:i + 1]
+			sample_rate = 2 * int(round(psd.f0 + (len(data) - 1) * psd.deltaF))
 
 		#
 		# compute the FIR kernel.  it always has an odd number of
