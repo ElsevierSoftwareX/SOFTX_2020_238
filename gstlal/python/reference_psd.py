@@ -244,14 +244,14 @@ class HorizonDistance(object):
 		delta_f might lead to inaccurate horizon distance
 		estimates.
 
-		f_min (Hz) sets the frequency at which the waveform model
-		is to begin.
+		f_min (Hertz) sets the frequency at which the waveform
+		model is to begin.
 
-		f_max (Hz) sets the frequency upto which the waveform's
+		f_max (Hertz) sets the frequency upto which the waveform's
 		model is desired.
 
-		delta_f (Hz) sets the frequency resolution of the desired
-		waveform model.
+		delta_f (Hertz) sets the frequency resolution of the
+		desired waveform model.
 
 		m1, m2 (solar masses) set the component masses of the
 		system to model.
@@ -261,7 +261,7 @@ class HorizonDistance(object):
 
 		eccentricity [0, 1) sets the eccentricity of the system.
 
-		inclination (rad) sets the orbital inclination of the
+		inclination (radians) sets the orbital inclination of the
 		system.
 
 		Example:
@@ -442,28 +442,29 @@ def effective_distance_factor(inclination, fp, fc):
 
 
 class PSDFirKernel(object):
-
 	def __init__(self):
 		self.revplan = None
 		self.fwdplan = None
 
 	def psd_to_linear_phase_whitening_fir_kernel(self, psd, invert = True, nyquist = None):
 		"""
-		Compute an acausal finite impulse-response filter kernel from a power
-		spectral density conforming to the LAL normalization convention,
-		such that if colored Gaussian random noise with the given PSD is fed
-		into an FIR filter using the kernel the filter's output will
-		be zero-mean unit-variance Gaussian random noise.  The PSD must be
+		Compute an acausal finite impulse-response filter kernel
+		from a power spectral density conforming to the LAL
+		normalization convention, such that if colored Gaussian
+		random noise with the given PSD is fed into an FIR filter
+		using the kernel the filter's output will be zero-mean
+		unit-variance Gaussian random noise.  The PSD must be
 		provided as a lal.REAL8FrequencySeries object.
 
-		The phase response of this filter is 0, just like whitening done in
-		the frequency domain.
+		The phase response of this filter is 0, just like whitening
+		done in the frequency domain.
 
-		The return value is the tuple (kernel, latency, sample rate).  The
-		kernel is a numpy array containing the filter kernel, the latency
-		is the filter latency in samples and the sample rate is in Hz.  The
-		kernel and latency can be used, for example, with gstreamer's stock
-		audiofirfilter element.
+		The return value is the tuple (kernel, latency, sample
+		rate).  The kernel is a numpy array containing the filter
+		kernel, the latency is the filter latency in samples and
+		the sample rate is in Hz.  The kernel and latency can be
+		used, for example, with gstreamer's stock audiofirfilter
+		element.
 		"""
 		#
 		# this could be relaxed with some work
