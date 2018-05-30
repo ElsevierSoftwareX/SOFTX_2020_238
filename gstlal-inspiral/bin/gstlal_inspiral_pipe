@@ -534,14 +534,14 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		rankpdf_nodes.append(calcranknode)
 		rankpdf_zerolag_nodes.append(calcrankzerolagnode)
 		
-		# Break up the likelihood jobs into chunks to process fewer files, e.g, 32
+		# Break up the likelihood jobs into chunks to process fewer files, e.g, 16
 		likelihood_nodes.setdefault(None,[]).append(
 			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
 				parent_nodes = [diststats_per_bin_node],
 				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 				input_files = {"likelihood-url":diststats_per_bin_node.output_files["output"]},
 				input_cache_files = {"input-cache":chunked_inputs}
-				) for chunked_inputs in chunks(inputs, 32)]
+				) for chunked_inputs in chunks(inputs, 16)]
 			)
 
 	# then injections
@@ -557,14 +557,14 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				likelihood_url = margnodes[bgbin_index].output_files["output"]
 			else:
 				likelihood_url = diststats[0]
-			# Break up the likelihood jobs into chunks to process fewer files, e.g., 32
+			# Break up the likelihood jobs into chunks to process fewer files, e.g., 16
 			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
 				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
 					parent_nodes = parents,
 					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
 					input_files = {"likelihood-url":likelihood_url},
 					input_cache_files = {"input-cache":chunked_inputs}
-					) for chunked_inputs in chunks(inputs, 32)]
+					) for chunked_inputs in chunks(inputs, 16)]
 				)
 
 	
