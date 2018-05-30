@@ -61,6 +61,7 @@ from glue.text_progress_bar import ProgressBar
 
 from lalinspiral import thinca
 from gstlal import lvalert_helper
+from gstlal.plotutil import golden_ratio
 from ligo.gracedb import rest as gracedb
 
 import bisect
@@ -87,8 +88,6 @@ matplotlib.rcParams.update({
         "text.usetex": True,
         "path.simplify": True
 })
-
-golden_ratio = (1. + math.sqrt(5.)) / 2.
 
 #
 # =============================================================================
