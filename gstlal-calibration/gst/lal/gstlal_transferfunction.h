@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017  Aaron Viets <aaron.viets@ligo.org>
+ * Copyright (C) 2018  Aaron Viets <aaron.viets@ligo.org>
  *
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the
@@ -136,7 +136,7 @@ struct _GSTLALTransferFunction {
 	gboolean update_after_gap;
 	gboolean write_to_screen;
 	char *filename;
-	int make_fir_filters;
+	double make_fir_filters;
 	gint64 fir_length;
 	double frequency_resolution;
 	int high_pass;

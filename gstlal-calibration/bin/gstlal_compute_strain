@@ -1568,7 +1568,7 @@ if options.remove_powerlines:
 	if not options.remove_callines:
 		clean_strain = straintee
 	powerlines = calibration_parts.caps_and_progress(pipeline, head_dict["powerlines"], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", "powerlines")
-	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, options.powerlines_freq_var, options.filter_latency, compute_rate = options.compute_factors_sr, rate_out = hoftsr, num_avg = 320, obsready = None if options.no_dq_vector else obsreadytee)
+	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, options.powerlines_freq_var, options.filter_latency, compute_rate = options.compute_factors_sr, rate_out = hoftsr, num_avg = 2048, obsready = None if options.no_dq_vector else obsreadytee)
 
 # Remove excess noise using any provided witness channels
 if options.witness_channel_list is not None:

@@ -170,6 +170,31 @@ def lal_transferfunction_03(pipeline, name):
 
 	return pipeline
 
+def lal_transferfunction_04(pipeline, name):
+
+	#
+	# This test produces three-channel data to be read into lal_transferfunction
+	#
+
+	rate = 16384		# Hz
+	buffer_length = 1.0	# seconds
+	test_duration = 500.0	# seconds
+	width = 64		# bits
+	channels = 1
+	freq = 512		# Hz
+
+	#
+	# build pipeline
+	#
+
+	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = freq, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
+	hoft = pipeparts.mktee(pipeline, hoft)
+	shifted_hoft = pipeparts.mkgeneric(pipeline, hoft, "lal_shift", shift = 35024)
+	interleaved_data = calibration_parts.mkinterleave(pipeline, calibration_parts.list_srcs(pipeline, hoft, shifted_hoft))
+	pipeparts.mkgeneric(pipeline, interleaved_data, "lal_transferfunction", fft_length = 4 * rate, fft_overlap = 2 * rate, num_ffts = 64, update_samples = rate * test_duration, make_fir_filters = 1, fir_length = rate, update_after_gap = True, filename = "lpfilter.txt")
+
+	return pipeline
+
 #
 # =============================================================================
 #
@@ -180,8 +205,9 @@ def lal_transferfunction_03(pipeline, name):
 
 
 #test_common.build_and_run(lal_transferfunction_01, "lal_transferfunction_01")
-test_common.build_and_run(lal_transferfunction_02, "lal_transferfunction_02")
+#test_common.build_and_run(lal_transferfunction_02, "lal_transferfunction_02")
 #test_common.build_and_run(lal_transferfunction_03, "lal_transferfunction_03")
+test_common.build_and_run(lal_transferfunction_04, "lal_transferfunction_04")
 
 
 

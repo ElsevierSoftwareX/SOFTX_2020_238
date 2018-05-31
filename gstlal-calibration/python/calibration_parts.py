@@ -191,7 +191,7 @@ def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, filter_latency
 
 	return elem
 
-def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, f0_var, filter_latency, compute_rate = 16, rate_out = 16384, num_avg = 320, obsready = None):
+def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, f0_var, filter_latency, compute_rate = 16, rate_out = 16384, num_avg = 2048, obsready = None):
 	# remove line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
 
