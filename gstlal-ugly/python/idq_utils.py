@@ -217,91 +217,46 @@ class HDF5FeatureData(FeatureData):
 	"""
 	def __init__(self, columns, keys, **kwargs):
 		super(HDF5FeatureData, self).__init__(columns, keys = keys, **kwargs)
-		self.padding = 1
 		self.cadence = kwargs.pop('cadence')
 		self.dtype = [(column, '<f8') for column in self.columns]
-		self.feature_data = {key: numpy.empty(((self.cadence+self.padding),), dtype = self.dtype) for key in keys}
-		self.last_save_time = None
+		self.feature_data = {key: numpy.empty((self.cadence,), dtype = self.dtype) for key in keys}
+		self.last_save_time = 0
 		self.clear()
 
-	def dump(self, path, base, start_time, key = None, tmp = False):
+	def dump(self, path, base, start_time, tmp = False):
 		"""
-		Saves the current cadence of gps triggers to disk and clear out data
+		Saves the current cadence of features to disk and clear out data
 		"""
 		name = "%d_%d" % (start_time, self.cadence)
-		if key:
+		for key in self.keys:
 			create_new_dataset(path, base, self.feature_data[key], name=name, group=key, tmp=tmp)
-			self.clear(key)
-		else:
-			for key in self.keys:
-				create_new_dataset(path, base, self.feature_data[key], name=name, group=key, tmp=tmp)
-			self.clear()
-
-	def append(self, value, key = None, buftime = None):
-		"""
-		Append a trigger row to data structure
-		"""
-		if buftime and key:
-			self.last_save_time = floor_div(buftime, self.cadence)
-			idx = int(numpy.floor(value['trigger_time'])) - self.last_save_time
-			if numpy.isnan(self.feature_data[key][idx][self.columns[0]]) or (value['snr'] > self.feature_data[key][idx]['snr']):
-				self.feature_data[key][idx] = numpy.array(tuple(value[col] for col in self.columns), dtype=self.dtype)
-
-	def clear(self, key = None):
-		if key:
-			self.feature_data[key][:] = numpy.nan
-		else:
-			for key in self.keys:
-				self.feature_data[key][:] = numpy.nan
-
-class HDF5SeriesFeatureData(FeatureData):
-	"""!
-	Saves feature data with varying dataset lengths to hdf5.
-	"""
-	def __init__(self, columns, keys, **kwargs):
-		super(HDF5SeriesFeatureData, self).__init__(columns, keys = keys, **kwargs)
-		self.cadence = kwargs.pop('cadence')
-		self.dtype = [(column, '<f8') for column in self.columns]
-		self.feature_data = {key: [] for key in keys}
 		self.clear()
 
-	def dump(self, path, base, start_time, key = None, tmp = False):
+	def append(self, timestamp, features):
 		"""
-		Saves the current cadence of gps triggers to disk and clear out data
+		Append a feature buffer to data structure
 		"""
-		name = "%d_%d" % (start_time, self.cadence)
-		if key:
-			create_new_dataset(path, base, numpy.array(self.feature_data[key], dtype=self.dtype), name=name, group=key, tmp=tmp)
-			self.clear(key)
-		else:
-			for key in self.keys:
-				create_new_dataset(path, base, numpy.array(self.feature_data[key], dtype=self.dtype), name=name, group=key, tmp=tmp)
-			self.clear()
+		self.last_save_time = floor_div(timestamp, self.cadence)
+		idx = timestamp - self.last_save_time
 
-	def append(self, value, key = None, buftime = None):
-		"""
-		Append a trigger row to data structure
-		"""
-		if buftime and key:
-			self.feature_data[key].append(tuple(value[col] for col in self.columns))
+		### FIXME: assumes there is just one row per channel for now (denoting a sample rate of 1Hz)
+		for key in features.keys():
+			if features[key][0]:
+				self.feature_data[key][idx] = numpy.array(tuple(features[key][0][col] for col in self.columns), dtype=self.dtype)
 
-	def clear(self, key = None):
-		if key:
-			self.feature_data[key] = []
-		else:
-			for key in self.keys:
-				self.feature_data[key] = []
+	def clear(self):
+		for key in self.keys:
+			self.feature_data[key][:] = numpy.nan
 
 class FeatureQueue(object):
 	"""
 	Class for storing feature data.
 	NOTE: assumes that ingested features are time ordered.
 	"""
-	def __init__(self, channels, columns, sample_rate, num_samples):
+	def __init__(self, channels, columns, sample_rate):
 		self.channels = channels
 		self.columns = columns
 		self.sample_rate = sample_rate
-		self.num_samples = num_samples
 		self.out_queue = deque(maxlen = 5)
 		self.in_queue = {}
 		self.counter = Counter()
@@ -330,6 +285,12 @@ class FeatureQueue(object):
 	def pop(self):
 		if len(self):
 			return self.out_queue.popleft()
+
+	def flush(self):
+		while self.in_queue:
+			oldest_timestamp = min(self.counter.keys())
+			del self.counter[oldest_timestamp]
+			self.out_queue.append({'timestamp': oldest_timestamp, 'features': self.in_queue.pop(oldest_timestamp)})
 
 	def _create_buffer(self):
 		return {channel: [None for x in range(self.sample_rate)] for channel in self.channels}
