@@ -129,6 +129,7 @@
 ###
 
 
+import base64
 try:
 	from fpconst import PosInf
 except ImportError:
@@ -146,6 +147,7 @@ import socket
 import StringIO
 import sys
 import tempfile
+import uuid
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -616,16 +618,11 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	# uncomment the next line to show tracebacks when something fails
 	# in the web server
 	#bottle.app().catchall = False
-	import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
 	httpservers = httpinterface.HTTPServers(
-		# FIXME:  either switch to using avahi's native name
-		# uniquification system or adopt a naturally unique naming
-		# scheme (e.g., include a search identifier and job
-		# number).
-		service_name = "gstlal_inspiral (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
+		service_name = "%s.gstlal_inspiral" % (options.job_tag if options.job_tag is not None else base64.urlsafe_b64encode(uuid.uuid4().bytes)),
 		service_properties = {
-			"job_tag": os.getcwd(),
-			"GSTLAL_LL_JOB": os.environ.get("GSTLAL_LL_JOB", "")
+			"cwd": os.getcwd(),
+			"pid": str(os.getpid()),
 		},
 		verbose = options.verbose
 	)
