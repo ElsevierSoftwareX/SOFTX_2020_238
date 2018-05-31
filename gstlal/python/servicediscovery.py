@@ -1,4 +1,4 @@
-# Copyright (C) 2012--2014  Kipp Cannon
+# Copyright (C) 2012--2014,2016--2018  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -30,7 +30,7 @@ import avahi
 from gi.repository import Gio
 
 
-__all__ = ["DEFAULT_SERVICE_TYPE", "DEFAULT_DOMAIN", "Publisher", "Listener", "ServiceBrowser"]
+__all__ = ["DEFAULT_SERVICE_TYPE", "DEFAULT_SERVICE_DOMAIN", "Publisher", "Listener", "ServiceBrowser"]
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -48,7 +48,7 @@ __date__ = "FIXME"
 
 
 DEFAULT_SERVICE_TYPE = "_http._tcp"
-DEFAULT_DOMAIN = "local"
+DEFAULT_SERVICE_DOMAIN = "gw.org"
 
 
 #
@@ -60,60 +60,118 @@ DEFAULT_DOMAIN = "local"
 #
 
 
-class Publisher(object):
+class Service(object):
 	"""
-	Glue code to connect to the avahi daemon through dbus and manage
-	the advertisement of services.
+	Add a service to a group, and allow its properties to be updated
+	later.
 	"""
-	def __init__(self):
-		bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
-		server = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER, avahi.DBUS_INTERFACE_SERVER, None)
-		group_path = server.EntryGroupNew("()")
-		self.group = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, group_path, avahi.DBUS_INTERFACE_ENTRY_GROUP, None)
+	@staticmethod
+	def properties_to_txt_array(properties):
+		if properties is None:
+			properties = {}
+		elif any("=" in key for key in properties):
+			raise ValueError("'=' not permitted in property keys")
+		return avahi.dict_to_txt_array(properties)
 
-	def add_service(self, sname, port, stype = DEFAULT_SERVICE_TYPE, sdomain = DEFAULT_DOMAIN, host = "", properties = None):
+
+	def __init__(self, group, sname, port, stype = None, sdomain = None, host = None, properties = None):
 		"""
 		Add a service to the collection of services currently
 		advertised.  sname and port specify the service name and
 		the port number on which the service can be found.  stype
-		and sdomain set the service type and service domain.
+		and sdomain set the service type and service domain;  if
+		not set the module-level symbols DEFAULT_SERVICE_TYPE and
+		DEFAULT_SERVICE_DOMAIN are used, respectively.
 
 		Avahi is asked to advertise the service on all network
 		interfaces to which it is connected.  If host is "" (the
 		default) then on each interface avahi will use the host
 		name corresponding to that network interface (as determined
 		by itself).  This is a convenient way to ensure the service
-		is advertised correctly on machines with multiple
-		interfaces.
+		is advertised on each interface with a host name that
+		exists on that interface's network.
 
-		If properties is not None it must be a dictionary of
-		name-value pairs all of which are strings.  "=" is not
-		allowed in any of the names.
+		properties is a dictionary of name-value pairs all of which
+		are strings.  "=" is not allowed in any of the names.
 		"""
-		if properties is not None:
-			assert not any("=" in key for key in properties)
-		self.group.AddService(
+		#
+		# this information will be needed to make updates
+		#
+
+		self.group = group
+		self.sname = sname
+		self.stype = stype if stype is not None else DEFAULT_SERVICE_TYPE
+		self.sdomain = sdomain if sdomain is not None else DEFAULT_SERVICE_DOMAIN
+
+		#
+		# add the service to the avahi service group
+		#
+
+		group.AddService(
 			"(iiussssqaay)",
 			avahi.IF_UNSPEC,	# interface
 			avahi.PROTO_INET,	# protocol
 			0,			# flags
 			sname,			# service name
-			stype,			# service type
-			sdomain,		# domain
-			host,			# host name
+			self.stype,		# service type
+			self.sdomain,		# service domain
+			host if host is not None else "",	# host name
 			port,			# port
-			avahi.dict_to_txt_array(properties if properties is not None else {})	# text/description
+			self.properties_to_txt_array(properties)	# text/description
 		)
+
+
+	def set_properties(self, properties = None):
+		"""
+		properties is a dictionary of name-value pairs all of which
+		are strings.  "=" is not allowed in any of the names.
+		"""
+		self.group.UpdateServiceTxt(
+			"(iiusssaay)",
+			avahi.IF_UNSPEC,	# interface
+			avahi.PROTO_INET,	# protocol
+			0,			# flags
+			self.sname,		# service name
+			self.stype,		# service type
+			self.sdomain,		# service domain
+			self.properties_to_txt_array(properties)	# text/description
+		)
+
+
+class Publisher(object):
+	"""
+	Glue code to connect to the avahi daemon through dbus and manage
+	the advertisement of services.
+	"""
+	def __enter__(self):
+		bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+		server = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER, avahi.DBUS_INTERFACE_SERVER, None)
+		group_path = server.EntryGroupNew("()")
+		self.group = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, group_path, avahi.DBUS_INTERFACE_ENTRY_GROUP, None)
+		return self
+
+	def add_service(self, sname, port, stype = None, sdomain = None, host = None, properties = None, commit = True):
+		"""
+		See the Service class for the meaning of the arguments.
+
+		If commit is True (the default), then the new service is
+		advertised immediately along with all other previously
+		unadvertised services;  otherwise the calling code is
+		responsible for calling the .commit() method itself.
+		"""
+		service = Service(self.group, sname, port, stype, sdomain, host, properties)
+		if commit:
+			self.commit()
+		return service
+
+	def commit(self):
 		self.group.Commit("()")
 
-	def unpublish(self):
+	def __exit__(self, exc_type, exc_value, traceback):
 		"""
 		Unpublish all services.
 		"""
 		self.group.Reset("()")
-
-	def __del__(self):
-		self.unpublish()
 
 
 #
@@ -151,7 +209,7 @@ class ServiceBrowser(object):
 	Glue code to connect a Listener implementation to the avahi daemon
 	through dbus.
 	"""
-	def __init__(self, listener, stype = DEFAULT_SERVICE_TYPE, sdomain = DEFAULT_DOMAIN, ignore_local = False):
+	def __init__(self, listener, stype = DEFAULT_SERVICE_TYPE, sdomain = DEFAULT_SERVICE_DOMAIN, ignore_local = False):
 		"""
 		Connects to the avahi daemon through dbus, requests an
 		avahi ServiceBrowser instance from the daemon configured to
@@ -257,18 +315,17 @@ if __name__ == "__main__":
 		# publish a service
 		#
 
-		publisher = Publisher()
-		publisher.add_service(
-			sname = "My Test Service",
-			port = 3456,
-			properties = {
-				"version": "0.10",
-				"a": "test value",
-				"b": "another value"
-			}
-		)
-		raw_input("Service published.  Press return to unpublish and quit.\n")
-		publisher.unpublish()
+		with Publisher() as publisher:
+			publisher.add_service(
+				sname = "My Test Service",
+				port = 3456,
+				properties = {
+					"version": "0.10",
+					"a": "test value",
+					"b": "another value"
+				}
+			)
+			raw_input("Service published.  Press return to unpublish and quit.\n")
 	else:
 		#
 		# browse for services
@@ -286,6 +343,10 @@ if __name__ == "__main__":
 				self.print_msg("added", sname, stype, sdomain, host, port, properties)
 			def remove_service(self, sname, stype, sdomain):
 				self.print_msg("removed", sname, stype, sdomain, None, None, None)
+
+			def all_for_now(self):
+				print >>sys.stderr, "All for now\n"
+
 			def failure(self, *args):
 				print >>sys.stderr, "failure", args
 		mainloop = GLib.MainLoop()
