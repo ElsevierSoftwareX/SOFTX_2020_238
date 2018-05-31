@@ -82,7 +82,7 @@ CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 # Get some basic definitions.  NOTE this comes from the share directory probably. #
 ###################################################################################
 
-include ../share/Makefile.offline_analysis_rules
+include /home/gstlalcbc/local/src/gstlal/gstlal-inspiral/share/Makefile.offline_analysis_rules
 
 # FIXME Is there a way to put this back in offline analysis rules?
 BANK_CACHE_STRING:=H1=H1_split_bank.cache,L1=L1_split_bank.cache
@@ -142,14 +142,16 @@ H1_psd.xml.gz:
 	# Generate H1 PSD used to produce fake data
 	# gstlal_psd_xml_from_asd_txt_0001
 	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt
-	gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt
+	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt
+	gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	@echo ""
  
 L1_psd.xml.gz:
 	# Generate L1 PSD used to produce fake data
 	# gstlal_psd_xml_from_asd_txt_0002
 	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt 
-	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt 
+	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt 
+	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	@echo ""
 
 H-H1_FAKE-1000/H-H1_FAKE-1000000000-1000.gwf: H1_psd.xml.gz injections.xml
@@ -213,7 +215,7 @@ vetoes.xml.gz:
 
 tisi.xml:
 	# Produce time slides file
-	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 bg_tisi.xml
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:25.13274:25.13274 bg_tisi.xml
 	ligolw_add --output $@ bg_tisi.xml $<
 	@echo ""
 
@@ -266,7 +268,7 @@ gstlal_bank.xml.gz: measured_psd.xml.gz
 		--verbose
 	@echo ""
 
-#template_bank_plot : gstlal_bank.xml.gz
+#template_bank_plot : gstlal_bank.xml.gz plots
 #	# gstlal_inspiral_plot_banks_0001
 #	gstlal_inspiral_plot_banks --template-bank-file gstlal_bank.xml.gz --plot-template-bank  --output-dir plots
 #	@echo ""
@@ -464,7 +466,7 @@ gstlal_compute_far_from_snr_chisq_histograms_0001: marginalized_likelihood.xml.g
 # PLotting scripts #
 ####################
 
-gstlal_inspiral_plotsummary_0001: gstlal_compute_far_from_snr_chisq_histograms_0001 
+gstlal_inspiral_plotsummary_0001: gstlal_compute_far_from_snr_chisq_histograms_0001 plots
 	# gstlal_inspiral_plotsummary_0001
 	gstlal_inspiral_plotsummary \
 		--output-dir plots \
@@ -494,7 +496,7 @@ gstlal_inspiral_plot_background_0001: gstlal_inspiral_plotsummary_0001
 # Generate summary pages #
 ##########################
 
-gstlal_inspiral_summary_page_0001: gstlal_inspiral_plot_background_0001
+gstlal_inspiral_summary_page_0001: gstlal_inspiral_plot_background_0001 $(WEBDIR)
 	# gstlal_inspiral_summary_page_0001
 	gstlal_inspiral_summary_page \
 		--output-user-tag ALL_LLOID_COMBINED \
@@ -513,7 +515,7 @@ gstlal_inspiral_summary_page_0002: gstlal_inspiral_summary_page_0001
 		--title gstlal-1000000000-1000002048-open-box \
 		--open-box
 	chmod a-rwx $(WEBDIR)/OPEN-BOX*
-	@echo "Open box with a+rwx $(WEBDIR)/OPEN-BOX*"
+	@echo "Open box with: chmod a+rwx $(WEBDIR)/OPEN-BOX*"
 	@touch gstlal_inspiral_summary_page_0002
 
 clean:
