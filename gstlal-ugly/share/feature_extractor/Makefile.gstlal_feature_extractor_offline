@@ -27,19 +27,25 @@ CHANNEL_LIST = H1_O2_standard_channel_list.txt
 # NOTE: * if max_serial_streams > max_parallel_streams, all jobs will be parallelized by channel
 #       * if max_parallel_streams > num_channels in channel list, all jobs will be processed serially, with processing driven by max_serial_streams
 #       * any other combination will produce a mix of parallelization by channels and processing channels serially per job
-MAX_PARALLEL_STREAMS = 300
-MAX_SERIAL_STREAMS = 110
+MAX_PARALLEL_STREAMS = 600
+MAX_SERIAL_STREAMS = 210
 
 # Maximum number of concurrent reads from the same frame file, done to prevent I/O locks
 CONCURRENCY = 1
 
-# Length of time to process for a given job
-SEGMENT_LENGTH = 3500
+# length of time to process for a given job
+SEGMENT_LENGTH = 4000
 
-# Waveform type and parameter space settings
-WAVEFORM = half_sine_gaussian
-MISMATCH = 0.05
-QHIGH = 100
+# Parameter space config of waveforms
+MISMATCH = 0.03
+QHIGH = 40
+
+# waveforms
+WAVEFORM = sine_gaussian
+
+# save preferences
+SAVE_CADENCE = 20
+PERSIST_CADENCE = 200
 
 # Detector
 CLUSTER:=$(shell hostname -d)
@@ -99,9 +105,11 @@ dag : frame.cache plots $(CHANNEL_LIST) segments.xml.gz
 		--frame-segments-file segments.xml.gz \
 		--frame-segments-name datasegments \
 		--local-frame-caching \
-		--waveform $(WAVEFORM) \
+		--cadence $(SAVE_CADENCE) \
+		--persist-cadence $(PERSIST_CADENCE) \
 		--channel-list $(CHANNEL_LIST) \
 		--out-path $(OUTPATH) \
+		--waveform $(WAVEFORM) \
 		--max-serial-streams $(MAX_SERIAL_STREAMS) \
 		--max-parallel-streams $(MAX_PARALLEL_STREAMS) \
 		--concurrency $(CONCURRENCY) \
@@ -110,7 +118,7 @@ dag : frame.cache plots $(CHANNEL_LIST) segments.xml.gz
 		--qhigh $(QHIGH) \
 		$(CONDOR_COMMANDS) \
 		--request-cpu 2 \
-		--request-memory 14GB \
+		--request-memory 15GB \
 		--request-disk 12GB \
 		--verbose \
 		--disable-web-service
