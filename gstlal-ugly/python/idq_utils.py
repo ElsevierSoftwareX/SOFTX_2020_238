@@ -26,7 +26,7 @@
 
 
 import bisect
-from collections import defaultdict
+from collections import Counter, defaultdict, deque
 import glob
 import logging
 import os
@@ -217,10 +217,10 @@ class HDF5FeatureData(FeatureData):
 	"""
 	def __init__(self, columns, keys, **kwargs):
 		super(HDF5FeatureData, self).__init__(columns, keys = keys, **kwargs)
-		self.latency = 1
+		self.padding = 1
 		self.cadence = kwargs.pop('cadence')
 		self.dtype = [(column, '<f8') for column in self.columns]
-		self.feature_data = {key: numpy.empty(((self.cadence+self.latency),), dtype = self.dtype) for key in keys}
+		self.feature_data = {key: numpy.empty(((self.cadence+self.padding),), dtype = self.dtype) for key in keys}
 		self.last_save_time = None
 		self.clear()
 
@@ -243,9 +243,9 @@ class HDF5FeatureData(FeatureData):
 		"""
 		if buftime and key:
 			self.last_save_time = floor_div(buftime, self.cadence)
-			idx = int(numpy.floor(value.trigger_time)) - self.last_save_time
-			if numpy.isnan(self.feature_data[key][idx][self.columns[0]]) or (value.snr > self.feature_data[key][idx]['snr']):
-				self.feature_data[key][idx] = numpy.array(value, dtype=self.dtype)
+			idx = int(numpy.floor(value['trigger_time'])) - self.last_save_time
+			if numpy.isnan(self.feature_data[key][idx][self.columns[0]]) or (value['snr'] > self.feature_data[key][idx]['snr']):
+				self.feature_data[key][idx] = numpy.array(tuple(value[col] for col in self.columns), dtype=self.dtype)
 
 	def clear(self, key = None):
 		if key:
@@ -283,7 +283,7 @@ class HDF5SeriesFeatureData(FeatureData):
 		Append a trigger row to data structure
 		"""
 		if buftime and key:
-			self.feature_data[key].append(value)
+			self.feature_data[key].append(tuple(value[col] for col in self.columns))
 
 	def clear(self, key = None):
 		if key:
@@ -291,6 +291,54 @@ class HDF5SeriesFeatureData(FeatureData):
 		else:
 			for key in self.keys:
 				self.feature_data[key] = []
+
+class FeatureQueue(object):
+	"""
+	Class for storing feature data.
+	NOTE: assumes that ingested features are time ordered.
+	"""
+	def __init__(self, channels, columns, sample_rate, num_samples):
+		self.channels = channels
+		self.columns = columns
+		self.sample_rate = sample_rate
+		self.num_samples = num_samples
+		self.out_queue = deque(maxlen = 5)
+		self.in_queue = {}
+		self.counter = Counter()
+		self.last_timestamp = 0
+		self.effective_latency = 2
+
+	def append(self, timestamp, channel, row):
+		if timestamp > self.last_timestamp:
+			### create new buffer if one isn't available for new timestamp
+			if timestamp not in self.in_queue:
+				self.in_queue[timestamp] = self._create_buffer()
+			self.counter[timestamp] += 1
+
+			### store row, aggregating if necessary
+			idx = self._idx(timestamp)
+			if not self.in_queue[timestamp][channel][idx] or (row['snr'] > self.in_queue[timestamp][channel][idx]['snr']):
+				self.in_queue[timestamp][channel][idx] = row
+
+			### check if there's enough new samples that the oldest sample needs to be pushed
+			if len(self.counter) > self.effective_latency:
+				oldest_timestamp = min(self.counter.keys())
+				self.last_timestamp = oldest_timestamp
+				self.out_queue.append({'timestamp': oldest_timestamp, 'features': self.in_queue.pop(oldest_timestamp)})
+				del self.counter[oldest_timestamp]
+
+	def pop(self):
+		if len(self):
+			return self.out_queue.popleft()
+
+	def _create_buffer(self):
+		return {channel: [None for x in range(self.sample_rate)] for channel in self.channels}
+
+	def _idx(self, timestamp):
+		return int(numpy.floor((timestamp % 1) * self.sample_rate))
+
+	def __len__(self):
+		return len(self.out_queue)
 
 #----------------------------------
 ### structures to generate basis waveforms

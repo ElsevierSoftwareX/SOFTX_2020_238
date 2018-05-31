@@ -217,12 +217,14 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.instrument = data_source_info.instrument
 		self.frame_segments = data_source_info.frame_segments
 		self.keys = kwargs.pop("keys")
+		self.num_samples = len(self.keys)
+		self.sample_rate = 1 # NOTE: hard-coded for now
 		self.waveforms = kwargs.pop("waveforms")
 		self.basename = kwargs.pop("basename")
 		self.waveform_type = options.waveform
 
 		# format keys used for saving, etc.
-		self.aggregate_rate = True
+		self.aggregate_rate = True # NOTE: hard-coded for now
 		if self.aggregate_rate:
 			self.keys = list(set([key[0] for key in self.keys]))
 		else:
@@ -251,17 +253,11 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# row properties
 		columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
-		self.Row = namedtuple('Row', columns)
 
 		# feature saving properties
 		if options.save_format == 'hdf5':
 			self.fdata = idq_utils.HDF5FeatureData(columns, keys = self.keys, cadence = self.cadence)
-
-			if self.is_live:
-				duration = idq_utils.floor_div(self.feature_start_time + self.persist_cadence, self.persist_cadence) - self.feature_start_time
-			else:
-				duration = self.feature_end_time - self.feature_start_time
-
+			duration = idq_utils.floor_div(self.feature_start_time + self.persist_cadence, self.persist_cadence) - self.feature_start_time
 			self.set_hdf_file_properties(self.feature_start_time, duration)
 
 		elif options.save_format == 'ascii':
@@ -271,8 +267,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.fdata.append(self.header)
 
 		# set up stream related properties
-		self.stream_event = deque(maxlen = 20000)
-		self.last_stream_event_time = None
+		self.stream_event = idq_utils.FeatureQueue(self.keys, columns, self.sample_rate, self.num_samples)
 
 		# set up bottle routes for PSDs and extracted feature data
 		self.psds = {}
@@ -329,16 +324,12 @@ class MultiChannelHandler(simplehandler.Handler):
 			channel, rate  = sink_dict[elem]
 
 			# push new stream event to queue if done processing current timestamp
-			if self.last_stream_event_time is None:
-				self.last_stream_event_time = buftime
-			if self.last_stream_event_time < buftime:
-				feature_subset = {'timestamp': self.last_stream_event_time, 'feature_data': list(self.stream_event)}
+			if len(self.stream_event):
+				feature_subset = self.stream_event.pop()
 				if options.use_kafka:
-					self.producer.produce(timestamp = self.last_stream_event_time, topic = self.kafka_topic, value = json.dumps(feature_subset))
+					self.producer.produce(timestamp = feature_subset['timestamp'], topic = self.kafka_topic, value = json.dumps(feature_subset))
 				else:
 					self.feature_data.append(feature_subset)
-				self.stream_event.clear()
-				self.last_stream_event_time = buftime
 
 			# set save time appropriately
 			if self.last_save_time is None:
@@ -356,8 +347,8 @@ class MultiChannelHandler(simplehandler.Handler):
 					self.fdata.append(self.header)
 				self.last_save_time = buftime
 
-			# persist triggers once per persist cadence if using hdf5 format and running with live data
-			if self.is_live and idq_utils.in_new_epoch(buftime, self.last_persist_time, self.persist_cadence) and options.save_format == 'hdf5':
+			# persist triggers once per persist cadence if using hdf5 format
+			if idq_utils.in_new_epoch(buftime, self.last_persist_time, self.persist_cadence) and options.save_format == 'hdf5':
 				logger.info("persisting features to disk at timestamp = %d" % buftime)
 				self.finish_hdf_file()
 				self.last_persist_time = buftime
@@ -413,9 +404,10 @@ class MultiChannelHandler(simplehandler.Handler):
 				stop_time = trigger_time
 
 			# append row for data transfer/saving
-			feature_row = self.Row(start_time=start_time, stop_time=stop_time, trigger_time=trigger_time,
-			                       frequency=freq, q=q, phase=row.phase, sigmasq=row.sigmasq, chisq=row.chisq, snr=row.snr)
-			self.stream_event.append(feature_row._asdict().update({'timestamp':buftime, 'channel':channel, 'rate':rate}))
+			timestamp = int(numpy.floor(trigger_time))
+			feature_row = {'timestamp':timestamp, 'channel':channel, 'start_time':start_time, 'stop_time':stop_time, 'snr':row.snr,
+			               'trigger_time':trigger_time, 'frequency':freq, 'q':q, 'phase':row.phase, 'sigmasq':row.sigmasq, 'chisq':row.chisq}
+			self.stream_event.append(timestamp, channel, feature_row)
 
 			# save iDQ compatible data
 			if options.save_format == 'hdf5':
