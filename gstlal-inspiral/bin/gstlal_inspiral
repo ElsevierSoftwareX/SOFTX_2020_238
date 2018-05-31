@@ -143,6 +143,7 @@ import os
 import resource
 import signal
 import socket
+import StringIO
 import sys
 import tempfile
 
