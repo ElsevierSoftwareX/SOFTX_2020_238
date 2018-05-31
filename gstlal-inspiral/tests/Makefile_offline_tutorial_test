@@ -82,7 +82,7 @@ CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 # Get some basic definitions.  NOTE this comes from the share directory probably. #
 ###################################################################################
 
-include /home/gstlalcbc/local/src/gstlal/gstlal-inspiral/share/Makefile.offline_analysis_rules
+include ../share/Makefile.offline_analysis_rules
 
 # FIXME Is there a way to put this back in offline analysis rules?
 BANK_CACHE_STRING:=H1=H1_split_bank.cache,L1=L1_split_bank.cache
