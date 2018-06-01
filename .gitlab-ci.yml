@@ -49,6 +49,9 @@ level0:gstlal:
   image: aepace/gstlal-dev:stretch
   stage: level0
   script:
+    - echo $GSTLAL_FIR_WHITEN
+    - ls ${GSTLAL_DIR}/lib64/gstreamer-1.0
+    - ls ${GSTLAL_DIR}/lib/gstreamer-1.0
     - cd gstlal
     - ./00init.sh
     - ./configure --prefix=${GSTLAL_DIR}
