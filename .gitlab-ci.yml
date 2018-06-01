@@ -30,7 +30,7 @@ before_script:
     # Define build and linking parameters:
     - export CFLAGS="-O3 -fPIC -march=native -I${GSTLAL_DIR}/include"
     - export LDFLAGS="-L${GSTLAL_DIR}/lib -L${GSTLAL_DIR}/lib64 ${LDFLAGS}"
-    - export GSTLAL_FIR_WHITEN=1
+    - export GSTLAL_FIR_WHITEN=0
     
 cache:
   key: $CI_JOB_NAME
