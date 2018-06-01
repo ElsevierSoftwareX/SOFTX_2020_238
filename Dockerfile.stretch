@@ -1,0 +1,151 @@
+# Start with the lalsuite nightly container:
+FROM containers.ligo.org/lscsoft/lalsuite:nightly
+
+# Labeling/packaging stuff:
+LABEL name="GstLAL Development Package, Debian" \
+      maintainer="Alexander Pace <alexander.pace@ligo.org>" \
+      date="20180521" \
+      support="Reference Platform, Stretch"
+
+# Set up the base user and build environment:
+# Note that I've had to install the following packages to get things to 
+# work. Some duplication with the command line, but the list is clearer:
+#   * build-essential (gcc, etc.)
+#   * wget
+#   * flex (from gobject-introspection)
+#   * bison (from gobject-introspection)
+#   * libffi-dev (from gobject-introspection)
+
+USER root
+RUN apt-get update && apt-get install --assume-yes build-essential wget flex bison libffi-dev
+
+# Set some environment variables. Hopefully these propagate to the 
+# gitlab-ci environment. Possibly re-define and then just copy the stuff over. 
+
+ENV GSTLAL_DIR /opt/gstlal
+ENV PATH ${GSTLAL_DIR}/bin:${PATH}
+ENV PKG_CONFIG_PATH ${GSTLAL_DIR}/lib/pkgconfig:${GSTLAL_DIR}/lib64/pkgconfig:${PKG_CONFIG_PATH}
+ENV GI_TYPELIB_PATH ${GSTLAL_DIR}/lib/girepository-1.0:${GI_TYPELIB_PATH}
+ENV GST_PLUGIN_PATH ${GSTLAL_DIR}/lib/gstreamer-1.0:${GST_PLUGIN_PATH}
+ENV PYTHONPATH ${GSTLAL_DIR}/lib64/python2.7/site-packages:${GSTLAL_DIR}/lib/python2.7/site-packages:${PYTHONPATH}
+
+# Set build variables:
+ENV CC gcc
+ENV CXX g++
+ENV CFLAGS "-O3 -fPIC -march=native -I${GSTLAL_DIR}/include"
+
+# These are the packages to download. Use the same nominclature as the optimixed Makefile. 
+
+ENV GSTPYTHON gst-python-1.4.0
+ENV GSTPLUGINSGOOD gst-plugins-good-1.4.5
+ENV GSTPLUGINSBASE gst-plugins-base-1.4.5
+ENV GSTREAMER gstreamer-1.4.5
+ENV PYGOBJECT pygobject-3.28.0
+ENV GINTRO gobject-introspection-1.50.0
+
+# Make a tar directory and download packages:
+RUN mkdir /tars
+RUN mkdir /src
+
+RUN wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-python/${GSTPYTHON}.tar.xz --directory-prefix=/tars -nc
+RUN wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-plugins-good/${GSTPLUGINSGOOD}.tar.xz --directory-prefix=/tars -nc
+RUN wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-plugins-base/${GSTPLUGINSBASE}.tar.xz --directory-prefix=/tars -nc
+RUN wget --no-check-certificate http://gstreamer.freedesktop.org/src/gstreamer/${GSTREAMER}.tar.xz --directory-prefix=/tars -nc
+RUN wget --no-check-certificate http://ftp.gnome.org/pub/GNOME/sources/pygobject/3.28/${PYGOBJECT}.tar.xz --directory-prefix=/tars -nc
+RUN wget --no-check-certificate http://ftp.gnome.org/pub/gnome/sources/gobject-introspection/1.50/${GINTRO}.tar.xz --directory-prefix=/tars -nc
+
+# Install gobject-introspection:
+RUN tar -xf /tars/${GINTRO}.tar.xz -C /src && \
+    cd /src/${GINTRO} && \ 
+    ./configure --prefix=${GSTLAL_DIR} --disable-static --with-python=/usr/bin/python && \
+    make && \
+    make install
+
+# Install pygobject:
+RUN tar -xf /tars/${PYGOBJECT}.tar.xz -C /src && \
+    cd /src/${PYGOBJECT} && \ 
+    ./configure --prefix=${GSTLAL_DIR} --with-python=python2 --enable-cairo=no && \
+    make && \
+    make install
+
+# Install gstreamer:
+RUN tar -xf /tars/${GSTREAMER}.tar.xz -C /src && \
+    cd /src/${GSTREAMER} && \ 
+    ./configure --prefix=${GSTLAL_DIR}  && \
+    make && \
+    make install
+
+# Install gst-plugins-base:
+RUN tar -xf /tars/${GSTPLUGINSBASE}.tar.xz -C /src && \
+    cd /src/${GSTPLUGINSBASE} && \
+    ./configure --prefix=${GSTLAL_DIR}  && \
+    make && \
+    make install
+
+# Install gst-plugins-good:
+RUN tar -xf /tars/${GSTPLUGINSGOOD}.tar.xz -C /src && \
+    cd /src/${GSTPLUGINSGOOD} && \
+    ./configure --prefix=${GSTLAL_DIR}  && \
+    make && \
+    make install
+
+# Install some stuff needed for documentation. I'm putting it as part of this 
+# container because it takes for-freaking-ever to install in CI:
+
+RUN apt-get --assume-yes install doxygen graphviz python-sphinx \
+    texlive-base \
+    texlive-binaries \
+    texlive-extra-utils \
+    texlive-font-utils \
+    texlive-fonts-extra \
+    texlive-fonts-extra-doc \
+    texlive-fonts-recommended \
+    texlive-fonts-recommended-doc \
+    texlive-generic-extra \
+    texlive-generic-recommended \
+    texlive-latex-base \
+    texlive-latex-base-doc \
+    texlive-latex-extra \
+    texlive-latex-extra-doc \
+    texlive-latex-recommended \
+    texlive-latex-recommended-doc \
+    texlive-pictures \
+    texlive-pictures-doc \
+    texlive-pstricks \
+    texlive-pstricks-doc \
+    texlive-science \
+    texlive-science-doc
+
+# Install system dependencies:
+RUN apt-get --assume-yes install gtk-doc-tools libfftw3-dev liborc-0.4-0 python-gobject-dev python-numpy python-scipy lscsoft-gds
+
+# Clean up and close-out
+
+RUN rm -rf /tars /src
+
+ENTRYPOINT [""]
+
+
+
+# Notes to run:
+#
+# 1. On your local machine (assuming you have docker installed), then first build the
+#    gstlal-dev container:
+#  
+#       docker build --rm --no-cache -t containers.ligo.org/alexander.pace/gstlal-dev:stretch -f ./Dockerfile.stretch ./
+# 
+#    , where the flags mean:
+#         --rm --no-cache  : build fresh, delete old build stages and cached copy. I'm paranoid.
+#         -t               : location/tag of destination container
+#         -f               : name of Dockerfile to use (it defaults to "Dockerfile") 
+#
+# 2. Once it builds, docker will give you a hash of the built container:
+#
+#       docker tag 7039c16eadc4 aepace/gstlal-dev:stretch
+#
+#    , this tags the container with hash "7039c16eadc4" and then tags it to the 
+#    gstlal-dev:stretch container in aepace's namespace. 
+#
+# 3. Finally, push the container you just tagged:
+#
+#       docker push aepace/gstlal-dev
