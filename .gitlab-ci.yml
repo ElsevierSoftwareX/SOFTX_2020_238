@@ -23,8 +23,9 @@ before_script:
     - export LIBRARY_PATH="${GSTLAL_DIR}/lib:${GSTLAL_DIR}/lib64:${LIBRARY_PATH}"
     - export PKG_CONFIG_PATH="${GSTLAL_DIR}/lib/pkgconfig:${GSTLAL_DIR}/lib64/pkgconfig:${PKG_CONFIG_PATH}"
     - export GI_TYPELIB_PATH="${GSTLAL_DIR}/lib/girepository-1.0:${GSTLAL_DIR}/lib64/girepository-1.0:${GI_TYPELIB_PATH}"
-    - export GST_PLUGIN_PATH="${GSTLAL_DIR}/lib/gstreamer-1.0:${GST_PLUGIN_PATH}"
+    - export GST_PLUGIN_PATH="${GSTLAL_DIR}/lib/gstreamer-1.0:${GSTLAL_DIR}/lib64/gstreamer-1.0:${GST_PLUGIN_PATH}"
     - export PYTHONPATH="${GSTLAL_DIR}/lib64/python2.7/site-packages:${GSTLAL_DIR}/lib/python2.7/site-packages:${PYTHONPATH}"
+    - export GST_REGISTRY_1_0="${GSTLAL_DIR}/registry.bin"
     - export CCACHE_DIR=${PWD}/ccache
     
     # Define build and linking parameters:
