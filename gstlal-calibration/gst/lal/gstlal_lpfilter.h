@@ -71,7 +71,7 @@ struct _GSTLALLPFilter {
 	guint64 next_in_offset;
 
 	/* FIR filter parameters */
-	double input_average;
+	complex double input_average;
 	gint64 num_in_avg;
 
 	/* properties */

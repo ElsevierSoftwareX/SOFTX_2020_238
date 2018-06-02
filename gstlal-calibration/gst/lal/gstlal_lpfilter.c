@@ -19,8 +19,8 @@
 
 /*
  * SECTION:gstlal_lpfilter
- * @short_description:  Compute transfer function between two or more
- * time series.
+ * @short_description:  Compute linear-phase FIR filter given gain and
+ * phase in the form of a complex input.
  */
 
 
@@ -204,7 +204,7 @@ static void update_fir_filter(complex double *fir_filter, fftw_plan fir_plan, co
 	 * Compute the filter in the frequency domain 
 	 */
 
-	double gain = cabs(input_average);
+	double gain = cabs(input_average) / fir_length;
 
 	/*
 	 * At each point in frequency space, the filter is gain * exp(2 pi i f t). The value
@@ -212,7 +212,7 @@ static void update_fir_filter(complex double *fir_filter, fftw_plan fir_plan, co
 	 * in evenly spaced increments. The rest of the parameters in the exp() are constant. 
 	 */
 
-	double two_pi_i_df_t = clog(input_average / gain) / measurement_frequency * fir_sample_rate / 2 / (fd_fir_length - 1);
+	complex double two_pi_i_df_t = clog(input_average / gain / fir_length) / measurement_frequency * fir_sample_rate / 2 / (fd_fir_length - 1);
 	for(n = 0; n < fd_fir_length; n += 2)
 		fir_filter[n] = gain * cexp(two_pi_i_df_t * n);
 
@@ -239,7 +239,7 @@ static void average_input_data_ ## DTYPE(GSTLALLPFilter *element, complex DTYPE 
 	if(element->num_in_avg) \
 		start_sample = 0; \
 	else \
-		start_sample = (gint64) (element->update_samples - gst_util_uint64_scale_int_round(pts, element->rate, GST_SECOND) % element->update_samples); \
+		start_sample = (gint64) (element->update_samples - gst_util_uint64_scale_int_round(pts, element->rate, GST_SECOND) % element->update_samples) % element->update_samples; \
  \
 	/* How many samples from this buffer will we need to add into this average? */ \
 	samples_to_add = min64(element->average_samples - element->num_in_avg, src_size - start_sample); \
@@ -248,7 +248,10 @@ static void average_input_data_ ## DTYPE(GSTLALLPFilter *element, complex DTYPE 
 		for(i = start_sample; i < start_sample + samples_to_add; i++) \
 			element->input_average += src[i]; \
 		element->num_in_avg += samples_to_add; \
-		if(element->num_in_avg == element->update_samples) { \
+		if(element->num_in_avg >= element->average_samples) { \
+ \
+			/* Number of samples in average should not become greater than specified by the user */ \
+			g_assert_cmpint(element->num_in_avg, ==, element->average_samples); \
  \
 			/* We still need to divide by n to get the average */ \
 			element->input_average /= element->num_in_avg; \
@@ -389,7 +392,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 	GST_DEBUG_OBJECT(element, "have buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 
 	/* Check if the data on this buffer is usable and if we plan to use it */
-	gint64 next_start_sample = element->update_samples - gst_util_uint64_scale_int_round(GST_BUFFER_PTS(buffer), element->rate, GST_SECOND) % element->update_samples;
+	gint64 next_start_sample = (element->update_samples - gst_util_uint64_scale_int_round(GST_BUFFER_PTS(buffer), element->rate, GST_SECOND) % element->update_samples) % element->update_samples;
 	if(!GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP) && mapinfo.size && (element->num_in_avg || next_start_sample < (gint64) gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(buffer), element->rate, GST_SECOND))) {
 		/* Get the data from the buffer */
 		gst_buffer_map(buffer, &mapinfo, GST_MAP_READ);
