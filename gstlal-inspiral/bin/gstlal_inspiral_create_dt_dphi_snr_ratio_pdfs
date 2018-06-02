@@ -23,5 +23,5 @@ if len(sys.argv) > 1:
 	print "USAGE: %s" % sys.argv[0]
 	sys.exit()
 
-IE = inspiral_extrinsics.InspiralExtrinsics()
+IE = inspiral_extrinsics.TimePhaseSNR(verbose = True)
 IE.to_hdf5("inspiral_dtdphi_pdf.h5")
