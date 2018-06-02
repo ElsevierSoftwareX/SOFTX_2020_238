@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018 Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+from glue import pipeline
+from gstlal import inspiral_pipe
+from gstlal import dagparts as gstlaldagparts
+
+
+try:
+	os.mkdir("logs")
+except:
+	pass
+dag = inspiral_pipe.DAG("dt_dphi")
+
+margJob = inspiral_pipe.generic_job("gstlal_inspiral_create_dt_dphi_snr_ratio_pdfs", condor_commands = {"request_memory":"4GB", "want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o2.cbc.uber.gstlaloffline"})
+
+for start in range(0,3345408,10000):
+	stop = start + 10000
+	inspiral_pipe.generic_node(margJob, dag, parent_nodes = [], opts = {"" : [start, stop]})
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+dag.write_cache()
+
