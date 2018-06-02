@@ -18,7 +18,7 @@ TPDPDF = inspiral_extrinsics.InspiralExtrinsics()
 
 num = 100
 dts = numpy.linspace(-0.030, 0.030, num)
-dphis = numpy.linspace(-numpy.pi*.99, numpy.pi*.99, num)
+dphis = numpy.linspace(-numpy.pi*1.99, numpy.pi*1.99, num)
 jointpdf = numpy.zeros((num,num))
 tpdf = numpy.zeros((num))
 phipdf = numpy.zeros((num))
