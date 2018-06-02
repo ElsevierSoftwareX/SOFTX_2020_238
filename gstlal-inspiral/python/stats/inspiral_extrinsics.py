@@ -902,7 +902,7 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 #
 
 
-def chunker(seq, size):
+def chunker(seq, size, start = None, stop = None):
 	"""
 	A generator to break up a sequence into chunks of length size, plus the
 	remainder, e.g.,
@@ -914,7 +914,11 @@ def chunker(seq, size):
 	[4, 5, 6]
 	[7]
 	"""
-	return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
+	if start is None:
+		start = 0
+	if stop is None:
+		stop = len(seq)
+	return (seq[pos:pos + size] for pos in xrange(start, stop, size))
 
 
 def normsq_along_one(x):
@@ -1058,7 +1062,7 @@ class TimePhaseSNR(object):
 	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
 	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 
-	def __init__(self, tree_data = None, margsky = None, verbose = False):
+	def __init__(self, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None):
 		"""
 		Initialize a new class from scratch via explicit computation
 		of the tree data and marginalized probability distributions or by providing
@@ -1099,17 +1103,18 @@ class TimePhaseSNR(object):
 				slcs = sorted(sum(self.instrument_pair_slices(self.instrument_pairs(combo)).values(),[]))
 				num_points = self.tree_data.shape[0]
 
-				marg = []
+				marg = numpy.zeros(num_points)
 				# FIXME the n_jobs parameter is not available
 				# in the reference platforms, but this doesn't
 				# get used in practice during an actual
-				# analysis.  This will use 8GB of RAM and keep
-				# a box pretty busy.
-				for cnt, points in enumerate(chunker(self.tree_data[:,slcs], 100)):
+				# analysis.  This will use 4GB of RAM and keep
+				# a box busier than 1 core.
+				numchunks = 50
+				for cnt, points in enumerate(chunker(self.tree_data[:,slcs], numchunks, margstart, margstop)):
 					if verbose:
-						print >> sys.stderr, "%d/%d" % (cnt * 100, num_points)
+						print >> sys.stderr, "%d/%d" % (cnt * numchunks, num_points)
 					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 8.5, n_jobs=-1)[0]
-					marg.extend(margprob(Dmat))
+					marg[margstart + numchunks * cnt : margstart + numchunks * (cnt+1)] = margprob(Dmat)
 				self.margsky[combo] = numpy.array(marg, dtype="float32")
 
 	def to_hdf5(self, fname):
