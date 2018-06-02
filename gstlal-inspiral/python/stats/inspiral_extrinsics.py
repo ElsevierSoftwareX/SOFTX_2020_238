@@ -1097,11 +1097,7 @@ class TimePhaseSNR(object):
 				if verbose:
 					print >> sys.stderr, "marginalizing tree for: ", combo
 				slcs = sorted(sum(self.instrument_pair_slices(self.instrument_pairs(combo)).values(),[]))
-				#
-				# NOTE we approximate the marginalization
-				# integral with 10% of the sky points
-				#
-				num_points = int(self.tree_data.shape[0] / 10.)
+				num_points = self.tree_data.shape[0]
 
 				marg = []
 				# FIXME the n_jobs parameter is not available
@@ -1109,8 +1105,10 @@ class TimePhaseSNR(object):
 				# get used in practice during an actual
 				# analysis.  This will use 8GB of RAM and keep
 				# a box pretty busy.
-				for points in chunker(self.tree_data[:,slcs], 1000):
-					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 20, n_jobs=-1)[0]
+				for cnt, points in enumerate(chunker(self.tree_data[:,slcs], 100)):
+					if verbose:
+						print >> sys.stderr, "%d/%d" % (cnt * 100, num_points)
+					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 8.5, n_jobs=-1)[0]
 					marg.extend(margprob(Dmat))
 				self.margsky[combo] = numpy.array(marg, dtype="float32")
 
