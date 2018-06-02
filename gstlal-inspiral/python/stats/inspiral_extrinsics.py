@@ -942,9 +942,9 @@ def margprob(Dmat):
 	out = []
 	for D in Dmat:
 		D = D[numpy.isfinite(D)]
-		step = max(int(len(D) / 32.), 1)
+		step = max(int(len(D) / 2048.), 1)
 		D = D[::step]
-		if len(D) == 33:
+		if len(D) == 2049:
 			out.append(step * scipy.integrate.romb(numpy.exp(-D**2/2.)))
 		else:
 			out.append(step * scipy.integrate.simps(numpy.exp(-D**2/2.)))
@@ -1075,7 +1075,7 @@ class TimePhaseSNR(object):
 		self.margsky = margsky
 
 		if self.tree_data is None:
-			time, phase, deff = TimePhaseSNR.tile()
+			time, phase, deff = TimePhaseSNR.tile(verbose = verbose)
 			self.tree_data = self.dtdphideffpoints(time, phase, deff, self.slices)
 
 		# produce KD trees for all the combinations.  NOTE we slice
@@ -1110,7 +1110,7 @@ class TimePhaseSNR(object):
 				# analysis.  This will use 8GB of RAM and keep
 				# a box pretty busy.
 				for points in chunker(self.tree_data[:,slcs], 1000):
-					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 3.5, n_jobs=-1)[0]
+					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 20, n_jobs=-1)[0]
 					marg.extend(margprob(Dmat))
 				self.margsky[combo] = numpy.array(marg, dtype="float32")
 
