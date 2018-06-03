@@ -1131,7 +1131,7 @@ class TimePhaseSNR(object):
 		f.close()
 
 	@staticmethod
-	def from_hdf5(fname):
+	def from_hdf5(fname, other_fnames = []):
 		"""
 		Initialize one of these from a file instead of computing it from scratch
 		"""
@@ -1142,6 +1142,14 @@ class TimePhaseSNR(object):
 		for combo in dgrp["marg"]:
 			key = tuple(combo.split(","))
 			margsky[key] = numpy.array(dgrp["marg"][combo])
+		f.close()
+		for fn in other_fnames:
+			f = h5py.File(fn, "r")
+			dgrp = f["gstlal_extparams"]
+			for combo in dgrp["marg"]:
+				key = tuple(combo.split(","))
+				margsky[key] += numpy.array(dgrp["marg"][combo])
+			f.close()
 		return TimePhaseSNR(tree_data = tree_data, margsky = margsky)
 
 	@property
