@@ -16,7 +16,7 @@ from gstlal.stats import inspiral_extrinsics
 
 TPDPDF = inspiral_extrinsics.InspiralExtrinsics()
 
-num = 100
+num = 300
 dts = numpy.linspace(-0.030, 0.030, num)
 dphis = numpy.linspace(-numpy.pi*1.99, numpy.pi*1.99, num)
 jointpdf = numpy.zeros((num,num))
