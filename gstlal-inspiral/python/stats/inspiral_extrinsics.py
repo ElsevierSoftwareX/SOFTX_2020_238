@@ -1061,6 +1061,7 @@ class TimePhaseSNR(object):
 	# include kagra for now...
 	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
 	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
+	numchunks = 20
 
 	def __init__(self, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None):
 		"""
@@ -1104,17 +1105,11 @@ class TimePhaseSNR(object):
 				num_points = self.tree_data.shape[0]
 
 				marg = numpy.zeros(num_points)
-				# FIXME the n_jobs parameter is not available
-				# in the reference platforms, but this doesn't
-				# get used in practice during an actual
-				# analysis.  This will use 4GB of RAM and keep
-				# a box busier than 1 core.
-				numchunks = 50
-				for cnt, points in enumerate(chunker(self.tree_data[:,slcs], numchunks, margstart, margstop)):
+				for cnt, points in enumerate(chunker(self.tree_data[:,slcs], self.numchunks, margstart, margstop)):
 					if verbose:
-						print >> sys.stderr, "%d/%d" % (cnt * numchunks, num_points)
-					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 8.5, n_jobs=-1)[0]
-					marg[margstart + numchunks * cnt : margstart + numchunks * (cnt+1)] = margprob(Dmat)
+						print >> sys.stderr, "%d/%d" % (cnt * self.numchunks, num_points)
+					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 8.5)[0]
+					marg[margstart + self.numchunks * cnt : margstart + self.numchunks * (cnt+1)] = margprob(Dmat)
 				self.margsky[combo] = numpy.array(marg, dtype="float32")
 
 	def to_hdf5(self, fname):
