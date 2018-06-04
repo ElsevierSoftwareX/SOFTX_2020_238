@@ -18,18 +18,19 @@
 
 import sys
 from gstlal.stats import inspiral_extrinsics
+import argparse
 
-if len(sys.argv) != 1 and len(sys.argv) != 3:
-	print "USAGE: %s <marg start> <marg stop>" % sys.argv[0]
-	sys.exit()
+parser = argparse.ArgumentParser(description = "create dt dphi snr pdfs")
+parser.add_argument("--start", metavar='N', type=int, help='The first index to marginalize')
+parser.add_argument("--stop", metavar='N', type=int, help='The last index to marginalize')
+parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_dtdphi_pdf.h5")
+options = parser.parse_args()
 
-if len(sys.argv) == 3:
-	start = int(sys.argv[1])
-	stop = int(sys.argv[2])
-	if start % 50 or stop % 50:
-		raise ValueError("start and stop must be multiple of 50")
-	IE = inspiral_extrinsics.TimePhaseSNR(verbose = True, margstart = start, margstop = stop)
-	IE.to_hdf5("inspiral_dtdphi_%d_%d_pdf.h5" % (start, stop))
+if options.start is not None and options.stop is not None:
+	if options.start % inspiral_extrinsics.TimePhaseSNR.numchunks or options.stop % inspiral_extrinsics.TimePhaseSNR.numchunks:
+		raise ValueError("start and stop must be multiple of %d" % TimePhaseSNR.numchunks)
+	IE = inspiral_extrinsics.TimePhaseSNR(verbose = True, margstart = options.start, margstop = options.stop)
 else:
 	IE = inspiral_extrinsics.TimePhaseSNR(verbose = True)
-	IE.to_hdf5("inspiral_dtdphi_pdf.h5")
+
+IE.to_hdf5(options.output)
