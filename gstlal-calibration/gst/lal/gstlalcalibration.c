@@ -64,7 +64,7 @@
 #include <gstlal_fccupdate.h>
 #include <gstlal_transferfunction.h>
 #include <gstlal_trackfrequency.h>
-#include <gstlal_lpfilter.h>
+#include <gstlal_adaptivefirfilt.h>
 
 
 /*
@@ -96,7 +96,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_fcc_update", GSTLAL_FCC_UPDATE_TYPE},
 		{"lal_transferfunction", GSTLAL_TRANSFERFUNCTION_TYPE},
 		{"lal_trackfrequency", GSTLAL_TRACKFREQUENCY_TYPE},
-		{"lal_lpfilter", GSTLAL_LPFILTER_TYPE},
+		{"lal_adaptivefirfilt", GSTLAL_ADAPTIVEFIRFILT_TYPE},
 		{NULL, 0},
 	};
 
