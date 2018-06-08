@@ -18,10 +18,10 @@
 
 import sys
 import argparse
-from gstlal.stats import inspiral_extrinsics
+from gstlal.stats import inspiral_extrinsics, inspiral_lr
 
 parser = argparse.ArgumentParser(description='Generate PDFs of extrinsic parameters')
-parser.add_argument('--snr-thresh', type=float, default = 4.0, help = 'set the snr minimum to define found')
+parser.add_argument('--snr-thresh', type=float, default = inspiral_lr.LnLRDensity.snr_min, help = 'set the snr minimum to define found')
 parser.add_argument('--output-file', default = 'extparams.h5', help = 'set the output hdf5 file. Default extparams.h5')
 parser.add_argument('--instrument', action = "append", help='add instrument. Can be given multiple times', required = True)
 args = parser.parse_args()
