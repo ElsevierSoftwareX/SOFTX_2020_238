@@ -589,6 +589,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 	hoftdicts = {}
 	max_instru_rates = {} 
 	sngl_max_rate = 0
+
 	for instrument in detectors.channel_dict:
 		for instrument_from_bank, bank_list in [(instrument_from_bank, bank_list) for bank_dict in banks for instrument_from_bank, bank_list in bank_dict.items()]:
 			if instrument_from_bank == instrument:
@@ -676,7 +677,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 			head = pipeparts.mkreblock(pipeline, head)
 			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
 			if verbose:
-				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
+				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_cuda_multirate_%s" % suffix)
 			snr = pipeparts.mkqueue(pipeline, snr, max_size_time=Gst.SECOND * 10, max_size_buffers=10, max_size_bytes=100000000)
 
 			if postcoh is None:
@@ -689,7 +690,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 
 		# FIXME: hard-coded to do compression
 		if verbose:
-			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
+			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_postcoh_dump_bank_stream%d" % i_dict)
 
 		postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_fname_prefix = cohfar_accumbackground_output_prefix[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
 		postcoh = mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)

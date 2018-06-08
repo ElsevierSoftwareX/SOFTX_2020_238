@@ -121,7 +121,7 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 	GstFlowReturn result = GST_FLOW_OK;
 
 
-	GstClockTime t_cur = GST_BUFFER_TIMESTAMP(buf);
+	GstClockTime t_cur = GST_BUFFER_PTS(buf);
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_start))
 		element->t_start = t_cur;
 
@@ -207,6 +207,8 @@ cohfar_assignfar_event (GstBaseTransform * base, GstEvent * event)
 {
   CohfarAssignfar *element = COHFAR_ASSIGNFAR(base);
 
+  GST_DEBUG_OBJECT(element, "Debug assignfar element %" GST_PTR_FORMAT, element);
+  GST_DEBUG_OBJECT(element, "Debug assignfar event %s", GST_EVENT_TYPE_NAME(event));
   switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_EOS:
 //      if (fflush (sink->file))

@@ -393,7 +393,7 @@ static PyObject *PyIIR(PyObject *self, PyObject *args)
 	phase_arraydims = PyArray_DIMS(phase_array);
 	phase_real8.length = phase_arraydims[0];
 	phase_real8.data = PyArray_DATA(phase_array);
-	XLALInspiralGenerateIIRSet(&amp_real8, &phase_real8, eps, alpha, beta, padding, &a1, &b0, &delay);
+	XLALInspiralGenerateIIRSet(&amp_real8, &phase_real8, eps, alpha, beta, padding, &a1, &b0, &delay, 0);
 	a1_length[0] = a1->length;
 	b0_length[0] = b0->length;
 	delay_length[0] = delay->length;

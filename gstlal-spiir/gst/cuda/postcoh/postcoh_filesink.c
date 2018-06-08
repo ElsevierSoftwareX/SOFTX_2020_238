@@ -670,7 +670,7 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 		"Writen a buffer (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
 		GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
 		G_GUINT64_FORMAT,  (unsigned int) gst_buffer_get_size(buf),
-		GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
+		GST_TIME_ARGS (GST_BUFFER_PTS(buf)),
 		GST_TIME_ARGS (GST_BUFFER_DURATION (buf)),
 		GST_BUFFER_OFFSET (buf), GST_BUFFER_OFFSET_END (buf));
 
@@ -750,10 +750,10 @@ postcoh_filesink_render (GstBaseSink * basesink, GstBuffer * buf)
 {
   PostcohFilesink *sink;
   sink = POSTCOH_FILESINK (basesink);
-  sink->t_end = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+  sink->t_end = GST_BUFFER_PTS(buf) + GST_BUFFER_DURATION(buf);
 
   if (!GST_CLOCK_TIME_IS_VALID(sink->t_start)) {
-    sink->t_start = GST_BUFFER_TIMESTAMP(buf);
+    sink->t_start = GST_BUFFER_PTS(buf);
     // This is the filename prefix.
     g_assert(sink->uri);
     sink->cur_filename = g_string_new(sink->uri);
@@ -772,7 +772,7 @@ postcoh_filesink_render (GstBaseSink * basesink, GstBuffer * buf)
     return rs;
   }
 
-  GstClockTime t_cur = GST_BUFFER_TIMESTAMP(buf);
+  GstClockTime t_cur = GST_BUFFER_PTS(buf);
   if (sink->snapshot_interval > 0 && (t_cur - sink->t_start)/GST_SECOND > (unsigned) sink->snapshot_interval) {
 
     gboolean rt = postcoh_filesink_end_xml(sink);

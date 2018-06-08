@@ -108,7 +108,7 @@ static void cohfar_accumbackground_get_property (GObject * object,
 /* vmethods */
 
 static GstFlowReturn cohfar_accumbackground_chain (GstPad * pad, GstBuffer * inbuf);
-static gboolean cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event);
+static gboolean cohfar_accumbackground_sink_event (GstPad * pad, GstObject *parent, GstEvent * event);
 static void cohfar_accumbackground_dispose (GObject *object);
 
 /*
@@ -139,14 +139,14 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
       G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
       GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "GAP" : "NONGAP",
       GST_BUFFER_IS_DISCONT(inbuf) ? "DISCONT" : "CONT",
-      gst_buffer_get_size(inbuf), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)),
+      gst_buffer_get_size(inbuf), GST_TIME_ARGS (GST_BUFFER_PTS(inbuf)),
       GST_TIME_ARGS (GST_BUFFER_DURATION (inbuf)),
       GST_BUFFER_OFFSET (inbuf), GST_BUFFER_OFFSET_END (inbuf));
 
 
 
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start))
-		element->t_roll_start = GST_BUFFER_TIMESTAMP(inbuf);
+		element->t_roll_start = GST_BUFFER_PTS(inbuf);
 
 	/* 
 	 * initialize stats files 
@@ -186,6 +186,8 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	GstPad *srcpad = element->srcpad;
 	GstCaps *caps = gst_pad_get_current_caps(srcpad);
 
+	GST_LOG("Debug accumbackground srcpad %" GST_PTR_FORMAT, srcpad);
+	GST_LOG("Debug accumbackground caps %" GST_PTR_FORMAT, caps);
 	/* allocate extra space for prompt stats */	
 	//int out_size = sizeof(PostcohInspiralTable) * outentries + sizeof(BackgroundStats) * ncombo;
 	int out_size = sizeof(PostcohInspiralTable) * outentries;
@@ -264,7 +266,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	// stats_list->pos = (stats_list->pos + 1) % NSTATS_TO_PROMPT;
 
 	/* snapshot background xml file when reaching the snapshot point*/
-	GstClockTime t_cur = GST_BUFFER_TIMESTAMP(inbuf);
+	GstClockTime t_cur = GST_BUFFER_PTS(inbuf);
 	element->t_end = t_cur;
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	if (element->snapshot_interval > 0 && duration >= element->snapshot_interval) {
@@ -280,7 +282,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	/*
 	 * set the outbuf meta data
 	 */
-	GST_BUFFER_TIMESTAMP(outbuf) = GST_BUFFER_TIMESTAMP(inbuf);
+	GST_BUFFER_PTS(outbuf) = GST_BUFFER_PTS(inbuf);
 	GST_BUFFER_DURATION(outbuf) = GST_BUFFER_DURATION(inbuf);
 	GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET(inbuf);
 	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
@@ -294,7 +296,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
       G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
       GST_BUFFER_FLAG_IS_SET(outbuf, GST_BUFFER_FLAG_GAP) ? "GAP" : "NONGAP",
       GST_BUFFER_IS_DISCONT(outbuf) ? "DISCONT" : "CONT",
-      gst_buffer_get_size(outbuf), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
+      gst_buffer_get_size(outbuf), GST_TIME_ARGS (GST_BUFFER_PTS(outbuf)),
       GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
       GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));
 
@@ -312,9 +314,13 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 
 /* handle events (search) */
 static gboolean
-cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
+cohfar_accumbackground_sink_event (GstPad * pad, GstObject *parent, GstEvent * event)
 {
-  CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(GST_OBJECT_PARENT(pad));
+  CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(parent);
+
+  GST_DEBUG_OBJECT(element, "Debug accumbackground event %s", GST_EVENT_TYPE_NAME(event));
+  GST_DEBUG_OBJECT(element, "Debug accumbackground element %" GST_PTR_FORMAT, element);
+  GST_DEBUG_OBJECT(element, "Debug accumbackground pad %" GST_PTR_FORMAT, pad);
 
   switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_EOS:
@@ -332,8 +338,11 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
     }
       break;
     default:
+      GST_DEBUG_OBJECT(event, "Debug accumbackground event default %" GST_PTR_FORMAT, event);
       break;
   }
+
+
 
   return gst_pad_event_default(pad, NULL, event);
 }
@@ -611,21 +620,26 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 
 static void cohfar_accumbackground_init(CohfarAccumbackground *element)
 {
-	GstPadTemplate *src_template;
-	GstPadTemplate *sink_template;
+  GstPad *sinkpad;
+  GstPad *srcpad;
 
-	src_template = gst_pad_template_new(
-			"src",
-			GST_PAD_SRC,
-			GST_PAD_ALWAYS,
-			gst_caps_from_string("application/x-lal-postcoh")
-		);
+  gst_element_create_all_pads(GST_ELEMENT(element));
+  /*
+  GstPadTemplate *src_template;
+  GstPadTemplate *sink_template;
 
-	sink_template = gst_pad_template_new("sink",
-			GST_PAD_SINK,
-			GST_PAD_ALWAYS,
-			gst_caps_from_string("application/x-lal-postcoh")
-		);
+  src_template = gst_pad_template_new(
+	"src",
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	gst_caps_from_string("application/x-lal-postcoh")
+  );
+
+  sink_template = gst_pad_template_new("sink",
+      GST_PAD_SINK,
+      GST_PAD_ALWAYS,
+      gst_caps_from_string("application/x-lal-postcoh")
+      );
 
 	element->sinkpad = gst_pad_new_from_template(
 		sink_template, "sink");
@@ -634,15 +648,24 @@ static void cohfar_accumbackground_init(CohfarAccumbackground *element)
 	element->srcpad = gst_pad_new_from_template(
 		src_template, "src");
 	gst_element_add_pad(GST_ELEMENT(element), element->srcpad);
+*/
+  
+  sinkpad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
+  element->sinkpad = sinkpad;
+  srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+  element->srcpad = srcpad;
+  gst_pad_set_event_function(sinkpad,
+    GST_DEBUG_FUNCPTR(cohfar_accumbackground_sink_event));
+  gst_pad_set_chain_function(sinkpad,
+    GST_DEBUG_FUNCPTR(cohfar_accumbackground_chain));
 
-	gst_pad_set_event_function(element->sinkpad,
-		GST_DEBUG_FUNCPTR(cohfar_accumbackground_sink_event));
+  gst_pad_use_fixed_caps(srcpad);
+  gst_pad_use_fixed_caps(sinkpad);
+  //gst_object_unref(srcpad);
+  //gst_object_unref(sinkpad);
 
-	gst_pad_set_chain_function(element->sinkpad,
-		GST_DEBUG_FUNCPTR(cohfar_accumbackground_chain));
-
-	element->stats_snapshot = NULL;
-	element->stats_prompt = NULL;
-	element->t_roll_start = GST_CLOCK_TIME_NONE;
-	element->snapshot_interval = NOT_INIT;
+  element->stats_snapshot = NULL;
+  element->stats_prompt = NULL;
+  element->t_roll_start = GST_CLOCK_TIME_NONE;
+  element->snapshot_interval = NOT_INIT;
 }

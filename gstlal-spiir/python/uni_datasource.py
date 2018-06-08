@@ -43,6 +43,7 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject
 from gi.repository import Gst
+from gi.repository import GstAudio
 GObject.threads_init()
 Gst.init(None)
 
@@ -169,8 +170,9 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 
 	quality = 9
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max_rate)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % max_rate)
-	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
+	#head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw, rate=%d" % max_rate)
+	#head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
+	head = pipeparts.mkresample(pipeline, head, quality = quality)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max_rate))
 
 	#
@@ -258,12 +260,12 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 
 	# export PSD in ascii text format
 	# FIXME:  also make them available in XML format as a single document
-	@bottle.route("/%s/psd.txt" % instrument)
-	def get_psd_txt(elem = whiten):
-		delta_f = elem.get_property("delta-f")
-		yield "# frequency\tspectral density\n"
-		for i, value in enumerate(elem.get_property("mean-psd")):
-			yield "%.16g %.16g\n" % (i * delta_f, value)
+	#@bottle.route("/%s/psd.txt" % instrument)
+	#def get_psd_txt(elem = whiten):
+	#	delta_f = elem.get_property("delta-f")
+	#	yield "# frequency\tspectral density\n"
+	#	for i, value in enumerate(elem.get_property("mean-psd")):
+	#		yield "%.16g %.16g\n" % (i * delta_f, value)
 
 	if psd is None:
 		# use running average PSD
@@ -289,14 +291,14 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 			if units == lal.DimensionlessUnit:
 				return
 			# FIXME: scale needs to work for the latest master code
-			#scale = float(psd.sampleUnits / units)
+			scale = float(psd.sampleUnits / units)
 			# get frequency resolution and number of bins
 			delta_f = elem.get_property("delta-f")
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 			# interpolate, rescale, and install PSD
 			psd = reference_psd.interpolate_psd(psd, delta_f)
-			#elem.set_property("mean-psd", psd.data.data[:n] * scale)
-			elem.set_property("mean-psd", psd.data[:n]) 
+			elem.set_property("mean-psd", psd.data.data[:n] * scale)
+			#elem.set_property("mean-psd", psd.data[:n]) 
 		whiten.connect_after("notify::f-nyquist", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::delta-f", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::psd-units", psd_units_or_resolution_changed, psd)
@@ -308,8 +310,13 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 	#
 
 	head = pipeparts.mkaudioconvert(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw,\
-			width=%d, rate=%d, channels=1" % (width, max_rate))
+	#head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw,\
+	#		width=%d, rate=%d, channels=1" % (width, max_rate))
+	# Copied from gstlal/python/multirate_datasource.py by shinkee
+	if width == 64: 
+	  head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max_rate, GstAudio.audio_format_to_string(GstAudio.AudioFormat.F64)))
+	else:
+	  head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max_rate, GstAudio.audio_format_to_string(GstAudio.AudioFormat.F32)))
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max_rate))
 
 

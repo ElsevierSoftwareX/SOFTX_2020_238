@@ -934,7 +934,12 @@ void cuda_multirate_spiir_add_two_data(float *data1, float *data2, gint len)
 
 guint64 cuda_multirate_spiir_get_available_samples(CudaMultirateSPIIR *element)
 {
-	return gst_adapter_available(element->adapter) / ( element->width / 8 );
+  guint size;
+  g_object_get(element->adapter, "size", &size, NULL);
+  GST_DEBUG("Debug multiratespiir_utils, getting available samples %"G_GSIZE_FORMAT, size);
+
+  return size;
+  //return gst_adapter_available(element->adapter) / ( element->width / 8 );
 }
 
 

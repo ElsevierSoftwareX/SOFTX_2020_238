@@ -364,7 +364,6 @@ class OneTimeSignalHandler(object):
 # parse command line
 #
 
-
 options, filenames, process_params, iir_banks, detectors = parse_command_line()
 
 if not options.check_time_stamps:

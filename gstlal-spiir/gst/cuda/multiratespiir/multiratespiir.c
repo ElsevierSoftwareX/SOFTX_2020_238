@@ -38,7 +38,6 @@
 #include <gstlal/gstaudioadapter.h>
 #include <gstlal/gstlal.h>
 
-
 #include <multiratespiir/multiratespiir.h>
 #include <multiratespiir/multiratespiir_utils.h>
 #include <multiratespiir/multiratespiir_kernel.h>
@@ -110,7 +109,7 @@ static void cuda_multirate_spiir_get_property (GObject * object,
 
 /* vmethods */
 static gboolean cuda_multirate_spiir_get_unit_size (GstBaseTransform * base,
-    GstCaps * caps, guint * size);
+    GstCaps * caps, gsize *size);
 static GstCaps *cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps);
 static gboolean cuda_multirate_spiir_set_caps (GstBaseTransform * base,
@@ -118,8 +117,8 @@ static gboolean cuda_multirate_spiir_set_caps (GstBaseTransform * base,
 static GstFlowReturn cuda_multirate_spiir_transform (GstBaseTransform * base,
     GstBuffer * inbuf, GstBuffer * outbuf);
 static gboolean cuda_multirate_spiir_transform_size (GstBaseTransform * base,
-   GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
-    guint * othersize);
+   GstPadDirection direction, GstCaps * caps, gsize size, GstCaps * othercaps,
+    gsize * othersize);
 static gboolean cuda_multirate_spiir_event (GstBaseTransform * base,
     GstEvent * event);
 static gboolean cuda_multirate_spiir_start (GstBaseTransform * base);
@@ -172,12 +171,15 @@ cuda_multirate_spiir_base_init (gpointer g_class)
 /*
  * the number of samples available in the adapter
  */
-
-static guint64 get_available_samples(CudaMultirateSPIIR *element)
+int DEBUG_LINE = __LINE__;
+static gsize get_available_samples(CudaMultirateSPIIR *element)
 {
-	guint size;
+	gsize size;
 
 	g_object_get(element->adapter, "size", &size, NULL);
+	GST_DEBUG("Debug multiratespiir original get_available_samples %"G_GSIZE_FORMAT " from line %d", size, DEBUG_LINE);
+	//GST_DEBUG("Debug multiratespiir original long d %ld", (long) size);
+	GST_DEBUG("Debug multiratespiir original u %u", size);
 
 	return size;
 }
@@ -216,9 +218,9 @@ cuda_multirate_spiir_class_init (CudaMultirateSPIIRClass * klass)
       GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform);
   GST_BASE_TRANSFORM_CLASS (klass)->transform_size =
       GST_DEBUG_FUNCPTR (cuda_multirate_spiir_transform_size);
-/*  GST_BASE_TRANSFORM_CLASS (klass)->event =
+  GST_BASE_TRANSFORM_CLASS (klass)->sink_event =
       GST_DEBUG_FUNCPTR (cuda_multirate_spiir_event);
-*/
+
 
   g_object_class_install_property (gobject_class, PROP_IIRBANK_FNAME,
  			g_param_spec_string(
@@ -282,7 +284,8 @@ cuda_multirate_spiir_start (GstBaseTransform * base)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
 
-  element->adapter = NULL;
+  element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
+
   element->need_discont = TRUE;
   element->num_gap_samples = 0;
   element->need_tail_drain = FALSE;
@@ -313,10 +316,11 @@ cuda_multirate_spiir_stop (GstBaseTransform * base)
 }
 
 static gboolean
-cuda_multirate_spiir_get_unit_size (GstBaseTransform * base, GstCaps * caps,
-    guint * size)
+cuda_multirate_spiir_get_unit_size (GstBaseTransform * base, GstCaps * caps, gsize *size)
 {
-  gint width, channels;
+  /* FIXME: shinkee: Hard coded width for now */
+  gint width = 32;
+  gint channels;
   GstStructure *structure;
   gboolean ret;
 
@@ -324,8 +328,8 @@ cuda_multirate_spiir_get_unit_size (GstBaseTransform * base, GstCaps * caps,
 
   /* this works for both float and int */
   structure = gst_caps_get_structure (caps, 0);
-  ret = gst_structure_get_int (structure, "width", &width);
-  ret &= gst_structure_get_int (structure, "channels", &channels);
+  //ret = gst_structure_get_int (structure, "width", &width);
+  ret = gst_structure_get_int (structure, "channels", &channels);
 
   if (G_UNLIKELY (!ret))
     return FALSE;
@@ -346,13 +350,15 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
 
   othercaps = gst_caps_copy(caps);
 
-  GST_LOG("Debug transform caps multiratespiir");
+  GST_LOG("Debug transform caps multiratespiir %" GST_PTR_FORMAT, element);
+  GST_LOG("Debug transform base %" GST_PTR_FORMAT, base);
   switch(direction) {
   case GST_PAD_SRC:
     /*
      * sink caps is the same with src caps, except it only has 1 channel
      */
 
+    GST_LOG("Debug multirate caps %d %" GST_PTR_FORMAT, __LINE__, othercaps);
     gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", G_TYPE_INT, 1, NULL);
     GST_LOG("setting channels to 1\n");
     break;
@@ -367,6 +373,7 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
     if(!element->spstate) 
 	    g_cond_wait(&element->iir_bank_available, &element->iir_bank_lock);
 
+  GST_LOG("Debug multirate caps %d %" GST_PTR_FORMAT, __LINE__, othercaps);
     gst_structure_set(gst_caps_get_structure(othercaps, 0), "channels", G_TYPE_INT, cuda_multirate_spiir_get_outchannels(element), NULL);
     g_mutex_unlock(&element->iir_bank_lock);
     break;
@@ -385,14 +392,14 @@ cuda_multirate_spiir_transform_caps (GstBaseTransform * base,
 
 static gboolean
 cuda_multirate_spiir_transform_size (GstBaseTransform * base,
-    GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
-    guint * othersize)
+    GstPadDirection direction, GstCaps * caps, gsize size, 
+    GstCaps *othercaps, gsize *othersize)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR(base);
   gboolean ret = TRUE;
 
-  guint unit_size, other_unit_size;
-  GST_LOG_OBJECT (base, "asked to transform size %d in direction %s",
+  gsize unit_size, other_unit_size;
+  GST_LOG_OBJECT (base, "Debug multiratespiir asked to transform size %d in direction %s",
       size, direction == GST_PAD_SINK ? "SINK" : "SRC");
 
   if (!cuda_multirate_spiir_get_unit_size (base, caps, &unit_size))
@@ -408,8 +415,12 @@ cuda_multirate_spiir_transform_size (GstBaseTransform * base,
      * is the uplimit size.
      */
 //    g_assert(element->bank_initialised == TRUE);
-    GST_LOG_OBJECT (base, "available samples %ld", cuda_multirate_spiir_get_available_samples (element));
-    *othersize = (size / unit_size + cuda_multirate_spiir_get_available_samples (element)) * other_unit_size;
+    DEBUG_LINE = __LINE__;
+    GST_LOG_OBJECT (base, "Debug multiratespiir available samples %ld", get_available_samples (element));
+    //*othersize = (size / unit_size + cuda_multirate_spiir_get_available_samples (element)) * other_unit_size;
+    DEBUG_LINE = __LINE__;
+    *othersize = (size / unit_size + get_available_samples (element)) * other_unit_size;
+    GST_DEBUG( "Debug seg fault" );
   } else {
     /* asked to convert size of an outgoing buffer. 
      */
@@ -431,7 +442,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
   GstStructure *s;
   gint rate;
   gint channels;
-  gint width;
+  //gint width;
   gboolean success = TRUE;
 
   GST_LOG_OBJECT (element, "incaps %" GST_PTR_FORMAT ", outcaps %"
@@ -439,7 +450,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
 
   s = gst_caps_get_structure(outcaps, 0);
   success &= gst_structure_get_int(s, "channels", &channels);
-  success &= gst_structure_get_int(s, "width", &width);
+  //success &= gst_structure_get_int(s, "width", &width);
   success &= gst_structure_get_int(s, "rate", &rate);
 
   g_mutex_lock(&element->iir_bank_lock);
@@ -455,7 +466,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
     GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, cuda_multirate_spiir_get_outchannels(element), outcaps);
       success = FALSE;
   }
-
+#if 0
   if (width != (gint) element->width) {
       /*
        * FIXME :do not support width change at run time
@@ -463,6 +474,7 @@ cuda_multirate_spiir_set_caps (GstBaseTransform * base, GstCaps * incaps,
       GST_ERROR_OBJECT(element, "width != %d in %" GST_PTR_FORMAT, element->width, outcaps);
       success = FALSE;
   }
+#endif
 
   if (rate != (gint) element->rate) {
       /*
@@ -507,15 +519,15 @@ cuda_multirate_spiir_assemble_gap_buffer (CudaMultirateSPIIR *element, gint len,
 
   /* time */
   if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
-    GST_BUFFER_TIMESTAMP (gapbuf) = element->t0 +
+    GST_BUFFER_PTS(gapbuf) = element->t0 +
         gst_util_uint64_scale_int_round (element->samples_out, GST_SECOND,
         element->rate);
     GST_BUFFER_DURATION (gapbuf) = element->t0 +
         gst_util_uint64_scale_int_round (element->samples_out + len,
-        GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP (gapbuf);
+        GST_SECOND, element->rate) - GST_BUFFER_PTS(gapbuf);
   } else {
-    GST_BUFFER_TIMESTAMP (gapbuf) = GST_CLOCK_TIME_NONE;
-    GST_BUFFER_DURATION (gapbuf) = GST_CLOCK_TIME_NONE;
+    GST_BUFFER_PTS(gapbuf) = 0;
+    GST_BUFFER_DURATION (gapbuf) = 0;
   }
   /* offset */
   if (element->offset0 != GST_BUFFER_OFFSET_NONE) {
@@ -542,7 +554,7 @@ cuda_multirate_spiir_assemble_gap_buffer (CudaMultirateSPIIR *element, gint len,
       "Assembled gap buffer of %u bytes with timestamp %" GST_TIME_FORMAT
       " duration %" GST_TIME_FORMAT " offset %" G_GUINT64_FORMAT " offset_end %"
       G_GUINT64_FORMAT, (unsigned int)gst_buffer_get_size(gapbuf),
-      GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (gapbuf)),
+      GST_TIME_ARGS (GST_BUFFER_PTS(gapbuf)),
       GST_TIME_ARGS (GST_BUFFER_DURATION (gapbuf)), GST_BUFFER_OFFSET (gapbuf),
       GST_BUFFER_OFFSET_END (gapbuf));
 
@@ -561,7 +573,7 @@ cuda_multirate_spiir_push_gap (CudaMultirateSPIIR *element, gint gap_len)
 
   if(gap_len)
   {
-    guint outsize = gap_len * sizeof(float) * element->outchannels;
+    gsize outsize = gap_len * sizeof(float) * element->outchannels;
   /*  gst_pad_alloc_buffer_and_set_caps (GST_BASE_TRANSFORM_SRC_PAD (element),
     GST_BUFFER_OFFSET_NONE, outsize,
     GST_PAD_CAPS (GST_BASE_TRANSFORM_SRC_PAD (element)), &gapbuf);
@@ -578,6 +590,7 @@ cuda_multirate_spiir_push_gap (CudaMultirateSPIIR *element, gint gap_len)
     // FIXME: no sanity check
     cuda_multirate_spiir_assemble_gap_buffer (element, gap_len, gapbuf);
 
+      GST_DEBUG("Debug adapter push %" GST_PTR_FORMAT, gapbuf);
     gst_audioadapter_push(element->adapter, gapbuf);
   }
  
@@ -618,6 +631,7 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
     out_len = in_len - element->num_tail_cover_samples;
 
 
+  GST_LOG("Debug spiir push drain %" GST_PTR_FORMAT, element);
   outsize = out_len * sizeof(float) * element->outchannels;
 
   outbuf = gst_buffer_new_allocate(NULL, outsize, NULL);
@@ -667,7 +681,9 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
 
   while (num_in_multidown > 0) {
     
-    g_assert (get_available_samples(element) >= num_in_multidown * sizeof(float));
+    DEBUG_LINE = __LINE__;
+    GST_DEBUG("Debug samples %d", num_in_multidown);
+    g_assert (get_available_samples(element) >= num_in_multidown);
     in_multidown = g_malloc(num_in_multidown * sizeof(float));
     gst_audioadapter_copy_samples(element->adapter, in_multidown, num_in_multidown, NULL, NULL);
     //in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
@@ -708,15 +724,15 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
 
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
-      GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
+      GST_BUFFER_PTS(outbuf) = element->t0 +
         gst_util_uint64_scale_int_round (element->samples_out, GST_SECOND,
         element->rate);
       GST_BUFFER_DURATION (outbuf) = element->t0 +
         gst_util_uint64_scale_int_round (element->samples_out + out_len,
-        GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP (outbuf);
+        GST_SECOND, element->rate) - GST_BUFFER_PTS(outbuf);
     } else {
-      GST_BUFFER_TIMESTAMP (outbuf) = GST_CLOCK_TIME_NONE;
-      GST_BUFFER_DURATION (outbuf) = GST_CLOCK_TIME_NONE;
+      GST_BUFFER_PTS(outbuf) = 0;
+      GST_BUFFER_DURATION (outbuf) = 0;
     }
     /* offset */
     if (element->offset0 != GST_BUFFER_OFFSET_NONE) {
@@ -739,11 +755,11 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
     gst_buffer_set_size(outbuf, outsize);
 
     GST_LOG_OBJECT (element,
-      "Push_drain: Converted to buffer of %" G_GUINT32_FORMAT
+      "Debug Push_drain: Converted to buffer of %" G_GUINT32_FORMAT
       " samples (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
       GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
       G_GUINT64_FORMAT, out_len, (unsigned int)gst_buffer_get_size(outbuf),
-      GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
+      GST_TIME_ARGS (GST_BUFFER_PTS(outbuf)),
       GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
       GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));
 
@@ -787,6 +803,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
 
   GstMapInfo mapinfo;
 
+  GST_DEBUG("Debug line no: %d", __LINE__ );
   if (element->num_exe_samples == element->rate)
     out_len = in_len;
   else
@@ -794,31 +811,42 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
 
   outsize = out_len * sizeof(float) * element->outchannels;
 
-  //GST_DEBUG_OBJECT (element, "tmp_out_len %d, out len predicted %d", tmp_out_len, out_len);
+  GST_DEBUG_OBJECT (element, "out len predicted %d", out_len);
+  GST_DEBUG_OBJECT (element, "in_len %d, num_exe_samples %d", in_len, num_exe_samples);
+
 
 #ifdef ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
   // to accelerate gpu memory copy, first gpu->cpu(pinned memory)->cpu(gstbuffer)
   // remember copy from h_snglsnr_buffer to gstbuffer
   // should update this part of code after porting to 1.0
+  GST_DEBUG("Debug line no: %d", __LINE__ );
   g_assert(element->len_snglsnr_buffer > 0 || (element->len_snglsnr_buffer == 0 && element->h_snglsnr_buffer == NULL));
   if (outsize > element->len_snglsnr_buffer) {
     if (element->h_snglsnr_buffer != NULL){
       cudaFreeHost(element->h_snglsnr_buffer);
     } 
+    GST_DEBUG("Debug line no: %d cudaMalloc", __LINE__ );
     cudaMallocHost((void**)&element->h_snglsnr_buffer, outsize);
     element->len_snglsnr_buffer = outsize;
   }
   outdata = (float*) element->h_snglsnr_buffer;
 #else
+
+  GST_DEBUG("Debug line no: %d", __LINE__ );
   gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
   outdata = (float *)mapinfo.data;
 #endif
    
   while (num_in_multidown > 0) {
     
-    g_assert (get_available_samples(element) >= num_in_multidown * sizeof(float));
+    DEBUG_LINE = __LINE__;
+  GST_DEBUG("Debug line no: %d", __LINE__ );
+    GST_DEBUG("Debug samples element %d", get_available_samples(element));
+    GST_DEBUG("Debug samples num_in_multidown %d", num_in_multidown);
+    g_assert ((int) (get_available_samples(element)) >= (int)num_in_multidown);
     in_multidown = g_malloc(num_in_multidown * sizeof(float));
     gst_audioadapter_copy_samples(element->adapter, in_multidown, num_in_multidown, NULL, NULL);
+  GST_DEBUG("Debug line no: %d", __LINE__ );
     //in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
 
     num_out_multidown = multi_downsample (element->spstate, in_multidown, (gint) num_in_multidown, element->num_depths, element->stream);
@@ -827,7 +855,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     //num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
 
 
-    GST_DEBUG_OBJECT (element, "done cpy data to BUFFER");
+    GST_DEBUG_OBJECT (element, "Debug done cpy data to BUFFER %d", num_in_multidown);
  
    /* move along */
     gst_audioadapter_flush_samples(element->adapter, num_in_multidown);
@@ -836,26 +864,34 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     last_num_out_spiirup += num_out_spiirup;
  }
 
-    g_assert(last_num_out_spiirup == out_len);
+  g_assert(last_num_out_spiirup == out_len);
+  GST_DEBUG("Debug line no: %d", __LINE__ );
 
 #ifdef ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
+  /*
     gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+  GST_DEBUG("Debug line no: %d map size: %d", __LINE__, mapinfo.size );
     memcpy((void*)&mapinfo.data, outdata, outsize);
+  GST_DEBUG("Debug line no: %d", __LINE__ );
+    gst_buffer_unmap(outbuf, &mapinfo);
+    */
+  GST_DEBUG("Debug line no: %d outsize: %d", __LINE__, outsize );
+  gst_buffer_fill(outbuf, 0, outdata, outsize);
 #endif
 
-    gst_buffer_unmap(outbuf, &mapinfo);
 
+  GST_DEBUG("Debug line no: %d", __LINE__ );
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
-      GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
+      GST_BUFFER_PTS(outbuf) = element->t0 +
         gst_util_uint64_scale_int_round (element->samples_out, GST_SECOND,
         element->rate);
       GST_BUFFER_DURATION (outbuf) = element->t0 +
         gst_util_uint64_scale_int_round (element->samples_out + out_len,
-        GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP (outbuf);
+        GST_SECOND, element->rate) - GST_BUFFER_PTS(outbuf);
     } else {
-      GST_BUFFER_TIMESTAMP (outbuf) = GST_CLOCK_TIME_NONE;
-      GST_BUFFER_DURATION (outbuf) = GST_CLOCK_TIME_NONE;
+      GST_BUFFER_PTS(outbuf) = 0;
+      GST_BUFFER_DURATION (outbuf) = 0;
     }
     /* offset */
     if (element->offset0 != GST_BUFFER_OFFSET_NONE) {
@@ -875,6 +911,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
     element->samples_in += old_in_len;
 
 
+  GST_DEBUG("Debug line no: %d", __LINE__ );
     gst_buffer_set_size(outbuf, outsize);
 
     GST_LOG_OBJECT (element,
@@ -882,7 +919,7 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
       " samples (%u bytes) with timestamp %" GST_TIME_FORMAT ", duration %"
       GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT ", offset_end %"
       G_GUINT64_FORMAT, out_len, (unsigned int)gst_buffer_get_size(outbuf),
-      GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
+      GST_TIME_ARGS (GST_BUFFER_PTS(outbuf)),
       GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
       GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf));
 
@@ -907,12 +944,26 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
 
 static void adapter_push_zeros(CudaMultirateSPIIR *element, unsigned samples)
 {
-	GstBuffer *zerobuf = gst_buffer_new(); 
-	if(!zerobuf) {
-		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
-	}
-	gst_audioadapter_push(element->adapter, zerobuf);
+  GstBuffer *zerobuf = gst_buffer_new(); 
+  if(!zerobuf) {
+    GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
 
+    GST_BUFFER_FLAG_SET(zerobuf, GST_BUFFER_FLAG_GAP);
+    GST_BUFFER_PTS(zerobuf) = gst_audioadapter_expected_timestamp(element->adapter);
+    
+    if(!GST_BUFFER_PTS_IS_VALID(zerobuf))
+      GST_BUFFER_PTS(zerobuf) = 0;
+    GST_BUFFER_DURATION(zerobuf) = gst_util_uint64_scale_int_round(samples, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
+    GST_BUFFER_OFFSET(zerobuf) = gst_audioadapter_expected_offset(element->adapter);
+    
+    if(!GST_BUFFER_OFFSET_IS_VALID(zerobuf))
+      GST_BUFFER_OFFSET(zerobuf) = 0;
+    
+    GST_BUFFER_OFFSET_END(zerobuf) = GST_BUFFER_OFFSET(zerobuf) + samples;
+
+    GST_DEBUG("Debug line no: %d %" GST_PTR_FORMAT, __LINE__, zerobuf);
+    gst_audioadapter_push(element->adapter, zerobuf);
+  }
 }
 
 
@@ -928,15 +979,15 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
   GstFlowReturn res;
 
-  gulong size;
+  gsize size;
   size = gst_buffer_get_size(inbuf);
 
-  GST_LOG_OBJECT (element, "transforming %s+%s buffer of %ld bytes, ts %"
+  GST_LOG_OBJECT (element, "multiratespiir transforming %s+%s buffer of %ld bytes, ts %"
       GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT ", offset %"
       G_GINT64_FORMAT ", offset_end %" G_GINT64_FORMAT,
       GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "GAP" : "NONGAP",
       GST_BUFFER_IS_DISCONT(inbuf) ? "DISCONT" : "CONT",
-      size, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)),
+      size, GST_TIME_ARGS (GST_BUFFER_PTS(inbuf)),
       GST_TIME_ARGS (GST_BUFFER_DURATION (inbuf)),
       GST_BUFFER_OFFSET (inbuf), GST_BUFFER_OFFSET_END (inbuf));
 
@@ -967,7 +1018,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
      * (re)sync timestamp and offset book-keeping. Set t0 and offset0 to be the timestamp and offset of the inbuf.
      */
 
-    element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+    element->t0 = GST_BUFFER_PTS(inbuf);
     element->offset0 = GST_BUFFER_OFFSET(inbuf);
     element->num_gap_samples = 0;
     element->need_tail_drain = FALSE;
@@ -986,11 +1037,11 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   if (size == 0) {
     /* time */
     if (GST_CLOCK_TIME_IS_VALID (element->t0)) {
-      GST_BUFFER_TIMESTAMP (outbuf) = element->t0 +
+      GST_BUFFER_PTS(outbuf) = element->t0 +
         gst_util_uint64_scale_int_round (element->samples_out, GST_SECOND,
         element->rate);
     } else {
-      GST_BUFFER_TIMESTAMP (outbuf) = GST_CLOCK_TIME_NONE;
+      GST_BUFFER_PTS(outbuf) = GST_CLOCK_TIME_NONE;
     }
     /* offset */
     if (element->offset0 != GST_BUFFER_OFFSET_NONE) {
@@ -1011,9 +1062,13 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   num_exe_samples = element->num_exe_samples;
   num_head_cover_samples = element->num_head_cover_samples;
   num_tail_cover_samples = element->num_tail_cover_samples;
-  guint64 history_gap_samples, gap_buffer_len;
-  gint num_zeros, adapter_len, num_filt_samples;
+  gsize history_gap_samples, gap_buffer_len, adapter_len;
+  gint num_zeros, num_filt_samples;
 
+
+  DEBUG_LINE = __LINE__;
+  GST_DEBUG("Debug get avaiable samples transform %d supposed size=%d", get_available_samples(element), size );
+  GST_DEBUG("Debug gap_handle %d", element->gap_handle); 
 
   switch (element->gap_handle) {
 
@@ -1051,7 +1106,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
      * history is already cover the roll-offs, 
      * produce the gap buffer
      */
-    if (history_gap_samples >= (guint64) num_tail_cover_samples) {
+    if (history_gap_samples >= (gsize) num_tail_cover_samples) {
         /* 
 	 * no process, gap buffer in place
 	 */
@@ -1068,19 +1123,21 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
      * total roll-offs of all the resamplers, check if current
      * number of gap samples will cover the roll-offs
      */
-    if (history_gap_samples < (guint64) num_tail_cover_samples) {
+    if (history_gap_samples < (gsize) num_tail_cover_samples) {
       /* 
        * if current number of gap samples more than we can 
        * cover the roll-offs offset, process the buffer; 
        * otherwise absorb the inbuf
        */
-      if (element->num_gap_samples >= (guint64) num_tail_cover_samples) {
+      if (element->num_gap_samples >= (gsize) num_tail_cover_samples) {
         /*
          * one buffer to cover the roll-offs
          */
         num_zeros = num_tail_cover_samples - history_gap_samples;
         adapter_push_zeros (element, num_zeros);
-	adapter_len = cuda_multirate_spiir_get_available_samples(element);
+	//adapter_len = cuda_multirate_spiir_get_available_samples(element);
+    DEBUG_LINE = __LINE__;
+	adapter_len = get_available_samples(element);
         res = cuda_multirate_spiir_push_drain (element, adapter_len);
    	if (res != GST_FLOW_OK)
           return res;
@@ -1117,9 +1174,11 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
      * reset spiir state
      * if history gap is smaller than a tail cover, continue processing.
      */
-    if (element->num_gap_samples >= (guint64) num_tail_cover_samples) {
+    if (element->num_gap_samples >= (gsize) num_tail_cover_samples) {
       if (element->need_tail_drain) {
-        adapter_len = cuda_multirate_spiir_get_available_samples(element);
+        //adapter_len = cuda_multirate_spiir_get_available_samples(element);
+    DEBUG_LINE = __LINE__;
+        adapter_len = get_available_samples(element);
         cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples + adapter_len);
         gst_audioadapter_clear (element->adapter);
 
@@ -1131,7 +1190,9 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
     element->num_gap_samples = 0;
     element->need_tail_drain = TRUE;
-    adapter_len = cuda_multirate_spiir_get_available_samples(element);
+    DEBUG_LINE = __LINE__;
+    adapter_len = get_available_samples(element);
+    //adapter_len = cuda_multirate_spiir_get_available_samples(element);
     /*
      * here merely speed consideration: if samples ready to be processed are less than num_exe_samples,
      * wait until there are over num_exe_samples
@@ -1148,15 +1209,18 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
        * filter
        */
       gst_buffer_ref(inbuf);	/* don't let the adapter free it */
+      GST_DEBUG("Debug adapter push %d %" GST_PTR_FORMAT, __LINE__, inbuf);
       gst_audioadapter_push (element->adapter, inbuf);
       /* 
        * to speed up, number of samples to be filtered is times of num_exe_samples
        */
-      adapter_len = cuda_multirate_spiir_get_available_samples(element);
+    DEBUG_LINE = __LINE__;
+      adapter_len = get_available_samples(element);
       if (element->num_exe_samples == element->rate)
         num_filt_samples = gst_util_uint64_scale_int (adapter_len, 1, num_exe_samples) * num_exe_samples;
       else
         num_filt_samples = num_exe_samples;
+      GST_DEBUG("Debug line no: %d num_filt_samples %d", __LINE__, num_filt_samples );
       res = cuda_multirate_spiir_process(element, num_filt_samples, outbuf);
       if (res != GST_FLOW_OK)
         return res;
@@ -1166,24 +1230,36 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
 
   case 0: // gap is treated as 0; 
 
-    if (GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) 
+    if (GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
+      GST_DEBUG("Debug line no: %d pushing gap samples %d", __LINE__, in_samples);
         adapter_push_zeros (element, in_samples);
+    }
     else {
       gst_buffer_ref(inbuf);	/* don't let the adapter free it */
+      GST_DEBUG("Debug line no: %d push %" GST_PTR_FORMAT, __LINE__, inbuf);
       gst_audioadapter_push (element->adapter, inbuf);
     }
      /* 
      * to speed up, number of samples to be filtered is times of num_exe_samples
      */
-    adapter_len = cuda_multirate_spiir_get_available_samples(element);
+    DEBUG_LINE = __LINE__;
+    adapter_len = get_available_samples(element);
+    GST_DEBUG("Debug adapter_len u %u", adapter_len);
+    GST_DEBUG("Debug adapter_len d %d num exe samples %d", adapter_len, element->num_exe_samples);
     g_assert(element->num_exe_samples > 0);
-    if (adapter_len >= element->num_exe_samples) {
+    if ( (int) adapter_len >= (int) element->num_exe_samples) {
       if (element->num_depths > 1)
         element->need_tail_drain = TRUE;
+      
+      GST_DEBUG("Debug line no: %d num exe samples: %d buffer size: %d", __LINE__, element->num_exe_samples, gst_buffer_get_size(outbuf) );
+
       res = cuda_multirate_spiir_process(element, element->num_exe_samples, outbuf);
+
+      GST_DEBUG("Debug line no: %d", __LINE__ );
       if (res != GST_FLOW_OK)
         return res;
     } else {
+      GST_DEBUG("Debug line no: %d", __LINE__ );
         GST_INFO_OBJECT(element, "inbuf absorbed %d samples", in_samples);
         return GST_BASE_TRANSFORM_FLOW_DROPPED;
     }
@@ -1204,6 +1280,8 @@ static gboolean
 cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
 {
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
+
+  GST_DEBUG_OBJECT(event, "Debug event multiratespiir %" GST_PTR_FORMAT, event);
 
   switch (GST_EVENT_TYPE (event)) {
 #if 0
@@ -1233,7 +1311,9 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
 		cuda_multirate_spiir_push_gap(element, element->num_tail_cover_samples);
 	} else {
         adapter_push_zeros (element, element->num_tail_cover_samples);
-	int adapter_len = cuda_multirate_spiir_get_available_samples(element);
+	//int adapter_len = cuda_multirate_spiir_get_available_samples(element);
+    DEBUG_LINE = __LINE__;
+	int adapter_len = get_available_samples(element);
         cuda_multirate_spiir_push_drain (element, adapter_len);
 	}
 
@@ -1270,7 +1350,8 @@ cuda_multirate_spiir_event (GstBaseTransform * base, GstEvent * event)
 
           GST_DEBUG_OBJECT(element, "EOS, clear tails by pushing drain");
           adapter_push_zeros (element, element->num_tail_cover_samples);
- 	  int adapter_len = cuda_multirate_spiir_get_available_samples(element);
+    DEBUG_LINE = __LINE__;
+ 	  int adapter_len = get_available_samples(element);
           cuda_multirate_spiir_push_drain (element, adapter_len);
 	}
 
