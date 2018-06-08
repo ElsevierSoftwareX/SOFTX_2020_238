@@ -248,11 +248,6 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 
 class LnSignalDensity(LnLRDensity):
-	# load/initialize an SNRPDF instance for use by all instances of
-	# this class
-	SNRPDF = inspiral_extrinsics.SNRPDF.load()
-	assert SNRPDF.snr_cutoff == LnLRDensity.snr_min
-
 	def __init__(self, *args, **kwargs):
 		super(LnSignalDensity, self).__init__(*args, **kwargs)
 
@@ -264,10 +259,9 @@ class LnSignalDensity(LnLRDensity):
 		# record of horizon distances for all instruments in the
 		# network
 		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in self.instruments)
-
-	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
 		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 
+	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
 		assert frozenset(segments) == self.instruments
 		if len(snrs) < self.min_instruments:
 			return float("-inf")
@@ -499,6 +493,7 @@ class DatalessLnSignalDensity(LnSignalDensity):
 	"""
 	def __init__(self, *args, **kwargs):
 		super(DatalessLnSignalDensity, self).__init__(*args, **kwargs)
+		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 		# so we're ready to go!
 		self.add_signal_model()
 
@@ -506,10 +501,23 @@ class DatalessLnSignalDensity(LnSignalDensity):
 		# evaluate P(t) \propto number of templates
 		lnP = math.log(len(self.template_ids))
 
-		# evaluate SNR PDF.  assume all instruments have 100 Mpc
+		# Add P(instruments | horizon distances)
+		# Assume all instruments have 100 Mpc
 		# horizon distance
 		horizons = dict.fromkeys(segments, 100.)
-		lnP += self.SNRPDF.lnP_instruments(snrs.keys(), horizons, self.min_instruments) + self.SNRPDF.lnP_snrs(snrs, horizons, self.min_instruments)
+
+		try:
+			lnP += math.log(self.InspiralExtrinsics.p_of_instruments_given_horizons(snrs.keys(), horizons))
+		except ValueError:
+			# The code raises a value error when a needed horizon distance is zero
+			return float("-inf")
+
+		# Evaluate dt, dphi, snr probability
+		try:
+			lnP += math.log(self.InspiralExtrinsics.time_phase_snr(dt, phase, snrs, horizons))
+		# FIXME need to make sure this is really a math domain error
+		except ValueError:
+			return float("-inf")
 
 		# evalute the (snr, \chi^2 | snr) PDFs (same for all
 		# instruments)
