@@ -1048,7 +1048,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 #
 
 if options.apply_complex_kappapu:
-	# We will apply an adaptive FIR filter to the PUM\UIM component of the actuation that includes time-dependence in the gain and computational time delay
+	# We will apply an adaptive FIR filter to the PUM/UIM component of the actuation that includes time-dependence in the gain and computational time delay
 	adaptive_pumuim_filter = pipeparts.mkgeneric(pipeline, smooth_kputee, "lal_adaptivefirfilt", update_samples = int(options.actuation_filter_update_time * options.compute_factors_sr), average_samples = int(options.actuation_filter_averaging_time * options.compute_factors_sr), phase_measurement_frequency = pu_act_esd_line_freq, static_filter = pumuimfilt, variable_filter_length = len(pumuimfilt), adaptive_filter_length = len(pumuimfilt), tukey_param = 0.5, filter_sample_rate = pumuimchainsr, filename = "adaptive_pumuim_filters.txt")
 
 if options.apply_complex_kappatst:

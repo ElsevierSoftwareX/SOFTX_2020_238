@@ -52,14 +52,15 @@
  */
 
 
-GType cmath_cabs_get_type (void);
-GType cmath_creal_get_type (void);
-GType cmath_cimag_get_type (void);
-GType cmath_cexp_get_type (void);
-GType cmath_cln_get_type (void);
-GType cmath_clog_get_type (void);
-GType cmath_clog10_get_type (void);
-GType cmath_cpow_get_type (void);
+GType cmath_cabs_get_type(void);
+GType cmath_creal_get_type(void);
+GType cmath_cimag_get_type(void);
+GType cmath_cexp_get_type(void);
+GType cmath_cln_get_type(void);
+GType cmath_clog_get_type(void);
+GType cmath_clog10_get_type(void);
+GType cmath_cpow_get_type(void);
+GType cmath_lpshiftfreq_get_type(void);
 
 
 static gboolean
@@ -72,14 +73,15 @@ plugin_init (GstPlugin *plugin)
 	} *element, elements[] = {
 		{
 		"cmath_base", CMATH_BASE_TYPE}, {
-		"cabs", cmath_cabs_get_type ()}, {
-		"creal", cmath_creal_get_type ()}, {
-		"cimag", cmath_cimag_get_type ()}, {
-		"cexp", cmath_cexp_get_type ()}, {
-		"cln", cmath_cln_get_type ()}, {
-		"clog", cmath_clog_get_type ()}, {
-		"clog10", cmath_clog10_get_type ()}, {
-		"cpow", cmath_cpow_get_type ()}, {
+		"cabs", cmath_cabs_get_type()}, {
+		"creal", cmath_creal_get_type()}, {
+		"cimag", cmath_cimag_get_type()}, {
+		"cexp", cmath_cexp_get_type()}, {
+		"cln", cmath_cln_get_type()}, {
+		"clog", cmath_clog_get_type()}, {
+		"clog10", cmath_clog10_get_type()}, {
+		"cpow", cmath_cpow_get_type()}, {
+		"lpshiftfreq", cmath_lpshiftfreq_get_type()}, {
 		NULL, 0},};
 
 	/*
