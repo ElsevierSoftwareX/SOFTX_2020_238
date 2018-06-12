@@ -25,8 +25,8 @@
  * The primary purpose of this element is to reject certain values
  * considered by the user to be "bad data." This can be done by flagging
  * that data as a gap, replacing it with a specified value, or both. The
- * criteria for bad data is specified by the property #bad_data_intervals,
- * which is an array of at most 16 elements. Array indices 0, 2, 4, etc.,
+ * criteria for bad data is specified by the array property
+ * #bad_data_intervals. Array indices 0, 2, 4, etc.,
  * represent maxima, and array indices 1, 3, 5, etc., represent the 
  * corresponding minima. For example, if 
  * #bad_data_intervals = [0, 1, 2, 3],
@@ -660,10 +660,11 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		element->replace_value = g_value_get_double(value);
 		break;
 	case ARG_BAD_DATA_INTERVALS: {
-		GValueArray *va = g_value_get_boxed(value);
-		element->bad_data_intervals = g_malloc(16 * sizeof(double));
-		element->array_length = 1;
-		gstlal_doubles_from_g_value_array(va, element->bad_data_intervals, &element->array_length);
+		if(element->bad_data_intervals) {
+			g_free(element->bad_data_intervals);
+			element->bad_data_intervals = NULL;
+		}
+		element->bad_data_intervals = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &element->array_length);
 		if(element->array_length % 2)
 			GST_ERROR_OBJECT(element, "Array length for property bad_data_intervals must be even");
 		break;
@@ -860,10 +861,10 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 		g_param_spec_value_array(
 			"bad-data-intervals",
 			"Bad data intervals",
-			"Array of at most 16 elements containing minima and maxima of closed intervals\n\t\t\t"
-			"in which data is considered unacceptable and will be replaced with gaps and/or\n\t\t\t"
-			"the replace-value. Array indices 0, 2, 4, etc., represent maxima, and\n\t\t\t"
-			"array indices 1, 3, 5, etc., represent the corresponding minima.",
+			"Array containing minima and maxima of closed intervals in which data is\n\t\t\t"
+			"considered unacceptable and will be replaced with gaps and/or the replace-value.\n\t\t\t"
+			"Array indices 0, 2, 4, etc., represent maxima, and array indices 1, 3, 5, etc.,\n\t\t\t"
+			"represent the corresponding minima.",
 			g_param_spec_double(
 				"coefficient",
 				"Coefficient",

@@ -1433,17 +1433,21 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_TRANSFER_FUNCTIONS:
-		if(element->transfer_functions)
+		if(element->transfer_functions) {
 			g_free(element->transfer_functions);
+			element->transfer_functions = NULL;
+		}
 		int n;
-		gstlal_doubles_from_g_value_array(g_value_get_boxed(value), (double *) element->transfer_functions, &n);
+		element->transfer_functions = (complex double *) gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &n);
 		break;
 
 	case ARG_FIR_FILTERS:
-		if(element->fir_filters)
+		if(element->fir_filters) {
 			g_free(element->fir_filters);
+			element->fir_filters = NULL;
+		}
 		int m;
-		gstlal_doubles_from_g_value_array(g_value_get_boxed(value), element->fir_filters, &m);
+		element->fir_filters = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &m);
 		break;
 
 	case ARG_INPUT_MAY_BE_ZERO:

@@ -90,15 +90,16 @@ def mkgate(pipeline, src, control, threshold, queue_length = 0, **properties):
 	elem = pipeparts.mkgate(pipeline, mkqueue(pipeline, src, length = queue_length), control = mkqueue(pipeline, control, length = queue_length), threshold = threshold, **properties)
 	return elem
 
-def mkinterleave(pipeline, srcs):
-	num_srcs = len(srcs)
+def mkinterleave(pipeline, srcs, complex_data = False):
+	complex_factor = 1 + int(complex_data)
+	num_srcs = complex_factor * len(srcs)
 	i = 0
 	mixed_srcs = []
 	for src in srcs:
 		matrix = [numpy.zeros(num_srcs)]
 		matrix[0][i] = 1
 		mixed_srcs.append(pipeparts.mkmatrixmixer(pipeline, src, matrix=matrix))
-		i += 1
+		i += complex_factor
 	elem = mkadder(pipeline, tuple(mixed_srcs))
 
 	#chan1 = pipeparts.mkmatrixmixer(pipeline, src1, matrix=[[1,0]])
@@ -251,7 +252,7 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 
 		# Remove worthless data from computation of transfer function if we can
 		if obsready is not None:
-			tf_at_f = mkgate(pipeline, tf_at_f, obsready, 1, attack_length = -integration_samples)
+			tf_at_f = mkgate(pipeline, tf_at_f, obsready, 1, attack_length = -((1.0 - filter_latency) * filter_samples))
 		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = 1, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
 		# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
@@ -451,7 +452,10 @@ def smooth_kappas_no_coherence_test(pipeline, head, var, expected, N, Nav, defau
 
 def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, min_samples, status_out_smooth = 1, starting_rate=16, ending_rate=16):
 
-	smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [expected_real - real_ok_var, expected_real, expected_real, expected_real + real_ok_var], insert_gap = True, remove_gap = False)
+	if type(real_ok_var) is list:
+		smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [real_ok_var[0], expected_real, expected_real, real_ok_var[1]], insert_gap = True, remove_gap = False)
+	else:
+		smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [expected_real - real_ok_var, expected_real, expected_real, expected_real + real_ok_var], insert_gap = True, remove_gap = False)
 	smoothRInRange = pipeparts.mkbitvectorgen(pipeline, smoothRInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 	smoothRInRange = pipeparts.mkcapsfilter(pipeline, smoothRInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % starting_rate)
 	if starting_rate != ending_rate:
@@ -459,7 +463,10 @@ def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag,
 		smoothRInRange = pipeparts.mkcapsfilter(pipeline, smoothRInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % ending_rate)
 	smoothRInRangetee = pipeparts.mktee(pipeline, smoothRInRange)
 
-	smoothIInRange = mkinsertgap(pipeline, smoothI, bad_data_intervals = [expected_imag - imag_ok_var, expected_imag, expected_imag, expected_imag + imag_ok_var], insert_gap = True, remove_gap = False)
+	if type(imag_ok_var) is list:
+		smoothIInRange = mkinsertgap(pipeline, smoothI, bad_data_intervals = [imag_ok_var[0], expected_imag, expected_imag, imag_ok_var[1]], insert_gap = True, remove_gap = False)
+	else:
+		smoothIInRange = mkinsertgap(pipeline, smoothI, bad_data_intervals = [expected_imag - imag_ok_var, expected_imag, expected_imag, expected_imag + imag_ok_var], insert_gap = True, remove_gap = False)
 	smoothIInRange = pipeparts.mkbitvectorgen(pipeline, smoothIInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 	smoothIInRange = pipeparts.mkcapsfilter(pipeline, smoothIInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % starting_rate)
 	if starting_rate != ending_rate:
@@ -474,7 +481,10 @@ def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag,
 
 def compute_kappa_bits_only_real(pipeline, smooth, expected, ok_var, min_samples, status_out_smooth = 1, starting_rate=16, ending_rate=16):
 
-	smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [expected - ok_var, expected, expected, expected + ok_var], insert_gap = True, remove_gap = False)
+	if type(ok_var) is list:
+		smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [ok_var[0], expected, expected, ok_var[1]], insert_gap = True, remove_gap = False)
+	else:
+		smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [expected - ok_var, expected, expected, expected + ok_var], insert_gap = True, remove_gap = False)
 	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 	smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % starting_rate)
 	if starting_rate != ending_rate:
@@ -733,7 +743,11 @@ def compute_Xi(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP14,
 
 	return Xi
 
-def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name, filter_number):
+def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name):
+	firfilter = filter_maker.get_property(maker_prop_name)[::-1]
+	filter_taker.set_property(taker_prop_name, firfilter)
+
+def update_filters(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name, filter_number):
 	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
 
@@ -763,7 +777,7 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
 		minus_noise = pipeparts.mkgeneric(pipeline, witness_tees[i], "lal_tdwhiten", kernel = default_fir_filter, latency = fir_length / 2, taper_length = 20 * fir_length)
-		transfer_functions.connect("notify::fir-filters", update_filter, minus_noise, "fir_filters", "kernel", i)
+		transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
 		signal_minus_noise.append(mkresample(pipeline, minus_noise, 5, False, signal_rate))
 
 	return mkadder(pipeline, tuple(signal_minus_noise))

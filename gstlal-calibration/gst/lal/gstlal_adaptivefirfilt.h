@@ -92,6 +92,10 @@ struct _GSTLALAdaptiveFIRFilt {
 	gint64 static_filter_length;
 	gint64 variable_filter_length;
 	double *adaptive_filter;
+	gint64 adaptive_filter_length;
+	double tukey_param;
+	double *tukey;
+	gint64 tukey_length;
 	gint filter_sample_rate;
 	gboolean write_to_screen;
 	char *filename;
