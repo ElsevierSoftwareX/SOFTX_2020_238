@@ -276,8 +276,11 @@ parser.add_option("--powerlines-channel-sr", metavar = "Hz", type = int, default
 parser.add_option("--powerlines-freq-var", metavar = "Hz", type = float, default = 0.02, help = "Amount by which freqency of the power mains varies with time. Supposedly they are intentionally varied by +- 0.02 Hz. (Default = 0.02)")
 parser.add_option("--witness-channel-list", metavar = "name", default = None, help = "Comma-separated list of witness channels to use to subtract noise from h(t). (Default is to not use any witness channels.)")
 parser.add_option("--witness-channel-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which transfer functions will be computed and witness channels will be filtered. (Default = 2048 Hz)")
-parser.add_option("--cleaning-check-range-min", metavar = "Hz", type = int, default = 100, help = "Minimum of a range of frequencies in which we expect noise subtraction to be impactful. The HOFT_CLEAN_OK bit of the calibration state vector is determined based on whether rms amplitude of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 100 Hz)")
-parser.add_option("--cleaning-check-range-max", metavar = "Hz", type = int, default = 500, help = "Maximum of a range of frequencies in which we expect noise subtraction to be impactful. The HOFT_CLEAN_OK bit of the calibration state vector is determined based on whether rms amplitude of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 500 Hz)")
+parser.add_option("--cleaning-check-rms-time", metavar = "seconds", type = float, default = 1.0, help = "The amount of data from h(t) and cleaned h(t) that is used to compute and compare the rms. This comparison between cleaned and uncleaned h(t) determines whether the HOFT_CLEAN bits of the calibration state vector are on or off.")
+parser.add_option("--cleaning-check-range-low-min", metavar = "Hz", type = int, default = 15, help = "Minimum of a range of frequencies in which we expect line/noise subtraction to be impactful. The HOFT_CLEAN_LOWFREQ_OK bit of the calibration state vector is determined based on whether rms of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 15 Hz)")
+parser.add_option("--cleaning-check-range-low-max", metavar = "Hz", type = int, default = 40, help = "Maximum of a range of frequencies in which we expect line/noise subtraction to be impactful. The HOFT_CLEAN_LOWFREQ_OK bit of the calibration state vector is determined based on whether rms of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 40 Hz)")
+parser.add_option("--cleaning-check-range-mid-min", metavar = "Hz", type = int, default = 100, help = "Minimum of a range of frequencies in which we expect line/noise subtraction to be impactful. The HOFT_CLEAN_MIDFREQ_OK bit of the calibration state vector is determined based on whether rms of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 100 Hz)")
+parser.add_option("--cleaning-check-range-mid-max", metavar = "Hz", type = int, default = 500, help = "Maximum of a range of frequencies in which we expect line/noise subtraction to be impactful. The HOFT_CLEAN_MIDFREQ_OK bit of the calibration state vector is determined based on whether rms of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 500 Hz)")
 
 # These options are specific to the full calibration mode
 parser.add_option("--full-calibration", action = "store_true", help = "Set this to run the pipeline in full calibration mode.")
@@ -901,14 +904,17 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 			derr_at_opt_gain_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_opt_gain_freq, derr_dewhiten_at_opt_gain_fcc_freq_real, derr_dewhiten_at_opt_gain_fcc_freq_imag)
 
 		# Compute the factor S which will be used for the kappa_c and f_cc calculations
+		# \kappa_tst and \kappa_pu need to be evaluated at the higher pcal line frequency
+		ktst_at_opt_gain_freq = pipeparts.mkgeneric(pipeline, ktst, "lpshiftfreq", frequency_ratio = opt_gain_fcc_line_freq / esd_act_line_freq)
+		kpu_at_opt_gain_freq = pipeparts.mkgeneric(pipeline, kpu, "lpshiftfreq", frequency_ratio = opt_gain_fcc_line_freq / pu_act_esd_line_freq)
 		if not options.factors_from_filters_file:
 			EP6 = calibration_parts.merge_into_complex(pipeline, head_dict["EP6_real"], head_dict["EP6_imag"])
 			EP7 = calibration_parts.merge_into_complex(pipeline, head_dict["EP7_real"], head_dict["EP7_imag"])
 			EP8 = calibration_parts.merge_into_complex(pipeline, head_dict["EP8_real"], head_dict["EP8_imag"])
 			EP9 = calibration_parts.merge_into_complex(pipeline, head_dict["EP9_real"], head_dict["EP9_imag"])
-			S = calibration_parts.compute_S(pipeline, EP6, pcal_at_opt_gain_freq, derr_at_opt_gain_freq, EP7, ktst, EP8, kpu, EP9)
+			S = calibration_parts.compute_S(pipeline, EP6, pcal_at_opt_gain_freq, derr_at_opt_gain_freq, EP7, ktst_at_opt_gain_freq, EP8, kpu_at_opt_gain_freq, EP9)
 		elif options.factors_from_filters_file:
-			S = calibration_parts.compute_S_from_filters_file(pipeline, EP6_real, EP6_imag, pcal_at_opt_gain_freq, derr_at_opt_gain_freq, EP7_real, EP7_imag, ktst, EP8_real, EP8_imag, kpu, EP9_real, EP9_imag)
+			S = calibration_parts.compute_S_from_filters_file(pipeline, EP6_real, EP6_imag, pcal_at_opt_gain_freq, derr_at_opt_gain_freq, EP7_real, EP7_imag, ktst_at_opt_gain_freq, EP8_real, EP8_imag, kpu_at_opt_gain_freq, EP9_real, EP9_imag)
 
 		S = pipeparts.mktee(pipeline, S)
 
@@ -982,14 +988,17 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 		derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, options.compute_factors_sr, options.demodulation_filter_time, options.filter_latency)
 
 		# Compute the factor Xi which will be used for the f_s and src_Q calculations
+		# \kappa_tst and \kappa_pu need to be evaluated at the SRC pcal line frequency
+		ktst_at_src_freq = pipeparts.mkgeneric(pipeline, ktst, "lpshiftfreq", frequency_ratio = src_pcal_line_freq / esd_act_line_freq)
+		kpu_at_src_freq = pipeparts.mkgeneric(pipeline, kpu, "lpshiftfreq", frequency_ratio = src_pcal_line_freq / pu_act_esd_line_freq)
 		if not options.factors_from_filters_file:
 			EP11 = calibration_parts.merge_into_complex(pipeline, head_dict["EP11_real"], head_dict["EP11_imag"])
 			EP12 = calibration_parts.merge_into_complex(pipeline, head_dict["EP12_real"], head_dict["EP12_imag"])
 			EP13 = calibration_parts.merge_into_complex(pipeline, head_dict["EP13_real"], head_dict["EP13_imag"])
 			EP14 = calibration_parts.merge_into_complex(pipeline, head_dict["EP14_real"], head_dict["EP14_imag"])
-			Xi = calibration_parts.compute_Xi(pipeline, pcal_at_src_freq, derr_at_src_freq, src_pcal_line_freq, EP11, EP12, EP13, EP14, ktst, kpu, kc, fcc)
+			Xi = calibration_parts.compute_Xi(pipeline, pcal_at_src_freq, derr_at_src_freq, src_pcal_line_freq, EP11, EP12, EP13, EP14, ktst_at_src_freq, kpu_at_src_freq, kc, fcc)
 		elif options.factors_from_filters_file:
-			Xi = calibration_parts.compute_Xi_from_filters_file(pipeline, pcal_at_src_freq, derr_at_src_freq, src_pcal_line_freq, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc)
+			Xi = calibration_parts.compute_Xi_from_filters_file(pipeline, pcal_at_src_freq, derr_at_src_freq, src_pcal_line_freq, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst_at_src_freq, kpu_at_src_freq, kc, fcc)
 
 		Xi = pipeparts.mktee(pipeline, Xi)
 		smooth_Xi_nogate = pipeparts.mkgeneric(pipeline, Xi, "lal_smoothkappas", default_kappa_re = float(numpy.real(expected_Xi)), default_kappa_im = float(numpy.imag(expected_Xi)), array_size = median_smoothing_samples, avg_array_size = src_average_samples, default_to_median = options.kappas_default_to_median, filter_latency = options.filter_latency)
@@ -1049,11 +1058,11 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 if options.apply_complex_kappapu:
 	# We will apply an adaptive FIR filter to the PUM/UIM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_pumuim_filter = pipeparts.mkgeneric(pipeline, smooth_kputee, "lal_adaptivefirfilt", update_samples = int(options.actuation_filter_update_time * options.compute_factors_sr), average_samples = int(options.actuation_filter_averaging_time * options.compute_factors_sr), phase_measurement_frequency = pu_act_esd_line_freq, static_filter = pumuimfilt, variable_filter_length = len(pumuimfilt), adaptive_filter_length = len(pumuimfilt), tukey_param = 0.5, filter_sample_rate = pumuimchainsr, filename = "adaptive_pumuim_filters.txt")
+	adaptive_pumuim_filter = pipeparts.mkgeneric(pipeline, smooth_kputee, "lal_adaptivefirfilt", update_samples = int(options.actuation_filter_update_time * options.compute_factors_sr), average_samples = int(options.actuation_filter_averaging_time * options.compute_factors_sr), phase_measurement_frequency = pu_act_esd_line_freq, static_filter = pumuimfilt, variable_filter_length = len(pumuimfilt), adaptive_filter_length = len(pumuimfilt), tukey_param = 0.5, filter_sample_rate = pumuimchainsr)
 
 if options.apply_complex_kappatst:
 	# We will apply an adaptive FIR filter to the TST component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_tst_filter = pipeparts.mkgeneric(pipeline, smooth_ktsttee, "lal_adaptivefirfilt", update_samples = int(options.actuation_filter_update_time * options.compute_factors_sr), average_samples = int(options.actuation_filter_averaging_time * options.compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = tstfilt, variable_filter_length = len(tstfilt), adaptive_filter_length = len(tstfilt), tukey_param = 0.5, filter_sample_rate = tstchainsr, filename = "adaptive_tst_filters.txt")
+	adaptive_tst_filter = pipeparts.mkgeneric(pipeline, smooth_ktsttee, "lal_adaptivefirfilt", update_samples = int(options.actuation_filter_update_time * options.compute_factors_sr), average_samples = int(options.actuation_filter_averaging_time * options.compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = tstfilt, variable_filter_length = len(tstfilt), adaptive_filter_length = len(tstfilt), tukey_param = 0.5, filter_sample_rate = tstchainsr)
 
 if options.update_fcc or options.update_fs or options.update_srcQ:
 	# We will apply an adaptive FIR filter to DARM_ERR that allows corrections for poles, zeros, and gain
@@ -1144,7 +1153,7 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 
 	# Now interleave the correction channels in tdep_zpk and feed them into lal_adaptivefirfilt to update the inverse sensing filter
 	tdep_zpk = calibration_parts.mkinterleave(pipeline, tdep_zpk, complex_data = True)
-	adaptive_invsens_filter = pipeparts.mkgeneric(pipeline, tdep_zpk, "lal_adaptivefirfilt", update_samples = int(options.sensing_filter_update_time * options.compute_factors_sr), average_samples = int(options.sensing_filter_averaging_time * options.compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, static_poles = static_invsens_poles, static_filter = reschainfilt, variable_filter_length = len(reschainfilt), adaptive_filter_length = len(reschainfilt), tukey_param = 0.5, filter_sample_rate = hoftsr, filename = "adaptive_invsens_filters.txt")
+	adaptive_invsens_filter = pipeparts.mkgeneric(pipeline, tdep_zpk, "lal_adaptivefirfilt", update_samples = int(options.sensing_filter_update_time * options.compute_factors_sr), average_samples = int(options.sensing_filter_averaging_time * options.compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, static_poles = static_invsens_poles, static_filter = reschainfilt, variable_filter_length = len(reschainfilt), adaptive_filter_length = len(reschainfilt), tukey_param = 0.5, filter_sample_rate = hoftsr)
 
 #
 # CONTROL BRANCH
@@ -1874,7 +1883,37 @@ if options.witness_channel_list is not None:
 if options.remove_callines or options.remove_powerlines or options.witness_channel_list is not None:
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
 	clean_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
-	clean_strain = pipeparts.mktaginject(pipeline, clean_strain, clean_straintagstr)
+	if not options.no_dq_vector:
+		clean_straintee = pipeparts.mktee(pipeline, clean_strain)
+		clean_strain = pipeparts.mktaginject(pipeline, clean_straintee, clean_straintagstr)
+	else:
+		clean_strain = pipeparts.mktaginject(pipeline, clean_strain, clean_straintagstr)
+
+#
+# CALIB_STATE_VECTOR: CALIB_STRAIN_CLEAN
+#
+
+if not options.no_dq_vector and (options.remove_callines or options.remove_powerlines or options.witness_channel_list is not None):
+	# Compute the RMS of the uncleaned strain in a low-frequency range to test subtraction of actuation lines
+	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_low_min, f_max = options.cleaning_check_range_low_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+	# Compute the RMS of the cleaned strain in a low-frequency range
+	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_low_min, f_max = options.cleaning_check_range_low_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
+	clean_hoft_ok_lowfreq = calibration_parts.complex_division(pipeline, strain_rms_lowfreq, clean_strain_rms_lowfreq)
+	clean_hoft_ok_lowfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_lowfreq, bit_vector=pow(2,25), threshold=1.0)
+	clean_hoft_ok_lowfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_lowfreq, calibstate_caps)
+
+	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
+        strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+        # Compute the RMS of the cleaned strain in a mid-frequency range
+        clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+        # Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
+        clean_hoft_ok_midfreq = calibration_parts.complex_division(pipeline, strain_rms_midfreq, clean_strain_rms_midfreq)
+        clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector=pow(2,26), threshold=1.0)
+	clean_hoft_ok_midfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_midfreq, calibstate_caps)
+
+	# Add these into the CALIB_STATE_VECTOR
+	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
 
 #
 # Produce time-dependent correction factors to be recorded in the frames
