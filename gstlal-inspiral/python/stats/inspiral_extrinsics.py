@@ -133,6 +133,12 @@ in fact it appears that the reimplementation is a bit more sensitive.
 .. |O2_O3_O3_cnt_vs_LR| image:: ../images/O2_O3_O3_cnt_vs_LR.png
    :width: 400px
 
+.. |O2_O3_LR_double_vs_triple| image:: ../images/O2_O3_LR_double_vs_triple.png
+   :width: 400px
+
+.. |O2_O3_HVtest| image:: ../images/HVtest.png
+   :width: 400px
+
 +-------------------+-------------------------+-------------------------+
 |                   | O2 Code                 | O3 Code                 |
 +===================+=========================+=========================+
@@ -142,6 +148,40 @@ in fact it appears that the reimplementation is a bit more sensitive.
 +-------------------+-------------------------+-------------------------+
 | **Count vs LR**   | |O2_O3_O2_cnt_vs_LR|    | |O2_O3_O3_cnt_vs_LR|    |
 +-------------------+-------------------------+-------------------------+
+
+Double vs triple found injections
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In this check we ran two analyses:
+
+- An HL only analysis
+- An HLV analysis
+
+Both were over the same time period.  A common set of found injections was
+identified and the false alarm probability (FAP) was computed for the doubles
+and triples. *Ideally* false alarm probabilities for all doubles would be
+higher than all triples, but this is not a requirement since noise and
+especially glitches can cause a triple to be ranked below a double.  The plot
+below shows that at least the trend is correct.  NOTE we are not currently
+computing doubles and triples and picking the best. 
+
+|O2_O3_LR_double_vs_triple|
+
+Check of PDFs
+^^^^^^^^^^^^^
+
+We tested the procedure for evaluating the probabilility using the procedure described below (orange) against a monte carlo (blue).  The details are in this script
+
+https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/tests/dtdphitest.py
+
+You can modify this source code to implement different checks.  The one
+implemented is to plot the marginal distributions of time delay and phase delay
+between Hanford and Virgo under the condition that the measured effective
+distance is the same.  NOTE this test assumes the same covariance matrix for
+noise as the code below in order to test the procedure, but it doesn't prove
+that the assumption is optimal.
+
+|O2_O3_HVtest|
 
 
 Review Status
@@ -1063,6 +1103,10 @@ class TimePhaseSNR(object):
 	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 	numchunks = 20
 
+	# FIXME compute this more reliably or expose it as a property
+	# or something
+	sigma = {"time": 0.001, "phase": numpy.pi / 6, "deff": 0.2}
+
 	def __init__(self, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None):
 		"""
 		Initialize a new class from scratch via explicit computation
@@ -1072,9 +1116,6 @@ class TimePhaseSNR(object):
 		from_hdf() method below.
 		"""
 
-		# FIXME compute this more reliably or expose it as a property
-		# or something
-		self.sigma = {"time": 0.001, "phase": numpy.pi / 6, "deff": 0.2}
 		self.norm = (4 * numpy.pi**2)**2
 		self.tree_data = tree_data
 		self.margsky = margsky
