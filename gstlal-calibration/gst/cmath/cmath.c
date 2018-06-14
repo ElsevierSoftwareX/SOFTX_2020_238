@@ -56,6 +56,7 @@ GType cmath_cabs_get_type(void);
 GType cmath_creal_get_type(void);
 GType cmath_cimag_get_type(void);
 GType cmath_cexp_get_type(void);
+GType cmath_carg_get_type(void);
 GType cmath_cln_get_type(void);
 GType cmath_clog_get_type(void);
 GType cmath_clog10_get_type(void);
@@ -76,6 +77,7 @@ plugin_init (GstPlugin *plugin)
 		"cabs", cmath_cabs_get_type()}, {
 		"creal", cmath_creal_get_type()}, {
 		"cimag", cmath_cimag_get_type()}, {
+		"carg", cmath_carg_get_type()}, {
 		"cexp", cmath_cexp_get_type()}, {
 		"cln", cmath_cln_get_type()}, {
 		"clog", cmath_clog_get_type()}, {

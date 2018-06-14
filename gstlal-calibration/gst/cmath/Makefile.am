@@ -8,6 +8,7 @@ libgstcmath_la_SOURCES = \
 	cmath_creal.c \
 	cmath_cimag.c \
 	cmath_cexp.c \
+	cmath_carg.c \
 	cmath_cln.c \
 	cmath_clog.c \
 	cmath_clog10.c \
