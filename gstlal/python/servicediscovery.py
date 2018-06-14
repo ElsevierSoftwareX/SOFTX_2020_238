@@ -48,7 +48,7 @@ __date__ = "FIXME"
 
 
 DEFAULT_SERVICE_TYPE = "_http._tcp"
-DEFAULT_SERVICE_DOMAIN = "gw.org"
+DEFAULT_SERVICE_DOMAIN = "gw.local"
 
 
 #
@@ -102,6 +102,8 @@ class Service(object):
 		self.sname = sname
 		self.stype = stype if stype is not None else DEFAULT_SERVICE_TYPE
 		self.sdomain = sdomain if sdomain is not None else DEFAULT_SERVICE_DOMAIN
+		if self.sdomain.split(".")[-1] != "local":
+			raise ValueError("sdomain must end in 'local': %s" % self.sdomain)
 
 		#
 		# add the service to the avahi service group
