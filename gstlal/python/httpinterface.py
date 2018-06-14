@@ -140,16 +140,6 @@ class HTTPServers(list):
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
 		self.service_publisher.commit()
 
-	def set_service_properties(self, service_properties):
-		for httpd, service in self:
-			if service is None:
-				continue
-			try:
-				service.set_properties(service_properties)
-			except Exception as e:
-				if self.verbose:
-					print >>sys.stderr, "failed: %s" % str(e)
-
 	def __del__(self):
 		if self.verbose:
 			print >>sys.stderr, "de-advertising http server(s) ...",
