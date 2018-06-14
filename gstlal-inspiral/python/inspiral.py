@@ -74,11 +74,6 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
-try:
-	from ligo import gracedb
-except ImportError:
-	print >>sys.stderr, "warning: gracedb import failed, program will crash if gracedb uploads are attempted"
-
 from glue import iterutils
 from glue import segments
 from glue import segmentsUtils
@@ -99,6 +94,7 @@ from lal import LIGOTimeGPS
 from lal import rate
 from lal import series as lalseries
 from lal.utils import CacheEntry
+from ligo import gracedb
 
 from gstlal import bottle
 from gstlal import cbc_template_iir

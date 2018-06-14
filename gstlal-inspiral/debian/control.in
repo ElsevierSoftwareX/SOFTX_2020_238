@@ -53,8 +53,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-ligo-gracedb (>= 1.11),
  python-numpy,
  python-scipy
-Recommends:
- ligo-gracedb
 Description: GStreamer for GW data analysis (inspiral parts)
  This package provides a variety of gstreamer elements for
  gravitational-wave data analysis and some libraries to help write such
