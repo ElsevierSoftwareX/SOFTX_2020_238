@@ -1814,8 +1814,8 @@ if options.remove_callines:
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, tstexc_at_esd_act_freq, EP10))
 		# Reconstruct a calibrated ESD injection at the ~30 Hz ESD line
 		if options.apply_kappatst:
-			# Multiply by kappa_tst
-			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, esd_act_line, smooth_ktsttee))
+			# Multiply by the magnitude of kappa_tst
+			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, esd_act_line, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, smooth_ktsttee, "cabs"), matrix=[[1.0, 0.0]]))))
 		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = 2.0)
 		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line_remove, "creal")
