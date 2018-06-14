@@ -413,8 +413,10 @@ elif not options.factors_from_filters_file:
 # How many EPICS will we for the CALIB_STATE_VECTOR calculation? It depends on the IFO and the time we are calibrating
 if options.no_dq_vector:
 	num_dq_epics = 0
-elif (options.ifo == "H1" and int(options.gps_start_time) > 1175976256) or (options.ifo == "L1" and int(options.gps_start_time) > 1179588864):
+elif options.ifo == "H1" and int(options.gps_start_time) > 1175976256:
 	num_dq_epics = 14
+elif options.ifo == "L1" and int(options.gps_start_time) > 1179588864:
+	num_dq_epics = 10
 else:
 	num_dq_epics = 9
 
