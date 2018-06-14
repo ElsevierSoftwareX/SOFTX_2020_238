@@ -72,6 +72,9 @@ def mkcomplexfirbank2(pipeline, src, latency = None, fir_matrix = None, time_dom
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return pipeparts.mkgeneric(pipeline, src, "lal_complexfirbank2", **properties)
 
+def mkpow(pipeline, src, **properties):
+	return pipeparts.mkgeneric(pipeline, src, "cpow", **properties)
+
 def mkmultiplier(pipeline, srcs, sync = True, queue_length = 0):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, mix_mode="product")
 	if srcs is not None:
@@ -377,7 +380,7 @@ def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, 
 		head = lowpass(pipeline, head, fcut = f_max, filter_latency = filter_latency, td = td)
 
 	# Square it
-	head = pipeparts.mkpow(pipeline, head, exponent = 2.0)
+	head = mkpow(pipeline, head, exponent = 2.0)
 
 	# Downsample again to save computational cost
 	head = mkresample(pipeline, head, 3, filter_latency == 0.0, rate_out)
@@ -531,7 +534,7 @@ def complex_audioamplify(pipeline, chan, WR, WI):
 def complex_inverse(pipeline, head):
 	# Invert a complex number (1/z)
 
-	head = pipeparts.mkgeneric(pipeline, head, "cpow", exponent = -1)
+	head = mkpow(pipeline, head, exponent = -1)
 
 	return head
 
@@ -686,8 +689,8 @@ def compute_kappac(pipeline, SR, SI):
 	#
 
 	SR = pipeparts.mktee(pipeline, SR)
-	S2 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkpow(pipeline, SR, exponent=2.0), pipeparts.mkpow(pipeline, SI, exponent=2.0)))
-	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, pipeparts.mkpow(pipeline, SR, exponent=-1.0)))
+	S2 = mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, SR, exponent=2.0), mkpow(pipeline, SI, exponent=2.0)))
+	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, mkpow(pipeline, SR, exponent=-1.0)))
 	return kc
 
 def compute_fcc(pipeline, SR, SI, fpcal2):
@@ -696,7 +699,7 @@ def compute_fcc(pipeline, SR, SI, fpcal2):
 	# f_cc = - (Re[S]/Im[S]) * fpcal2
 	#
 
-	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), pipeparts.mkpow(pipeline, SI, exponent=-1.0)))
+	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), mkpow(pipeline, SI, exponent=-1.0)))
 	return fcc
 
 def compute_Xi_from_filters_file(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc):
@@ -711,7 +714,7 @@ def compute_Xi_from_filters_file(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11_
 	minusAD = complex_audioamplify(pipeline, A, -1.0 * EP12_real, -1.0 * EP12_imag)
 	pcal_over_derr = complex_division(pipeline, pcalfpcal4, darmfpcal4)
 	pcal_over_derr_res = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, minusAD))
-	fpcal4_over_fcc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkpow(pipeline, fcc, exponent = -1.0), fpcal4)
+	fpcal4_over_fcc = pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, fcc, exponent = -1.0), fpcal4)
 	i_fpcal4_over_fcc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fpcal4_over_fcc, matrix = [[0, 1]]))
 	i_fpcal4_over_fcc_plus_one = pipeparts.mkgeneric(pipeline, i_fpcal4_over_fcc, "lal_add_constant", value = 1.0)
 	i_fpcal4_over_fcc_plus_one_inv = complex_inverse(pipeline, i_fpcal4_over_fcc_plus_one)
@@ -734,7 +737,7 @@ def compute_Xi(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP14,
 	minusAD = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, EP12, -1.0, 0.0), A))
 	pcal_over_derr = complex_division(pipeline, pcalfpcal4, darmfpcal4)
 	pcal_over_derr_res = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, minusAD))
-	fpcal4_over_fcc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkpow(pipeline, fcc, exponent = -1.0), fpcal4)
+	fpcal4_over_fcc = pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, fcc, exponent = -1.0), fpcal4)
 	i_fpcal4_over_fcc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fpcal4_over_fcc, matrix = [[0, 1]]))
 	i_fpcal4_over_fcc_plus_one = pipeparts.mkgeneric(pipeline, i_fpcal4_over_fcc, "lal_add_constant", value = 1.0)
 	i_fpcal4_over_fcc_plus_one_inv = complex_inverse(pipeline, i_fpcal4_over_fcc_plus_one)

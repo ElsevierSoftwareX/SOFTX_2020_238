@@ -1025,8 +1025,8 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 			smooth_XiR, smooth_XiI = calibration_parts.split_into_real(pipeline, smooth_Xi)
 			smooth_XiR_nogate, smooth_XiI_nogate = calibration_parts.split_into_real(pipeline, smooth_Xi_nogate)
 
-		smooth_sqrtXiR = pipeparts.mkpow(pipeline, smooth_XiR, exponent = 0.5)
-		smooth_sqrtXiR_nogate = pipeparts.mkpow(pipeline, smooth_XiR_nogate, exponent = 0.5)
+		smooth_sqrtXiR = calibration_parts.mkpow(pipeline, smooth_XiR, exponent = 0.5)
+		smooth_sqrtXiR_nogate = calibration_parts.mkpow(pipeline, smooth_XiR_nogate, exponent = 0.5)
 
 		if not options.no_fs and not options.no_srcQ:
 			smooth_sqrtXiR = pipeparts.mktee(pipeline, smooth_sqrtXiR)
@@ -1042,8 +1042,8 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 		# compute SRC Q_inv
 		if not options.no_srcQ:
-			smooth_sqrtXiR_inv = pipeparts.mkpow(pipeline, smooth_sqrtXiR, exponent = -1.0)
-			smooth_sqrtXiR_inv_nogate = pipeparts.mkpow(pipeline, smooth_sqrtXiR_nogate, exponent = -1.0)
+			smooth_sqrtXiR_inv = calibration_parts.mkpow(pipeline, smooth_sqrtXiR, exponent = -1.0)
+			smooth_sqrtXiR_inv_nogate = calibration_parts.mkpow(pipeline, smooth_sqrtXiR_nogate, exponent = -1.0)
 			smooth_srcQ_inv = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, smooth_sqrtXiR_inv, pipeparts.mkaudioamplify(pipeline, smooth_XiI, -1.0)))
 			smooth_srcQ_inv_nogate = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, smooth_sqrtXiR_inv_nogate, pipeparts.mkaudioamplify(pipeline, smooth_XiI_nogate, -1.0)))
 
@@ -1084,7 +1084,7 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 		tdep_zpk.append(complex_fcc)
 
 		# This will be added into tdep_zpk at the end, as required by lal_adaptivefirfilt
-		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, pipeparts.mkgeneric(pipeline, smooth_fcctee, "cpow", exponent = -1.0), fcc_default)
+		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, smooth_fcctee, exponent = -1.0), fcc_default)
 
 	# There are two zeros that depend on fs and Q, both of which depend on both fs and Q
 	if options.update_fs or options.update_srcQ:
@@ -1094,8 +1094,8 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 
 	if options.update_fs and options.update_srcQ:
 		# The variable zeros depend on the computed values of fs and Q
-		Q_inv_squared = pipeparts.mkgeneric(pipeline, smooth_srcQ_inv, "cpow", exponent = 2.0)
-		sqrt_Q_inv_squared_plus4 = pipeparts.mkgeneric(pipeline, pipeparts.mkgeneric(pipeline, Q_inv_squared, "lal_add_constant", value = 4.0), "cpow", exponent = 0.5)
+		Q_inv_squared = calibration_parts.mkpow(pipeline, smooth_srcQ_inv, exponent = 2.0)
+		sqrt_Q_inv_squared_plus4 = calibration_parts.mkpow(pipeline, pipeparts.mkgeneric(pipeline, Q_inv_squared, "lal_add_constant", value = 4.0), exponent = 0.5)
 		sqrt_Q_inv_squared_plus4 = pipeparts.mktee(pipeline, sqrt_Q_inv_squared_plus4)
 
 		SRC_zero1 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, sqrt_Q_inv_squared_plus4))
@@ -1125,8 +1125,8 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 
 	elif options.update_srcQ:
 		# The variable zeros depend on the model value of fs and the computed value of Q
-		Q_inv_squared = pipeparts.mkgeneric(pipeline, smooth_srcQ_inv, "cpow", exponent = 2.0)
-		sqrt_Q_inv_squared_plus4 = pipeparts.mkgeneric(pipeline, pipeparts.mkgeneric(pipeline, Q_inv_squared, "lal_add_constant", value = 4.0), "cpow", exponent = 0.5)
+		Q_inv_squared = calibration_parts.mkpow(pipeline, smooth_srcQ_inv, exponent = 2.0)
+		sqrt_Q_inv_squared_plus4 = calibration_parts.mkpow(pipeline, pipeparts.mkgeneric(pipeline, Q_inv_squared, "lal_add_constant", value = 4.0), exponent = 0.5)
 		sqrt_Q_inv_squared_plus4 = pipeparts.mktee(pipeline, sqrt_Q_inv_squared_plus4)
 
 		SRC_zero1 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, sqrt_Q_inv_squared_plus4))
@@ -1141,7 +1141,7 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 
 	if options.apply_kappac:
 		# We divide the gain by kappa_c
-		kappac_inv = pipeparts.mkgeneric(pipeline, smooth_kctee, "cpow", exponent = -1.0)
+		kappac_inv = calibration_parts.mkpow(pipeline, smooth_kctee, exponent = -1.0)
 		if options.update_fcc:
 			variable_invsens_gain = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, variable_invsens_gain, kappac_inv))
 		else:
@@ -1337,7 +1337,7 @@ res_filter_latency += float(reschaindelay)/hoftsr
 # Apply \kappa_c if we haven't already
 if options.apply_kappac and not (options.update_fcc or options.update_fs or options.update_srcQ):
 	kc_modify_res = calibration_parts.mkresample(pipeline, smooth_kctee, 3, False, hoft_caps)
-	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, pipeparts.mkgeneric(pipeline, kc_modify_res, "cpow", exponent = -1.0)))
+	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, calibration_parts.mkpow(pipeline, kc_modify_res, exponent = -1.0)))
 
 if options.dewhitening:
 	res = pipeparts.mkfirbank(pipeline, res, latency = int(resdewhitendelay), fir_matrix = [resdewhiten[::-1]], time_domain = td)
