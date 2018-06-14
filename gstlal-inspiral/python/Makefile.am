@@ -17,6 +17,7 @@ pkgpython_PYTHON = \
 	imr_utils.py \
 	inspiral_pipe.py \
 	inspiral.py \
+	lloidhandler.py \
 	lloidparts.py \
 	lloidplots.py \
 	llweb.py \

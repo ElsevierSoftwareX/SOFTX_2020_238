@@ -168,12 +168,13 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from gstlal import bottle
 from gstlal import datasource
-from gstlal import lloidparts
 from gstlal import far
 from gstlal import httpinterface
 from gstlal import hoftcache
 from gstlal import inspiral
 from gstlal import inspiral_pipe
+from gstlal import lloidhandler
+from gstlal import lloidparts
 from gstlal import pipeparts
 from gstlal import simulation
 
@@ -506,7 +507,7 @@ class OneTimeSignalHandler(object):
 			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
 			try:
 				#FIXME how do I choose a timestamp?
-				self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp = inspiral.now().ns()))
+				self.pipeline.get_bus().post(lloidhandler.message_new_checkpoint(self.pipeline, timestamp = inspiral.now().ns()))
 				if not self.pipeline.send_event(Gst.Event.new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
 			except Exception as e:
@@ -765,14 +766,16 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 
 	#
-	# build output document
+	# construct and configure pipeline handler
 	#
 
 
 	if options.verbose:
-		print >>sys.stderr, "initializing output document ..."
-	output = inspiral.Data(
-		inspiral.CoincsDocument(
+		print >>sys.stderr, "initializing pipeline handler ..."
+	handler = lloidhandler.Handler(
+		mainloop = mainloop,
+		pipeline = pipeline,
+		coincs_document = inspiral.CoincsDocument(
 			url = output_url or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.instrumentsproperty.set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
 			process_params = process_params,
 			comment = options.comment,
@@ -784,8 +787,18 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			replace_file = True,
 			verbose = options.verbose
 		),
-		pipeline = pipeline,
 		rankingstat = rankingstat,
+		gracedbwrapper = inspiral.GracedBWrapper(
+			instruments = rankingstat.instruments,
+			far_threshold = options.gracedb_far_threshold,
+			min_instruments = options.min_instruments,
+			group = options.gracedb_group,
+			search = options.gracedb_search,
+			pipeline = options.gracedb_pipeline,
+			service_url = options.gracedb_service_url,
+			upload_auxiliary_data = (options.gracedb_service_url == gracedb_default_service_url),
+			verbose = options.verbose
+		),
 		ranking_stat_input_url = options.ranking_stat_input,
 		ranking_stat_output_url = ranking_stat_output_url,
 		rankingstatpdf_url = options.ranking_stat_pdf,
@@ -794,28 +807,15 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		thinca_interval = options.thinca_interval,
 		min_log_L = options.min_log_L,
 		sngls_snr_threshold = options.singles_threshold,
-		gracedb_far_threshold = options.gracedb_far_threshold,
-		gracedb_min_instruments = options.min_instruments,
-		gracedb_group = options.gracedb_group,
-		gracedb_search = options.gracedb_search,
-		gracedb_pipeline = options.gracedb_pipeline,
-		gracedb_service_url = options.gracedb_service_url,
-		upload_auxiliary_data_to_gracedb = (options.gracedb_service_url == gracedb_default_service_url),
-		verbose = options.verbose
-	)
-	if options.verbose:
-		print >>sys.stderr, "... output document initialized"
-
-	handler = lloidparts.Handler(mainloop, pipeline,
-		output,
-		instruments = rankingstat.instruments,
 		tag = options.job_tag,
 		verbose = options.verbose
 	)
+	if options.verbose:
+		print >>sys.stderr, "... pipeline handler initialized"
 
 	if options.verbose:
 		print >>sys.stderr, "attaching appsinks to pipeline ...",
-	appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
+	appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_buffer)
 	appsinks = set(appsync.add_sink(pipeline, src, caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
 	if options.verbose:
 		print >>sys.stderr, "attached %d, done" % len(appsinks)
@@ -873,7 +873,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	#
 
 
-	output.write_output_url(url = output_url or output.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
+	handler.write_output_url(url = output_url or handler.T050017_filename("%s_LLOID" % options.job_tag, "xml.gz"), description = "%s_LLOID" % options.job_tag, verbose = options.verbose)
 
 
 	#
@@ -907,7 +907,6 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline could not be set to NULL")
 	del handler.pipeline
-	del output.pipeline
 	del handler
 	del bank
 	del banks

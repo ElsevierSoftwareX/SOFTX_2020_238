@@ -199,14 +199,6 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	return handler.psd
 
 
-def write_psd_fileobj(fileobj, psddict, gz = False):
-	"""
-	Wrapper around make_psd_xmldoc() to write the XML document directly
-	to a Python file object.
-	"""
-	ligolw_utils.write_fileobj(lal.series.make_psd_xmldoc(psddict), fileobj, gz = gz)
-
-
 def write_psd(filename, psddict, verbose = False, trap_signals = None):
 	"""
 	Wrapper around make_psd_xmldoc() to write the XML document directly
