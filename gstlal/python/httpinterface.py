@@ -120,21 +120,15 @@ class HTTPServers(list):
 			httpd = HTTPDServer(host, port, bottle_app, verbose = verbose).__enter__()
 			if verbose:
 				print >>sys.stderr, "advertising http server \"%s\" on http://%s:%d ..." % (service_name, httpd.host, httpd.port),
-			service = None	# in case what follows fails
-			try:
-				service = self.service_publisher.add_service(
-					sname = service_name,
-					sdomain = service_domain,
-					port = httpd.port,
-					properties = service_properties,
-					commit = False
-				)
-			except Exception as e:
-				if verbose:
-					print >>sys.stderr, "failed: %s" % str(e)
-			else:
-				if verbose:
-					print >>sys.stderr, "done (%s)" % ".".join((service.sname, service.sdomain))
+			service = self.service_publisher.add_service(
+				sname = service_name,
+				sdomain = service_domain,
+				port = httpd.port,
+				properties = service_properties,
+				commit = False
+			)
+			if verbose:
+				print >>sys.stderr, "done (%s)" % ".".join((service.sname, service.sdomain))
 			self.append((httpd, service))
 		if not self:
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
