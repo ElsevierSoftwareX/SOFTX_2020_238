@@ -814,35 +814,12 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 	elif options.factors_from_filters_file:
 		ktst = calibration_parts.compute_kappatst_from_filters_file(pipeline, derr_at_esd_act_freq, tstexc_at_esd_act_freq, pcal_at_darm_act_freq, derr_at_darm_act_freq, EP1_real, EP1_imag)
 
-	if not options.no_kappatst or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
-		ktst = pipeparts.mktee(pipeline, ktst)
-	if not options.no_kappatst:
-		smooth_ktst_nogate = pipeparts.mkgeneric(pipeline, ktst, "lal_smoothkappas", default_kappa_re = options.expected_kappatst_real, default_kappa_im = options.expected_kappatst_imag, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median, filter_latency = options.filter_latency)
-		smooth_ktstR_nogate, smooth_ktstI_nogate = calibration_parts.split_into_real(pipeline, smooth_ktst_nogate)
+	ktst = pipeparts.mktee(pipeline, ktst)
 
-		if not options.no_coherence:
-			# Gate kappa_tst with the coherence of the PCALY_line1 line
-			ktst_gated = calibration_parts.mkgate(pipeline, ktst, pcaly_line1_coh, options.coherence_uncertainty_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True)
-			# Gate kappa_tst with the coherence of the suspension line
-			ktst_gated = calibration_parts.mkgate(pipeline, ktst_gated, sus_coh, options.coherence_uncertainty_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True)
-			# Gate kappa_tst with the coherence of the DARM line
-			ktst_gated = calibration_parts.mkgate(pipeline, ktst_gated, darm_coh, options.coherence_uncertainty_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True)
+	# Put off smoothing \kappa_tst until after \kappa_pu is computed in case we are correcting the phase of \kappa_tst using \kappa_pu
 
-			# Smooth kappa_tst
-			smooth_ktst = calibration_parts.smooth_complex_kappas(pipeline, ktst_gated, options.expected_kappatst_real, options.expected_kappatst_imag, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median, options.filter_latency)
-
-		else:
-			# Smooth kappa_tst
-			smooth_ktst = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, ktst, options.kappatst_real_ok_var, options.kappatst_imag_ok_var, options.expected_kappatst_real, options.expected_kappatst_imag, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median, options.filter_latency)
-
-		smooth_ktsttee = pipeparts.mktee(pipeline, smooth_ktst)
-		smooth_ktstR, smooth_ktstI = calibration_parts.split_into_real(pipeline, smooth_ktsttee)
-
-		smooth_ktstRtee = pipeparts.mktee(pipeline, smooth_ktstR)
-		smooth_ktstItee = pipeparts.mktee(pipeline, smooth_ktstI)
-	
 # If we're also computing \kappa_c, f_cc, or \kappa_pu, keep going
-if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not options.no_srcQ or not options.no_fs:
+if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not options.no_srcQ or not options.no_fs or (not options.no_kappatst and options.act_timing_from_kappapu):
 	# demodulate excitation channel at PU actuation line frequency
 	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, options.compute_factors_sr, options.demodulation_filter_time, options.filter_latency)
 
@@ -867,8 +844,66 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 	elif options.factors_from_filters_file:
 		kpu = calibration_parts.compute_kappapu_from_filters_file(pipeline, EP3_real, EP3_imag, afctrl, ktst, EP4_real, EP4_imag)
 
-	if not options.no_kappapu or not options.no_srcQ or not options.no_fs:
+	kpu = pipeparts.mktee(pipeline, kpu)
+
+	# Put off smoothing \kappa_pu until after \kappa_tst is computed in case we are correcting the phase of \kappa_pu using \kappa_tst
+
+	# If desired, correct the phase of \kappa_pu using \kappa_tst (This assumes that all stages of actuation have the same variable time delay, and that \kappa_tst is doing a better job of measuring it)
+	if options.act_timing_from_kappatst:
+		# Find the magnitude of \kappa_pu
+		kpu = pipeparts.mkgeneric(pipeline, kpu, "cabs")
+		# Find the phase of \kappa_tst
+		phi_ktst = pipeparts.mkgeneric(pipeline, ktst, "carg")
+		# Multiply by the line-frequency ratio to get the phase of \kappa_pu
+		phi_kpu = pipeparts.mkaudioamplify(pipeline, phi_ktst, pu_act_esd_line_freq / esd_act_line_freq)
+		# Find the phase factor
+		kpu_phase_factor = pipeparts.mkgeneric(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, phi_kpu, matrix = [[0.0, 1.0]])), "cexp")
+		# Multiply by the magnitude of \kappa_pu
+		kpu = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kpu, matrix = [[1.0, 0.0]])), kpu_phase_factor))
 		kpu = pipeparts.mktee(pipeline, kpu)
+
+	# If desired, correct the phase of \kappa_tst using \kappa_pu (This assumes that all stages of actuation have the same variable time delay, and that \kappa_pu is doing a better job of measuring it)
+	if options.act_timing_from_kappapu:
+		# Find the magnitude of \kappa_tst
+		ktst = pipeparts.mkgeneric(pipeline, ktst, "cabs")
+		# Find the phase of \kappa_tst
+		phi_kpu = pipeparts.mkgeneric(pipeline, kpu, "carg")
+		# Multiply by the line-frequency ratio to get the phase of \kappa_tst
+		phi_ktst = pipeparts.mkaudioamplify(pipeline, phi_kpu, esd_act_line_freq / pu_act_esd_line_freq)
+		# Find the phase factor
+		ktst_phase_factor = pipeparts.mkgeneric(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, phi_ktst, matrix = [[0.0, 1.0]])), "cexp")
+		# Multiply by the magnitude of \kappa_tst
+		ktst = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, ktst, matrix = [[1.0, 0.0]])), ktst_phase_factor))
+		ktst = pipeparts.mktee(pipeline, ktst)
+
+	# Now apply the gating and smoothing to \kappa_tst and \kappa_pu
+	if not options.no_kappatst:
+		smooth_ktst_nogate = pipeparts.mkgeneric(pipeline, ktst, "lal_smoothkappas", default_kappa_re = options.expected_kappatst_real, default_kappa_im = options.expected_kappatst_imag, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median, filter_latency = options.filter_latency)
+		smooth_ktstR_nogate, smooth_ktstI_nogate = calibration_parts.split_into_real(pipeline, smooth_ktst_nogate)
+
+		if not options.no_coherence:
+			# Gate kappa_tst with the coherence of the PCALY_line1 line
+			ktst_gated = calibration_parts.mkgate(pipeline, ktst, pcaly_line1_coh, options.coherence_uncertainty_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True)
+			# Gate kappa_tst with the coherence of the suspension line
+			ktst_gated = calibration_parts.mkgate(pipeline, ktst_gated, sus_coh, options.coherence_uncertainty_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True)
+			# Gate kappa_tst with the coherence of the DARM line
+			ktst_gated = calibration_parts.mkgate(pipeline, ktst_gated, darm_coh, options.coherence_uncertainty_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True)
+
+			# Smooth kappa_tst
+			smooth_ktst = calibration_parts.smooth_complex_kappas(pipeline, ktst_gated, options.expected_kappatst_real, options.expected_kappatst_imag, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median, options.filter_latency)
+
+		else:
+			# Smooth kappa_tst
+			smooth_ktst = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, ktst, options.kappatst_real_ok_var, options.kappatst_imag_ok_var, options.expected_kappatst_real, options.expected_kappatst_imag, median_smoothing_samples, factors_average_samples, options.kappas_default_to_median, options.filter_latency)
+
+		smooth_ktsttee = pipeparts.mktee(pipeline, smooth_ktst)
+		smooth_ktstR, smooth_ktstI = calibration_parts.split_into_real(pipeline, smooth_ktsttee)
+
+		smooth_ktstRtee = pipeparts.mktee(pipeline, smooth_ktstR)
+		smooth_ktstItee = pipeparts.mktee(pipeline, smooth_ktstI)
+
+
+
 	if not options.no_kappapu:
 		smooth_kpu_nogate = pipeparts.mkgeneric(pipeline, kpu, "lal_smoothkappas", default_kappa_re = options.expected_kappapu_real, default_kappa_im = options.expected_kappapu_imag, array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median, filter_latency = options.filter_latency)
 		smooth_kpuR_nogate, smooth_kpuI_nogate = calibration_parts.split_into_real(pipeline, smooth_kpu_nogate)
@@ -1908,12 +1943,12 @@ if not options.no_dq_vector and (options.remove_callines or options.remove_power
 	clean_hoft_ok_lowfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_lowfreq, calibstate_caps)
 
 	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
-        strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
-        # Compute the RMS of the cleaned strain in a mid-frequency range
-        clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
-        # Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
-        clean_hoft_ok_midfreq = calibration_parts.complex_division(pipeline, strain_rms_midfreq, clean_strain_rms_midfreq)
-        clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector=pow(2,26), threshold=1.0)
+	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+	# Compute the RMS of the cleaned strain in a mid-frequency range
+	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
+	clean_hoft_ok_midfreq = calibration_parts.complex_division(pipeline, strain_rms_midfreq, clean_strain_rms_midfreq)
+	clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector=pow(2,26), threshold=1.0)
 	clean_hoft_ok_midfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_midfreq, calibstate_caps)
 
 	# Add these into the CALIB_STATE_VECTOR
