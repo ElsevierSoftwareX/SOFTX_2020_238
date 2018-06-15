@@ -78,7 +78,7 @@ GINTRO=gobject-introspection-1.50.0
 GSL=gsl-1.16
 ORC=orc-0.4.26
 PYFFTW=pyFFTW-0.9.0
-FFTW=fftw-3.3.5
+FFTW=fftw-3.3.8
 
 # Specify target/dependancy files
 GSTINSPIRAL_TARGET=$(INSTALL_DIR)/lib/libgstlalinspiral.so
