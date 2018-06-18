@@ -107,6 +107,7 @@ enum property {
 	ARG_PHASE_MEASUREMENT_FREQUENCY,
 	ARG_STATIC_FILTER,
 	ARG_VARIABLE_FILTER_LENGTH,
+	ARG_MINIMIZE_FILTER_LENGTH,
 	ARG_ADAPTIVE_FILTER,
 	ARG_ADAPTIVE_FILTER_LENGTH,
 	ARG_TUKEY_PARAM,
@@ -193,7 +194,43 @@ static void write_filter(double *filter, char *element_name, char *filter_type, 
 }
 
 
-static void convolve(double *filter1, gint64 length1, double *filter2, gint64 length2, double *convolved_filter, gint64 convolved_length) {
+double *convolve(double *filter1, int length1, double *filter2, int length2, double *convolved_filter) {
+	int i, j;
+	if(!convolved_filter)
+		convolved_filter = g_malloc((length1 + length2 - 1) * sizeof(*convolved_filter));
+	if(convolved_filter == filter1) {
+		/* We are putting the result into the memory location of filter1, so we need to make a copy of filter1 */
+		double *filter1_copy = g_malloc(length1 * sizeof(*filter1));
+		memcpy(filter1_copy, filter1, length1 * sizeof(*filter1));
+		memset(convolved_filter, 0, (length1 + length2 - 1) * sizeof(*convolved_filter));
+		for(i = 0; i < length1; i++) {
+			for(j = 0; j < length2; j++)
+				convolved_filter[i + j] += filter1_copy[i] * filter2[j];
+		}
+		g_free(filter1_copy);
+	} else if(convolved_filter == filter2) {
+		/* We are putting the result into the memory location of filter2, so we need to make a copy of filter2 */
+		double *filter2_copy = g_malloc(length2 * sizeof(*filter2));
+		memcpy(filter2_copy, filter2, length2 * sizeof(*filter2));
+		memset(convolved_filter, 0, (length1 + length2 - 1) * sizeof(*convolved_filter));
+		for(i = 0; i < length1; i++) {
+			for(j = 0; j < length2; j++)
+				convolved_filter[i + j] += filter1[i] * filter2_copy[j];
+		}
+		g_free(filter2_copy);
+	} else {
+		/* All three memory locations are different */
+		memset(convolved_filter, 0, (length1 + length2 - 1) * sizeof(*convolved_filter));
+		for(i = 0; i < length1; i++) {
+			for(j = 0; j < length2; j++)
+				convolved_filter[i + j] += filter1[i] * filter2[j];
+		}
+	}
+	return convolved_filter;
+}
+
+
+static void convolve_and_chop(double *filter1, gint64 length1, double *filter2, gint64 length2, double *convolved_filter, gint64 convolved_length) {
 
 	gint64 i, j, chop_samples, j_start, j_stop;
 
@@ -257,16 +294,16 @@ static gboolean update_variable_filter(complex double *variable_filter, gint64 v
 	for(n = 0; n < fd_variable_filter_length; n++) {
 		/* variable zeros */
 		for(m = 0; m < num_zeros; m++)
-			variable_filter[n] *= n * df - input_average[m];
+			variable_filter[n] *= 1.0 + I * n * df / input_average[m];
 		/* variable poles */
 		for(m = num_zeros; m < num_zeros + num_poles; m++)
-			variable_filter[n] /= n * df - input_average[m];
+			variable_filter[n] /= 1.0 + I * n * df / input_average[m];
 		/* static zeros */
 		for(m = 0; m < num_static_zeros; m++)
-			variable_filter[n] *= n * df - static_zeros[m];
+			variable_filter[n] *= 1.0 + I * n * df / static_zeros[m];
 		/* static poles */
 		for(m = 0; m < num_static_poles; m++)
-			variable_filter[n] /= n * df - static_poles[m];
+			variable_filter[n] /= 1.0 + I * n * df / static_poles[m];
 	}
 
 	/* Make sure the DC and Nyquist components are purely real */
@@ -280,6 +317,54 @@ static gboolean update_variable_filter(complex double *variable_filter, gint64 v
 	gboolean success = TRUE;
 	for(n = 0; n < variable_filter_length; n++)
 		success &= isnormal(((double *) variable_filter)[n]);
+
+	return success;
+}
+
+
+static gboolean update_variable_filter_minimized(double *variable_filter, int variable_filter_length, int filter_sample_rate, complex double *input_average, int num_zeros, gboolean filter_has_gain, complex double *static_zeros, int num_static_zeros) {
+
+	int i;
+
+	if(num_zeros) {
+		/* There is at least one zero computed from inputs. We compute a two-tap filter based on the first of these */
+		*variable_filter = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(*input_average));
+		variable_filter[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(*input_average));
+	} else if(num_static_zeros) {
+		/* There are no inputs that are zeros, but we wish to compute a two-tap filter from a static zero instead */
+		*variable_filter = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(*input_average));
+		variable_filter[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(*input_average));
+	} else {
+		/* There are no zeros, only a gain */
+		*variable_filter = 1.0;
+	}
+
+	if(num_zeros + num_static_zeros > 1) {
+		/* We will convolve the variable filter with more two-tap filters to complete it */
+		double *tempfilt = g_malloc(2 * sizeof(*variable_filter));
+		for(i = 1; i < num_zeros; i++) {
+			*tempfilt = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(input_average[i]));
+			tempfilt[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(input_average[i]));
+			convolve(variable_filter, i + 1, tempfilt, 2, variable_filter);
+		}
+		for(i = num_zeros ? num_zeros : 1; i < num_zeros + num_static_zeros; i++) {
+			*tempfilt = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(static_zeros[i - num_zeros]));
+			tempfilt[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(static_zeros[i - num_zeros]));
+			convolve(variable_filter, i + 1, tempfilt, 2, variable_filter);
+		}
+		g_free(tempfilt);
+	}
+
+	/* Include a gain factor if there is one */
+	if(filter_has_gain) {
+		for(i = 0; i < variable_filter_length; i++)
+			variable_filter[i] *= creal(input_average[num_zeros]);
+	}
+
+	/* Check if the filter has sain values in it */
+	gboolean success = TRUE;
+	for(i = 0; i < variable_filter_length; i++)
+		success &= isnormal(((double *) variable_filter)[i]);
 
 	return success;
 }
@@ -315,9 +400,14 @@ static void average_input_data_ ## DTYPE(GSTLALAdaptiveFIRFilt *element, complex
 				element->input_average[j] /= element->num_in_avg; \
  \
 			/* Update variable portion of adaptive FIR filter */ \
-			if(update_variable_filter(element->variable_filter, element->variable_filter_length, element->filter_sample_rate, element->variable_filter_plan, element->input_average, element->num_zeros, element->num_poles, element->filter_has_gain, element->static_zeros, element->num_static_zeros, element->static_poles, element->num_static_poles, element->phase_measurement_frequency)) { \
+			gboolean success; \
+			if(element->minimize_filter_length) \
+				success = update_variable_filter_minimized((double *) element->variable_filter, (int) element->variable_filter_length, element->filter_sample_rate, element->input_average, element->num_zeros, element->filter_has_gain, element->static_zeros, element->num_static_zeros); \
+			else \
+				success = update_variable_filter(element->variable_filter, element->variable_filter_length, element->filter_sample_rate, element->variable_filter_plan, element->input_average, element->num_zeros, element->num_poles, element->filter_has_gain, element->static_zeros, element->num_static_zeros, element->static_poles, element->num_static_poles, element->phase_measurement_frequency); \
+			if(success) { \
 				/* Convolve the variable filter with the static filter */ \
-				convolve((double *) element->variable_filter, element->variable_filter_length, element->static_filter, element->static_filter_length, element->adaptive_filter, element->adaptive_filter_length); \
+				convolve_and_chop((double *) element->variable_filter, element->variable_filter_length, element->static_filter, element->static_filter_length, element->adaptive_filter, element->adaptive_filter_length); \
  \
 				/* Apply the Tukey window so that the filter falls off smoothly at the edges */ \
 				for(i = 0; i < element->tukey_length; i++) { \
@@ -403,9 +493,15 @@ static gboolean start(GstBaseSink *sink) {
 		*element->static_filter = 1.0;
 	}
 
-	/* Sanity check */
+	/* Sanity checks */
 	if(element->average_samples > element->update_samples)
 		GST_ERROR_OBJECT(element, "average_samples cannot be greater than update_samples");
+	if(element->minimize_filter_length) {
+		if(element->num_poles || element->num_static_poles)
+			GST_WARNING_OBJECT(element, "Cannot set option minimize_filter_length = True if there are poles. Keeping variable_filter_length as is.");
+		else
+			element->variable_filter_length = element->num_zeros + element->num_static_zeros + 1;
+	}
 
 	return TRUE;
 }
@@ -482,7 +578,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	for(i = 0; i < element->tukey_length; i++)
 		element->tukey[i] = pow(sin(M_PI * i / 2.0 / element->tukey_length), 2.0);
 
-	if(!element->variable_filter) {
+	if(!element->variable_filter && !element->minimize_filter_length) {
 		/* Allocate memory for fftw to do an inverse Fourier transform of the filter. */
 		gstlal_fftw_lock();
 
@@ -496,6 +592,9 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 		gstlal_fftw_unlock();
 
+	} else if (!element->variable_filter) {
+		/* Allocate memory for the variable filter, but in this case, no fft's are necessary */
+		element->variable_filter = g_malloc(element->variable_filter_length * sizeof(*element->variable_filter) / 2);
 	}
 
 	return success;
@@ -653,6 +752,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->variable_filter_length = g_value_get_int64(value);
 		break;
 
+	case ARG_MINIMIZE_FILTER_LENGTH:
+		element->minimize_filter_length = g_value_get_boolean(value);
+		break;
+
 	case ARG_ADAPTIVE_FILTER:
 		if(element->adaptive_filter) {
 			g_free(element->adaptive_filter);
@@ -740,6 +843,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_VARIABLE_FILTER_LENGTH:
 		g_value_set_int64(value, element->variable_filter_length);
+		break;
+
+	case ARG_MINIMIZE_FILTER_LENGTH:
+		g_value_set_boolean(value, element->minimize_filter_length);
 		break;
 
 	case ARG_ADAPTIVE_FILTER:
@@ -835,11 +942,11 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		"frequency, used to compute a gain and a frequency-independent time delay or\n\t\t\t   "
 		"advance. The filter applied is therefore:\n\t\t\t   "
 		"\n\t\t\t   "
-		"\t     product_i[f - f_i]\n\t\t\t   "
-		"   F(f) = ------------------ * K * exp(2 * pi * i * f * t_adv)\n\t\t\t   "
-		"\t     product_j[f - f_j]\n\t\t\t   "
+		"\t     product_m[1 + i * f / f0_m]\n\t\t\t   "
+		"   F(f) = --------------------------- * K * exp(2 * pi * i * f * t_adv)\n\t\t\t   "
+		"\t     product_n[1 + i * f / fp_n]\n\t\t\t   "
 		"\n\t\t\t   "
-		"where the zeros f_i, poles f_j, gain K and time advance t_adv are computed\n\t\t\t   "
+		"where the zeros f0_m, poles fp_n, gain K and time advance t_adv are computed\n\t\t\t   "
 		"internally from the input channels. If static zeros and/or poles are\n\t\t\t   "
 		"provided to this element, they will be included in the filter. Additionally,\n\t\t\t   "
 		"the element can convolve a provided static filter with the computed adaptive\n\t\t\t   "
@@ -952,6 +1059,15 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		1, G_MAXINT64, 16384,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_MINIMIZE_FILTER_LENGTH] = g_param_spec_boolean(
+		"minimize-filter-length",
+		"Minimize Filter Length",
+		"If true, the adaptive FIR filter will have the minimum number of taps needed\n\t\t\t"
+		"to model the given zeros (one more than the number of zeros). This cannot be\n\t\t\t"
+		"done if there are poles.",
+		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 	properties[ARG_ADAPTIVE_FILTER] = g_param_spec_value_array(
 		"adaptive-filter",
 		"Adaptive Filter",
@@ -1055,6 +1171,11 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		gobject_class,
 		ARG_VARIABLE_FILTER_LENGTH,
 		properties[ARG_VARIABLE_FILTER_LENGTH]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_MINIMIZE_FILTER_LENGTH,
+		properties[ARG_MINIMIZE_FILTER_LENGTH]
 	);
 	g_object_class_install_property(
 		gobject_class,

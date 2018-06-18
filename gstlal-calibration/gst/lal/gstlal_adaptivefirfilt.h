@@ -91,6 +91,7 @@ struct _GSTLALAdaptiveFIRFilt {
 	double *static_filter;
 	gint64 static_filter_length;
 	gint64 variable_filter_length;
+	gboolean minimize_filter_length;
 	double *adaptive_filter;
 	gint64 adaptive_filter_length;
 	double tukey_param;
