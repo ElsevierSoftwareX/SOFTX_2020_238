@@ -66,7 +66,7 @@ except KeyError as e:
 	raise
 
 
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = None, width = 64, unit_normalize = True, statevector = None, dqvector = None):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = None, width = 64, unit_normalize = True, statevector = None, dqvector = None, fir_whiten_reference_psd = None):
 	"""
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -80,6 +80,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	* veto_segments: segments to mark as gaps after whitening
 	* track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
 	* width: type convert to either 32 or 64 bit float
+	* fir_whiten_reference_psd: when using FIR whitener, use this PSD to define desired desired phase response
 
 	**Gstreamer graph describing this function**
 
@@ -219,7 +220,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.zeros((1, 1 + max(rates) * psd_fft_length), dtype=numpy.float64), block_stride = block_stride, time_domain = False, latency = 0)
 
 		# compute whitening kernel from PSD
-		def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
+		def set_fir_psd(whiten, pspec, firelem, psd_fir_kernel):
 			psd_data = numpy.array(whiten.get_property("mean-psd"))
 			psd = lal.CreateREAL8FrequencySeries(
 				name = "psd",
@@ -231,9 +232,25 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			)
 			psd.data.data = psd_data
 			kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
-			kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
-			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
-		whiten.connect_after("notify::mean-psd", set_fir_psd, head, reference_psd.PSDFirKernel())
+			kernel, phase = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
+			firelem.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
+		firkernel = reference_psd.PSDFirKernel()
+		if fir_whiten_reference_psd is not None:
+			assert fir_whiten_reference_psd.f0 == 0.
+			# interpolate the reference phase PSD if its
+			# resolution doesn't match what we'll eventually
+			# require it to be.
+			if psd_fft_length != round(1. / fir_whiten_reference_psd.deltaF):
+				fir_whiten_reference_psd = reference_psd.interpolate_psd(fir_whiten_reference_psd, 1. / psd_fft_length)
+			# confirm that the reference phase PSD's Nyquist is
+			# sufficiently high, then reduce it to the required
+			# Nyquist if needed.
+			assert (psd_fft_length * max(rates)) // 2 + 1 <= len(fir_whiten_reference_psd.data.data), "fir_whiten_reference_psd Nyquist too low"
+			if (psd_fft_length * max(rates)) // 2 + 1 < len(fir_whiten_reference_psd.data.data):
+				fir_whiten_reference_psd = lal.CutREAL8FrequencySeries(fir_whiten_reference_psd, 0, (psd_fft_length * max(rates)) // 2 + 1)
+			# set the reference phase PSD
+			firkernel.set_phase(fir_whiten_reference_psd)
+		whiten.connect_after("notify::mean-psd", set_fir_psd, head, firkernel)
 
 		# Gate after gaps
 		# FIXME the -max(rates) extra padding is for the high pass
@@ -247,6 +264,13 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
+		# FIXME:  we should require fir_whiten_reference_psd to be
+		# None in this code path for safety, but that's hard to do
+		# since the calling code would need to know what
+		# environment variable is being used to select the mode,
+		# and we don't want to be duplicating that code all over
+		# the place
+
 		#
 		# add a reblock element.  the whitener's gap support isn't
 		# 100% yet and giving it smaller input buffers works around
