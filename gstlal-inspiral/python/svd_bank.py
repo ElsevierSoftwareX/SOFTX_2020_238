@@ -259,7 +259,7 @@ def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_
 	return bank
 
 
-def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd = False, verbose = False):
+def write_bank(filename, banks, cliplefts = None, cliprights = None, verbose = False):
 	"""Write SVD banks to a LIGO_LW xml file."""
 
 	# Create new document
@@ -333,8 +333,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, write_psd =
 	# put a copy of the processed PSD file in
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one here
-	if write_psd:
-		lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
+	lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
 
 	# Write to file
 	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
@@ -347,6 +346,10 @@ def read_banks(filename, contenthandler, verbose = False):
 	xmldoc = ligolw_utils.load_url(filename, contenthandler = contenthandler, verbose = verbose)
 
 	banks = []
+
+	# FIXME in principle this could be different for each bank included in
+	# this file, but we only put one in the file for now
+	psd = lal.series.read_psd_xmldoc(xmldoc)
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
 	
@@ -369,6 +372,9 @@ def read_banks(filename, contenthandler, verbose = False):
 		bank.autocorrelation_bank = ligolw_array.get_array(root, 'autocorrelation_bank_real').array + 1j * ligolw_array.get_array(root, 'autocorrelation_bank_imag').array
 		bank.autocorrelation_mask = ligolw_array.get_array(root, 'autocorrelation_mask').array
 		bank.sigmasq = ligolw_array.get_array(root, 'sigmasq').array
+
+		# attach a reference to the psd
+		bank.psd = psd
 
 		# Read bank fragments
 		bank.bank_fragments = []
