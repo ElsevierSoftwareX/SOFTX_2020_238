@@ -534,8 +534,8 @@ class PSDFirKernel(object):
 
 		kernel_fseries.data.data = numpy.sqrt(data) + 0.j
 		lal.COMPLEX16FreqTimeFFT(kernel_tseries, kernel_fseries, self.revplan)
-		kernel = numpy.real(kernel_tseries.data.data)
-		kernel = numpy.roll(kernel, (len(data) - 1) / 2)[:] / sample_rate * 2
+		kernel = kernel_tseries.data.data.real
+		kernel = numpy.roll(kernel, (len(data) - 1) / 2) / sample_rate * 2
 
 		#
 		# apply a Tukey window whose flat bit is 50% of the kernel.
@@ -669,6 +669,16 @@ class PSDFirKernel(object):
 		lal.COMPLEX16TimeFreqFFT(theta, cepstrum, self.fwdplan)
 
 		#
+		# compute the gain and phase of the zero-phase
+		# approximation relative to the original linear-phase
+		# filter
+		#
+
+		theta_data = theta.data.data[working_length // 2:]
+		#gain = numpy.exp(theta_data.real)
+		phase = -theta_data.imag
+
+		#
 		# compute minimum phase kernel
 		#
 
@@ -683,16 +693,6 @@ class PSDFirKernel(object):
 		#
 
 		kernel = kernel[-1::-1]
-
-		#
-		# compute the gain and phase of the zero-phase
-		# approximation relative to the original linear-phase
-		# filter
-		#
-
-		theta = theta.data.data[working_length // 2:]
-		#gain = numpy.exp(theta.real)
-		phase = -theta.imag
 
 		#
 		# done
@@ -812,7 +812,7 @@ def one_second_highpass_kernel(rate, cutoff = 12):
 	highpass_filter_fd[-int(cutoff):] = 0.
 	highpass_filter_fd[rate/2-1:rate/2+1] = 0.
 	highpass_filter_td = fftpack.ifft(highpass_filter_fd)
-	highpass_filter_td = numpy.roll(numpy.real(highpass_filter_td), rate/2)
+	highpass_filter_td = numpy.roll(highpass_filter_td.real, rate/2)
 	highpass_filter_kernel = numpy.zeros(len(highpass_filter_td)+1)
 	highpass_filter_kernel[:-1] = highpass_filter_td[:]
 	x = numpy.arange(len(highpass_filter_kernel))
