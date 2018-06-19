@@ -1112,22 +1112,19 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 	if options.update_fcc:
 		variable_invsens_zeros += 1
 		# The real part of the pole is 0.0, and fcc_default is the imaginary part
-		static_invsens_poles.extend([0.0, fcc_default])
+		static_invsens_poles.extend([fcc_default, 0.0])
 
-		# (f - i * f_cc) is a zero in the variable inverse sensing filter
-		complex_fcc = pipeparts.mkmatrixmixer(pipeline, smooth_fcctee, matrix = [[0.0, 1.0]])
+		# (1 + i * f / f_cc) is a zero in the variable inverse sensing filter
+		complex_fcc = pipeparts.mkmatrixmixer(pipeline, smooth_fcctee, matrix = [[1.0, 0.0]])
 		complex_fcc = pipeparts.mktogglecomplex(pipeline, complex_fcc)
 
 		tdep_zpk.append(complex_fcc)
 
-		# This will be added into tdep_zpk at the end, as required by lal_adaptivefirfilt
-		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, smooth_fcctee, exponent = -1.0), fcc_default)
-
 	# There are two zeros that depend on fs and Q, both of which depend on both fs and Q
 	if options.update_fs or options.update_srcQ:
 		variable_invsens_zeros += 2
-		static_invsens_poles.extend([0.0, (fs_default / 2.0) * (pow(srcQ_default, -1.0) + pow(pow(srcQ_default, -2.0) + 4.0, 0.5))])
-		static_invsens_poles.extend([0.0, (fs_default / 2.0) * (pow(srcQ_default, -1.0) - pow(pow(srcQ_default, -2.0) + 4.0, 0.5))])
+		static_invsens_poles.extend([(fs_default / 2.0) * (pow(srcQ_default, -1.0) + pow(pow(srcQ_default, -2.0) + 4.0, 0.5)), 0.0])
+		static_invsens_poles.extend([(fs_default / 2.0) * (pow(srcQ_default, -1.0) - pow(pow(srcQ_default, -2.0) + 4.0, 0.5)), 0.0])
 
 	if options.update_fs and options.update_srcQ:
 		# The variable zeros depend on the computed values of fs and Q
@@ -1137,28 +1134,34 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 
 		SRC_zero1 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, sqrt_Q_inv_squared_plus4))
 		SRC_zero1 = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, SRC_zero1, smooth_fs))
-		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, SRC_zero1, matrix = [[0.0, 0.5]])
+		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, SRC_zero1, matrix = [[0.5, 0.0]])
 		SRC_zero1 = pipeparts.mktogglecomplex(pipeline, SRC_zero1)
 
 		SRC_zero2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, pipeparts.mkaudioamplify(pipeline, sqrt_Q_inv_squared_plus4, -1.0)))
 		SRC_zero2 = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, SRC_zero2, smooth_fs))
-		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, SRC_zero2, matrix = [[0.0, 0.5]])
+		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, SRC_zero2, matrix = [[0.5, 0.0]])
 		SRC_zero2 = pipeparts.mktogglecomplex(pipeline, SRC_zero2)
 
 		tdep_zpk.extend([SRC_zero1, SRC_zero2])
+
+		# This will be added into tdep_zpk at the end, as required by lal_adaptivefirfilt
+		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, smooth_fs, exponent = 2.0), pow(fs_default, -2.0))
 
 	elif options.update_fs:
 		# The variable zeros depend on the computed value of fs and the model value of Q
 		Q_factor1 = (pow(srcQ_default, -1.0) + pow(pow(srcQ_default, -2.0) + 4.0, 0.5)) / 2.0
 		Q_factor2 = (pow(srcQ_default, -1.0) - pow(pow(srcQ_default, -2.0) + 4.0, 0.5)) / 2.0
 
-		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, smooth_fs, matrix = [[0.0, Q_factor1]])
+		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, smooth_fs, matrix = [[Q_factor1, 0.0]])
 		SRC_zero1 = pipeparts.mktogglecomplex(pipeline, SRC_zero1)
 
-		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, smooth_fs, matrix = [[0.0, Q_factor2]])
+		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, smooth_fs, matrix = [[Q_factor2, 0.0]])
 		SRC_zero2 = pipeparts.mktogglecomplex(pipeline, SRC_zero2)
 
 		tdep_zpk.extend([SRC_zero1, SRC_zero2])
+
+		# This will be added into tdep_zpk at the end, as required by lal_adaptivefirfilt
+		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, smooth_fs, exponent = 2.0), pow(fs_default, -2.0))
 
 	elif options.update_srcQ:
 		# The variable zeros depend on the model value of fs and the computed value of Q
@@ -1167,11 +1170,11 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 		sqrt_Q_inv_squared_plus4 = pipeparts.mktee(pipeline, sqrt_Q_inv_squared_plus4)
 
 		SRC_zero1 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, sqrt_Q_inv_squared_plus4))
-		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, SRC_zero1, matrix = [[0.0, 0.5 * fs_default]])
+		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, SRC_zero1, matrix = [[0.5 * fs_default, 0.0]])
 		SRC_zero1 = pipeparts.mktogglecomplex(pipeline, SRC_zero1)
 
 		SRC_zero2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, pipeparts.mkaudioamplify(pipeline, sqrt_Q_inv_squared_plus4, -1.0)))
-		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, SRC_zero2, matrix = [[0.0, 0.5 * fs_default]])
+		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, SRC_zero2, matrix = [[0.5 * fs_default, 0.0]])
 		SRC_zero2 = pipeparts.mktogglecomplex(pipeline, SRC_zero2)
 
 		tdep_zpk.extend([SRC_zero1, SRC_zero2])
@@ -1179,12 +1182,12 @@ if options.update_fcc or options.update_fs or options.update_srcQ:
 	if options.apply_kappac:
 		# We divide the gain by kappa_c
 		kappac_inv = calibration_parts.mkpow(pipeline, smooth_kctee, exponent = -1.0)
-		if options.update_fcc:
+		if options.update_fs:
 			variable_invsens_gain = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, variable_invsens_gain, kappac_inv))
 		else:
 			variable_invsens_gain = kappac_inv
 
-	if options.apply_kappac or options.update_fcc:
+	if options.apply_kappac or options.update_fs:
 		# Now add the gain into the list of corrections
 		variable_invsens_gain = pipeparts.mkmatrixmixer(pipeline, variable_invsens_gain, matrix = [[1.0, 0.0]])
 		variable_invsens_gain = pipeparts.mktogglecomplex(pipeline, variable_invsens_gain)
@@ -1933,19 +1936,22 @@ if options.remove_callines or options.remove_powerlines or options.witness_chann
 #
 
 if not options.no_dq_vector and (options.remove_callines or options.remove_powerlines or options.witness_channel_list is not None):
+	low_rms_rate = pow(2, int(numpy.log(options.cleaning_check_range_low_max) / numpy.log(2) + 1.1))
+	mid_rms_rate = pow(2, int(numpy.log(options.cleaning_check_range_mid_max) / numpy.log(2) + 1.1))
+
 	# Compute the RMS of the uncleaned strain in a low-frequency range to test subtraction of actuation lines
-	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_low_min, f_max = options.cleaning_check_range_low_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_low_min, f_max = options.cleaning_check_range_low_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
 	# Compute the RMS of the cleaned strain in a low-frequency range
-	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_low_min, f_max = options.cleaning_check_range_low_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_low_min, f_max = options.cleaning_check_range_low_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_lowfreq = calibration_parts.complex_division(pipeline, strain_rms_lowfreq, clean_strain_rms_lowfreq)
 	clean_hoft_ok_lowfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_lowfreq, bit_vector=pow(2,25), threshold=1.0)
 	clean_hoft_ok_lowfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_lowfreq, calibstate_caps)
 
 	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
-	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
 	# Compute the RMS of the cleaned strain in a mid-frequency range
-	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, hoftsr, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
+	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, options.cleaning_check_rms_time, f_min = options.cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = options.filter_latency, rate_out = calibstatesr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_midfreq = calibration_parts.complex_division(pipeline, strain_rms_midfreq, clean_strain_rms_midfreq)
 	clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector=pow(2,26), threshold=1.0)
