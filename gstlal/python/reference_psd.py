@@ -444,6 +444,42 @@ class PSDFirKernel(object):
 	def __init__(self):
 		self.revplan = None
 		self.fwdplan = None
+		self.target_phase = None
+		self.target_phase_mask = None
+
+	def set_phase(self, psd, f_low = 10.0, m1 = 1.4, m2 = 1.4):
+		# compute phase response of zero-latency whitening filter
+		# corresponding to psd
+		kernel, latency, sample_rate = self.psd_to_linear_phase_whitening_fir_kernel(psd)
+		kernel, phase = self.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
+
+		# get merger model for SNR = 1.
+		f_psd = psd.f0 + numpy.arange(len(psd.data.data)) * psd.deltaF
+		horizon_distance = HorizonDistance(f_low, f_psd[-1], psd.deltaF, m1, m2)
+		f_model, model= horizon_distance(psd, 1.)[1]
+
+		# find the range of frequency bins covered by the merger
+		# model
+		kmin, kmax = f_psd.searchsorted(f_model[0]), f_psd.searchsorted(f_model[-1]) + 1
+
+		# compute SNR=1 model's (d SNR^2 / df) spectral density
+		unit_snr2_density = numpy.zeros_like(phase)
+		unit_snr2_density[kmin:kmax] = model / psd.data.data[kmin:kmax]
+
+		# integrate across each frequency bin, converting to
+		# snr^2/bin.  NOTE:  this step is here for the record, but
+		# is commented out because it has no effect on the result
+		# given the renormalization that occurs next.
+		#unit_snr2_density *= psd.deltaF
+
+		# take 16th root, then normalize so max=1.  why?  I don't
+		# know, just feels good, on the whole.
+		unit_snr2_density = unit_snr2_density**(1./16)
+		unit_snr2_density /= unit_snr2_density.max()
+
+		# record phase vector and SNR^2 density vector
+		self.target_phase = phase
+		self.target_phase_mask = unit_snr2_density
 
 	def psd_to_linear_phase_whitening_fir_kernel(self, psd, invert = True, nyquist = None):
 		"""
@@ -677,6 +713,27 @@ class PSDFirKernel(object):
 		theta_data = theta.data.data[working_length // 2:]
 		#gain = numpy.exp(theta_data.real)
 		phase = -theta_data.imag
+
+		#
+		# apply optional masked phase adjustment
+		#
+
+		if self.target_phase is not None:
+			# compute phase adjustment for +ve frequencies
+			phase_adjustment = (self.target_phase - phase) * self.target_phase_mask
+
+			# combine with phase adjustment for -ve frequencies
+			phase_adjustment = numpy.concatenate((phase_adjustment[1:][-1::-1].conj(), phase_adjustment))
+
+			# apply adjustment.  phase adjustment is what we
+			# wish to add to the phase.  theta's imaginary
+			# component contains the negative of the phase, so
+			# we need to add -phase to theta's imaginary
+			# component
+			theta.data.data += -1.j * phase_adjustment
+
+			# report adjusted phase
+			#phase = -theta.data.data[working_length // 2:].imag
 
 		#
 		# compute minimum phase kernel
