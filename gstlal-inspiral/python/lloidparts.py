@@ -1027,15 +1027,32 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 
 	#
 	# construct dictionaries of whitened, conditioned, down-sampled
-	# h(t) streams
+	# h(t) streams.  NOTE:  we assume all banks for each instrument
+	# were generated with the same processed PSD for that instrument
+	# and just extract the first without checking that this assumption
+	# is correct
 	#
 
+	assert psd_fft_length % 4 == 0, "psd_fft_length (= %g) must be multiple of 4" % psd_fft_length
 	hoftdicts = {}
 	for instrument in detectors.channel_dict:
-		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates())
 		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
-		assert psd_fft_length % 4 == 0, "psd_fft_length (= %g) must be multiple of 4" % psd_fft_length
-		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument] if veto_segments is not None else None, nxydump_segment = nxydump_segment, track_psd = track_psd, width = 32, statevector = statevector, dqvector = dqvector)
+		hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(
+			pipeline,
+			src = src,
+			rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()),
+			instrument = instrument,
+			psd = psd[instrument],
+			psd_fft_length = psd_fft_length,
+			ht_gate_threshold = ht_gate_threshold,
+			veto_segments = veto_segments[instrument] if veto_segments is not None else None,
+			nxydump_segment = nxydump_segment,
+			track_psd = track_psd,
+			width = 32,
+			statevector = statevector,
+			dqvector = dqvector,
+			fir_whiten_reference_psd = banks[instrument][0].psd[instrument]
+		)
 
 	#
 	# build gate control branches
