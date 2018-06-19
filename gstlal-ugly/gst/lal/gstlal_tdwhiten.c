@@ -234,7 +234,7 @@ static void set_metadata(GSTLALTDwhiten *element, GstBuffer *buf, guint64 outsam
 
 
 /*
- * obtain the two gains applied to output of two kernels for taping them.
+ * obtain the two gains applied to output of two kernels for tapering them.
  */
 
 
@@ -338,7 +338,8 @@ static unsigned tddfilter(GSTLALTDwhiten *element, GstMapInfo *mapinfo, unsigned
 		kernelinfo = g_queue_peek_nth(element->kernels, j);
 
 		/*
-		 * tape the two output samples time series computed by two kernels.
+		 * taper the two output samples time series computed by two
+		 * kernels.
 		 */
 
 		for(i = 0; i < output_length; i++) {
