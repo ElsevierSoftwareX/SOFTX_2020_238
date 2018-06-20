@@ -93,6 +93,16 @@ def calc_expected_snr(inj):
 	# FIXME have better scheme for calculating the needed sample_rate
 	sample_rate = 16384.0
 
+        approximant = lalsimulation.GetApproximantFromString(str(inj.waveform))
+
+        if approximant == lalsimulation.NR_hdf5:
+                LALparams = lal.CreateDict()
+                lalsimulation.SimInspiralWaveformParamsInsertNumRelData(LALparams, str(inj.numrel_data))
+                f_min = inj.f_lower
+        else:
+                LALparams = None
+                f_min = options.flow
+        
 	h_plus, h_cross = lalsimulation.SimInspiralTD(
 		m1 = inj.mass1*lal.MSUN_SI,
 		m2 = inj.mass2*lal.MSUN_SI,
@@ -109,10 +119,10 @@ def calc_expected_snr(inj):
 		eccentricity = 0.0,
 		meanPerAno = 0.0,
 		deltaT = 1.0 / sample_rate,
-		f_min = options.flow,
+		f_min = f_min,
 		f_ref = 0.0,
-		LALparams = None,
-		approximant = lalsimulation.GetApproximantFromString(str(inj.waveform))
+		LALparams = LALparams,
+		approximant = approximant
 	)
 
 	h_plus.epoch += injtime
