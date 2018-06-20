@@ -846,7 +846,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappapu or not 
 
 	kpu = pipeparts.mktee(pipeline, kpu)
 
-	# Put off smoothing \kappa_pu until after \kappa_tst is computed in case we are correcting the phase of \kappa_pu using \kappa_tst
+	# Put off smoothing \kappa_pu in case we are correcting the phase of \kappa_pu using \kappa_tst
 
 	# If desired, correct the phase of \kappa_pu using \kappa_tst (This assumes that all stages of actuation have the same variable time delay, and that \kappa_tst is doing a better job of measuring it)
 	if options.act_timing_from_kappatst:

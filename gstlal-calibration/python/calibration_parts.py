@@ -383,7 +383,7 @@ def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, 
 	head = mkpow(pipeline, head, exponent = 2.0)
 
 	# Downsample again to save computational cost
-	head = mkresample(pipeline, head, 3, filter_latency == 0.0, rate_out)
+	head = mkresample(pipeline, head, 4, filter_latency == 0.0, rate_out)
 
 	# Compute running average
 	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = 0.0, array_size = 1, avg_array_size = average_time * rate_out, filter_latency = filter_latency)
