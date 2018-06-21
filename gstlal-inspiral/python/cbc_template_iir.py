@@ -722,6 +722,8 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
         spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad))/numpy.sqrt(norm_u * norm_h))
 	# overlap of spiir reconstructed waveform with full template (data_full)
 	u_full_match = abs(numpy.dot(u_rev_pad, numpy.conj(data_full_pad))/numpy.sqrt(norm_u * norm_data_full))
+    	# normalize so that the SNR would match the expected SNR
+    	b0 *= numpy.sqrt(norm_data_full / norm_u) * u_full_match
         n_filters = len(delay)
 
         if verbose:
@@ -739,8 +741,9 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     if verbose:
         logging.info("norm of the original template %f, norm of spiir template h_pad %f, norm of spiir response u_rev_pad %f" % (norm_data_full, norm_h, norm_u))
 
-    # normalize the spiir response
-    u_rev_pad = u_rev_pad * numpy.sqrt(norm_h / norm_u) * spiir_match
+    # normalize u_rev_pad so its square root of inner product is sqrt(norm_data_full) * u_full_match
+    u_rev_pad = u_rev_pad * numpy.sqrt(norm_data_full / norm_u) * u_full_match
+
     return u_rev_pad, h_pad, data_full
 
 def gen_lalsim_waveform(row, flower, sampleRate):
@@ -1105,8 +1108,8 @@ class Bank(object):
         	data_full_pad *= cmath.sqrt(2 / norm_data_full)
 		# overlap of spiir constructed waveform with original template
                 u_full_match = abs(numpy.dot(u_rev_pad, numpy.conj(data_full_pad)))/2.0
-
-
+	    	# normalize b0 so that the SNR would match the expected SNR
+	    	b0 *= u_full_match
  
                 if(abs(original_epsilon - epsilon) < 1e-5):
                     original_match = spiir_match
@@ -1164,15 +1167,18 @@ class Bank(object):
             #self.sigmasq.append(1.0 * norm_h / sampleRate)
             norm_data = abs(numpy.dot(data, numpy.conj(data)))
             self.sigmasq.append(norm_data * spiir_match * spiir_match * working_state["working_length"] / sampleRate**2. )
+
             
             # This is actually the cross correlation between the original waveform and this approximation
-            # FIXME: also update the waveform
+            # FIXME: also update the h_pad to be the original data_full_pad
             self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
-            
-            self.matches.append(spiir_match)
+           
+	    # save the overlap of spiir reconstructed waveform with the original data_full_pad
+            self.matches.append(u_full_match)
 
             if verbose:
                 logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), row.mass1,row.mass2, epsilon, n_filters, spiir_match, original_epsilon, original_filters, original_match))    
+
             # get the filter frequencies
             fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
             a1dict = {}
