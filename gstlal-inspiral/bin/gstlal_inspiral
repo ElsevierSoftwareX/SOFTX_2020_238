@@ -678,7 +678,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		output.close()
 		return outstr
 	# FIXME:  don't use Gamma0, switch to a proper column
-	template_ids = frozenset(sngl_inspiral_table.getColumnByName("Gamma0"))
+	template_ids = frozenset(map(int, sngl_inspiral_table.getColumnByName("Gamma0")))
 	@bottle.route("/template_ids.txt")
 	def get_template_ids(template_ids = sorted(template_ids)):
 		return "\n".join("%d" % template_id for template_id in template_ids)
