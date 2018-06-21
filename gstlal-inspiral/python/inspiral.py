@@ -195,7 +195,7 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 			# trigger generator
 			# FIXME teach the trigger generator to get this
 			# information a better way
-			bank.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".gz", delete = False).name
+			bank.template_bank_filename = tempfile.NamedTemporaryFile(suffix = ".xml.gz", delete = False).name
 			xmldoc = ligolw.Document()
 			# FIXME if this table reference is from a DB this
 			# is a problem (but it almost certainly isn't)
