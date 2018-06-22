@@ -45,5 +45,7 @@ dist_bin_SCRIPTS = \
 	gstlal_bank_extract \
 	gstlal_inspiral_summary_page \
 	gstlal_inspiral_injection_snr \
-	gstlal_plot_inj
+	gstlal_plot_inj \
+	gstlal_ll_inspiral_postcohspiir_update_map \
+	gstlal_inspiral_spiir_filt
 
