@@ -83,7 +83,7 @@ from ligo import segments
 #
 
 def write_graph(demux):
-	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = True)
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (DebuggingConfigs["pipelinegraphfilename"], "PLAYING"), verbose = True)
 
 #
 # Make sure we have sufficient resources
@@ -176,7 +176,7 @@ if InputConfigs["datasource"] not in data_sources:
 if InputConfigs["datasource"] == "frames" and InputConfigs["framecache"] is None:
 	raise ValueError("FrameCache must be specified when using DataSource: frames")
 
-if InputConfigs["wings"] is not None and InputConfigs["datasource"] != "frames":
+if int(InputConfigs["wings"] != 0) and InputConfigs["datasource"] != "frames":
 	raise ValueError("Wings can only be set when DataSource: frames")
 
 if CalibrationConfigs["ifo"] is None:
@@ -395,6 +395,8 @@ if factors_from_filters_file or not compute_calibstatevector:
 		EP10_imag = float(filters["EP10_imag"])
 		if factors_from_filters_file and remove_cal_lines:
 			remove_esd_act_line = True
+		else:
+			remove_esd_act_line = False
 	except:
 		if factors_from_filters_file:
 			remove_esd_act_line = False
@@ -655,7 +657,7 @@ handler = simplehandler.Handler(mainloop, pipeline)
 #
 
 pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src # comment this line out to turn on the checktimestamps debugging
-if verbose:
+if not verbose:
 	pipeparts.mkprogressreport = lambda pipeline, src, *args: src
 
 #
@@ -671,14 +673,12 @@ elif InputConfigs["datasource"] == "frames": # Data is to be read from frame fil
 # Hook up the relevant channels to the demuxer
 #
 
-if InputConfigs["datasource"] == "lvshm":
-	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = file_check_sum, skip_bad_files = skip_bad_files, channel_list = map("%s:%s".__mod__, channel_list))
-elif InputConfigs["datasource"] == "frames":
-	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = file_check_sum, skip_bad_files = skip_bad_files, channel_list = map("%s:%s".__mod__, channel_list))
+demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = file_check_sum, skip_bad_files = skip_bad_files, channel_list = map("%s:%s".__mod__, channel_list))
 
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if DebuggingConfigs["pipelinegraphfilename"] != "None":
 	demux.connect("no-more-pads", write_graph)	
+
 
 # Get everything hooked up and fill in discontinuities
 for key, chan in zip(headkeys, channel_list):
@@ -2037,17 +2037,27 @@ if compute_srcq:
 
 # Check that all frames are long enough, that they have all of the channels by requring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
 def check_complete_frames(pad, info, (output_start, frame_duration, wings_start, wings_end)):
+	if verbose:
+		print("Checking if frames are complete")
 	buf = info.get_buffer()
 	startts = lal.LIGOTimeGPS(0, buf.pts)
 	duration = lal.LIGOTimeGPS(0, buf.duration)
 	if not (startts % frame_duration == 0):
+		if verbose:
+			print("Dropping frame because it is not an integer multiple of frame duration")
 		return Gst.PadProbeReturn.DROP
 	if startts < output_start:
+		if verbose:
+			print("Dropping frame because start time %f is less than desired output start time %f" % (startts, output_start))
 		return Gst.PadProbeReturn.DROP
 	if duration != frame_duration:
+		if verbose:
+			print("Dropping frame because the duration %d is not equal to the required frame duration %d" % (duration, frame_duration))
 		return Gst.PadProbeReturn.DROP
 	if wings_start is not None and wings_end is not None:
 		if startts < wings_start or (startts+duration) > wings_end:
+			if verbose:
+				print("Dropping frame because it lies outside of the wings time")
 			return Gst.PadProbeReturn.DROP
 	return Gst.PadProbeReturn.OK
 if InputConfigs["datasource"] == "frames":
