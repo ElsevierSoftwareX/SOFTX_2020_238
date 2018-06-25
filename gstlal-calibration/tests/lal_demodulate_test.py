@@ -27,6 +27,7 @@
 import numpy
 import sys
 from gstlal import pipeparts
+from gstlal import calibration_parts
 import test_common
 
 
@@ -95,6 +96,40 @@ def lal_demodulate_02(pipeline, name):
 
 	return pipeline
 
+def lal_demodulate_03(pipeline, name):
+	#
+	# This test checks sensitivity of the demodulation process used in the calibration pipeline to small changes in line frequency
+	#
+
+	rate_in = 16384	    	# Hz
+	rate_out = 16		# Hz
+	buffer_length = 1.0	# seconds
+	test_duration = 1000	# seconds
+
+	#
+	# build pipeline
+	#
+
+	# Make fake data with a signal
+	src = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate_in, test_duration = test_duration, wave = 0, volume = 1.0, freq = 37.00, width = 64)
+
+	# Demodulate it
+	head = calibration_parts.demodulate(pipeline, src, 37.10, True, rate_out, 20, 0.0)
+
+	# Smoothing
+#	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", array_size = 128 * rate_out, avg_array_size = 10 * rate_out)
+
+	# Measure the amplitude of the result
+	head = pipeparts.mkgeneric(pipeline, head, "cabs")
+	head = pipeparts.mkaudioamplify(pipeline, head, 2.0)
+	pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
+
+	#
+	# done
+	#
+
+	return pipeline
+
 #
 # =============================================================================
 #
@@ -104,5 +139,7 @@ def lal_demodulate_02(pipeline, name):
 #
 
 
-test_common.build_and_run(lal_demodulate_01, "lal_demodulate_01")
+#test_common.build_and_run(lal_demodulate_01, "lal_demodulate_01")
 #test_common.build_and_run(lal_demodulate_02, "lal_demodulate_02")
+test_common.build_and_run(lal_demodulate_03, "lal_demodulate_03")
+
