@@ -29,6 +29,7 @@ TAR_DIR:=tarball
 LOGS_DIR:=logs
 PATCH_DIR:=${PWD}/patches
 INSTALL_DIR:=${LAL_PATH}
+KAFKA_DIR:=${KAFKA_PATH}
 IDQ_REPO:=${PWD}/git/iDQ
 GSTLAL_REPO:=${PWD}/git/gstlal
 GLUE_REPO:=${PWD}/git/glue
@@ -54,7 +55,7 @@ IDQ=idq-2.0.0
 # idq/feature extractor deps
 KAFKA=0.11.0.2
 SCALA=2.11
-KAFKA_PYTHON=0.11.0
+KAFKA_PYTHON=0.11.4
 LIBRDKAFKA=0.11.3
 SKLEARN=scikit-learn-0.18.2
 CYTHON=Cython-0.25.2
@@ -100,7 +101,7 @@ FFTW=fftw-3.3.5
 # Specify target/dependency files
 IDQ_TARGET=$(INSTALL_DIR)/bin/idq-train
 KAFKA_TARGET=$(KAFKA_DIR)/bin/kafka-topics.sh
-KAFKA_PYTHON_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/confluent_kafka-$(KAFKA)-py2.7-linux-x86_64.egg/confluent_kafka/cimpl.so
+KAFKA_PYTHON_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/confluent_kafka-$(KAFKA_PYTHON)-py2.7-linux-x86_64.egg/confluent_kafka/cimpl.so
 LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 SKLEARN_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/sklearn/_isotonic.so
 CYTHON_TARGET=$(INSTALL_DIR)/bin/cython
@@ -300,6 +301,7 @@ logs/kafka.txt : $(LOGS_DIR)/kafka-python.txt $(KAFKA_TARGET)
 $(KAFKA_TARGET) : $(KAFKA_PYTHON_TARGET)
 	@echo $(GREEN)kafka$(WHITE) 1>&2
 	tar -xzf $(TAR_DIR)/kafka_$(SCALA)-$(KAFKA).tgz -C $(SRC_DIR) ; \
+	rm -rvf $(KAFKA_DIR)/* ; \
 	mv $(SRC_DIR)/kafka_$(SCALA)-$(KAFKA)/* $(KAFKA_DIR) ; \
 
 # confluent-kafka-python
@@ -342,7 +344,7 @@ cython : logs/cython.txt
 logs/cython.txt : $(LOGS_DIR)/gstlal.txt $(CYTHON_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(CYTHON_TARGET) : $(GSTLAL_TARGET)
+$(CYTHON_TARGET) : $(GSTINSPIRAL_TARGET)
 	@echo $(GREEN)cython$(WHITE) 1>&2
 	tar -xzf $(TAR_DIR)/$(CYTHON).tar.gz -C $(SRC_DIR) ; \
 	cd $(SRC_DIR)/$(CYTHON) && python setup.py install --prefix=$(INSTALL_DIR) ; \
@@ -918,7 +920,15 @@ $(FFTW_TAR_TARGET) : $(LOGS_DIR)
 
 # git repos
 $(LOGS_DIR) :
-	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR)
+	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(KAFKA_DIR)
+	if [ "${IDQ_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "iDQ git repo exists" ; \
+		else \
+			mkdir -p $(IDQ_REPO) ; \
+			git clone -b $(IDQ_GIT_BRANCH) https://git.ligo.org/reed.essick/iDQ.git $(IDQ_REPO) ; \
+		fi ; \
+	fi ;
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		if [ -f $@ ] ; then \
 			echo "Lalsuite git repo exists" ; \
@@ -943,14 +953,6 @@ $(LOGS_DIR) :
 			git clone -b $(GSTLAL_GIT_BRANCH) https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
 		fi ; \
 	fi ;
-	if [ "${IDQ_GIT}" = "1" ]; then \
-		if [ -f $@ ] ; then \
-			echo "iDQ git repo exists" ; \
-		else \
-			mkdir -p $(IDQ_REPO) ; \
-			git clone -b $(IDQ_GIT_BRANCH) https://git.ligo.org/reed.essick/iDQ.git $(IDQ_REPO) ; \
-		fi ; \
-	fi ;
 	mkdir -p $(LOGS_DIR)
 
 ############
@@ -958,7 +960,7 @@ $(LOGS_DIR) :
 ############
 
 clean-all :
-	rm -rvf $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(LOGS_DIR)
+	rm -rvf $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(LOGS_DIR) $(KAFKA_DIR)
 	rm -rvf opt git
 	rm -rf *.txt
 
@@ -970,6 +972,9 @@ clean-idq :
 
 clean-kafka :
 	rm -rf logs/sklearn.txt $(KAFKA_TARGET)
+
+clean-kafka-python :
+	rm -rf logs/kafka-python.txt $(KAFKA_PYTHON_TARGET)
 
 clean-librdkafka :
 	rm -rf logs/librdkafka.txt $(LIBRDKAFKA_TARGET)
