@@ -283,6 +283,11 @@ parser.add_option("--powerlines-channel-sr", metavar = "Hz", type = int, default
 parser.add_option("--powerlines-freq-var", metavar = "Hz", type = float, default = 0.02, help = "Amount by which freqency of the power mains varies with time. Supposedly they are intentionally varied by +- 0.02 Hz. (Default = 0.02)")
 parser.add_option("--witness-channel-list", metavar = "name", default = None, help = "Comma-separated list of witness channels to use to subtract noise from h(t). (Default is to not use any witness channels.)")
 parser.add_option("--witness-channel-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which transfer functions will be computed and witness channels will be filtered. (Default = 2048 Hz)")
+parser.add_option("--witness-channel-fft-length", metavar = "seconds", type = float, default = 1.0, help = "The length in seconds of the fast Fourier transforms used to compute transfer functions between witness channels and h(t). The fft's are windowed with Hann windows and overlapped. (Default = 1.0)")
+parser.add_option("--num-witness-ffts", type = int, default = 128, help = "The number of fft's to average for the witness -> h(t) transfer functions calculation. The average is taken after the ratio h(f) / witness(f). (Default = 128)")
+parser.add_option("--witness-fir-length", metavar = "seconds", type = float, default = 0.5, help = "The length in seconds of the filters applied to the witness channels before subtracting from h(t) (Default = 0.5)")
+parser.add_option("--witness-frequency-resolution", metavar = "Hz", type = float, default = 5.0, help = "The frequency resolution of the filters applied to the witness channels before subtracting from h(t). It can be advantageous to lower the frequency resolution in order to average over excess noise. (Default = 5.0)")
+parser.add_option("--witness-tf-update-time", metavar = "seconds", type = int, default = 3600, help = "The amount of time after transfer functions between witness channels and h(t) are finished to begin the calculation of the next set of transfer functions (Default = 3600)")
 parser.add_option("--cleaning-check-rms-time", metavar = "seconds", type = float, default = 1.0, help = "The amount of data from h(t) and cleaned h(t) that is used to compute and compare the rms. This comparison between cleaned and uncleaned h(t) determines whether the HOFT_CLEAN bits of the calibration state vector are on or off.")
 parser.add_option("--cleaning-check-range-low-min", metavar = "Hz", type = int, default = 15, help = "Minimum of a range of frequencies in which we expect line/noise subtraction to be impactful. The HOFT_CLEAN_LOWFREQ_OK bit of the calibration state vector is determined based on whether rms of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 15 Hz)")
 parser.add_option("--cleaning-check-range-low-max", metavar = "Hz", type = int, default = 40, help = "Maximum of a range of frequencies in which we expect line/noise subtraction to be impactful. The HOFT_CLEAN_LOWFREQ_OK bit of the calibration state vector is determined based on whether rms of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 40 Hz)")
@@ -1939,6 +1944,11 @@ if options.remove_powerlines:
 
 # Remove excess noise using any provided witness channels
 if options.witness_channel_list is not None:
+	witness_fft_samples = int(options.witness_channel_fft_length * options.witness_channel_sr)
+	witness_fft_overlap = int(witness_fft_samples / 2)
+	witness_tf_update_samples = int(options.witness_channel_sr) * int(options.witness_tf_update_time)
+	witness_fir_samples = int(options.witness_fir_length * options.witness_channel_sr)
+
 	if not (options.remove_callines or options.remove_powerlines):
 		clean_strain = straintee
 	if options.no_dq_vector:
@@ -1949,7 +1959,7 @@ if options.witness_channel_list is not None:
 			witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 	if len(witnesses) != len(witness_channel_list):
 		print("WARNING: Not all requested witness channels are being used")
-	clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoftsr, witnesses, int(options.witness_channel_sr), int(options.witness_channel_sr), int(options.witness_channel_sr) / 2, 128, int(options.witness_channel_sr) * 3600, int(options.witness_channel_sr) / 2, 10, obsready = None if options.no_dq_vector else obsreadytee)
+	clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoftsr, witnesses, options.witness_channel_sr, witness_fft_samples, witness_fft_overlap, options.num_witness_ffts, witness_tf_update_samples, witness_fir_samples, options.witness_frequency_resolution, obsready = None if options.no_dq_vector else obsreadytee, attack_length = -filter_settle_time * options.witness_channel_sr, filename = "transfer_functions.txt")
 
 if options.remove_callines or options.remove_powerlines or options.witness_channel_list is not None:
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
