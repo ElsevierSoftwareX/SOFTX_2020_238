@@ -179,17 +179,18 @@ DEFINE_MAXIMUM(32);
 DEFINE_MAXIMUM(64);
 
 
-static void write_transfer_functions(complex double *tfs, char *element_name, gint64 rows, int columns, gboolean write_to_screen, char *filename, gboolean free_name) {
+static void write_transfer_functions(complex double *tfs, char *element_name, double df, gint64 rows, int columns, gboolean write_to_screen, char *filename, gboolean free_name) {
 	gint64 i;
 	int j, j_stop;
 	if(write_to_screen) {
-		g_print("\n\n==================== Transfer functions computed by %s ====================\n\t  ", element_name);
+		g_print("\n\n==================== Transfer functions computed by %s ====================\nfrequency\t\t  ", element_name);
 		for(j = 1; j < columns; j++)
 			g_print("ch%d -> ch0\t\t\t\t  ", j);
 		g_print("ch%d -> ch0\n\n", columns);
 
 		j_stop = columns - 1;
 		for(i = 0; i < rows; i++) {
+			g_print("%10f\t", i * df);
 			for(j = 0; j < j_stop; j++) {
 				if(cimag(tfs[i + j * rows]) < 0.0)
 					g_print("%10e - %10ei\t\t", creal(tfs[i + j * rows]), -cimag(tfs[i + j * rows]));
@@ -207,13 +208,14 @@ static void write_transfer_functions(complex double *tfs, char *element_name, gi
 	if(filename) {
 		FILE *fp;
 		fp = fopen(filename, "a");
-		g_fprintf(fp, "==================== Transfer functions computed by %s ====================\n\t  ", element_name);
+		g_fprintf(fp, "==================== Transfer functions computed by %s ====================\nfrequency\t\t  ", element_name);
 		for(j = 1; j < columns; j++)
 			g_fprintf(fp, "ch%d -> ch0\t\t\t\t  ", j);
 		g_fprintf(fp, "ch%d -> ch0\n\n", columns);
 
 		j_stop = columns - 1;
 		for(i = 0; i < rows; i++) {
+			g_fprintf(fp, "%10f\t", i * df);
 			for(j = 0; j < j_stop; j++) {
 				if(cimag(tfs[i + j * rows]) < 0.0)
 					g_fprintf(fp, "%10e - %10ei\t\t", creal(tfs[i + j * rows]), -cimag(tfs[i + j * rows]));
@@ -584,7 +586,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 			/* Write transfer functions to the screen or a file if we want */ \
 			if(element->write_to_screen || element->filename) \
-				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), fd_fft_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
+				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_fft_length - 1.0), fd_fft_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
 		} \
 		element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
 		element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg = 0; \
