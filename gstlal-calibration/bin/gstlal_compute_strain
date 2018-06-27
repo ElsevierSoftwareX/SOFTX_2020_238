@@ -20,24 +20,24 @@
 """
 This pipeline produces h(t) given DARM_ERR and DARM_CTRL or given DELTAL_RESIDUAL and DELTAL_CTRL. It can be run online in real-time or offline on frame files.  It can write h(t) frames to frame files or to a shared memory partition.
 
-The differential arm length resulting from external sources is                                                
+The differential arm length resulting from external sources is						
 
-\Delta L_{ext} = ((f^2 + f_s^2 - i * f * f_s / Q) / f^2)                                                        
-* ((1 + i * f / f_cc) / (\kappa_c C_res)) * d_{err}                                                             
-+ (A_tst * \kappa_tst + A_pu * \kappa_pu) * d_{ctrl}                                                            
+\Delta L_{ext} = ((f^2 + f_s^2 - i * f * f_s / Q) / f^2)							
+* ((1 + i * f / f_cc) / (\kappa_c C_res)) * d_{err}							     
++ (A_tst * \kappa_tst + A_pu * \kappa_pu) * d_{ctrl}							    
 
-where C is the static portion of the sensing function, A_tst is the TST actuation function, A_pu is the PUM+UIM actuation, \kappa_c is the time-dependent gain of the sensing function, \kappa_tst is the time-dependent gain of TST actuation, and \kappa_pu is the time-dependent gain of the PUM/UIM actuation.  \Delta L_{ext} is divided by the average arm length (4000 km) to obtain h(t), the external strain in the detectors,                                                                                                
+where C is the static portion of the sensing function, A_tst is the TST actuation function, A_pu is the PUM+UIM actuation, \kappa_c is the time-dependent gain of the sensing function, \kappa_tst is the time-dependent gain of TST actuation, and \kappa_pu is the time-dependent gain of the PUM/UIM actuation.  \Delta L_{ext} is divided by the average arm length (4000 km) to obtain h(t), the external strain in the detectors,												
 
-h(t) = \Delta L_{ext} / L .                                                                                  
+h(t) = \Delta L_{ext} / L .										  
 
 The time-dependent gains (\kappa's) as well as the value for the coupled cavity pole f_cc and SRC detuning parameters f_s and Q are calcuated in this pipeline as well.
 
-This pipeline will most often be run in a format where it picks up after part of the actuation and sensing functions have been applied to the appropriate channels.  In this mode, the input channels are \Delta L_{res} and \Delta L_{ctrl, i}.  This pipeline then applies further high frequency corrections to each of these channels, applies the appropriate time delay to each channel, adds the channels together, and divides by L.                                                                                        
+This pipeline will most often be run in a format where it picks up after part of the actuation and sensing functions have been applied to the appropriate channels.  In this mode, the input channels are \Delta L_{res} and \Delta L_{ctrl, i}.  This pipeline then applies further high frequency corrections to each of these channels, applies the appropriate time delay to each channel, adds the channels together, and divides by L.											
 
-h(t) = (((f^2 + f_s^2 - i * f * f_s / Q) / f^2)                                                             
-* ((1 + i * f / f_cc) / \kappa_c) * corrections * \Delta L_{res}                                                    
-+ \kappa_tst * \Delta L_{ctrl, TST}                                                                                 
-+ \kappa_pu * (\Delta L_{ctrl, P} + \Delta L_{ctrl, U})) / L                                                        
+h(t) = (((f^2 + f_s^2 - i * f * f_s / Q) / f^2)							     
+* ((1 + i * f / f_cc) / \kappa_c) * corrections * \Delta L_{res}						    
++ \kappa_tst * \Delta L_{ctrl, TST}										 
++ \kappa_pu * (\Delta L_{ctrl, P} + \Delta L_{ctrl, U})) / L							
 
 Note: The actuation \kappa's are complex numbers.  Only the real part of the computed \kappa's are applied as time-dependent gain corrections.
 
@@ -1404,6 +1404,7 @@ filter_latency = max(res_filter_latency, tst_filter_latency, pumuim_filter_laten
 
 # Add control and residual chains and divide by L to make h(t)
 strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, res, ctrl))
+
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
@@ -1553,7 +1554,16 @@ if not options.no_dq_vector:
 	# COHERENCE BITS BRANCH
 	#
 	if not options.no_coherence:
+		coherence_ok_list = []
+		if not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
+			# PCALY_LINE2 is only used for \kappa_c, f_cc, f_s, and Q
+			pcaly_line2_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line2_coh, threshold = options.coherence_uncertainty_threshold, bit_vector = pow(2,19), invert_control = True)
+			pcaly_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line2_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % cohsr)
+			pcaly_line2_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line2_coh_ok, "lal_logicalundersample", required_on = pow(2,19), status_out = pow(2,19))
+			pcaly_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line2_coh_ok, calibstate_caps)
+			coherence_ok_list.append(pcaly_line2_coh_ok)
 		if not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
+			# The coherences of these lines are all used to gate all the time dependence calculations
 			pcaly_line1_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line1_coh, threshold = options.coherence_uncertainty_threshold, bit_vector = pow(2,18), invert_control = True)
 			pcaly_line1_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line1_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % cohsr)
 			pcaly_line1_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line1_coh_ok, "lal_logicalundersample", required_on = pow(2,18), status_out = pow(2,18))
@@ -1568,42 +1578,38 @@ if not options.no_dq_vector:
 			darm_coh_ok = pipeparts.mkcapsfilter(pipeline, darm_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % cohsr)
 			darm_coh_ok = pipeparts.mkgeneric(pipeline, darm_coh_ok, "lal_logicalundersample", required_on = pow(2,17), status_out = pow(2,17))
 			darm_coh_ok = pipeparts.mkcapsfilter(pipeline, darm_coh_ok, calibstate_caps)
-			coherence_bits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pcaly_line1_coh_ok, sus_coh_ok, darm_coh_ok))
-		if not options.no_kappac or not options.no_fcc or not options.no_srcQ or not options.no_fs:
-			pcaly_line2_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line2_coh, threshold = options.coherence_uncertainty_threshold, bit_vector = pow(2,19), invert_control = True)
-			pcaly_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line2_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % cohsr)
-			pcaly_line2_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line2_coh_ok, "lal_logicalundersample", required_on = pow(2,19), status_out = pow(2,19))
-			pcaly_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line2_coh_ok, calibstate_caps)
-			coherence_bits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, coherence_bits, pcaly_line2_coh_ok))
+			coherence_ok_list.extend((pcaly_line1_coh_ok, sus_coh_ok, darm_coh_ok))
+			coherence_bits = calibration_parts.mkadder(pipeline, tuple(coherence_ok_list))
 
 	#
 	# H(T)-OK BIT BRANCH
 	#
 
 	# First combine higher order bits to determine h(t)-OK
-	higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, filtersok, obsreadytee, noinvalidinput))
+	higherbits_list = [filtersok, obsreadytee, noinvalidinput]
 	htok_threshold = pow(2,2) + pow(2,3) + pow(2,4)
-	if options.apply_kappatst:
-		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, ktstSmoothInRange))
+	if options.apply_kappatst or options.apply_complex_kappatst:
+		higherbits_list.append(ktstSmoothInRange)
 		htok_threshold += pow(2,9)
-	if options.apply_kappap or options.apply_kappapu:
-		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, kpSmoothInRange))
+	if options.apply_kappap or options.apply_complex_kappap or options.apply_kappapu or options.apply_complex_kappapu:
+		higherbits_list.append(kpSmoothInRange)
 		htok_threshold += pow(2,10)
-	if options.apply_kappau:
-		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, kuSmoothInRange))
+	if options.apply_kappau or options.apply_complex_kappau:
+		higherbits_list.append(kuSmoothInRange)
 		htok_threshold += pow(2,11)
 	if options.apply_kappac:
-		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, kcSmoothInRange))
+		higherbits_list.append(kcSmoothInRange)
 		htok_threshold += pow(2,12)
 	if options.update_fcc:
-		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, fccSmoothInRange))
+		higherbits_list.append(fccSmoothInRange)
 		htok_threshold += pow(2,13)
 	if options.update_fs:
-		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, fsSmoothInRange))
+		higherbits_list.append(fsSmoothInRange)
 		htok_threshold += pow(2,14)
 	if options.update_srcQ:
-		higherbits = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbits, srcQSmoothInRange))
+		higherbits_list.append(srcQSmoothInRange)
 		htok_threshold += pow(2,15)
+	higherbits = calibration_parts.mkadder(pipeline, tuple(higherbits_list))
 	higherbitstee = pipeparts.mktee(pipeline, higherbits)
 
 	# Now calculate h(t)-OK bit
@@ -1644,7 +1650,7 @@ if not options.no_dq_vector:
 		# The above values should be close to one (within 1 / 10^4)
 		EP7_real_check = pipeparts.mkgeneric(pipeline, EP7_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 		EP7_imag_check = pipeparts.mkgeneric(pipeline, EP7_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-		D_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, EP7_real_check, EP7_imag_check))
+		D_epics_check_list = [EP7_real_check, EP7_imag_check]
 
 		if num_dq_epics > 11:
 			D_epics_threshold += 2.0
@@ -1654,8 +1660,9 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP12_real_check = pipeparts.mkgeneric(pipeline, EP12_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP12_imag_check = pipeparts.mkgeneric(pipeline, EP12_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			D_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, D_epics_check, EP12_real_check, EP12_imag_check))
+			D_epics_check_list.extend((EP12_real_check, EP12_imag_check))
 
+		D_epics_check = calibration_parts.mkadder(pipeline, tuple(D_epics_check_list))
 		D_epics_bit = pipeparts.mkbitvectorgen(pipeline, D_epics_check, bit_vector = pow(2,21), threshold = D_epics_threshold)
 		D_epics_bit = pipeparts.mkgeneric(pipeline, D_epics_bit, "lal_logicalundersample", required_on = pow(2,21), status_out = pow(2,21))
 		D_epics_bit = pipeparts.mkcapsfilter(pipeline, D_epics_bit, calibstate_caps)
@@ -1669,7 +1676,7 @@ if not options.no_dq_vector:
 		# The above values should be close to one (within 1 / 10^4)
 		EP3_real_check = pipeparts.mkgeneric(pipeline, EP3_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 		EP3_imag_check = pipeparts.mkgeneric(pipeline, EP3_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-		A_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, EP3_real_check, EP3_imag_check))
+		A_epics_check_list = [EP3_real_check, EP3_imag_check]
 
 		if num_dq_epics > 3:
 			A_epics_threshold += 2.0
@@ -1679,7 +1686,7 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP4_real_check = pipeparts.mkgeneric(pipeline, EP4_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP4_imag_check = pipeparts.mkgeneric(pipeline, EP4_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			A_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, A_epics_check, EP4_real_check, EP4_imag_check))
+			A_epics_check_list.extend((EP4_real_check, EP4_imag_check))
 
 		if num_dq_epics > 7:
 			A_epics_threshold += 2.0
@@ -1689,7 +1696,7 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP8_real_check = pipeparts.mkgeneric(pipeline, EP8_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP8_imag_check = pipeparts.mkgeneric(pipeline, EP8_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			A_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, A_epics_check, EP8_real_check, EP8_imag_check))
+			A_epics_check_list.extend((EP8_real_check, EP8_imag_check))
 
 		if num_dq_epics > 8:
 			A_epics_threshold += 2.0
@@ -1699,7 +1706,7 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP9_real_check = pipeparts.mkgeneric(pipeline, EP9_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP9_imag_check = pipeparts.mkgeneric(pipeline, EP9_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			A_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, A_epics_check, EP9_real_check, EP9_imag_check))
+			A_epics_check_list.extend((EP9_real_check, EP9_imag_check))
 
 		if num_dq_epics > 9:
 			A_epics_threshold += 2.0
@@ -1709,7 +1716,7 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP10_real_check = pipeparts.mkgeneric(pipeline, EP10_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP10_imag_check = pipeparts.mkgeneric(pipeline, EP10_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			A_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, A_epics_check, EP10_real_check, EP10_imag_check))
+			A_epics_check_list.extend((EP10_real_check, EP10_imag_check))
 
 		if num_dq_epics > 12:
 			A_epics_threshold += 2.0
@@ -1719,7 +1726,7 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP13_real_check = pipeparts.mkgeneric(pipeline, EP13_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP13_imag_check = pipeparts.mkgeneric(pipeline, EP13_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			A_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, A_epics_check, EP13_real_check, EP13_imag_check))
+			A_epics_check_list.extend((EP13_real_check, EP13_imag_check))
 
 		if num_dq_epics > 13:
 			A_epics_threshold += 2.0
@@ -1729,8 +1736,9 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP14_real_check = pipeparts.mkgeneric(pipeline, EP14_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP14_imag_check = pipeparts.mkgeneric(pipeline, EP14_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			A_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, A_epics_check, EP14_real_check, EP14_imag_check))
+			A_epics_check_list.extend((EP14_real_check, EP14_imag_check))
 
+		A_epics_check = calibration_parts.mkadder(pipeline, tuple(A_epics_check_list))
 		A_epics_bit = pipeparts.mkbitvectorgen(pipeline, A_epics_check, bit_vector = pow(2,22), threshold = A_epics_threshold)
 		A_epics_bit = pipeparts.mkgeneric(pipeline, A_epics_bit, "lal_logicalundersample", required_on = pow(2,22), status_out = pow(2,22))
 		A_epics_bit = pipeparts.mkcapsfilter(pipeline, A_epics_bit, calibstate_caps)
@@ -1744,7 +1752,7 @@ if not options.no_dq_vector:
 		# The above values should be close to one (within 1 / 10^4)
 		EP6_real_check = pipeparts.mkgeneric(pipeline, EP6_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 		EP6_imag_check = pipeparts.mkgeneric(pipeline, EP6_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-		C_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, EP6_real_check, EP6_imag_check))
+		C_epics_check_list = [EP6_real_check, EP6_imag_check]
 
 		if num_dq_epics > 10:
 			C_epics_threshold += 2.0
@@ -1754,8 +1762,9 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP11_real_check = pipeparts.mkgeneric(pipeline, EP11_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP11_imag_check = pipeparts.mkgeneric(pipeline, EP11_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			C_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, C_epics_check, EP11_real_check, EP11_imag_check))
+			C_epics_check_list.extend((EP11_real_check, EP11_imag_check))
 
+		C_epics_check = calibration_parts.mkadder(pipeline, tuple(C_epics_check_list))
 		C_epics_bit = pipeparts.mkbitvectorgen(pipeline, C_epics_check, bit_vector = pow(2,23), threshold = C_epics_threshold)
 		C_epics_bit = pipeparts.mkgeneric(pipeline, C_epics_bit, "lal_logicalundersample", required_on = pow(2,23), status_out = pow(2,23))
 		C_epics_bit = pipeparts.mkcapsfilter(pipeline, C_epics_bit, calibstate_caps)
@@ -1769,7 +1778,7 @@ if not options.no_dq_vector:
 		# The above values should be close to one (within 1 / 10^4)
 		EP1_real_check = pipeparts.mkgeneric(pipeline, EP1_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 		EP1_imag_check = pipeparts.mkgeneric(pipeline, EP1_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-		other_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, EP1_real_check, EP1_imag_check))
+		other_epics_check_list = [EP1_real_check, EP1_imag_check]
 
 		if num_dq_epics > 1:
 			other_epics_threshold += 2.0
@@ -1779,8 +1788,9 @@ if not options.no_dq_vector:
 			# The above values should be close to one (within 1 / 10^4)
 			EP2_real_check = pipeparts.mkgeneric(pipeline, EP2_real_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			EP2_imag_check = pipeparts.mkgeneric(pipeline, EP2_imag_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
-			other_epics_check = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, other_epics_check, EP2_real_check, EP2_imag_check))
+			other_epics_check_list.extend((EP2_real_check, EP2_imag_check))
 
+		other_epics_check = calibration_parts.mkadder(pipeline, tuple(other_epics_check_list))
 		other_epics_bit = pipeparts.mkbitvectorgen(pipeline, other_epics_check, bit_vector = pow(2,24), threshold = other_epics_threshold)
 		other_epics_bit = pipeparts.mkgeneric(pipeline, other_epics_bit, "lal_logicalundersample", required_on = pow(2,24), status_out = pow(2,24))
 		epics_bits = pipeparts.mkcapsfilter(pipeline, other_epics_bit, calibstate_caps)
@@ -1800,26 +1810,27 @@ if not options.no_dq_vector:
 	# COMBINE ALL BITS TO MAKE GDS-CALIB_STATE_VECTOR
 	#
 
-	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, higherbitstee, obsintenttee, htok, hwinjcbc, hwinjburst, hwinjdetchar, hwinjstoch))
+	all_bits_list = [higherbitstee, obsintenttee, htok, hwinjcbc, hwinjburst, hwinjdetchar, hwinjstoch]
 	if not options.no_coherence and (not options.no_kappatst or not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ):
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, coherence_bits))
-	if not options.no_kappatst and not options.apply_kappatst:
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, ktstSmoothInRange))
-	if not (options.no_kappap and options.no_kappapu) and not (options.apply_kappap or options.apply_kappapu):
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, kpSmoothInRange))
-	if not options.no_kappau and not options.apply_kappau:
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, kuSmoothInRange))
+		all_bits_list.append(coherence_bits)
+	if not options.no_kappatst and not options.apply_kappatst and not options.apply_complex_kappatst:
+		all_bits_list.append(ktstSmoothInRange)
+	if not (options.no_kappap and options.no_kappapu) and not (options.apply_kappap or options.apply_complex_kappap or options.apply_kappapu or options.apply_complex_kappapu):
+		all_bits_list.append(kpSmoothInRange)
+	if not options.no_kappau and not (options.apply_kappau or options.apply_complex_kappau):
+		all_bits_list.append(kuSmoothInRange)
 	if not options.no_kappac and not options.apply_kappac:
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, kcSmoothInRange))
+		all_bits_list.append(kcSmoothInRange)
 	if not options.no_fcc and not options.update_fcc:
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, fccSmoothInRange))
+		all_bits_list.append(fccSmoothInRange)
 	if not options.no_fs and not options.update_fs:
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, fsSmoothInRange))
+		all_bits_list.append(fsSmoothInRange)
 	if not options.no_srcQ and not options.update_srcQ:
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, srcQSmoothInRange))
+		all_bits_list.append(srcQSmoothInRange)
 	if num_dq_epics > 0:
-		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, epics_bits))
+		all_bits_list.append(epics_bits)
 
+	calibstatevector = calibration_parts.mkadder(pipeline, tuple(all_bits_list))
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
@@ -1850,8 +1861,8 @@ if options.remove_callines:
 	pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "lal_demodulate", line_frequency = -1.0 * opt_gain_fcc_line_freq, prefactor_real = 2.0)
 	remove_pcaly_line2 = pipeparts.mkgeneric(pipeline, pcaly_line2, "creal")
 
-	# Add the first two components together. We will add this to h(t) to remove these lines
-	calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, remove_pcaly_line1, remove_pcaly_line2))
+	# Add the first two components to the list. We will add everything in this list to h(t) to remove these lines
+	callines_list = [remove_pcaly_line1, remove_pcaly_line2]
 
 	if remove_esd_act_line:
 		# Make sure we have demodulated the ESD excitation channel at the ~30 Hz ESD line
@@ -1864,14 +1875,18 @@ if options.remove_callines:
 			EP10 = calibration_parts.merge_into_complex(pipeline, head_dict["EP10_real"], head_dict["EP10_imag"], long_queue, short_queue)
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, tstexc_at_esd_act_freq, EP10))
 		# Reconstruct a calibrated ESD injection at the ~30 Hz ESD line
-		if options.apply_kappatst:
+		if options.apply_complex_kappatst:
 			# Multiply by kappa_tst
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, esd_act_line, smooth_ktsttee))
+		elif options.apply_kappatst:
+			# Multiply by the real part of kappa_tst
+			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, esd_act_line, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_ktstRtee, matrix = [[1.0, 0.0]]))))
 		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
 		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = 2.0)
 		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line_remove, "creal")
+
 		# Add into the total line removal stream
-		calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_lines, esd_act_line_remove))
+		callines_list.append(esd_act_line_remove)
 
 	if remove_high_pcal_line:
 		# Demodulate pcal at the ~1kHz pcal line
@@ -1881,7 +1896,7 @@ if options.remove_callines:
 		pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "lal_demodulate", line_frequency = -1.0 * high_pcal_line_freq, prefactor_real = 2.0)
 		remove_pcaly_line3 = pipeparts.mkgeneric(pipeline, pcaly_line3, "creal")
 		# Add into the total line removal stream
-		calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_lines, remove_pcaly_line3))
+		callines_list.append(remove_pcaly_line3)
 
 	if remove_roaming_pcal_line:
 		# Demodulate pcal at the ~3kHz pcal line
@@ -1891,7 +1906,7 @@ if options.remove_callines:
 		pcaly_line4 = pipeparts.mkgeneric(pipeline, pcaly_line4, "lal_demodulate", line_frequency = -1.0 * roaming_pcal_line_freq, prefactor_real = 2.0)
 		remove_pcaly_line4 = pipeparts.mkgeneric(pipeline, pcaly_line4, "creal")
 		# Add into the total line removal stream
-		calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_lines, remove_pcaly_line4))
+		callines_list.append(remove_pcaly_line4)
 
 	if remove_src_pcal_line:
 		# Make sure we have demodulated pcal at the ~8 Hz pcal line
@@ -1902,7 +1917,10 @@ if options.remove_callines:
 		pcaly_line0 = pipeparts.mkgeneric(pipeline, pcaly_line0, "lal_demodulate", line_frequency = -1.0 * src_pcal_line_freq, prefactor_real = 2.0)
 		remove_pcaly_line0 = pipeparts.mkgeneric(pipeline, pcaly_line0, "creal")
 		# Add into the total line removal stream
-		calibration_lines = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibration_lines, remove_pcaly_line0))
+		callines_list.append(remove_pcaly_line0)
+
+	# Add all the lines together
+	calibration_lines = calibration_parts.mkadder(pipeline, tuple(callines_list))
 
 	# Divide the calibration lines we are removing by the arm length
 	try:
