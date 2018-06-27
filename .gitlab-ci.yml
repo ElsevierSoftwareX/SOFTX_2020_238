@@ -62,6 +62,7 @@ level0:gstlal:
       - gstlal
   only:
     - pushes
+    - schedules
     
 level1:gstlal-ugly:
   image: aepace/gstlal-dev:stretch
@@ -81,6 +82,7 @@ level1:gstlal-ugly:
       - gstlal-ugly
   only:
     - pushes
+    - schedules
 
 level2:gstlal-calibration:
   image: aepace/gstlal-dev:stretch
@@ -100,6 +102,7 @@ level2:gstlal-calibration:
       - gstlal-calibration
   only:
     - pushes
+    - schedules
 
 level2:gstlal-inspiral:
   image: aepace/gstlal-dev:stretch
@@ -119,6 +122,7 @@ level2:gstlal-inspiral:
       - gstlal-inspiral
   only:
     - pushes
+    - schedules
   
 offline-test:
   image: aepace/gstlal-dev:stretch
@@ -134,6 +138,7 @@ offline-test:
       - gstlal-inspiral/tests
   only:
     - pushes
+    - schedules
   allow_failure: true
   
 pages:
@@ -151,6 +156,8 @@ pages:
     paths:
       - public
   only:
-    - pushes
+    - master@lscsoft/gstlal
+    - schedules
   except:
     - web
+    - pushes
