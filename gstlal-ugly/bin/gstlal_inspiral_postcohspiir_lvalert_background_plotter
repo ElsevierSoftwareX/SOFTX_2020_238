@@ -73,10 +73,18 @@ def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq
   proc = subprocess.Popen(cmd)
   proc_out, proc_err = proc.communicate()
 
-	
+def call_fits_skymap_func(ifos, pivotal_ifo, gpsSeconds, gpsNanoSeconds, tmplt_idx, output_fname, event_id):
+	input_fname = "%s_skymap/%s_%d_%d_%d" % (ifos, pivotal_ifo, gpsSeconds, gpsNanoSeconds, tmplt_idx)
+	cmd = []
+	cmd += ["gstlal_postcoh_skymap2fits"]
+	cmd += ["--output", output_fname]
+	cmd += ["--event-id", event_id]
+	cmd += [input_fname]
+
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 	options, gid_list = parser.parse_args()
 	
@@ -107,6 +115,8 @@ try:
 except OSError:
 	pass
 
+if options.verbose:
+	print("loading tables from event %s" %gid)
 gracedb = gracedb.GraceDb(options.gracedb_service_url)
 xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
 coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
@@ -144,9 +154,19 @@ call_background_plot_func(ifos, input_stats_fname_2h, input_zerolag_fname, cohsn
 #
 # Upload Background plots
 #
+if options.verbose:
+	print("Uploading %s for event %s" % (outfname_1w, gid))
 
 gracedb.writeLog(gid, "%s FAR_1w over CohSNR/CmbChisq" % ifos, filename = outfname_1w, filecontents = open(outfname_1w).read(), tagname = "background")
+
+if options.verbose:
+	print("Uploading %s for event %s" % (outfname_1d, gid))
+
 gracedb.writeLog(gid, "%s FAR_1d over CohSNR/CmbChisq" % ifos, filename = outfname_1d, filecontents = open(outfname_1d).read(), tagname = "background")
+
+if options.verbose:
+	print("Uploading %s for event %s" % (outfname_2h, gid))
+
 gracedb.writeLog(gid, "%s FAR_2h over CohSNR/CmbChisq" % ifos, filename = outfname_2h, filecontents = open(outfname_2h).read(), tagname = "background")
 
 def get_snglsnr(snr_name, postcoh_table_row):
@@ -177,15 +197,35 @@ if far < 1e-7:
 		chisq = get_chisq(chisq_name, postcoh_table_row)
 		outfname_1w = 'gracedb/%s/%s_%s_snrchi_1w.png' % (gid, gid, ifo)
 		call_background_plot_func(ifo, input_stats_fname_1w, input_zerolag_fname, snr, chisq, outfname_1w, njob)
+		if options.verbose:
+			print("Uploading %s for event %s" % (outfname_1w, gid))
 		gracedb.writeLog(gid, "%s FAR_1w over SNR/Chisq" % ifo, filename = outfname_1w, filecontents = open(outfname_1w).read(), tagname = "background")
 		outfname_1d = 'gracedb/%s/%s_%s_snrchi_1d.png' % (gid, gid, ifo)
 		call_background_plot_func(ifo, input_stats_fname_1d, input_zerolag_fname, snr, chisq, outfname_1d, njob)
+		if options.verbose:
+			print("Uploading %s for event %s" % (outfname_1d, gid))
 		gracedb.writeLog(gid, "%s FAR_1d over SNR/Chisq" % ifo, filename = outfname_1d, filecontents = open(outfname_1d).read(), tagname = "background")
 		outfname_2h = 'gracedb/%s/%s_%s_snrchi_2h.png' % (gid, gid, ifo)
 		call_background_plot_func(ifo, input_stats_fname_2h, input_zerolag_fname, snr, chisq, outfname_2h, njob)
+		if options.verbose:
+			print("Uploading %s for event %s" % (outfname_2h, gid))
 		gracedb.writeLog(gid, "%s FAR_2h over SNR/Chisq" % ifo, filename = outfname_2h, filecontents = open(outfname_2h).read(), tagname = "background")
 
-
-
-
+#
+# Upload skymap
+#
+pivotal_ifo = postcoh_table_row.pivotal_ifo
+gpsSeconds = postcoh_table_row.end_time
+gpsNanoSeconds = postcoh_table_row.end_time_ns
+tmplt_idx = postcoh_table_row.tmplt_idx
+outfname_skymap = 'gracedb/%s/%s_skymap.fits' % (gid, gid, ifos)
+try:
+	call_fits_skymap_func(ifos, pivotal_ifo, gpsSeconds, gpsNanoSeconds, tmplt_idx, output_fname, gid)
+	if options.verbose:
+		print("Uploading %s for event %s" % (outfname_skymap, gid))
+	gracedb.writeLog(gid, "%s skymap" % ifos, filename = outfname_skymap, filecontents = open(outfname_skymap).read(), tagname = "skymap")
+except:
+	if options.verbose:
+		print("Uploading skymap not available message for event %s" % (outfname_skymap, gid))
+	gracedb.writeLog(gid, "skymap not generated; check if the trigger single SNR is below the threshold (8) to generate a skymap", filename = None, tagname = "skymap")
 

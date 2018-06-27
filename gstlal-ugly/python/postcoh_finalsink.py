@@ -137,7 +137,7 @@ class OnlinePerformer(object):
 
 
 class BackgroundStatsUpdater(object):
-	def __init__(self, path, input_prefix_list, ifos, output_list_string = None, collection_time_string = None):
+	def __init__(self, path, input_prefix_list, ifos, output_list_string = None, collect_walltime_string = None):
 		self.path = path
 		self.input_prefix_list = input_prefix_list
 		self.ifos = ifos
@@ -145,11 +145,11 @@ class BackgroundStatsUpdater(object):
 		if output_list_string is not None:
 			self.output = output_list_string.split(",")
 
-		self.collection_time = []
-		if collection_time_string is not None:
-			times = collection_time_string.split(",")
+		self.collect_walltime = []
+		if collect_walltime_string is not None:
+			times = collect_walltime_string.split(",")
 			for itime in times:
-				self.collection_time.append(int(itime))
+				self.collect_walltime.append(int(itime))
 
 
 	def wait_last_process_finish(self):
@@ -175,8 +175,8 @@ class BackgroundStatsUpdater(object):
 		ls_proc.wait()
 		ls_fnames = ls_out.split("\n")
 		#pdb.set_trace()	
-		for (i, collection_time) in enumerate(self.collection_time):
-			boundary = cur_buftime - collection_time
+		for (i, collect_walltime) in enumerate(self.collect_walltime):
+			boundary = cur_buftime - collect_walltime
 			# find the files within the collection time
 			valid_fnames = []
 			for ifname in ls_fnames:
@@ -194,7 +194,7 @@ class BackgroundStatsUpdater(object):
 				cmd += ["--input-format", "stats"]
 				cmd += ["--output", self.output[i]]
 				cmd += ["--ifos", self.ifos]
-				cmd += ["--duration", str(collection_time)]
+				cmd += ["--walltime", str(collect_walltime)]
 				print cmd
 				proc = subprocess.Popen(cmd)
 				self.procs.append(proc)
@@ -208,13 +208,14 @@ class BackgroundStatsUpdater(object):
 		cmd = []
 		cmd += ["./combine_stats.sh"]
 		cmd += [self.path]
+		cmd += [self.ifos]
 		print cmd
 		proc = subprocess.Popen(cmd)
 		self.procs.append(proc)
 
 
 class FinalSink(object):
-	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, background_update_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collection_time_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
+	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, background_update_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, cohfar_assignfar_input_fname = "marginalized_stats", background_collect_walltime_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
 	#
 	# initialize
 	#
@@ -270,7 +271,7 @@ class FinalSink(object):
 		self.t_start = None
 		self.t_bsupdate_start = None
 		self.bsupdate_interval = background_update_interval
-		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output_list_string = cohfar_assignfar_input_fname, collection_time_string = background_collection_time_string, ifos = ifos)
+		self.bsupdater = BackgroundStatsUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output_list_string = cohfar_assignfar_input_fname, collect_walltime_string = background_collect_walltime_string, ifos = ifos)
 
 		# online information performer
 		self.need_online_perform = need_online_perform
@@ -782,9 +783,8 @@ class CoincsDocFromPostcoh(object):
 		row.template_duration = trigger.template_duration
 		row.event_duration = 0
 		row.amplitude = 0
-		# FIXME: switch to the following deff when the sigmasq array is regenerated
-		# row.eff_distance = trigger.deff_L
-		row.eff_distance = 0
+		row.eff_distance = trigger.deff_L
+		#row.eff_distance = 0
 		row.coa_phase = trigger.coaphase_L
 		row.mass1 = trigger.mass1 
 		row.mass2 = trigger.mass2
@@ -853,9 +853,8 @@ class CoincsDocFromPostcoh(object):
 		row.template_duration = trigger.template_duration
 		row.event_duration = 0
 		row.amplitude = 0
-		# FIXME: switch to the following deff when the sigmasq array is regenerated
-		# row.eff_distance = trigger.deff_H
-		row.eff_distance = 0
+		row.eff_distance = trigger.deff_H
+		# row.eff_distance = 0
 		row.coa_phase = trigger.coaphase_H
 		row.mass1 = trigger.mass1 
 		row.mass2 = trigger.mass2 
@@ -923,9 +922,8 @@ class CoincsDocFromPostcoh(object):
 		row.template_duration = trigger.template_duration
 		row.event_duration = 0
 		row.amplitude = 0
-		# FIXME: switch to the following deff when the sigmasq array is regenerated
-		# row.eff_distance = trigger.deff_V
-		row.eff_distance = 0
+		row.eff_distance = trigger.deff_V
+		#row.eff_distance = 0
 		row.coa_phase = trigger.coaphase_V
 		row.mass1 = trigger.mass1 
 		row.mass2 = trigger.mass2 

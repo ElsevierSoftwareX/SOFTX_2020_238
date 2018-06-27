@@ -182,14 +182,19 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		GST_ERROR_OBJECT(srcpad, "Could not allocate postcoh-inspiral buffer %d", result);
 		return result;
 	}
-
+	int icombo=0;
+	/* increment livetime if the data is not flaged gap, estimated by snglsnr_max of any ifo has value > 0*/
+	if (!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)){
+		for (icombo=0; icombo<element->ncombo; icombo++)
+			background_stats_livetime_inc(stats_snapshot, icombo);
+	}
 	/*
 	 * update background rates
 	 */
 
 	intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
-	int isingle, icombo, nifo;
+	int isingle, nifo;
 	for (; intable<intable_end; intable++) {
 		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {

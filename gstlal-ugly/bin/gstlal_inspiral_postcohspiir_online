@@ -186,7 +186,7 @@ def parse_command_line():
   parser.add_option("--cohfar-accumbackground-output-name", metavar = "filename", action = "append", help = "Set the filename name in which to save the stats (optional)")
   parser.add_option("--cohfar-assignfar-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
   parser.add_option("--cohfar-assignfar-silent-time", type = "int", metavar = "seconds", default = 2147483647, help = "Do not assign FAP during this silent time. (optional)")
-  parser.add_option("--finalsink-background-collection-time", metavar = "seconds,seconds,seconds", default = "604800,86400,7200", help = "Update the marginalized stats files using the information of the collection time. (optional)")
+  parser.add_option("--finalsink-background-collect-walltime", metavar = "seconds,seconds,seconds", default = "604800,86400,7200", help = "Update the marginalized stats files using the information of the collection time. (optional)")
   parser.add_option("--cohfar-assignfar-input-fname", metavar = "filename", default = None, help = "Set the filename to read the FAP (optional)")
   parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (optional).")
   parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
@@ -225,7 +225,8 @@ def parse_command_line():
   parser.add_option("--cuda-postcoh-detrsp-fname", metavar = "filename", help = "detector response filename.")
   parser.add_option("--cuda-postcoh-hist-trials", metavar = "hist-trials", type = "int", default = 100, help = "histogram trials for background distribution.")
   parser.add_option("--cuda-postcoh-output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "if output skymap, 1: yes, 0: no")
-
+  parser.add_option("--cuda-postcoh-detrsp-refresh-interval", metavar = "refresh-interval", type = "int", default = 800, help = "interval to refresh detrsp map.")
+ 
   # gpu acceleartion support
   parser.add_option("--gpu-acc", action = "store_true", help = "gpu acceleration for IIR filtering (optional).")
   #parser.add_option("--k10-gpu-start-id", metavar = "k10-gpu-start-id", type = "int", default = 0, help = "GPU device id to start postcoh.")
@@ -480,6 +481,7 @@ postcohsrcs = spiirparts.mkPostcohSPIIROnline(
       cuda_postcoh_detrsp_fname = options.cuda_postcoh_detrsp_fname,
       cuda_postcoh_hist_trials = options.cuda_postcoh_hist_trials,
       cuda_postcoh_output_skymap = options.cuda_postcoh_output_skymap,
+      cuda_postcoh_detrsp_refresh_interval = options.cuda_postcoh_detrsp_refresh_interval,
       cohfar_file_path = options.job_tag,
       cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
       cohfar_accumbackground_output_name = options.cohfar_accumbackground_output_name,
@@ -505,7 +507,7 @@ finalsink = postcoh_finalsink.FinalSink(
 		  cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
 		  cohfar_accumbackground_output_name = options.cohfar_accumbackground_output_name,
 		  cohfar_assignfar_input_fname = options.cohfar_assignfar_input_fname,
-		  background_collection_time_string = options.finalsink_background_collection_time,
+		  background_collect_walltime_string = options.finalsink_background_collect_walltime,
 		  gracedb_far_threshold = options.finalsink_gracedb_far_threshold,
 		  gracedb_group = options.finalsink_gracedb_group,
 		  gracedb_search = options.finalsink_gracedb_search,

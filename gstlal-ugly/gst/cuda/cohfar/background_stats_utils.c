@@ -175,7 +175,7 @@ background_stats_reset(BackgroundStats **stats, int ncombo)
 	  gsl_vector_long_set_zero((gsl_vector_long *)feature->lgchisq_rates->data);
 	  gsl_matrix_long_set_zero((gsl_matrix_long *)feature->lgsnr_lgchisq_rates->data);
 	  stats[icombo]->nevent = 0;
-	  stats[icombo]->duration = 0;
+	  stats[icombo]->livetime = 0;
   }
 
 }
@@ -251,7 +251,7 @@ background_stats_create(char *ifos)
     // our rank, cdf
     cur_stats->rank = rank_stats_create();
     cur_stats->nevent = 0;
-    cur_stats->duration = 0;
+    cur_stats->livetime = 0;
   }
   return stats;
 }
@@ -301,7 +301,7 @@ background_stats_list_create(char *ifos)
       cur_stats->ifos = malloc(strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
       strncpy(cur_stats->ifos, IFO_COMBO_MAP[icombo], strlen(IFO_COMBO_MAP[icombo]) * sizeof(char));
       cur_stats->nevent = 0;
-      cur_stats->duration = 0;
+      cur_stats->livetime = 0;
     }
     stats_list->plist[ilist] = stats;
   }
@@ -382,9 +382,19 @@ background_stats_feature_rates_add(FeatureStats *feature1, FeatureStats *feature
 	cur_stats->nevent = gsl_vector_long_sum((gsl_vector_long *)feature1->lgsnr_rates->data);
 }
 
+void
+background_stats_livetime_add(BackgroundStats **stats_out, BackgroundStats **stats_in, const int icombo)
+{
+	stats_out[icombo]->livetime += stats_in[icombo]->livetime;
+}
 /*
  * background pdf direnctly from rates
  */
+void
+background_stats_livetime_inc(BackgroundStats **stats, const int icombo)
+{
+	stats[icombo]->livetime += 1;
+}
 
 void
 background_stats_feature_rates_to_pdf_hist(FeatureStats *feature, Bins2D *pdf)
@@ -752,7 +762,7 @@ background_stats_rank_get_val_from_map(double snr, double chisq, Bins2D *bins)
 gboolean
 background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_trials, const char *filename)
 {
-  int nelem = 10; // 4 for feature, 4 for rank, 2 for nevent,duration
+  int nelem = 10; // 4 for feature, 4 for rank, 2 for nevent,livetime
   int nnode = ncombo * nelem + 1, icombo; // 1 for hist_trials
   /* read rates */
 
@@ -763,7 +773,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
   XmlArray *array_lgsnr_lgchisq_pdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_rank_map = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlParam *param_nevent = (XmlParam *) malloc(sizeof(XmlParam) * ncombo);
-  XmlParam *param_duration = (XmlParam *) malloc(sizeof(XmlParam) * ncombo);
+  XmlParam *param_livetime = (XmlParam *) malloc(sizeof(XmlParam) * ncombo);
   XmlArray *array_rank_rates = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_rank_pdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_rank_fap = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
@@ -801,9 +811,9 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
     xns[pos_xns].data = &(param_nevent[icombo]);
 
     pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s_duration:param",  BACKGROUND_XML_FEATURE_NAME, IFO_COMBO_MAP[icombo]);
+    sprintf((char *)xns[pos_xns].tag, "%s:%s_livetime:param",  BACKGROUND_XML_FEATURE_NAME, IFO_COMBO_MAP[icombo]);
     xns[pos_xns].processPtr = readParam;
-    xns[pos_xns].data = &(param_duration[icombo]);
+    xns[pos_xns].data = &(param_livetime[icombo]);
 
     pos_xns += ncombo;
     sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  BACKGROUND_XML_RANK_NAME, IFO_COMBO_MAP[icombo], RANK_RATES_SUFFIX);
@@ -857,7 +867,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
     memcpy(((gsl_vector *)rank->rank_pdf->data)->data, (long *)array_rank_pdf[icombo].data, y_size);
     memcpy(((gsl_vector *)rank->rank_fap->data)->data, (long *)array_rank_fap[icombo].data, y_size);
     cur_stats->nevent = *((long *)param_nevent[icombo].data);
-    cur_stats->duration = *((long *)param_duration[icombo].data);
+    cur_stats->livetime = *((long *)param_livetime[icombo].data);
     //printf("filename %s, icombo %d, fap addr %p\n", filename, icombo, ((gsl_matrix *)cur_stats->fap->data)->data);
     //printf("icombo %d, nevent addr %p, %p\n", icombo, (param_nevent[icombo].data), (&(param_nevent[icombo]))->data);
   }
@@ -883,7 +893,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
     free(array_lgsnr_lgchisq_rates[icombo].data);
     free(array_lgsnr_lgchisq_pdf[icombo].data);
     free(param_nevent[icombo].data);
-    free(param_duration[icombo].data);
+    free(param_livetime[icombo].data);
     free(array_rank_map[icombo].data);
     free(array_rank_rates[icombo].data);
     free(array_rank_pdf[icombo].data);
@@ -895,7 +905,7 @@ background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_t
   free(array_lgsnr_lgchisq_rates);
   free(array_lgsnr_lgchisq_pdf);
   free(param_nevent);
-  free(param_duration);
+  free(param_livetime);
   free(array_rank_map);
   free(array_rank_rates);
   free(array_rank_pdf);
@@ -1047,8 +1057,8 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_tria
   XmlParam param_nevent;
   param_nevent.data = (long *) malloc (sizeof(long));
 
-  XmlParam param_duration;
-  param_duration.data = (long *) malloc (sizeof(long));
+  XmlParam param_livetime;
+  param_livetime.data = (long *) malloc (sizeof(long));
 
 
   GString *array_name = g_string_new(NULL);
@@ -1076,9 +1086,9 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_tria
     g_string_printf(param_name, "%s:%s_nevent:param",  BACKGROUND_XML_FEATURE_NAME, IFO_COMBO_MAP[icombo]);
     ((long *)param_nevent.data)[0] = stats[icombo]->nevent;
     ligoxml_write_Param(writer, &param_nevent, BAD_CAST "int_8s", BAD_CAST param_name->str);
-    g_string_printf(param_name, "%s:%s_duration:param",  BACKGROUND_XML_FEATURE_NAME, IFO_COMBO_MAP[icombo]);
-    ((long *)param_duration.data)[0] = stats[icombo]->duration;
-    ligoxml_write_Param(writer, &param_duration, BAD_CAST "int_8s", BAD_CAST param_name->str);
+    g_string_printf(param_name, "%s:%s_livetime:param",  BACKGROUND_XML_FEATURE_NAME, IFO_COMBO_MAP[icombo]);
+    ((long *)param_livetime.data)[0] = stats[icombo]->livetime;
+    ligoxml_write_Param(writer, &param_livetime, BAD_CAST "int_8s", BAD_CAST param_name->str);
   }
 
   XmlParam param_hist_trials;
@@ -1106,7 +1116,7 @@ background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_tria
    */
   free(param_range.data);
   free(param_nevent.data);
-  free(param_duration.data);
+  free(param_livetime.data);
   free(param_hist_trials.data);
   for (icombo=ncombo-1; icombo>=0; icombo--) {
     freeArray(array_lgsnr_rates + icombo);

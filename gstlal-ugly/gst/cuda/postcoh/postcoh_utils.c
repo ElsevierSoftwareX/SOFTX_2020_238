@@ -380,6 +380,8 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 		free(array_u[i].data);
 		free(array_diff[i].data);
 	}
+	free(array_u);
+	free(array_diff);
 }
 
 void

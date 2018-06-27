@@ -34,7 +34,7 @@
 
 #define __DEBUG__ 1
 
-static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar **pout, gchar **pifos, gchar **pduration)
+static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar **pout, gchar **pifos, gchar **pwalltime)
 {
 	int option_index = 0;
 	struct option long_opts[] =
@@ -42,7 +42,7 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar 
 		{"input",		required_argument,	0,	'i'},
 		{"input-format",	required_argument,	0,	'f'},
 		{"output",		required_argument,	0,	'o'},
-		{"duration",		required_argument,	0,	'u'},
+		{"walltime",		optional_argument,	0,	'u'},
 		{"ifos",		required_argument,	0,	'd'},
 		{0, 0, 0, 0}
 	};
@@ -62,7 +62,7 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar 
 				*pifos = g_strdup((gchar *)optarg);
 				break;
 			case 'u':
-				*pduration = g_strdup((gchar *)optarg);
+				*pwalltime = g_strdup((gchar *)optarg);
 				break;
 			default:
 				exit(0);
@@ -130,9 +130,11 @@ void cohfar_get_stats_from_file(gchar **in_fnames, BackgroundStats **stats_in, B
 	for (ifname = in_fnames; *ifname; ifname++) {
 		printf("%s\n", *ifname);
 		background_stats_from_xml(stats_in, ncombo, hist_trials, *ifname);
-		printf("%s done read\n", *ifname);
-		for (icombo=0; icombo<ncombo; icombo++)
+		for (icombo=0; icombo<ncombo; icombo++){
 			background_stats_feature_rates_add(stats_out[icombo]->feature, stats_in[icombo]->feature, stats_out[icombo]);
+			background_stats_livetime_add(stats_out, stats_in, icombo);
+		}
+		printf("%s done loading\n", *ifname);
 	}
 }
 
@@ -143,9 +145,9 @@ int main(int argc, char *argv[])
 	gchar **pfmt = (gchar **)malloc(sizeof(gchar *));
 	gchar **pout = (gchar **)malloc(sizeof(gchar *));
 	gchar **pifos = (gchar **)malloc(sizeof(gchar *));
-	gchar **pduration = (gchar **)malloc(sizeof(gchar *));
+	gchar **pwalltime = (gchar **)malloc(sizeof(gchar *));
 
-	parse_opts(argc, argv, pin, pfmt, pout, pifos, pduration);
+	parse_opts(argc, argv, pin, pfmt, pout, pifos, pwalltime);
 	int nifo = strlen(*pifos) / IFO_LEN;
 	int icombo, ncombo = get_ncombo(nifo), hist_trials;
 	
@@ -171,8 +173,9 @@ int main(int argc, char *argv[])
 		for (icombo=0; icombo<ncombo; icombo++) {
 			background_stats_feature_rates_to_pdf(stats_out[icombo]->feature);
 			background_stats_feature_to_rank(stats_out[icombo]->feature, stats_out[icombo]->rank);
-			stats_out[icombo]->duration = atol(*pduration);
-			//printf("stats_out duration %d\n", stats_out[icombo]->duration );
+			/* livetime calculated from all walltimes in the input files, will deprecate the following */
+			//stats_out[icombo]->livetime = atol(*pwalltime);
+			printf("stats_out livetime %d\n", stats_out[icombo]->livetime );
 		}
 	}
 	background_stats_to_xml(stats_out, ncombo, hist_trials, *pout);

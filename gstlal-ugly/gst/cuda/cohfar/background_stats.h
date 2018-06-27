@@ -110,7 +110,7 @@ typedef struct {
 	FeatureStats *feature;
 	int hist_trials;
 	long nevent;
-	long duration;
+	long livetime;
 } BackgroundStats;
 
 

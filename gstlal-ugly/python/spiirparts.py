@@ -89,8 +89,8 @@ def mkitac_spearman(pipeline, src, n, bank, autocorrelation_matrix = None, mask_
 		properties["sigmasq"] = sigmasq
 	return pipeparts.mkgeneric(pipeline, src, "lal_itac_spearman", **properties)
 
-def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials = 1, snglsnr_thresh = 4.0, cohsnr_thresh = 5.0, output_skymap = 0, trial_interval = 0.1, stream_id = 0):
-	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "sngl-tmplt-fname", "hist-trials", "snglsnr-thresh", "cohsnr_thresh", "output-skymap", "trial-interval", "stream-id"), (detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials, snglsnr_thresh, cohsnr_thresh, output_skymap, trial_interval, stream_id)))
+def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials = 1, snglsnr_thresh = 4.0, cohsnr_thresh = 5.0, output_skymap = 0, detrsp_refresh_interval = 0, trial_interval = 0.1, stream_id = 0):
+	properties = dict((name, value) for name, value in zip(("detrsp-fname", "autocorrelation-fname", "sngl-tmplt-fname", "hist-trials", "snglsnr-thresh", "cohsnr_thresh", "output-skymap", "detrsp-refresh-interval", "trial-interval", "stream-id"), (detrsp_fname, autocorrelation_fname, sngl_tmplt_fname, hist_trials, snglsnr_thresh, cohsnr_thresh, output_skymap, detrsp_refresh_interval, trial_interval, stream_id)))
 	if "name" in properties:
 		elem = gst.element_factory_make("cuda_postcoh", properties.pop("name"))
 	else:
@@ -140,10 +140,10 @@ def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snaps
 		src.link(elem)
 	return elem
 
-def mkcohfar_assignfar(pipeline, src, ifos= "H1L1", refresh_interval = 14400, silent_time = 2147483647, input_fname = None):
+def mkcohfar_assignfar(pipeline, src, ifos= "H1L1", assignfar_refresh_interval = 14400, silent_time = 2147483647, input_fname = None):
 	properties = {
 		"ifos": ifos,
-		"refresh_interval": refresh_interval,
+		"refresh_interval": assignfar_refresh_interval,
 		"silent_time": silent_time,
 	}
 	if input_fname is not None:
@@ -567,7 +567,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		False, block_duration = gst.SECOND, blind_injections = None,
 		cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh =
 		5.0, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials
-		= 1, cuda_postcoh_output_skymap = 0, cohfar_file_path = None,
+		= 1, cuda_postcoh_output_skymap = 0, cuda_postcoh_detrsp_refresh_interval = 0, cohfar_file_path = None,
 		cohfar_accumbackground_output_prefix = None,
 		cohfar_accumbackground_output_name = None,
 		cohfar_accumbackground_snapshot_interval = 0,
@@ -706,7 +706,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 
 			if postcoh is None:
 				# make a queue for postcoh, otherwise it will be in the same thread with the first bank	
-				postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, cohsnr_thresh = cuda_postcoh_cohsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = postcoh_count)
+				postcoh = mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, cohsnr_thresh = cuda_postcoh_cohsnr_thresh, output_skymap = cuda_postcoh_output_skymap, detrsp_refresh_interval = cuda_postcoh_detrsp_refresh_interval, stream_id = postcoh_count)
 				postcoh_count += 1
 			else:
 				snr.link_pads(None, postcoh, instrument)
@@ -720,7 +720,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 			postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_prefix = None, output_name = cohfar_accumbackground_output_name[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
 		else:
 			postcoh = mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_prefix = cohfar_accumbackground_output_prefix[i_dict], output_name = None, snapshot_interval = cohfar_accumbackground_snapshot_interval)
-		postcoh = mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)
+		postcoh = mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, assignfar_refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)
 		#head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(postcoh)
 	return triggersrcs

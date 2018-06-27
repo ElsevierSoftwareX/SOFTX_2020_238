@@ -160,7 +160,8 @@ enum
 	PROP_OUTPUT_SKYMAP,
 	PROP_COHSNR_THRESH,
 	PROP_SNGLSNR_THRESH,
-	PROP_STREAM_ID
+	PROP_STREAM_ID,
+	PROP_REFRESH_INTERVAL
 };
 
 static void cuda_postcoh_device_set_init(CudaPostcoh *element)
@@ -262,6 +263,10 @@ static void cuda_postcoh_set_property(GObject *object, guint id, const GValue *v
 			element->stream_id = g_value_get_int(value);
 			break;
 
+		case PROP_REFRESH_INTERVAL:
+			element->refresh_interval = g_value_get_int(value);
+			break;
+
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 			break;
@@ -312,6 +317,10 @@ static void cuda_postcoh_get_property(GObject * object, guint id, GValue * value
 
 		case PROP_STREAM_ID:
 			g_value_set_int (value, element->stream_id);
+			break;
+
+		case PROP_REFRESH_INTERVAL:
+			g_value_set_int(value, element->refresh_interval);
 			break;
 
 		default:
@@ -1232,6 +1241,10 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 
 	GST_BUFFER_SIZE(outbuf) = out_size;
 
+	/* approximate indicator that if the detector is operating, used to evaluate FAR later */
+	if (postcoh->state->snglsnr_max < 1e-3)
+		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+
 	cuda_postcoh_write_table_to_buf(postcoh, outbuf);
 
 	GST_LOG_OBJECT (srcpad,
@@ -1367,6 +1380,16 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 	int c_npeak;
 	GstClockTime ts = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
 		       	postcoh->rate);
+
+
+	/* Refresh the detector response U and Dt matrices if reached the refresh interval */
+	if (postcoh->refresh_interval > 0 && (ts - postcoh->t_roll_start)/GST_SECOND > (unsigned) postcoh->refresh_interval) {
+		postcoh->t_roll_start = ts;
+		/* re-read matrices and send them to GPU */
+		CUDA_CHECK(cudaSetDevice(postcoh->device_id));
+		cuda_postcoh_map_from_xml(postcoh->detrsp_fname, postcoh->state, postcoh->stream);
+		GST_DEBUG("detrsp map has been updated");
+	}
 
 	LIGOTimeGPS ligo_time;
 	XLALINT8NSToGPS(&ligo_time, ts);
@@ -1516,6 +1539,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			return GST_FLOW_ERROR;
 		}
 		postcoh->t0 = t_latest_start;
+		postcoh->t_roll_start = t_latest_start;
 		postcoh->next_exe_t = postcoh->t0;
 		postcoh->offset0 = offset_latest_start;
 		GST_DEBUG_OBJECT(postcoh, "set the aligned time to %" GST_TIME_FORMAT 
@@ -1738,6 +1762,18 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 		)
 	);
 
+	g_object_class_install_property(
+		gobject_class,
+		PROP_REFRESH_INTERVAL,
+		g_param_spec_int(
+			"detrsp-refresh-interval",
+			"detector response refresh interval",
+			"(0) never refresh stats; (N) refresh stats every N seconds. ",
+			0, G_MAXINT, 600,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
 
 }
 
@@ -1773,6 +1809,8 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	postcoh->device_id = NOT_INIT;
 	postcoh->process_id = 0;
 	postcoh->cur_event_id = 0;
+	postcoh->t_roll_start = GST_CLOCK_TIME_NONE;
+	postcoh->refresh_interval = 0;
 }
 
 

@@ -52,7 +52,7 @@ G_BEGIN_DECLS
 #endif
 
 #ifndef MIN_OUTPUT_SKYMAP_SNR
-#define MIN_OUTPUT_SKYMAP_SNR 11
+#define MIN_OUTPUT_SKYMAP_SNR 10
 #endif
 
 typedef struct _CudaPostcoh CudaPostcoh;
@@ -294,6 +294,8 @@ struct _CudaPostcoh {
   long process_id;
   long cur_event_id;
   cudaStream_t stream;
+  GstClockTime t_roll_start;
+  int refresh_interval;
 };
 
 struct _CudaPostcohClass {

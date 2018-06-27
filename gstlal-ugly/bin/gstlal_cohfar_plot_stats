@@ -112,16 +112,20 @@ if options.ifos == "L1H1":
 else:
 	ifos = options.ifos
 
-fap_name = "background_fap:%s_lgsnr_lgchisq:array" % ifos
-nevent_name = "background_rates:%s_nevent:param" % ifos
-duration_name = "background_rates:%s_duration:param" % ifos
+rankmap_name = "background_rank:%s_rank_map:array" % ifos
+rankfap_name = "background_rank:%s_rank_fap:array" % ifos
+nevent_name = "background_feature:%s_nevent:param" % ifos
+livetime_name = "background_feature:%s_livetime:param" % ifos
 hist_trials_name = "hist_trials:param"
 
-fap = array_from_xml(options.input_stats, fap_name)
+rankmap = array_from_xml(options.input_stats, rankmap_name)
+rankfap = array_from_xml(options.input_stats, rankfap_name)
 nevent = int(param_from_xml(options.input_stats, nevent_name))
-duration = int(param_from_xml(options.input_stats, duration_name))
+livetime = int(param_from_xml(options.input_stats, livetime_name))
 hist_trials = int(param_from_xml(options.input_stats, hist_trials_name))
-lgfar = np.log10(fap * nevent / (float(duration)*hist_trials) * float(options.far_factor))
+
+# FIXME: want to plot fap[chisq, snr]?, need to convert fap[rank] to fap[chisq, snr]
+#lgfar = np.log10(fap * nevent / (float(livetime)*hist_trials) * float(options.far_factor))
 
 if options.input_zerolag is not 'None':
 	zerolags = postcoh_table_from_xml(options.input_zerolag)
@@ -150,13 +154,16 @@ y = np.arange(ymin, ymax, ystep)
 
 cohsnr_idx = min(max(event_cohsnr - xmin, 0)/xstep, 299)
 chisq_idx = min(max(event_chisq - ymin, 0)/ystep, 299)
-event_far = fap[chisq_idx, cohsnr_idx] * nevent / (float(duration)*hist_trials) * float(options.far_factor)
-print "event far %e\n" % event_far
+#event_far = fap[chisq_idx, cohsnr_idx] * nevent / (float(livetime)*hist_trials) * float(options.far_factor)
+#print "event far %e\n" % event_far
 
 pyplot.figure()
 X, Y = np.meshgrid(x, y)
+#levels = np.arange(-13, -2, 2)
+#CS = pyplot.contour(lgfar, levels, origin = 'lower', extent = (xmin, xmax, ymin, ymax))
+#CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
 levels = np.arange(-13, -2, 2)
-CS = pyplot.contour(lgfar, levels, origin = 'lower', extent = (xmin, xmax, ymin, ymax))
+CS = pyplot.contour(rankmap, levels, origin = 'lower', extent = (xmin, xmax, ymin, ymax))
 CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
 CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
 
