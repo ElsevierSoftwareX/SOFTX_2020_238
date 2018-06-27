@@ -1051,7 +1051,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 			width = 32,
 			statevector = statevector,
 			dqvector = dqvector,
-			fir_whiten_reference_psd = banks[instrument][0].psd[instrument]
+			fir_whiten_reference_psd = banks[instrument][0].processed_psd
 		)
 
 	#

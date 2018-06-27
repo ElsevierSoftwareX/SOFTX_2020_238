@@ -349,7 +349,9 @@ def read_banks(filename, contenthandler, verbose = False):
 
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one in the file for now
-	psd = lal.series.read_psd_xmldoc(xmldoc)
+	# FIXME, right now there is only one instrument so we just pull out the
+	# only psd there is 
+	processed_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
 	
@@ -374,7 +376,7 @@ def read_banks(filename, contenthandler, verbose = False):
 		bank.sigmasq = ligolw_array.get_array(root, 'sigmasq').array
 
 		# attach a reference to the psd
-		bank.psd = psd
+		bank.processed_psd = processed_psd
 
 		# Read bank fragments
 		bank.bank_fragments = []
