@@ -1,7 +1,7 @@
 from glue.ligolw import ilwd
 from glue.ligolw import lsctables
 import lal
-from . import _sngltriggertable
+from gstlal import _sngltriggertable
 
 
 __all__ = ["GSTLALSnglTrigger"]

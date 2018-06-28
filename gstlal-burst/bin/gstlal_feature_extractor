@@ -164,17 +164,18 @@ from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 
 from gstlal import aggregator
-from gstlal import auxcache
 from gstlal import bottle
 from gstlal import datasource
 from gstlal import httpinterface
-from gstlal import idq_multirate_datasource
-from gstlal import idq_utils
-from gstlal import multichannel_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
-from gstlal import sngltriggertable
+
+from gstlal.fxtools import auxcache
+from gstlal.fxtools import multichannel_datasource
+from gstlal.fxtools import multirate_datasource
+from gstlal.fxtools import sngltriggertable
+from gstlal.fxtools import utils
 
 #
 # Make sure we have sufficient resources
@@ -244,7 +245,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.feature_start_time = options.feature_start_time
 		self.feature_end_time = options.feature_end_time
 		self.columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
-		self.feature_queue = idq_utils.FeatureQueue(self.keys, self.columns, self.sample_rate)
+		self.feature_queue = utils.FeatureQueue(self.keys, self.columns, self.sample_rate)
 
 		# set whether data source is live
 		self.is_live = data_source_info.data_source in data_source_info.live_sources
@@ -257,7 +258,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# feature saving properties
 		if options.save_format == 'hdf5':
-			self.fdata = idq_utils.HDF5FeatureData(self.columns, keys = self.keys, cadence = self.cadence)
+			self.fdata = utils.HDF5FeatureData(self.columns, keys = self.keys, cadence = self.cadence)
 
 		elif options.save_format == 'ascii':
 			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
@@ -330,12 +331,12 @@ class MultiChannelHandler(simplehandler.Handler):
 					self.last_save_time = self.timestamp
 					self.last_persist_time = self.timestamp
 					if options.save_format =='hdf5':
-						duration = idq_utils.floor_div(self.timestamp + self.persist_cadence, self.persist_cadence) - self.timestamp
+						duration = utils.floor_div(self.timestamp + self.persist_cadence, self.persist_cadence) - self.timestamp
 						self.set_hdf_file_properties(self.timestamp, duration)
 
 				# Save triggers once per cadence if saving to disk
 				if options.save_format == 'hdf5' or options.save_format == 'ascii':
-					if self.timestamp and idq_utils.in_new_epoch(self.timestamp, self.last_save_time, self.cadence) or (self.timestamp == self.feature_end_time):
+					if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_save_time, self.cadence) or (self.timestamp == self.feature_end_time):
 						logger.info("saving features to disk at timestamp = %d" % self.timestamp)
 						if options.save_format == 'hdf5':
 							self.to_hdf_file()
@@ -347,7 +348,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 				# persist triggers once per persist cadence if using hdf5 format
 				if options.save_format == 'hdf5':
-					if self.timestamp and idq_utils.in_new_epoch(self.timestamp, self.last_persist_time, self.persist_cadence):
+					if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_persist_time, self.persist_cadence):
 						logger.info("persisting features to disk at timestamp = %d" % self.timestamp)
 						self.finish_hdf_file()
 						self.last_persist_time = self.timestamp
@@ -438,7 +439,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		# Only write triggers to disk where the associated data structure has more
 		# than the header stored within.
 		if len(self.fdata) > 1 :
-			fname = '%s-%d-%d.%s' % (self.tag, idq_utils.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
+			fname = '%s-%d-%d.%s' % (self.tag, utils.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
 			path = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
 			fpath = os.path.join(path, fname)
 			tmpfile = fpath+"~"
@@ -459,7 +460,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		Uses the T050017 filenaming convention.
 		NOTE: This method should only be called by an instance that is locked.
 		"""
-		self.fdata.dump(self.tmp_path, self.fname, idq_utils.floor_div(self.last_save_time, self.cadence), tmp = True)
+		self.fdata.dump(self.tmp_path, self.fname, utils.floor_div(self.last_save_time, self.cadence), tmp = True)
 
 	def finish_hdf_file(self):
 		"""
@@ -494,9 +495,9 @@ class MultiChannelHandler(simplehandler.Handler):
 		Also takes care of creating new directories as needed and removing any leftover temporary files.
 		"""
 		# set/update file names and directories with new gps time and duration
-		self.fname = os.path.splitext(idq_utils.to_trigger_filename(self.basename, start_time, duration, 'h5'))[0]
-		self.fpath = idq_utils.to_trigger_path(os.path.abspath(self.out_path), self.basename, start_time, self.job_id, self.subset_id)
-		self.tmp_path = idq_utils.to_trigger_path(self.tmp_dir, self.basename, start_time, self.job_id, self.subset_id)
+		self.fname = os.path.splitext(utils.to_trigger_filename(self.basename, start_time, duration, 'h5'))[0]
+		self.fpath = utils.to_trigger_path(os.path.abspath(self.out_path), self.basename, start_time, self.job_id, self.subset_id)
+		self.tmp_path = utils.to_trigger_path(self.tmp_dir, self.basename, start_time, self.job_id, self.subset_id)
 
 		# create temp and output directories if they don't exist
 		aggregator.makedir(self.fpath)
@@ -735,7 +736,7 @@ duration = options.feature_end_time - options.feature_start_time
 logdir = os.path.join(options.out_path, 'logs', options.job_id)
 aggregator.makedir(logdir)
 
-logger = idq_utils.get_logger('gstlal-feature-extractor_%d-%d' % (options.feature_start_time, duration), rootdir=logdir, verbose=options.verbose)
+logger = utils.get_logger('gstlal-feature-extractor_%d-%d' % (options.feature_start_time, duration), rootdir=logdir, verbose=options.verbose)
 logger.info("writing log to %s" % logdir)
 
 #
@@ -782,8 +783,8 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 		try:
 			# get path where triggers are located
 			duration = options.feature_end_time - options.feature_start_time
-			fname = idq_utils.to_trigger_filename(basename, options.feature_start_time, duration, 'h5')
-			fpath = idq_utils.to_trigger_path(os.path.abspath(options.out_path), basename, options.feature_start_time, options.job_id, str(subset_id).zfill(4))
+			fname = utils.to_trigger_filename(basename, options.feature_start_time, duration, 'h5')
+			fpath = utils.to_trigger_path(os.path.abspath(options.out_path), basename, options.feature_start_time, options.job_id, str(subset_id).zfill(4))
 			trg_file = os.path.join(fpath, fname)
 
 			# visit groups within a given hdf5 file
@@ -879,19 +880,19 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 
 		# generate templates
 		if options.waveform == 'half_sine_gaussian':
-			waveforms[channel] = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
+			waveforms[channel] = utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
 		elif options.waveform == 'sine_gaussian':
-			waveforms[channel] = idq_utils.SineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
+			waveforms[channel] = utils.SineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
 		else:
 			raise NotImplementedError
 
 		if options.latency_output:
-			head[channel] = pipeparts.mklatency(pipeline, head[channel], name=idq_utils.latency_name('beforewhitening', 2, channel))
+			head[channel] = pipeparts.mklatency(pipeline, head[channel], name=utils.latency_name('beforewhitening', 2, channel))
 
 		# whiten auxiliary channel data
-		for rate, thishead in idq_multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32, nxydump_segment=options.nxydump_segment).items():
+		for rate, thishead in multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32, nxydump_segment=options.nxydump_segment).items():
 			if options.latency_output:
-				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterwhitening', 3, channel, rate))
+				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('afterwhitening', 3, channel, rate))
 
 			# determine whether to do time-domain or frequency-domain convolution
 			time_domain = (waveforms[channel].sample_pts[rate]*rate) < (5*waveforms[channel].sample_pts[rate]*numpy.log2(rate))
@@ -903,7 +904,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 
 			# add queues, change stream format, add tags
 			if options.latency_output:
-				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('afterFIRbank', 4, channel, rate))
+				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('afterFIRbank', 4, channel, rate))
 			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
 			thishead = pipeparts.mktogglecomplex(pipeline, thishead)
 			thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
@@ -918,7 +919,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			thishead = pipeparts.mktrigger(pipeline, tee, rate, max_snr = True)
 
 			if options.latency_output:
-				thishead = pipeparts.mklatency(pipeline, thishead, name=idq_utils.latency_name('aftertrigger', 5, channel, rate))
+				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('aftertrigger', 5, channel, rate))
 
 			# link to src for processing by appsync
 			src[(channel, rate)] = thishead

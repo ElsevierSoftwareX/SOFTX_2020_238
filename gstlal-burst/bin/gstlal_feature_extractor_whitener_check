@@ -42,10 +42,11 @@ import lal
 from gstlal import aggregator
 from gstlal import pipeio
 from gstlal import datasource
-from gstlal import multichannel_datasource
 from gstlal import reference_psd
 from gstlal import pipeparts
 from gstlal import simplehandler
+
+from gstlal.fxtools import multichannel_datasource
 
 # global settings for whitening properties
 PSD_FFT_LENGTH = 32

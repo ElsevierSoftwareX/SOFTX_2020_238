@@ -45,9 +45,10 @@ import glue.ligolw.utils.segments as ligolw_segments
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 from gstlal import datasource
-from gstlal import multichannel_datasource
-from gstlal import idq_multirate_datasource
-from gstlal import idq_utils
+
+from gstlal.fxtools import multichannel_datasource
+from gstlal.fxtools import multirate_datasource
+from gstlal.fxtools import utils
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -71,7 +72,7 @@ def breakupseg(seg, maxextent, overlap):
 	while abs(seg):
 		if (seg[0] + maxextent + overlap) < end:
 			# Round down segment gps end time to integer multiple of cadence.
-			seglist.append(segments.segment(seg[0], idq_utils.floor_div(int(seg[0]) + maxextent + overlap, options.cadence)))
+			seglist.append(segments.segment(seg[0], utils.floor_div(int(seg[0]) + maxextent + overlap, options.cadence)))
 			seg = segments.segment(seglist[-1][1] - overlap, seg[1])
 		else:
 			seglist.append(segments.segment(seg[0], end))
@@ -88,7 +89,7 @@ def breakupsegs(seglist, maxextent, overlap):
 def analysis_segments(ifo, allsegs, boundary_seg, segment_length, max_template_length = 30):
 	segsdict = segments.segmentlistdict()
 	# 512 seconds for the whitener to settle + the maximum template_length
-	start_pad = idq_multirate_datasource.PSD_DROP_TIME + max_template_length
+	start_pad = multirate_datasource.PSD_DROP_TIME + max_template_length
 
 	segsdict[ifo] = segments.segmentlist([boundary_seg])
 	segsdict[ifo] = segsdict[ifo].protract(start_pad)
@@ -132,7 +133,7 @@ def feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, parent_nodes, seg
 			channels[0] = channels[0].split('=')[1]
 
 			outpath = os.path.join(options.out_path, "gstlal_feature_extractor")
-			trig_start = int(seg[0]) + idq_multirate_datasource.PSD_DROP_TIME + max_template_length
+			trig_start = int(seg[0]) + multirate_datasource.PSD_DROP_TIME + max_template_length
 
 			feature_extractor_nodes[(ii, seg)] = \
 				inspiral_pipe.generic_node(gstlalFeatureExtractorJob, dag, parent_nodes = dep_nodes,
@@ -207,7 +208,7 @@ def parse_command_line():
 
 	# sanity check to enforce a minimum segment length
 	# Minimum segment length chosen so that the overlap is a ~33% hit in run time
-	min_segment_length = int(4 * idq_multirate_datasource.PSD_DROP_TIME)
+	min_segment_length = int(4 * multirate_datasource.PSD_DROP_TIME)
 	assert options.segment_length >= min_segment_length
 
 

@@ -51,6 +51,7 @@
 
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_string_triggergen.h>
+#include <gstlal_trigger.h>
 
 
 /*
@@ -69,6 +70,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"lal_string_triggergen", GSTLAL_STRING_TRIGGERGEN_TYPE},
+		{"lal_trigger", GSTLAL_TRIGGER_TYPE},
 		{NULL, 0},
 	};
 

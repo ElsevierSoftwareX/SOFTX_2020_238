@@ -1,1 +1,1 @@
-SUBDIRS = excesspower
+SUBDIRS = excesspower fxtools

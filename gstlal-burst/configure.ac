@@ -23,7 +23,8 @@ AC_CONFIG_FILES([ \
 	debian/control \
 	debian/Makefile \
 	python/Makefile \
-	python/excesspower/Makefile
+	python/excesspower/Makefile \
+	python/fxtools/Makefile
 ])
 
 
@@ -183,6 +184,25 @@ PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE}
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
 
+#
+# Check for GObject Introspection
+#
+
+
+AC_SUBST([MIN_GOBJECT_INTROSPECTION_VERSION], [1.30.0])
+GOBJECT_INTROSPECTION_CHECK([${MIN_GOBJECT_INTROSPECTION_VERSION}])
+AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
+AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
+AS_IF([test "x$found_introspection" = "xyes"], [
+    AC_SUBST([girdir], ["\${datadir}/gir-1.0"])
+    AC_SUBST([typelibdir], ["\${libdir}/girepository-1.0"])
+    AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gobject introspection typelib search path, you might need to add the directory
+
+    $typelibdir
+
+to your GI_TYPELIB_PATH environment variable.])
+])
+
 
 #
 # Check for PyGObject
@@ -240,7 +260,7 @@ AX_PYTHON_PYLAL()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [0.8.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.3.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
@@ -255,12 +275,20 @@ AC_SUBST([GSTLAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GSTLAL_UGLY_VERSION], [0.7.0])
+AC_SUBST([MIN_GSTLAL_UGLY_VERSION], [1.4.0])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_UGLY_VERSION])
 AC_SUBST([GSTLAL_UGLY_VERSION_MAJOR])
 AC_SUBST([GSTLAL_UGLY_VERSION_MINOR])
 AC_SUBST([GSTLAL_UGLY_VERSION_POINT])
 
+# 
+# Check for GSL 
+# 
+ 
+ 
+PKG_CHECK_MODULES([GSL], [gsl]) 
+AC_SUBST([GSL_CFLAGS])
+AC_SUBST([GSL_LIBS])
 
 #
 # Output configure information

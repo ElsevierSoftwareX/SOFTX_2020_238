@@ -37,9 +37,9 @@ import numpy
 import lal
 from glue import markup
 
-from gstlal import idq_utils
 from gstlal import plotutil
 from gstlal import aggregator
+from gstlal.fxtools import utils
 
 import matplotlib
 matplotlib.use('Agg')
@@ -249,9 +249,9 @@ if __name__ == '__main__':
 	flow = min_samp_rate / 4.
 
 	if options.waveform == 'sine_gaussian':
-		waveforms = idq_utils.SineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch = options.mismatch, downsample_factor=downsample_factor)
+		waveforms = utils.SineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch = options.mismatch, downsample_factor=downsample_factor)
 	elif options.waveform == 'half_sine_gaussian':
-		waveforms = idq_utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch = options.mismatch, downsample_factor=downsample_factor)
+		waveforms = utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch = options.mismatch, downsample_factor=downsample_factor)
 	else:
 		raise NotImplementedError
 	basis_params = waveforms.parameter_grid

@@ -10,7 +10,6 @@ lib@GSTPLUGINPREFIX@gstlalugly_la_SOURCES = \
 	gstlal_iirbank.h gstlal_iirbank.c \
 	gstlal_interpolator.h gstlal_interpolator.c \
 	gstlal_tdwhiten.h gstlal_tdwhiten.c \
-	gstlal_trigger.h gstlal_trigger.c \
 	gstlal_latency.h gstlal_latency.c \
 	#gstlal_specgram.h gstlal_specgram.c \
 	#gstlal_mean.h gstlal_mean.c \
