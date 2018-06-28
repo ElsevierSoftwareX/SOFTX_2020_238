@@ -28,7 +28,7 @@ import h5py
 import math
 import numpy
 import os
-from scipy.interpolate import PPoly
+#from scipy.interpolate import PPoly
 
 
 from gstlal import stats as gstlalstats
