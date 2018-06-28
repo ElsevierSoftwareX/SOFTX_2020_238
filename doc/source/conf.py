@@ -21,7 +21,7 @@ import sys
 sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath('../../gstlal/python'))
 sys.path.insert(0, os.path.abspath('../../gstlal-inspiral/python'))
-#sys.path.insert(0, os.path.abspath('../../gstlal-burst/python'))
+sys.path.insert(0, os.path.abspath('../../gstlal-burst/python'))
 sys.path.insert(0, os.path.abspath('../../gstlal-calibration/python'))
 sys.path.insert(0, os.path.abspath('../../gstlal-ugly/python'))
 

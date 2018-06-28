@@ -10,11 +10,11 @@ gstlal-inspiral-modules :
 gstlal-calibration-modules :
 	sphinx-apidoc -e -o source/gstlal-calibration/python-modules ../gstlal-calibration/python
 
-#gstlal-burst-modules :
-#	sphinx-apidoc -e -o source/gstlal-burst/python-modules ../gstlal-burst/python
+gstlal-burst-modules :
+	sphinx-apidoc -e -o source/gstlal-burst/python-modules ../gstlal-burst/python ../gstlal-burst/python/excesspower ../gstlal-burst/python/fxtools/sngltriggertable.py
 
 gstlal-ugly-modules :
-	sphinx-apidoc -e -o source/gstlal-ugly/python-modules ../gstlal-ugly/python ../gstlal-ugly/python/gviz_api.py ../gstlal-ugly/python/coherent_inspiral_metric.py  ../gstlal-ugly/python/coherent_inspiral_metric_plots.py ../gstlal-ugly/python/coherent_inspiral_metric_detector_details.py ../gstlal-ugly/python/sngltriggertable.py ../gstlal-ugly/python/aggregator.py 
+	sphinx-apidoc -e -o source/gstlal-ugly/python-modules ../gstlal-ugly/python ../gstlal-ugly/python/gviz_api.py ../gstlal-ugly/python/coherent_inspiral_metric.py  ../gstlal-ugly/python/coherent_inspiral_metric_plots.py ../gstlal-ugly/python/coherent_inspiral_metric_detector_details.py ../gstlal-ugly/python/aggregator.py 
 
 gstlal-bin :
 	./sphinx-bindoc source/gstlal/bin ../gstlal/bin gstlal_ligo_data_find_check
@@ -25,13 +25,13 @@ gstlal-inspiral-bin :
 gstlal-calibration-bin :
 	./sphinx-bindoc source/gstlal-calibration/bin ../gstlal-calibration/bin
 
-#gstlal-burst-bin :
-#	./sphinx-bindoc source/gstlal-burst/bin ../gstlal-burst/bin gstlal_excesspower
+gstlal-burst-bin :
+	./sphinx-bindoc source/gstlal-burst/bin ../gstlal-burst/bin gstlal_excesspower gstlal_excesspower_trigvis
 
 gstlal-ugly-bin :
 	./sphinx-bindoc source/gstlal-ugly/bin ../gstlal-ugly/bin gstlal_h1h2_coh_frames gstlal_geo_player gstlal_ll_inspiral_daily_summary_page gstlal_cache_to_segments gstlal_inspiral_plot_efficiency gstlal_burst_injections_by_rate_plot gstlal_display_from_logs gstlal_inspiral_bankviz gstlal_ll_inspiral_regen_reg_from_condor_q gstlal_cbc_sensitivity_vs_flow_at_fixed_computational_cost gstlal_inspiral_check_livetimes gstlal_rds_gen gstlal_injections_by_local_rate_plot gstlal_ninja_smooth_reference_psd gstlal_shift_frames 
 
-html : gstlal-modules gstlal-inspiral-modules gstlal-calibration-modules gstlal-ugly-modules gstlal-bin gstlal-inspiral-bin gstlal-calibration-bin gstlal-ugly-bin
+html : gstlal-modules gstlal-inspiral-modules gstlal-calibration-modules gstlal-ugly-modules gstlal-burst-modules gstlal-bin gstlal-inspiral-bin gstlal-calibration-bin gstlal-ugly-bin gstlal-burst-bin
 	sphinx-build -b html source _build
 
 clean :
