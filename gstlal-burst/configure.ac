@@ -147,6 +147,18 @@ AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
 
 
 #
+# Check for FFTW
+#
+
+
+PKG_CHECK_MODULES([FFTW], [fftw3 fftw3f])
+AC_SUBST([FFTW_CFLAGS])
+AC_SUBST([FFTW_LIBS])
+AC_DEFINE([GSTLAL_FFTW_WISDOM_ENV], ["GSTLAL_FFTW_WISDOM"], [Set to the name of the environment variable to use for overriding the system-wide double-precision FFTW wisdom file])
+AC_DEFINE([GSTLAL_FFTWF_WISDOM_ENV], ["GSTLAL_FFTWF_WISDOM"], [Set to the name of the environment variable to use for overriding the system-wide single-precision FFTW wisdom file])
+
+
+#
 # Check for GStreamer
 #
 
@@ -160,7 +172,7 @@ AC_SUBST([plugindir], [${libdir}/gstreamer-${GSTREAMER_RELEASE}])
 AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your default gstreamer plugin search path, you might need to add the directory
 
 	$plugindir
-	
+
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\|gstlal_\|GstLAL_\|GSTLAL_\).*"])
 
@@ -194,11 +206,11 @@ GOBJECT_INTROSPECTION_CHECK([${MIN_GOBJECT_INTROSPECTION_VERSION}])
 AC_SUBST([GIR_VERSION], [${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}])
 AC_SUBST([GIR_VERSION_], [${GIR_VERSION/./_}])
 AS_IF([test "x$found_introspection" = "xyes"], [
-    AC_SUBST([girdir], ["\${datadir}/gir-1.0"])
-    AC_SUBST([typelibdir], ["\${libdir}/girepository-1.0"])
-    AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gobject introspection typelib search path, you might need to add the directory
+	AC_SUBST([girdir], ["\${datadir}/gir-1.0"])
+	AC_SUBST([typelibdir], ["\${libdir}/girepository-1.0"])
+	AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gobject introspection typelib search path, you might need to add the directory
 
-    $typelibdir
+	$typelibdir
 
 to your GI_TYPELIB_PATH environment variable.])
 ])
@@ -249,10 +261,8 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.54.1])
-AC_SUBST([MIN_PYLAL_VERSION], [0.13.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.58.0])
 AX_PYTHON_GLUE()
-AX_PYTHON_PYLAL()
 
 
 #
@@ -289,6 +299,19 @@ AC_SUBST([GSTLAL_UGLY_VERSION_POINT])
 PKG_CHECK_MODULES([GSL], [gsl]) 
 AC_SUBST([GSL_CFLAGS])
 AC_SUBST([GSL_LIBS])
+
+#
+# Check for ORC
+#
+
+
+AC_SUBST([MIN_ORC_VERSION], [0.4.16])
+PKG_CHECK_MODULES([ORC], [orc-0.4 >= ${MIN_ORC_VERSION}], , [
+	AC_MSG_WARN([ORC not found;  using potentially slower code paths.])
+	ORC_CFLAGS="-DDISABLE_ORC"
+])
+AC_SUBST([ORC_CFLAGS])
+AC_SUBST([ORC_LIBS])
 
 #
 # Output configure information
