@@ -122,7 +122,6 @@ enum property {
 	ARG_LOW_PASS,
 	ARG_TRANSFER_FUNCTIONS,
 	ARG_FIR_FILTERS,
-	ARG_INPUT_MAY_BE_ZERO,
 	ARG_FAKE
 };
 
@@ -427,10 +426,6 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	num_tfs = element->channels - 1; \
 	DTYPE *real_fft = (DTYPE *) element->workspace.w ## S_OR_D ## pf.fft; \
  \
-	/* Check a few inputs to see if we have valid data yet */ \
-	for(i = 0; i < 2 * element->channels; i++) \
-		success &= isnormal(src[i]) || (element->input_may_be_zero && src[i] == 0.0); \
- \
 	/* Determine how many fft's we will calculate from combined leftover and new input data */ \
 	num_ffts = minimum64((element->workspace.w ## S_OR_D ## pf.num_leftover + stride - 1) / stride, element->num_ffts - element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg); \
 	num_ffts = minimum64(num_ffts, (element->workspace.w ## S_OR_D ## pf.num_leftover + (gint64) src_size - element->fft_overlap) / stride); \
@@ -461,32 +456,38 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 				element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
 		} \
  \
-		/* 
-		 * Add into the autocorrelation matrix to be averaged. The autocorrelation
-		 * matrix includes all transfer functions. Note that the data is stored in
-		 * "frequency-major" order: transfer functions at a particular frequency are
-		 * stored contiguously in memory before incrementing to the next frequency.
-		 */ \
-		for(j = 0; j < fd_fft_length; j++) { \
-			first_index = j * element->channels * num_tfs - 1; \
-			for(k = 1; k <= num_tfs; k++) { \
-				/* First, divide FFT's of first channel by others to get those transfer functions */ \
-				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+		/* Check the FFTs to see if their values will produce usable transfer functions */ \
+		for(j = 0; j < fd_fft_length * element->channels; j++) \
+			success &= isnormal(creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.ffts[j])); \
  \
-				/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
-				first_index2 = first_index + k * element->channels; \
-				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2] += 1.0; \
+		if(success) { \
+			/* 
+			 * Add into the autocorrelation matrix to be averaged. The autocorrelation
+			 * matrix includes all transfer functions. Note that the data is stored in
+			 * "frequency-major" order: transfer functions at a particular frequency are
+			 * stored contiguously in memory before incrementing to the next frequency.
+			 */ \
+			for(j = 0; j < fd_fft_length; j++) { \
+				first_index = j * element->channels * num_tfs - 1; \
+				for(k = 1; k <= num_tfs; k++) { \
+					/* First, divide FFT's of first channel by others to get those transfer functions */ \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
  \
-				/* Now find all other elements of the autocorrelation matrix */ \
-				for(m = 1; m <= num_tfs - k; m++) { \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
+					/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
+					first_index2 = first_index + k * element->channels; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2] += 1.0; \
+ \
+					/* Now find all other elements of the autocorrelation matrix */ \
+					for(m = 1; m <= num_tfs - k; m++) { \
+						element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+						element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
+					} \
 				} \
 			} \
+		} else { \
+			GST_WARNING_OBJECT(element, "Computed FFT is not usable. Dropping..."); \
+			success = TRUE; \
 		} \
-		/* Check a few values in the autocorrelation matrix to see if it was computed successfully */ \
-		for(j = 0; j < 2 * num_tfs * element->channels; j++) \
-			success &= isnormal(creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[j])) || creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[j]) == 0.0; \
 	} \
  \
 	element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg += num_ffts; \
@@ -522,32 +523,38 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 				element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
 		} \
  \
-		/* 
-		 * Add into the autocorrelation matrix to be averaged. The autocorrelation
-		 * matrix includes all transfer functions. Note that the data is stored in
-		 * "frequency-major" order: transfer functions at a particular frequency are
-		 * stored contiguously in memory before incrementing to the next frequency.
-		 */ \
-		for(j = 0; j < fd_fft_length; j++) { \
-			first_index = j * element->channels * num_tfs - 1; \
-			for(k = 1; k <= num_tfs; k++) { \
-				/* First, divide FFT's of first channel by others to get those transfer functions */ \
-				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+		/* Check the FFTs to see if their values will produce usable transfer functions */ \
+		for(j = 0; j < fd_fft_length * element->channels; j++) \
+			success &= isnormal(creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.ffts[j])); \
  \
-				/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
-				first_index2 = first_index + k * element->channels; \
-				element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2] += 1.0; \
+		if(success) { \
+			/* 
+			 * Add into the autocorrelation matrix to be averaged. The autocorrelation
+			 * matrix includes all transfer functions. Note that the data is stored in
+			 * "frequency-major" order: transfer functions at a particular frequency are
+			 * stored contiguously in memory before incrementing to the next frequency.
+			 */ \
+			for(j = 0; j < fd_fft_length; j++) { \
+				first_index = j * element->channels * num_tfs - 1; \
+				for(k = 1; k <= num_tfs; k++) { \
+					/* First, divide FFT's of first channel by others to get those transfer functions */ \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
  \
-				/* Now find all other elements of the autocorrelation matrix */ \
-				for(m = 1; m <= num_tfs - k; m++) { \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
-					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
+					/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
+					first_index2 = first_index + k * element->channels; \
+					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2] += 1.0; \
+ \
+					/* Now find all other elements of the autocorrelation matrix */ \
+					for(m = 1; m <= num_tfs - k; m++) { \
+						element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m] += element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+						element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index2 + m * num_tfs] += element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + (k + m) * fd_fft_length]; \
+					} \
 				} \
 			} \
+		} else { \
+			GST_WARNING_OBJECT(element, "Computed FFT is not usable. Dropping..."); \
+			success = TRUE; \
 		} \
-		/* Check a few values in the autocorrelation matrix to see if it was computed successfully */ \
-		for(j = 0; j < 2 * num_tfs * element->channels; j++) \
-			success &= isnormal(creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[j])) || creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[j]) == 0.0; \
 	} \
  \
 	element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg += num_ffts; \
@@ -578,30 +585,32 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	element->workspace.w ## S_OR_D ## pf.num_leftover = maximum64(0, element->sample_count + 1 - sample_count_next_fft); \
  \
 	/* Finally, update transfer functions if ready */ \
-	if(success && element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
+	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
 		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
-		GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
 		if(success) { \
+			GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
 			/* Let other elements know about the update */ \
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 			/* Write transfer functions to the screen or a file if we want */ \
 			if(element->write_to_screen || element->filename) \
 				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_fft_length - 1.0), fd_fft_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
-		} \
+		} else \
+			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Trying again."); \
 		element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
 		element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg = 0; \
  \
 		/* Update FIR filters if we want */ \
 		if(element->make_fir_filters) { \
 			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fft_length, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
-			GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
 			if(success) { \
+				GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
 				/* Let other elements know about the update */ \
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
 				/* Write FIR filters to the screen or a file if we want */ \
 				if(element->write_to_screen || element->filename) \
 					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
-			} \
+			} else \
+				GST_WARNING_OBJECT(element, "FIR filter(s) computation failed. Trying again."); \
 		} \
 	} \
  \
@@ -1452,10 +1461,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->fir_filters = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &m);
 		break;
 
-	case ARG_INPUT_MAY_BE_ZERO:
-		element->input_may_be_zero = g_value_get_boolean(value);
-		break;
-
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1548,10 +1553,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			}
 			g_value_take_boxed(value, val_array);
 		}
-		break;
-
-	case ARG_INPUT_MAY_BE_ZERO:
-		g_value_set_boolean(value, element->input_may_be_zero);
 		break;
 
 	default:
@@ -1771,15 +1772,6 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		),
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
 	);
-	properties[ARG_INPUT_MAY_BE_ZERO] = g_param_spec_boolean(
-		"input-may-be-zero",
-		"Input may be zero",
-		"Set to True if transfer functions should be computed even if an input\n\t\t\t"
-		"channel contains zeros. Default is False, to prevent errors when an\n\t\t\t"
-		"input channel has no data yet at start of stream, etc.",
-		FALSE,
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-	);
 
 
 	g_object_class_install_property(
@@ -1851,11 +1843,6 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_FIR_FILTERS,
 		properties[ARG_FIR_FILTERS]
-	);
-	g_object_class_install_property(
-		gobject_class,
-		ARG_INPUT_MAY_BE_ZERO,
-		properties[ARG_INPUT_MAY_BE_ZERO]
 	);
 }
 

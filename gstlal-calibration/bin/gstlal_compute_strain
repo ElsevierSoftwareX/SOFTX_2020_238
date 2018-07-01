@@ -791,7 +791,7 @@ if not options.no_kappac or not options.no_fcc or not options.no_kappatst or not
 	# pcal excitation channel, which will be demodulated
 	pcal = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
 	pcaltee = pipeparts.mktee(pipeline, pcal)
-	
+
 	# DARM_ERR channel, which will have followed different paths if we're doing full vs. partial calibration
 	if options.full_calibration:
 		darm_err = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "darm_err")
