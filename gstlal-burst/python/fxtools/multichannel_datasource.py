@@ -398,6 +398,10 @@ class DataSourceInfo(object):
 		if options.shared_memory_partition is not None:
 			self.shm_part_dict.update( datasource.channel_dict_from_channel_list(options.shared_memory_partition) )
 
+		## options for shared memory
+		self.shm_assumed_duration = options.shared_memory_assumed_duration
+		self.shm_block_size = options.shared_memory_block_size # NOTE: should this be incorporated into options.block_size? currently only used for offline data sources
+
 		## A dictionary of framexmit addresses
 		self.framexmit_addr = framexmit_ports["CIT"]
 		if options.framexmit_addr is not None:
@@ -506,6 +510,12 @@ def append_options(parser):
 		Set the name of the shared memory partition for a given instrument.
 		Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME
 
+-	--shared-memory-assumed-duration [int]
+		Set the assumed span of files in seconds. Default = 4 seconds.
+
+-	--shared-memory-block-size [int]
+		Set the byte size to read per buffer. Default = 4096 bytes.
+
 -	--frame-type [string]
 		Set the frame type required by the channels being used.
 
@@ -530,7 +540,7 @@ def append_options(parser):
 		Set the channel names to be included from the INI file. Can be given multiple times. If not specified, assumed to include all channels.
 
 -	--latency-output
-		Set whether to print out latency (in seconds) at various stages of the detector.
+		Set whether to print out latency (in seconds) at various stages of the pipeline.
 
 	#### Typical usage case examples
 
@@ -559,6 +569,8 @@ def append_options(parser):
 	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
 	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
 	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")
+	group.add_option("--shared-memory-assumed-duration", type = "int", default = 4, help = "Set the assumed span of files in seconds. Default = 4.")
+	group.add_option("--shared-memory-block-size", type = "int", default = 4096, help = "Set the byte size to read per buffer. Default = 4096.")
 	group.add_option("--frame-type", type="string", metavar = "name", help = "Include only those channels with the frame type given.")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")	
@@ -654,7 +666,7 @@ def mkbasicmultisrc(pipeline, data_source_info, channels, verbose = False):
 	elif data_source_info.data_source in ("framexmit", "lvshm"):
 		if data_source_info.data_source == "lvshm":
 			# FIXME make wait_time adjustable through web interface or command line or both
-			src = pipeparts.mklvshmsrc(pipeline, shm_name = data_source_info.shm_part_dict[data_source_info.instrument], num_buffers = 64, blocksize = 10000000, wait_time = 120)
+			src = pipeparts.mklvshmsrc(pipeline, shm_name = data_source_info.shm_part_dict[data_source_info.instrument], assumed_duration = data_source_info.shm_assumed_duration, blocksize = data_source_info.shm_block_size, wait_time = 120)
 		elif data_source_info.data_source == "framexmit":
 			src = pipeparts.mkframexmitsrc(pipeline, multicast_iface = data_source_info.framexmit_iface, multicast_group = data_source_info.framexmit_addr[data_source_info.instrument][0], port = data_source_info.framexmit_addr[data_source_info.instrument][1], wait_time = 120)
 		else:
