@@ -148,6 +148,7 @@ level2:gstlal-burst:
     paths:
       - ${GSTLAL_DIR}
       - gstlal-burst
+    when: always
   only:
     - pushes
     - schedules
