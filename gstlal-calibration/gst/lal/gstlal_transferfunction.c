@@ -274,28 +274,112 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 }
 
 
-#define DEFINE_UPDATE_TRANSFER_FUNCTIONS(DTYPE) \
-static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_matrix, int num_tfs, gint64 fd_fft_length, gint64 num_avg, gsl_vector_complex *transfer_functions_at_f, gsl_vector_complex *transfer_functions_solved_at_f, gsl_matrix_complex *autocorrelation_matrix_at_f, gsl_permutation *permutation, complex double *transfer_functions) { \
+#define DEFINE_UPDATE_TRANSFER_FUNCTIONS(DTYPE, F_OR_BLANK) \
+static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_matrix, int num_tfs, gint64 fd_fft_length, gint64 fd_tf_length, DTYPE *sinc_table, gint64 sinc_length, gint64 sinc_taps_per_df, gint64 num_avg, gsl_vector_complex *transfer_functions_at_f, gsl_vector_complex *transfer_functions_solved_at_f, gsl_matrix_complex *autocorrelation_matrix_at_f, gsl_permutation *permutation, complex double *transfer_functions) { \
  \
 	gboolean success = TRUE; \
-	gint64 i, first_index; \
-	int j, j_stop, signum; \
-	complex double z; \
+	gint64 i, first_index, sinc_taps_per_input, sinc_taps_per_output, k, k_stop, input0, sinc0; \
+	int j, j_stop, elements_per_freq, signum; \
+	complex DTYPE z; \
 	gsl_complex gslz; \
-	for(i = 0; i < fd_fft_length; i++) { \
-		/* First, copy samples at a specific frequency from the big autocorrelation matrix to the gsl vector transfer_functions_at_f */ \
+	/*
+	 * We may need to resample and/or low-pass filter the transfer functions so they have
+	 * the right length and frequency resolution. First, calculate the number of taps of the
+	 * sinc filter that corresponds to one increment in the input and output. 
+	 */ \
+	sinc_taps_per_input = fd_tf_length > fd_fft_length ? sinc_taps_per_df * (fd_tf_length - 1) / (fd_fft_length - 1) : sinc_taps_per_df; \
+	sinc_taps_per_output = fd_tf_length > fd_fft_length ? sinc_taps_per_df : sinc_taps_per_df * (fd_fft_length - 1) / (fd_tf_length - 1); \
+	elements_per_freq = num_tfs * (1 + num_tfs); \
+	for(i = 0; i < fd_tf_length; i++) { \
+		/* First, copy samples at a specific frequency from the big autocorrelation matrix to the gsl vector transfer_functions_at_f, applying any required resampling and smoothing */ \
 		first_index = i * num_tfs * (num_tfs + 1); \
 		for(j = 0; j < num_tfs; j++) { \
-			z = (complex double) autocorrelation_matrix[first_index + j] / num_avg; \
-			gsl_vector_complex_set(transfer_functions_at_f, j, gsl_complex_rect(creal(z), cimag(z))); \
+			z = 0.0; \
+			/*
+			 * First, apply the sinc filter to higher frequencies. We could hit the edge
+			 * of the sinc table or the Nyquist frequency of the transfer function.
+			 */ \
+			sinc0 = (sinc_taps_per_input - i * sinc_taps_per_output % sinc_taps_per_input) % sinc_taps_per_input; \
+			input0 = j + elements_per_freq * (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1); \
+			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, fd_fft_length - (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1)); \
+			for(k = 0; k < k_stop; k++) \
+				z += sinc_table[sinc0 + k * sinc_taps_per_input] * autocorrelation_matrix[input0 + k * elements_per_freq]; \
+			/*
+			 * If we hit the Nyquist frequency of the transfer function but not the edge of
+			 * the sinc table, turn around and keep going until we hit the edge of the sinc table.
+			 */ \
+			sinc0 += k_stop * sinc_taps_per_input; \
+			input0 += (k_stop - 2) * elements_per_freq; \
+			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
+			for(k = 0; k < k_stop; k++) \
+				z += sinc_table[sinc0 + k * sinc_taps_per_input] * conj ## F_OR_BLANK(autocorrelation_matrix[input0 - k * elements_per_freq]); \
+			/*
+			 * Now, go back and apply the sinc filter to the lower frequencies. We could hit the edge
+			 * of the sinc table or the DC component of the transfer function.
+			 */ \
+			sinc0 = 1 + (sinc_taps_per_input + i * sinc_taps_per_output - 1) % sinc_taps_per_input; \
+			input0 = j + elements_per_freq * (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1); \
+			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1)); \
+			for(k = 0; k < k_stop; k++) \
+				z += sinc_table[sinc0 + k * sinc_taps_per_input] * autocorrelation_matrix[input0 - k * elements_per_freq]; \
+			/*
+			 * If we hit the DC component of the transfer function but not the edge of the 
+			 * sinc table, turn around and keep going until we hit the edge of the sinc table.
+			 */ \
+			sinc0 += k_stop * sinc_taps_per_input; \
+			input0 = j + 1; \
+			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
+			for(k = 0; k < k_stop; k++) \
+				z += sinc_table[sinc0 + k * sinc_taps_per_input] * conj ## F_OR_BLANK(autocorrelation_matrix[input0 + k * elements_per_freq]); \
+ \
+			/* Set an element of the GSL vector transfer_functions_at_f */ \
+			gsl_vector_complex_set(transfer_functions_at_f, j, gsl_complex_rect(creal((complex double) z) / num_avg, cimag((complex double) z) / num_avg)); \
 		} \
  \
-		/* Next, copy samples at a specific frequency from the big autocorrelation matrix to the gsl matrix autocorrelation_matrix_at_f */ \
+		/* Next, copy samples at a specific frequency from the big autocorrelation matrix to the gsl matrix autocorrelation_matrix_at_f, applying any required resampling and smoothing */ \
 		j_stop = num_tfs * num_tfs; \
 		first_index += num_tfs; \
 		for(j = 0; j < j_stop; j++) { \
-			z = (complex double) autocorrelation_matrix[first_index + j] / num_avg; \
-			gsl_matrix_complex_set(autocorrelation_matrix_at_f, j / num_tfs, j % num_tfs, gsl_complex_rect(creal(z), cimag(z))); \
+			z = 0.0; \
+			/*
+			 * First, apply the sinc filter to higher frequencies. We could hit the edge
+			 * of the sinc table or the Nyquist frequency of the transfer function.
+			 */ \
+			sinc0 = (sinc_taps_per_input - i * sinc_taps_per_output % sinc_taps_per_input) % sinc_taps_per_input; \
+			input0 = j + num_tfs + elements_per_freq * (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1); \
+			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, fd_fft_length - (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1)); \
+			for(k = 0; k < k_stop; k++) \
+				z += sinc_table[sinc0 + k * sinc_taps_per_input] * autocorrelation_matrix[input0 + k * elements_per_freq]; \
+			/*
+			 * If we hit the Nyquist frequency of the transfer function but not the edge of
+			 * the sinc table, turn around and keep going until we hit the edge of the sinc table.
+			 */ \
+			sinc0 += k_stop * sinc_taps_per_input; \
+			input0 += (k_stop - 2) * elements_per_freq; \
+			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
+			for(k = 0; k < k_stop; k++) \
+				z += sinc_table[sinc0 + k * sinc_taps_per_input] * conj ## F_OR_BLANK(autocorrelation_matrix[input0 - k * elements_per_freq]); \
+			/*
+			 * Now, go back and apply the sinc filter to the lower frequencies. We could hit the edge
+			 * of the sinc table or the DC component of the transfer function.
+			 */ \
+			sinc0 = 1 + (sinc_taps_per_input + i * sinc_taps_per_output - 1) % sinc_taps_per_input; \
+			input0 = j + num_tfs + elements_per_freq * (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1); \
+			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1)); \
+			for(k = 0; k < k_stop; k++) \
+				z += sinc_table[sinc0 + k * sinc_taps_per_input] * autocorrelation_matrix[input0 - k * elements_per_freq]; \
+			/*
+			 * If we hit the DC component of the transfer function but not the edge of the 
+			 * sinc table, turn around and keep going until we hit the edge of the sinc table.
+			 */ \
+			sinc0 += k_stop * sinc_taps_per_input; \
+			input0 = j + num_tfs + 1; \
+			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
+			for(k = 0; k < k_stop; k++) \
+				z += sinc_table[sinc0 + k * sinc_taps_per_input] * conj ## F_OR_BLANK(autocorrelation_matrix[input0 + k * elements_per_freq]); \
+ \
+			/* Set an element of the GSL matrix autocorrelation_matrix_at_f */ \
+			gsl_matrix_complex_set(autocorrelation_matrix_at_f, j / num_tfs, j % num_tfs, gsl_complex_rect(creal((complex double) z) / num_avg, cimag((complex double) z) / num_avg)); \
 		} \
  \
 		/* Now solve [autocorrelation_matrix_at_f] [transfer_functions(f)] = [transfer_functions_at_f] for [transfer_functions(f)] using gsl */ \
@@ -318,79 +402,31 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 }
 
 
-DEFINE_UPDATE_TRANSFER_FUNCTIONS(float);
-DEFINE_UPDATE_TRANSFER_FUNCTIONS(double);
+DEFINE_UPDATE_TRANSFER_FUNCTIONS(float, f);
+DEFINE_UPDATE_TRANSFER_FUNCTIONS(double, );
 
 
 #define DEFINE_UPDATE_FIR_FILTERS(DTYPE, F_OR_BLANK) \
-static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fft_length, gint64 fir_length, int sample_rate, DTYPE *sinc_table, gint64 sinc_length, gint64 sinc_taps_per_df, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
+static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
  \
 	gboolean success = TRUE; \
-	gint16 i; \
-	gint64 j, k, k_stop, fd_fft_length, fd_fir_length, input0, sinc0, sinc_taps_per_input, sinc_taps_per_output; \
-	complex DTYPE smooth_tf; \
- \
-	fd_fft_length = fft_length / 2 + 1; \
+	int i; \
+	gint64 j, fd_fir_length; \
 	fd_fir_length = fir_length / 2 + 1; \
-	/*
-	 * We may need to resample and/or low-pass filter the transfer functions to produce FIR filters
-	 * with the right length and frequency resolution. First, calculate the number of taps of the
-	 * sinc filter that corresponds to one increment in the input and output. 
-	 */ \
-	sinc_taps_per_input = fd_fir_length > fd_fft_length ? sinc_taps_per_df * (fd_fir_length - 1) / (fd_fft_length - 1) : sinc_taps_per_df; \
-	sinc_taps_per_output = fd_fir_length > fd_fft_length ? sinc_taps_per_df : sinc_taps_per_df * (fd_fft_length - 1) / (fd_fir_length - 1); \
  \
 	for(i = 0; i < num_tfs; i++) { \
 		for(j = 0; j < fd_fir_length; j++) { \
-			smooth_tf = 0; \
 			/*
-			 * First, apply the sinc filter to higher frequencies. We could hit the edge
-			 * of the sinc table or the Nyquist frequency of the transfer function.
+			 * Copy each transfer function to fir_filter, which will be ifft'ed. Apply a frequency-domain
+			 * window in case we are adding a high- or low-pass filter. Add a delay of half the filter
+			 * length, to center it in time.
 			 */ \
-			sinc0 = (sinc_taps_per_input - j * sinc_taps_per_output % sinc_taps_per_input) % sinc_taps_per_input; \
-			input0 = i * fd_fft_length + (j * (fd_fft_length - 1) + fd_fir_length - 2) / (fd_fir_length - 1); \
-			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, (i + 1) * fd_fft_length - input0); \
-			gint64 stupid = k_stop; \
-			for(k = 0; k < k_stop; k++) \
-				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (fd_window[(input0 + k) % fd_fft_length] * transfer_functions[input0 + k]); \
-			/*
-			 * If we hit the Nyquist frequency of the transfer function but not the edge of
-			 * the sinc table, turn around and keep going until we hit the edge of the sinc table.
-			 */ \
-			sinc0 += k_stop * sinc_taps_per_input; \
-			input0 = (i + 1) * fd_fft_length - 2; \
-			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
-			stupid += k_stop; \
-			for(k = 0; k < k_stop; k++) \
-				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (fd_window[(input0 - k) % fd_fft_length] * conj ## F_OR_BLANK(transfer_functions[input0 - k])); \
-			/*
-			 * Now, go back and apply the sinc filter to the lower frequencies. We could hit the edge
-			 * of the sinc table or the DC component of the transfer function.
-			 */ \
-			sinc0 = 1 + (sinc_taps_per_input + j * sinc_taps_per_output - 1) % sinc_taps_per_input; \
-			input0 = i * fd_fft_length + (j * (fd_fft_length - 1) - 1) / (fd_fir_length - 1); \
-			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, input0 - i * fd_fft_length); \
-			stupid = k_stop; \
-			for(k = 0; k < k_stop; k++) \
-				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (fd_window[(input0 - k) % fd_fft_length] * transfer_functions[input0 - k]); \
-			/*
-			 * If we hit the DC component of the transfer function but not the edge of the 
-			 * sinc table, turn around and keep going until we hit the edge of the sinc table.
-			 */ \
-			sinc0 += k_stop * sinc_taps_per_input; \
-			input0 = i * fd_fft_length + 1; \
-			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
-			stupid += k_stop; \
-			for(k = 0; k < k_stop; k++) \
-				smooth_tf += sinc_table[sinc0 + k * sinc_taps_per_input] * (complex DTYPE) (fd_window[(input0 + k) % fd_fft_length] * conj ## F_OR_BLANK(transfer_functions[input0 + k])); \
- \
-			/* Add a delay of half the length of the filter, to center the filter in time. */ \
-			fir_filter[j] = (1 - 2 * (j % 2)) * smooth_tf; \
+			fir_filter[j] = (1 - 2 * (j % 2)) * fd_window[j] * (complex DTYPE) transfer_functions[i * fd_fir_length + j]; \
 		} \
  \
 		/* Make sure the DC and Nyquist components are purely real */ \
-		fir_filter[0] = creal ## F_OR_BLANK(fir_filter[0]); \
-		fir_filter[fd_fir_length - 1] = creal ## F_OR_BLANK(fir_filter[fd_fir_length - 1]); \
+		fir_filter[0] = (complex DTYPE) creal ## F_OR_BLANK(fir_filter[0]); \
+		fir_filter[fd_fir_length - 1] = (complex DTYPE) creal ## F_OR_BLANK(fir_filter[fd_fir_length - 1]); \
  \
 		/* Take the inverse Fourier transform */ \
 		fftw ## F_OR_BLANK ## _execute(fir_plan); \
@@ -420,8 +456,9 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	g_assert(!(src_size % element->unit_size)); \
 	src_size /= element->unit_size; \
  \
-	gint64 i, j, k, m, num_ffts, k_start, k_stop, first_index, first_index2, fd_fft_length, stride, num_tfs; \
+	gint64 i, j, k, m, num_ffts, k_start, k_stop, first_index, first_index2, fd_fft_length, fd_tf_length, stride, num_tfs; \
 	fd_fft_length = element->fft_length / 2 + 1; \
+	fd_tf_length = element->fir_length / 2 + 1; \
 	stride = element->fft_length - element->fft_overlap; \
 	num_tfs = element->channels - 1; \
 	DTYPE *real_fft = (DTYPE *) element->workspace.w ## S_OR_D ## pf.fft; \
@@ -586,14 +623,14 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
  \
 	/* Finally, update transfer functions if ready */ \
 	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
-		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
+		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
 		if(success) { \
 			GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
 			/* Let other elements know about the update */ \
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 			/* Write transfer functions to the screen or a file if we want */ \
 			if(element->write_to_screen || element->filename) \
-				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_fft_length - 1.0), fd_fft_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
+				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
 		} else \
 			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Trying again."); \
 		element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
@@ -601,7 +638,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
  \
 		/* Update FIR filters if we want */ \
 		if(element->make_fir_filters) { \
-			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fft_length, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
+			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
 			if(success) { \
 				GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
 				/* Let other elements know about the update */ \
@@ -826,8 +863,10 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	 */
 
 	gint64 fd_fft_length = element->fft_length / 2 + 1;
+	if(!element->fir_length)
+		element->fir_length = element->fft_length;
 	gint64 fd_fir_length = element->fir_length / 2 + 1;
-	element->transfer_functions = g_malloc((element->channels - 1) * fd_fft_length * sizeof(*element->transfer_functions));
+	element->transfer_functions = g_malloc((element->channels - 1) * fd_fir_length * sizeof(*element->transfer_functions));
 	if(element->make_fir_filters)
 		element->fir_filters = g_malloc((element->channels - 1) * element->fir_length * sizeof(*element->fir_filters));
 
@@ -845,7 +884,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				element->workspace.wspf.fft_window[i] = (float) pow(sin(M_PI * i / (element->fft_length - 1)), 2.0);
 		}
 
-		if(element->make_fir_filters && (!element->workspace.wspf.fir_window)) {
+		if(!element->workspace.wspf.sinc_table) {
 
 			/*
 			 * Make a sinc table to resample and/or low-pass filter the transfer functions when we make FIR filters
@@ -908,19 +947,22 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 						element->workspace.wspf.sinc_table[j] /= normalization;
 				}
 			}
+		}
+
+		if(element->make_fir_filters && (!element->workspace.wspf.fir_window)) {
 
 			/*
 			 * Make a frequency-domain window to roll off low and high frequencies
 			 */
 
-			element->workspace.wspf.fir_window = g_malloc(fd_fft_length * sizeof(*element->workspace.wspf.fir_window));
+			element->workspace.wspf.fir_window = g_malloc(fd_fir_length * sizeof(*element->workspace.wspf.fir_window));
 
 			/* Initialize to ones */
-			for(i = 0; i < fd_fft_length; i++)
+			for(i = 0; i < fd_fir_length; i++)
 				element->workspace.wspf.fir_window[i] = 1.0;
 
 			int f_nyquist = element->rate / 2;
-			float df_per_hz = (fd_fft_length - 1.0) / f_nyquist;
+			float df_per_hz = (fd_fir_length - 1.0) / f_nyquist;
 
 			/* high-pass filter */
 			/* Remove low frequencies */
@@ -938,13 +980,13 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			if(element->low_pass > 0) {
 				/* Apply half of a Hann window */
 				i_start = (gint64) (element->low_pass * df_per_hz + 0.5);
-				i_stop = minimum64(fd_fft_length, 1.4 * i_start);
+				i_stop = minimum64(fd_fir_length, 1.4 * i_start);
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wspf.fir_window[i] *= (float) pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
 				i_start = i_stop;
-				i_stop = fd_fft_length;
+				i_stop = fd_fir_length;
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wspf.fir_window[i] = 0.0;
 			}
@@ -1017,7 +1059,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				element->workspace.wdpf.fft_window[i] = pow(sin(M_PI * i / (element->fft_length - 1)), 2.0);
 		}
 
-		if(element->make_fir_filters && (!element->workspace.wdpf.fir_window)) {
+		if(!element->workspace.wdpf.sinc_table) {
 
 			/*
 			 * Make a sinc table to resample and/or low-pass filter the transfer functions when we make FIR filters
@@ -1080,19 +1122,22 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 						element->workspace.wdpf.sinc_table[j] /= normalization;
 				}
 			}
+		}
+
+		if(element->make_fir_filters && (!element->workspace.wdpf.fir_window)) {
 
 			/*
 			 * Make a frequency-donain window to roll off low and high frequencies
 			 */
 
-			element->workspace.wdpf.fir_window = g_malloc(fd_fft_length * sizeof(*element->workspace.wdpf.fir_window));
+			element->workspace.wdpf.fir_window = g_malloc(fd_fir_length * sizeof(*element->workspace.wdpf.fir_window));
 
 			/* Initialize to ones */
-			for(i = 0; i < fd_fft_length; i++)
+			for(i = 0; i < fd_fir_length; i++)
 				element->workspace.wdpf.fir_window[i] = 1.0;
 
 			int f_nyquist = element->rate / 2;
-			double df_per_hz = (fd_fft_length - 1.0) / f_nyquist;
+			double df_per_hz = (fd_fir_length - 1.0) / f_nyquist;
 
 			/* high-pass filter */
 			/* Remove low frequencies */
@@ -1110,13 +1155,13 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			if(element->low_pass > 0) {
 				/* Apply half of a Hann window */
 				i_start = (gint64) (element->low_pass * df_per_hz + 0.5);
-				i_stop = minimum64(fd_fft_length, 1.4 * i_start);
+				i_stop = minimum64(fd_fir_length, 1.4 * i_start);
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wdpf.fir_window[i] *= pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
 				i_start = i_stop;
-				i_stop = fd_fft_length;
+				i_stop = fd_fir_length;
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wdpf.fir_window[i] = 0.0;
 			}
@@ -1533,7 +1578,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			g_value_init(&v, G_TYPE_VALUE_ARRAY);
 			int i;
 			for(i = 0; i < element->channels - 1; i++) {
-				g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((double *) (element->transfer_functions + i * (element->fft_length / 2 + 1)), element->fft_length + 2));
+				g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((double *) (element->transfer_functions + i * (element->fir_length / 2 + 1)), element->fir_length + 2));
 				g_value_array_append(va, &v);
 			}
 			g_value_take_boxed(value, va);
@@ -1701,18 +1746,21 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	properties[ARG_FIR_LENGTH] = g_param_spec_int64(
 		"fir-length",
 		"FIR filter length",
-		"Length in samples of FIR filters produced. Must be an even number.",
-		1, G_MAXINT64, 16384,
+		"Length in samples of FIR filters produced. The length of the transfer\n\t\t\t"
+		"functions produced is also compute from this, as fir-length / 2 + 1. If\n\t\t\t"
+		"unset, the length of the transfer functions and FIR filters will be based on\n\t\t\t"
+		"fft-length. Must be an even number.",
+		0, G_MAXINT64, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_FREQUENCY_RESOLUTION] = g_param_spec_double(
 		"frequency-resolution",
 		"Frequency resolution",
-		"Frequency resolution of the FIR filters in Hz. This must be greater\n\t\t\t"
-		"than or equal to sample rate/fir-length and sample rate/fft-length\n\t\t\t"
-		"in order to be effective. When computing multiple FIR filters\n\t\t\t"
-		"simultaneously, it is recommended to set this to a value significantly\n\t\t\t"
-		"larger than 1/fft_length.",
+		"Frequency resolution of the transfer functions and FIR filters in Hz.\n\t\t\t"
+		"This must be greater than or equal to sample rate/fir-length and sample\n\t\t\t"
+		"rate/fft-length in order to be effective. When computing multiple FIR\n\t\t\t"
+		"filters simultaneously, it is recommended to set this to a value\n\t\t\t"
+		"significantly larger than 1/fft_length.",
 		0, G_MAXDOUBLE, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
