@@ -673,7 +673,7 @@ def parse_command_line():
 	group.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	group.add_option("--nxydump-segment", metavar = "start:stop", help = "Set the time interval to dump from nxydump elements (optional).")
-	group.add_option("--sample-rate", type = "int", metavar = "Hz", help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
+	group.add_option("--sample-rate", type = "int", metavar = "Hz", default = 1, help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
 	group.add_option("--feature-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output features in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--feature-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output features in GPS seconds.  Required unless --data-source=lvshm")
 	parser.add_option_group(group)
