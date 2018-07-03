@@ -218,8 +218,9 @@ class HDF5FeatureData(FeatureData):
 	def __init__(self, columns, keys, **kwargs):
 		super(HDF5FeatureData, self).__init__(columns, keys = keys, **kwargs)
 		self.cadence = kwargs.pop('cadence')
+		self.sample_rate = kwargs.pop('sample_rate')
 		self.dtype = [(column, '<f8') for column in self.columns]
-		self.feature_data = {key: numpy.empty((self.cadence,), dtype = self.dtype) for key in keys}
+		self.feature_data = {key: numpy.empty((self.cadence * self.sample_rate,), dtype = self.dtype) for key in keys}
 		self.last_save_time = 0
 		self.clear()
 
@@ -237,12 +238,13 @@ class HDF5FeatureData(FeatureData):
 		Append a feature buffer to data structure
 		"""
 		self.last_save_time = floor_div(timestamp, self.cadence)
-		idx = timestamp - self.last_save_time
+		time_idx = (timestamp - self.last_save_time) * self.sample_rate
 
-		### FIXME: assumes there is just one row per channel for now (denoting a sample rate of 1Hz)
 		for key in features.keys():
-			if features[key][0]:
-				self.feature_data[key][idx] = numpy.array(tuple(features[key][0][col] for col in self.columns), dtype=self.dtype)
+			for row_idx, row in enumerate(features[key]):
+				if row:
+					idx = time_idx + row_idx
+					self.feature_data[key][idx] = numpy.array(tuple(row[col] for col in self.columns), dtype=self.dtype)
 
 	def clear(self):
 		for key in self.keys:
@@ -271,7 +273,7 @@ class FeatureQueue(object):
 			self.counter[timestamp] += 1
 
 			### store row, aggregating if necessary
-			idx = self._idx(timestamp)
+			idx = self._idx(row['trigger_time'])
 			if not self.in_queue[timestamp][channel][idx] or (row['snr'] > self.in_queue[timestamp][channel][idx]['snr']):
 				self.in_queue[timestamp][channel][idx] = row
 

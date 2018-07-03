@@ -220,7 +220,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.frame_segments = data_source_info.frame_segments
 		self.keys = kwargs.pop("keys")
 		self.num_samples = len(self.keys)
-		self.sample_rate = 1 # NOTE: hard-coded for now
+		self.sample_rate = options.sample_rate
 		self.waveforms = kwargs.pop("waveforms")
 		self.basename = kwargs.pop("basename")
 		self.waveform_type = options.waveform
@@ -258,7 +258,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# feature saving properties
 		if options.save_format == 'hdf5':
-			self.fdata = utils.HDF5FeatureData(self.columns, keys = self.keys, cadence = self.cadence)
+			self.fdata = utils.HDF5FeatureData(self.columns, keys = self.keys, cadence = self.cadence, sample_rate = self.sample_rate)
 
 		elif options.save_format == 'ascii':
 			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
@@ -673,6 +673,7 @@ def parse_command_line():
 	group.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	group.add_option("--nxydump-segment", metavar = "start:stop", help = "Set the time interval to dump from nxydump elements (optional).")
+	group.add_option("--sample-rate", type = "int", metavar = "Hz", help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
 	group.add_option("--feature-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output features in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--feature-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output features in GPS seconds.  Required unless --data-source=lvshm")
 	parser.add_option_group(group)
@@ -695,6 +696,9 @@ def parse_command_line():
 		options.feature_start_time = int(options.gps_start_time)
 	if options.feature_end_time is None:
 		options.feature_end_time = int(options.gps_end_time)
+
+	# check if input sample rate is sensible
+	assert options.sample_rate == 1 or options.sample_rate % 2 == 0
 
 	# check if persist and save cadence times are sensible
 	assert options.persist_cadence >= options.cadence
@@ -916,7 +920,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "snrtimeseries_%s_%s.txt" % (channel, repr(rate)), segment = options.nxydump_segment)
 
 			# extract features from time series
-			thishead = pipeparts.mktrigger(pipeline, tee, rate, max_snr = True)
+			thishead = pipeparts.mktrigger(pipeline, tee, int(rate // options.sample_rate), max_snr = True)
 
 			if options.latency_output:
 				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('aftertrigger', 5, channel, rate))
