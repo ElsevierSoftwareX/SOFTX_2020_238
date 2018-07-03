@@ -152,7 +152,6 @@ level2:gstlal-burst:
   only:
     - pushes
     - schedules
-  allow_failure: true
   
 offline-test:
   image: aepace/gstlal-dev:stretch-mkl
