@@ -164,7 +164,7 @@ offline-test:
     - level2:gstlal-inspiral
   script:
     - cd gstlal-inspiral/tests
-    - ls -lth ${GSTLAL_DIR}/lib
+    - ls -lth ${GSTLAL_DIR}/* > gstlal_dir_out
     - make -f Makefile_offline_tutorial_test
   artifacts:
     expire_in: 3h
