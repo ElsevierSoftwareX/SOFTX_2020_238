@@ -105,6 +105,7 @@ KAFKA_PYTHON_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/confluent_kafka
 LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 SKLEARN_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/sklearn/_isotonic.so
 CYTHON_TARGET=$(INSTALL_DIR)/bin/cython
+GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
 GSTINSPIRAL_TARGET=$(INSTALL_DIR)/lib/libgstlalinspiral.so
 GSTLALCALIB_TARGET=$(INSTALL_DIR)/bin/gstlal_compute_strain
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
@@ -344,7 +345,7 @@ cython : logs/cython.txt
 logs/cython.txt : $(LOGS_DIR)/gstlal.txt $(CYTHON_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(CYTHON_TARGET) : $(GSTINSPIRAL_TARGET)
+$(CYTHON_TARGET) : $(GSTLALBURST_TARGET)
 	@echo $(GREEN)cython$(WHITE) 1>&2
 	tar -xzf $(TAR_DIR)/$(CYTHON).tar.gz -C $(SRC_DIR) ; \
 	cd $(SRC_DIR)/$(CYTHON) && python setup.py install --prefix=$(INSTALL_DIR) ; \
@@ -352,8 +353,15 @@ $(CYTHON_TARGET) : $(GSTINSPIRAL_TARGET)
 # gstlal (all)
 gstlal : logs/gstlal.txt
 
-logs/gstlal.txt : $(LOGS_DIR)/doxygen.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALCALIB_TARGET) $(GSTINSPIRAL_TARGET)
+logs/gstlal.txt : $(LOGS_DIR)/doxygen.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALCALIB_TARGET) $(GSTINSPIRAL_TARGET) $(GSTLALBURST_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
+
+# gstlal-burst
+$(GSTLALBURST_TARGET) : $(GSTINSPIRAL_TARGET)
+	@echo $(GREEN)gstlal-burst$(WHITE) 1>&2
+	cd $(GSTLAL_REPO)/gstlal-burst && echo | ./00init.sh ; \
+	cd $(GSTLAL_REPO)/gstlal-burst && ./configure --prefix=$(INSTALL_DIR) ; \
+	cd $(GSTLAL_REPO)/gstlal-burst && make -j$(CORES) && make install -j$(CORES) ; \
 
 # gstlal-inspiral
 $(GSTINSPIRAL_TARGET) : $(GSTLALCALIB_TARGET)
@@ -986,7 +994,7 @@ clean-cython :
 	rm -rf logs/cython.txt $(CYTHON_TARGET)
 
 clean-gstlal :
-	rm -rf logs/gstlal.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALCALIB_TARGET) $(GSTLALINSPIRAL_TARGET)
+	rm -rf logs/gstlal.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALCALIB_TARGET) $(GSTLALINSPIRAL_TARGET) $(GSTLALBURST_TARGET)
 
 clean-doxygen :
 	rm -rf logs/doxygen.txt $(DOXYGEN_TARGET)
