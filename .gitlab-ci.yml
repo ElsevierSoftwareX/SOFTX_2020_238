@@ -50,7 +50,7 @@ stages:
     - level0
     - level1
     - level2
-    - offline-test
+    - test
     - nightly-pages
 
 level0:gstlal:
@@ -157,9 +157,23 @@ level2:gstlal-burst:
     - pushes
     - schedules
   
-offline-test:
+test:gstlal-burst:
   image: aepace/gstlal-dev:stretch-mkl
-  stage: offline-test
+  stage: test
+  dependencies:
+    - level2:gstlal-burst
+  script:
+    - apt-get install -y python-pytest
+    - cd gstlal-burst
+    - python -m pytest --doctest-modules --ignore python/excesspower --ignore tests/trigger_test_01.py
+  only:
+    - pushes
+    - schedules
+  allow_failure: true
+
+test:offline:
+  image: aepace/gstlal-dev:stretch-mkl
+  stage: test
   dependencies:
     - level2:gstlal-inspiral
   script:
