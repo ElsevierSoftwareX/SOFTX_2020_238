@@ -157,6 +157,34 @@ level2:gstlal-burst:
     - pushes
     - schedules
   
+test:gstlal:
+  image: aepace/gstlal-dev:stretch-mkl
+  stage: test
+  dependencies:
+    - level2:gstlal
+  script:
+    - apt-get install -y python-pytest
+    - cd gstlal-burst
+    - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore python/misc.py
+  only:
+    - pushes
+    - schedules
+  allow_failure: true
+
+test:gstlal-inspiral:
+  image: aepace/gstlal-dev:stretch-mkl
+  stage: test
+  dependencies:
+    - level2:gstlal-inspiral
+  script:
+    - apt-get install -y python-pytest
+    - cd gstlal-burst
+    - python -m pytest -v --doctest-modules --ignore gst/python --ignore tests --ignore python/stats/inspiral_extrinsics.py
+  only:
+    - pushes
+    - schedules
+  allow_failure: true
+
 test:gstlal-burst:
   image: aepace/gstlal-dev:stretch-mkl
   stage: test
@@ -165,7 +193,7 @@ test:gstlal-burst:
   script:
     - apt-get install -y python-pytest
     - cd gstlal-burst
-    - python -m pytest --doctest-modules --ignore python/excesspower --ignore tests/trigger_test_01.py
+    - python -m pytest -v --doctest-modules --ignore python/excesspower --ignore tests/trigger_test_01.py
   only:
     - pushes
     - schedules
