@@ -57,7 +57,7 @@ level0:gstlal:
   image: aepace/gstlal-dev:stretch-mkl
   stage: level0
   script:
-    - echo $GSTLAL_FIR_WHITEN
+    - echo "$PWD" > ./pwd_output.out
     - cd gstlal
     - ./00init.sh
     - ./configure --prefix=${GSTLAL_DIR}
