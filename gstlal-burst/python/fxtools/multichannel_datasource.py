@@ -77,7 +77,7 @@ def channel_dict_from_channel_list(channel_list):
 
 	Examples:
 
-		>>> multichannel_datasource.channel_dict_from_channel_list(["H1:AUX-CHANNEL-NAME_1:2048", "H1:AUX-CHANNEL-NAME-2:512"])
+		>>> channel_dict_from_channel_list(["H1:AUX-CHANNEL-NAME_1:2048", "H1:AUX-CHANNEL-NAME-2:512"])
 		{'H1:AUX-CHANNEL-NAME_1': {'qhigh': None, 'ifo': 'H1', 'flow': None, 'fsamp': 2048.0, 'fhigh': None, 'frametype': None}, 'H1:AUX-CHANNEL-NAME-2': {'qhigh': None, 'ifo': 'H1', 'flow': None, 'fsamp': 512.0, 'fhigh': None, 'frametype': None}}
 	"""
 
