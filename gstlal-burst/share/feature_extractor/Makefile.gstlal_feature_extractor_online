@@ -1,0 +1,89 @@
+SHELL := /bin/bash
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=ligo.dev.o3.detchar.onlinedq.idq
+GROUP_USER=patrick.godwin
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+
+#########################
+# Triggering parameters #
+#########################
+
+OUTPATH = $(PWD)
+
+# channel list for analysis
+CHANNEL_LIST = channel_list.txt 
+
+MAX_STREAMS = 200
+DATA_SOURCE = lvshm
+
+# Parameter space config of waveform
+WAVEFORM = sine_gaussian
+MISMATCH = 0.02
+QHIGH = 40
+
+# Detector
+CLUSTER:=$(shell hostname -d)
+
+IFO = H1
+#IFO = L1
+
+#################
+# Web directory #
+#################
+
+# A user tag for the run
+#TAG = O2_C00
+# Run number
+#RUN = run_1
+# A web directory for output (note difference between cit+uwm and Atlas)
+# cit & uwm
+#WEBDIR = ~/public_html/observing/$(TAG)/$(START)-$(STOP)-$(RUN)
+# Atlas
+#WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
+
+############
+# Workflow #
+############
+
+all : dag
+	sed -i '/gstlal_feature_extractor / s/$$/ |& grep -v '\''XLAL\|GSL\|Generic'\''/' feature_extractor_pipe.sh
+	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
+
+# Run etg pipe to produce dag
+dag : plots $(CHANNEL_LIST)
+	gstlal_feature_extractor_pipe_online \
+		--data-source $(DATA_SOURCE) \
+		--channel-list $(CHANNEL_LIST) \
+		--out-path $(OUTPATH) \
+		--max-streams $(MAX_STREAMS) \
+		--mismatch $(MISMATCH) \
+		--qhigh $(QHIGH) \
+		$(CONDOR_COMMANDS) \
+		--shared-memory-partition H1=LHO_RedDtchr \
+		--shared-memory-assumed-duration 1 \
+		--cadence 20 \
+		--request-cpu 2 \
+		--request-memory 15GB \
+		--verbose \
+		--disable-web-service
+
+#		--web-dir $(WEBDIR) \
+
+# FIXME Determine channel list automatically.
+#full_channel_list.txt : frame.cache
+#	FrChannels $$(head -n 1 $^ | awk '{ print $$5}' | sed -e "s@file://localhost@@g") > $@
+
+# FIXME Add webpages once we have output
+# Make webpage directory and copy files across
+#$(WEBDIR) : $(MAKEFILE_LIST)
+#	mkdir -p $(WEBDIR)/OPEN-BOX
+#	cp $(MAKEFILE_LIST) $@
+
+# Makes local plots directory
+plots :
+	mkdir plots
+
+clean :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+
