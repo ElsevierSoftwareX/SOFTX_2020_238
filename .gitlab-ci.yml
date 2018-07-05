@@ -161,7 +161,7 @@ test:gstlal:
   image: aepace/gstlal-dev:stretch-mkl
   stage: test
   dependencies:
-    - level2:gstlal
+    - level0:gstlal
   script:
     - apt-get install -y python-pytest
     - cd gstlal
