@@ -111,8 +111,8 @@ class NearestLeafTree(object):
 	>>> 103 in x
 	False
 	>>> import sys
-	>>> x.to_xml(u"H1").write(sys.stdout)	# doctest: +NORMALIZE_WHITESPACE
-	<Array Type="real_8" Name="H1:nearestleaftree:array">
+	>>> x.to_xml(u"H1").write(sys.stdout) # doctest: +NORMALIZE_WHITESPACE
+	<Array Name="H1:nearestleaftree:array" Type="real_8">
 		<Dim>2</Dim>
 		<Dim>2</Dim>
 		<Stream Delimiter=" " Type="Local">
@@ -523,7 +523,7 @@ class HorizonHistories(dict):
 		500.0
 		>>> x.functional_integral((300., 500.))
 		0.0
-		>>> x.functional_integral((100., 150.), lambda f: f**3)
+		>>> x["H1"].functional_integral((100., 150.), w = lambda f: f**3)
 		200.0
 		"""
 		if not self or not all(self.values()):
