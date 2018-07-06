@@ -13,7 +13,7 @@ APPROXIMANT = 0.0:100.0:TaylorF2
 ##############################
 
 # The GPS start time to generate data
-DATASTART=999999998
+DATASTART=999999966
 # The GPS stop time to generate data
 DATASTOP=1000002100
 
@@ -154,7 +154,7 @@ L1_psd.xml.gz:
 	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	@echo ""
 
-H-H1_FAKE-10000/H-H1_FAKE-1000000512-512.gwf: H1_psd.xml.gz injections.xml
+H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf: H1_psd.xml.gz injections.xml
 	# Generate 2048s of H1 FAKE data with a single injection included
 	# gstlal_fake_frames_0001
 	gstlal_fake_frames \
@@ -171,7 +171,7 @@ H-H1_FAKE-10000/H-H1_FAKE-1000000512-512.gwf: H1_psd.xml.gz injections.xml
 		--verbose
 	@echo ""
 
-L-L1_FAKE-10000/L-L1_FAKE-1000000512-512.gwf: L1_psd.xml.gz injections.xml
+L-L1_FAKE-10000/L-L1_FAKE-1000000000-512.gwf: L1_psd.xml.gz injections.xml
 	# Generate 2048s of L1 FAKE data with a single injection included
 	# gstlal_fake_frames_0002
 	gstlal_fake_frames \
@@ -188,7 +188,7 @@ L-L1_FAKE-10000/L-L1_FAKE-1000000512-512.gwf: L1_psd.xml.gz injections.xml
 		--verbose
 	@echo ""
 
-frames.cache: H-H1_FAKE-10000/H-H1_FAKE-1000000512-512.gwf L-L1_FAKE-10000/L-L1_FAKE-1000000512-512.gwf
+frames.cache: H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf L-L1_FAKE-10000/L-L1_FAKE-1000000000-512.gwf
 	# Produce frames cache file
 	# A file that contains full paths to all frame files
 	ls H-H1_FAKE-10000/* L-L1_FAKE-10000/* | lalapps_path2cache > frames.cache
