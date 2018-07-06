@@ -176,7 +176,7 @@ def injection_dict_from_channel_list_with_node_range(injection_list):
 
 	Examples:
 	>>> injection_dict_from_channel_list_with_node_range(["0000:0002:Injection_1.xml", "0002:0004:Injection_2.xml"])
-{'0000': 'Injection_1.xml', '0001': 'Injection_1.xml', '0002': 'Injection_2.xml', '0003': 'Injection_2.xml'}
+	{'0000': 'Injection_1.xml', '0001': 'Injection_1.xml', '0002': 'Injection_2.xml', '0003': 'Injection_2.xml'}
 	"""
 	outdict = {}
 	for injection_name in injection_list:
