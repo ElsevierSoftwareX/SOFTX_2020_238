@@ -32,8 +32,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <postcoh/postcohinspiral_table.h>
-
+#include <postcoh/postcohtable.h>
 #include <cohfar/background_stats.h>
 
 G_BEGIN_DECLS

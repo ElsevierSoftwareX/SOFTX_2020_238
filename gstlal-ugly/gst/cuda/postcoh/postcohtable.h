@@ -101,8 +101,10 @@ tagPostcohInspiralTable
   REAL8		deff_H;
   REAL8		deff_L;
   REAL8		deff_V;
+  LIGOTimeGPS	epoch;
+  double	deltaT;
+  size_t	snr_length;
+  float complex *snr;
 }
-
-
 PostcohInspiralTable;
 #endif /* __POSTCOH_TABLE_H */

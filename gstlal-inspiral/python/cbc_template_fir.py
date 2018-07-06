@@ -61,7 +61,8 @@ import lal
 import lalsimulation as lalsim
 
 
-from gstlal.reference_psd import interpolate_psd, horizon_distance
+from gstlal.reference_psd import HorizonDistance as horizon_distance
+from gstlal.reference_psd import interpolate_psd
 
 
 from gstlal import templates

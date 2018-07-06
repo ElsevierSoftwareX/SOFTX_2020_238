@@ -121,6 +121,8 @@ void cohfar_get_data_from_file(gchar **in_fnames, gsl_vector **pdata_dim1, gsl_v
 		}
 		fclose(fp);
 	}
+	gsl_vector_free(*pdata_dim1);
+	gsl_vector_free(*pdata_dim2);
 }	
 
 void cohfar_get_stats_from_file(gchar **in_fnames, BackgroundStats **stats_in, BackgroundStats **stats_out, int *hist_trials, int ncombo)

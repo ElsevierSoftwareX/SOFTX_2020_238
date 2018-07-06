@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I gnuscripts
 EXTRA_DIST = gstlal-inspiral.spec
-SUBDIRS = debian lib python gst bin share tests doc
+SUBDIRS = debian python bin share
 
 # check that the most recent changelog entry's version matches the package
 # version

@@ -41,7 +41,7 @@
  * stuff from here
  */
 
-#include <postcoh/postcohinspiral_table.h>
+#include <postcoh/postcohtable.h>
 #include <cohfar/background_stats_utils.h>
 #include <cohfar/cohfar_accumbackground.h>
 

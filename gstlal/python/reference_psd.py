@@ -30,7 +30,10 @@ import math
 import numpy
 import os
 import scipy
-from scipy import fftpack
+try:
+	from pyfftw.interfaces import scipy_fftpack as fftpack
+except ImportError:
+	from scipy import fftpack
 from scipy import interpolate
 import sys
 import signal
@@ -44,12 +47,11 @@ import pygst
 pygst.require("0.10")
 import gst
 
-
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 import lal
+import lal.series
 from lal import LIGOTimeGPS
-from pylal import datatypes as laltypes
-from pylal import series as lalseries
+import lalsimulation
 
 
 from gstlal import datasource
@@ -99,7 +101,7 @@ class PSDHandler(simplehandler.Handler):
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 
 	def do_on_message(self, bus, message):
-		if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
+		if message.type == Gst.MessageType.ELEMENT and message.get_structure().get_name() == "spectrum":
 			self.psd = pipeio.parse_spectrum_message(message)
 			return True
 		return False
@@ -150,14 +152,14 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	if verbose:
 		print >>sys.stderr, "measuring PSD in segment %s" % str(gw_data_source_info.seg)
 		print >>sys.stderr, "building pipeline ..."
-	mainloop = gobject.MainLoop()
-	pipeline = gst.Pipeline("psd")
+	mainloop = GObject.MainLoop()
+	pipeline = Gst.Pipeline(name="psd")
 	handler = PSDHandler(mainloop, pipeline)
 
-	head, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = verbose)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % rate)	# disallow upsampling
+	head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = verbose)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=[%d,MAX]" % rate)	# disallow upsampling
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % rate)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
 	if gw_data_source_info.seg is not None:
 		average_samples = int(round(float(abs(gw_data_source_info.seg)) / (psd_fft_length / 2.) - 1.))
@@ -179,8 +181,14 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	#
 
 	if verbose:
-		print >>sys.stderr, "putting pipeline into playing state ..."
-	if pipeline.set_state(gst.STATE_PLAYING) == gst.STATE_CHANGE_FAILURE:
+		print >>sys.stderr, "putting pipeline into READY state ..."
+	if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+		raise RuntimeError("pipeline failed to enter READY state")
+	if gw_data_source_info.data_source not in ("lvshm", "framexmit"):# FIXME what about nds online?
+		datasource.pipeline_seek_for_gps(pipeline, *gw_data_source_info.seg)
+	if verbose:
+		print >>sys.stderr, "putting pipeline into PLAYING state ..."
+	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter PLAYING state")
 	if verbose:
 		print >>sys.stderr, "running pipeline ..."
@@ -195,24 +203,12 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	return handler.psd
 
 
-def read_psd_xmldoc(xmldoc):
-	import warnings
-	warnings.warn("gstlal.reference_psd.read_psd_xmldoc() is deprecated, use pylal.series.read_psd_xmldoc() instead.", DeprecationWarning)
-	return lalseries.read_psd_xmldoc(xmldoc)
-
-
-def make_psd_xmldoc(psddict, xmldoc = None):
-	import warnings
-	warnings.warn("gstlal.reference_psd.make_psd_xmldoc() is deprecated, use pylal.series.make_psd_xmldoc() instead.", DeprecationWarning)
-	return lalseries.make_psd_xmldoc(psddict, xmldoc = xmldoc)
-
-
-def write_psd_fileobj(fileobj, psddict, gz = False, trap_signals = None):
+def write_psd_fileobj(fileobj, psddict, gz = False):
 	"""
 	Wrapper around make_psd_xmldoc() to write the XML document directly
 	to a Python file object.
 	"""
-	utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), fileobj, gz = gz, trap_signals = trap_signals)
+	ligolw_utils.write_fileobj(lal.series.make_psd_xmldoc(psddict), fileobj, gz = gz)
 
 
 def write_psd(filename, psddict, verbose = False, trap_signals = None):
@@ -220,7 +216,7 @@ def write_psd(filename, psddict, verbose = False, trap_signals = None):
 	Wrapper around make_psd_xmldoc() to write the XML document directly
 	to a named file.
 	"""
-	utils.write_filename(lalseries.make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
+	ligolw_utils.write_filename(lal.series.make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
 
 
 #
@@ -232,93 +228,205 @@ def write_psd(filename, psddict, verbose = False, trap_signals = None):
 #
 
 
-def horizon_distance(psd, m1, m2, snr, f_min, f_max = None, inspiral_spectrum = None):
-	"""
-	Compute horizon distance, the distance at which an optimally
-	oriented inspiral would be seen to have the given SNR.  m1 and m2
-	are in solar mass units.  f_min and f_max are in Hz.  psd is a
-	REAL8FrequencySeries object containing the strain spectral density
-	function in the LAL normalization convention.  The return value is
-	in Mpc.
+class HorizonDistance(object):
+	def __init__(self, f_min, f_max, delta_f, m1, m2, spin1 = (0., 0., 0.), spin2 = (0., 0., 0.), eccentricity = 0., inclination = 0.):
+		"""
+		Configures the horizon distance calculation for a specific
+		waveform model.  The waveform is pre-computed and stored,
+		so this initialization step can be time-consuming but
+		computing horizon distances from measured PSDs will be
+		fast.
 
-	The horizon distance is determined using an integral whose upper
-	bound is the smaller of f_max (if supplied), the highest frequency
-	in the PSD, or the ISCO frequency.
+		The waveform model's spectrum parameters, for example its
+		Nyquist and frequency resolution, need not match the
+		parameters for the PSDs that will ultimately be supplied
+		but there are some advantages to be had in getting them to
+		match.  For example, computing the waveform with a smaller
+		delta_f than will be needed will require additional storage
+		and consume additional CPU time for the initialization,
+		while computing it with too low an f_max or too large a
+		delta_f might lead to inaccurate horizon distance
+		estimates.
 
-	If inspiral_spectrum is not None, it should be a two-element list.
-	The first element will be replaced with an array of frequency
-	values, and the second element will be replaced with an array of
-	spectrum values giving the amplitude of an inspiral spectrum with
-	the given SNR.  The spectrum is normalized so that the SNR is
+		f_min (Hz) sets the frequency at which the waveform model
+		is to begin.
 
-	SNR^2 = \int (inspiral_spectrum / psd) df
+		f_max (Hz) sets the frequency upto which the waveform's
+		model is desired.
 
-	That is, the ratio of the inspiral spectrum to the PSD gives the
-	density of SNR^2.
-	"""
-	#
-	# obtain PSD data, set default f_max if not supplied
-	#
+		delta_f (Hz) sets the frequency resolution of the desired
+		waveform model.
 
-	Sn = psd.data
-	assert len(Sn) > 0
+		m1, m2 (solar masses) set the component masses of the
+		system to model.
 
-	if f_max is None:
-		f_max = psd.f0 + (len(Sn) - 1) * psd.deltaF
-	elif f_max > psd.f0 + (len(Sn) - 1) * psd.deltaF:
-		warnings.warn("f_max clipped to Nyquist frequency", UserWarning)
-		f_max = psd.f0 + (len(Sn) - 1) * psd.deltaF
+		spin1, spin2 (3-component vectors, geometric units) set the
+		spins of the component masses.
 
-	#
-	# clip to ISCO.  see (4) in arXiv:1003.2481
-	#
+		eccentricity [0, 1) sets the eccentricity of the system.
 
-	f_isco = lal.C_SI**3 / (6**(3. / 2.) * math.pi * lal.G_SI * (m1 + m2) * lal.MSUN_SI)
-	f_max = min(f_max, f_isco)
-	assert psd.f0 <= f_isco
-	assert psd.f0 <= f_min <= f_isco
-	assert f_min <= f_max
+		inclination (rad) sets the orbital inclination of the
+		system.
 
-	#
-	# convert f_min and f_max to indexes and extract data vectors for
-	# SNR integral
-	#
+		Example:
 
-	k_min = int(round((f_min - psd.f0) / psd.deltaF))
-	k_max = int(round((f_max - psd.f0) / psd.deltaF))
+		>>> # configure for non-spinning, circular, 1.4+1.4 BNS
+		>>> horizon_distance = HorizonDistance(10., 1024., 1./32., 1.4, 1.4)
+		>>> # populate a PSD for testing
+		>>> import lal, lalsimulation
+		>>> psd = lal.CreateREAL8FrequencySeries("psd", lal.LIGOTimeGPS(0), 0., 1./32., lal.Unit("strain^2 s"), horizon_distance.model.data.length)
+		>>> lalsimulation.SimNoisePSDaLIGODesignSensitivityP1200087(psd, 0.)
+		0
+		>>> # compute horizon distance
+		>>> D, (f, model) = horizon_distance(psd)
+		>>> print "%.4g Mpc" % D
+		434.5 Mpc
+		>>> # compute distance and spectrum for SNR = 25
+		>>> D, (f, model) = horizon_distance(psd, 25.)
+		>>> "%.4g Mpc" % D
+		'139 Mpc'
+		>>> f
+		array([   10.     ,    10.03125,    10.0625 , ...,  1023.9375 ,
+		        1023.96875,  1024.     ])
+		>>> model
+		array([  8.00942750e-45,   7.95221458e-45,   7.89520620e-45, ...,
+		         1.11473675e-49,   1.11465176e-49,   1.11456678e-49])
 
-	f = psd.f0 + numpy.arange(k_min, k_max + 1) * psd.deltaF
-	Sn = Sn[k_min : k_max + 1]
+		NOTE:
 
-	#
-	# |h(f)|^2 for source at D = 1 m.  see (5) in arXiv:1003.2481
-	#
+		- Currently the SEOBNRv4_ROM waveform model is used, so its
+		  limitations with respect to masses, spins, etc., apply.
+		  The choice of waveform model is subject to change.
+		"""
+		self.f_min = f_min
+		self.f_max = f_max
+		self.m1 = m1
+		self.m2 = m2
+		self.spin1 = numpy.array(spin1)
+		self.spin2 = numpy.array(spin2)
+		self.inclination = inclination
+		self.eccentricity = eccentricity
+		# NOTE:  the waveform models are computed up-to but not
+		# including the supplied f_max parameter so we need to pass
+		# (f_max + delta_f) if we want the waveform model defined
+		# in the f_max bin
+		hp, hc = lalsimulation.SimInspiralFD(
+			m1 * lal.MSUN_SI, m2 * lal.MSUN_SI,
+			spin1[0], spin1[1], spin1[2],
+			spin2[0], spin2[1], spin2[2],
+			1.0,	# distance (m)
+			inclination,
+			0.0,	# reference orbital phase (rad)
+			0.0,	# longitude of ascending nodes (rad)
+			eccentricity,
+			0.0,	# mean anomaly of periastron
+			delta_f,
+			f_min,
+			f_max + delta_f,
+			100.,	# reference frequency (Hz)
+			None,	# LAL dictionary containing accessory parameters
+			lalsimulation.GetApproximantFromString("SEOBNRv4_ROM")
+		)
+		assert hp.data.length > 0, "huh!?  h+ has zero length!"
 
-	mu = (m1 * m2) / (m1 + m2)
-	mchirp = mu**(3. / 5.) * (m1 + m2)**(2. / 5.)
+		#
+		# store |h(f)|^2 for source at D = 1 m.  see (5) in
+		# arXiv:1003.2481
+		#
 
-	inspiral = (5 * math.pi / (24 * lal.C_SI**3)) * (lal.G_SI * mchirp * lal.MSUN_SI)**(5. / 3.) * (math.pi * f)**(-7. / 3.)
+		self.model = lal.CreateREAL8FrequencySeries(
+			name = "signal spectrum",
+			epoch = LIGOTimeGPS(0),
+			f0 = hp.f0,
+			deltaF = hp.deltaF,
+			sampleUnits = hp.sampleUnits * hp.sampleUnits,
+			length = hp.data.length
+		)
+		self.model.data.data[:] = numpy.abs(hp.data.data)**2.
 
-	#
-	# SNR for source at D = 1 m <--> D in m for source w/ SNR = 1.  see
-	# (3) in arXiv:1003.2481
-	#
 
-	D_at_snr_1 = math.sqrt(4 * (inspiral / Sn).sum() * psd.deltaF)
+	def __call__(self, psd, snr = 8.):
+		"""
+		Compute the horizon distance for the configured waveform
+		model given the PSD and the SNR at which the horizon is
+		defined (default = 8).  Equivalently, from a PSD and an
+		observed SNR compute and return the amplitude of the
+		configured waveform's spectrum required to achieve that
+		SNR.
 
-	#
-	# scale inspiral spectrum by distance to achieve desired SNR
-	#
+		The return value is a two-element tuple.  The first element
+		is the horizon distance in Mpc.  The second element is,
+		itself, a two-element tuple containing two vectors giving
+		the frequencies and amplitudes of the waveform model's
+		spectrum scaled so as to have the given SNR.  The vectors
+		are clipped to the range of frequencies that were used for
+		the SNR integral.
 
-	if inspiral_spectrum is not None:
-		inspiral_spectrum[0] = f
-		inspiral_spectrum[1] = 4 * inspiral / (D_at_snr_1 / snr)**2
+		The parameters of the PSD, for example its Nyquist and
+		frequency resolution, need not match the parameters of the
+		configured waveform model.  In the event of a mismatch, the
+		waveform model is resampled to the frequencies at which the
+		PSD has been measured.
 
-	#
-	# D in Mpc for source with desired SNR
-	#
+		The inspiral spectrum returned has the same units as the
+		PSD and is normalized so that the SNR is
 
-	return D_at_snr_1 / snr / (1e6 * lal.PC_SI)
+		SNR^2 = \int (inspiral_spectrum / psd) df
+
+		That is, the ratio of the inspiral spectrum to the PSD
+		gives the spectral density of SNR^2.
+		"""
+		#
+		# frequencies at which PSD has been measured
+		#
+
+		f = psd.f0 + numpy.arange(psd.data.length) * psd.deltaF
+
+		#
+		# nearest-neighbour interpolation of waveform model
+		# evaluated at PSD's frequency bins
+		#
+
+		indexes = ((f - self.model.f0) / self.model.deltaF).round().astype("int").clip(0, self.model.data.length - 1)
+		model = self.model.data.data[indexes]
+
+		#
+		# range of indexes for integration
+		#
+
+		kmin = (max(psd.f0, self.model.f0, self.f_min) - psd.f0) / psd.deltaF
+		kmin = int(round(kmin))
+		kmax = (min(psd.f0 + psd.data.length * psd.deltaF, self.model.f0 + self.model.data.length * self.model.deltaF, self.f_max) - psd.f0) / psd.deltaF
+		kmax = int(round(kmax)) + 1
+		assert kmin < kmax, "PSD and waveform model do not intersect"
+
+		#
+		# SNR for source at D = 1 m <--> D in m for source w/ SNR =
+		# 1.  see (3) in arXiv:1003.2481
+		#
+
+		f = f[kmin:kmax]
+		model = model[kmin:kmax]
+		D = math.sqrt(4. * (model / psd.data.data[kmin:kmax]).sum() * psd.deltaF)
+
+		#
+		# distance at desired SNR
+		#
+
+		D /= snr
+
+		#
+		# scale inspiral spectrum by distance to achieve desired SNR
+		#
+
+		model *= 4. / D**2.
+
+		#
+		# D in Mpc for source with specified SNR, and waveform
+		# model
+		#
+
+		return D / (1e6 * lal.PC_SI), (f, model)
 
 
 def effective_distance_factor(inclination, fp, fc):
@@ -335,6 +443,7 @@ def effective_distance_factor(inclination, fp, fc):
 	"""
 	cos2i = math.cos(inclination)**2
 	return 1.0 / math.sqrt(fp**2 * (1+cos2i)**2 / 4 + fc**2 * cos2i)
+
 
 class PSDFirKernel(object):
 
@@ -453,143 +562,6 @@ class PSDFirKernel(object):
 		return kernel, latency, sample_rate
 
 
-	def min_phase(self,linear_phase_kernel):
-		# FIXME: this function is just too slow (15mins) to work,
-		# Manoj is double checking if this function is correct
-		h = linear_phase_kernel
-		#norm_before = numpy.dot(h,h)
-                n_fft = 1.5*len(h) #typically a lot greater than filter length
-		#Source code default - n_fft = 2 ** int(np.ceil(np.log2(2 * (len(h) - 1) / 0.01)))
-		n_fft = int(n_fft)
-		n_half = len(h) // 2
-
-		# zero-pad; calculate the DFT
-		h_temp = abs(scipy.fftpack.fft(h, n_fft))
-		# take 0.25*log(|H|**2) = 0.5*log(|H|)
-		h_temp += 1e-7 * h_temp[h_temp > 0].min()  # don't let log blow up
-		h_temp = scipy.log(h_temp)
-		h_temp *= 0.5
-		# IDFT
-		h_temp = scipy.fftpack.ifft(h_temp).real
-		# multiply pointwise by the homomorphic filter
-		# lmin[n] = 2u[n] - d[n]
-		win = numpy.zeros(n_fft)
-		win[0] = 1
-		stop = (len(h) + 1) // 2
-		win[1:stop] = 2
-		if len(h) % 2:
-		    win[stop] = 1    
-		h_temp *= win
-		h_temp = scipy.fftpack.ifft(scipy.exp(scipy.fftpack.fft(h_temp)))
-		h_minimum = h_temp.real
-		h_minimum = h_minimum[:len(linear_phase_kernel)]
-		#h_minimum *= math.sqrt(norm_before / numpy.dot(h_minimum,h_minimum))
-		n_out = n_half + len(h) % 2
-		filt = h_minimum[:n_out] #time domain of the min phase filter
-
-		#filt = np.pad(filt, (0, len(h)-len(filt)), 'constant')
-		min_kernel = filt[-1::-1]
-
-		return min_kernel
-
-	def homomorphic(self, linear_phase_kernel, sample_rate):
-
-		# FIXME: two things need to be done for this function to work:
-		# 1. scaling is not accurate
-		# 2. working_length needs to be larger than 10 times of the kernel length
-                # FIXME check for change in length
-                if self.fwdplan is None:
-                        self.fwdplan = lal.CreateForwardCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)
-                if self.revplan is None:
-                        self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)
-
-                deltaF = 1. / (len(linear_phase_kernel) / sample_rate)
-                working_length = len(linear_phase_kernel)
-		n_half = len(linear_phase_kernel) // 2
-                deltaT = 1. / sample_rate
-
-                kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
-                        name = "timeseries of whitening kernel",
-                        epoch = LIGOTimeGPS(0.),
-                        f0 = 0.,
-                        deltaT = 1.0 / sample_rate,
-                        length = len(linear_phase_kernel),
-                        sampleUnits = lal.Unit("strain")
-                )
-                kernel_tseries.data.data = linear_phase_kernel
-
-                absX = lal.CreateCOMPLEX16FrequencySeries(
-                        name = "absX",
-                        epoch = LIGOTimeGPS(0),
-                        f0 = 0.0,
-                        deltaF = deltaF,
-                        length = working_length,
-                        sampleUnits = lal.Unit("strain s")
-                )
-                lal.COMPLEX16TimeFreqFFT(absX, kernel_tseries, self.fwdplan)
-
-		t_absX = abs(absX.data.data)
-                t_absX += 1e-7 * t_absX[t_absX > 0].min()  # don't let log blow up
-                log_absX = numpy.log(t_absX)
-                log_absX *= 0.5
-
-                logabsX = lal.CreateCOMPLEX16FrequencySeries(
-                        name = "absX",
-                        epoch = LIGOTimeGPS(0),
-                        f0 = 0.0,
-                        deltaF = deltaF,
-                        length = working_length,
-                        sampleUnits = lal.Unit("strain s")
-                )
-		logabsX.data.data = log_absX
-
-                temp = lal.CreateCOMPLEX16TimeSeries(
-                        name = "cepstrum",
-                        epoch = LIGOTimeGPS(0.),
-                        f0 = 0.,
-                        deltaT = deltaT,
-                        length = len(log_absX),
-                        sampleUnits = lal.Unit("strain")
-                )
-		lal.COMPLEX16FreqTimeFFT(temp, logabsX, self.revplan)
-                h_temp = numpy.real(temp.data.data)
-                win = numpy.zeros(working_length)
-                win[0] = 1
-                stop = (len(linear_phase_kernel) + 1) // 2
-                win[1:stop] = 2
-                if len(linear_phase_kernel) % 2:
-                    win[stop] = 1
-		h_temp *= win
-		temp.data.data = h_temp
-                elog = lal.CreateCOMPLEX16FrequencySeries(
-                        name = "theta",
-                        epoch = LIGOTimeGPS(0),
-                        f0 = 0.0,
-                        deltaF = deltaF,
-                        length = working_length,
-                        sampleUnits = lal.Unit("strain s")
-                )
-                lal.COMPLEX16TimeFreqFFT(elog, temp, self.fwdplan)
-		elog.data.data = numpy.exp(elog.data.data)
-
-                min_phase_kernel = lal.CreateCOMPLEX16TimeSeries(
-                        name = "min phase kernel",
-                        epoch = LIGOTimeGPS(0.),
-                        f0 = 0.,
-                        deltaT = deltaT,
-                        length = working_length,
-                        sampleUnits = lal.Unit("strain")
-                )
-                lal.COMPLEX16FreqTimeFFT(min_phase_kernel, elog, self.revplan)
-		kernel = numpy.real(min_phase_kernel.data.data)
-                n_out = n_half + len(linear_phase_kernel) % 2
-                kernel = kernel[:n_out] #time domain of the min phase filter
-		kernel = kernel[-1::-1]
-		return kernel
-
-
-
-
 	def linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(self, linear_phase_kernel, sample_rate):
 		"""
 		Compute the minimum-phase response filter (zero latency) associated with a
@@ -613,15 +585,15 @@ class PSDFirKernel(object):
 		if self.revplan is None:
 			self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(len(linear_phase_kernel), 1)
 
-		deltaF = 1. / (len(linear_phase_kernel) / sample_rate)
-		working_length = len(linear_phase_kernel)
 		deltaT = 1. / sample_rate
+		deltaF = 1. / (len(linear_phase_kernel) * deltaT)
+		working_length = len(linear_phase_kernel)
 
 		kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "timeseries of whitening kernel",
 			epoch = LIGOTimeGPS(0.),
 			f0 = 0.,
-			deltaT = 1.0 / sample_rate,
+			deltaT = deltaT,
 			length = working_length,
 			sampleUnits = lal.Unit("strain")
 		)
@@ -673,15 +645,14 @@ class PSDFirKernel(object):
 		)
 
 		lal.COMPLEX16TimeFreqFFT(absX, kernel_tseries, self.fwdplan)
-		absX.data.data[:] = numpy.roll(abs(absX.data.data), -working_length / 2 + 1)[:] * sample_rate
+		absX.data.data[:] = numpy.roll(abs(absX.data.data), -working_length // 2 + 1) * sample_rate
 
 		#
 		# compute the cepstrum of the kernel
 		# (i.e., the iFFT of the log of the abs of the FFT of the kernel)
 		#
 
-		logabsX.data.data = numpy.log(absX.data.data)
-		logabsX.data.data[:] = numpy.roll(logabsX.data.data, +working_length / 2 + 1)[:]
+		logabsX.data.data[:] = numpy.roll(numpy.log(absX.data.data), +working_length // 2 + 1)
 		lal.COMPLEX16FreqTimeFFT(cepstrum, logabsX, self.revplan)
 		cepstrum.data.data /= sample_rate
 
@@ -689,29 +660,27 @@ class PSDFirKernel(object):
 		# compute sgn
 		#
 
-		sgn = 1 * scipy.ones(working_length)
+		sgn = scipy.ones(working_length)
 		sgn[0] = 0.
-		sgn[(len(sgn)+1)/2] = 0.
-		sgn[(len(sgn)+1)/2:] *= -1
+		sgn[(len(sgn) + 1) // 2] = 0.
+		sgn[(len(sgn) + 1) // 2:] *= -1
 		cepstrum.data.data *= sgn
 
 		#
 		# compute theta
 		#
+
 		lal.COMPLEX16TimeFreqFFT(theta, cepstrum, self.fwdplan)
-		theta.data.data *= -1.j
-		theta.data.data[:] = numpy.roll(theta.data.data, -working_length / 2)[:] * sample_rate
+		theta.data.data[:] = numpy.roll(-1.j * theta.data.data, -working_length // 2) * sample_rate
 
 		#
 		# compute minimum phase kernel
 		#
 
-		tmp  = absX.data.data * scipy.exp(1.j * theta.data.data)[:]
-		absX.data.data[:]  = absX.data.data * scipy.exp(1.j * theta.data.data)[:]
-		absX.data.data[:] = numpy.roll(absX.data.data, +working_length / 2 + 1)[:] / sample_rate
+		absX.data.data[:] = numpy.roll(absX.data.data * scipy.exp(1.j * theta.data.data), +working_length // 2 + 1) / sample_rate
 		lal.COMPLEX16FreqTimeFFT(min_phase_kernel, absX, self.revplan)
 
-		kernel = numpy.real(min_phase_kernel.data.data)
+		kernel = min_phase_kernel.data.data.real
 
 		#
 		# this kernel needs to be reversed to follow conventions used with the
@@ -724,7 +693,7 @@ class PSDFirKernel(object):
 		# done
 		#
 
-		return kernel, -1 * theta.data.data
+		return kernel, -theta.data.data
 
 
 def interpolate_psd(psd, deltaF):
@@ -742,7 +711,7 @@ def interpolate_psd(psd, deltaF):
 	#
 
 	#from scipy import fftpack
-	#psd_data = psd.data
+	#psd_data = psd.data.data
 	#x = numpy.zeros((len(psd_data) * 2 - 2,), dtype = "double")
 	#psd_data = numpy.where(psd_data, psd_data, float("inf"))
 	#x[0] = 1 / psd_data[0]**.5
@@ -761,7 +730,7 @@ def interpolate_psd(psd, deltaF):
 	# interpolate PSD with linear interpolator
 	#
 
-	#psd_data = psd.data
+	#psd_data = psd.data.data
 	#f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
 	#interp = interpolate.interp1d(f, psd_data, bounds_error = False)
 	#f = psd.f0 + numpy.arange(round(len(psd_data) * psd.deltaF / deltaF)) * deltaF
@@ -773,7 +742,7 @@ def interpolate_psd(psd, deltaF):
 	# doesn't seem to like the occasional sample being -inf)
 	#
 
-	psd_data = psd.data
+	psd_data = psd.data.data
 	psd_data = numpy.where(psd_data, psd_data, 1e-300)
 	f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
 	interp = interpolate.splrep(f, numpy.log(psd_data), s = 0)
@@ -784,14 +753,17 @@ def interpolate_psd(psd, deltaF):
 	# return result
 	#
 
-	return laltypes.REAL8FrequencySeries(
+	psd = lal.CreateREAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = deltaF,
 		sampleUnits = psd.sampleUnits,
-		data = psd_data
+		length = len(psd_data)
 	)
+	psd.data.data = psd_data
+
+	return psd
 
 
 def movingmedian(psd, window_size):
@@ -799,24 +771,26 @@ def movingmedian(psd, window_size):
 	Assumes that the underlying PSD doesn't have variance, i.e., that there
 	is no median / mean correction factor required
 	"""
-	data = psd.data
-	datacopy = numpy.copy(psd.data)
+	data = psd.data.data
+	datacopy = numpy.copy(data)
 	for i in range(window_size, len(data)-window_size):
 		datacopy[i] = numpy.median(data[i-window_size:i+window_size])
-	return laltypes.REAL8FrequencySeries(
+	psd = lal.CreateREAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = psd.deltaF,
 		sampleUnits = psd.sampleUnits,
-		data = datacopy
+		length = len(datacopy)
 	)
+	psd.data.data = datacopy
+	return psd
 
 
 def polyfit(psd, minsample, maxsample, order, verbose = False):
 	# f / f_min between f_min and f_max, i.e. f[0] here is 1
 	f = numpy.arange(maxsample - minsample) * psd.deltaF + 1
-	data = psd.data[minsample:maxsample]
+	data = psd.data.data[minsample:maxsample]
 
 	logf = numpy.linspace(numpy.log(f[0]), numpy.log(f[-1]), 100000)
 	interp = interpolate.interp1d(numpy.log(f), numpy.log(data))
@@ -825,17 +799,18 @@ def polyfit(psd, minsample, maxsample, order, verbose = False):
 	if verbose:
 		print >> sys.stderr, "\nFit polynomial is: \n\nlog(PSD) = \n", p, "\n\nwhere x = f / f_min\n"
 	data = numpy.exp(p(numpy.log(f)))
-	olddata = psd.data
+	olddata = psd.data.data
 	olddata[minsample:maxsample] = data
-	return laltypes.REAL8FrequencySeries(
+	psd = lal.CreateREAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = psd.deltaF,
 		sampleUnits = psd.sampleUnits,
-		data = olddata
+		length = len(olddata)
 	)
-
+	psd.data.data = olddata
+	return psd
 
 def one_second_highpass_kernel(rate, cutoff = 12):
 	highpass_filter_fd =  numpy.ones(rate, dtype=complex)

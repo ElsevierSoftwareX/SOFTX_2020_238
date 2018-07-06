@@ -27,8 +27,8 @@
 #define __POSTCOH_TABLE_UTILS_H__
 
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
-#include "postcohinspiral_table.h"
+#include "postcohtable.h"
 
-void postcohinspiral_table_init(XmlTable *table);
+void postcohtable_init(XmlTable *table);
 #endif /* __POSTCOH_TABLE_UTILS_H__ */
 

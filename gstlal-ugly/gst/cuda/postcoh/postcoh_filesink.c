@@ -33,7 +33,7 @@
 #include <string.h>
 #include <math.h>
 #include "postcoh_filesink.h"
-#include "postcohinspiral_table_utils.h"
+#include "postcohtable_utils.h"
 
 #define EPSILON 5.0
 enum 
@@ -523,7 +523,7 @@ postcoh_filesink_start_xml(PostcohFilesink *sink)
 
   sink->xtable = (XmlTable *)malloc(sizeof(XmlTable));
   XmlTable * xtable = sink->xtable;
-  postcohinspiral_table_init(xtable);
+  postcohtable_init(xtable);
     // Add the Table Node
     rc = xmlTextWriterStartElement(writer, BAD_CAST "Table");
 
@@ -635,7 +635,7 @@ postcoh_filesink_write_table_from_buf(PostcohFilesink *sink, GstBuffer *buf)
 	//is_invalid = postcoh_filesink_is_invalid_background(table);
 	if (!is_invalid) {
         GString *line = g_string_new("\t\t\t\t");
-	postcohinspiral_table_set_line(line, table, xtable);
+	postcohtable_set_line(line, table, xtable);
         rc = xmlTextWriterWriteFormatRaw(sink->writer, line->str);
 	if (rc < 0)
 		return GST_FLOW_ERROR;

@@ -15,7 +15,7 @@ libcuda_plugin_la_SOURCES = \
 	postcoh/postcoh_kernel.cu \
 	postcoh/postcoh_utils.c \
 	postcoh/postcoh.c \
-	postcoh/postcohinspiral_table_utils.c \
+	postcoh/postcohtable_utils.c \
 	postcoh/postcoh_filesink.c \
 	cohfar/knn_kde.c \
 	cohfar/ssvkernel.c \
@@ -51,8 +51,8 @@ noinst_HEADERS = \
 	multiratespiir/multiratespiir.h \
 	postcoh/postcoh_utils.h \
 	postcoh/postcoh.h \
-	postcoh/postcohinspiral_table.h \
-	postcoh/postcohinspiral_table_utils.h \
+	postcoh/postcohtable.h \
+	postcoh/postcohtable_utils.h \
 	cohfar/background_stats.h \
 	cohfar/background_stats_utils.h \
 	cohfar/cohfar_accumbackground.h \

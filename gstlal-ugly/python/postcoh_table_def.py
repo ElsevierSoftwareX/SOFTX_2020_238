@@ -12,8 +12,9 @@ dbtables.ligolwtypes.ToPyType["ilwd:char"] = unicode
 PostcohInspiralID = ilwd.get_ilwdchar_class(u"postcoh", u"event_id")
 # defined in postcohinspiral_table.h
 class PostcohInspiralTable(table.Table):
-	tableName = "postcoh:table"
+	tableName = "postcoh"
 	validcolumns = {
+			"process_id":	"ilwd:char",
 			"event_id":	"ilwd:char",
 			"end_time":	"int_4s",
 			"end_time_ns":	"int_4s",
@@ -81,7 +82,7 @@ class PostcohInspiralTable(table.Table):
 	constraints = "PRIMARY KEY (event_id)"
 	next_id = PostcohInspiralID(0)
 
-class PostcohInspiral(table.TableRow):
+class PostcohInspiral(table.Table.RowType):
 	__slots__ = PostcohInspiralTable.validcolumns.keys()
 
 	#
@@ -109,7 +110,7 @@ PostcohInspiralTable.RowType = PostcohInspiral
 #
 
 TableByName = {
-		table.StripTableName(PostcohInspiralTable.tableName): PostcohInspiralTable
+		PostcohInspiralTable.tableName: PostcohInspiralTable
 		}
 
 
@@ -131,7 +132,7 @@ def use_in(ContentHandler):
 	#ContentHandler = table.use_in(ContentHandler)
 
 	def startTable(self, parent, attrs, __orig_startTable = ContentHandler.startTable):
-		name = table.StripTableName(attrs[u"Name"])
+		name = table.Table.TableName(attrs[u"Name"])
 		if name in TableByName:
 			return TableByName[name](attrs)
 		return __orig_startTable(self, parent, attrs)
@@ -149,7 +150,7 @@ class PostcohInspiralDBTable(dbtables.DBTable):
 	how_to_index = PostcohInspiralTable.how_to_index
 
 DBTableByName = {
-		table.StripTableName(PostcohInspiralDBTable.tableName): PostcohInspiralDBTable
+		PostcohInspiralDBTable.tableName: PostcohInspiralDBTable
 		}
 
 
@@ -180,7 +181,7 @@ def DB_use_in(ContentHandler):
 	"""
 
 	def startTable(self, parent, attrs, __orig_startTable = ContentHandler.startTable):
-		name = table.StripTableName(attrs[u"Name"])
+		name = table.Table.TableName(attrs[u"Name"])
 		if name in DBTableByName:
 			return DBTableByName[name](attrs, connection = self.connection)
 		return __orig_startTable(self, parent, attrs)

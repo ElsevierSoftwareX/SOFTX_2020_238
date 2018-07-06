@@ -21,7 +21,7 @@
 #include <gst/gst.h>
 #include <LIGOLw_xmllib/LIGOLwHeader.h>
 #include <postcoh/postcoh_utils.h>
-#include <postcoh/postcohinspiral_table.h>
+#include <postcoh/postcohtable.h>
 #include <cohfar/background_stats_utils.h> // for IFO_COMBO_MAP
 #include <cuda_debug.h>
 
@@ -275,8 +275,12 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 
 
 	}
-
+	/* free memory */
+	free(fname_cpy);
+	free(all_ifos);
+	free(xns);
 }
+
 void
 cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
@@ -300,7 +304,7 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	sprintf((char *)xns[2].tag, "chealpix_order:param");
 	xns[2].processPtr = readParam;
 	xns[2].data = &param_order;
-	printf("read in detrsp map from xml %s\n", fname);
+	// printf("read in detrsp map from xml %s\n", fname);
 
 	parseFile(fname, xns, 3);
 	/*
@@ -313,21 +317,22 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	xmlMemoryDump();
 
 
-	//printf("test\n");
-	printf("reading detrsp map %s %s %s\n", xns[0].tag, xns[1].tag, xns[2].tag);
-
+	/* assign basic information to state */
+	int gps_step_new = *((int *)param_gps_step.data);
+	if (state->npix != NOT_INIT && state->gps_step != gps_step_new) {
+	  fprintf(stderr, "detrsp map has a different configuration than last read, aboring!");
+	  exit(0);
+	}
 	state->gps_step = *((int *)param_gps_step.data);
 	state->gps_start = *((long *)param_gps_start.data);
-	printf("gps_step %d\n", state->gps_step);
-	printf("gps_start %d\n", state->gps_start);
 	unsigned long nside = (unsigned long) 1 << *((int *)param_order.data);
 	state->nside = nside;
-	state->npix = nside2npix(nside);
+
+	/* free memory */
 	free(param_gps_step.data);
 	free(param_gps_start.data);
 	param_gps_step.data = NULL;
 	param_gps_start.data = NULL;
-	//printf("test\n");
 	free(param_order.data);
 	param_order.data = NULL;
 	free(xns);
@@ -337,8 +342,10 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	int ngps = gps_end/(state->gps_step);
 
 	xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2* ngps);
-	state->d_U_map = (float**)malloc(sizeof(float *) * ngps);
-	state->d_diff_map = (float**)malloc(sizeof(float *) * ngps);
+	if (state->npix != NOT_INIT) {
+	  state->d_U_map = (float**)malloc(sizeof(float *) * ngps);
+	  state->d_diff_map = (float**)malloc(sizeof(float *) * ngps);
+	}
 
 	int i;
 	XmlArray *array_u = (XmlArray *)malloc(sizeof(XmlArray) * ngps);
@@ -347,7 +354,6 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	for (i=0; i<ngps; i++) {
 
 		sprintf((char *)xns[i].tag, "U_map_gps_%d:array", gps);
-		//printf("%s\n", xns[i].tag);
 		xns[i].processPtr = readArray;
 		xns[i].data = &(array_u[i]);
 
@@ -361,9 +367,11 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 
 	int mem_alloc_size = sizeof(float) * array_u[0].dim[0] * array_u[0].dim[1];
 	for (i=0; i<ngps; i++) {
+		if (state->npix == NOT_INIT) {
 		CUDA_CHECK(cudaMalloc((void **)&(state->d_U_map[i]), mem_alloc_size));
-		CUDA_CHECK(cudaMemcpyAsync(state->d_U_map[i], array_u[i].data, mem_alloc_size, cudaMemcpyHostToDevice, stream));
 		CUDA_CHECK(cudaMalloc((void **)&(state->d_diff_map[i]), mem_alloc_size));
+		}
+		CUDA_CHECK(cudaMemcpyAsync(state->d_U_map[i], array_u[i].data, mem_alloc_size, cudaMemcpyHostToDevice, stream));
 		CUDA_CHECK(cudaMemcpyAsync(state->d_diff_map[i], array_diff[i].data, mem_alloc_size, cudaMemcpyHostToDevice, stream));
 
 	}
@@ -376,12 +384,17 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	 */
 	xmlMemoryDump();
 
+	/* label that the map has been initialized, no longer NOT_INIT */
+	state->npix = nside2npix(nside);
+
+	/* free memory */
 	for (i=0; i<ngps; i++) {
 		free(array_u[i].data);
 		free(array_diff[i].data);
 	}
 	free(array_u);
 	free(array_diff);
+	free(xns);
 }
 
 void
@@ -408,6 +421,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 
 	COMPLEX_F *tmp_autocorr = NULL;
 	float *tmp_norm = NULL;
+	/* allocate memory for host autocorr list pointer and device auto list pointer*/
 	COMPLEX_F **autocorr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * nifo );
 	float **autocorr_norm = (float **)malloc(sizeof(float *) * nifo );
 	cudaMalloc((void **)&(state->dd_autocorr_matrix), sizeof(COMPLEX_F *) * nifo);
@@ -511,9 +525,14 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 
 	}
 
+	state->autochisq_len = autochisq_len;
+
+	/* free memory */
+	free(fname_cpy);
 	free(tmp_autocorr);
 	free(tmp_norm);
-	state->autochisq_len = autochisq_len;
+	free(autocorr);
+	free(autocorr_norm);
 }
 
 char * ColNames[] = {
@@ -614,12 +633,69 @@ cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 	for (jlen=0; jlen<val->data->len; jlen++) 
 		sngl_table[jlen].eta = g_array_index(val->data, float, jlen);
 
-	for (icol=0; icol<NSNGL_TMPLT_COLS; icol++) 
-		g_string_free(col_names[icol], TRUE);
 
+	/* free memory */
 	// FIXME: XmlTable destroy not implemented yet.	
 	// freeTable(xtable);
 	free(xns);
+	for (icol=0; icol<NSNGL_TMPLT_COLS; icol++) 
+		g_string_free(col_names[icol], TRUE);
+	free(col_names);
+}
+
+static void
+sigmasq_destroy(PostcohState *state){
+  int iifo;
+  if (state->sigmasq != NULL) {
+    for (iifo=0; iifo<state->nifo; iifo++) {
+      if (state->sigmasq[iifo] != NULL)
+	free(state->sigmasq[iifo]);
+    }
+    free(state->sigmasq);
+  }
+}
+ 
+static void
+map_destroy(PostcohState *state){
+  int i, ngps = 24*3600/ state->gps_step;
+	for (i=0; i<ngps; i++) {
+		CUDA_CHECK(cudaFree(state->d_U_map[i]));
+		CUDA_CHECK(cudaFree(state->d_diff_map[i]));
+	}
+	
+    free(state->d_U_map);
+    free(state->d_diff_map);
+}
+   
+
+static void
+autocorr_destroy(PostcohState *state)
+{
+  int iifo;
+  if (state->dd_autocorr_matrix != NULL) {
+    for (iifo=0; iifo<state->nifo; iifo++) {
+      if (state->dd_autocorr_matrix[iifo] != NULL)
+	cudaFree(state->dd_autocorr_matrix[iifo]);
+	cudaFree(state->dd_autocorr_norm[iifo]);
+    }
+    cudaFree(state->dd_autocorr_matrix);
+    cudaFree(state->dd_autocorr_norm);
+  }
+
+}
+
+void
+peak_list_destroy(PeakList *pklist)
+{
+	
+	CUDA_CHECK(cudaFree(pklist->d_npeak));
+	CUDA_CHECK(cudaFree(pklist->d_snglsnr_L));
+	CUDA_CHECK(cudaFree(pklist->d_peak_tmplt));
+	CUDA_CHECK(cudaFree(pklist->d_cohsnr_skymap));
+
+	CUDA_CHECK(cudaFreeHost(pklist->npeak));
+	CUDA_CHECK(cudaFreeHost(pklist->snglsnr_L));
+	CUDA_CHECK(cudaFreeHost(pklist->cohsnr_skymap));
 }
 
 void
@@ -647,22 +723,10 @@ state_destroy(PostcohState *state)
 			peak_list_destroy(state->peak_list[i]);
 			free(state->peak_list[i]);
 		}
+	sigmasq_destroy(state);
+	autocorr_destroy(state);
+	map_destroy(state);
 	}
-
-}
-
-void
-peak_list_destroy(PeakList *pklist)
-{
-	
-	CUDA_CHECK(cudaFree(pklist->d_npeak));
-	CUDA_CHECK(cudaFree(pklist->d_snglsnr_L));
-	CUDA_CHECK(cudaFree(pklist->d_peak_tmplt));
-	CUDA_CHECK(cudaFree(pklist->d_cohsnr_skymap));
-
-	CUDA_CHECK(cudaFreeHost(pklist->npeak));
-	CUDA_CHECK(cudaFreeHost(pklist->snglsnr_L));
-	CUDA_CHECK(cudaFreeHost(pklist->cohsnr_skymap));
 }
 
 void

@@ -89,9 +89,8 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
-from pylal import series as lalseries
+import lal
 from gstlal import pipeparts
-from gstlal import lloidparts
 from gstlal import spiirparts
 from gstlal import simplehandler
 from gstlal import inspiral
@@ -395,7 +394,7 @@ else:
 
 # FIXME: need to be updated to lal.series.read_psd_xmldoc in order to have sampleUnits for psd
 if options.reference_psd is not None:
-  psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
+  psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
 else:
   psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
@@ -414,7 +413,7 @@ if int(options.finalsink_need_online_perform) > 0:
 
   # show trackbacks when something fails
   #bottle.app().catchall = False
-  httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_iir_inspiral" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
+  httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_inspiral_postcoh_online" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
 
   # Set up a registry of the resources that this job provides
   @bottle.route("/")

@@ -17,10 +17,10 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#include "postcohinspiral_table_utils.h"
+#include "postcohtable_utils.h"
 // FIXME: The current code works. But it misses 4 fields in output compared with the online pipeline output: eta, fap_l, h, v
 
-void postcohinspiral_table_init(XmlTable *table)
+void postcohtable_init(XmlTable *table)
 {
     table->tableName = g_string_new("postcoh:table");
 
@@ -135,7 +135,7 @@ void postcohinspiral_table_init(XmlTable *table)
     g_array_append_val(table->type_names, *g_string_new("real_8"));
 }
 
-void postcohinspiral_table_set_line(GString *line, PostcohInspiralTable *table, XmlTable *xtable)
+void postcohtable_set_line(GString *line, PostcohInspiralTable *table, XmlTable *xtable)
 {
 	g_string_append_printf(line, "%d%s", table->end_time_L.gpsSeconds, xtable->delimiter->str); // for end_time_ns
 	g_string_append_printf(line, "%d%s", table->end_time_L.gpsNanoSeconds, xtable->delimiter->str);

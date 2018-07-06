@@ -62,14 +62,13 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 
 import lal
-from pylal.datatypes import LALUnit
+from pylal import datatypes as laltypes
 from pylal.datatypes import LIGOTimeGPS
-from pylal.datatypes import REAL8FrequencySeries
-from pylal.xlal.datatypes import postcohinspiraltable
 
 from gstlal import bottle
 from gstlal import reference_psd
 from gstlal import postcoh_table_def 
+from gstlal import postcohtable
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -92,6 +91,7 @@ lsctables.use_in(LIGOLWContentHandler)
 #
 class PostcohDocument(object):
 	def __init__(self, verbose = False):
+
 		self.get_another = lambda: PostcohDocument(verbose = verbose)
 
 		self.filename = None
@@ -174,7 +174,6 @@ class BackgroundStatsUpdater(object):
 			return
 		ls_proc.wait()
 		ls_fnames = ls_out.split("\n")
-		#pdb.set_trace()	
 		for (i, collect_walltime) in enumerate(self.collect_walltime):
 			boundary = cur_buftime - collect_walltime
 			# find the files within the collection time
@@ -294,7 +293,7 @@ class FinalSink(object):
 		with self.lock:
 			buf = elem.emit("pull-buffer")
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
-			newevents = postcohinspiraltable.PostcohInspiralTable.from_buffer(buf)
+			newevents = postcohtable.GSTLALPostcohInspiral.from_buffer(buf)
 			self.need_candidate_check = False
 
 			nevent = len(newevents)
@@ -578,12 +577,12 @@ class FinalSink(object):
 			# when we port to swig
 			# version of
 			# REAL8FrequencySeries
-			psddict[instrument] = REAL8FrequencySeries(
+			psddict[instrument] = laltypes.REAL8FrequencySeries(
 				name = "PSD",
 				epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
 				f0 = 0.0,
 				deltaF = elem.get_property("delta-f"),
-				sampleUnits = LALUnit("s strain^2"),	# FIXME:  don't hard-code this
+				sampleUnits = lal.Unit("s strain^2"),	# FIXME:  don't hard-code this
 				data = numpy.array(elem.get_property("mean-psd"))
 				)
 		fobj = StringIO.StringIO()

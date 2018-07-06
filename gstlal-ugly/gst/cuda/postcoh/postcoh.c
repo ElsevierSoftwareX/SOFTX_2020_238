@@ -31,8 +31,8 @@
 #include <math.h>
 #include "postcoh.h"
 #include <cohfar/background_stats_utils.h> // for get_icombo, IFO_COMBO_MAP
-#include "postcoh_utils.h"
-#include "postcohinspiral_table_utils.h"
+#include <postcoh/postcoh_utils.h>
+#include "postcohtable_utils.h"
 #include <cuda_debug.h>
 
 #define GST_CAT_DEFAULT gstlal_postcoh_debug
@@ -1054,6 +1054,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 
 		int peak_cur, len_cur, peak_cur_bg;
 		for(ipeak=0; ipeak<npeak; ipeak++) {
+			output->next = NULL;
 			XLALINT8NSToGPS(&end_time, ts);
 			int *peak_pos = pklist->peak_pos;
 			peak_cur = peak_pos[ipeak];
@@ -1145,6 +1146,11 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			     output->chisq_L, output->chisq_H, output->chisq_V,
 			     output->cohsnr, output->nullsnr, output->cmbchisq
 			      );
+			
+			XLALINT8NSToGPS(&output->epoch, ts);
+			output->deltaT = 1./postcoh->rate;
+			/* set the snr length to 0, FIXME: dump snr series of single ifo */
+			output->snr_length = 0;
 			output++;
 			write_entries++;
 		}
@@ -1196,7 +1202,11 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 				     output->chisq_L, output->chisq_H, output->chisq_V,
 				     output->cohsnr, output->nullsnr, output->cmbchisq
 				      );
-	
+				
+					/* do not dump snr for background */
+					XLALINT8NSToGPS(&output->epoch, ts);
+					output->deltaT = 0;
+					output->snr_length = 0;
 					output++;
 					write_entries++;
 					}
@@ -1512,7 +1522,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	g_mutex_lock(postcoh->prop_lock);
 	while (state->npix == NOT_INIT || state->autochisq_len == NOT_INIT || postcoh->hist_trials == NOT_INIT) {
 		g_cond_wait(postcoh->prop_avail, postcoh->prop_lock);
-		GST_LOG_OBJECT(postcoh, "collected have to wait");
+		GST_LOG_OBJECT(postcoh, "collected have to wait for detrsp_map, autocorrelation, and hist_trials to be read");
 	}
 	g_mutex_unlock(postcoh->prop_lock);
 
