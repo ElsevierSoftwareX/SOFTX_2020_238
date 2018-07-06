@@ -88,12 +88,7 @@ def channel_dict_from_channel_list_with_node_range(channel_list):
 	Examples:
 
 		>>> channel_dict_from_channel_list_with_node_range(["0000:0002:H1=LSC_STRAIN_1,L1=LSC_STRAIN_2", "0002:0004:H1=LSC_STRAIN_3,L1=LSC_STRAIN_4", "0004:0006:H1=LSC_STRAIN_5,L1=LSC_STRAIN_6"])
-		{'0000' : {'H1': 'LSC_STRAIN_1', 'L1': 'LSC-STRAIN_2'},
-		 '0001' : {'H1': 'LSC_STRAIN_1', 'L1': 'LSC-STRAIN_2'},
-		 '0002' : {'H1': 'LSC_STRAIN_3', 'L1': 'LSC-STRAIN_4'},
-		 '0003' : {'H1': 'LSC_STRAIN_3', 'L1': 'LSC-STRAIN_4'},
-		 '0004' : {'H1': 'LSC_STRAIN_5', 'L1': 'LSC-STRAIN_6'},
-		 '0005' : {'H1': 'LSC_STRAIN_5', 'L1': 'LSC-STRAIN_6'} }
+		{'0004': {'H1': 'LSC_STRAIN_5', 'L1': 'LSC_STRAIN_6'}, '0005': {'H1': 'LSC_STRAIN_5', 'L1': 'LSC_STRAIN_6'}, '0000': {'H1': 'LSC_STRAIN_1', 'L1': 'LSC_STRAIN_2'}, '0001': {'H1': 'LSC_STRAIN_1', 'L1': 'LSC_STRAIN_2'}, '0002': {'H1': 'LSC_STRAIN_3', 'L1': 'LSC_STRAIN_4'}, '0003': {'H1': 'LSC_STRAIN_3', 'L1': 'LSC_STRAIN_4'}}
 	"""
 	outdict = {}
 	for instrument_channel_full in channel_list:
@@ -180,11 +175,8 @@ def injection_dict_from_channel_list_with_node_range(injection_list):
 	specify the "append" action.
 
 	Examples:
-		>>> injection_dict_from_channel_list_with_node_range(["0000:0002:Injection_1.xml", "0002:0004:Injection_2.xml"])
-		{'0000' : 'Injection_1.xml',
-		 '0001' : 'Injection_1.xml',
-		 '0002' : 'Injection_2.xml',
-		 '0003' : 'Injection_2.xml'}
+	>>> injection_dict_from_channel_list_with_node_range(["0000:0002:Injection_1.xml", "0002:0004:Injection_2.xml"])
+{'0000': 'Injection_1.xml', '0001': 'Injection_1.xml', '0002': 'Injection_2.xml', '0003': 'Injection_2.xml'}
 	"""
 	outdict = {}
 	for injection_name in injection_list:

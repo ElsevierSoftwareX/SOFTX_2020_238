@@ -165,7 +165,7 @@ test:gstlal:
   script:
     - apt-get install -y python-pytest
     - cd gstlal
-    - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore python/misc.py
+    - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py
   only:
     - pushes
     - schedules
