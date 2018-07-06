@@ -87,7 +87,7 @@ def channel_dict_from_channel_list_with_node_range(channel_list):
 
 	Examples:
 
-		>>> channel_dict_from_channle_list_with_node_range(["0000:0002:H1=LSC_STRAIN_1,L1=LSC_STRAIN_2", "0002:0004:H1=LSC_STRAIN_3,L1=LSC_STRAIN_4", "0004:0006:H1=LSC_STRAIN_5,L1=LSC_STRAIN_6"])
+		>>> channel_dict_from_channel_list_with_node_range(["0000:0002:H1=LSC_STRAIN_1,L1=LSC_STRAIN_2", "0002:0004:H1=LSC_STRAIN_3,L1=LSC_STRAIN_4", "0004:0006:H1=LSC_STRAIN_5,L1=LSC_STRAIN_6"])
 		{'0000' : {'H1': 'LSC_STRAIN_1', 'L1': 'LSC-STRAIN_2'},
 		 '0001' : {'H1': 'LSC_STRAIN_1', 'L1': 'LSC-STRAIN_2'},
 		 '0002' : {'H1': 'LSC_STRAIN_3', 'L1': 'LSC-STRAIN_4'},
@@ -150,13 +150,13 @@ def pipeline_channel_list_from_channel_dict_with_node_range(channel_dict, node =
 
 	Examples:
 
-		>>> pipeline_channel_list_from_channel_dict({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0)
+		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0)
 		'H2=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
 
-		>>> pipeline_channel_list_from_channel_dict({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, ifos=["H1"])
+		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, ifos=["H1"])
 		'H1=LSC-STRAIN '
 
-		>>> pipeline_channel_list_from_channel_dict('0000': {{'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, opt="test-string")
+		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, opt="test-string")
 		'H2=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
 	"""
 	outstr = ""
