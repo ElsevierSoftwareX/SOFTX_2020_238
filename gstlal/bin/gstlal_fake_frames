@@ -260,6 +260,8 @@ mainloop = GObject.MainLoop()
 handler = simplehandler.Handler(mainloop, pipeline)
 
 ## 1) Set the pipeline head to basic input from datasource.mkbasicsrc()
+# FIXME: fake source causes problems when making large buffers, so block_size needs to be overwritten
+gw_data_source.block_size = 8 * options.sample_rate
 head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source, instrument, verbose = options.verbose)
 
 ## 2) Set the pipeline head to be verbose with pipeparts.mkprogressreport()
@@ -310,7 +312,7 @@ if options.color_psd:
 	fir_matrix, latency, measured_sample_rate = FIRKernel.psd_to_linear_phase_whitening_fir_kernel(rpsd, invert = False)
 
 	## 7) Set the pipeline head to a pipeparts.mkfirbank() recoloring filter
-	head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_matrix], block_stride = 32 * options.sample_rate)
+	head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_matrix], block_stride = 1 * options.sample_rate)
 
 
 ## Set the tags for the output data
