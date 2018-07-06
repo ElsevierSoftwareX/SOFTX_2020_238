@@ -154,7 +154,7 @@ L1_psd.xml.gz:
 	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	@echo ""
 
-H-H1_FAKE-1000/H-H1_FAKE-1000000000-1000.gwf: H1_psd.xml.gz injections.xml
+H-H1_FAKE-10000/H-H1_FAKE-1000000512-512.gwf: H1_psd.xml.gz injections.xml
 	# Generate 2048s of H1 FAKE data with a single injection included
 	# gstlal_fake_frames_0001
 	gstlal_fake_frames \
@@ -165,13 +165,13 @@ H-H1_FAKE-1000/H-H1_FAKE-1000000000-1000.gwf: H1_psd.xml.gz injections.xml
 		--gps-start-time $(DATASTART) \
 		--gps-end-time $(DATASTOP) \
 		--color-psd H1_psd.xml.gz \
-		--frames-per-file 1000 \
+		--frames-per-file 512 \
 		--frame-duration 1 \
 		--injections injections.xml \
 		--verbose
 	@echo ""
 
-L-L1_FAKE-1000/L-L1_FAKE-1000000000-1000.gwf: L1_psd.xml.gz injections.xml
+L-L1_FAKE-10000/L-L1_FAKE-1000000512-512.gwf: L1_psd.xml.gz injections.xml
 	# Generate 2048s of L1 FAKE data with a single injection included
 	# gstlal_fake_frames_0002
 	gstlal_fake_frames \
@@ -182,16 +182,16 @@ L-L1_FAKE-1000/L-L1_FAKE-1000000000-1000.gwf: L1_psd.xml.gz injections.xml
 		--gps-start-time $(DATASTART) \
 		--gps-end-time $(DATASTOP) \
 		--color-psd L1_psd.xml.gz \
-		--frames-per-file 1000 \
+		--frames-per-file 512 \
 		--frame-duration 1 \
 		--injections injections.xml \
 		--verbose
 	@echo ""
 
-frames.cache: H-H1_FAKE-1000/H-H1_FAKE-1000000000-1000.gwf L-L1_FAKE-1000/L-L1_FAKE-1000000000-1000.gwf
+frames.cache: H-H1_FAKE-10000/H-H1_FAKE-1000000512-512.gwf L-L1_FAKE-10000/L-L1_FAKE-1000000512-512.gwf
 	# Produce frames cache file
 	# A file that contains full paths to all frame files
-	ls H-H1_FAKE-1000/* L-L1_FAKE-1000/* | lalapps_path2cache > frames.cache
+	ls H-H1_FAKE-10000/* L-L1_FAKE-10000/* | lalapps_path2cache > frames.cache
 	@echo ""
 
 segments.xml.gz:
@@ -522,7 +522,7 @@ clean:
 	rm -rf H1* L1* *.txt *.xml *.gz *.cache gstlal_* lalapps_* ligolw_*
 
 clean-data:
-	rm -rf H-H1_FAKE-1000 L-L1_FAKE-1000
+	rm -rf H-H1_FAKE-10000 L-L1_FAKE-10000
 
 clean-all:
 	rm -rf H* L* *.txt *.xml *.gz *.cache gstlal_* lalapps_* ligolw_*
