@@ -12,7 +12,7 @@ before_script:
     # Set up directory structure and copy over built-dependencies from container:
     - mkdir public
     - mkdir -p ${GSTLAL_DIR}
-    - cp -r /opt/gstlal/* ${GSTLAL_DIR}/
+    #- cp -r /opt/gstlal/* ${GSTLAL_DIR}/
     
     # Update apt info
     - apt update
@@ -57,7 +57,7 @@ level0:gstlal:
   image: aepace/gstlal-dev:stretch-mkl
   stage: level0
   script:
-    - echo "$PWD" > ./pwd_output.out
+    #- echo "$PWD" > ./pwd_output.out
     - cd gstlal
     - ./00init.sh
     - ./configure --prefix=${GSTLAL_DIR}
