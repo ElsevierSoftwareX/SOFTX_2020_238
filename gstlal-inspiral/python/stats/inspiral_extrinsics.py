@@ -1193,7 +1193,7 @@ class TimePhaseSNR(object):
 		"""
 		return instrument combos for all the instruments internally stored in self.responses
 
-		>>> TPS.combos
+		>>> TimePhaseSNR.combos
 		(('H1', 'L1'), ('H1', 'L1', 'V1'), ('H1', 'V1'), ('L1', 'V1'))
 		"""
 		return self.instrument_combos(self.responses)
@@ -1203,7 +1203,7 @@ class TimePhaseSNR(object):
 		"""
 		Return all possible pairs of instruments for the
 		instruments internally stored in self.responses
-		>>> TPS.pairs
+		>>> TimePhaseSNR.pairs
 		(('H1', 'L1'), ('H1', 'V1'), ('L1', 'V1'))
 		"""
 
@@ -1218,7 +1218,7 @@ class TimePhaseSNR(object):
 		This provides a way to index into the internal tree data for
 		the delta T, delta phi, and deff ratios for each instrument pair.
 
-		>>> TPS.slices
+		>>> TimePhaseSNR.slices
 		{('H1', 'L1'): [0, 1, 2], ('H1', 'V1'): [3, 4, 5], ('L1', 'V1'): [6, 7, 8]}
 		"""
 		# we will define indexes for slicing into a subset of instrument data
@@ -1237,11 +1237,11 @@ class TimePhaseSNR(object):
 		"""
 		Given a list of instrument produce all the possible combinations of min_instruents or greater, e.g.,
 
-		>>> TPS.instrument_combos(("H1","V1","L1"), min_instruments = 3)
+		>>> TimePhaseSNR.instrument_combos(("H1","V1","L1"), min_instruments = 3)
 		(('H1', 'L1', 'V1'),)
-		>>> TPS.instrument_combos(("H1","V1","L1"), min_instruments = 2)
+		>>> TimePhaseSNR.instrument_combos(("H1","V1","L1"), min_instruments = 2)
 		(('H1', 'L1'), ('H1', 'L1', 'V1'), ('H1', 'V1'), ('L1', 'V1'))
-		>>> TPS.instrument_combos(("H1","V1","L1"), min_instruments = 1)
+		>>> TimePhaseSNR.instrument_combos(("H1","V1","L1"), min_instruments = 1)
 		(('H1',), ('H1', 'L1'), ('H1', 'L1', 'V1'), ('H1', 'V1'), ('L1',), ('L1', 'V1'), ('V1',))
 
 		**NOTE**: these combos are always returned in alphabetical order
@@ -1262,7 +1262,7 @@ class TimePhaseSNR(object):
 		"""
 		Given a list of instruments, construct all possible pairs
 
-		>>> TPS.instrument_pairs(("H1","K1","V1","L1"))
+		>>> TimePhaseSNR.instrument_pairs(("H1","K1","V1","L1"))
 		(('H1', 'K1'), ('H1', 'L1'), ('H1', 'V1'))
 
 		**NOTE**: These are always in alphabetical order
@@ -1280,7 +1280,7 @@ class TimePhaseSNR(object):
 		ratios divided by the values in self.sigma into an output array according to
 		the rules provided by slices.
 
-		>>> TPS.dtdphideffpoints({"H1":0, "L1":-.001, "V1":.001}, {"H1":0, "L1":0, "V1":1}, {"H1":1, "L1":3, "V1":4}, TPS.slices)
+		>>> TimePhaseSNR.dtdphideffpoints({"H1":0, "L1":-.001, "V1":.001}, {"H1":0, "L1":0, "V1":1}, {"H1":1, "L1":3, "V1":4}, TimePhaseSNR.slices)
 		array([[ 1.        ,  0.        , -5.        , -1.        , -2.54647899,
 			-5.        , -2.        , -2.54647899, -5.        ]], dtype=float32)
 
@@ -1359,7 +1359,7 @@ class TimePhaseSNR(object):
 		for the instruments specified by the input dictionaries.  We also need the
 		horizon distance because we convert to effective distance internally.
 
-		>>> TPS({"H1":0, "L1":0.001, "V1":0.001}, {"H1":0., "L1":1., "V1":1.}, {"H1":5., "L1":7., "V1":7.}, {"H1":1., "L1":1., "V1":1.})
+		>>> TimePhaseSNR({"H1":0, "L1":0.001, "V1":0.001}, {"H1":0., "L1":1., "V1":1.}, {"H1":5., "L1":7., "V1":7.}, {"H1":1., "L1":1., "V1":1.})
 		array([  9.51668418e-14], dtype=float32)
 
 		"""
