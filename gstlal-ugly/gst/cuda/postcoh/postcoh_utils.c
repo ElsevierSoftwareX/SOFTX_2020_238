@@ -342,7 +342,7 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 	int ngps = gps_end/(state->gps_step);
 
 	xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2* ngps);
-	if (state->npix != NOT_INIT) {
+	if (state->npix == NOT_INIT) {
 	  state->d_U_map = (float**)malloc(sizeof(float *) * ngps);
 	  state->d_diff_map = (float**)malloc(sizeof(float *) * ngps);
 	}

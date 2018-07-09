@@ -699,7 +699,7 @@ class CoincsDocFromPostcoh(object):
 		row.coinc_event_id = "coinc_event:coinc_event_id:1"
 		row.instruments = ','.join(re.findall('..',trigger.ifos)) #FIXME: for more complex detector names
 		row.nevents = 2
-		row.process_id = "process:process_id:1"
+		row.process_id = self.process.process_id
 		row.coinc_def_id = "coinc_definer:coinc_def_id:3"
 		row.time_slide_id = "time_slide:time_slide_id:6"
 		row.likelihood = 0
@@ -739,21 +739,21 @@ class CoincsDocFromPostcoh(object):
 		row = time_slide_table.RowType()
 		row.instrument = "H1"
 		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.process_id = "process:process_id:1"
+		row.process_id = self.process.process_id
 		row.offset = 0
 		time_slide_table.append(row)
 
 		row = time_slide_table.RowType()
 		row.instrument = "L1"
 		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.process_id = "process:process_id:1"
+		row.process_id = self.process.process_id
 		row.offset = 0
 		time_slide_table.append(row)
 
 		row = time_slide_table.RowType()
 		row.instrument = "V1"
 		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.process_id = "process:process_id:1"
+		row.process_id = self.process.process_id
 		row.offset = 0
 		time_slide_table.append(row)
 
@@ -770,7 +770,7 @@ class CoincsDocFromPostcoh(object):
 		    pass
 		
 		# Setting the L1 row
-		row.process_id = "process:process_id:1"
+		row.process_id = self.process.process_id
 		row.ifo = "L1"
 		row.search = self.url
 		row.channel = "GDS-CALIB_STRAIN" 
@@ -840,7 +840,7 @@ class CoincsDocFromPostcoh(object):
 
 		row = sngl_inspiral_table.RowType()
 		# Setting the the other row
-		row.process_id = "process:process_id:1"
+		row.process_id = self.process.process_id
 		row.ifo = "H1"
 		row.search = self.url
 		row.channel = "GDS-CALIB_STRAIN" 
@@ -909,7 +909,7 @@ class CoincsDocFromPostcoh(object):
 
 		row = sngl_inspiral_table.RowType()
 		# Setting the the other row
-		row.process_id = "process:process_id:1"
+		row.process_id = self.process.process_id
 		row.ifo = "V1"
 		row.search = self.url
 		row.channel = "Hrec_hoft_16384Hz" 
