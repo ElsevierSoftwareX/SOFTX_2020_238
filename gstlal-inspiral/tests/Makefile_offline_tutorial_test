@@ -13,7 +13,7 @@ APPROXIMANT = 0.0:100.0:TaylorF2
 ##############################
 
 # The GPS start time to generate data
-DATASTART=999999966
+DATASTART=999999952
 # The GPS stop time to generate data
 DATASTOP=1000002100
 
