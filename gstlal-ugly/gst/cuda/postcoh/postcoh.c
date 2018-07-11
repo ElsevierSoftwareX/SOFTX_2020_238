@@ -795,8 +795,8 @@ cuda_postcoh_fillin_discont(GstCollectPads *pads, CudaPostcoh *postcoh)
 		}
 		((GstPostcohCollectData *)data)->next_offset = GST_BUFFER_OFFSET_END(buf);
 
-		gst_buffer_unref(buf);
 		}
+		gst_buffer_unref(buf);
 	}
 	return TRUE;
 }
@@ -825,7 +825,7 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 	for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
 			buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
-			if (buf == NULL) {
+			if (!buf) { //buf == NULL
 				size_cur = gst_adapter_available(data->adapter);
 				if(!min_size_init) {
 					min_size = size_cur;
@@ -847,7 +847,7 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 			}
 			strncpy(state->cur_ifos + IFO_LEN*state->cur_nifo, data->ifo_name, sizeof(data->ifo_name));
 			state->cur_nifo++;
-
+			/* should not unref the buf insce adapter is using it */
 	}
 	/* If all pads returns NULL buffers, this means all pads at EOS,
 	 * we flag min_size as -1 to indicate we need to send an EOS event */ 
@@ -857,6 +857,32 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 	GST_LOG_OBJECT(postcoh, "get common size %d", min_size);
 
 	return min_size;
+}
+
+static gboolean cuda_postcoh_find_and_remove_zerobuf(GstCollectPads *pads, CudaPostcoh *postcoh)
+{
+
+	GSList *collectlist;
+	GstPostcohCollectData *data;
+	GstBuffer *buf = NULL;
+	gboolean find_zerobuf = FALSE;
+
+	GST_DEBUG_OBJECT(pads, "begin to check zerobufs from any pads");
+
+	for (collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist)) {
+		data = collectlist->data;
+		buf = gst_collect_pads_peek(pads, (GstCollectData *)data);
+		if (buf && GST_BUFFER_SIZE(buf) == 0) {
+			GST_DEBUG_OBJECT(data, "bufsize is 0");
+			gst_buffer_unref(buf);
+			/* discard this buffer in collectpads so it can collect new one */
+			buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
+			gst_buffer_unref(buf);
+			find_zerobuf = TRUE;
+		}
+		else gst_buffer_unref(buf);
+	}
+	return find_zerobuf;
 }
 
 static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *postcoh)
@@ -889,6 +915,7 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 		if (t_end_cur > t0) {
 			buf_aligned_offset0 = (gint) (postcoh->offset0 - offset_cur);
 			GST_DEBUG_OBJECT(data, "buffer aligned offset0 %u", buf_aligned_offset0);
+			assert(buf_aligned_offset0 >= 0);
 			subbuf = gst_buffer_create_sub(buf, buf_aligned_offset0, (offset_end_cur - offset_cur - buf_aligned_offset0) * data->channels * sizeof(float));
 			g_assert(subbuf);
 			GST_LOG_OBJECT (pads,
@@ -903,13 +930,10 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 			set_aligned_offset0(data, buf_aligned_offset0 + offset_cur);
 			/* from the first buffer in the adapter, we initiate the next offset */
 			data->next_offset = GST_BUFFER_OFFSET_END(buf);
-			/* discard this buffer in collectpads so it can collect new one */
 			gst_buffer_unref(buf);
 		} else {
 			all_aligned = FALSE;
-			/* discard this buffer in collectpads so it can collect new one */
 			gst_buffer_unref(buf);
-
 		}
 	}
 
@@ -1561,7 +1585,13 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		return GST_FLOW_OK;
 	}
 
-		
+	/* if buf in any of pads is 0 size, discard this buf.
+	 * this means this element starts to work only when
+	 * there are non-zero buffers in all pads */
+	if (cuda_postcoh_find_and_remove_zerobuf(pads, postcoh))
+		return GST_FLOW_OK;
+
+	
 	if (postcoh->is_all_aligned) {
 		common_size = cuda_postcoh_push_and_get_common_size(pads, postcoh);
 		GST_DEBUG_OBJECT(postcoh, "get spanned size %d, get spanned samples %f", common_size, common_size/ postcoh->bps);
