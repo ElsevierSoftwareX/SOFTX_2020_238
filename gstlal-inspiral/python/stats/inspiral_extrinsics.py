@@ -187,6 +187,27 @@ that the assumption is optimal.
 Review Status
 -------------
 
+Do no harm check of O2 results  
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Comparing runs before and after (done) 
+- Checking the probabilities returned by new code and old code (sarah is working on it) to show consistent results
+
+Check of error assumptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Calculate theoretical delta T, delta phi and snr ratio values of an O2 injection set.  Then compute same parameters from injections.  The difference between those (in e.g., a scatter plot) should give a sense of the errors on those parameters caused by noise.  (sarah is working on it)
+- Eventually use the fisher matrix for the error estimates (chad will do it, but not for O2)
+
+
+Inclusion of virgo
+^^^^^^^^^^^^^^^^^^
+
+- Virgo should not make the analysis worse in an average sense. (this has been demonstrated, but Chad will make it a bit more quantitative)
+- Understand cases where / if virgo does downrank a trigger
+- Consider having the likelihood calculation maximize over all trigger subsets (Chad and Kipp, but not for O2)
+
+
 +-------------------------------------------------+------------------------------------------+------------+
 | Names                                           | Hash                                     | Date       |
 +=================================================+==========================================+============+
