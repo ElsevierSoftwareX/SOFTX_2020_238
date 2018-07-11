@@ -31,9 +31,11 @@ __author__ = 'Duncan Meacher <duncan.meacher@ligo.org>, Patrick Godwin <patrick.
 import optparse
 import os
 
+from gstlal import aggregator
 from gstlal import inspiral_pipe
 from gstlal import dagparts as gstlaldagparts
 
+from gstlal.fxtools import feature_extractor
 from gstlal.fxtools import multichannel_datasource
 from gstlal.fxtools import multirate_datasource
 from gstlal.fxtools import utils
@@ -44,41 +46,90 @@ from gstlal.fxtools import utils
 #
 # =============================
 
+def generate_options(options):
+	"""
+	Generates a list of command line options to pass into DAG nodes.
+	"""
+	# data source options
+	if options.data_source == 'lvshm':
+		data_source_options = {
+			"data-source": options.data_source,
+			"shared-memory-partition": options.shared_memory_partition,
+			"shared-memory-assumed-duration": options.shared_memory_assumed_duration
+		}
+	elif options.data_source == 'framexmit':
+		data_source_options = {"data-source": options.data_source}
+
+	# waveform options
+	waveform_options = {
+		"waveform": options.waveform,
+		"mismatch": options.mismatch,
+		"qhigh": options.qhigh
+	}
+
+	# data transfer options
+	if options.save_format == 'kafka':
+		save_options = {
+			"save-format": options.save_format,
+			"data-transfer": options.data_transfer,
+			"kafka-partition": options.kafka_partition,
+			"kafka-topic": options.kafka_topic,
+			"kafka-server": options.kafka_server
+		}
+	elif options.save_format == 'hdf5':
+		save_options = {
+			"save-format": options.save_format,
+			"cadence": options.cadence,
+			"persist-cadence": options.persist_cadence
+		}
+	else:
+		raise NotImplementedError, 'not an available option for online jobs at this time'
+
+	# program behavior options
+	program_options = {}
+	if options.disable_web_service:
+		program_options.update({"disable-web-service": options.disable_web_service})
+	if options.verbose:
+		program_options.update({"verbose": options.verbose})
+
+	# gobble options together
+	out_options = {}
+	out_options.update(data_source_options)
+	out_options.update(waveform_options)
+	out_options.update(save_options)
+	out_options.update(program_options)
+
+	return out_options
+
 def feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, parent_nodes, ifo, options, data_source_info):
 	feature_extractor_nodes = {}
+
+	# generate common command line options
+	command_line_options = generate_options(options)
 
 	# parallelize jobs by channel subsets
 	for ii, channel_subset in enumerate(data_source_info.channel_subsets):
 
+		if options.verbose:
+			print("Creating node for channel subset %d"%ii)
+
 		# creates a list of channel names with entries of the form --channel-name=IFO:CHANNEL_NAME:RATE
 		channels = [''.join(["--channel-name=",':'.join([channel, str(int(data_source_info.channel_dict[channel]['fsamp']))])]) for channel in channel_subset]
+		channels[0] = channels[0].split('=')[1] # this is done to peel off --channel-name option off first channel
 
-		# FIXME: hacky way of getting options to get passed correctly for channels
-		channels[0] = channels[0].split('=')[1]
-
-		outpath = os.path.join(options.out_path, "gstlal_feature_extractor")
+		# create specific options for each channel subset
+		subset_options = {
+			"max-streams": options.max_streams,
+			"job-id": str(ii + 1).zfill(4),
+			"channel-name":' '.join(channels)
+		}
+		subset_options.update(command_line_options)
 
 		feature_extractor_nodes[ii] = \
 			inspiral_pipe.generic_node(gstlalFeatureExtractorJob, dag, parent_nodes = parent_nodes,
-				opts = {"mismatch":options.mismatch,
-					"shared-memory-partition": options.shared_memory_partition,
-					"shared-memory-assumed-duration": options.shared_memory_assumed_duration,
-					"data-source":"lvshm",
-					"mismatch":options.mismatch,
-					"waveform":options.waveform,
-					"qhigh":options.qhigh,
-					"max-streams":options.max_streams,
-					"job-id":str(ii + 1).zfill(4),
-					"cadence":options.cadence,
-					"disable-web-service":options.disable_web_service,
-					"save-format": options.save_format,
-					"verbose":options.verbose,
-					"channel-name":' '.join(channels)
-				},
-				output_files = {"out-path":outpath}
+				opts = subset_options,
+				output_files = {"out-path": os.path.join(options.out_path, "gstlal_feature_extractor")}
 			)
-		if options.verbose:
-			print "Creating node for channel subset %d" % ii
 
 	return feature_extractor_nodes
 
