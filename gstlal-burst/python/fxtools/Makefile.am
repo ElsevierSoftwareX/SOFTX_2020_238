@@ -11,6 +11,7 @@ fxtools_PYTHON = \
 	__init__.py \
 	auxcache.py \
 	utils.py \
+	feature_extractor.py \
 	multirate_datasource.py \
 	multichannel_datasource.py \
 	sngltriggertable.py
