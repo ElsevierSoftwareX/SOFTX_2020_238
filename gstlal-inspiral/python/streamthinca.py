@@ -45,7 +45,7 @@ import itertools
 
 
 from glue import iterutils
-from glue import segments
+from ligo import segments
 from glue.ligolw import lsctables
 import lal
 from lalinspiral import thinca

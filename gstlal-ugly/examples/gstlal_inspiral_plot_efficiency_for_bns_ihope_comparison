@@ -16,7 +16,7 @@ import copy
 from optparse import OptionParser
 import traceback
 
-from glue import segments
+from ligo import segments
 from glue.ligolw import ligolw
 from glue.ligolw import array
 from glue.ligolw import param

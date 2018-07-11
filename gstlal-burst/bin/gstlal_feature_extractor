@@ -155,7 +155,7 @@ import lal
 from lal import LIGOTimeGPS
 
 from glue import iterutils
-from glue import segments
+from ligo import segments
 from glue import segmentsUtils
 from glue.lal import CacheEntry
 from glue.ligolw import ligolw

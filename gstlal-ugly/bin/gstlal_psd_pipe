@@ -28,7 +28,7 @@ import sys, os
 
 ##############################################################################
 # import the modules we need to build the pipeline
-from glue import segments
+from ligo import segments
 from optparse import OptionParser
 from gstlal import dagparts
 from gstlal import datasource

@@ -37,7 +37,7 @@ import lal.series
 from lal.utils import CacheEntry
 from glue import pipeline
 from glue.lal import Cache
-from glue import segments
+from ligo import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 import glue.ligolw.utils as ligolw_utils

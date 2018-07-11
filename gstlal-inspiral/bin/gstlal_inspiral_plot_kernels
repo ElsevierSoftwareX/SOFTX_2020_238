@@ -44,7 +44,7 @@ from optparse import OptionParser
 import sys
 
 
-from glue import segments
+from ligo import segments
 from gstlal import far
 from gstlal import plotfar
 

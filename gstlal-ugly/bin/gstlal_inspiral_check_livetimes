@@ -19,7 +19,7 @@
 import sys
 import sqlite3
 from glue.ligolw import dbtables
-from glue import segments
+from ligo import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables

@@ -17,7 +17,7 @@
 import sys
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
-from glue import segments
+from ligo import segments
 from glue import segmentsUtils
 from glue.ligolw import table
 from lal import rate

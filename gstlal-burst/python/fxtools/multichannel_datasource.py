@@ -41,7 +41,7 @@ from gstlal import pipeparts
 from gstlal import datasource
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
-from glue import segments
+from ligo import segments
 import lal
 from lal import LIGOTimeGPS
 

@@ -38,7 +38,7 @@ from gstlal import far
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw import ligolw
-from glue import segments
+from ligo import segments
 from lal import LIGOTimeGPS
 from optparse import OptionParser
 

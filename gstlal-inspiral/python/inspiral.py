@@ -75,7 +75,7 @@ GObject.threads_init()
 Gst.init(None)
 
 from glue import iterutils
-from glue import segments
+from ligo import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables

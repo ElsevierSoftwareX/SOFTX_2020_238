@@ -12,7 +12,7 @@ from optparse import OptionParser
 
 from glue.ligolw import lsctables
 from glue.ligolw import utils
-from glue import segments
+from ligo import segments
 from glue.lal import LIGOTimeGPS
 
 optp = OptionParser()

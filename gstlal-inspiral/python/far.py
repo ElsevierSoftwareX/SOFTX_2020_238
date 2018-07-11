@@ -66,7 +66,7 @@ import sys
 import time
 
 
-from glue import segments
+from ligo import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array

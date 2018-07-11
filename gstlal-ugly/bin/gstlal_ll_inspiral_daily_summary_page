@@ -6,7 +6,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw import table
-from glue import segments
+from ligo import segments
 from glue.lal import Cache
 import lal
 from lal import LIGOTimeGPS

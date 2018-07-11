@@ -19,7 +19,7 @@
 import sys
 import re
 import gzip
-from glue import segments
+from ligo import segments
 from glue.ligolw import ligolw
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments

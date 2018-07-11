@@ -82,7 +82,7 @@ Gst.init(None)
 
 
 from glue import iterutils
-from glue import segments
+from ligo import segments
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments

@@ -32,7 +32,7 @@ import base64
 import glob
 import bisect
 from glue.lal import Cache
-from glue import segments
+from ligo import segments
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw import lsctables

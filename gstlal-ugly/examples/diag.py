@@ -13,7 +13,7 @@ pygst.require('0.10')
 import gst
 
 
-from glue import segments
+from ligo import segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import pipeparts
 

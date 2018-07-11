@@ -25,7 +25,7 @@
 
 
 import numpy
-from glue import segments
+from ligo import segments
 from gstlal import pipeio
 from gstlal import pipeparts
 from lal import LIGOTimeGPS

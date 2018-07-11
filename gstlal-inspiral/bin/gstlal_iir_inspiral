@@ -82,7 +82,7 @@ pygst.require("0.10")
 import gst
 from gstlal import bottle
 
-from glue import segments
+from ligo import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import array as ligolw_array

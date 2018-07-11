@@ -25,7 +25,7 @@
 
 
 from bisect import bisect_right
-from glue import segments
+from ligo import segments
 import math
 import numpy
 import random

@@ -51,7 +51,7 @@ from gstlal import coherent_null
 from gstlal import inspiral
 from gstlal import datasource
 
-from glue import segments
+from ligo import segments
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process

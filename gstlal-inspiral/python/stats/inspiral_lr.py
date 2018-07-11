@@ -41,7 +41,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
-from glue import segments
+from ligo import segments
 from gstlal.stats import horizonhistory
 from gstlal.stats import inspiral_extrinsics
 from gstlal.stats import inspiral_intrinsics

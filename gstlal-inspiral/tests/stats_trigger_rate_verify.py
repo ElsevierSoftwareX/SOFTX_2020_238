@@ -4,7 +4,7 @@ import doctest
 import random
 import unittest
 import sys
-from glue import segments
+from ligo import segments
 from gstlal.stats import trigger_rate
 
 def random_coalesced_list(n):

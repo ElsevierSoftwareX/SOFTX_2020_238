@@ -40,7 +40,7 @@ import math
 import sys, os
 import subprocess, socket, tempfile, copy, doctest
 from glue import pipeline
-from glue import segments
+from ligo import segments
 from glue.ligolw import lsctables, ligolw
 from glue.ligolw import utils as ligolw_utils
 from gstlal import svd_bank

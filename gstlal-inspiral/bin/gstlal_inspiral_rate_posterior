@@ -54,7 +54,7 @@ import sqlite3
 import sys
 
 
-from glue import segments
+from ligo import segments
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables

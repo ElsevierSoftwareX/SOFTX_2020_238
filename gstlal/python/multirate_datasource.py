@@ -37,7 +37,7 @@ GObject.threads_init()
 Gst.init(None)
 
 import lal
-from glue import segments
+from ligo import segments
 
 from gstlal import bottle
 from gstlal import pipeparts

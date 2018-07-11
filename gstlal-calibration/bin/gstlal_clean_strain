@@ -51,7 +51,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
-from glue import segments
+from ligo import segments
 
 def write_graph(demux):
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = True)

@@ -41,7 +41,7 @@ from gstlal import pipeparts
 from gstlal import datasource
 
 
-from glue import segments
+from ligo import segments
 
 
 #

@@ -52,7 +52,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
-from glue import segments
+from ligo import segments
 import test_common
 
 

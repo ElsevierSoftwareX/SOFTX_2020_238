@@ -39,7 +39,7 @@ Gst.init(None)
 
 
 from glue import iterutils
-from glue import segments
+from ligo import segments
 from gstlal import pipeio
 from lal import LIGOTimeGPS
 from lal.utils import CacheEntry

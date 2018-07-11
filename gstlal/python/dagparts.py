@@ -40,7 +40,7 @@ import subprocess
 import tempfile
 import math
 
-from glue import segments
+from ligo import segments
 from glue import pipeline
 
 

@@ -33,7 +33,7 @@ from optparse import OptionParser
 # import the modules we need to build the pipeline
 #
 
-from glue import segments
+from ligo import segments
 from gstlal import inspiral_pipe
 from gstlal import far 
 from lal.utils import CacheEntry

@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as tkr
 import numpy
 
-from glue import segments
+from ligo import segments
 from glue.ligolw.ligolw import LIGOLWContentHandler
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import lsctables

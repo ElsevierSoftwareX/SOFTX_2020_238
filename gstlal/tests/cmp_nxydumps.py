@@ -21,7 +21,7 @@ import itertools
 
 
 from glue import iterutils
-from glue import segments
+from ligo import segments
 from lal import LIGOTimeGPS
 
 

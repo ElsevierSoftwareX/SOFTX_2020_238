@@ -50,7 +50,7 @@ import lal
 from gstlal import far
 from gstlal import rate_estimation
 
-from glue import segments
+from ligo import segments
 from glue.lal import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables

@@ -30,7 +30,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import ligolw_sqlite
 from glue.offsetvector import offsetvector
-from glue import segments
+from ligo import segments
 from gstlal import inspiral
 from gstlal import far
 import lal

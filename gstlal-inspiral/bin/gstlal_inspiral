@@ -160,7 +160,7 @@ from lal import LIGOTimeGPS
 from lal.utils import CacheEntry
 from ligo.gracedb.rest import DEFAULT_SERVICE_URL as gracedb_default_service_url
 
-from glue import segments
+from ligo import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
