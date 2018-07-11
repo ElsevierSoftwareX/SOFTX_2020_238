@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2015 Qi Chu
 # Modified from :
-# Copyright (C) 2012  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2012	Kipp Cannon, Chad Hanna, Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -10,12 +10,12 @@
 #
 # This program is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
 # Public License for more details.
 #
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# 51 Franklin Street, Fifth Floor, Boston, MA	02110-1301, USA.
 
 ## @file
 # A program to request some followup data from a running gstlal_inspiral job based on gracedb submissions notified by lvalert
@@ -39,39 +39,41 @@ import json
 from optparse import OptionParser
 from gstlal import postcoh_table_def
 
+import pdb
+
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 lsctables.use_in(LIGOLWContentHandler)
 
 def gen_zerolag_fname(path):
-  ls_proc = subprocess.Popen(["ls", path], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-  ls_out = ""
-  try:
-    ls_out = subprocess.check_output(["grep", "zerolag"], stdin = ls_proc.stdout)
-  except:
-    print "no zerolag file yet"
-    return
-  ls_proc.wait()
-  ls_out_list = ls_out.split("\n")
-  ls_out_list_full_path = ["%s/" % path + one_out for one_out in ls_out_list[:-1]]
-  input_zerolag_fname = ",".join(ls_out_list_full_path)
-  return input_zerolag_fname
+	ls_proc = subprocess.Popen(["ls", path], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+	ls_out = ""
+	try:
+		ls_out = subprocess.check_output(["grep", "zerolag"], stdin = ls_proc.stdout)
+	except:
+		print "no zerolag file yet"
+		return
+	ls_proc.wait()
+	ls_out_list = ls_out.split("\n")
+	ls_out_list_full_path = ["%s/" % path + one_out for one_out in ls_out_list[:-1]]
+	input_zerolag_fname = ",".join(ls_out_list_full_path)
+	return input_zerolag_fname
 
 def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output_fname, njob):
-  cmd = []
-  cmd += ["gstlal_cohfar_plot_stats"]
-  cmd += ["--output", output_fname]
-  cmd += ["--input-stats", stats_fname]
-  cmd += ["--input-zerolag", zerolag_fname]
-  cmd += ["--zerolag-format", "single"]
-  cmd += ["--cohsnr", str(cohsnr)]
-  cmd += ["--cmbchisq", str(cmbchisq)]
-  cmd += ["--ifos", ifos]
-  cmd += ["--far-factor", str(njob)]
-  print cmd
+	cmd = []
+	cmd += ["gstlal_cohfar_plot_stats"]
+	cmd += ["--output", output_fname]
+	cmd += ["--input-stats", stats_fname]
+	cmd += ["--input-zerolag", zerolag_fname]
+	cmd += ["--zerolag-format", "single"]
+	cmd += ["--cohsnr", str(cohsnr)]
+	cmd += ["--cmbchisq", str(cmbchisq)]
+	cmd += ["--ifos", ifos]
+	cmd += ["--far-factor", str(njob)]
+	print cmd
 
-  proc = subprocess.Popen(cmd)
-  proc_out, proc_err = proc.communicate()
+	proc = subprocess.Popen(cmd)
+	proc_out, proc_err = proc.communicate()
 
 def call_fits_skymap_func(ifos, pivotal_ifo, gpsSeconds, gpsNanoSeconds, tmplt_idx, output_fname, event_id):
 	input_fname = "%s_skymap/%s_%d_%d_%d" % (ifos, pivotal_ifo, gpsSeconds, gpsNanoSeconds, tmplt_idx)
@@ -80,6 +82,10 @@ def call_fits_skymap_func(ifos, pivotal_ifo, gpsSeconds, gpsNanoSeconds, tmplt_i
 	cmd += ["--output", output_fname]
 	cmd += ["--event-id", event_id]
 	cmd += [input_fname]
+	print cmd
+	proc = subprocess.Popen(cmd)
+	proc_out, proc_err = proc.communicate()
+
 
 def parse_command_line():
 	parser = OptionParser()
@@ -97,7 +103,7 @@ def parse_command_line():
 		logging.info("lvalert data: %s" % repr(lvalert_data))
 		alert_type = lvalert_data["alert_type"]
 		if alert_type != "new":
-			logging.info("not a new-type alert.  skipping")
+			logging.info("not a new-type alert.	skipping")
 			sys.exit()
 		gid = str(lvalert_data["uid"])
 	else:
@@ -117,6 +123,9 @@ except OSError:
 
 if options.verbose:
 	print("loading tables from event %s" %gid)
+#
+# read from gracedb event
+#
 gracedb = gracedb.GraceDb(options.gracedb_service_url)
 xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb, gid)
 coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
@@ -131,21 +140,29 @@ for process_params in process_params_table:
 		njob = process_params.value
 		break
 
+#
+# set up the background stats files in path folder
+#
 input_stats_fname_1w = "%s/%s_marginalized_stats_1w.xml.gz" % (path, path)
 input_stats_fname_1d = "%s/%s_marginalized_stats_1d.xml.gz" % (path, path)
 input_stats_fname_2h = "%s/%s_marginalized_stats_2h.xml.gz" % (path, path)
+
+#
+# find zerolag files in the path folder
+#
 input_zerolag_fname = gen_zerolag_fname(path)
 
 outfname_1w = 'gracedb/%s/%s_%s_snrchi_1w.png' % (gid, gid, ifos)
 outfname_1d = 'gracedb/%s/%s_%s_snrchi_1d.png' % (gid, gid, ifos)
 outfname_2h = 'gracedb/%s/%s_%s_snrchi_2h.png' % (gid, gid, ifos)
 
+# read in the cohsnr, cmbchisq, and far values from the event
 cohsnr = postcoh_table_row.cohsnr
 cmbchisq = postcoh_table_row.cmbchisq
 far = postcoh_table_row.far
 
 # 
-# invoke the program to plot stats
+# call the program to plot background stats
 #
 call_background_plot_func(ifos, input_stats_fname_1w, input_zerolag_fname, cohsnr, cmbchisq, outfname_1w, njob)
 call_background_plot_func(ifos, input_stats_fname_1d, input_zerolag_fname, cohsnr, cmbchisq, outfname_1d, njob)
@@ -157,17 +174,17 @@ call_background_plot_func(ifos, input_stats_fname_2h, input_zerolag_fname, cohsn
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_1w, gid))
 
-gracedb.writeLog(gid, "%s FAR_1w over CohSNR/CmbChisq" % ifos, filename = outfname_1w, filecontents = open(outfname_1w).read(), tagname = "background")
+gracedb.writeLog(gid, "%s FAR_1w over CohSNR/CmbChisq" % ifos, filename = outfname_1w, filecontents = open(outfname_1w).read(), tagname = "Background Information")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_1d, gid))
 
-gracedb.writeLog(gid, "%s FAR_1d over CohSNR/CmbChisq" % ifos, filename = outfname_1d, filecontents = open(outfname_1d).read(), tagname = "background")
+gracedb.writeLog(gid, "%s FAR_1d over CohSNR/CmbChisq" % ifos, filename = outfname_1d, filecontents = open(outfname_1d).read(), tagname = "Background Information")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_2h, gid))
 
-gracedb.writeLog(gid, "%s FAR_2h over CohSNR/CmbChisq" % ifos, filename = outfname_2h, filecontents = open(outfname_2h).read(), tagname = "background")
+gracedb.writeLog(gid, "%s FAR_2h over CohSNR/CmbChisq" % ifos, filename = outfname_2h, filecontents = open(outfname_2h).read(), tagname = "Background Information")
 
 def get_snglsnr(snr_name, postcoh_table_row):
 	if snr_name == 'snr_L':
@@ -199,17 +216,17 @@ if far < 1e-7:
 		call_background_plot_func(ifo, input_stats_fname_1w, input_zerolag_fname, snr, chisq, outfname_1w, njob)
 		if options.verbose:
 			print("Uploading %s for event %s" % (outfname_1w, gid))
-		gracedb.writeLog(gid, "%s FAR_1w over SNR/Chisq" % ifo, filename = outfname_1w, filecontents = open(outfname_1w).read(), tagname = "background")
+		gracedb.writeLog(gid, "%s FAR_1w over SNR/Chisq" % ifo, filename = outfname_1w, filecontents = open(outfname_1w).read(), tagname = "Background Information")
 		outfname_1d = 'gracedb/%s/%s_%s_snrchi_1d.png' % (gid, gid, ifo)
 		call_background_plot_func(ifo, input_stats_fname_1d, input_zerolag_fname, snr, chisq, outfname_1d, njob)
 		if options.verbose:
 			print("Uploading %s for event %s" % (outfname_1d, gid))
-		gracedb.writeLog(gid, "%s FAR_1d over SNR/Chisq" % ifo, filename = outfname_1d, filecontents = open(outfname_1d).read(), tagname = "background")
+		gracedb.writeLog(gid, "%s FAR_1d over SNR/Chisq" % ifo, filename = outfname_1d, filecontents = open(outfname_1d).read(), tagname = "Background Information")
 		outfname_2h = 'gracedb/%s/%s_%s_snrchi_2h.png' % (gid, gid, ifo)
 		call_background_plot_func(ifo, input_stats_fname_2h, input_zerolag_fname, snr, chisq, outfname_2h, njob)
 		if options.verbose:
 			print("Uploading %s for event %s" % (outfname_2h, gid))
-		gracedb.writeLog(gid, "%s FAR_2h over SNR/Chisq" % ifo, filename = outfname_2h, filecontents = open(outfname_2h).read(), tagname = "background")
+		gracedb.writeLog(gid, "%s FAR_2h over SNR/Chisq" % ifo, filename = outfname_2h, filecontents = open(outfname_2h).read(), tagname = "Background Information")
 
 #
 # Upload skymap
@@ -218,14 +235,14 @@ pivotal_ifo = postcoh_table_row.pivotal_ifo
 gpsSeconds = postcoh_table_row.end_time
 gpsNanoSeconds = postcoh_table_row.end_time_ns
 tmplt_idx = postcoh_table_row.tmplt_idx
-outfname_skymap = 'gracedb/%s/%s_skymap.fits' % (gid, gid, ifos)
+outfname_skymap = 'gracedb/%s/%s_skymap.fits' % (gid, ifos)
 try:
-	call_fits_skymap_func(ifos, pivotal_ifo, gpsSeconds, gpsNanoSeconds, tmplt_idx, output_fname, gid)
+	call_fits_skymap_func(ifos, pivotal_ifo, gpsSeconds, gpsNanoSeconds, tmplt_idx, outfname_skymap, gid)
 	if options.verbose:
 		print("Uploading %s for event %s" % (outfname_skymap, gid))
-	gracedb.writeLog(gid, "%s skymap" % ifos, filename = outfname_skymap, filecontents = open(outfname_skymap).read(), tagname = "skymap")
+	gracedb.writeLog(gid, "%s skymap" % ifos, filename = outfname_skymap, filecontents = open(outfname_skymap).read(), tagname = "Sky Localization")
 except:
 	if options.verbose:
-		print("Uploading skymap not available message for event %s" % (outfname_skymap, gid))
-	gracedb.writeLog(gid, "skymap not generated; check if the trigger single SNR is below the threshold (8) to generate a skymap", filename = None, tagname = "skymap")
+		print("Uploading skymap %s not available message for event %s" % (outfname_skymap, gid))
+	gracedb.writeLog(gid, "skymap not generated; check if the trigger single SNR is below the threshold in the postcoh element to generate a skymap", filename = None, tagname = "Sky Localization")
 

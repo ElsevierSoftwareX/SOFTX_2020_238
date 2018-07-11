@@ -19,7 +19,8 @@
 Produce a fits file from binary sky map file
 """
 import struct
-from lalinference import fits
+from lalinference.io import fits
+import numpy as np
 import pdb
 from optparse import Option, OptionParser
 
@@ -29,8 +30,8 @@ parser = OptionParser(
   option_list = [
 	  Option("--output", "-o", 
 		  help="Output filename"),
-	  Option("--event-id", "-e", type=int, default=0,
-		  help="Postcoh event ID [default: 0]")]
+	  Option("--event-id", "-e",
+		  help="Postcoh event ID")]
 )
 
 opts, args = parser.parse_args()

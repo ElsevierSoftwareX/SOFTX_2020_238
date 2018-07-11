@@ -30,7 +30,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_postcohspiir_workflow \
 	gstlal_inspiral_postcohspiir_online \
 	gstlal_inspiral_postcohspiir_flopulator \
-	gstlal_inspiral_postcohspiir_lvalert_background_plotter \
+	gstlal_inspiral_postcohspiir_lvalert_plotter \
 	gstlal_inspiral_postcohspiir_offline \
 	gstlal_inspiral_postcohspiir_extract_zerolag \
 	gstlal_iir_inspiral \
