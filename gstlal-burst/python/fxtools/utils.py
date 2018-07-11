@@ -211,12 +211,12 @@ class FeatureData(object):
 	def clear(self):
 		raise NotImplementedError
 
-class HDF5FeatureData(FeatureData):
+class HDF5TimeseriesFeatureData(FeatureData):
 	"""
-	Saves feature data to hdf5.
+	Saves feature data to hdf5 as regularly sampled timeseries.
 	"""
 	def __init__(self, columns, keys, **kwargs):
-		super(HDF5FeatureData, self).__init__(columns, keys = keys, **kwargs)
+		super(HDF5TimeseriesFeatureData, self).__init__(columns, keys = keys, **kwargs)
 		self.cadence = kwargs.pop('cadence')
 		self.sample_rate = kwargs.pop('sample_rate')
 		self.dtype = [(column, '<f8') for column in self.columns]
@@ -250,15 +250,49 @@ class HDF5FeatureData(FeatureData):
 		for key in self.keys:
 			self.feature_data[key][:] = numpy.nan
 
-class FeatureQueue(object):
+class HDF5ETGFeatureData(FeatureData):
+	"""!
+	Saves feature data with varying dataset lengths (when run in ETG mode) to hdf5.
 	"""
-	Class for storing feature data.
+	def __init__(self, columns, keys, **kwargs):
+		super(HDF5ETGFeatureData, self).__init__(columns, keys = keys, **kwargs)
+		self.cadence = kwargs.pop('cadence')
+		self.dtype = [(column, '<f8') for column in self.columns]
+		self.feature_data = {key: [] for key in keys}
+		self.clear()
+
+	def dump(self, path, base, start_time, tmp = False):
+		"""
+		Saves the current cadence of gps triggers to disk and clear out data
+		"""
+		name = "%d_%d" % (start_time, self.cadence)
+		for key in self.keys:
+			create_new_dataset(path, base, numpy.array(self.feature_data[key], dtype=self.dtype), name=name, group=key, tmp=tmp)
+		self.clear()
+
+	def append(self, timestamp, features):
+		"""
+		Append a trigger row to data structure
+
+		NOTE: timestamp arg is here purely to match API, not used in append
+		"""
+		for key in features.keys():
+			for row in features[key]:
+				self.feature_data[key].append(tuple(row[col] for col in self.columns))
+
+	def clear(self):
+		for key in self.keys:
+			self.feature_data[key] = []
+
+class TimeseriesFeatureQueue(object):
+	"""
+	Class for storing regularly sampled feature data.
 	NOTE: assumes that ingested features are time ordered.
 	"""
-	def __init__(self, channels, columns, sample_rate):
+	def __init__(self, channels, columns, **kwargs):
 		self.channels = channels
 		self.columns = columns
-		self.sample_rate = sample_rate
+		self.sample_rate = kwargs.pop('sample_rate')
 		self.out_queue = deque(maxlen = 5)
 		self.in_queue = {}
 		self.counter = Counter()
@@ -299,6 +333,53 @@ class FeatureQueue(object):
 
 	def _idx(self, timestamp):
 		return int(numpy.floor((timestamp % 1) * self.sample_rate))
+
+	def __len__(self):
+		return len(self.out_queue)
+
+class ETGFeatureQueue(object):
+	"""
+	Class for storing feature data when pipeline is running in ETG mode, i.e. report all triggers above an SNR threshold.
+	NOTE: assumes that ingested features are time ordered.
+	"""
+	def __init__(self, channels, columns, **kwargs):
+		self.channels = channels
+		self.columns = columns
+		self.out_queue = deque(maxlen = 5)
+		self.in_queue = {}
+		self.counter = Counter()
+		self.last_timestamp = 0
+		self.effective_latency = 2
+
+	def append(self, timestamp, channel, row):
+		if timestamp > self.last_timestamp:
+			### create new buffer if one isn't available for new timestamp
+			if timestamp not in self.in_queue:
+				self.in_queue[timestamp] = self._create_buffer()
+			self.counter[timestamp] += 1
+
+			### store row
+			self.in_queue[timestamp][channel].append(row)
+
+			### check if there's enough new samples that the oldest sample needs to be pushed
+			if len(self.counter) > self.effective_latency:
+				oldest_timestamp = min(self.counter.keys())
+				self.last_timestamp = oldest_timestamp
+				self.out_queue.append({'timestamp': oldest_timestamp, 'features': self.in_queue.pop(oldest_timestamp)})
+				del self.counter[oldest_timestamp]
+
+	def pop(self):
+		if len(self):
+			return self.out_queue.popleft()
+
+	def flush(self):
+		while self.in_queue:
+			oldest_timestamp = min(self.counter.keys())
+			del self.counter[oldest_timestamp]
+			self.out_queue.append({'timestamp': oldest_timestamp, 'features': self.in_queue.pop(oldest_timestamp)})
+
+	def _create_buffer(self):
+		return {channel: [] for channel in self.channels}
 
 	def __len__(self):
 		return len(self.out_queue)

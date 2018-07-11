@@ -245,7 +245,12 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.feature_start_time = options.feature_start_time
 		self.feature_end_time = options.feature_end_time
 		self.columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
-		self.feature_queue = utils.FeatureQueue(self.keys, self.columns, self.sample_rate)
+
+		### set up queue to cache features depending on pipeline mode
+		if options.feature_mode == 'timeseries':
+			self.feature_queue = utils.TimeseriesFeatureQueue(self.keys, self.columns, sample_rate = self.sample_rate)
+		elif options.feature_mode == 'etg':
+			self.feature_queue = utils.ETGFeatureQueue(self.keys, self.columns)
 
 		# set whether data source is live
 		self.is_live = data_source_info.data_source in data_source_info.live_sources
@@ -258,7 +263,12 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# feature saving properties
 		if options.save_format == 'hdf5':
-			self.fdata = utils.HDF5FeatureData(self.columns, keys = self.keys, cadence = self.cadence, sample_rate = self.sample_rate)
+			if options.feature_mode == 'timeseries':
+				self.fdata = utils.HDF5TimeseriesFeatureData(self.columns, keys = self.keys, cadence = self.cadence, sample_rate = self.sample_rate)
+			elif options.feature_mode == 'etg':
+				self.fdata = utils.HDF5ETGFeatureData(self.columns, keys = self.keys, cadence = self.cadence)
+			else:
+				raise KeyError, 'not a valid feature mode option'
 
 		elif options.save_format == 'ascii':
 			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
@@ -656,6 +666,7 @@ def parse_command_line():
 	group.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	group.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Set the filename description in which to save the output.")
 	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (ascii/hdf5/kafka/bottle) of features written to disk. Default = hdf5")
+	group.add_option("--feature-mode", metavar = "string", default = "timeseries", help = "Specifies the mode for which features are generated (timeseries/etg). Default = timeseries")
 	group.add_option("--data-transfer", metavar = "string", default = "table", help = "Specifies the format of features transferred over-the-wire (table/row). Default = table")
 	group.add_option("--cadence", type = "int", default = 20, help = "Rate at which to write trigger files to disk. Default = 20 seconds.")
 	group.add_option("--persist-cadence", type = "int", default = 200, help = "Rate at which to persist trigger files to disk, used with hdf5 files. Needs to be a multiple of save cadence. Default = 200 seconds.")
@@ -674,6 +685,7 @@ def parse_command_line():
 	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	group.add_option("--nxydump-segment", metavar = "start:stop", help = "Set the time interval to dump from nxydump elements (optional).")
 	group.add_option("--sample-rate", type = "int", metavar = "Hz", default = 1, help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
+	group.add_option("--snr-threshold", type = "float", default = 5.5, help = "Specifies the SNR threshold for features written to disk, required if 'feature-mode' option is set. Default = 5.5")
 	group.add_option("--feature-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output features in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--feature-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output features in GPS seconds.  Required unless --data-source=lvshm")
 	parser.add_option_group(group)
@@ -920,7 +932,10 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "snrtimeseries_%s_%s.txt" % (channel, repr(rate)), segment = options.nxydump_segment)
 
 			# extract features from time series
-			thishead = pipeparts.mktrigger(pipeline, tee, int(rate // options.sample_rate), max_snr = True)
+			if options.feature_mode == 'timeseries':
+				thishead = pipeparts.mktrigger(pipeline, tee, int(rate // options.sample_rate), max_snr = True)
+			elif options.feature_mode == 'etg':
+				thishead = pipeparts.mktrigger(pipeline, tee, rate, snr_thresh = options.snr_threshold)
 
 			if options.latency_output:
 				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('aftertrigger', 5, channel, rate))
