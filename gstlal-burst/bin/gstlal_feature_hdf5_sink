@@ -38,13 +38,10 @@ from confluent_kafka import Consumer, KafkaError
 import h5py
 import numpy
 
-from gstlal import multichannel_datasource
-from gstlal import idq_utils
 from gstlal import aggregator
 
-from idq import io
-from idq import logs
-from idq import names
+from gstlal.fxtools import multichannel_datasource
+from gstlal.fxtools import utils
 
 #-------------------------------------------------
 #                  Functions
@@ -251,8 +248,8 @@ if __name__ == '__main__':
     options, args = parse_command_line()
 
     ### set up logging
-    logger = logs.get_logger(
-        names.tag2logname(options.tag, 'hdf5_sink'),
+    logger = utils.get_logger(
+        '-'.join([options.tag, 'hdf5_sink']),
         log_level=options.log_level,
         rootdir=options.rootdir,
         verbose=options.verbose

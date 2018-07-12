@@ -39,9 +39,6 @@ from lal import LIGOTimeGPS
 
 from confluent_kafka import Producer, Consumer, KafkaError
 
-from idq import logs
-from idq import names
-
 #-------------------------------------------------
 #                  Functions
 #-------------------------------------------------
@@ -88,7 +85,7 @@ class StreamSynchronizer(object):
         self.num_topics = options.num_topics
 
         ### initialize consumers
-        self.consumer_names = ['%s_%s' % (options.input_topic_basename, str(i).zfill(2)) for i in range(1, self.num_topics + 1)]
+        self.consumer_names = ['%s_%s' % (options.input_topic_basename, str(i).zfill(4)) for i in range(1, self.num_topics + 1)]
         # FIXME: hacky way of introducing group id, should be a settable option
         consumer_kafka_settings = self.kafka_settings
         consumer_kafka_settings['group.id'] = 'group_1'
@@ -240,8 +237,8 @@ if __name__ == '__main__':
     options, args = parse_command_line()
 
     ### set up logging
-    logger = logs.get_logger(
-        names.tag2logname(options.tag, 'synchronizer'),
+    logger = utils.get_logger(
+        '-'.join([options.tag, 'synchronizer']),
         log_level=options.log_level,
         rootdir=options.rootdir,
         verbose=options.verbose
