@@ -872,15 +872,20 @@ static gboolean cuda_postcoh_find_and_remove_zerobuf(GstCollectPads *pads, CudaP
 	for (collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist)) {
 		data = collectlist->data;
 		buf = gst_collect_pads_peek(pads, (GstCollectData *)data);
-		if (buf && GST_BUFFER_SIZE(buf) == 0) {
+		if (buf) { 
+			if (GST_BUFFER_SIZE(buf) == 0) { // gap buffer
 			GST_DEBUG_OBJECT(data, "bufsize is 0");
 			gst_buffer_unref(buf);
 			/* discard this buffer in collectpads so it can collect new one */
 			buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
 			gst_buffer_unref(buf);
 			find_zerobuf = TRUE;
+			}
+			else { // normal buffer pass it
+			gst_buffer_unref(buf);
+			}
 		}
-		else gst_buffer_unref(buf);
+		/* do nothing if it is null buffer */
 	}
 	return find_zerobuf;
 }
@@ -915,7 +920,7 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 		if (t_end_cur > t0) {
 			buf_aligned_offset0 = (gint) (postcoh->offset0 - offset_cur);
 			GST_DEBUG_OBJECT(data, "buffer aligned offset0 %u", buf_aligned_offset0);
-			assert(buf_aligned_offset0 >= 0);
+			g_assert(buf_aligned_offset0 >= 0);
 			subbuf = gst_buffer_create_sub(buf, buf_aligned_offset0, (offset_end_cur - offset_cur - buf_aligned_offset0) * data->channels * sizeof(float));
 			g_assert(subbuf);
 			GST_LOG_OBJECT (pads,
