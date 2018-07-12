@@ -338,7 +338,8 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	#
 
 	if veto_segments is not None:
-		head = pipeparts.mkdeglitcher(pipeline, head, veto_segments)
+		long_veto_segments = segments.segmentlist([seg for seg in veto_segments if abs(seg) > 2.0])
+		head = pipeparts.mkdeglitcher(pipeline, head, long_veto_segments)
 
 	#
 	# optional gate on whitened h(t) amplitude.  attack and hold are
