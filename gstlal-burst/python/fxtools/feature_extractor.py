@@ -144,7 +144,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		elif self.save_format == 'kafka':
 			self.data_transfer = options.data_transfer
 			self.kafka_partition = options.kafka_partition
-			self.kafka_topic = options.kafka_topic
+			self.kafka_topic = '_'.join([options.kafka_topic, self.job_id])
 			self.kafka_conf = {'bootstrap.servers': options.kafka_server}
 			self.producer = Producer(self.kafka_conf)
 
