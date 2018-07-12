@@ -14,13 +14,23 @@ OUTPATH = $(PWD)
 # channel list for analysis
 CHANNEL_LIST = channel_list.txt 
 
-MAX_STREAMS = 200
 DATA_SOURCE = lvshm
+MAX_STREAMS = 200
 
 # Parameter space config of waveform
 WAVEFORM = sine_gaussian
 MISMATCH = 0.02
 QHIGH = 40
+
+# data transfer options
+#SAVE_FORMAT = hdf5
+#SAVE_CADENCE = 20
+#PERSIST_CADENCE = 200
+
+SAVE_FORMAT = kafka
+KAFKA_TOPIC = gstlal_features
+KAFKA_SERVER = localhost:9092
+KAFKA_PARTITION = group_1
 
 # Detector
 CLUSTER:=$(shell hostname -d)
@@ -51,27 +61,73 @@ all : dag
 
 # Run etg pipe to produce dag
 dag : plots $(CHANNEL_LIST)
-	if [[ $(DATA_SOURCE) == "lvshm" ]] ; then \
+	if [[ $(DATA_SOURCE) == "lvshm" ]] && [[ $(SAVE_FORMAT) == "hdf5" ]] ; then \
 		gstlal_ll_feature_extractor_pipe \
 			--data-source $(DATA_SOURCE) \
+			--shared-memory-partition H1=LHO_RedDtchr \
+			--shared-memory-assumed-duration 1 \
+			--save-format $(SAVE_FORMAT) \
+			--cadence $(SAVE_CADENCE) \
+			--persist-cadence $(PERSIST_CADENCE) \
 			--channel-list $(CHANNEL_LIST) \
 			--out-path $(OUTPATH) \
 			--max-streams $(MAX_STREAMS) \
+			--waveform $(WAVEFORM) \
 			--mismatch $(MISMATCH) \
 			--qhigh $(QHIGH) \
 			$(CONDOR_COMMANDS) \
-			--shared-memory-partition H1=LHO_RedDtchr \
-			--shared-memory-assumed-duration 1 \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
 			--disable-web-service ; \
-	elif [[ $(DATA_SOURCE) == "framexmit" ]] ; then \
+	elif [[ $(DATA_SOURCE) == "framexmit" ]] && [[ $(SAVE_FORMAT) == "hdf5" ]] ; then \
 		gstlal_ll_feature_extractor_pipe \
 			--data-source $(DATA_SOURCE) \
+			--save-format $(SAVE_FORMAT) \
+			--cadence $(SAVE_CADENCE) \
+			--persist-cadence $(PERSIST_CADENCE) \
 			--channel-list $(CHANNEL_LIST) \
 			--out-path $(OUTPATH) \
 			--max-streams $(MAX_STREAMS) \
+			--waveform $(WAVEFORM) \
+			--mismatch $(MISMATCH) \
+			--qhigh $(QHIGH) \
+			$(CONDOR_COMMANDS) \
+			--request-cpu 2 \
+			--request-memory 15GB \
+			--verbose \
+			--disable-web-service ; \
+	elif [[ $(DATA_SOURCE) == "lvshm" ]] && [[ $(SAVE_FORMAT) == "kafka" ]] ; then \
+		gstlal_ll_feature_extractor_pipe \
+			--data-source $(DATA_SOURCE) \
+			--shared-memory-partition H1=LHO_RedDtchr \
+			--shared-memory-assumed-duration 1 \
+			--save-format $(SAVE_FORMAT) \
+			--kafka-topic $(KAFKA_TOPIC) \
+			--kafka-server $(KAFKA_SERVER) \
+			--kafka-partition $(KAFKA_PARTITION) \
+			--channel-list $(CHANNEL_LIST) \
+			--out-path $(OUTPATH) \
+			--max-streams $(MAX_STREAMS) \
+			--waveform $(WAVEFORM) \
+			--mismatch $(MISMATCH) \
+			--qhigh $(QHIGH) \
+			$(CONDOR_COMMANDS) \
+			--request-cpu 2 \
+			--request-memory 15GB \
+			--verbose \
+			--disable-web-service ; \
+	elif [[ $(DATA_SOURCE) == "framexmit" ]] && [[ $(SAVE_FORMAT) == "kafka" ]] ; then \
+		gstlal_ll_feature_extractor_pipe \
+			--data-source $(DATA_SOURCE) \
+			--save-format $(SAVE_FORMAT) \
+			--kafka-topic $(KAFKA_TOPIC) \
+			--kafka-server $(KAFKA_SERVER) \
+			--kafka-partition $(KAFKA_PARTITION) \
+			--channel-list $(CHANNEL_LIST) \
+			--out-path $(OUTPATH) \
+			--max-streams $(MAX_STREAMS) \
+			--waveform $(WAVEFORM) \
 			--mismatch $(MISMATCH) \
 			--qhigh $(QHIGH) \
 			$(CONDOR_COMMANDS) \
