@@ -148,8 +148,10 @@ def parse_command_line():
 	# Condor commands
 	group = optparse.OptionGroup(parser, "Condor Options", "Adjust parameters used for HTCondor")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
-	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count, default = 2")
-	parser.add_option("--request-memory", default = "8GB", metavar = "integer", help = "set the requested node memory, default = 8GB")
+	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count for feature extraction jobs, default = 2")
+	parser.add_option("--request-memory", default = "8GB", metavar = "integer", help = "set the requested node memory for feature extraction jobs, default = 8GB")
+	parser.add_option("--auxiliary-request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count for auxiliary processes, default = 2")
+	parser.add_option("--auxiliary-request-memory", default = "2GB", metavar = "integer", help = "set the requested node memory for auxiliary processes, default = 2GB")
 	parser.add_option_group(group)
 
 	# Synchronizer/File Sink commands
@@ -200,39 +202,39 @@ condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_com
 feature_extractor_job = inspiral_pipe.generic_job("gstlal_feature_extractor", condor_commands = condor_commands)
 
 # auxiliary jobs
-auxiliary_condor_options = {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}
-auxiliary_condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, auxiliary_condor_options)
-synchronizer_job = inspiral_pipe.generic_job("gstlal_feature_synchronizer", condor_commands = auxiliary_condor_commands)
-hdf5_sink_job = inspiral_pipe.generic_job("gstlal_feature_hdf5_sink", condor_commands = auxiliary_condor_commands)
+if options.save_format == 'kafka':
+	auxiliary_condor_options = {"request_memory":options.auxiliary_request_memory, "request_cpus":options.auxiliary_request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}
+	auxiliary_condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, auxiliary_condor_options)
+	synchronizer_job = inspiral_pipe.generic_job("gstlal_feature_synchronizer", condor_commands = auxiliary_condor_commands)
+	hdf5_sink_job = inspiral_pipe.generic_job("gstlal_feature_hdf5_sink", condor_commands = auxiliary_condor_commands)
 
-#
-# set up options for auxiliary jobs
-#
-common_options = {
-	"verbose": options.verbose,
-	"tag": options.tag,
-	"processing-cadence": options.processing_cadence,
-	"request-timeout": options.request_timeout,
-	"kafka-server": options.kafka_server
-}
+	#
+	# set up options for auxiliary jobs
+	#
+	common_options = {
+		"verbose": options.verbose,
+		"tag": options.tag,
+		"processing-cadence": options.processing_cadence,
+		"request-timeout": options.request_timeout,
+		"kafka-server": options.kafka_server
+	}
 
-synchronizer_options = {
-	"latency-timeout": options.latency_timeout,
-	"input-topic-basename": options.kafka_topic,
-	"output-topic-basename": '_'.join(['synchronizer', options.tag])
-}
+	synchronizer_options = {
+		"latency-timeout": options.latency_timeout,
+		"input-topic-basename": options.kafka_topic,
+		"output-topic-basename": '_'.join(['synchronizer', options.tag])
+	}
 
-hdf5_sink_options = {
-	"basename": options.basename,
-	"instrument": ifo,
-	"channel-list": options.channel_list,
-	"write-cadence": options.cadence,
-	"persist-cadence": options.persist_cadence,
-	"input-topic-basename": '_'.join(['synchronizer', options.tag])
-}
+	hdf5_sink_options = {
+		"instrument": ifo,
+		"channel-list": options.channel_list,
+		"write-cadence": options.cadence,
+		"persist-cadence": options.persist_cadence,
+		"input-topic-basename": '_'.join(['synchronizer', options.tag])
+	}
 
-synchronizer_options.update(common_options)
-hdf5_sink_options.update(common_options)
+	synchronizer_options.update(common_options)
+	hdf5_sink_options.update(common_options)
 
 #
 # set up jobs
@@ -240,9 +242,10 @@ hdf5_sink_options.update(common_options)
 
 feature_extractor_nodes = feature_extractor_node_gen(feature_extractor_job, dag, [], ifo, options, data_source_info)
 
-synchronizer_options.update({"num-topics": len(feature_extractor_nodes)})
-synchronizer_node = inspiral_pipe.generic_node(synchronizer_job, dag, [], opts = synchronizer_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_synchronizer")})
-hdf5_sink_node = inspiral_pipe.generic_node(hdf5_sink_job, dag, [], opts = hdf5_sink_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_hdf5_sink")})
+if options.save_format == 'kafka':
+	synchronizer_options.update({"num-topics": len(feature_extractor_nodes)})
+	synchronizer_node = inspiral_pipe.generic_node(synchronizer_job, dag, [], opts = synchronizer_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_synchronizer")})
+	hdf5_sink_node = inspiral_pipe.generic_node(hdf5_sink_job, dag, [], opts = hdf5_sink_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_hdf5_sink")})
 
 #
 # write out dag and sub files

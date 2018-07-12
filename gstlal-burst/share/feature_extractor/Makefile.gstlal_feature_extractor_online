@@ -9,7 +9,10 @@ CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-co
 # Triggering parameters #
 #########################
 
-OUTPATH = $(PWD)
+TAG = online_test
+
+IFO = H1
+#IFO = L1
 
 # channel list for analysis
 CHANNEL_LIST = channel_list.txt 
@@ -23,20 +26,26 @@ MISMATCH = 0.02
 QHIGH = 40
 
 # data transfer options
+OUTPATH = $(PWD)
+SAVE_FORMAT = kafka
 #SAVE_FORMAT = hdf5
+
+# hdf5 options
 #SAVE_CADENCE = 20
 #PERSIST_CADENCE = 200
 
-SAVE_FORMAT = kafka
+# kafka options
 KAFKA_TOPIC = gstlal_features
 KAFKA_SERVER = localhost:9092
 KAFKA_PARTITION = group_1
 
-# Detector
-CLUSTER:=$(shell hostname -d)
+# synchronizer/file sink options (kafka only)
+PROCESSING_CADENCE = 0.1
+REQUEST_TIMEOUT = 0.2
+LATENCY_TIMEOUT = 12
 
-IFO = H1
-#IFO = L1
+# cluster where analysis is run
+CLUSTER:=$(shell hostname -d)
 
 #################
 # Web directory #
@@ -112,6 +121,10 @@ dag : plots $(CHANNEL_LIST)
 			--waveform $(WAVEFORM) \
 			--mismatch $(MISMATCH) \
 			--qhigh $(QHIGH) \
+			--tag $(TAG) \
+			--processing-cadence $(PROCESSING_CADENCE) \
+			--request-timeout $(REQUEST_TIMEOUT) \
+			--latency-timeout $(LATENCY_TIMEOUT) \
 			$(CONDOR_COMMANDS) \
 			--request-cpu 2 \
 			--request-memory 15GB \
@@ -130,6 +143,10 @@ dag : plots $(CHANNEL_LIST)
 			--waveform $(WAVEFORM) \
 			--mismatch $(MISMATCH) \
 			--qhigh $(QHIGH) \
+			--tag $(TAG) \
+			--processing-cadence $(PROCESSING_CADENCE) \
+			--request-timeout $(REQUEST_TIMEOUT) \
+			--latency-timeout $(LATENCY_TIMEOUT) \
 			$(CONDOR_COMMANDS) \
 			--request-cpu 2 \
 			--request-memory 15GB \
