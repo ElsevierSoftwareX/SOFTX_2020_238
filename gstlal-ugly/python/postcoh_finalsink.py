@@ -62,8 +62,7 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue.ligolw.utils import segments as ligolw_segments
 
 import lal
-from pylal import datatypes as laltypes
-from pylal.datatypes import LIGOTimeGPS
+from lal import LIGOTimeGPS
 
 from gstlal import bottle
 from gstlal import reference_psd
@@ -511,7 +510,7 @@ class FinalSink(object):
 		message = StringIO.StringIO()
 		#message2 = file(filename, "w")
 		#pdb.set_trace()
-		ligolw_utils.write_fileobj(xmldoc, message, gz = False, trap_signals = None)
+		ligolw_utils.write_fileobj(xmldoc, message, gz = False)
 		ligolw_utils.write_filename(xmldoc, filename, gz = False, trap_signals = None)
 		xmldoc.unlink()
 	
@@ -572,21 +571,18 @@ class FinalSink(object):
 		instruments = re.findall('..', trigger.ifos)
 		for instrument in instruments:
 			elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
-			# FIXME:  remove
-			# LIGOTimeGPS type cast
-			# when we port to swig
-			# version of
-			# REAL8FrequencySeries
-			psddict[instrument] = laltypes.REAL8FrequencySeries(
+			data = numpy.array(elem.get_property("mean-psd"))
+			psddict[instrument] = lal.CreateREAL8FrequencySeries(
 				name = "PSD",
 				epoch = LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0),
 				f0 = 0.0,
 				deltaF = elem.get_property("delta-f"),
 				sampleUnits = lal.Unit("s strain^2"),	# FIXME:  don't hard-code this
-				data = numpy.array(elem.get_property("mean-psd"))
-				)
+				length = len(data)
+			)
+			psddict[instrument].data.data = data
 		fobj = StringIO.StringIO()
-		reference_psd.write_psd_fileobj(fobj, psddict, gz = True, trap_signals = None)
+		reference_psd.write_psd_fileobj(fobj, psddict, gz = True)
 		common_messages.append(("strain spectral densities", "psd.xml.gz", "psd", fobj.getvalue()))
 
 
