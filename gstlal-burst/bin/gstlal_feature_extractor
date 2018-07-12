@@ -16,7 +16,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-
+"""
+A program to extract features from auxiliary channel data in real time or in offline mode
+"""
 
 # =============================
 # 
@@ -24,8 +26,6 @@
 #
 # =============================
 
-### A program to extract features from auxiliary channel data in real time or in offline mode
-###
 ### .. graphviz::
 ###
 ###    digraph llpipe {
@@ -192,7 +192,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 def parse_command_line():
 
-	parser = OptionParser(description = __doc__)
+	parser = OptionParser(usage = '%prog [options]', description = __doc__)
 
 	# First append datasource and feature extraction common options
 	multichannel_datasource.append_options(parser)

@@ -139,7 +139,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 # =============================
 
 def parse_command_line():
-	parser = optparse.OptionParser(description = __doc__)
+	parser = optparse.OptionParser(usage = '%prog [options]', description = __doc__)
 
 	# generic data source and feature extraction options
 	multichannel_datasource.append_options(parser)

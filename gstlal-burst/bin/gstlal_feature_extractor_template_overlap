@@ -16,7 +16,10 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-
+"""
+A program that measures template overlaps and how templates are spread out in the parameter space
+for gstlal_feature_extractor
+"""
 
 ####################
 # 
@@ -206,7 +209,7 @@ def to_output_url(output_dir):
 
 def parse_command_line():
 
-	parser = OptionParser(description = __doc__)
+	parser = OptionParser(usage = '%prog [options]', description = __doc__)
 
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-m", "--mismatch", type = "float", default = 0.05, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.05.")

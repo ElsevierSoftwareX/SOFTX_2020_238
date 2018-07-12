@@ -170,7 +170,7 @@ def feature_extractor_node_gen(gstlalFeatureExtractorJob, dag, parent_nodes, seg
 #
 
 def parse_command_line():
-	parser = OptionParser(description = __doc__)
+	parser = OptionParser(usage = '%prog [options]', description = __doc__)
 
 	# generic data source options
 	multichannel_datasource.append_options(parser)

@@ -16,6 +16,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+"""
+A program that allows diagnosis of the whitening stage of gstlal_feature_extractor
+"""
 
 
 ####################
@@ -60,7 +63,7 @@ PSD_DROP_TIME = 16 * PSD_FFT_LENGTH
 
 def parse_command_line():
 
-	parser = OptionParser(description = __doc__)
+	parser = OptionParser(usage = '%prog [options]', description = __doc__)
 
 	# First append the datasource common options
 	multichannel_datasource.append_options(parser)
