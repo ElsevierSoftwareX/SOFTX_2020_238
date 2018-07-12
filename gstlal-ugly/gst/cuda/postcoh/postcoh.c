@@ -778,12 +778,11 @@ cuda_postcoh_fillin_discont(GstCollectPads *pads, CudaPostcoh *postcoh)
 		data = collectlist->data;
 		buf = gst_collect_pads_peek(pads, (GstCollectData *)data);
 
-		if (buf != NULL) {
+		if (buf != NULL) { // != if(buf)
 		/* if the buffer in the pad is behind what we expected,
 		 * we span the gap using zero buffer.
 		 */ 
 		if (GST_BUFFER_OFFSET(buf) > data->next_offset) {
-			printf("catch a gap\n");
 			GST_DEBUG_OBJECT(data, "gap :data offset %" G_GUINT64_FORMAT "current next offset %" G_GUINT64_FORMAT, GST_BUFFER_OFFSET(buf), data->next_offset);
 			GstBuffer *zerobuf = gst_buffer_new_and_alloc((GST_BUFFER_OFFSET(buf)- data->next_offset) * postcoh->bps); 
 			if(!zerobuf) {
@@ -794,9 +793,8 @@ cuda_postcoh_fillin_discont(GstCollectPads *pads, CudaPostcoh *postcoh)
 
 		}
 		((GstPostcohCollectData *)data)->next_offset = GST_BUFFER_OFFSET_END(buf);
-
-		}
 		gst_buffer_unref(buf);
+		}
 	}
 	return TRUE;
 }
@@ -872,9 +870,9 @@ static gboolean cuda_postcoh_find_and_remove_zerobuf(GstCollectPads *pads, CudaP
 	for (collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist)) {
 		data = collectlist->data;
 		buf = gst_collect_pads_peek(pads, (GstCollectData *)data);
-		if (buf) { 
+		if (buf != NULL) {  // != if(buf)
 			if (GST_BUFFER_SIZE(buf) == 0) { // gap buffer
-			GST_DEBUG_OBJECT(data, "bufsize is 0");
+			GST_DEBUG_OBJECT(data, "bufsize is zero");
 			gst_buffer_unref(buf);
 			/* discard this buffer in collectpads so it can collect new one */
 			buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
@@ -882,6 +880,7 @@ static gboolean cuda_postcoh_find_and_remove_zerobuf(GstCollectPads *pads, CudaP
 			find_zerobuf = TRUE;
 			}
 			else { // normal buffer pass it
+			GST_DEBUG_OBJECT(data, "bufsize is not zero");
 			gst_buffer_unref(buf);
 			}
 		}
