@@ -34,6 +34,7 @@ from gstlal import multirate_datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
 from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw import lsctables, ligolw
 
 ### This program will play data in a variety of ways
 ###
@@ -129,6 +130,11 @@ from glue.ligolw.utils import segments as ligolw_segments
 ###
 
 
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+
 def parse_command_line():
 
 	parser = OptionParser(description = __doc__)
@@ -143,6 +149,8 @@ def parse_command_line():
 	parser.add_option("--sample-format", metavar = "name", help = "Force a specific sample format for the output.  If not specified, the format is chosen by auto-negotiation with the encoder.  Allowed values are any GStreamer-recognized format that is compatible with the requested encoder.  Examples include \"F32LE\", \"F64LE\".")
 	parser.add_option("--rate", metavar = "Hz", type = "int", default = 4096, help = "Downsample input to this sample rate. Default = 4096 Hz.  Must be <= input sample rate or else you will get a caps negotiation error.")
 	parser.add_option("--whiten", action = "store_true", help = "Whiten the time series (default = do not whiten).")
+	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional). Must coincide with --whiten")
+	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.  Must coincide with --whiten", default = "vetoes")
 	parser.add_option("--reference-psd", metavar = "file", help = "When whitening, normalize the time series to the spectrum described in this XML file.  If this option is not given, the spectrum is measured from the data.") 
 	parser.add_option("--low-pass-filter", metavar = "Hz", type = "float", help = "Low pass filter frequency (default = no low-pass filter).  Low-pass filter is applied after whitening.")
 	parser.add_option("--high-pass-filter", metavar = "Hz", type = "float", help = "High pass filter frequency (default = no high-pass filter).  High-pass filter is applied after whitening.")
@@ -159,8 +167,8 @@ def parse_command_line():
 		if options.low_pass_filter <= options.high_pass_filter:
 			raise ValueError("--low-pass-filter must be > --high-pass-filter")
 
-	if options.reference_psd and not options.whiten:
-		raise ValueError("--reference-psd requires --whiten")
+	if options.reference_psd or options.veto_segments_file and not options.whiten:
+		raise ValueError("--reference-psd and --veto-segments-file requires --whiten")
 
 	if len(options.channel_name) > 1:
 		raise ValueError("only one --channel-name allowed")
@@ -179,6 +187,10 @@ if options.reference_psd is not None:
 else:
 	psd = None
 
+if options.veto_segments_file is not None:
+	veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()[instrument]
+else:
+	veto_segments = None
 
 # building the event loop and pipeline
 mainloop = GObject.MainLoop()
@@ -193,7 +205,7 @@ head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, ve
 
 # if whitening, leverage mkwhitened_multirate_src() otherwise just resample
 if options.whiten:
-	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.rate], instrument, psd, track_psd = True)[options.rate]
+	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.rate], instrument, psd, track_psd = True, veto_segments = veto_segments)[options.rate]
 else:
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.rate)
