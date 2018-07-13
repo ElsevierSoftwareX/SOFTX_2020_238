@@ -98,8 +98,8 @@ CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 # Link to offline analaysis rules in Makefile
 # Default is local path toi git repo version for CI.
 # Change for other runs.
-#include ../share/Makefile.offline_analysis_rules
-include $(LAL_PATH)/share/gstlal/Makefile.offline_analysis_rules
+include ../share/Makefile.offline_analysis_rules
+#include $(LAL_PATH)/share/gstlal/Makefile.offline_analysis_rules
 #include $(GSTLAL_PATH)/share/gstlal/Makefile.offline_analysis_rules
 
 # FIXME Is there a way to put this back in offline analysis rules?
@@ -159,17 +159,17 @@ injections.xml:
 H1_psd.xml.gz:
 	# Generate H1 PSD used to produce fake data
 	# gstlal_psd_xml_from_asd_txt_0001
-	gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt
+	gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ ../../gstlal/share/early_aligo_asd.txt
+	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt
 	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt
-	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	@echo ""
  
 L1_psd.xml.gz:
 	# Generate L1 PSD used to produce fake data
 	# gstlal_psd_xml_from_asd_txt_0002
-	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt 
+	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ../../gstlal/share/early_aligo_asd.txt
+	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt 
 	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt 
-	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	@echo ""
 
 H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf: H1_psd.xml.gz injections.xml
