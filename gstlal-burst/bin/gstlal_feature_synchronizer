@@ -39,6 +39,8 @@ from lal import LIGOTimeGPS
 
 from confluent_kafka import Producer, Consumer, KafkaError
 
+from gstlal.fxtools import utils
+
 #-------------------------------------------------
 #                  Functions
 #-------------------------------------------------

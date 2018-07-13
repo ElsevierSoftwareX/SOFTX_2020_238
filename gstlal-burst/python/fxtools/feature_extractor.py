@@ -44,6 +44,8 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
+from confluent_kafka import Producer
+
 import lal
 from lal import LIGOTimeGPS
 
