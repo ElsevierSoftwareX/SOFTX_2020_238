@@ -316,7 +316,7 @@ static gboolean update_variable_filter(complex double *variable_filter, gint64 v
 	/* Check if the filter has sain values in it */
 	gboolean success = TRUE;
 	for(n = 0; n < variable_filter_length; n++)
-		success &= isnormal(((double *) variable_filter)[n]);
+		success &= isnormal(((double *) variable_filter)[n]) || ((double *) variable_filter)[n] == 0.0;
 
 	return success;
 }
