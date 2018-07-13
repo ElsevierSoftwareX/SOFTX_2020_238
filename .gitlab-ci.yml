@@ -206,8 +206,9 @@ test:offline:
     - level2:gstlal-inspiral
   script:
     - export GSTLAL_FIR_WHITEN=0
+    - export GSTLAL_WEBVIS_DIR=gstlal-ugly/share/vis/
     - cd gstlal-inspiral/tests
-    - make -f Makefile_offline_tutorial_test
+    - make -f Makefile.offline_tutorial_test
   artifacts:
     expire_in: 3h
     paths:

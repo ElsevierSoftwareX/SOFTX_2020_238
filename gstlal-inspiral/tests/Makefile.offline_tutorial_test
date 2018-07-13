@@ -1,21 +1,24 @@
-# Controls the number of templates in each SVD sub bank
-NUM_SPLIT_TEMPLATES = 500
-# Number of bins of chi to uniformly bin templates into
-NUM_CHI_BINS = 1
-# Controls the overlap from sub bank to sub bank - helps mitigate edge effects
-# in the SVD.  Redundant templates will be removed
-OVERLAP = 50
-# The approximant that you wish to filter with for BANK_MCHIRP1 and BANK_MCHIRP2, respectively.
-APPROXIMANT = 0.0:100.0:TaylorF2
+SHELL := /bin/bash # Use bash syntax
+
+##################
+# Runtime outout #
+##################
+
+# Prints runtime of each individual job. 
+# To disable leave blank.
+#TIME=
+TIME=time -p
 
 ##############################
 # Data generation parameters #
 ##############################
 
 # The GPS start time to generate data
-DATASTART=999999952
+DATASTART = 999999998
 # The GPS stop time to generate data
-DATASTOP=1000002100
+DATASTOP = 1000002070
+# Sampling rate of fake data
+SAMPLE_RATE = 4096
 
 #########################
 # Triggering parameters #
@@ -41,12 +44,22 @@ WEBDIR = ~/public_html/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
 # The number of sub banks in each SVD bank file
 NUMBANKS = 1
 
+############################
+# Template Bank Parameters #
+############################
 
-
+# Controls the number of templates in each SVD sub bank
+NUM_SPLIT_TEMPLATES = 500
+# Number of bins of chi to uniformly bin templates into
+NUM_CHI_BINS = 1
+# Controls the overlap from sub bank to sub bank - helps mitigate edge effects
+# in the SVD.  Redundant templates will be removed
+OVERLAP = 50
+# The approximant that you wish to filter with for BANK_MCHIRP1 and BANK_MCHIRP2, respectively.
+APPROXIMANT = 0.0:100.0:TaylorF2
 # Template bank parameters
 LOW_FREQUENCY_CUTOFF = 30.0
 HIGH_FREQUENCY_CUTOFF = 1024
-SAMPLE_RATE = 4096
 
 ####################
 # Injection params #
@@ -82,7 +95,12 @@ CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 # Get some basic definitions.  NOTE this comes from the share directory probably. #
 ###################################################################################
 
-include ../share/Makefile.offline_analysis_rules
+# Link to offline analaysis rules in Makefile
+# Default is local path toi git repo version for CI.
+# Change for other runs.
+#include ../share/Makefile.offline_analysis_rules
+include $(LAL_PATH)/share/gstlal/Makefile.offline_analysis_rules
+#include $(GSTLAL_PATH)/share/gstlal/Makefile.offline_analysis_rules
 
 # FIXME Is there a way to put this back in offline analysis rules?
 BANK_CACHE_STRING:=H1=H1_split_bank.cache,L1=L1_split_bank.cache
@@ -108,7 +126,7 @@ $(WEBDIR): $(MAKEFILE_LIST)
 
 injections.xml:
 	# Generate injection file containing a single BNS injection
-	lalapps_inspinj \
+	$(TIME) lalapps_inspinj \
 		--m-distr gaussian \
 		--min-mass1 1.39 \
 		--max-mass1 1.41 \
@@ -125,8 +143,8 @@ injections.xml:
 		--disable-spin \
 		--d-distr uniform \
 		--i-distr uniform \
-		--min-distance 30000 \
-		--max-distance 40000 \
+		--min-distance 10000 \
+		--max-distance 15000 \
 		--waveform TaylorT4threePointFivePN \
 		--l-distr random \
 		--f-lower 15. \
@@ -141,23 +159,23 @@ injections.xml:
 H1_psd.xml.gz:
 	# Generate H1 PSD used to produce fake data
 	# gstlal_psd_xml_from_asd_txt_0001
-	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt
+	gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt
 	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt
-	gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ ../../gstlal/share/early_aligo_asd.txt
+	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	@echo ""
  
 L1_psd.xml.gz:
 	# Generate L1 PSD used to produce fake data
 	# gstlal_psd_xml_from_asd_txt_0002
-	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt 
+	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt 
 	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt 
-	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ../../gstlal/share/early_aligo_asd.txt
+	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	@echo ""
 
 H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf: H1_psd.xml.gz injections.xml
 	# Generate 2048s of H1 FAKE data with a single injection included
 	# gstlal_fake_frames_0001
-	gstlal_fake_frames \
+	$(TIME) gstlal_fake_frames \
 		--data-source white \
 		--sample-rate $(SAMPLE_RATE) \
 		--frame-type H1_FAKE \
@@ -174,7 +192,7 @@ H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf: H1_psd.xml.gz injections.xml
 L-L1_FAKE-10000/L-L1_FAKE-1000000000-512.gwf: L1_psd.xml.gz injections.xml
 	# Generate 2048s of L1 FAKE data with a single injection included
 	# gstlal_fake_frames_0002
-	gstlal_fake_frames \
+	$(TIME) gstlal_fake_frames \
 		--data-source white \
 		--sample-rate $(SAMPLE_RATE) \
 		--frame-type L1_FAKE \
@@ -191,7 +209,7 @@ L-L1_FAKE-10000/L-L1_FAKE-1000000000-512.gwf: L1_psd.xml.gz injections.xml
 frames.cache: H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf L-L1_FAKE-10000/L-L1_FAKE-1000000000-512.gwf
 	# Produce frames cache file
 	# A file that contains full paths to all frame files
-	ls H-H1_FAKE-10000/* L-L1_FAKE-10000/* | lalapps_path2cache > frames.cache
+	ls H-H1_FAKE-*/* L-L1_FAKE-*/* | lalapps_path2cache > frames.cache
 	@echo ""
 
 segments.xml.gz:
@@ -221,7 +239,7 @@ tisi.xml:
 
 measured_psd.xml.gz: frames.cache
 	# Job gstlal_reference_psd_0001
-	gstlal_reference_psd \
+	$(TIME) gstlal_reference_psd \
 		--data-source frames \
 		--frame-cache frames.cache \
 		--gps-start-time $(START) \
@@ -235,22 +253,22 @@ measured_psd.xml.gz: frames.cache
 
 psd.png: measured_psd.xml.gz
 	# gstlal_plot_psd_0001
-	gstlal_plot_psd --output $@ measured_psd.xml.gz
+	$(TIME) gstlal_plot_psd --output $@ measured_psd.xml.gz
 	@echo ""
 
 psd_horizon.png:
 	# gstlal_plot_psd_horizon_0001
-	gstlal_plot_psd_horizon $@ measured_psd.xml.gz
+	$(TIME) gstlal_plot_psd_horizon $@ measured_psd.xml.gz
 	@echo ""
 
 gstlal_bank.xml.gz: measured_psd.xml.gz
 	# Produce template bank
-	lalapps_cbc_sbank \
+	$(TIME) lalapps_cbc_sbank \
 		--approximant TaylorF2 \
-		--mass1-min 1.31 \
-		--mass1-max 1.485 \
-		--mass2-min 1.31 \
-		--mass2-max 1.485 \
+		--mass1-min 1.35 \
+		--mass1-max 1.45 \
+		--mass2-min 1.35 \
+		--mass2-max 1.45 \
 		--spin1-min 0 \
 		--spin1-max 0 \
 		--spin2-max 0 \
@@ -258,7 +276,7 @@ gstlal_bank.xml.gz: measured_psd.xml.gz
 		--flow $(LOW_FREQUENCY_CUTOFF) \
 		--reference-psd measured_psd.xml.gz \
 		--instrument H1 \
-		--checkpoint 50 \
+		--checkpoint 0 \
 		--iterative-match-df-max 2.0 \
 		--coarse-match-df 2.0 \
 		--aligned-spin \
@@ -275,7 +293,7 @@ gstlal_bank.xml.gz: measured_psd.xml.gz
 
 H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz: gstlal_bank.xml.gz
 	# gstlal_bank_splitter_0001
-	gstlal_bank_splitter \
+	$(TIME) gstlal_bank_splitter \
 		--f-low $(LOW_FREQUENCY_CUTOFF) \
 		--group-by-chi $(NUM_CHI_BINS) \
 		--approximant $(APPROXIMANT) \
@@ -291,7 +309,7 @@ H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz: gstlal_bank.xml.gz
 
 L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz: gstlal_bank.xml.gz
 	# gstlal_bank_splitter_0002
-	gstlal_bank_splitter \
+	$(TIME) gstlal_bank_splitter \
 		--f-low $(LOW_FREQUENCY_CUTOFF) \
 		--group-by-chi $(NUM_CHI_BINS) \
 		--approximant $(APPROXIMANT) \
@@ -307,7 +325,7 @@ L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz: gstlal_bank.xml.gz
 
 H1-0000_SVD-1000000000-2048.xml.gz: H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz
 	# gstlal_svd_bank_0001
-	gstlal_svd_bank \
+	$(TIME) gstlal_svd_bank \
 		--reference-psd measured_psd.xml.gz \
 		--samples-min $(SAMPLES_MIN) \
 		--bank-id 0_0 \
@@ -326,7 +344,7 @@ H1-0000_SVD-1000000000-2048.xml.gz: H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz
 
 L1-0000_SVD-1000000000-2048.xml.gz: L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz
 	# gstlal_svd_bank_0002
-	gstlal_svd_bank \
+	$(TIME) gstlal_svd_bank \
 		--reference-psd measured_psd.xml.gz \
 		--samples-min $(SAMPLES_MIN) \
 		--bank-id 0_0 \
@@ -345,7 +363,7 @@ L1-0000_SVD-1000000000-2048.xml.gz: L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz
 
 H1L1-0000_LLOID-1000000000-2048.xml.gz: measured_psd.xml.gz frames.cache segments.xml.gz vetoes.xml.gz tisi.xml H1-0000_SVD-1000000000-2048.xml.gz L1-0000_SVD-1000000000-2048.xml.gz
 	# gstlal_inspiral_0001
-	gstlal_inspiral \
+	$(TIME) gstlal_inspiral \
 		--singles-threshold inf \
 		--reference-psd measured_psd.xml.gz \
 		--track-psd  \
@@ -374,7 +392,7 @@ H1L1-0000_LLOID-1000000000-2048.xml.gz: measured_psd.xml.gz frames.cache segment
 
 H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz:
 	# gstlal_inspiral_create_prior_diststats_0001
-	gstlal_inspiral_create_prior_diststats \
+	$(TIME) gstlal_inspiral_create_prior_diststats \
 		--instrument H1 \
 		--instrument L1 \
 		--min-instruments $(MIN_IFOS) \
@@ -385,7 +403,7 @@ H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz:
 
 H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz: H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz H1L1-0000_LLOID-1000000000-2048.xml.gz
 	# gstlal_inspiral_marginalize_likelihood_0001
-	gstlal_inspiral_marginalize_likelihood \
+	$(TIME) gstlal_inspiral_marginalize_likelihood \
 		--output $@ \
 		--marginalize ranking-stat \
 		$< H1L1-0000_DIST_STATS-1000000000-2048.xml.gz \
@@ -395,7 +413,7 @@ H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz: H1L1-0000_CREATE_PRIOR_DIST_ST
 H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz: H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz
 	# gstlal_inspiral_calc_rank_pdfs_0001
 	# n samples = 2**18
-	gstlal_inspiral_calc_rank_pdfs \
+	$(TIME) gstlal_inspiral_calc_rank_pdfs \
 		--output H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz \
 		--ranking-stat-samples 262144 \
 		H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz \
@@ -404,7 +422,7 @@ H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz: H1L1-0000_MARG_DIST_STATS-10000
 
 gstlal_inspiral_calc_likelihood_0001: H1L1-0000_LLOID-1000000000-2048.xml.gz H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz
 	# gstlal_inspiral_calc_likelihood_0001
-	gstlal_inspiral_calc_likelihood \
+	$(TIME) gstlal_inspiral_calc_likelihood \
 		--likelihood-url H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz \
 		--tmp-space $(TMPDIR) \
 		H1L1-0000_LLOID-1000000000-2048.xml.gz \
@@ -414,7 +432,7 @@ gstlal_inspiral_calc_likelihood_0001: H1L1-0000_LLOID-1000000000-2048.xml.gz H1L
 
 lalapps_run_sqlite_0001: gstlal_inspiral_calc_likelihood_0001
 	# lalapps_run_sqlite_0001
-	lalapps_run_sqlite \
+	$(TIME) lalapps_run_sqlite \
 		--sql-file $(LAL_PATH)/share/gstlal/simplify_and_cluster.sql \
 		--tmp-space $(TMPDIR) \
 		H1L1-0000_LLOID-1000000000-2048.xml.gz
@@ -423,7 +441,7 @@ lalapps_run_sqlite_0001: gstlal_inspiral_calc_likelihood_0001
 
 H1L1-ALL_LLOID-1000000000-2048.sqlite: lalapps_run_sqlite_0001
 	# ligolw_sqlite_from_xml_0004
-	ligolw_sqlite \
+	$(TIME) ligolw_sqlite \
 		--database H1L1-ALL_LLOID-1000000000-2048.sqlite \
 		--replace \
 		--tmp-space $(TMPDIR) \
@@ -435,7 +453,7 @@ H1L1-ALL_LLOID-1000000000-2048.sqlite: lalapps_run_sqlite_0001
 
 gstlal_inspiral_marginalize_likelihood_0002: H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz
 	# gstlal_inspiral_marginalize_likelihood_0002
-	gstlal_inspiral_marginalize_likelihood \
+	$(TIME) gstlal_inspiral_marginalize_likelihood \
 		--output H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz \
 		--marginalize ranking-stat-pdf \
 		H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz \
@@ -445,7 +463,7 @@ gstlal_inspiral_marginalize_likelihood_0002: H1L1-0000_CALC_RANK_PDFS-1000000000
 
 marginalized_likelihood.xml.gz: gstlal_inspiral_marginalize_likelihood_0002
 	# gstlal_inspiral_marginalize_likelihood_0003
-	gstlal_inspiral_marginalize_likelihood \
+	$(TIME) gstlal_inspiral_marginalize_likelihood \
 		--output marginalized_likelihood.xml.gz \
 		--marginalize ranking-stat-pdf \
 		H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz \
@@ -454,7 +472,7 @@ marginalized_likelihood.xml.gz: gstlal_inspiral_marginalize_likelihood_0002
 
 gstlal_compute_far_from_snr_chisq_histograms_0001: marginalized_likelihood.xml.gz H1L1-ALL_LLOID-1000000000-2048.sqlite
 	# gstlal_compute_far_from_snr_chisq_histograms_0001
-	gstlal_compute_far_from_snr_chisq_histograms \
+	$(TIME) gstlal_compute_far_from_snr_chisq_histograms \
 		--non-injection-db H1L1-ALL_LLOID-1000000000-2048.sqlite \
 		--background-bins-file marginalized_likelihood.xml.gz \
 		--tmp-space $(TMPDIR) \
@@ -468,7 +486,7 @@ gstlal_compute_far_from_snr_chisq_histograms_0001: marginalized_likelihood.xml.g
 
 gstlal_inspiral_plotsummary_0001: gstlal_compute_far_from_snr_chisq_histograms_0001 plots
 	# gstlal_inspiral_plotsummary_0001
-	gstlal_inspiral_plotsummary \
+	$(TIME) gstlal_inspiral_plotsummary \
 		--output-dir plots \
 		--remove-precession \
 		--user-tag ALL_LLOID_COMBINED \
@@ -484,7 +502,7 @@ gstlal_inspiral_plotsummary_0001: gstlal_compute_far_from_snr_chisq_histograms_0
 
 gstlal_inspiral_plot_background_0001: gstlal_inspiral_plotsummary_0001
 	# gstlal_inspiral_plot_background_0001
-	gstlal_inspiral_plot_background \
+	$(TIME) gstlal_inspiral_plot_background \
 		--database H1L1-ALL_LLOID-1000000000-2048.sqlite \
 		--user-tag ALL_LLOID_COMBINED \
 		--output-dir plots \
@@ -498,7 +516,7 @@ gstlal_inspiral_plot_background_0001: gstlal_inspiral_plotsummary_0001
 
 gstlal_inspiral_summary_page_0001: gstlal_inspiral_plot_background_0001 $(WEBDIR)
 	# gstlal_inspiral_summary_page_0001
-	gstlal_inspiral_summary_page \
+	$(TIME) gstlal_inspiral_summary_page \
 		--output-user-tag ALL_LLOID_COMBINED \
 		--glob-path plots \
 		--webserver-dir $(WEBDIR) \
@@ -508,7 +526,7 @@ gstlal_inspiral_summary_page_0001: gstlal_inspiral_plot_background_0001 $(WEBDIR
 
 gstlal_inspiral_summary_page_0002: gstlal_inspiral_summary_page_0001
 	# gstlal_inspiral_summary_page_0002
-	gstlal_inspiral_summary_page \
+	$(TIME) gstlal_inspiral_summary_page \
 		--output-user-tag ALL_LLOID_COMBINED \
 		--glob-path plots \
 		--webserver-dir $(WEBDIR)/OPEN-BOX \
@@ -519,10 +537,11 @@ gstlal_inspiral_summary_page_0002: gstlal_inspiral_summary_page_0001
 	@touch gstlal_inspiral_summary_page_0002
 
 clean:
-	rm -rf H1* L1* *.txt *.xml *.gz *.cache gstlal_* lalapps_* ligolw_*
+	rm -rf H* L* *.txt *.xml *.gz *.cache gstlal_* lalapps_* ligolw_* $(WEBDIR)* plots/
 
 clean-data:
-	rm -rf H-H1_FAKE-10000 L-L1_FAKE-10000
+	rm -rf H-H1_FAKE-* L-L1_FAKE-*
 
-clean-all:
-	rm -rf H* L* *.txt *.xml *.gz *.cache gstlal_* lalapps_* ligolw_*
+clean-webdir:
+	rm -rf $(WEBDIR)*
+
