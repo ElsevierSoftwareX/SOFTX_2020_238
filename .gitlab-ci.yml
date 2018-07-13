@@ -230,12 +230,14 @@ pages:
     - apt-get install --assume-yes python-sphinx texlive-base texlive-binaries texlive-extra-utils texlive-font-utils texlive-fonts-extra texlive-fonts-extra-doc texlive-fonts-recommended
     - apt-get install --assume-yes texlive-fonts-recommended-doc texlive-generic-extra texlive-generic-recommended texlive-latex-base texlive-latex-base-doc texlive-latex-extra
     - apt-get install --assume-yes texlive-latex-extra-doc texlive-latex-recommended texlive-latex-recommended-doc texlive-pictures texlive-pictures-doc texlive-pstricks texlive-pstricks-doc texlive-science texlive-science-doc
+    - export GSTLAL_FIR_WHITEN=0
     - export TMPDIR=tmp/
     - cd doc; make html
     - cd ..; cp -rf doc/_build/* public/
   dependencies:
     - level2:gstlal-inspiral
     - level2:gstlal-calibration
+    - level2:gstlal-burst
   artifacts:
     paths:
       - public
