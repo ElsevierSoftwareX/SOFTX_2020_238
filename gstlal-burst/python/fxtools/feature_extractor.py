@@ -44,8 +44,6 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
-from confluent_kafka import Producer
-
 import lal
 from lal import LIGOTimeGPS
 
@@ -62,6 +60,11 @@ from gstlal import simplehandler
 from gstlal.fxtools import sngltriggertable
 from gstlal.fxtools import utils
 
+# set up confluent_kafka as an optional library
+try:
+	import confluent_kafka as kafka
+except ImportError:
+	kafka = None
 
 # =============================
 # 
@@ -144,11 +147,12 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.fdata.append(self.header)
 
 		elif self.save_format == 'kafka':
+			check_kafka()
 			self.data_transfer = options.data_transfer
 			self.kafka_partition = options.kafka_partition
 			self.kafka_topic = '_'.join([options.kafka_topic, self.job_id])
 			self.kafka_conf = {'bootstrap.servers': options.kafka_server}
-			self.producer = Producer(self.kafka_conf)
+			self.producer = kafka.Producer(self.kafka_conf)
 
 		elif self.save_format == 'bottle':
 			assert not options.disable_web_service, 'web service is not available to use bottle to transfer features'
@@ -558,3 +562,10 @@ def append_options(parser):
 	group.add_option("--feature-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output features in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--feature-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output features in GPS seconds.  Required unless --data-source=lvshm")
 	parser.add_option_group(group)
+
+def check_kafka():
+    """!
+    Checks if confluent_kafka was imported correctly.
+    """
+    if kafka is None:
+        raise ImportError("you're attempting to use kafka to transfer features, but confluent_kafka could not be imported")
