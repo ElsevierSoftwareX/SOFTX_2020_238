@@ -281,7 +281,7 @@ gstlal_bank.xml.gz: measured_psd.xml.gz
 		--coarse-match-df 2.0 \
 		--aligned-spin \
 		--output-filename $@ \
-		--match-min 0.97 \
+		--match-min 0.95 \
 		--fhigh-max $(HIGH_FREQUENCY_CUTOFF) \
 		--verbose
 	@echo ""
