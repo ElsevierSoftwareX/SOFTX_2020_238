@@ -203,10 +203,26 @@ test:offline:
   image: aepace/gstlal-dev:stretch-mkl
   stage: test
   dependencies:
+    - level1:gstlal-ugly
     - level2:gstlal-inspiral
   script:
+    # Export variables for the offline tutorial
     - export GSTLAL_FIR_WHITEN=0
     - export GSTLAL_WEBVIS_DIR=gstlal-ugly/share/vis/
+    - export LAL_PATH=${GSTLAL_DIR}
+    
+    # Get documentation packages, and download lalsuite-extra data:
+    - apt-get install --assume-yes texlive-base texlive-binaries texlive-extra-utils texlive-font-utils texlive-fonts-extra texlive-fonts-extra-doc texlive-fonts-recommended dvipng
+    - apt-get install --assume-yes texlive-fonts-recommended-doc texlive-generic-extra texlive-generic-recommended texlive-latex-base texlive-latex-base-doc texlive-latex-extra
+    - apt-get install --assume-yes texlive-latex-extra-doc texlive-latex-recommended texlive-latex-recommended-doc texlive-pictures texlive-pictures-doc texlive-pstricks texlive-pstricks-doc texlive-science texlive-science-doc
+    # Start the avahi and dbus services:
+    - service dbus start
+    - service avahi-daemon start
+    # Get the necessary ROM data:
+    - git lfs install
+    - git clone https://git.ligo.org/lscsoft/lalsuite-extra.git ${GSTLAL_DIR}/lalsuite-extra
+    - export LAL_DATA_PATH=${GSTLAL_DIR}/lalsuite-extra/data/lalsimulation/
+
     - cd gstlal-inspiral/tests
     - make -f Makefile.offline_tutorial_test
   artifacts:
