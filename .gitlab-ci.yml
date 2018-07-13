@@ -40,6 +40,8 @@ before_script:
     - export LDFLAGS="-lfftw3 -lfftw3f -lfftw3_threads -lfftw3f_threads -L${GSTLAL_DIR}/lib -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_ilp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl"
     - export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libfftw3.so:/usr/lib/x86_64-linux-gnu/libfftw3f.so"
     
+    - export TMPDIR=/tmp
+    
 cache:
   key: $CI_JOB_NAME
   paths:
