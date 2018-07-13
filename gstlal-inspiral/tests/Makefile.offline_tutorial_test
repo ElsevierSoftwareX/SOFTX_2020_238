@@ -49,7 +49,7 @@ NUMBANKS = 1
 ############################
 
 # Controls the number of templates in each SVD sub bank
-NUM_SPLIT_TEMPLATES = 500
+NUM_SPLIT_TEMPLATES = 200
 # Number of bins of chi to uniformly bin templates into
 NUM_CHI_BINS = 1
 # Controls the overlap from sub bank to sub bank - helps mitigate edge effects
