@@ -37,10 +37,7 @@ TAG = gstlal_offline_tutorial
 # Run number
 RUN=run_1
 # A web directory for output
-# cit & uwm
-WEBDIR = ~/public_html/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
-# Atlas
-#WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
+WEBDIR = WEBDIR/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
 # The number of sub banks in each SVD bank file
 NUMBANKS = 1
 
@@ -49,7 +46,7 @@ NUMBANKS = 1
 ############################
 
 # Controls the number of templates in each SVD sub bank
-NUM_SPLIT_TEMPLATES = 200
+NUM_SPLIT_TEMPLATES = 250
 # Number of bins of chi to uniformly bin templates into
 NUM_CHI_BINS = 1
 # Controls the overlap from sub bank to sub bank - helps mitigate edge effects
@@ -261,29 +258,71 @@ psd_horizon.png:
 	$(TIME) gstlal_plot_psd_horizon $@ measured_psd.xml.gz
 	@echo ""
 
-gstlal_bank.xml.gz: measured_psd.xml.gz
+#gstlal_bank.xml.gz: measured_psd.xml.gz
+#	# Produce template bank
+#	$(TIME) lalapps_cbc_sbank \
+#		--approximant TaylorF2 \
+#		--mass1-min 1.35 \
+#		--mass1-max 1.45 \
+#		--mass2-min 1.35 \
+#		--mass2-max 1.45 \
+#		--spin1-min 0 \
+#		--spin1-max 0 \
+#		--spin2-max 0 \
+#		--spin2-min 0 \
+#		--flow $(LOW_FREQUENCY_CUTOFF) \
+#		--reference-psd measured_psd.xml.gz \
+#		--instrument H1 \
+#		--checkpoint 0 \
+#		--iterative-match-df-max 2.0 \
+#		--coarse-match-df 2.0 \
+#		--aligned-spin \
+#		--output-filename $@ \
+#		--match-min 0.95 \
+#		--fhigh-max $(HIGH_FREQUENCY_CUTOFF) \
+#		--verbose
+#	@echo ""
+
+gstlal_bank.xml.gz: frames.cache
 	# Produce template bank
-	$(TIME) lalapps_cbc_sbank \
+	$(TIME) lalapps_tmpltbank \
+		--disable-compute-moments \
+		--grid-spacing Hexagonal \
+		--dynamic-range-exponent 69.0 \
+		--enable-high-pass 10.0 \
+		--high-pass-order 8 \
+		--strain-high-pass-order 8 \
+		--minimum-mass 1.35 \
+		--maximum-mass 1.45 \
+		--min-total-mass 2.7 \
+		--max-total-mass 2.9 \
+		--max-eta 0.25 \
+		--min-eta 0.18 \
+		--gps-start-time 1000000000 \
+		--gps-end-time 1000002048 \
+		--calibrated-data real_8 \
+		--channel-name H1:FAKE \
+		--space Tau0Tau3 \
+		--number-of-segments 15 \
+		--minimal-match 0.97 \
+		--high-pass-attenuation 0.1 \
+		--min-high-freq-cutoff ERD \
+		--segment-length 1048576 \
+		--low-frequency-cutoff 15.0 \
+		--num-freq-cutoffs 1 \
+		--sample-rate 4096 \
+		--high-frequency-cutoff 1024.0 \
+		--resample-filter ldas \
+		--strain-high-pass-atten 0.1 \
+		--strain-high-pass-freq 10.0 \
+		--frame-cache frames.cache \
+		--max-high-freq-cutoff ERD \
 		--approximant TaylorF2 \
-		--mass1-min 1.35 \
-		--mass1-max 1.45 \
-		--mass2-min 1.35 \
-		--mass2-max 1.45 \
-		--spin1-min 0 \
-		--spin1-max 0 \
-		--spin2-max 0 \
-		--spin2-min 0 \
-		--flow $(LOW_FREQUENCY_CUTOFF) \
-		--reference-psd measured_psd.xml.gz \
-		--instrument H1 \
-		--checkpoint 0 \
-		--iterative-match-df-max 2.0 \
-		--coarse-match-df 2.0 \
-		--aligned-spin \
-		--output-filename $@ \
-		--match-min 0.95 \
-		--fhigh-max $(HIGH_FREQUENCY_CUTOFF) \
+		--order twoPN \
+		--spectrum-type median \
+		--write-compress \
 		--verbose
+	mv H1-TMPLTBANK-1000000000-2048.xml.gz gstlal_bank.xml.gz
 	@echo ""
 
 #template_bank_plot : gstlal_bank.xml.gz plots
@@ -532,7 +571,7 @@ gstlal_inspiral_summary_page_0002: gstlal_inspiral_summary_page_0001
 		--webserver-dir $(WEBDIR)/OPEN-BOX \
 		--title gstlal-1000000000-1000002048-open-box \
 		--open-box
-	chmod a-rwx $(WEBDIR)/OPEN-BOX*
+	@echo "Make box unreadable with: chmod a-rwx $(WEBDIR)/OPEN-BOX*"
 	@echo "Open box with: chmod a+rwx $(WEBDIR)/OPEN-BOX*"
 	@touch gstlal_inspiral_summary_page_0002
 
