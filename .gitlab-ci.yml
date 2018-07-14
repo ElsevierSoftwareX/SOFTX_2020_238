@@ -228,10 +228,12 @@ test:offline:
 
     - cd gstlal-inspiral/tests
     - make -f Makefile.offline_tutorial_test
+    - cp -rf ./WEBDIR/gstlal_offline_tutorial public/
   artifacts:
     expire_in: 3h
     paths:
       - gstlal-inspiral/tests
+      - public
     when: always
   only:
     - pushes
