@@ -76,13 +76,15 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 	# parallelize jobs by channel subsets
 	for ii, channel_subset in enumerate(data_source_info.channel_subsets):
 
+		print "Creating feature extractor jobs for channel subset %d" % ii
+
 		# parallelize jobs by segments
 		for seg in segsdict[ifo]:
 
 			# only produce jobs where the analysis runtime after applying segments is nonzero
 			if not data_source_info.frame_segments[ifo].intersects_segment(seg):
 				if options.verbose:
-					print "Skipping %s since there is no analyzable data here" % repr(seg)
+					print "    Skipping segment (%d, %d) for channel subset %d since there is no analyzable data here" % (int(seg[0]), int(seg[1]), ii)
 				continue
 
 			# set maximum number of jobs reading concurrently from the same frame file to prevent I/O locks
@@ -98,14 +100,18 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 			channels[0] = channels[0].split('=')[1]
 
 			outpath = os.path.join(options.out_path, "gstlal_feature_extractor")
-			trig_start = int(seg[0]) + multirate_datasource.PSD_DROP_TIME + max_template_length
+
+			# define analysis times
+			gps_start_time = int(seg[0])
+			feature_start_time = gps_start_time + multirate_datasource.PSD_DROP_TIME + max_template_length
+			feature_end_time = min(int(seg[1]), options.gps_end_time)
 
 			feature_extractor_nodes[(ii, seg)] = \
 				inspiral_pipe.generic_node(feature_extractor_job, dag, parent_nodes = dep_nodes,
-					opts = {"gps-start-time":int(seg[0]),
-						"gps-end-time":int(seg[1]),
-						"feature-start-time":int(trig_start),
-						"feature-end-time":int(seg[1]),
+					opts = {"gps-start-time":gps_start_time,
+						"gps-end-time":feature_end_time,
+						"feature-start-time":feature_start_time,
+						"feature-end-time":feature_end_time,
 						"data-source":"frames",
 						"mismatch":options.mismatch,
 						"waveform":options.waveform,
@@ -126,7 +132,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 					output_files = {"out-path":outpath}
 				)
 			if options.verbose:
-				print "Creating node for index, segment %s" % repr((ii, seg))
+				print "    Creating node for channel subset %d, gps range %d - %d" % (ii, feature_start_time, feature_end_time)
 
 	return feature_extractor_nodes
 
