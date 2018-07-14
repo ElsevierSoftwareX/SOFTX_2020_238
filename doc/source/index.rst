@@ -31,3 +31,11 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+Build/Test Results
+-------------------------
+
+Results pages for the `Offline Tutorial Test <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/tests/Makefile.offline_tutorial_test>`_ are generated automatically and are located here:
+
+* `gstlal_offline_tutorial test dag <gstlal_offline_tutorial/1000000000-1000002048-test_dag-run_1/>`_
+* `gstlal_offline_tutorial test dag lite <gstlal_offline_tutorial/1000000000-1000002048-test_dag-run_1_lite/>`_
