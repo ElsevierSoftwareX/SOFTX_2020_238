@@ -901,7 +901,7 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 		self.norm.shape = (len(self.norm), 1)
 
 	@staticmethod
-	def add_signal_model(lnpdf, n, prefactors_range, df, inv_snr_pow = 4., snr_min = 4., progressbar = None):
+	def add_signal_model(lnpdf, n, prefactors_range, df, inv_snr_pow = 4., snr_min = 3.5, progressbar = None):
 		if df <= 0.:
 			raise ValueError("require df >= 0: %s" % repr(df))
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 100)
