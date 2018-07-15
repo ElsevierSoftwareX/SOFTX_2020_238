@@ -347,7 +347,7 @@ static GstFlowReturn process_buffer(GstLALDeglitchFilter *filter, GstBuffer * in
 			 */
 
 			guint64 duration = segstop - segstart;
-			gdouble min_window_duration = 2.0 * GST_SECOND;
+			gdouble min_window_duration = 0.5 * GST_SECOND;
 			g_assert(duration >= min_window_duration); /* must be greater than or equal to 1.0s */
 			g_assert(filter->rate >= 128); /* This probably doesnt make sense for low sample rates, so this is just here as a safety check. FIXME */
 			gdouble beta = min_window_duration / duration;
