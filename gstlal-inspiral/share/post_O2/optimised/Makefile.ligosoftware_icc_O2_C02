@@ -32,7 +32,7 @@ LALSUITE_REPO:=${PWD}/git/lalsuite
 
 # Set to build from git (0 = tarball, 1 = git)
 GSTLAL_GIT=1
-GLUE_GIT=0
+GLUE_GIT=1
 LALSUITE_GIT=1
 
 # Define which branch from git to build. Defaults to 'master', but the user can 
@@ -178,7 +178,7 @@ CLUSTER:=$(shell hostname -d)
 ICC_CIT:=/ldcg/intel/2017u2/bin/compilervars.sh
 ICC_LHO:=/ldcg/intel/2017u2/bin/compilervars.sh
 ICC_LLO:=/ldcg/intel/2017u2/bin/compilervars.sh
-ICC_UWM:=/opt/intel/2017u4/bin/compilervars.sh
+ICC_UWM:=/opt/intel/2018u3/bin/compilervars.sh
 ICC_ATLAS:=/opt/intel/2015/intel.sh
 ICC_PSU:=/ligo/apps/intel/2017u4/bin/compilervars.sh
 
@@ -755,31 +755,8 @@ $(LOGS_DIR) :
 			echo "Lalsuite git repo exists" ; \
 		else \
 			mkdir -p $(LALSUITE_REPO) ; \
-			git clone -b production-patched https://git.ligo.org/alexander-pace/lalsuite.git $(LALSUITE_REPO) ; \
-		fi ; \
-	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc ; \
-	fi ;
-	if [ "${GLUE_GIT}" = "1" ]; then \
-		if [ -f $@ ] ; then \
-			echo "Glue git repo exists" ; \
-		else \
-			mkdir -p $(GLUE_REPO) ; \
-			git clone -b $(GLUE_GIT_BRANCH) https://git.ligo.org/lscsoft/glue.git $(GLUE_REPO) ; \
-		fi ; \
-	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-	fi ;
-	if [ "${GSTLAL_GIT}" = "1" ]; then \
-		if [ -f $@ ] ; then \
-			echo "Gstlal git repo exists" ; \
-		else \
-			mkdir -p $(GSTLAL_REPO) ; \
-			git clone -b $(GSTLAL_GIT_BRANCH) https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
-			cd $(GSTLAL_REPO) && git checkout tags/post_O2_rates ; \
+			git clone -b $(LALSUITE_GIT_BRANCH) https://git.ligo.org/lscsoft/lalsuite.git $(LALSUITE_REPO) ; \
+			cd $(LALSUITE_REPO) && git checkout 62d316d5b46fc608965f2730970a2fa619968a58 ; \
 		fi ; \
 	else \
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
@@ -793,6 +770,31 @@ $(LOGS_DIR) :
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINFERENCE).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSTOCHASTIC).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+	fi ;
+	if [ "${GLUE_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "Glue git repo exists" ; \
+		else \
+			mkdir -p $(GLUE_REPO) ; \
+			git clone -b $(GLUE_GIT_BRANCH) https://git.ligo.org/lscsoft/glue.git $(GLUE_REPO) ; \
+			cd $(GLUE_REPO) && git checkout df19005bb15d95becec04096ab3b7003ccfe8c8e ; \
+		fi ; \
+	else \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+	fi ;
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "Gstlal git repo exists" ; \
+		else \
+			mkdir -p $(GSTLAL_REPO) ; \
+			git clone -b $(GSTLAL_GIT_BRANCH) https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
+			cd $(GSTLAL_REPO) && git checkout 57cfbe528c53d79bfbb9606fda539b65b0958f92 ; \
+		fi ; \
+	else \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc ; \
 	fi ;
 	mkdir -p $(LOGS_DIR)
 
