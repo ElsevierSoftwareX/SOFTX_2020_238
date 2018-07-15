@@ -198,7 +198,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# have 1 second of padding which means the gate itself is 1 second or
 	# less).  This should be revisted for O3.
 	if veto_segments is not None:
-		short_veto_segments = segments.segmentlist([seg for seg in veto_segments if abs(seg) <= 2.0])
+		short_veto_segments = segments.segmentlist([seg for seg in veto_segments if abs(seg) <= 1.0]).protract(0.25).coalesce()
 		head = pipeparts.mkdeglitcher(pipeline, head, short_veto_segments)
 
 	#
@@ -338,7 +338,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	#
 
 	if veto_segments is not None:
-		long_veto_segments = segments.segmentlist([seg for seg in veto_segments if abs(seg) > 2.0])
+		long_veto_segments = segments.segmentlist(veto_segments).protract(0.25).coalesce()
 		head = pipeparts.mkdeglitcher(pipeline, head, long_veto_segments)
 
 	#
