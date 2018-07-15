@@ -220,13 +220,6 @@ test:offline:
     - apt-get install --assume-yes texlive-latex-extra-doc texlive-latex-recommended texlive-latex-recommended-doc texlive-pictures texlive-pictures-doc texlive-pstricks texlive-pstricks-doc texlive-science texlive-science-doc
     # Start the avahi and dbus services:
     - service dbus start
-    
-    # Set up a random uid for the avahi user before starting the daemon. This
-    # *may* have to go in the dev container first. 
-    
-    - randuid=$((9000 + $RANDOM % 1000))
-    - adduser --uid $randuid avahi
-    
     - service avahi-daemon start
     # Get the necessary ROM data:
     - git lfs install
