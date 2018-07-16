@@ -129,7 +129,7 @@ INJ_MAX_DIST = 200000
 #######################
 
 # Vetoes file names
-VETODEF = /path/to/H1L1-CBC_VETO_DEFINER_C02_O2_1164556817-23176801.xml
+VETODEF = /path/to/H1L1-CBC_VETO_DEFINER_CLEANED_C02_O2_1164556817-23176801.xml
 
 vetoes_suffix := _vetoes.xml
 VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
@@ -145,37 +145,37 @@ CAT1_VETOES_FILES  := $(addsuffix $(CAT1_vetoes_suffix),$(IFOS))
 # GSTLAL_SEGMENTS Options
 SEG_SERVER=https://segments.ligo.org
 # C00
-LIGO_SEGMENTS="$*:DMT-ANALYSIS_READY:1"
+#LIGO_SEGMENTS="$*:DMT-ANALYSIS_READY:1"
 # C01
 #LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C01:1"
 # C02
-#LIGO_SEGMENTS="$*:DCH-CLEAN_SCIENCE_C02:1"
+LIGO_SEGMENTS="$*:DCH-CLEAN_SCIENCE_C02:1"
 
 SEGMENT_TRIM = 0
 SEGMENT_MIN_LENGTH = 512
 
 # The LIGO frame types
 # C00
-HANFORD_FRAME_TYPE='H1_HOFT_C00'
-LIVINGSTON_FRAME_TYPE='L1_HOFT_C00'
+#HANFORD_FRAME_TYPE='H1_HOFT_C00'
+#LIVINGSTON_FRAME_TYPE='L1_HOFT_C00'
 # C01
 #HANFORD_FRAME_TYPE='H1_HOFT_C01'
 #LIVINGSTON_FRAME_TYPE='L1_HOFT_C01'
 # C02
-#HANFORD_FRAME_TYPE='H1_CLEANED_HOFT_C02'
-#LIVINGSTON_FRAME_TYPE='L1_CLEANED_HOFT_C02'
+HANFORD_FRAME_TYPE='H1_CLEANED_HOFT_C02'
+LIVINGSTON_FRAME_TYPE='L1_CLEANED_HOFT_C02'
 
 # The Channel names. FIXME sadly you have to change the CHANNEL_NAMES string if
 # you want to analyze a different set of IFOS
 # C00
-H1_CHANNEL=GDS-CALIB_STRAIN
-L1_CHANNEL=GDS-CALIB_STRAIN
+#H1_CHANNEL=GDS-CALIB_STRAIN
+#L1_CHANNEL=GDS-CALIB_STRAIN
 # C01
 #H1_CHANNEL=DCS-CALIB_STRAIN_C01
 #L1_CHANNEL=DCS-CALIB_STRAIN_C01
 # C02
-#H1_CHANNEL=DCH-CLEAN_STRAIN_C02
-#L1_CHANNEL=DCH-CLEAN_STRAIN_C02
+H1_CHANNEL=DCH-CLEAN_STRAIN_C02
+L1_CHANNEL=DCH-CLEAN_STRAIN_C02
 
 CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 
@@ -196,11 +196,11 @@ BANK_CACHE_FILES:=H1_split_bank.cache L1_split_bank.cache
 ############
 
 all : dag SNR_sed
-	@echo "Submit with: condor_submit_dag -maxjobs 3000 trigger_pipe.dag"
+	@echo "Submit with: condor_submit_dag trigger_pipe.dag"
 	@echo "Monitor with: tail -f trigger_pipe.dag.dagman.out | grep -v -e ULOG -e monitoring"
 
 SNR_sed : dag
-	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=/opt/intel/2017u4/mkl/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
+	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=$(MKLROOT)/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
 
 # Run inspiral pipe to produce dag
 dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
@@ -235,7 +235,12 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		--ranking-stat-samples 4194304
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
 
-#	sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=0;?" *.sub
+#	sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=0;?" *.sub # Set GSTLAL_FIR_WHITEN within sub files
+#	sed -i 's/.*queue.*/Requirements = regexp("Intel.*v[3-5]", TARGET.cpuinfo_model_name)\n&/' *.sub
+#	Following three lines are use to make dynamical memory requests.
+#	sed -i 's/.*request_memory.*/#&\n+MemoryUsage = ( 2048 ) * 2 \/ 3\nrequest_memory = ( MemoryUsage ) * 3 \/ 2\nperiodic_hold = ( MemoryUsage >= ( ( RequestMemory ) * 3 \/ 2 ) )\nperiodic_release = (JobStatus == 5) \&\& ((CurrentTime - EnteredCurrentStatus) > 180) \&\& (HoldReasonCode != 34)/' *.sub
+#	sed -e 's@+MemoryUsage = ( 2048 ) \* 2 / 3@+MemoryUsage = ( 6000 ) \* 2 / 3@' gstlal_inspiral.sub
+#	sed -e 's@+MemoryUsage = ( 2048 ) \* 2 / 3@+MemoryUsage = ( 6000 ) \* 2 / 3@' gstlal_inspiral_inj.sub
 
 %_split_bank.cache : H1-TMPLTBANK-$(START)-2048.xml
 	mkdir -p $*_split_bank
@@ -255,8 +260,7 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		--num-banks $(NUMBANKS) \
 		$<
 
-# FIXME Update lalapps_tmpltbank to more up to date command
-# NOTE Command should be run with system build
+# FIXME Update lalapps_tmpltbank to lalapps_cbc_sbank
 H1-TMPLTBANK-$(START)-2048.xml: H1_frame.cache
 	lalapps_tmpltbank \
 		--disable-compute-moments \
@@ -342,8 +346,7 @@ vetoes.xml.gz : $(VETOES_FILES)
 	gzip $@
 
 %_vetoes.xml : $(VETODEF) lauras_txt_files_to_xml H1-GATES-1163203217-24537601.txt L1-GATES-1163203217-24537601.txt
-	#curl -O -L -b /tmp/ecpcookie.u`id -u` https://git.ligo.org/detchar/veto-definitions/blob/master/cbc/O2/$*-GATES-1163203217-24537601.txt.txt
-	./lauras_txt_files_to_xml -i $* -c -p 0.125 -o $*-gates.xml $*-GATES-1163203217-24537601.txt
+	./lauras_txt_files_to_xml -i $* -c -o $*-gates.xml $*-GATES-1163203217-24537601.txt
 	gstlal_segments_operations --union --segment-name VETO_CAT3_CUMULATIVE --output-file $@.tmp --output-segment-name vetoes $*-VETOTIME_CAT3-*.xml $*-VETOTIME_CAT3-*.xml
 	gstlal_segments_operations --union --segment-name vetoes --output-file $@ --output-segment-name vetoes $@.tmp $*-gates.xml
 
@@ -373,17 +376,11 @@ frame.cache : $(FRAME_CACHE_FILES)
 
 H1_frame.cache :
 	# FIXME force the observatory column to actually be instrument
-	# NOTE This command finds local data
 	gw_data_find -o H -t $(HANFORD_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
-	# NOTE This command find cvmfs data, needed on UWM for C02 cleaned data
-	#gw_data_find --server datafind.ligo.org:443 -o H -t $(HANFORD_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
 
 L1_frame.cache :
 	# FIXME force the observatory column to actually be instrument
-	# NOTE This command finds local data
 	gw_data_find -o L -t $(LIVINGSTON_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
-	# NOTE This command find cvmfs data, needed on UWM for C02 cleaned data
-	#gw_data_find --server datafind.ligo.org:443 -o L -t $(LIVINGSTON_FRAME_TYPE) -l  -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > $@
 
 # Produce padded segments files
 %_segmentspadded.xml :
