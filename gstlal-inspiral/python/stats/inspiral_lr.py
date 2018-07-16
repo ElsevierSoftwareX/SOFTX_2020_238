@@ -44,6 +44,7 @@ from glue.ligolw import utils as ligolw_utils
 from ligo import segments
 from gstlal.stats import horizonhistory
 from gstlal.stats import inspiral_extrinsics
+from gstlal.stats import inspiral_intrinsics
 from gstlal.stats import trigger_rate
 import lal
 from lal import rate
@@ -259,6 +260,17 @@ class LnSignalDensity(LnLRDensity):
 		# record of horizon distances for all instruments in the
 		# network
 		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in self.instruments)
+
+		# source population model
+		if self.template_ids:
+			self.population_model = inspiral_intrinsics.UniformInTemplatePopulationModel(self.template_ids)
+			# FIXME:  switch to this when a model file becomes
+			# available
+			#self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids)
+		else:
+			# default lnP = 1/len(templates) = 0
+			self.population_model = inspiral_intrinsics.UniformInTemplatePopulationModel([0])
+
 		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 
 	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
@@ -309,6 +321,9 @@ class LnSignalDensity(LnLRDensity):
 		# FIXME need to make sure this is really a math domain error
 		except ValueError:
 			return float("-inf")
+
+		# evaluate population model
+		lnP += self.population_model.lnP_template_signal(template_id, max(snrs.values()))
 
 		# evalute the (snr, \chi^2 | snr) PDFs (same for all
 		# instruments)
@@ -475,6 +490,19 @@ class LnSignalDensity(LnLRDensity):
 		xml = cls.get_xml_root(xml, name)
 		self = super(LnSignalDensity, cls).from_xml(xml, name)
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, u"horizon_history")
+		# source population model
+		# FIXME:  this should probably be stored in the ranking
+		# statistic file somehow.  maybe the HDF5 filename could be
+		# stored.  whatever would allow the correct model to be
+		# re-initialized
+		if self.template_ids:
+			self.population_model = inspiral_intrinsics.UniformInTemplatePopulationModel(self.template_ids)
+			# FIXME:  switch to this when a model file becomes
+			# available
+			#self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids)
+		else:
+			# default lnP = 1/len(templates) = 0
+			self.population_model = inspiral_intrinsics.UniformInTemplatePopulationModel([0])
 		return self
 
 
@@ -518,6 +546,9 @@ class DatalessLnSignalDensity(LnSignalDensity):
 		# FIXME need to make sure this is really a math domain error
 		except ValueError:
 			return float("-inf")
+
+		# evaluate population model
+		lnP += self.population_model.lnP_template_signal(template_id, max(snrs.values()))
 
 		# evalute the (snr, \chi^2 | snr) PDFs (same for all
 		# instruments)
