@@ -26,10 +26,6 @@ AC_CONFIG_FILES([ \
 	gst/framecpp/Makefile \
 	gst/gds/Makefile \
 	gst/multirate/Makefile \
-	gst/cuda/Makefile \
-	gst/control/Makefile \
-	bin/Makefile \
-	tests/Makefile \
 	examples/Makefile
 ])
 
