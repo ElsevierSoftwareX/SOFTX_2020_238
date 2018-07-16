@@ -278,7 +278,7 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelation_matrix, int num_tfs, gint64 fd_fft_length, gint64 fd_tf_length, DTYPE *sinc_table, gint64 sinc_length, gint64 sinc_taps_per_df, gint64 num_avg, gsl_vector_complex *transfer_functions_at_f, gsl_vector_complex *transfer_functions_solved_at_f, gsl_matrix_complex *autocorrelation_matrix_at_f, gsl_permutation *permutation, complex double *transfer_functions) { \
  \
 	gboolean success = TRUE; \
-	gint64 i, first_index, sinc_taps_per_input, sinc_taps_per_output, k, k_stop, input0, sinc0; \
+	gint64 i, sinc_taps_per_input, sinc_taps_per_output, k, k_stop, input0, sinc0; \
 	int j, j_stop, elements_per_freq, signum; \
 	complex DTYPE z; \
 	gsl_complex gslz; \
@@ -292,7 +292,6 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 	elements_per_freq = num_tfs * (1 + num_tfs); \
 	for(i = 0; i < fd_tf_length; i++) { \
 		/* First, copy samples at a specific frequency from the big autocorrelation matrix to the gsl vector transfer_functions_at_f, applying any required resampling and smoothing */ \
-		first_index = i * num_tfs * (num_tfs + 1); \
 		for(j = 0; j < num_tfs; j++) { \
 			z = 0.0; \
 			/*
@@ -300,7 +299,7 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 			 * of the sinc table or the Nyquist frequency of the transfer function.
 			 */ \
 			sinc0 = (sinc_taps_per_input - i * sinc_taps_per_output % sinc_taps_per_input) % sinc_taps_per_input; \
-			input0 = j + elements_per_freq * (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1); \
+			input0 = j + (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1) * elements_per_freq; \
 			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, fd_fft_length - (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1)); \
 			for(k = 0; k < k_stop; k++) \
 				z += sinc_table[sinc0 + k * sinc_taps_per_input] * autocorrelation_matrix[input0 + k * elements_per_freq]; \
@@ -318,7 +317,7 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 			 * of the sinc table or the DC component of the transfer function.
 			 */ \
 			sinc0 = 1 + (sinc_taps_per_input + i * sinc_taps_per_output - 1) % sinc_taps_per_input; \
-			input0 = j + elements_per_freq * (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1); \
+			input0 = j + (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1) * elements_per_freq; \
 			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1)); \
 			for(k = 0; k < k_stop; k++) \
 				z += sinc_table[sinc0 + k * sinc_taps_per_input] * autocorrelation_matrix[input0 - k * elements_per_freq]; \
@@ -338,7 +337,6 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
  \
 		/* Next, copy samples at a specific frequency from the big autocorrelation matrix to the gsl matrix autocorrelation_matrix_at_f, applying any required resampling and smoothing */ \
 		j_stop = num_tfs * num_tfs; \
-		first_index += num_tfs; \
 		for(j = 0; j < j_stop; j++) { \
 			z = 0.0; \
 			/*
@@ -346,7 +344,7 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 			 * of the sinc table or the Nyquist frequency of the transfer function.
 			 */ \
 			sinc0 = (sinc_taps_per_input - i * sinc_taps_per_output % sinc_taps_per_input) % sinc_taps_per_input; \
-			input0 = j + num_tfs + elements_per_freq * (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1); \
+			input0 = j + num_tfs + (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1) * elements_per_freq; \
 			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, fd_fft_length - (i * (fd_fft_length - 1) + fd_tf_length - 2) / (fd_tf_length - 1)); \
 			for(k = 0; k < k_stop; k++) \
 				z += sinc_table[sinc0 + k * sinc_taps_per_input] * autocorrelation_matrix[input0 + k * elements_per_freq]; \
@@ -364,7 +362,7 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 			 * of the sinc table or the DC component of the transfer function.
 			 */ \
 			sinc0 = 1 + (sinc_taps_per_input + i * sinc_taps_per_output - 1) % sinc_taps_per_input; \
-			input0 = j + num_tfs + elements_per_freq * (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1); \
+			input0 = j + num_tfs + (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1) * elements_per_freq; \
 			k_stop = minimum64((sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input, (i * (fd_fft_length - 1) - 1) / (fd_tf_length - 1)); \
 			for(k = 0; k < k_stop; k++) \
 				z += sinc_table[sinc0 + k * sinc_taps_per_input] * autocorrelation_matrix[input0 - k * elements_per_freq]; \
@@ -894,10 +892,11 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				element->workspace.wspf.sinc_length = 1;
 				element->workspace.wspf.sinc_table = g_malloc(sizeof(*element->workspace.wspf.sinc_table));
 				*element->workspace.wspf.sinc_table = 1.0;
+				element->workspace.wspf.sinc_taps_per_df = 1;
 			} else {
 				/* 
 				 * element->workspace.wspf.sinc_taps_per_df is the number of taps per frequency bin (at the finer
-				 * frequency resolution). If fir_length is an integer multiple of divisor of fft_length, taps_per_df is 1.
+				 * frequency resolution). If fir_length is an integer multiple or divisor of fft_length, taps_per_df is 1.
 				 */
 				gint64 common_denomimator, short_length, long_length;
 				short_length = minimum64(fd_fft_length - 1, fd_fir_length - 1);
@@ -1069,6 +1068,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				element->workspace.wdpf.sinc_length = 1;
 				element->workspace.wdpf.sinc_table = g_malloc(sizeof(*element->workspace.wdpf.sinc_table));
 				*element->workspace.wdpf.sinc_table = 1.0;
+				element->workspace.wspf.sinc_taps_per_df = 1;
 			} else {
 				/* 
 				 * element->workspace.wspf.sinc_taps_per_df is the number of taps per frequency bin (at the finer
