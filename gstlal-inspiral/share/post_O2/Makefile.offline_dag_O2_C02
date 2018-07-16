@@ -81,8 +81,7 @@ MCHIRP_INJECTIONS :=
 
 # Vetoes file names
 # Obtain veto definer from here: https://code.pycbc.phy.syr.edu/detchar/veto-definitions/blob/master/cbc/O1/
-#commit = 3924e978fedcee921d26497e688461ef1463008e
-VETODEF = /path/to/H1L1-CBC_VETO_DEFINER_C02_O2_1164556817-23176801.xml
+VETODEF = /path/to/H1L1-CBC_VETO_DEFINER_CLEANED_C02_O2_1164556817-23176801.xml
 
 vetoes_suffix := _vetoes.xml
 VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
@@ -147,11 +146,11 @@ BANK_CACHE_FILES:=H1_split_bank_0.cache L1_split_bank_0.cache H1_split_bank_1.ca
 ############
 
 all : dag SNR_sed
-	@echo "Submit with: condor_submit_dag -maxjobs 3000 trigger_pipe.dag"
+	@echo "Submit with: condor_submit_dag -maxjobs 3000 -maxidle 50 trigger_pipe.dag"
 	@echo "Monitor with: tail -f trigger_pipe.dag.dagman.out | grep -v -e ULOG -e monitoring"
 
 SNR_sed : dag
-	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=/opt/intel/2015u5/mkl/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
+	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=$(MKLROOT)/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
 
 # Run inspiral pipe to produce dag
 dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES) gstlal_bank.xml.gz
@@ -188,7 +187,12 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		--ranking-stat-samples 4194304
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
 
-#	sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=0;?" *.sub
+#       sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=0;?" *.sub # Set GSTLAL_FIR_WHITEN within sub files
+#       sed -i 's/.*queue.*/Requirements = regexp("Intel.*v[3-5]", TARGET.cpuinfo_model_name)\n&/' *.sub
+#       #       Following three lines are use to make dynamical memory requests.
+#       sed -i 's/.*request_memory.*/#&\n+MemoryUsage = ( 2048 ) * 2 \/ 3\nrequest_memory = ( MemoryUsage ) * 3 \/ 2\nperiodic_hold = ( MemoryUsage >= ( ( RequestMemory ) * 3 \/ 2 ) )\nperiodic_release = (JobStatus == 5) \&\& ((CurrentTime - EnteredCurrentStatus) > 180) \&\& (HoldReasonCode != 34)/' *.sub
+#       sed -e 's@+MemoryUsage = ( 2048 ) \* 2 / 3@+MemoryUsage = ( 6000 ) \* 2 / 3@' gstlal_inspiral.sub
+#       #       sed -e 's@+MemoryUsage = ( 2048 ) \* 2 / 3@+MemoryUsage = ( 6000 ) \* 2 / 3@' gstlal_inspiral_inj.sub
 
 # Produce split banks #FIXME REPLACE BANK FILES
 %_split_bank_0.cache : bank_mtotal80split_00.xml.gz
@@ -258,7 +262,7 @@ vetoes.xml.gz : $(VETOES_FILES)
 	gzip $@
 
 %_vetoes.xml : $(VETODEF) lauras_txt_files_to_xml H1-GATES-1163203217-24537601.txt L1-GATES-1163203217-24537601.txt
-	./lauras_txt_files_to_xml -i $* -c -p 0.125 -o $*-gates.xml $*-GATES-1163203217-24537601.txt
+	./lauras_txt_files_to_xml -i $* -c -o $*-gates.xml $*-GATES-1163203217-24537601.txt
 	gstlal_segments_operations --union --segment-name VETO_CAT3_CUMULATIVE --output-file $@.tmp --output-segment-name vetoes $*-VETOTIME_CAT3-*.xml $*-VETOTIME_CAT3-*.xml
 	gstlal_segments_operations --union --segment-name vetoes --output-file $@ --output-segment-name vetoes $@.tmp $*-gates.xml
 
