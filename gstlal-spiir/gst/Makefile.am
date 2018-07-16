@@ -1,0 +1,8 @@
+if COND_CUDA
+CUDA_SUBDIRS = cuda
+else
+CUDA_SUBDIRS =
+endif
+
+
+SUBDIRS = $(CUDA_SUBDIRS)

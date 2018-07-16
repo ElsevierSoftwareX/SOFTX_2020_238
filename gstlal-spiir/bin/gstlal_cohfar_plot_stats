@@ -1,0 +1,181 @@
+#! /usr/bin/env python
+#
+# Copyright (C) 2016 Qi Chu
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import os
+import numpy as np
+import scipy
+import math
+import csv
+import logging
+from optparse import OptionParser
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot
+from matplotlib import rc
+
+rc('text', usetex = True)
+
+from gstlal.postcoh_table_def import PostcohInspiralTable
+from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from pylal import datatypes as laltypes
+from pylal import git_version
+import pdb
+
+Attributes = ligolw.sax.xmlreader.AttributesImpl
+
+# FIXME:  require calling code to provide the content handler
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+array.use_in(DefaultContentHandler)
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+
+def param_from_xml(filename, param_name, contenthandler = DefaultContentHandler, verbose = False):
+
+	# Load document
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+
+	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
+		result = param.get_param(root, param_name).pcdata
+	return result
+
+
+def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
+
+	# Load document
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+
+	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_spiir_cohfar"):
+		result = array.get_array(root, array_name).array 
+	return result
+
+def postcoh_table_from_xml(filename, contenthandler = DefaultContentHandler, verbose = False):
+
+	files = filename.split(",")
+	all_table = lsctables.New(PostcohInspiralTable)
+	for file in files:
+	  # Load document
+	  xmldoc = utils.load_filename(file, contenthandler = contenthandler, verbose = verbose)
+	  postcoh = PostcohInspiralTable.get_table(xmldoc)
+	  all_table.extend(postcoh)
+	return all_table
+
+def append_missing_options(missing_options, options, option):
+	if getattr(options, option) is None:
+		missing_options.append("--%s" % option.replace("_", "-"))
+
+
+def parse_command_line():
+	parser = OptionParser(version = git_version.verbose_msg, usage = "%prog [options] [file ...]", description = "%prog to plot pdf and cdf")
+	parser.add_option("--output", default = "", metavar = "name", help = "Set the output file name")
+	parser.add_option("--input-stats", default = "", metavar = "name", help = "Set the input stats file name")
+	parser.add_option("--zerolag-format", default = "", metavar = "name", help = "format support, single | multi")
+	parser.add_option("--cohsnr", type = "float", help = "if format is single, read the cohsnr")
+	parser.add_option("--cmbchisq", type = "float", help = "if format is single, read the combined chisq")
+	parser.add_option("--far-factor", type = "float", default = 12, help = "a factor multiplied to event far")
+	parser.add_option("--input-zerolag", default = "", metavar = "name", help = "Set the input stats file name")
+	parser.add_option("--ifos", metavar = "name", help = "set the ifos to plot pdf and cdf")
+	options, tmp = parser.parse_args()
+
+	missing_options = []
+	append_missing_options(missing_options, options, "output")
+	append_missing_options(missing_options, options, "input_stats")
+	if options.zerolag_format == "single":
+		append_missing_options(missing_options, options, "cohsnr")
+		append_missing_options(missing_options, options, "cmbchisq")
+
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+	return options
+
+options = parse_command_line()
+
+if options.ifos == "L1H1":
+	ifos = "H1L1"
+else:
+	ifos = options.ifos
+
+rankmap_name = "background_rank:%s_rank_map" % ifos
+rankfap_name = "background_rank:%s_rank_fap" % ifos
+nevent_name = "background_feature:%s_nevent" % ifos
+livetime_name = "background_feature:%s_livetime" % ifos
+hist_trials_name = "hist_trials"
+
+rankmap = array_from_xml(options.input_stats, rankmap_name)
+rankfap = array_from_xml(options.input_stats, rankfap_name)
+nevent = int(param_from_xml(options.input_stats, nevent_name))
+livetime = int(param_from_xml(options.input_stats, livetime_name))
+hist_trials = int(param_from_xml(options.input_stats, hist_trials_name))
+
+# FIXME: want to plot fap[chisq, snr]?, need to convert fap[rank] to fap[chisq, snr]
+#lgfar = np.log10(fap * nevent / (float(livetime)*hist_trials) * float(options.far_factor))
+
+if options.input_zerolag is not 'None':
+	zerolags = postcoh_table_from_xml(options.input_zerolag)
+	if len(ifos) == 2:
+		snr_name = 'snglsnr_%s' % ifos[0]
+		chisq_name = 'chisq_%s' % ifos[0]
+		all_cohsnr = np.log10(zerolags.getColumnByName(snr_name))
+		all_chisq = np.log10(zerolags.getColumnByName(chisq_name))
+	else:
+
+		all_cohsnr = np.log10(zerolags.getColumnByName("cohsnr"))
+		all_chisq = np.log10(zerolags.getColumnByName("cmbchisq"))
+event_cohsnr = np.log10(options.cohsnr)
+event_chisq = np.log10(options.cmbchisq)
+# cohsnr
+xmin = 0.54
+xmax = 3.0
+xstep = 0.0082
+# chisq
+ymin = -1.2
+ymax = 4.0
+ystep = 0.0173
+
+x = np.arange(xmin, xmax, xstep)
+y = np.arange(ymin, ymax, ystep)
+
+cohsnr_idx = min(max(event_cohsnr - xmin, 0)/xstep, 299)
+chisq_idx = min(max(event_chisq - ymin, 0)/ystep, 299)
+#event_far = fap[chisq_idx, cohsnr_idx] * nevent / (float(livetime)*hist_trials) * float(options.far_factor)
+#print "event far %e\n" % event_far
+
+pyplot.figure()
+X, Y = np.meshgrid(x, y)
+#levels = np.arange(-13, -2, 2)
+#CS = pyplot.contour(lgfar, levels, origin = 'lower', extent = (xmin, xmax, ymin, ymax))
+#CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
+levels = np.arange(-13, -2, 2)
+CS = pyplot.contour(rankmap, levels, origin = 'lower', extent = (xmin, xmax, ymin, ymax))
+CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
+CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
+
+if options.input_zerolag is not 'None':
+	CM = pyplot.scatter(all_cohsnr, all_chisq, color = 'k', marker = 'o', s = 6, facecolors = 'none')
+	pyplot.legend((CM, CM2), ('spiir zerolags', 'spiir event'), loc='lower right')
+else:
+	pyplot.legend((CM2), ('spiir event'), loc='lower right')
+
+pyplot.ylim(-1,3)
+pyplot.xlim(0.2,2.2)
+pyplot.xlabel(r'$\log_{10}(\rho_c)$')	
+pyplot.ylabel(r'$\log_{10}(\xi_c^2)$')	
+pyplot.savefig(options.output)
+

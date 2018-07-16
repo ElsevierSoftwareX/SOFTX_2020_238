@@ -1,0 +1,585 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018 Qi Chu
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Stream-based inspiral analysis tool use IIR filters"""
+
+## @file
+# A version of gstlal_inspiral that uses IIR filter banks
+#
+#	+ `--psd-fft-length` [s] (int): FFT length, default 16s.
+#	+ `--veto-segments-file` [filename]: Set the name of the LIGO light-weight XML file from which to load vetoes (optional).
+#	+ `--veto-segments-name` [name]: Set the name of the segments to extract from the segment tables and use as the veto list (default = "vetoes").
+#	+ `--nxydump-segment` [start:stop]: Set the time interval to dump from nxydump elments (optional).  (default is \":\", i.e. dump all time.")
+#	+ `--output` [filename]: Set the filename in which to save the triggers (required).
+#	+ `--reference-psd` [filename]: Load the spectrum from this LIGO light-weight XML file (required).
+#	+ `--track-psd`: Track PSD even if a reference is given
+#	+ `--iir-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
+#	+ `--ht-gate-threshold` [threshold] (float): Set the threshold on whitened h(t) to mark samples as gaps (glitch removal).
+#	+ `--chisq-type` [type]: Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.
+#	+ `--coincidence-threshold` [value] (float): Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.
+#	+ `--write-pipeline` [filename]: Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.
+#	+ `--comment`  [str]
+#	+ `--check-time-stamps`: Turn on time stamp checking.
+#	+ `--verbose`: Be verbose (optional).
+#	+ `--tmp-space` [path]: Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.
+#	+ `--blind-injections` [filename]: Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case.
+#	+ `--job-tag`: Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required"
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import os
+import resource
+import sys
+from optparse import OptionParser
+import signal
+import socket
+import time
+import tempfile
+import math
+from collections import namedtuple
+
+import subprocess
+import multiprocessing
+
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+
+from glue import segments
+from glue import segmentsUtils
+from glue.ligolw import ligolw
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import segments as ligolw_segments
+from pylal.datatypes import LIGOTimeGPS
+from pylal import series as lalseries
+from gstlal import bottle
+from gstlal import datasource
+from gstlal import lloidparts
+from gstlal import far
+from gstlal import httpinterface
+from gstlal import hoftcache
+from gstlal import inspiral
+from gstlal import pipeparts
+from gstlal import simulation
+
+from gstlal import spiirparts
+from gstlal import simplehandler
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+  pass
+ligolw_array.use_in(LIGOLWContentHandler)
+ligolw_param.use_in(LIGOLWContentHandler)
+lsctables.use_in(LIGOLWContentHandler)
+
+#
+# Make sure we have sufficient resources
+# We allocate far more memory than we need, so this is okay
+#
+
+def setrlimit(res, lim):
+  hard_lim = resource.getrlimit(res)[1]
+  resource.setrlimit(res, (lim if lim is not None else hard_lim, hard_lim))
+
+# set the number of processes and total set size up to hard limit and
+# shrink the per-thread stack size (default is 10 MiB)
+setrlimit(resource.RLIMIT_NPROC, None)
+setrlimit(resource.RLIMIT_AS, None)
+setrlimit(resource.RLIMIT_RSS, None)
+setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
+
+def now():
+  return LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+def parse_command_line():
+  parser = OptionParser(
+    description = __doc__
+  )
+
+	# append all the datasource specific options
+  datasource.append_options(parser)
+
+  parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 16s")
+  parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+  parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
+  parser.add_option("--nxydump-segment", metavar = "start:stop", default = None, help = "Set the time interval to dump from nxydump elments (optional).  The default is None, i.e. no dump.")
+  parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
+  parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
+  parser.add_option("--iir-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
+  parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
+  parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq|autochisq_spearman). The default is autochisq.")
+  parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+  parser.add_option("--comment",  metavar="str")
+  parser.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
+  parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+  parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+  parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case")
+  parser.add_option("--local-frame-caching", action = "store_true", help = "Unused")
+  parser.add_option("--peak-thresh", metavar = "SNR", type = "float", default = 4.0, help = "Set the SNR threshold at which to find triggers using gstlal_itac element.")
+
+
+
+  #FIXME: do not consider online paramters yet
+  parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.  required")
+
+  # gpu acceleartion support
+  parser.add_option("--gpu-acc", metavar = "multiratespiir|spiir|off", default = "off", help = "Turn on gpu acceleration code or not")
+
+
+
+  options, filenames = parser.parse_args()
+
+  if options.reference_psd is None and not options.track_psd:
+    raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+
+  if options.blind_injections and options.injections:
+    raise ValueError("must use only one of --blind-injections or --injections")
+
+  required_options = []
+	
+  missing_options = []
+
+  if options.iir_bank is None:
+    missing_options += ["--iir-bank"]
+  missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+  if missing_options:
+    raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+
+  # parse the datasource specific information and do option checking
+  detectors = datasource.GWDataSourceInfo(options)
+  if len(detectors.channel_dict) < 2:
+    print("only process one detector")
+
+  # Get the banks and make the detectors
+  iir_banks = [inspiral.parse_iirbank_string(iirbank) for iirbank in options.iir_bank]
+	
+  # FIXME: should also check for read permissions
+  required_files = []
+  
+  #for instrument in iir_banks:
+  #  required_files.extend(iir_banks[instrument])
+  for iir_bank_set in iir_banks:
+    for instrument in iir_bank_set:
+      required_files += iir_bank_set[instrument]
+
+  if options.veto_segments_file:
+    required_files += [options.veto_segments_file]
+  
+  missing_files = [filename for filename in required_files if not os.path.exists(filename)]
+  
+  if missing_files:
+    raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
+
+  if options.chisq_type not in ["autochisq", "timeslicechisq", "autochisq_spearman"]:
+    raise ValueError, "--chisq-type must be one of (autochisq|timeslicechisq|autochisq_spearman), given %s" % (options.chisq_type)
+
+  # do this before converting option types
+  process_params = options.__dict__.copy() 
+
+  if options.nxydump_segment: 
+    options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
+
+	# Online specific initialization
+  if options.data_source in ("lvshm", "framexmit"):
+    # make an "infinite" extent segment
+    detectors.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
+
+    # this gets set so that if you log into a node you can find out what the job id is easily
+    os.environ['GSTLAL_LL_JOB'] = options.job_tag
+
+    # check required options in this case
+    required_options = ["job_tag"]
+
+    missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+    if missing_options:
+      raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+  
+  if options.reference_psd is None and not options.track_psd:
+    raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+  if options.local_frame_caching and not options.data_source == "frames":
+    raise ValueError('--local-frame-caching can only be used if --data-source = "frames"')
+
+  #
+  # Option checks complete
+  #
+
+  if options.blind_injections is not None:
+    detectors.injection_filename = options.blind_injections
+	
+  # Setup local caching
+  if options.local_frame_caching:
+    f, fname = tempfile.mkstemp(".cache")
+    if options.verbose:
+      print >> sys.stderr, "caching frame data locally to ", fname
+    f = open(fname, "w")
+    # FIXME:  should try to down-sample if possible.  there are
+    # MDCs data sets floating around whose streams do not start
+    # on integer second boundaries, however, and it's possible
+    # to trigger a failure in the frame muxer if those get
+    # down-sampled so for now we're not doing any resampling.
+    # later, when we don't care about those MDCs, we can go
+    # back to down-sampling.  if not being able to down-sample
+    # is a problem in the meantime, I think the best way
+    # forward is to clip the start of said streams using a drop
+    # element and a (to be written) buffer probe that figures
+    # out how many samples to clip off the start of the stream.
+    # FIXME shouldn't use tempfile.gettempdir() directly, use
+    # _CONDOR_SCRATCH_DIR like glue??
+    # FIXME, note that at least for now condor sets TMPDIR to the
+    # run scratch space so this *will* work properly
+    detectors.local_cache_list = hoftcache.cache_hoft(detectors, output_path = tempfile.gettempdir(), verbose = options.verbose)
+    for cacheentry in detectors.local_cache_list:
+      # Guarantee a lal cache complient file with only integer starts and durations.
+      cacheentry.segment = segments.segment( int(cacheentry.segment[0]), int(math.ceil(cacheentry.segment[1])) )
+      print >>f, str(cacheentry)
+    detectors.frame_cache = fname
+
+    # the injections are now present in the data so we don't want to do them twice
+    detectors.injection_filename = None
+	
+  # Choose to optionally reconstruct segments around injections (not blind injections!)
+  if options.injections:
+    reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections)
+  else:
+    reconstruction_segment_list = None
+
+  return options, filenames, process_params, iir_banks, detectors, reconstruction_segment_list
+################################################################
+# end parse_command_line
+################################################################
+
+################################################################
+    #
+    # setup sigint handler to shutdown pipeline.  this is how the program stops
+    # gracefully, it is the only way to stop it.  Otherwise it runs forever
+    # man.
+    #
+###############################################################
+
+class OneTimeSignalHandler(object):
+  def __init__(self, pipeline):
+    self.pipeline = pipeline
+    self.count = 0
+
+  def __call__(self, signum, frame):
+    self.count += 1
+    if self.count == 1:
+      print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+      try:
+	#FIXME how do I choose a timestamp?
+	self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
+	if not self.pipeline.send_event(gst.event_new_eos()):
+	  raise Exception("pipeline.send_event(EOS) returned failure")
+      except Exception, e:
+	print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+	os._exit(1)
+    else:
+      print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+#################################################################
+# end class OneTimeSignalHandler()
+#################################################################
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, filenames, process_params, iir_banks, detectors, reconstruction_segment_list = parse_command_line()
+
+if not options.check_time_stamps:
+  pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
+
+
+#
+# Parse the vetos segments file(s) if provided
+#
+
+
+if options.veto_segments_file is not None:
+  veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
+else:
+  veto_segments = None
+
+
+#
+# set up the PSDs
+#
+# There are three modes for psds in this program
+# 1) --reference-psd without --track-psd - a fixed psd (provided by the user) will be used to whiten the data
+# 2) --track-psd without --reference-psd - a psd will me measured and used on the fly
+# 3) --track-psd with --reference-psd - a psd will be measured on the fly, but the first "guess will come from the users provided psd
+#
+
+
+if options.reference_psd is not None:
+  psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
+else:
+  psd = dict((instrument, None) for instrument in detectors.channel_dict)
+
+
+#
+# Process banks in multi-process
+#
+def one_pipeline(iir_bank, 
+		detectors,
+		psd,
+		options,
+		veto_segments,
+		):
+  if options.verbose:
+    print >>sys.stderr, "start a process for one pipeline"
+    print >>sys.stderr, iir_bank
+
+  # create a new, empty, Bottle application
+  bottle.default_app.push()
+
+  # show trackbacks when something fails
+  #bottle.app().catchall = False
+  httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_spiir_filt" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
+
+  # Set up a registry of the resources that this job provides
+  @bottle.route("/")
+  @bottle.route("/index.html")
+
+  
+  def index(job_tag = options.job_tag, instruments = set(iir_bank.keys())):
+    host = socket.gethostname()
+    server_address = "http://%s:%d" % (host, httpservers[0][0].port)
+    yield "<html><body>\n<h3>%s %s %s</h3>\n<p>\n" % (job_tag, host, " ".join(sorted(instruments)))
+    for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+      if route.rule in ("/", "/index.html"):
+	# don't create links back to this page
+	continue
+      if route.method != "GET":
+	# only create links for GET methods
+	continue
+      yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
+    yield "</p>\n</body></html>"
+  # FIXME:  get service-discovery working, then don't do this
+  if "GSTLAL_LL_JOB" in os.environ:
+    open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
+
+#  banks = {}
+#  banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
+#  for instrument in banks:
+#    for n, bank in enumerate(banks[instrument]):
+#      bank.logname = "%sbank%d" % (instrument,n)
+#  @bottle.route("/bank.txt")
+#  def get_name(banks = banks):
+#    bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
+#    yield '%.14g %.4g ' % (float(now()), bank.template_bank_filename)
+
+  #
+  # Build pipeline
+  #
+
+  if options.verbose:
+    print >>sys.stderr, "assembling pipeline ...",
+
+  pipeline = gst.Pipeline("gstlal_inspiral_spiir_filt")
+  mainloop = gobject.MainLoop()
+
+  if options.gpu_acc == "multiratespiir":
+    if options.verbose:
+      print >> sys.stderr, "gpu acc mode: multiratespiir"
+    triggersrc = spiirparts.mkBuildBossSPIIR(
+      pipeline,
+      detectors = detectors,
+      banks = iir_bank,
+      psd = psd,
+      psd_fft_length = options.psd_fft_length,
+      ht_gate_threshold = options.ht_gate_threshold,
+      veto_segments = veto_segments,
+      verbose = options.verbose,
+      nxydump_segment = options.nxydump_segment,
+      chisq_type = options.chisq_type,
+      track_psd = options.track_psd,
+      blind_injections = options.blind_injections,
+      peak_thresh = options.peak_thresh
+    )
+  elif options.gpu_acc == "spiir":
+    if options.verbose:
+      print >> sys.stderr, "gpu acc mode: spiir"
+    banks = {}
+    banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
+    triggersrc = spiirparts.mkSPIIRmulti(
+      pipeline,
+      detectors = detectors,
+      banks = banks,
+      psd = psd,
+      psd_fft_length = options.psd_fft_length,
+      ht_gate_threshold = options.ht_gate_threshold,
+      veto_segments = veto_segments,
+      verbose = options.verbose,
+      nxydump_segment = options.nxydump_segment,
+      chisq_type = options.chisq_type,
+      track_psd = options.track_psd,
+      blind_injections = options.blind_injections,
+      peak_thresh = options.peak_thresh,
+      gpu_acc = True
+    )
+  else :
+    if options.verbose:
+      print >> sys.stderr, "gpu acc mode: off"
+    banks = {}
+    banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
+    triggersrc = spiirparts.mkSPIIRmulti(
+      pipeline,
+      detectors = detectors,
+      banks = banks,
+      psd = psd,
+      psd_fft_length = options.psd_fft_length,
+      ht_gate_threshold = options.ht_gate_threshold,
+      veto_segments = veto_segments,
+      verbose = options.verbose,
+      nxydump_segment = options.nxydump_segment,
+      chisq_type = options.chisq_type,
+      track_psd = options.track_psd,
+      blind_injections = options.blind_injections,
+      peak_thresh = options.peak_thresh,
+      gpu_acc = False
+    )
+
+
+
+
+  if options.verbose:
+    print >>sys.stderr, "done"
+
+
+  if options.verbose:
+    print >>sys.stderr, "attaching fakesink to pipeline ...",
+
+  nsink = 0
+  for instrument in triggersrc.keys():
+	  for head in triggersrc[instrument]:
+  		pipeparts.mkfakesink(pipeline, head)
+		nsink += 1
+
+  handler = simplehandler.Handler(mainloop, pipeline)
+  if options.verbose:
+    print >>sys.stderr, "attached %d, done" % nsink
+
+
+  #
+  # if we request a dot graph of the pipeline, set it up
+  #
+  if options.write_pipeline is not None:
+    pipeparts.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
+    pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+
+
+  #
+  # Run pipeline
+  #
+  if options.data_source in ("lvshm", "framexmit"):
+
+    # setup sigint handler to shutdown pipeline. This is
+    # how the program stops gracefully.
+    # Otherwise it runs forever.
+    signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
+    signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+    
+  if options.verbose:
+    print >>sys.stderr, "setting pipeline state to playing ..."
+  if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+    raise RuntimeError, "pipeline did not enter playing state"
+
+  if options.write_pipeline is not None:
+    pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+
+  if options.verbose:
+    print >>sys.stderr, "running pipeline ..."
+  mainloop.run()
+
+  # end
+  bottle.default_app.pop()
+
+  if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
+    raise RuntimeError("pipeline could not be set to NULL")
+
+  del handler
+
+#
+# done
+#
+
+#  if options.data_source in ("lvshm", "framexmit"):
+#    sys.exit(1) # online pipeline always ends with an error code
+
+jobs = []
+for iir_bank in iir_banks:
+
+  if options.verbose:
+    print >> sys.stderr, "try fork a new process"
+  
+  child = multiprocessing.Process(target = one_pipeline, 
+      args = (iir_bank, 
+	detectors,
+	psd,
+	options,
+	veto_segments,
+	))
+  jobs.append(child)
+  child.start()
+
+#jobs[-1].terminate()
+for j in jobs:
+  j.join()
+
+if options.local_frame_caching:
+  if options.verbose:
+    print >>sys.stderr, "deleting temporary cache file ", detectors.frame_cache
+    
+  os.remove(detectors.frame_cache)
+  del detectors.local_cache_list
+
+if options.data_source in ("lvshm", "framexmit"):
+  sys.exit(1)

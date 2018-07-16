@@ -1,0 +1,172 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017  Qi Chu
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# Compute an IIR bank for inspiral waveforms
+#
+# ### Command line interface
+#
+#	+ `--template-bank` [filename]: Set the name of the LIGO light-weight XML file from which to load the template bank (required).
+#	+ `--extract-method` : Set the extract index.
+#	+ `--output` [filename]: Set the filename in which to save the template bank (required).
+#	+ `--verbose`: Be verbose.
+
+
+import sys
+import scipy
+import numpy
+from optparse import OptionParser
+import pdb
+
+from glue.ligolw import ligolw, lsctables, array, param, utils
+from glue import iterutils
+
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+    pass
+array.use_in(DefaultContentHandler)
+param.use_in(DefaultContentHandler)
+lsctables.use_in(DefaultContentHandler)
+
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
+parser.add_option("--extract-method", metavar = "index|mchirp", default = "index", help = "Set the extract method")
+parser.add_option("--extract-range", default = None, help = "Set the extract range")
+parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parser.parse_args()
+
+required_options = ("template_bank", "output")
+
+missing_options = [option for option in required_options if getattr(options, option) is None]
+if missing_options:
+	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+# load the sngl_inspiral table
+tmpltbank_xmldoc = utils.load_filename(options.template_bank, contenthandler = DefaultContentHandler, verbose = options.verbose)
+
+# Get sngl inspiral table
+sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
+# assemble a new xml doc
+xmldoc = ligolw.Document()
+lw = ligolw.LIGO_LW()
+
+# assemble a new sngl_inspiral table
+
+new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
+
+if options.extract_method == "index":
+    # select the entries
+    if options.extract_range is None:
+        extract_start = 0
+        extract_end = 0
+    else:
+        # sngl_inspiral_table index start from 0, the input index start from 1
+        extract_start = int(options.extract_range.split(":")[0]) - 1
+        extract_end = int(options.extract_range.split(":")[1]) - 1
+    
+    if options.verbose:
+        print "the entries we select is [%d, %d)" % (extract_start, extract_end)
+    
+    for row_id in range(extract_start, extract_end):
+        new_sngl_table.append(sngl_inspiral_table[row_id])
+
+elif options.extract_method == "mchirp":
+
+    # select the entries
+    if options.extract_range is None:
+        extract_start = 0
+        extract_end = 0
+    else:
+        # sngl_inspiral_table index start from 0, the input index start from 1
+        extract_start = float(options.extract_range.split(":")[0]) 
+        extract_end = float(options.extract_range.split(":")[1])
+
+    iterutils.inplace_filter(lambda row: row.mchirp >= extract_start and row.mchirp < extract_end, sngl_inspiral_table)
+    
+    if options.verbose:
+        print "the entries we select is [%d, %d)" % (extract_start, extract_end)
+
+    for row_id in range(0, len(sngl_inspiral_table)):
+        new_sngl_table.append(sngl_inspiral_table[row_id])
+    
+
+elif options.extract_method == "component_mass":
+
+    # select the entries
+    if options.extract_range is None:
+        extract_start = 0
+        extract_end = 0
+    else:
+        # sngl_inspiral_table index start from 0, the input index start from 1
+        extract_start = float(options.extract_range.split(":")[0])
+        extract_end = float(options.extract_range.split(":")[1])
+
+    iterutils.inplace_filter(lambda row: row.mass2 > extract_start and row.mass2 < extract_end and row.mass1 > extract_start and row.mass1 < extract_end, sngl_inspiral_table)
+    
+    if options.verbose:
+        print "the entries we select is [%f, %f)" % (extract_start, extract_end)
+    for row_id in range(0, len(sngl_inspiral_table)):
+        new_sngl_table.append(sngl_inspiral_table[row_id])
+
+elif options.extract_method == "component_mass_and_mchirp":
+
+    # select the entries given component mass range
+    if options.extract_range is None:
+        extract_start = 0
+        extract_end = 0
+    else:
+        # sngl_inspiral_table index start from 0, the input index start from 1
+        extract_start = float(options.extract_range.split(",")[0].split(":")[0]) 
+        extract_end = float(options.extract_range.split(",")[0].split(":")[1]) 
+
+    if options.verbose:
+        print "the entries we select is [%f, %f)" % (extract_start, extract_end)
+
+    iterutils.inplace_filter(lambda row: row.mass2 > extract_start and row.mass2 < extract_end and row.mass1 > extract_start and row.mass1 < extract_end, sngl_inspiral_table)
+    
+ 
+    # select the entries given the mchirp range
+    if options.extract_range is None:
+        extract_start = 0
+        extract_end = 0
+    else:
+        # sngl_inspiral_table index start from 0, the input index start from 1
+        extract_start = float(options.extract_range.split(",")[1].split(":")[0]) 
+        extract_end = float(options.extract_range.split(",")[1].split(":")[1]) 
+
+    if options.verbose:
+        print "the entries we select is [%f, %f)" % (extract_start, extract_end)
+
+    iterutils.inplace_filter(lambda row: row.mchirp >= extract_start and row.mchirp < extract_end, sngl_inspiral_table)
+
+    for row_id in range(0, len(sngl_inspiral_table)):
+        new_sngl_table.append(sngl_inspiral_table[row_id])
+    
+# append the new sngl_inspiral table to the new LIGO_LW
+lw.appendChild(new_sngl_table)
+
+# add top level LIGO_LW to document
+xmldoc.appendChild(lw)
+
+# Write to file
+utils.write_filename(xmldoc, options.output, gz = options.output.endswith('.gz'), verbose = options.verbose)
+
+
+
