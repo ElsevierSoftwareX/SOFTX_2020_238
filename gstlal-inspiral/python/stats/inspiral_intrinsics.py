@@ -62,7 +62,7 @@ class UniformInTemplatePopulationModel(object):
 		Assumes uniform in template population model, no
                 astrophysical prior.
 		"""
-		self.lnP = -math.log(len(template_ids))
+		self.lnP = 0.
 
 
 	@gstlalstats.assert_ln_probability
