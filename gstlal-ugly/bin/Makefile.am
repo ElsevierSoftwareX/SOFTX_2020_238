@@ -25,27 +25,9 @@ dist_bin_SCRIPTS = \
 	gstlal_inj_frames \
 	gstlal_cache_to_segments \
 	gstlal_parse_frame_segment_logs \
-	gstlal_postcoh_skymap2fits \
 	gstlal_ll_iir_inspiral_pipe \
-	gstlal_inspiral_postcohspiir_workflow \
-	gstlal_inspiral_postcohspiir_online \
-	gstlal_inspiral_postcohspiir_flopulator \
-	gstlal_inspiral_postcohspiir_lvalert_plotter \
-	gstlal_inspiral_postcohspiir_offline \
-	gstlal_inspiral_postcohspiir_extract_zerolag \
 	gstlal_iir_inspiral \
-	gstlal_cohfar_plot_stats \
-	gstlal_cohfar_plot_ifar \
-	gstlal_cohfar_assign_far \
-	ligolw_inspinjfind_postcoh \
-	ligolw_sqlite_postcoh \
-	gstlal_inspiral_postcohspiir_plotsummary \
-	gstlal_spiir_plot_waveform \
-	gstlal_matched_filter \
-	gstlal_bank_extract \
 	gstlal_inspiral_summary_page \
 	gstlal_inspiral_injection_snr \
-	gstlal_plot_inj \
-	gstlal_ll_inspiral_postcohspiir_update_map \
-	gstlal_inspiral_spiir_filt
+	gstlal_plot_inj
 

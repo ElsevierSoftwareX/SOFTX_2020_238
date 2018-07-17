@@ -1,7 +1,0 @@
-# Chichi <chicsheep@gmail.com>
-
-This folder contains GPU accelerated gstlal elements written in cuda language
-
- * iirfilter: cudarized Summed Parallel Infinite Impulse Response (SPIIR) filtering plugin
- * audioresample: cudarized gstreamer audioresample plugin 
- * multiratespiir: implemented multidownsample + SPIIR + multiupsample in one plugin

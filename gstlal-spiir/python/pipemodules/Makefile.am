@@ -10,6 +10,7 @@ pipemodulesdir = $(pkgpythondir)/pipemodules
 
 pipemodules_PYTHON = \
 	__init__.py \
+	homomorphic.py \
 	uni_datasource.py \
 	postcoh_finalsink.py \
 	spiirparts.py
