@@ -17,6 +17,7 @@ AC_CONFIG_FILES([ \
 	gstlal-ugly.spec \
 	debian/control \
 	debian/Makefile \
+	bin/Makefile \
 	python/Makefile \
 	share/Makefile \
 	gst/Makefile \
@@ -26,6 +27,8 @@ AC_CONFIG_FILES([ \
 	gst/framecpp/Makefile \
 	gst/gds/Makefile \
 	gst/multirate/Makefile \
+	gst/control/Makefile \
+	tests/Makefile \
 	examples/Makefile
 ])
 
