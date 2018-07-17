@@ -194,11 +194,10 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	# FIXME NOTE The pre whitening vetoes are only applied via the
 	# deglitcher if they are impulse like.  What that means is that they
-	# have to be shorter than 2s (it is assumed that gate vetoes already
-	# have 1 second of padding which means the gate itself is 1 second or
-	# less).  This should be revisted for O3.
+	# have to be shorter than 1s.
+	# This should be revisted for O3.
 	if veto_segments is not None:
-		short_veto_segments = segments.segmentlist([seg for seg in veto_segments if abs(seg) <= 1.0]).protract(0.25).coalesce()
+		short_veto_segments = segments.segmentlist([seg for seg in veto_segments if abs(seg) < 1.0]).protract(0.25).coalesce()
 		head = pipeparts.mkdeglitcher(pipeline, head, short_veto_segments)
 
 	#
