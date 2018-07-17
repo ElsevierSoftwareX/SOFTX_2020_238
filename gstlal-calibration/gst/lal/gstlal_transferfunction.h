@@ -141,9 +141,10 @@ struct _GSTLALTransferFunction {
 	double frequency_resolution;
 	int high_pass;
 	int low_pass;
+	double notch_frequencies;
+	int num_notches;
 	complex double *transfer_functions;
 	double *fir_filters;
-	gboolean input_may_be_zero;
 };
 
 

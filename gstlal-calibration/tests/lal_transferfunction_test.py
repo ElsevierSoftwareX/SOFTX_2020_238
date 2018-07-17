@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2017  Aaron Viets
+# Copyright (C) 2018  Aaron Viets
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -140,7 +140,7 @@ def lal_transferfunction_03(pipeline, name):
 
 	rate = 16384		# Hz
 	buffer_length = 1.0	# seconds
-	test_duration = 100.0	# seconds
+	test_duration = 50.0	# seconds
 	width = 64		# bits
 	channels = 1
 	freq = 512
@@ -151,21 +151,16 @@ def lal_transferfunction_03(pipeline, name):
 
 	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = freq, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
 	hoft = pipeparts.mktee(pipeline, hoft)
-	difference = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.001, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-	difference = pipeparts.mktee(pipeline, difference)
 
-	difference2 = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.001, freq = 4096, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
+	noise = []
+	for i in range(0, 10):
+		difference = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.001, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
+		noisy_hoft = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, hoft, difference))
+		noisy_hoft = pipeparts.mkprogressreport(pipeline, noisy_hoft, "noisy_hoft_%d" % i)
+		noise.append(noisy_hoft)
 
-	hoft2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, hoft, difference))
-	hoft2 = pipeparts.mktee(pipeline, hoft2)
-
-	hoft3 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, hoft, difference2))
-	hoft3 = pipeparts.mktee(pipeline, hoft3)
-
-	clean_data = calibration_parts.clean_data(pipeline, hoft, rate, calibration_parts.list_srcs(pipeline, hoft2, hoft3), rate, rate / 8, rate / 16, 32, rate * 100)
+	clean_data = calibration_parts.clean_data(pipeline, hoft, rate, noise, rate, 2 * rate, rate, 10, rate * 1000, rate, 4, filename = "tfs.txt")
 	pipeparts.mknxydumpsink(pipeline, hoft, "%s_hoft.txt" % name)
-	pipeparts.mknxydumpsink(pipeline, hoft2, "%s_hoft2.txt" % name)
-	pipeparts.mknxydumpsink(pipeline, difference, "%s_difference.txt" % name)
 	pipeparts.mknxydumpsink(pipeline, clean_data, "%s_out.txt" % name)
 
 	return pipeline
@@ -206,8 +201,8 @@ def lal_transferfunction_04(pipeline, name):
 
 #test_common.build_and_run(lal_transferfunction_01, "lal_transferfunction_01")
 #test_common.build_and_run(lal_transferfunction_02, "lal_transferfunction_02")
-#test_common.build_and_run(lal_transferfunction_03, "lal_transferfunction_03")
-test_common.build_and_run(lal_transferfunction_04, "lal_transferfunction_04")
+test_common.build_and_run(lal_transferfunction_03, "lal_transferfunction_03")
+#test_common.build_and_run(lal_transferfunction_04, "lal_transferfunction_04")
 
 
 

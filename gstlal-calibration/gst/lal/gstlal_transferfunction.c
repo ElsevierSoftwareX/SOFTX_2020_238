@@ -388,10 +388,10 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 		for(j = 0; j < num_tfs; j++) { \
 			gslz = gsl_vector_complex_get(transfer_functions_solved_at_f, j); \
 			if(isnormal(GSL_REAL(gslz)) || GSL_REAL(gslz) == 0.0) \
-				transfer_functions[j * fd_fft_length + i] = GSL_REAL(gslz) + I * GSL_IMAG(gslz); \
+				transfer_functions[j * fd_tf_length + i] = GSL_REAL(gslz) + I * GSL_IMAG(gslz); \
 			else { \
 				success = FALSE; \
-				transfer_functions[j * fd_fft_length + i] = 0.0; \
+				transfer_functions[j * fd_tf_length + i] = 0.0; \
 			} \
 		} \
 	} \
