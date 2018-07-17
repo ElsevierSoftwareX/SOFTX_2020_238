@@ -1,10 +1,71 @@
 SHELL := /bin/bash # Use bash syntax
 
+#
+# gstlal offline tutorial
+#
+# Author: Duncan Meacher (duncan.meacher@ligo.org)
+#
+# This Makefile is designed to be a very basic introduction to the gstlal
+# workflow, as well as being a test script for continuous integration as part
+# of gitlab. The steps of this Makefile are:
+#
+# 1. Produce 2048s of fake data data that contains a single BNS injection with
+# an early aLIGO PSD.
+# 2. A simple frames.cache, segments.xml.gz, vetoes.xml.gz, and tisi.xml files
+# are produced, which are required for running gstlal_insiral.
+# 3. A very basic template template bank, focused around the injection
+# parameters, is produced. N_templates < 250.
+# 4. An SVD bank is then produced from this template bank.
+# 5. gstlal_inspiral is then run, producing output files containing triggers
+# and background statistics.
+# 6. The triggers are then asigned a ranking statistic, and are then clustered
+# so that only the loudest trigger within a 4s window remains.
+# 7. The background statistics collected in step 5 are sampled to find the
+# noise distribution of our ranking statistic. These are then combined across
+# the entire search.
+# 8. The noise distributions found in 7 are used to assign false alarm rates
+# (FARs) and probabilities (FAPs).
+# 9. Plotting scripts are then run and a summary page is produced.
+#
+# This Makefile is relatively self contained, it produces all required files
+# apart from the early_aligo_asd.txt file (found at
+# gstlal/gstlal/share/early_aligo_asd.txt), and the
+# Makefile.offline_analysis_rules file (found at
+# gstlal/gstlal-inspiral/share/Makefile.offline_analysis_rules). These are
+# currently linked with local paths, which are used for the CI tests, but it is
+# recomendded that when used as an offline tutorial that this script is not run
+# within the gstlal git repo. The paths will then need to be modified. If using
+# a optmised build (i.e.
+# gstlal-inspiral/share/post_O2/optimised/Makefile.ligosoftware_icc_gstreamer-1.0)
+# then these files will be copied across to the build directory and can found
+# by uncommenting to the $(LAL_PATH). If using other builds then full paths
+# should be used. The WEBDIR varibale should also be changed to point to the
+# accessible pages of the cluster being run on.
+#
+# NOTE: This Makefile is arranged "backwards" and should be read top to bottom.
+#
+# NOTE: lalapps_cbc_sbank takes a very long time to run within the CI
+# environment, so has been switched out for lalapps_tmpltbank, which is an
+# older bank generation code. If using as an offline tutorial, this can be
+# switched back.
+#
+# To run, making sure that the correct environment is sourced:
+#
+# 	$ make -f Makefile.offline_tutorial_test
+#
+# If you are able to run this Makefile without issues, then it is recomended to
+# run the BNS test dag. This produces a larger workflow that needs to be
+# submitted via condor, but should still finished within 24 hours. This can be
+# found here:
+#
+# 	gstlal/gstlal-inspiral/share/post_O2/Makefile.BNS_HL_test_dag_O2
+#
+
 ##################
 # Runtime outout #
 ##################
 
-# Prints runtime of each individual job. 
+# Prints runtime in secoonds of each individual job.
 # To disable leave blank.
 #TIME=
 TIME=time -p
@@ -38,6 +99,7 @@ TAG = gstlal_offline_tutorial
 RUN=run_1
 # A web directory for output
 WEBDIR = WEBDIR/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
+#WEBDIR = ~/public_html/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
 # The number of sub banks in each SVD bank file
 NUMBANKS = 1
 
@@ -93,11 +155,10 @@ CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
 ###################################################################################
 
 # Link to offline analaysis rules in Makefile
-# Default is local path toi git repo version for CI.
+# Default is local path to git repo version for CI.
 # Change for other runs.
 include ../share/Makefile.offline_analysis_rules
 #include $(LAL_PATH)/share/gstlal/Makefile.offline_analysis_rules
-#include $(GSTLAL_PATH)/share/gstlal/Makefile.offline_analysis_rules
 
 # FIXME Is there a way to put this back in offline analysis rules?
 BANK_CACHE_STRING:=H1=H1_split_bank.cache,L1=L1_split_bank.cache
@@ -153,20 +214,22 @@ injections.xml:
 		--verbose
 	@echo ""
 
+# Default is local path to git repo version for CI.
+# Change for other runs.
 H1_psd.xml.gz:
 	# Generate H1 PSD used to produce fake data
 	# gstlal_psd_xml_from_asd_txt_0001
 	gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ ../../gstlal/share/early_aligo_asd.txt
 	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt
-	#gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt
 	@echo ""
- 
+
+# Default is local path to git repo version for CI.
+# Change for other runs.
 L1_psd.xml.gz:
 	# Generate L1 PSD used to produce fake data
 	# gstlal_psd_xml_from_asd_txt_0002
 	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ../../gstlal/share/early_aligo_asd.txt
-	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt 
-	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(GSTLAL_PATH)/share/gstlal/early_aligo_asd.txt 
+	#gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ $(LAL_PATH)/share/gstlal/early_aligo_asd.txt
 	@echo ""
 
 H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf: H1_psd.xml.gz injections.xml
@@ -219,8 +282,7 @@ segments.xml.gz:
 	@echo ""
 
 vetoes.xml.gz:
-	# Produce veto file
-	# A Dummy vetoes file
+	# Produce a dummy veto file
 	@echo "Produce veto file"
 	echo 0 1 > vetoes.txt
 	ligolw_segments --insert-from-segwizard=H1=vetoes.txt --output H1_vetoes.xml.gz --name=vetoes
@@ -258,6 +320,7 @@ psd_horizon.png:
 	$(TIME) gstlal_plot_psd_horizon $@ measured_psd.xml.gz
 	@echo ""
 
+# FIXME sbank takes a very long to run in the CI environment.
 #gstlal_bank.xml.gz: measured_psd.xml.gz
 #	# Produce template bank
 #	$(TIME) lalapps_cbc_sbank \
@@ -325,6 +388,7 @@ gstlal_bank.xml.gz: frames.cache
 	mv H1-TMPLTBANK-1000000000-2048.xml.gz gstlal_bank.xml.gz
 	@echo ""
 
+# FIXME Doesn't work
 #template_bank_plot : gstlal_bank.xml.gz plots
 #	# gstlal_inspiral_plot_banks_0001
 #	gstlal_inspiral_plot_banks --template-bank-file gstlal_bank.xml.gz --plot-template-bank  --output-dir plots
@@ -545,7 +609,7 @@ gstlal_inspiral_plot_background_0001: gstlal_inspiral_plotsummary_0001
 		--database H1L1-ALL_LLOID-1000000000-2048.sqlite \
 		--user-tag ALL_LLOID_COMBINED \
 		--output-dir plots \
-		post_marginalized_likelihood.xml.gz 
+		post_marginalized_likelihood.xml.gz
 	@touch gstlal_inspiral_plot_background_0001
 	@echo ""
 
@@ -579,7 +643,7 @@ clean:
 	rm -rf H* L* *.txt *.xml *.gz *.cache gstlal_* lalapps_* ligolw_* $(WEBDIR)* plots/
 
 clean-data:
-	rm -rf H-H1_FAKE-* L-L1_FAKE-*
+	rm -rf H-H1_FAKE-* L-L1_FAKE-* frames.cache
 
 clean-webdir:
 	rm -rf $(WEBDIR)*
