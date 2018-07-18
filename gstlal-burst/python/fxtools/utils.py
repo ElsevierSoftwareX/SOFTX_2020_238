@@ -96,6 +96,12 @@ def in_new_epoch(new_gps_time, prev_gps_time, gps_epoch):
 	"""
 	Returns whether new and old gps times are in different
 	epochs.
+
+	>>> in_new_epoch(1234561200, 1234560000, 1000)
+	True
+	>>> in_new_epoch(1234561200, 1234560000, 10000)
+	False
+
 	"""
 	return (new_gps_time - floor_div(prev_gps_time, gps_epoch)) >= gps_epoch
 
@@ -103,8 +109,12 @@ def floor_div(x, n):
 	"""
 	Floor an integer by removing its remainder
 	from integer division by another integer n.
-	e.g. floor_div(163, 10) = 160
-	e.g. floor_div(158, 10) = 150
+
+	>>> floor_div(163, 10)
+	160
+	>>> floor_div(158, 10)
+	150
+
 	"""
 	assert n > 0
 	return (x / n) * n
@@ -288,6 +298,28 @@ class TimeseriesFeatureQueue(object):
 	"""
 	Class for storing regularly sampled feature data.
 	NOTE: assumes that ingested features are time ordered.
+
+	Example:
+		>>> # create the queue
+		>>> columns = ['trigger_time', 'snr']
+		>>> channels = ['channel1']
+		>>> queue = TimeseriesFeatureQueue(channels, columns, sample_rate=1)
+		>>> # add features
+		>>> queue.append(123450, 'channel1', {'trigger_time': 123450.3, 'snr': 3.0})
+		>>> queue.append(123451, 'channel1', {'trigger_time': 123451.7, 'snr': 6.5})
+		>>> queue.append(123452, 'channel1', {'trigger_time': 123452.4, 'snr': 5.2})
+		>>> # get oldest feature
+		>>> queue.pop()
+		{'timestamp': 123450, 'features': {'channel1': [{'snr': 3.0, 'trigger_time': 123450.3}]}}
+		>>> # flush queue and get rest of features
+		>>> queue.flush()
+		>>> len(queue)
+		2
+		>>> queue.pop()
+		{'timestamp': 123451, 'features': {'channel1': [{'snr': 6.5, 'trigger_time': 123451.7}]}}
+		>>> queue.pop()
+		{'timestamp': 123452, 'features': {'channel1': [{'snr': 5.2, 'trigger_time': 123452.4}]}}
+
 	"""
 	def __init__(self, channels, columns, **kwargs):
 		self.channels = channels
