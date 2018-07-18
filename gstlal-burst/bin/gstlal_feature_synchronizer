@@ -166,7 +166,7 @@ class StreamSynchronizer(object):
         combine subsets of features from multiple streams in a sensible way
         """
         datum = [subset[1] for subset in subsets]
-        return list(itertools.chain(*datum))
+        return {ch: rows for channel_subsets in datum for ch, rows in channel_subsets.items()}
 
     def push_features(self):
         """
@@ -176,7 +176,7 @@ class StreamSynchronizer(object):
         if self.feature_buffer:
             timestamp, features = self.feature_buffer.pop()
             logger.info('pushing features with timestamp %d downstream' % timestamp)
-            feature_packet = {'timestamp': timestamp, 'features': list(features)}
+            feature_packet = {'timestamp': timestamp, 'features': features}
             self.producer.produce(timestamp = timestamp, topic = self.producer_name, value = json.dumps(feature_packet))
 
     def max_timeout(self):
