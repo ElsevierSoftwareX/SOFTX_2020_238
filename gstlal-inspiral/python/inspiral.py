@@ -52,6 +52,12 @@
 
 import bisect
 from collections import deque
+try:
+	from fpconst import NaN
+except ImportError:
+	# fpconst is not part of the standard library and might not be
+	# available
+	NaN = float("nan")
 import itertools
 import math
 import numpy
@@ -670,6 +676,17 @@ class Data(object):
 			# we have extended the buf_seg above to enclose the
 			# triggers, make sure that worked
 			assert all(event.end in buf_seg for event in events)
+
+			# set all effective distances to NaN.
+			# gstlal_inspiral's effective distances are
+			# incorrect, and the PE codes require us to either
+			# provide correct effective distances or
+			# communicate to them that they are incorrect.
+			# they have explained that setting them to NaN is
+			# sufficient for the latter.
+			# FIXME:  fix the effective distances
+			for event in events:
+				event.eff_dist = NaN
 
 			# Find max SNR sngles
 			if events:
