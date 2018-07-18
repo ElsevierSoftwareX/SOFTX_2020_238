@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import sys
+
+
+from glue.ligolw import utils as ligolw_utils
+from lal import series as lalseries
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		description = ""
+	)
+	parser.add_option("--prefix", metavar = "string", default = "psd_", help = "Prepend output files with this string (default = \"psd_\").")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	options, filenames = parser.parse_args()
+
+	if len(filenames) != 1:
+		raise ValueError("only file PSD file may be given")
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# load the PSD file iterate over instruments, writing ASD to ascii file
+#
+
+
+for filename in filenames:
+	for instrument, psd in lalseries.read_psd_xmldoc(ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = lalseries.PSDContentHandler)).items():
+		filename = "%s%s.txt" % (options.prefix, instrument)
+		with open(filename, "w") as f:
+			if options.verbose:
+				print >>sys.stderr, "writing \"%s\" ..." % filename
+			for i, x in enumerate(psd.data.data):
+				print >>f, "%.16g %.16g" % (psd.f0 + i * psd.deltaF, x**.5)
