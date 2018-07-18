@@ -142,20 +142,21 @@ def lal_transferfunction_03(pipeline, name):
 	buffer_length = 1.0	# seconds
 	test_duration = 50.0	# seconds
 	width = 64		# bits
-	channels = 1
-	freq = 512
+	freq = 512		# Hz
+	num_witnesses = 2
+	witness_factor = 0.5	# Ratio of amplitudes of witness / signal
 
 	#
 	# build pipeline
 	#
 
-	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = freq, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
+	hoft = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 1, freq = freq, channels = 1, rate = rate, test_duration = test_duration, width = width, verbose = False)
 	hoft = pipeparts.mktee(pipeline, hoft)
 
 	noise = []
-	for i in range(0, 10):
-		difference = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.001, channels = channels, rate = rate, test_duration = test_duration, width = width, verbose = False)
-		noisy_hoft = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, hoft, difference))
+	for i in range(0, num_witnesses):
+		difference = test_common.test_src(pipeline, buffer_length = buffer_length, wave = 5, volume = 0.001, channels = 1, rate = rate, test_duration = test_duration, width = width, verbose = False)
+		noisy_hoft = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, hoft, witness_factor), difference))
 		noisy_hoft = pipeparts.mkprogressreport(pipeline, noisy_hoft, "noisy_hoft_%d" % i)
 		noise.append(noisy_hoft)
 

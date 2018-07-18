@@ -252,6 +252,8 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 
 		# Find transfer function between witness channel and signal at this frequency
 		tf_at_f = complex_division(pipeline, line_in_signal, line_in_witness)
+		# It may be necessary to remove the first few samples since denominator samples may have arrived before numerator samples, in which case the adder assumes the numerator is one.
+		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_insertgap", chop_length = 1000000000) # Removing one second
 
 		# Remove worthless data from computation of transfer function if we can
 		if obsready is not None:
@@ -263,6 +265,8 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 			reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tf_at_f, line_in_witness))
 		else:
 			reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tf_at_f, line_in_witness, phase_factor))
+		# It may be necessary to remove the first few samples since line_in_witness may have arrived first, in which case the result of the above multiplication would be line_in_witness
+		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_insertgap", chop_length = 1000000000)
 		reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, upsample_quality, zero_latency, rate_out)
 		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * n * f0, prefactor_real = -2.0)
 		reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "creal")

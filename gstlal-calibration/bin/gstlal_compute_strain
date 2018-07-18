@@ -279,7 +279,7 @@ parser.add_option("--remove-powerlines", action = "store_true", help = "Set this
 parser.add_option("--powerlines-channel-name", metavar = "name", default = "PEM-EY_MAINSMON_EBAY_1_DQ", help = "Set the name of the channel used as input for 60 Hz power lines to be removed. (Default = PEM-EY_MAINSMON_EBAY_1_DQ)")
 parser.add_option("--powerlines-channel-sr", metavar = "Hz", type = int, default = 1024, help = "Sample rate of the powerlines channel (Default = 1024 Hz)")
 parser.add_option("--powerlines-freq-var", metavar = "Hz", type = float, default = 0.02, help = "Amount by which freqency of the power mains varies with time. Supposedly they are intentionally varied by +- 0.02 Hz. (Default = 0.02)")
-parser.add_option("--witness-channel-list", metavar = "name", default = None, help = "Comma-separated list of witness channels to use to subtract noise from h(t). (Default is to not use any witness channels.)")
+parser.add_option("--witness-channel-list", metavar = "name", default = None, help = "List of witness channels to use to subtract noise from h(t), given as a string. Use semicolons (;) to separate channels/groups of channels that should be processed separately. Use commas to separate channels that should be processed together. For example, --witness-channel-list=\"chan1,chan2,chan3;chan4,chan5\". This means the pipeline will process the first 3 channels together and the last 2 channels together. (Default is to not use any witness channels.)")
 parser.add_option("--witness-channel-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which transfer functions will be computed and witness channels will be filtered. (Default = 2048 Hz)")
 parser.add_option("--witness-channel-fft-length", metavar = "seconds", type = float, default = 1.0, help = "The length in seconds of the fast Fourier transforms used to compute transfer functions between witness channels and h(t). The fft's are windowed with Hann windows and overlapped. (Default = 1.0)")
 parser.add_option("--num-witness-ffts", type = int, default = 128, help = "The number of fft's to average for the witness -> h(t) transfer functions calculation. The average is taken after the ratio h(f) / witness(f). (Default = 128)")
@@ -692,10 +692,14 @@ if options.remove_powerlines:
 
 # If we are using witness channels to clean h(t), add those to the channel list
 if options.witness_channel_list is not None:
-	witness_channel_list = options.witness_channel_list.split(',')
-	for i in range(0, len(witness_channel_list)):
-		channel_list.append((instrument, witness_channel_list[i]))
-		headkeys.append(witness_channel_list[i])
+	witness_channel_list = []
+	split_witness_list = options.witness_channel_list.split(';')
+	for i in range(0, len(split_witness_list)):
+		witness_channels = split_witness_list[i].split(',')
+		witness_channel_list.append(witness_channels)
+		for j in range(0, len(witness_channels)):
+			channel_list.append((instrument, witness_channels[j]))
+			headkeys.append(witness_channels[j])
 
 
 ####################################################################################################
@@ -1886,13 +1890,14 @@ if options.witness_channel_list is not None:
 		clean_strain = straintee
 	if options.no_dq_vector:
 		obsreadytee = None
-	witnesses = []
-	for key in headkeys:
-		if key in witness_channel_list:
-			witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
-	if len(witnesses) != len(witness_channel_list):
-		print("WARNING: Not all requested witness channels are being used")
-	clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoftsr, witnesses, options.witness_channel_sr, witness_fft_samples, witness_fft_overlap, options.num_witness_ffts, witness_tf_update_samples, witness_fir_samples, options.witness_frequency_resolution, obsready = None if options.no_dq_vector else obsreadytee, attack_length = -filter_settle_time * options.witness_channel_sr, filename = "transfer_functions.txt")
+	for i in range(0, len(witness_channel_list)):
+		witnesses = []
+		for key in headkeys:
+			if key in witness_channel_list[i]:
+				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
+		if len(witnesses) != len(witness_channel_list[i]):
+			print("WARNING: Not all requested witness channels are being used")
+		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoftsr, witnesses, options.witness_channel_sr, witness_fft_samples, witness_fft_overlap, options.num_witness_ffts, witness_tf_update_samples, witness_fir_samples, options.witness_frequency_resolution, obsready = None if options.no_dq_vector else obsreadytee, attack_length = -filter_settle_time * options.witness_channel_sr, filename = "transfer_functions.txt")
 
 if options.remove_callines or options.remove_powerlines or options.witness_channel_list is not None:
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
