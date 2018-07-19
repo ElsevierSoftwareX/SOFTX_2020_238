@@ -432,19 +432,19 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 			element->unit_size = GST_AUDIO_INFO_BPF(&info);
 			if(!strcmp(name, GST_AUDIO_NE(U32))) {
 				element->data_type = GSTLAL_INSERTGAP_U32;
-				g_assert_cmpuint(element->unit_size, ==, 4);
+				g_assert_cmpuint(element->unit_size, ==, element->channels * 4);
 			} else if(!strcmp(name, GST_AUDIO_NE(F32))) {
 				element->data_type = GSTLAL_INSERTGAP_F32;
-				g_assert_cmpuint(element->unit_size, ==, 4);
+				g_assert_cmpuint(element->unit_size, ==, element->channels * 4);
 			} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
 				element->data_type = GSTLAL_INSERTGAP_F64;
-				g_assert_cmpuint(element->unit_size, ==, 8);
+				g_assert_cmpuint(element->unit_size, ==, element->channels * 8);
 			} else if(!strcmp(name, GST_AUDIO_NE(Z64))) {
 				element->data_type = GSTLAL_INSERTGAP_Z64;
-				g_assert_cmpuint(element->unit_size, ==, 8);
+				g_assert_cmpuint(element->unit_size, ==, element->channels * 8);
 			} else if(!strcmp(name, GST_AUDIO_NE(Z128))) {
 				element->data_type = GSTLAL_INSERTGAP_Z128;
-				g_assert_cmpuint(element->unit_size, ==, 16);
+				g_assert_cmpuint(element->unit_size, ==, element->channels * 16);
 			} else
 				g_assert_not_reached();
 		}

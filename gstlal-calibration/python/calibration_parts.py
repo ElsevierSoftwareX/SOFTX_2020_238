@@ -758,7 +758,7 @@ def update_filters(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_
 	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
 
-def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, update_samples, fir_length, frequency_resolution, obsready = None, attack_length = 0, chop_time = 0.0, wait_time = 0.0, filename = None):
+def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, obsready = None, chop_time = 0.0, wait_time = 0.0, filename = None):
 
 	#
 	# Use witness channels that monitor the environment to remove environmental noise
@@ -779,13 +779,13 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	resampled_signal = mkresample(pipeline, signal_tee, 5, False, witness_rate)
 	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
 	if obsready is not None:
-		transfer_functions = mkgate(pipeline, transfer_functions, obsready, 1, attack_length = attack_length)
+		transfer_functions = mkgate(pipeline, transfer_functions, obsready, 1, attack_length = -witness_rate * chop_time)
 	if(chop_time):
 		transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_insertgap", chop_length = int(1000000000 * chop_time))
 	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = 9, update_after_gap = True, filename = filename)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
-		minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, witness_tees[i], min_length = wait_time + 0.5), "lal_tdwhiten", kernel = default_fir_filter, latency = fir_length / 2, taper_length = 20 * fir_length)
+		minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, witness_tees[i], min_length = wait_time), "lal_tdwhiten", kernel = default_fir_filter, latency = fir_length / 2, taper_length = filter_taper_length)
 		transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
 		signal_minus_noise.append(mkresample(pipeline, minus_noise, 5, False, signal_rate))
 

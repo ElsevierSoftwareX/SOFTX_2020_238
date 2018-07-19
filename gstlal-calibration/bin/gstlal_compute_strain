@@ -186,7 +186,6 @@ parser.add_option("--no-fcc", action = "store_true", help = "Set this to turn of
 parser.add_option("--no-srcQ", action = "store_true", help = "Set this to turn off the calculation of the SRC Q.")
 parser.add_option("--no-fs", action = "store_true", help = "Set this to turn off the calculation of the SRC spring frequency.")
 parser.add_option("--factors-averaging-time", metavar = "Sec", type = int, default = 10, help = "Time over which to average the smoothed time-varying calibration factors (\kappas), given in seconds. (Default = 10 seconds)")
-parser.add_option("--src-averaging-time", metavar = "Sec", type = int, default = 600, help = "Time over which to average the smoothed SRC detuning parameters fs and Q, given in seconds. (Default = 600 seconds)")
 parser.add_option("--apply-kappapu", action = "store_true", help = "Set this to have the \kappa_pu factors multiply the actuation chain.")
 parser.add_option("--apply-complex-kappapu", action = "store_true", help = "Set this to have the \kappa_pu factors the actuation chain with an adaptive filter that corrects for both magnitude and phase errors.")
 parser.add_option("--apply-kappap", action = "store_true", help = "Set this to have the \kappa_p factors multiply the actuation chain.")
@@ -278,14 +277,16 @@ parser.add_option("--remove-callines", action = "store_true", help = "Set this o
 parser.add_option("--remove-powerlines", action = "store_true", help = "Set this option to subtract the power mains lines from the h(t) spectrum.")
 parser.add_option("--powerlines-channel-name", metavar = "name", default = "PEM-EY_MAINSMON_EBAY_1_DQ", help = "Set the name of the channel used as input for 60 Hz power lines to be removed. (Default = PEM-EY_MAINSMON_EBAY_1_DQ)")
 parser.add_option("--powerlines-channel-sr", metavar = "Hz", type = int, default = 1024, help = "Sample rate of the powerlines channel (Default = 1024 Hz)")
+parser.add_option("--powerlines-tf-averaging-time", metavar = "seconds", type = int, default = 128, help = "Time over which to average the transfer function between the power mains witness channel and h(t) at 60 Hz and harmonics. (Default = 128)")
 parser.add_option("--powerlines-freq-var", metavar = "Hz", type = float, default = 0.02, help = "Amount by which freqency of the power mains varies with time. Supposedly they are intentionally varied by +- 0.02 Hz. (Default = 0.02)")
 parser.add_option("--witness-channel-list", metavar = "name", default = None, help = "List of witness channels to use to subtract noise from h(t), given as a string. Use semicolons (;) to separate channels/groups of channels that should be processed separately. Use commas to separate channels that should be processed together. For example, --witness-channel-list=\"chan1,chan2,chan3;chan4,chan5\". This means the pipeline will process the first 3 channels together and the last 2 channels together. (Default is to not use any witness channels.)")
 parser.add_option("--witness-channel-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which transfer functions will be computed and witness channels will be filtered. (Default = 2048 Hz)")
-parser.add_option("--witness-channel-fft-length", metavar = "seconds", type = float, default = 1.0, help = "The length in seconds of the fast Fourier transforms used to compute transfer functions between witness channels and h(t). The fft's are windowed with Hann windows and overlapped. (Default = 1.0)")
-parser.add_option("--num-witness-ffts", type = int, default = 128, help = "The number of fft's to average for the witness -> h(t) transfer functions calculation. The average is taken after the ratio h(f) / witness(f). (Default = 128)")
+parser.add_option("--witness-channel-fft-time", metavar = "seconds", type = float, default = 4.0, help = "The length in seconds of the fast Fourier transforms used to compute transfer functions between witness channels and h(t). The fft's are windowed with Hann windows and overlapped. (Default = 4.0)")
+parser.add_option("--num-witness-ffts", metavar = "integer", type = int, default = 128, help = "The number of ffts to take before averaging the witness -> h(t) transfer functions calculation. The average is taken after the ratio h(f) / witness(f). (Default = 128)")
 parser.add_option("--witness-fir-length", metavar = "seconds", type = float, default = 0.5, help = "The length in seconds of the filters applied to the witness channels before subtracting from h(t) (Default = 0.5)")
 parser.add_option("--witness-frequency-resolution", metavar = "Hz", type = float, default = 5.0, help = "The frequency resolution of the filters applied to the witness channels before subtracting from h(t). It can be advantageous to lower the frequency resolution in order to average over excess noise. (Default = 5.0)")
 parser.add_option("--witness-tf-update-time", metavar = "seconds", type = int, default = 3600, help = "The amount of time after transfer functions between witness channels and h(t) are finished to begin the calculation of the next set of transfer functions (Default = 3600)")
+parser.add_option("--witness-filter-taper-time", metavar = "seconds", type = int, default = 10, help = "The amount of time to use to taper in newly computed FIR filters for witness channels being used for noise subtraction.")
 parser.add_option("--cleaning-check-rms-time", metavar = "seconds", type = float, default = 1.0, help = "The amount of data from h(t) and cleaned h(t) that is used to compute and compare the rms. This comparison between cleaned and uncleaned h(t) determines whether the HOFT_CLEAN bits of the calibration state vector are on or off.")
 parser.add_option("--cleaning-check-range-low-min", metavar = "Hz", type = int, default = 15, help = "Minimum of a range of frequencies in which we expect line/noise subtraction to be impactful. The HOFT_CLEAN_LOWFREQ_OK bit of the calibration state vector is determined based on whether rms of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 15 Hz)")
 parser.add_option("--cleaning-check-range-low-max", metavar = "Hz", type = int, default = 40, help = "Maximum of a range of frequencies in which we expect line/noise subtraction to be impactful. The HOFT_CLEAN_LOWFREQ_OK bit of the calibration state vector is determined based on whether rms of the cleaned data is less than that of uncleaned h(t) in this range. (Default = 40 Hz)")
@@ -399,7 +400,6 @@ compute_calib_factors_complex_caps = "audio/x-raw, format=Z128LE, rate=%d, chann
 # Set up smoothing, averaging and integration sample sizes for kappa calulations
 integration_samples = int(options.demodulation_filter_time) * options.compute_factors_sr
 factors_average_samples = int(options.factors_averaging_time) * options.compute_factors_sr
-src_average_samples = int(options.src_averaging_time) * options.compute_factors_sr
 median_smoothing_samples = int(options.median_smoothing_time) * options.compute_factors_sr
 kappa_gate_attack_length = -integration_samples * (1.0 - options.filter_latency)
 kappa_gate_hold_length = -integration_samples * options.filter_latency - (options.filter_latency != 0) * options.coherence_time * options.compute_factors_sr
@@ -1028,7 +1028,7 @@ if not options.no_fs or not options.no_srcQ:
 		Xi = calibration_parts.compute_Xi_from_filters_file(pipeline, pcal_at_src_freq, derr_at_src_freq, src_pcal_line_freq, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst_at_src_freq, kpu_at_src_freq, kc, fcc)
 
 	Xi = pipeparts.mktee(pipeline, Xi)
-	smooth_Xi_nogate = pipeparts.mkgeneric(pipeline, Xi, "lal_smoothkappas", default_kappa_re = float(numpy.real(expected_Xi)), default_kappa_im = float(numpy.imag(expected_Xi)), array_size = median_smoothing_samples, avg_array_size = src_average_samples, default_to_median = options.kappas_default_to_median, filter_latency = options.filter_latency)
+	smooth_Xi_nogate = pipeparts.mkgeneric(pipeline, Xi, "lal_smoothkappas", default_kappa_re = float(numpy.real(expected_Xi)), default_kappa_im = float(numpy.imag(expected_Xi)), array_size = median_smoothing_samples, avg_array_size = factors_average_samples, default_to_median = options.kappas_default_to_median, filter_latency = options.filter_latency)
 
 	if not options.no_coherence:
 		# Gate Xi with all coherences. We apply the gating and smoothing here since Q depends on the inverse of Im(Xi), which fluctuates about zero.
@@ -1037,10 +1037,10 @@ if not options.no_fs or not options.no_srcQ:
 		Xi_gated = calibration_parts.mkgate(pipeline, Xi_gated, pcaly_line2_coh, options.coherence_uncertainty_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True)
 		Xi_gated = calibration_parts.mkgate(pipeline, Xi_gated, sus_coh, options.coherence_uncertainty_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True)
 
-		smooth_Xi = calibration_parts.smooth_complex_kappas(pipeline, Xi_gated, float(numpy.real(expected_Xi)), float(numpy.imag(expected_Xi)), median_smoothing_samples, src_average_samples, options.kappas_default_to_median, options.filter_latency)
+		smooth_Xi = calibration_parts.smooth_complex_kappas(pipeline, Xi_gated, float(numpy.real(expected_Xi)), float(numpy.imag(expected_Xi)), median_smoothing_samples, factors_average_samples, options.kappas_default_to_median, options.filter_latency)
 
 	else:
-		smooth_Xi = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, Xi, Xi_real_ok_var, Xi_real_ok_var, float(numpy.real(expected_Xi)), float(numpy.imag(expected_Xi)), median_smoothing_samples, src_average_samples, options.kappas_default_to_median, options.filter_latency)
+		smooth_Xi = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, Xi, Xi_real_ok_var, Xi_real_ok_var, float(numpy.real(expected_Xi)), float(numpy.imag(expected_Xi)), median_smoothing_samples, factors_average_samples, options.kappas_default_to_median, options.filter_latency)
 
 	if options.no_srcQ:
 		# the imaginary part is only used to compute Q
@@ -1519,13 +1519,13 @@ if not options.no_dq_vector:
 	# FS BITS BRANCH
 	#
 	if not options.no_fs:
-		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, fs_default, options.fs_ok_var, int(median_smoothing_samples / 2) + src_average_samples, status_out_smooth = pow(2,14), starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, fs_default, options.fs_ok_var, int(median_smoothing_samples / 2) + factors_average_samples, status_out_smooth = pow(2,14), starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# SRCQ BITS BRANCH
 	#
 	if not options.no_srcQ:
-		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, 1.0 / srcQ_default, [options.srcQinv_min, options.srcQinv_max], int(median_smoothing_samples / 2) + src_average_samples, status_out_smooth = pow(2,15), starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
+		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, 1.0 / srcQ_default, [options.srcQinv_min, options.srcQinv_max], int(median_smoothing_samples / 2) + factors_average_samples, status_out_smooth = pow(2,15), starting_rate = options.compute_factors_sr, ending_rate = calibstatesr)
 
 	#
 	# COHERENCE BITS BRANCH
@@ -1877,14 +1877,23 @@ if options.remove_powerlines:
 	if not options.remove_callines:
 		clean_strain = straintee
 	powerlines = calibration_parts.caps_and_progress(pipeline, head_dict["powerlines"], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", "powerlines")
-	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, options.powerlines_freq_var, options.filter_latency, compute_rate = options.compute_factors_sr, rate_out = hoftsr, num_avg = 2048, obsready = None if options.no_dq_vector else obsreadytee)
+	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, options.powerlines_freq_var, options.filter_latency, compute_rate = options.compute_factors_sr, rate_out = hoftsr, num_avg = options.powerlines_tf_averaging_time * options.powerlines_channel_sr, obsready = None if options.no_dq_vector else obsreadytee)
 
 # Remove excess noise using any provided witness channels
 if options.witness_channel_list is not None:
-	witness_fft_samples = int(options.witness_channel_fft_length * options.witness_channel_sr)
+	witness_fft_samples = int(options.witness_channel_fft_time * options.witness_channel_sr)
 	witness_fft_overlap = int(witness_fft_samples / 2)
 	witness_tf_update_samples = int(options.witness_channel_sr) * int(options.witness_tf_update_time)
 	witness_fir_samples = int(options.witness_fir_length * options.witness_channel_sr)
+	witness_filter_taper_length = int(options.witness_channel_sr * options.witness_filter_taper_time)
+	# Remove initial data from computation of transfer functions and wait until the filters and kappas settle
+	witness_chop_time = filter_settle_time + (1.0 - options.filter_latency) * (options.demodulation_filter_time + options.median_smoothing_time + options.factors_averaging_time)
+	# In high latency, make the witnesses wait to be filtered until new filters are ready
+	witness_wait_time = (filter_settle_time + options.demodulation_filter_time + options.median_smoothing_time + options.factors_averaging_time + options.witness_channel_fft_time / 2.0 * (options.num_witness_ffts + 1.0)) if options.filter_latency else 0.0
+	# How much does the "chop_time" need to increase per iteration of cleaning?
+	witness_chop_increment = options.witness_filter_taper_time + (options.witness_channel_fft_time / 2.0 * (options.num_witness_ffts + 1.0) if not options.filter_latency else 0.0)
+	# How much does the "wait_time" need to increase per iteration of cleaning?
+	witness_wait_increment = (options.witness_filter_taper_time + options.witness_channel_fft_time / 2.0 * (options.num_witness_ffts + 1.0)) if options.filter_latency else 0.0
 
 	if not (options.remove_callines or options.remove_powerlines):
 		clean_strain = straintee
@@ -1896,8 +1905,10 @@ if options.witness_channel_list is not None:
 			if key in witness_channel_list[i]:
 				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 		if len(witnesses) != len(witness_channel_list[i]):
-			print("WARNING: Not all requested witness channels are being used")
-		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoftsr, witnesses, options.witness_channel_sr, witness_fft_samples, witness_fft_overlap, options.num_witness_ffts, witness_tf_update_samples, witness_fir_samples, options.witness_frequency_resolution, obsready = None if options.no_dq_vector else obsreadytee, attack_length = -filter_settle_time * options.witness_channel_sr, filename = "transfer_functions.txt")
+			print "WARNING: Not all requested witness channels are being used"
+		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoftsr, witnesses, options.witness_channel_sr, witness_fft_samples, witness_fft_overlap, options.num_witness_ffts, witness_tf_update_samples, witness_fir_samples, options.witness_frequency_resolution, witness_filter_taper_length, obsready = obsreadytee, chop_time = witness_chop_time, wait_time = witness_wait_time, filename = "transfer_functions_%d.txt" % i)
+		witness_chop_time += witness_chop_increment
+		witness_wait_time += witness_wait_increment
 
 if options.remove_callines or options.remove_powerlines or options.witness_channel_list is not None:
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
