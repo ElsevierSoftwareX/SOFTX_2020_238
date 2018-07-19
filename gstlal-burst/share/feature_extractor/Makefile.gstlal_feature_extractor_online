@@ -72,6 +72,14 @@ SHELL := /bin/bash # Use bash syntax
 #         is to prevent a single feature extractor job from holding up the online pipeline. This will
 #         also depend on the latency induced by the feature extractor, especially when using templates
 #         that have latencies associated with them such as Sine-Gaussians.
+#
+# In order to start up online runs, you'll need an installation of gstlal. An installation Makefile that
+# includes Kafka dependencies are located at: gstlal/gstlal-burst/share/feature_extractor/Makefile.gstlal_idq_icc
+#
+# To run, making sure that the correct environment is sourced:
+#
+#   $ make -f Makefile.gstlal_feature_extractor_online
+#
 
 ########################
 # User/Accounting Tags #
