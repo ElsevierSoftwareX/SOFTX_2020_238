@@ -154,9 +154,9 @@ static gboolean check_data_ ## DTYPE(DTYPE *data, double *bad_data_intervals, in
 				result &= data[i] > bad_data_intervals[j] && data[i] < bad_data_intervals[j + 1]; \
 		} \
 		if(remove_nan) \
-			result &= !isnan(data[i]); \
+			result &= !isnan((double) data[i]); \
 		if(remove_inf) \
-			result &= !isinf(data[i]); \
+			result &= !isinf((double) data[i]); \
 	} \
 	return result; \
 }
