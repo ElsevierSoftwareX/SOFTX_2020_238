@@ -100,7 +100,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
+		"channels = (int) [1, MAX], " \
 		"format = (string) { "GST_AUDIO_NE(U32)", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
@@ -115,7 +115,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"audio/x-raw, " \
 		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
+		"channels = (int) [1, MAX], " \
 		"format = (string) { "GST_AUDIO_NE(U32)", " GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) ", " GST_AUDIO_NE(Z64) ", " GST_AUDIO_NE(Z128) " }, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
@@ -144,40 +144,27 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-static gboolean check_data(double complex data, double *bad_data_intervals, gint array_length, gboolean remove_nan, gboolean remove_inf, gboolean complex_data) {
-	double data_re = creal(data);
-	gint i;
-	if(complex_data){
-		double data_im = cimag(data);
-		if(bad_data_intervals) {
-			if(data_re <= bad_data_intervals[0] || data_re >= bad_data_intervals[array_length - 1] || data_im <= bad_data_intervals[0] || data_im >= bad_data_intervals[array_length - 1])
-				return TRUE;
-			for(i = 1; i < array_length - 1; i += 2) {
-				if((data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1]) || (data_im >= bad_data_intervals[i] && data_im <= bad_data_intervals[i + 1]))
-					return TRUE;
-			}
-		}
-		if(remove_nan && (isnan(data_re) || isnan(data_im)))
-			return TRUE;
-		if(remove_inf && (isinf(data_re) || isinf(data_im)))
-			return TRUE;
-	} else {
-		if(bad_data_intervals) {
-			if(data_re <= bad_data_intervals[0] || data_re >= bad_data_intervals[array_length - 1])
-				return TRUE;
-			for(i = 1; i < array_length - 1; i += 2) {
-				if(data_re >= bad_data_intervals[i] && data_re <= bad_data_intervals[i + 1])
-					return TRUE;
-			}
-		}
-		if(remove_nan && (isnan(data_re)))
-			return TRUE;
-		if(remove_inf && (isinf(data_re)))
-			return TRUE;
-	}
-
-	return FALSE;
+#define DEFINE_CHECK_DATA(DTYPE) \
+static gboolean check_data_ ## DTYPE(DTYPE *data, double *bad_data_intervals, int array_length, int num_checks, gboolean remove_nan, gboolean remove_inf) { \
+	int i, j; \
+	gboolean result = TRUE; \
+	for(i = 0; i < num_checks; i++) { \
+		if(bad_data_intervals) { \
+			for(j = 0; j < array_length; j += 2) \
+				result &= data[i] > bad_data_intervals[j] && data[i] < bad_data_intervals[j + 1]; \
+		} \
+		if(remove_nan) \
+			result &= !isnan(data[i]); \
+		if(remove_inf) \
+			result &= !isinf(data[i]); \
+	} \
+	return result; \
 }
+
+
+DEFINE_CHECK_DATA(float);
+DEFINE_CHECK_DATA(double);
+DEFINE_CHECK_DATA(guint32);
 
 
 #define DEFINE_PROCESS_INBUF(DTYPE,COMPLEX) \
@@ -221,13 +208,13 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 			for(buffer_num = 0; buffer_num < standard_blocks; buffer_num++) { \
 				GstBuffer *discont_buf; \
 				DTYPE COMPLEX *discont_buf_data; \
-				discont_buf_data = g_malloc(max_block_length * sizeof(DTYPE COMPLEX)); \
+				discont_buf_data = g_malloc(max_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
 				guint sample_num; \
-				for(sample_num = 0; sample_num < max_block_length; sample_num++) { \
+				for(sample_num = 0; sample_num < max_block_length * element->channels; sample_num++) { \
 					*discont_buf_data = sample_value; \
 					discont_buf_data++; \
 				} \
-				discont_buf = gst_buffer_new_wrapped((discont_buf_data - max_block_length), max_block_length * sizeof(DTYPE COMPLEX)); \
+				discont_buf = gst_buffer_new_wrapped((discont_buf_data - max_block_length * element->channels), max_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
 				if(G_UNLIKELY(!discont_buf)) { \
 					GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
 					result = GST_FLOW_ERROR; \
@@ -259,13 +246,13 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 		if(last_block_length != 0) { \
 			GstBuffer *last_discont_buf; \
 			DTYPE COMPLEX *last_discont_buf_data; \
-			last_discont_buf_data = g_malloc(last_block_length * sizeof(DTYPE COMPLEX)); \
+			last_discont_buf_data = g_malloc(last_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
 			guint sample_num; \
-			for(sample_num = 0; sample_num < last_block_length; sample_num++) { \
+			for(sample_num = 0; sample_num < last_block_length * element->channels; sample_num++) { \
 				*last_discont_buf_data = sample_value; \
 				last_discont_buf_data++; \
 			} \
-			last_discont_buf = gst_buffer_new_wrapped((last_discont_buf_data - last_block_length), last_block_length * sizeof(DTYPE COMPLEX)); \
+			last_discont_buf = gst_buffer_new_wrapped((last_discont_buf_data - last_block_length * element->channels), last_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
 			if(G_UNLIKELY(!last_discont_buf)) { \
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
 				result = GST_FLOW_ERROR; \
@@ -314,18 +301,18 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 	g_assert_cmpuint(max_block_length, >, 0); \
  \
 	/* Check first sample */ \
-	data_is_bad = check_data((double complex) *indata, element->bad_data_intervals, element->array_length, element->remove_nan, element->remove_inf, complex_data); \
+	data_is_bad = !check_data_ ## DTYPE((DTYPE *) indata, element->bad_data_intervals, element->array_length, (1 + (int) complex_data) * element->channels, element->remove_nan, element->remove_inf); \
 	srcbuf_gap = (sinkbuf_gap && (!(element->remove_gap))) || ((element->insert_gap) && data_is_bad); \
 	for(offset = 0; offset < length; offset++) { \
-		data_is_bad = check_data((double complex) *indata, element->bad_data_intervals, element->array_length, element->remove_nan, element->remove_inf, complex_data); \
+		data_is_bad = !check_data_ ## DTYPE((DTYPE *) indata, element->bad_data_intervals, element->array_length, (1 + (int) complex_data) * element->channels, element->remove_nan, element->remove_inf); \
 		srcbuf_gap_next = (sinkbuf_gap && (!(element->remove_gap))) || ((element->insert_gap) && data_is_bad); \
 		if(complex_data) \
 			*outdata = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? ((DTYPE) (element->replace_value)) * (1 + I) : *indata; \
 		else \
 			*outdata = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? (DTYPE) (element->replace_value) : *indata; \
 		current_srcbuf_length++; \
-		indata++; \
-		outdata++; \
+		indata += element->channels; \
+		outdata += element->channels; \
  \
 		/* 
 		 * We need to push an output buffer if:
@@ -343,14 +330,14 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 				 */ \
 				offset--; \
 				current_srcbuf_length--; \
-				indata--; \
-				outdata--; \
+				indata -= element->channels; \
+				outdata -= element->channels; \
 			} \
 			GstBuffer *srcbuf; \
 			DTYPE COMPLEX *srcbuf_data; \
-			srcbuf_data = g_malloc(current_srcbuf_length * sizeof(DTYPE COMPLEX)); \
-			memcpy(srcbuf_data, (outdata - current_srcbuf_length), current_srcbuf_length * sizeof(DTYPE COMPLEX)); \
-			srcbuf = gst_buffer_new_wrapped(srcbuf_data, current_srcbuf_length * sizeof(DTYPE COMPLEX)); \
+			srcbuf_data = g_malloc(current_srcbuf_length * element->channels * sizeof(DTYPE COMPLEX)); \
+			memcpy(srcbuf_data, (outdata - current_srcbuf_length * element->channels), current_srcbuf_length * element->channels * sizeof(DTYPE COMPLEX)); \
+			srcbuf = gst_buffer_new_wrapped(srcbuf_data, current_srcbuf_length * element->channels * sizeof(DTYPE COMPLEX)); \
  \
 			if(G_UNLIKELY(!srcbuf)) { \
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
@@ -379,8 +366,8 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 			if(srcbuf_gap_next != srcbuf_gap) { \
 				/* We need to reset our place in the input buffer */ \
 				offset++; \
-				indata++; \
-				outdata++; \
+				indata += element->channels; \
+				outdata += element->channels; \
 				current_srcbuf_length = 1; \
 				srcbuf_gap = srcbuf_gap_next; \
 			} else \
@@ -441,6 +428,7 @@ static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 		if(success) {
 			/* record stream parameters */
 			element->rate = GST_AUDIO_INFO_RATE(&info);
+			element->channels = GST_AUDIO_INFO_CHANNELS(&info);
 			element->unit_size = GST_AUDIO_INFO_BPF(&info);
 			if(!strcmp(name, GST_AUDIO_NE(U32))) {
 				element->data_type = GSTLAL_INSERTGAP_U32;
@@ -935,6 +923,7 @@ static void gstlal_insertgap_init(GSTLALInsertGap *element)
 	element->bad_data_intervals = NULL;
 	element->array_length = 0;
 	element->rate = 0;
+	element->channels = 0;
 	element->unit_size = 0;
 	element->last_sinkbuf_ets = 0;
 	element->last_sinkbuf_offset_end = 0;

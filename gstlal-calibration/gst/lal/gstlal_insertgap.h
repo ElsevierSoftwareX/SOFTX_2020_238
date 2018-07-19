@@ -67,6 +67,7 @@ struct _GSTLALInsertGap {
 	/* stream parameters */
 
 	gint rate;
+	gint channels;
 	gint unit_size;
 	enum gstlal_insertgap_data_type {
 		GSTLAL_INSERTGAP_U32 = 0,
