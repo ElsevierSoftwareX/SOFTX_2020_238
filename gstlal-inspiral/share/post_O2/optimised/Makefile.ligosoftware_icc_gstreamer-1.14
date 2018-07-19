@@ -738,10 +738,10 @@ $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 # patches
 patch : logs/patch.txt
 
-logs/patch.txt : $(LOGS_DIR)/tar.txt $(GST_PATCH_TARGET)
+logs/patch.txt : $(LOGS_DIR)/tar.txt $(PATCH_DIR)/gst1.14.patch
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-$(GST_PATCH_TARGET) : $(LOGS_DIR)/tar.txt
+$(PATCH_DIR)/gst1.14.patch : $(LOGS_DIR)/tar.txt
 	@echo $(GREEN)patches$(WHITE) 1>&2
 	cp $(GSTLAL_REPO)/gstlal-inspiral/share/post_O2/optimised/gst1.14.patch $(PATCH_DIR)
 	cd $(GSTLAL_REPO) && patch -p1 < $(PATCH_DIR)/gst1.14.patch
