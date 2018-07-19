@@ -1,12 +1,89 @@
-SHELL := /bin/bash
-# condor commands
+SHELL := /bin/bash # Use bash syntax
+
+########################
+#        Guide         #
+########################
+
+# Author: Patrick Godwin (patrick.godwin@ligo.org)
+#
+# This Makefile is designed to launch online feature extractor jobs as well
+# as auxiliary jobs as needed (synchronizer/hdf5 file sinks).
+#
+# There are four separate modes that can be used to launch online jobs:
+#
+#   1. Auxiliary channel ingestion:
+#
+#     a. Reading from framexmit protocol (DATA_SOURCE=framexmit).
+#        This mode is recommended when reading in live data from LHO/LLO.
+#
+#     b. Reading from shared memory (DATA_SOURCE=lvshm).
+#        This mode is recommended for reading in data for O2 replay (e.g. UWM).
+#
+#  2. Data transfer of features:
+#
+#     a. Saving features directly to disk, e.g. no data transfer.
+#        This will save features to disk directly from the feature extractor,
+#        and saves features periodically via hdf5.
+#
+#     b. Transfer of features via Kafka topics.
+#        This requires a Kafka/Zookeeper service to be running (can be existing LDG
+#        or your own). Features get transferred via Kafka from the feature extractor,
+#        parallel instances of the extractor get synchronized, and then sent downstream
+#        where it can be read by other processes (e.g. iDQ). In addition, an streaming
+#        hdf5 file sink is launched where it'll dump features periodically to disk.
+#
+# Configuration options:
+#
+#   General:
+#     * TAG: sets the name used for logging purposes, Kafka topic naming, etc.
+#
+#   Data ingestion:
+#     * IFO: select the IFO for auxiliary channels to be ingested.
+#     * CHANNEL_LIST: a list of channels for the feature extractor to process. Provided
+#         lists for O1/O2 and H1/L1 lists are in gstlal/gstlal-burst/share/feature_extractor.
+#     * DATA_SOURCE: Protocol for reading in auxiliary channels (framexmit/lvshm).
+#     * MAX_STREAMS: Maximum # of streams that a single gstlal_feature_extractor process will
+#         process. This is determined by sum_i(channel_i * # rates_i). Number of rates for a
+#         given channels is determined by log2(max_rate/min_rate) + 1.
+#
+#   Waveform parameters:
+#     * WAVEFORM: type of waveform used to perform matched filtering (sine_gaussian/half_sine_gaussian).
+#     * MISMATCH: maximum mismatch between templates (corresponding to Omicron's mismatch definition).
+#     * QHIGH: maximum value of Q
+#
+#   Data transfer/saving:
+#     * OUTPATH: directory in which to save features.
+#     * SAVE_FORMAT: determines whether to transfer features downstream or save directly (kafka/hdf5).
+#     * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
+#     * PERSIST_CADENCE: span of a typical hdf5 file.
+#
+#   Kafka options:
+#     * KAFKA_TOPIC: basename of topic for features generated from feature_extractor
+#     * KAFKA_SERVER: Kafka server address where Kafka is hosted. If features are run in same location,
+#         as in condor's local universe, setting localhost:port is fine. Otherwise you'll need to determine
+#         the IP address where your Kafka server is running (using 'ip addr show' or equivalent).
+#     * KAFKA_GROUP: group for which Kafka producers for feature_extractor jobs report to.
+#
+#   Synchronizer/File sink options:
+#     * PROCESSING_CADENCE: cadence at which incoming features are processed, so as to limit polling
+#         of topics repeatedly, etc. Default value of 0.1s is fine.
+#     * REQUEST_TIMEOUT: timeout for waiting for a single poll from a Kafka consumer.
+#     * LATENCY_TIMEOUT: timeout for the feature synchronizer before older features are dropped. This
+#         is to prevent a single feature extractor job from holding up the online pipeline. This will
+#         also depend on the latency induced by the feature extractor, especially when using templates
+#         that have latencies associated with them such as Sine-Gaussians.
+
+########################
+# User/Accounting Tags #
+########################
+
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
 ACCOUNTING_TAG=ligo.dev.o3.detchar.onlinedq.idq
 GROUP_USER=albert.einstein
 CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
 
 #########################
-# Triggering parameters #
+# Online DAG Parameters #
 #########################
 
 TAG = online_test
@@ -30,14 +107,14 @@ OUTPATH = $(PWD)
 SAVE_FORMAT = kafka
 #SAVE_FORMAT = hdf5
 
-# hdf5 options
-#SAVE_CADENCE = 20
-#PERSIST_CADENCE = 200
+# save options
+SAVE_CADENCE = 20
+PERSIST_CADENCE = 200
 
 # kafka options
 KAFKA_TOPIC = gstlal_features
 KAFKA_SERVER = localhost:9092
-KAFKA_PARTITION = group_1
+KAFKA_GROUP = group_1
 
 # synchronizer/file sink options (kafka only)
 PROCESSING_CADENCE = 0.1
@@ -114,7 +191,7 @@ dag : plots $(CHANNEL_LIST)
 			--save-format $(SAVE_FORMAT) \
 			--kafka-topic $(KAFKA_TOPIC) \
 			--kafka-server $(KAFKA_SERVER) \
-			--kafka-partition $(KAFKA_PARTITION) \
+			--kafka-partition $(KAFKA_GROUP) \
 			--channel-list $(CHANNEL_LIST) \
 			--out-path $(OUTPATH) \
 			--max-streams $(MAX_STREAMS) \
@@ -136,7 +213,7 @@ dag : plots $(CHANNEL_LIST)
 			--save-format $(SAVE_FORMAT) \
 			--kafka-topic $(KAFKA_TOPIC) \
 			--kafka-server $(KAFKA_SERVER) \
-			--kafka-partition $(KAFKA_PARTITION) \
+			--kafka-partition $(KAFKA_GROUP) \
 			--channel-list $(CHANNEL_LIST) \
 			--out-path $(OUTPATH) \
 			--max-streams $(MAX_STREAMS) \
