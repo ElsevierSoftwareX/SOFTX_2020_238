@@ -92,9 +92,9 @@ class SourcePopulationModel(object):
 
 	def __init__(self, template_ids, filename = None):
 		"""
-		Sets the polynomial coefficients, given the template ID 
-                and SNR for a source population model, from which
-                lnP is then computed using PPoly.
+		Sets the polynomial coefficients, given the template ID and
+		SNR for a source population model, from which lnP is then
+		computed using PPoly.
 		"""
 		with h5py.File(filename if filename is not None else self.DEFAULT_FILENAME, 'r') as model:
 			coefficients = model['coefficients'].value
