@@ -150,8 +150,9 @@ static gboolean check_data_ ## DTYPE(DTYPE *data, double *bad_data_intervals, in
 	gboolean result = TRUE; \
 	for(i = 0; i < num_checks; i++) { \
 		if(bad_data_intervals) { \
+			result = FALSE; \
 			for(j = 0; j < array_length; j += 2) \
-				result &= data[i] > bad_data_intervals[j] && data[i] < bad_data_intervals[j + 1]; \
+				result |= data[i] > bad_data_intervals[j] && data[i] < bad_data_intervals[j + 1]; \
 		} \
 		if(remove_nan) \
 			result &= !isnan((double) data[i]); \
