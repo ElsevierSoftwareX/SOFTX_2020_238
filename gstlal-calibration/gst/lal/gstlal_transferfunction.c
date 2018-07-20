@@ -326,7 +326,7 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 			 * sinc table, turn around and keep going until we hit the edge of the sinc table.
 			 */ \
 			sinc0 += k_stop * sinc_taps_per_input; \
-			input0 = j + 1; \
+			input0 = j; \
 			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
 			for(k = 0; k < k_stop; k++) \
 				z += sinc_table[sinc0 + k * sinc_taps_per_input] * conj ## F_OR_BLANK(autocorrelation_matrix[input0 + k * elements_per_freq]); \
@@ -371,7 +371,7 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 			 * sinc table, turn around and keep going until we hit the edge of the sinc table.
 			 */ \
 			sinc0 += k_stop * sinc_taps_per_input; \
-			input0 = j + num_tfs + 1; \
+			input0 = j + num_tfs; \
 			k_stop = (sinc_taps_per_input + sinc_length / 2 - sinc0) / sinc_taps_per_input; \
 			for(k = 0; k < k_stop; k++) \
 				z += sinc_table[sinc0 + k * sinc_taps_per_input] * conj ## F_OR_BLANK(autocorrelation_matrix[input0 + k * elements_per_freq]); \
