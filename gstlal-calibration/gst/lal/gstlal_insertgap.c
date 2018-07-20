@@ -172,13 +172,15 @@ DEFINE_CHECK_DATA(guint32);
 static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *indata, DTYPE COMPLEX *outdata, GSTLALInsertGap *element, gboolean sinkbuf_gap, gboolean sinkbuf_discont, guint64 sinkbuf_offset, guint64 sinkbuf_offset_end, GstClockTime sinkbuf_dur, GstClockTime sinkbuf_pts, gboolean complex_data) \
 { \
 	GstFlowReturn result = GST_FLOW_OK; \
-	guint64 blocks, max_block_length, missing_samples; \
-	missing_samples = 0; \
+	guint64 blocks, max_block_length; \
  \
 	/*
 	 * First, deal with discontinuity if necessary
 	 */ \
 	if(element->fill_discont && (element->last_sinkbuf_offset_end != 0) && (sinkbuf_pts != element->last_sinkbuf_ets)) { \
+ \
+		guint64 standard_blocks, last_block_length, buffer_num, sample_num, missing_samples = 0; \
+		DTYPE COMPLEX sample_value; \
  \
 		/* Track discont length and number of zero-length buffers */ \
 		element->discont_time += (sinkbuf_pts - element->last_sinkbuf_ets); \
@@ -195,9 +197,8 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 		if(sinkbuf_dur && sinkbuf_offset != sinkbuf_offset_end) \
 			GST_WARNING_OBJECT(element, "filling discontinuity lasting %f seconds (%lu samples) including %lu zero-length buffers and starting at %f seconds (offset %lu)", (((double) element->discont_time) / 1000000000.0), gst_util_uint64_scale_int_round(element->discont_time, element->rate, 1000000000), element->empty_bufs, (double) sinkbuf_pts / 1000000000.0 - (double) element->discont_time / 1000000000.0, sinkbuf_offset); \
  \
-		guint standard_blocks = (guint) (missing_samples / max_block_length); \
-		guint64 last_block_length = missing_samples % max_block_length; \
-		DTYPE COMPLEX sample_value; \
+		standard_blocks = missing_samples / max_block_length; \
+		last_block_length = missing_samples % max_block_length; \
 		if(complex_data) \
 			sample_value = (element->replace_value < G_MAXDOUBLE) ? ((DTYPE) (element->replace_value)) * (1 + I) : 0; \
 		else \
@@ -205,12 +206,10 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
  \
 		/* first make and push any buffers of size max_buffer_size */ \
 		if(standard_blocks != 0) { \
-			guint buffer_num; \
 			for(buffer_num = 0; buffer_num < standard_blocks; buffer_num++) { \
 				GstBuffer *discont_buf; \
 				DTYPE COMPLEX *discont_buf_data; \
 				discont_buf_data = g_malloc(max_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
-				guint sample_num; \
 				for(sample_num = 0; sample_num < max_block_length * element->channels; sample_num++) { \
 					*discont_buf_data = sample_value; \
 					discont_buf_data++; \
@@ -291,13 +290,13 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 	 * Now, use data on input buffer to make next output buffer(s)
 	 */ \
 	gboolean data_is_bad, srcbuf_gap, srcbuf_gap_next; \
-	guint64 offset, current_srcbuf_length; \
-	current_srcbuf_length = 0; \
+	guint64 offset, length, current_srcbuf_length = 0; \
+	int i; \
  \
 	/* compute length of incoming buffer and maximum block length in samples */ \
 	blocks = (sinkbuf_dur + element->block_duration - 1) / element->block_duration; /* ceil */ \
 	g_assert_cmpuint(blocks, >, 0); /* make sure that the sinkbuf is not zero length */ \
-	guint64 length = sinkbuf_offset_end - sinkbuf_offset; \
+	length = sinkbuf_offset_end - sinkbuf_offset; \
 	max_block_length = (length + blocks - 1) / blocks; /* ceil */ \
 	g_assert_cmpuint(max_block_length, >, 0); \
  \
@@ -307,10 +306,13 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 	for(offset = 0; offset < length; offset++) { \
 		data_is_bad = !check_data_ ## DTYPE((DTYPE *) indata, element->bad_data_intervals, element->array_length, (1 + (int) complex_data) * element->channels, element->remove_nan, element->remove_inf); \
 		srcbuf_gap_next = (sinkbuf_gap && (!(element->remove_gap))) || ((element->insert_gap) && data_is_bad); \
-		if(complex_data) \
-			*outdata = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? ((DTYPE) (element->replace_value)) * (1 + I) : *indata; \
-		else \
-			*outdata = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? (DTYPE) (element->replace_value) : *indata; \
+		if(complex_data) { \
+			for(i = 0; i < element->channels; i++) \
+				outdata[i] = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? ((DTYPE) (element->replace_value)) * (1 + I) : indata[i]; \
+		} else { \
+			for(i = 0; i < element->channels; i++) \
+				outdata[i] = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? (DTYPE) (element->replace_value) : indata[i]; \
+		} \
 		current_srcbuf_length++; \
 		indata += element->channels; \
 		outdata += element->channels; \
