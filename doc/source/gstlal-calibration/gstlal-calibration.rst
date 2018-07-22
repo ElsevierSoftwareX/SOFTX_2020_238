@@ -1,4 +1,4 @@
-GstLAL calibration project
+GstLAL calibration
 ==========================
 
 .. toctree::

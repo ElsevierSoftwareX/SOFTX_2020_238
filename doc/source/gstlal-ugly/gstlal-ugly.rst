@@ -1,4 +1,4 @@
-GstLAL ugly project
+GstLAL ugly
 ===================
 
 .. toctree::

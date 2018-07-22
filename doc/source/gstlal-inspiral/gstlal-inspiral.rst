@@ -1,4 +1,4 @@
-GstLAL inspiral project
+GstLAL inspiral
 =======================
 
 .. toctree::

@@ -1,4 +1,4 @@
-GstLAL project
+GstLAL
 ==============
 
 .. toctree::
