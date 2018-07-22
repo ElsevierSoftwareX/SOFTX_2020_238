@@ -28,7 +28,22 @@ import h5py
 import math
 import numpy
 import os
-#from scipy.interpolate import PPoly
+try:
+	from scipy.interpolate import PPoly
+except ImportError:
+	# argh, scipy too old
+	# FIXME:  delete this when we can rely on LDG sites having a
+	# new-enough scipy
+	from lal.rate import IrregularBins
+	class PPoly(object):
+		def __init__(self, c, x):
+			self.intervals = IrregularBins(x)
+			self.coeffs = c
+			self.x0 = x
+
+		def __call__(self, x):
+			i = self.intervals[x]
+			return numpy.poly1d(self.coeffs[:,i].squeeze())(x - self.x0[i]),
 
 
 from gstlal import stats as gstlalstats
