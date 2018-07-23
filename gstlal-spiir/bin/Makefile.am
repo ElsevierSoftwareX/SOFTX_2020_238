@@ -2,7 +2,7 @@
 dist_bin_SCRIPTS = \
 	gstlal_ll_postcohspiir_inspiral_pipe \
 	gstlal_postcoh_skymap2fits \
-	gstlal_postcoh_update_detrspmap \
+	gstlal_periodic_postcoh_update_detrspmap \
 	gstlal_inspiral_spiir \
 	gstlal_inspiral_postcohspiir_workflow \
 	gstlal_inspiral_postcohspiir_online \
@@ -18,4 +18,5 @@ dist_bin_SCRIPTS = \
 	ligolw_inspinjfind_postcoh \
 	ligolw_sqlite_postcoh \
 	gstlal_matched_filter \
-	gstlal_bank_extract
+	gstlal_bank_extract \
+	gstlal_periodic_get_urls

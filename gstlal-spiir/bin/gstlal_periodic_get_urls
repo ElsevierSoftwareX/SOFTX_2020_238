@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# renamed from gstlal_ll_inspiral_get_urls
+# Copyright (C) 2014  Chad Hanna, Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# This program queries running gstlal inspiral jobs in the low latency analysis and downloads pertinent data, e.g., SNR trigger history, segment files, etc.
+
+#
+# ### Review status
+#
+# | Names                                       | Hash                                        | Date       | Diff to Head of Master      |
+# | ------------------------------------------- | ------------------------------------------- | ---------- | --------------------------- |
+# | Florent, Jolien, Kipp, Chad                 | 8aad48d2d796642a2925c7d70dd207c06c0e9a70    | 2015-05-14 | <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_ll_inspiral_get_urls?id=HEAD&id2=8aad48d2d796642a2925c7d70dd207c06c0e9a70">gstlal_ll_inspiral_get_urls</a> |
+#
+# #### Action
+# - none
+
+## @package gstlal_ll_inspiral_get_urls
+
+while true ; do
+	for f in $@; do
+		wget -nH -P ${f} -r  $(cat ${f}_registry.txt);
+	done
+	sleep 180
+done
+
+#
+# Always end on an error so that condor will restart it
+#
+
+exit 1

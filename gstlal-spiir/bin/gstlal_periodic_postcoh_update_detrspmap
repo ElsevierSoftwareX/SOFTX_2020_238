@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Chichi
+
+while true; do
+dir=$1
+horizons=$2
+this_banktime=`ls ${dir} -1t| tail -n 1 | cut -d - -f 3 `
+detrsp_name=$4
+gstlal_postcoh_gen_detrsp_map --ifo-horizons $horizons  --chealpix-order 4 --output-filename $detrsp_name --gps-time $this_banktime
+sleep $3
+done
