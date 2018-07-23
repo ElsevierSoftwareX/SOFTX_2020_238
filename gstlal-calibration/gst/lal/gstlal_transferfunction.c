@@ -120,6 +120,7 @@ enum property {
 	ARG_FREQUENCY_RESOLUTION,
 	ARG_HIGH_PASS,
 	ARG_LOW_PASS,
+	ARG_NOTCH_FREQUENCIES,
 	ARG_TRANSFER_FUNCTIONS,
 	ARG_FIR_FILTERS,
 	ARG_FAKE
@@ -489,6 +490,17 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			first_index = j * fd_fft_length; \
 			for(k = 0; k < fd_fft_length; k++) \
 				element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
+ \
+			/* Fill in any requested "notches" with straight lines */ \
+			int n; \
+			for(n = 0; n < element->num_notches; n++) { \
+				gint64 notch_start = element->notch_indices[2 * n]; \
+				gint64 notch_end = element->notch_indices[2 * n + 1]; \
+				complex DTYPE fft_start = element->workspace.w ## S_OR_D ## pf.fft[element->notch_indices[2 * n]]; \
+				complex DTYPE fft_end = element->workspace.w ## S_OR_D ## pf.fft[element->notch_indices[2 * n + 1]]; \
+				for(k = notch_start + 1; k < notch_end; k++) \
+					element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = fft_start * (k - notch_start) / (notch_end - notch_start) + fft_end * (notch_end - k) / (notch_end - notch_start); \
+			} \
 		} \
  \
 		/* Check the FFTs to see if their values will produce usable transfer functions */ \
@@ -556,6 +568,17 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			first_index = j * fd_fft_length; \
 			for(k = 0; k < fd_fft_length; k++) \
 				element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
+ \
+			/* Fill in any requested "notches" with straight lines */ \
+			int n; \
+			for(n = 0; n < element->num_notches; n++) { \
+				gint64 notch_start = element->notch_indices[2 * n]; \
+				gint64 notch_end = element->notch_indices[2 * n + 1]; \
+				complex DTYPE fft_start = element->workspace.w ## S_OR_D ## pf.fft[element->notch_indices[2 * n]]; \
+				complex DTYPE fft_end = element->workspace.w ## S_OR_D ## pf.fft[element->notch_indices[2 * n + 1]]; \
+				for(k = notch_start + 1; k < notch_end; k++) \
+					element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = fft_start * (k - notch_start) / (notch_end - notch_start) + fft_end * (notch_end - k) / (notch_end - notch_start); \
+			} \
 		} \
  \
 		/* Check the FFTs to see if their values will produce usable transfer functions */ \
@@ -868,6 +891,17 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	if(element->make_fir_filters)
 		element->fir_filters = g_malloc((element->channels - 1) * element->fir_length * sizeof(*element->fir_filters));
 
+	/* Prepare to deal with any notches */
+	if(element->num_notches && !element->notch_indices) {
+		int k;
+		double df = (double) element->rate / element->fft_length;
+		element->notch_indices = g_malloc(2 * element->num_notches * sizeof(*element->notch_indices));
+		for(k = 0; k < element->num_notches; k++) {
+			element->notch_indices[2 * k] = (gint64) (element->notch_frequencies[2 * k] / df - 1.0);
+			element->notch_indices[2 * k + 1] = (gint64) (element->notch_frequencies[2 * k + 1] / df + 2.0);
+		}
+	}
+
 	/* Prepare workspace for finding transfer functions and FIR filters */
 	if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 
@@ -912,7 +946,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				/* To save memory, we use symmetry and record only half of the sinc table */
 				element->workspace.wspf.sinc_table = g_malloc((1 + element->workspace.wspf.sinc_length / 2) * sizeof(*element->workspace.wspf.sinc_table));
 				*element->workspace.wspf.sinc_table = 1.0;
-				gint64 i, j;
+				gint64 j;
 				float sin_arg, normalization;
 				for(i = 1; i <= element->workspace.wspf.sinc_length / 2; i++) {
 					sin_arg = M_PI * i / taps_per_osc;
@@ -1088,7 +1122,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				/* To save memory, we use symmetry and record only half of the sinc table */
 				element->workspace.wdpf.sinc_table = g_malloc((1 + element->workspace.wdpf.sinc_length / 2) * sizeof(*element->workspace.wdpf.sinc_table));
 				*element->workspace.wdpf.sinc_table = 1.0;
-				gint64 i, j;
+				gint64 j;
 				double sin_arg, normalization;
 				for(i = 1; i <= element->workspace.wdpf.sinc_length / 2; i++) {
 					sin_arg = M_PI * i / taps_per_osc;
@@ -1488,6 +1522,17 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->low_pass = g_value_get_double(value);
 		break;
 
+	case ARG_NOTCH_FREQUENCIES:
+		if(element->notch_frequencies) {
+			g_free(element->notch_frequencies);
+			element->notch_frequencies = NULL;
+		}
+		element->notch_frequencies = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &element->num_notches);
+		if(element->num_notches % 2)
+			GST_ERROR_OBJECT(element, "Array length for property notch_frequencies must be even");
+		element->num_notches /= 2;
+		break;
+
 	case ARG_TRANSFER_FUNCTIONS:
 		if(element->transfer_functions) {
 			g_free(element->transfer_functions);
@@ -1570,6 +1615,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_double(value, element->low_pass);
 		break;
 
+	case ARG_NOTCH_FREQUENCIES:
+		g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->notch_frequencies, 2 * element->num_notches));
+		break;
+
 	case ARG_TRANSFER_FUNCTIONS:
 		if(element->transfer_functions) {
 			GValueArray *va;
@@ -1625,6 +1674,10 @@ static void finalize(GObject *object) {
 	if(element->fir_filters) {
 		g_free(element->fir_filters);
 		element->fir_filters = NULL;
+	}
+	if(element->notch_frequencies) {
+		g_free(element->notch_frequencies);
+		element->notch_frequencies = NULL;
 	}
 	G_OBJECT_CLASS(gstlal_transferfunction_parent_class)->finalize(object);
 }
@@ -1758,9 +1811,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		"Frequency resolution",
 		"Frequency resolution of the transfer functions and FIR filters in Hz.\n\t\t\t"
 		"This must be greater than or equal to sample rate/fir-length and sample\n\t\t\t"
-		"rate/fft-length in order to be effective. When computing multiple FIR\n\t\t\t"
-		"filters simultaneously, it is recommended to set this to a value\n\t\t\t"
-		"significantly larger than 1/fft_length.",
+		"rate/fft-length in order to be effective.",
 		0, G_MAXDOUBLE, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
@@ -1782,6 +1833,22 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		0, G_MAXDOUBLE, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_NOTCH_FREQUENCIES] = g_param_spec_value_array(
+		"notch-frequencies",
+		"Notch Frequencies",
+		"Array of minima and maxima of frequency ranges where the Fourier transform\n\t\t\t"
+		"of the signal of interest will be replaced by a straight line. This can be\n\t\t\t"
+		"useful if there are loud lines in the signal that are not present in the\n\t\t\t"
+		"witness channels.",
+		g_param_spec_double(
+			"frequency",
+			"Frequency",
+			"A frequency in the array, either a minimum or maximum of a notch.",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		),
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 	properties[ARG_TRANSFER_FUNCTIONS] = g_param_spec_value_array(
 		"transfer-functions",
 		"Transfer Functions",
@@ -1799,7 +1866,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		),
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
 	properties[ARG_FIR_FILTERS] = g_param_spec_value_array(
 		"fir-filters",
@@ -1818,7 +1885,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		),
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
 
 
@@ -1884,6 +1951,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_NOTCH_FREQUENCIES,
+		properties[ARG_NOTCH_FREQUENCIES]
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_TRANSFER_FUNCTIONS,
 		properties[ARG_TRANSFER_FUNCTIONS]
 	);
@@ -1902,8 +1974,13 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 
 static void gstlal_transferfunction_init(GSTLALTransferFunction *element) {
 
-	g_signal_connect(G_OBJECT(element), "notify::transfer-function", G_CALLBACK(rebuild_workspace_and_reset), NULL);
-	g_signal_connect(G_OBJECT(element), "notify::fir-filter", G_CALLBACK(rebuild_workspace_and_reset), NULL);
+	g_signal_connect(G_OBJECT(element), "notify::transfer-functions", G_CALLBACK(rebuild_workspace_and_reset), NULL);
+	g_signal_connect(G_OBJECT(element), "notify::fir-filters", G_CALLBACK(rebuild_workspace_and_reset), NULL);
+	element->transfer_functions = NULL;
+	element->fir_filters = NULL;
+	element->notch_frequencies = NULL;
+	element->notch_indices = NULL;
+	element->num_notches = 0;
 	element->rate = 0;
 	element->unit_size = 0;
 	element->channels = 0;

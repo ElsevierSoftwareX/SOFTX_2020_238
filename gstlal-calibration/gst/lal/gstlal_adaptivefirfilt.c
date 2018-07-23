@@ -744,6 +744,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		/* If no static filter is provided, the filter is just 1 */
 		if(element->static_filter_length == 0) {
 			element->static_filter_length = 1;
+			element->static_filter = g_malloc(sizeof(*element->static_filter));
 			*element->static_filter = 1.0;
 		}
 		break;
@@ -1011,7 +1012,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		),
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_STATIC_POLES] = g_param_spec_value_array(
 		"static-poles",
@@ -1026,7 +1027,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		),
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_PHASE_MEASUREMENT_FREQUENCY] = g_param_spec_double(
 		"phase-measurement-frequency",
@@ -1048,7 +1049,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		),
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_VARIABLE_FILTER_LENGTH] = g_param_spec_int64(
 		"variable-filter-length",
@@ -1082,7 +1083,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		),
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
 	properties[ARG_ADAPTIVE_FILTER_LENGTH] = g_param_spec_int64(
 		"adaptive-filter-length",
@@ -1217,7 +1218,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 
 static void gstlal_adaptivefirfilt_init(GSTLALAdaptiveFIRFilt *element) {
 
-	g_signal_connect(G_OBJECT(element), "notify::fir-filter", G_CALLBACK(rebuild_workspace_and_reset), NULL);
+	g_signal_connect(G_OBJECT(element), "notify::adaptive-filter", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 	element->rate = 0;
 	element->unit_size = 0;
 	element->channels = 0;
