@@ -67,7 +67,7 @@ def source_type_distance_chirp_mass_bins_from_sims(sims, distbins = 200):
 
     distances = [tup[0] for tup in dist_mchirp_vals]
 
-    return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.8, 2.0, 4.5, 45., 450])])
+    return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.5, 2.0, 4.5, 45., 450])])
     #return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.8, 1.74, 8.07, 14.92, 21.77, 100.0, 218.00, 450.0])])
 
 def chirp_mass(m1,m2):
