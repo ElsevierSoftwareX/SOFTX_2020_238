@@ -679,9 +679,7 @@ class CoincsDocFromPostcoh(object):
 		self.assemble_snglinspiral_table(trigger)
 		coinc_def_table = lsctables.CoincDefTable.get_table(self.xmldoc)
 		coinc_table = lsctables.CoincTable.get_table(self.xmldoc)
-		coinc_map_table = lsctables.CoincMapTable.get_table(self.xmldoc)
 		coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(self.xmldoc)
-		time_slide_table = lsctables.TimeSlideTable.get_table(self.xmldoc)
 		postcoh_table = postcoh_table_def.PostcohInspiralTable.get_table(self.xmldoc)
 
 		row = coinc_def_table.RowType()
@@ -714,261 +712,119 @@ class CoincsDocFromPostcoh(object):
 		row.ifos = ','.join(re.findall('..',trigger.ifos)) #FIXME: for more complex detector names
 		coinc_inspiral_table.append(row)
 
-		row = coinc_map_table.RowType()
-		row.event_id = "sngl_inspiral:event_id:1"
-		row.table_name = "sngl_inspiral"
-		row.coinc_event_id = "coinc_event:coinc_event_id:1"
-		coinc_map_table.append(row)
-
-		row = coinc_map_table.RowType()
-		row.event_id = "sngl_inspiral:event_id:2"
-		row.table_name = "sngl_inspiral"
-		row.coinc_event_id = "coinc_event:coinc_event_id:1"
-		coinc_map_table.append(row)
-
-		row = coinc_map_table.RowType()
-		row.event_id = "sngl_inspiral:event_id:3"
-		row.table_name = "sngl_inspiral"
-		row.coinc_event_id = "coinc_event:coinc_event_id:1"
-		coinc_map_table.append(row)
-
-		row = time_slide_table.RowType()
-		row.instrument = "H1"
-		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.process_id = self.process.process_id
-		row.offset = 0
-		time_slide_table.append(row)
-
-		row = time_slide_table.RowType()
-		row.instrument = "L1"
-		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.process_id = self.process.process_id
-		row.offset = 0
-		time_slide_table.append(row)
-
-		row = time_slide_table.RowType()
-		row.instrument = "V1"
-		row.time_slide_id = "time_slide:time_slide_id:6"
-		row.process_id = self.process.process_id
-		row.offset = 0
-		time_slide_table.append(row)
+		self.assemble_coinc_map_table(trigger)
+		self.assemble_time_slide_table(trigger)
 
 		postcoh_table.append(trigger)
 
+	def assemble_coinc_map_table(self, trigger):
+
+		coinc_map_table = lsctables.CoincMapTable.get_table(self.xmldoc)
+		# FIXME: hard-coded ifo length
+		nifo = len(trigger.ifos)/2
+		for iifo in range(0, nifo):
+			row = coinc_map_table.RowType()
+			row.event_id = "sngl_inspiral:event_id:%d" % iifo
+			row.table_name = "sngl_inspiral"
+			row.coinc_event_id = "coinc_event:coinc_event_id:1"
+			coinc_map_table.append(row)
+
+	def assemble_time_slide_table(self, trigger):
+
+		time_slide_table = lsctables.TimeSlideTable.get_table(self.xmldoc)
+		# FIXME: hard-coded ifo length
+		nifo = len(trigger.ifos)/2
+		for iifo in range(0, nifo):
+			row = time_slide_table.RowType()
+			row.instrument = trigger.ifos[2*iifo:2*iifo+2]
+			row.time_slide_id = "time_slide:time_slide_id:6"
+			row.process_id = self.process.process_id
+			row.offset = 0
+			time_slide_table.append(row)
+
+
 	def assemble_snglinspiral_table(self, trigger):
 		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(self.xmldoc)
-		row = sngl_inspiral_table.RowType()
 		for standard_column in ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"):
-		  try:
-		    sngl_inspiral_table.appendColumn(standard_column)
-		  except ValueError:
-		    # already has it
-		    pass
-		
-		# Setting the L1 row
-		row.process_id = self.process.process_id
-		row.ifo = "L1"
-		row.search = self.url
-		row.channel = "GDS-CALIB_STRAIN" 
-		row.end_time = trigger.end_time_L
-		row.end_time_ns = trigger.end_time_ns_L
-		row.end_time_gmst = 0 
-		row.impulse_time = 0
-		row.impulse_time_ns = 0
-		row.template_duration = trigger.template_duration
-		row.event_duration = 0
-		row.amplitude = 0
-		row.eff_distance = trigger.deff_L
-		#row.eff_distance = 0
-		row.coa_phase = trigger.coaphase_L
-		row.mass1 = trigger.mass1 
-		row.mass2 = trigger.mass2
-		row.mchirp = trigger.mchirp 
-		row.mtotal = trigger.mtotal 
-		row.eta = trigger.eta 
-		row.kappa = 0 
-		row.chi = 1 
-		row.tau0 = 0 
-		row.tau2 = 0 
-		row.tau3 = 0 
-		row.tau4 = 0
-		row.tau5 = 0 
-		row.ttotal = 0 
-		row.psi0 = 0 
-		row.psi3 = 0 
-		row.alpha = 0
-		row.alpha1 = 0
-		row.alpha2 = 0
-		row.alpha3 = 0
-		row.alpha4 = 0
-		row.alpha5 = 0
-		row.alpha6 = 0
-		row.beta = 0
-		row.f_final = 2048
-		row.snr = trigger.snglsnr_L
-		row.chisq = trigger.chisq_L
-		row.chisq_dof = 4
-		row.bank_chisq = 0
-		row.bank_chisq_dof = 0
-		row.cont_chisq = 0
-		row.cont_chisq_dof = 0
-		row.sigmasq = 0
-		row.rsqveto_duration = 0
-		row.Gamma0 = 0
-		row.Gamma1 = 0
-		row.Gamma2 = 0
-		row.Gamma3 = 0
-		row.Gamma4 = 0
-		row.Gamma5 = 0
-		row.Gamma6 = 0
-		row.Gamma7 = 0
-		row.Gamma8 = 0
-		row.Gamma9 = 0
-		row.spin1x = trigger.spin1x 
-		row.spin1y = trigger.spin1y 
-		row.spin1z = trigger.spin1z 
-		row.spin2x = trigger.spin2x 
-		row.spin2y = trigger.spin2y 
-		row.spin2z = trigger.spin2z
-		row.event_id = "sngl_inspiral:event_id:1"
-	
-		sngl_inspiral_table.append(row)
+			try:
+				sngl_inspiral_table.appendColumn(standard_column)
+			except ValueError:
+				# already has it
+				pass
 
-		row = sngl_inspiral_table.RowType()
-		# Setting the the other row
-		row.process_id = self.process.process_id
-		row.ifo = "H1"
-		row.search = self.url
-		row.channel = "GDS-CALIB_STRAIN" 
-		row.end_time = trigger.end_time_H
-		row.end_time_ns = trigger.end_time_ns_H 
-		row.end_time_gmst = 0 
-		row.impulse_time = 0
-		row.impulse_time_ns = 0
-		row.template_duration = trigger.template_duration
-		row.event_duration = 0
-		row.amplitude = 0
-		row.eff_distance = trigger.deff_H
-		# row.eff_distance = 0
-		row.coa_phase = trigger.coaphase_H
-		row.mass1 = trigger.mass1 
-		row.mass2 = trigger.mass2 
-		row.mchirp = trigger.mchirp 
-		row.mtotal = trigger.mtotal 
-		row.eta = trigger.eta
-		row.kappa = 0 
-		row.chi = 1 
-		row.tau0 = 0 
-		row.tau2 = 0 
-		row.tau3 = 0 
-		row.tau4 = 0
-		row.tau5 = 0 
-		row.ttotal = 0 
-		row.psi0 = 0 
-		row.psi3 = 0 
-		row.alpha = 0
-		row.alpha1 = 0
-		row.alpha2 = 0
-		row.alpha3 = 0
-		row.alpha4 = 0
-		row.alpha5 = 0
-		row.alpha6 = 0
-		row.beta = 0
-		row.f_final = 2048
-		row.snr = trigger.snglsnr_H
-		row.chisq = trigger.chisq_H
-		row.chisq_dof = 4
-		row.bank_chisq = 0
-		row.bank_chisq_dof = 0
-		row.cont_chisq = 0
-		row.cont_chisq_dof = 0
-		row.sigmasq = 0
-		row.rsqveto_duration = 0
-		row.Gamma0 = 0 
-		row.Gamma1 = 0
-		row.Gamma2 = 0
-		row.Gamma3 = 0
-		row.Gamma4 = 0
-		row.Gamma5 = 0
-		row.Gamma6 = 0
-		row.Gamma7 = 0
-		row.Gamma8 = 0
-		row.Gamma9 = 0
-		row.spin1x = trigger.spin1x 
-		row.spin1y = trigger.spin1y 
-		row.spin1z = trigger.spin1z 
-		row.spin2x = trigger.spin2x 
-		row.spin2y = trigger.spin2y 
-		row.spin2z = trigger.spin2z
-		row.event_id = "sngl_inspiral:event_id:2"
-		sngl_inspiral_table.append(row)
-
-		row = sngl_inspiral_table.RowType()
-		# Setting the the other row
-		row.process_id = self.process.process_id
-		row.ifo = "V1"
-		row.search = self.url
-		row.channel = "Hrec_hoft_16384Hz" 
-		row.end_time = trigger.end_time_V
-		row.end_time_ns = trigger.end_time_ns_V
-		row.end_time_gmst = 0 
-		row.impulse_time = 0
-		row.impulse_time_ns = 0
-		row.template_duration = trigger.template_duration
-		row.event_duration = 0
-		row.amplitude = 0
-		row.eff_distance = trigger.deff_V
-		#row.eff_distance = 0
-		row.coa_phase = trigger.coaphase_V
-		row.mass1 = trigger.mass1 
-		row.mass2 = trigger.mass2 
-		row.mchirp = trigger.mchirp 
-		row.mtotal = trigger.mtotal 
-		row.eta = trigger.eta
-		row.kappa = 0 
-		row.chi = 1 
-		row.tau0 = 0 
-		row.tau2 = 0 
-		row.tau3 = 0 
-		row.tau4 = 0
-		row.tau5 = 0 
-		row.ttotal = 0 
-		row.psi0 = 0 
-		row.psi3 = 0 
-		row.alpha = 0
-		row.alpha1 = 0
-		row.alpha2 = 0
-		row.alpha3 = 0
-		row.alpha4 = 0
-		row.alpha5 = 0
-		row.alpha6 = 0
-		row.beta = 0
-		row.f_final = 2048
-		row.snr = trigger.snglsnr_V
-		row.chisq = trigger.chisq_V
-		row.chisq_dof = 4
-		row.bank_chisq = 0
-		row.bank_chisq_dof = 0
-		row.cont_chisq = 0
-		row.cont_chisq_dof = 0
-		row.sigmasq = 0
-		row.rsqveto_duration = 0
-		row.Gamma0 = 0 
-		row.Gamma1 = 0
-		row.Gamma2 = 0
-		row.Gamma3 = 0
-		row.Gamma4 = 0
-		row.Gamma5 = 0
-		row.Gamma6 = 0
-		row.Gamma7 = 0
-		row.Gamma8 = 0
-		row.Gamma9 = 0
-		row.spin1x = trigger.spin1x 
-		row.spin1y = trigger.spin1y 
-		row.spin1z = trigger.spin1z 
-		row.spin2x = trigger.spin2x 
-		row.spin2y = trigger.spin2y 
-		row.spin2z = trigger.spin2z
-		row.event_id = "sngl_inspiral:event_id:3"
-		sngl_inspiral_table.append(row)
-
+		# FIXME: hard-coded ifo length
+		nifo = len(trigger.ifos)/2
+		for iifo in range(0, nifo):
+			row = sngl_inspiral_table.RowType()
+			ifo = trigger.ifos[2*iifo:2*iifo+2]
+			# Setting the individual row
+			row.process_id = self.process.process_id
+			row.ifo =  ifo
+			row.search = self.url
+			# FIXME: hard-coded channel name
+			if ifo in ("H1", "L1"):
+				row.channel = "GDS-CALIB_STRAIN" 
+			else:
+				row.channel = "Hrec_hoft_16384Hz" 
+			row.end_time = getattr(trigger, "end_time_%s" % ifo[0])
+			row.end_time_ns = getattr(trigger, "end_time_ns_%s" % ifo[0])
+			row.end_time_gmst = 0 
+			row.impulse_time = 0
+			row.impulse_time_ns = 0
+			row.template_duration = trigger.template_duration
+			row.event_duration = 0
+			row.amplitude = 0
+			row.eff_distance = getattr(trigger, "deff_%s" % ifo[0])
+			row.coa_phase = getattr(trigger, "coaphase_%s" % ifo[0])
+			row.mass1 = trigger.mass1 
+			row.mass2 = trigger.mass2
+			row.mchirp = trigger.mchirp 
+			row.mtotal = trigger.mtotal 
+			row.eta = trigger.eta 
+			row.kappa = 0 
+			row.chi = 1 
+			row.tau0 = 0 
+			row.tau2 = 0 
+			row.tau3 = 0 
+			row.tau4 = 0
+			row.tau5 = 0 
+			row.ttotal = 0 
+			row.psi0 = 0 
+			row.psi3 = 0 
+			row.alpha = 0
+			row.alpha1 = 0
+			row.alpha2 = 0
+			row.alpha3 = 0
+			row.alpha4 = 0
+			row.alpha5 = 0
+			row.alpha6 = 0
+			row.beta = 0
+			row.f_final = 2048
+			row.snr = getattr(trigger, "snglsnr_%s" % ifo[0])
+			row.chisq = getattr(trigger, "chisq_%s" % ifo[0])
+			row.chisq_dof = 4
+			row.bank_chisq = 0
+			row.bank_chisq_dof = 0
+			row.cont_chisq = 0
+			row.cont_chisq_dof = 0
+			row.sigmasq = 0
+			row.rsqveto_duration = 0
+			row.Gamma0 = 0
+			row.Gamma1 = 0
+			row.Gamma2 = 0
+			row.Gamma3 = 0
+			row.Gamma4 = 0
+			row.Gamma5 = 0
+			row.Gamma6 = 0
+			row.Gamma7 = 0
+			row.Gamma8 = 0
+			row.Gamma9 = 0
+			row.spin1x = trigger.spin1x 
+			row.spin1y = trigger.spin1y 
+			row.spin1z = trigger.spin1z 
+			row.spin2x = trigger.spin2x 
+			row.spin2y = trigger.spin2y 
+			row.spin2z = trigger.spin2z
+			row.event_id = "sngl_inspiral:event_id:%d" % iifo
+			sngl_inspiral_table.append(row)
+			    
