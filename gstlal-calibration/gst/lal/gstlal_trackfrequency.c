@@ -149,10 +149,7 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 		} \
  \
 		/* Reset the step size to search the next cycle */ \
-		if(*current_frequency) \
-			*check_step = (int) (0.2 * rate / *current_frequency + 0.61); \
-		else \
-			*check_step = 1; \
+		*check_step = (int) (0.2 * rate / *current_frequency + 0.61) > 1 ? (int) (0.2 * rate / *current_frequency + 0.61) : 1; \
 	} \
 	/* We should be at the end of the output buffer now */ \
 	g_assert_cmpint(size, == , j); \
@@ -243,10 +240,7 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 		} \
  \
 		/* Reset the step size to search the next cycle */ \
-		if(*current_frequency) \
-			*check_step = (int) (0.2 * rate / fabs(*current_frequency) + 0.61); \
-		else \
-			*check_step = 1; \
+		*check_step = (int) (0.2 * rate / fabs(*current_frequency) + 0.61) > 1 ? (int) (0.2 * rate / fabs(*current_frequency) + 0.61) : 1; \
 	} \
 	/* We should be at the end of the output buffer now */ \
 	g_assert_cmpint(size, == , j); \
