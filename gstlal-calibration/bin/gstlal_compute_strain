@@ -282,7 +282,7 @@ parser.add_option("--powerlines-freq-var", metavar = "Hz", type = float, default
 parser.add_option("--witness-channel-list", metavar = "name", default = None, help = "List of witness channels to use to subtract noise from h(t), given as a string. Use semicolons (;) to separate channels/groups of channels that should be processed separately. Use commas to separate channels that should be processed together. For example, --witness-channel-list=\"chan1,chan2,chan3;chan4,chan5\". This means the pipeline will process the first 3 channels together and the last 2 channels together. (Default is to not use any witness channels.)")
 parser.add_option("--witness-channel-sr", metavar = "Hz", type = int, default = 2048, help = "Sample rate at which transfer functions will be computed and witness channels will be filtered. (Default = 2048 Hz)")
 parser.add_option("--witness-channel-fft-time", metavar = "seconds", type = float, default = 4.0, help = "The length in seconds of the fast Fourier transforms used to compute transfer functions between witness channels and h(t). The fft's are windowed with Hann windows and overlapped. (Default = 4.0)")
-parser.add_option("--num-witness-ffts", metavar = "integer", type = int, default = 1800, help = "The number of ffts to take before averaging the witness -> h(t) transfer functions calculation. The average is taken after the ratio h(f) / witness(f). (Default = 128)")
+parser.add_option("--num-witness-ffts", metavar = "integer", type = int, default = 1800, help = "The number of ffts to take before averaging the witness -> h(t) transfer functions calculation. The average is taken after the ratio h(f) / witness(f). (Default = 1800)")
 parser.add_option("--witness-fir-length", metavar = "seconds", type = float, default = 0.5, help = "The length in seconds of the filters applied to the witness channels before subtracting from h(t) (Default = 0.5)")
 parser.add_option("--witness-frequency-resolution", metavar = "Hz", type = float, default = 1.0, help = "The frequency resolution of the filters applied to the witness channels before subtracting from h(t). It can be advantageous to lower the frequency resolution in order to average over excess noise. (Default = 1.0)")
 parser.add_option("--witness-notch-frequencies", metavar = "list", default = None, help = "List of minima and maxima of frequency ranges where the Fourier transform of h(t) will be replaced by a straight line in the calculation of transfer functions between witness channels and h(t) for noise subtraction. Here is an example using the expected format: --witness-notch-frequencies=\"498.0,505.5,997.0,1008.5\" This can be useful, e.g., if there are loud lines in the signal that are not present in the witness channels. (Default is to not use any notches.)")
@@ -424,6 +424,8 @@ else:
 # How many EPICS will we for the CALIB_STATE_VECTOR calculation? It depends on the IFO and the time we are calibrating
 if options.no_dq_vector:
 	num_dq_epics = 0
+elif options.data_source == "lvshm":
+	num_dq_epics = 14
 elif options.ifo == "H1" and int(options.gps_start_time) > 1175976256:
 	num_dq_epics = 14
 elif options.ifo == "L1" and int(options.gps_start_time) > 1179588864:
@@ -1846,7 +1848,7 @@ if options.remove_callines:
 			esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
 		else:
 			# EP10 was read from the frames
-			EP10 = calibration_parts.merge_into_complex(pipeline, head_dict["EP10_real"], head_dict["EP10_imag"], long_queue, short_queue)
+			EP10 = calibration_parts.merge_into_complex(pipeline, head_dict["EP10_real"], head_dict["EP10_imag"])
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, tstexc_at_esd_act_freq, EP10))
 		# Reconstruct a calibrated ESD injection at the ~30 Hz ESD line
 		if options.apply_complex_kappatst:
