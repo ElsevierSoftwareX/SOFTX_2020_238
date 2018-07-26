@@ -192,7 +192,6 @@ static struct injection_document *load_injection_document(const char *filename, 
 			success = 0;
 		} else
 			XLALPrintInfo("%s(): found sim_burst table\n", __func__);
-		XLALSortSimBurst(&new->sim_burst_table_head, XLALCompareSimBurstByGeocentTimeGPS);
 	} else
 		new->sim_burst_table_head = NULL;
 
@@ -471,12 +470,15 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 
 	if(element->injection_document->sim_burst_table_head) {
 		/*
-		 * We follow the procedure in here so we don't end up adding the same burst injection to the data multiple times.
-		 * The burst_series buffer essentially windows the injections to those that are currently relevant.
-		 */
-
-		/*
-		 * create a buffer to store burst injections
+		 * create a buffer to store burst injections.  we put the
+		 * injections into this (zeroed) buffer and then from there
+		 * into h(t) so that we don't inject the same burst
+		 * injection into the data more than once (these
+		 * intermediate buffers are disjoint).
+		 * XLALBurstInjectSignals() will skip injections too far
+		 * outside of the boundaries of its target series, so in
+		 * this way we also control which injections are generated
+		 * in each iteration.
 		 */
 
 		REAL8TimeSeries *burst_series = XLALCreateREAL8TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &h->sampleUnits, h->data->length);
