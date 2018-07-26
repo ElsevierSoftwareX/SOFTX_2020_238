@@ -686,7 +686,7 @@ class Data(object):
 			# sufficient for the latter.
 			# FIXME:  fix the effective distances
 			for event in events:
-				event.eff_dist = NaN
+				event.eff_distance = NaN
 
 			# Find max SNR sngles
 			if events:
