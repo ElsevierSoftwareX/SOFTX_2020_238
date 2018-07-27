@@ -77,7 +77,8 @@ class PostcohInspiralTable(table.Table):
 			"dec":		"real_8",
 			"deff_L":	"real_8",
 			"deff_H":	"real_8",
-			"deff_V":	"real_8"
+			"deff_V":	"real_8",
+			"rank":		"real_8"
 	}
 	constraints = "PRIMARY KEY (event_id)"
 	next_id = PostcohInspiralID(0)

@@ -1381,7 +1381,7 @@ def finish_plot(contents, plot_group, options, user_tag):
         for (fig, filename_fragment, is_open_box) in plot.finish():
 	    for format in options.format:
 		if filename_fragment and fig:
-                        filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[0], "%s", path = options.output_dir)
+                        filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_POSTCOHSPIIR_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[0], "%s", path = options.output_dir)
 			filename = filename_template % (user_tag, n, filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
 			if options.verbose:
 				print >>sys.stderr, "writing %s ..." % filename

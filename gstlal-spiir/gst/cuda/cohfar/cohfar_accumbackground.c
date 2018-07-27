@@ -142,19 +142,20 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	/* 
 	 * initialize stats files 
 	 */
-	BackgroundStats **stats_snapshot = element->stats_snapshot;
-	// BackgroundStats **stats_prompt = element->stats_prompt;
-	// BackgroundStatsPointerList *stats_list = element->stats_list;
+	TriggerStatsXML *bgstats = element->bgstats;
+	TriggerStatsXML *zlstats = element->zlstats;
+	// TriggerStats **stats_prompt = element->stats_prompt;
+	// TriggerStatsPointerList *stats_list = element->stats_list;
 	// /* reset stats_prompt */
-	// background_stats_reset(stats_prompt, element->ncombo);
+	// trigger_stats_reset(stats_prompt, element->ncombo);
 
 	
 	/*
 	 * reset stats in the stats_list in order to input new background points
 	 */
 	// int pos = stats_list->pos;
-	// BackgroundStats **cur_stats_in_list = stats_list->plist[pos];
-	// background_stats_reset(cur_stats_in_list, element->ncombo);
+	// TriggerStats **cur_stats_in_list = stats_list->plist[pos];
+	// trigger_stats_reset(cur_stats_in_list, element->ncombo);
 
 
 	/*
@@ -176,7 +177,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	GstCaps *caps = GST_PAD_CAPS(srcpad);
 
 	/* allocate extra space for prompt stats */	
-	//int out_size = sizeof(PostcohInspiralTable) * outentries + sizeof(BackgroundStats) * ncombo;
+	//int out_size = sizeof(PostcohInspiralTable) * outentries + sizeof(TriggerStats) * ncombo;
 	int out_size = sizeof(PostcohInspiralTable) * outentries;
 	result = gst_pad_alloc_buffer(srcpad, 0, out_size, caps, &outbuf);
 	if (result != GST_FLOW_OK) {
@@ -186,8 +187,10 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	int icombo=0;
 	/* increment livetime if the data is not flaged gap, estimated by snglsnr_max of any ifo has value > 0*/
 	if (!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)){
-		for (icombo=0; icombo<element->ncombo; icombo++)
-			background_stats_livetime_inc(stats_snapshot, icombo);
+		for (icombo=0; icombo<element->ncombo; icombo++) {
+			trigger_stats_livetime_inc(bgstats->multistats, icombo);
+			trigger_stats_livetime_inc(zlstats->multistats, icombo);
+        }
 	}
 	/*
 	 * update background rates
@@ -201,7 +204,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		if (intable->is_background == 1) {
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1) {
-				background_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, stats_snapshot[icombo]->feature, stats_snapshot[icombo]);
+				trigger_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, bgstats->multistats[icombo]->feature, bgstats->multistats[icombo]);
 				//printf("eventime %d, cohsnr %f, chisq %f\n", intable->end_time.gpsSeconds, intable->cohsnr, intable->cmbchisq);
 			}	
 
@@ -213,14 +216,26 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 			for (isingle=0; isingle< nifo; isingle++){
 				int write_isingle = element->write_ifo_mapping[isingle];
 				//printf("write isingle %d->%d\n", isingle, write_isingle);
-				background_stats_feature_rates_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), stats_snapshot[write_isingle]->feature, stats_snapshot[write_isingle]);
+				trigger_stats_feature_rates_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), bgstats->multistats[write_isingle]->feature, bgstats->multistats[write_isingle]);
 				// printf("eventime %d, single %d, snr %f, chisq %f\n", intable->end_time.gpsSeconds, isingle, (double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)));
 			}
-			/* add stats to stats_list for prompt FAP estimation */
-			// if (icombo > -1)
-			// 	background_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, cur_stats_in_list[icombo]->rates, cur_stats_in_list[icombo]);
-
 		} else { /* coherent trigger entry */
+			icombo = get_icombo(intable->ifos);
+			if (icombo > -1) {
+				trigger_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, zlstats->multistats[icombo]->feature, zlstats->multistats[icombo]);
+				//printf("eventime %d, cohsnr %f, chisq %f\n", intable->end_time.gpsSeconds, intable->cohsnr, intable->cmbchisq);
+			}	
+
+			nifo = strlen(intable->ifos)/IFO_LEN;
+			/* add single detector stats */
+			get_write_ifo_mapping(IFOComboMap[icombo].name, nifo, element->write_ifo_mapping);
+			//printf("found combo %s\n", IFOComboMap[icombo]);
+
+			for (isingle=0; isingle< nifo; isingle++){
+				int write_isingle = element->write_ifo_mapping[isingle];
+				//printf("write isingle %d->%d\n", isingle, write_isingle);
+				trigger_stats_feature_rates_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), zlstats->multistats[write_isingle]->feature, zlstats->multistats[write_isingle]);
+            }
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 		} 
@@ -228,45 +243,30 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	/*
 	 * calculate immediate PDF using stats_prompt from stats_list
 	 */
-	// int ilist = 0, ncombo = element->ncombo;
-	// if (outentries > 0) {
-	// 	/* sum all stats in stats_list to stats_prompt */
-	// 	for (ilist=0; ilist<stats_list->size; ilist++) {
-	// 		cur_stats_in_list = stats_list->plist[(pos+ilist)%NSTATS_TO_PROMPT];
-	// 		for (icombo=0; icombo<ncombo; icombo++)
-	// 			background_stats_rates_add(stats_prompt[icombo]->rates, cur_stats_in_list[icombo]->rates, stats_prompt[icombo]);
-	// 			memcpy(outtable, stats_prompt[icombo], sizeof(BackgroundStats))
-	// 	}
-	// }
-	/* 
-	 * deprecated: assign prompt FAP to 'fap' field of our trigger
-	 */
-	//outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 
-	//int ientry = 0;
-	//for (ientry=0; ientry<outentries; ientry++) {
-	//	icombo = get_icombo(outtable->ifos);
-	//	/* substitude fap with pdf */
-	//	outtable->fap = background_stats_bins2D_get_val((double)outtable->cohsnr, (double)outtable->cmbchisq, stats_prompt[icombo]->pdf);
-	//	outtable++;
-	//}
-	
 	/*
 	 * shuffle one step down in stats_list 
 	 */
-	// stats_list->pos = (stats_list->pos + 1) % NSTATS_TO_PROMPT;
 
 	/* snapshot background xml file when reaching the snapshot point*/
 	GstClockTime t_cur = GST_BUFFER_TIMESTAMP(inbuf);
 	element->t_end = t_cur;
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	if (element->snapshot_interval > 0 && duration >= element->snapshot_interval) {
-		gint gps_time = (int) (element->t_roll_start / GST_SECOND);
-		GString *tmp_fname = g_string_new(element->output_prefix);
-		g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
-		background_stats_to_xml(stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
-		g_string_free(tmp_fname, TRUE);
-		background_stats_reset(stats_snapshot, element->ncombo);
+	    gint gps_time = (int) (element->t_roll_start / GST_SECOND);
+	GString *fname = g_string_new(element->output_prefix);
+	GString *tmp_fname = g_string_new(element->output_prefix);
+	g_string_append_printf(fname, "_%d_%d.xml.gz", gps_time, duration);
+	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz_next", gps_time, duration);
+	trigger_stats_xml_dump(element->bgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
+	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+    printf("rename from %s\n", tmp_fname->str);
+    g_rename(tmp_fname->str, fname->str);
+	g_string_free(fname, TRUE);
+	g_string_free(tmp_fname, TRUE);
+
+		trigger_stats_xml_reset(element->bgstats);
+		trigger_stats_xml_reset(element->zlstats);
 		element->t_roll_start = t_cur;
 	}
 
@@ -318,14 +318,22 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
     if (element->snapshot_interval > 0) {
 	gint gps_time = (int) (element->t_roll_start / GST_SECOND);
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
+	GString *fname = g_string_new(element->output_prefix);
 	GString *tmp_fname = g_string_new(element->output_prefix);
-	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz", gps_time, duration);
-	background_stats_to_xml(element->stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
+	g_string_append_printf(fname, "_%d_%d.xml.gz", gps_time, duration);
+	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz_next", gps_time, duration);
+	trigger_stats_xml_dump(element->bgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
+	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+    printf("rename from %s\n", tmp_fname->str);
+    g_rename(tmp_fname->str, fname->str);
+	g_string_free(fname, TRUE);
 	g_string_free(tmp_fname, TRUE);
+
     } else {
-	GString *tmp_fname = g_string_new(element->output_name);
-	background_stats_to_xml(element->stats_snapshot, element->ncombo, element->hist_trials, tmp_fname->str);
-	g_string_free(tmp_fname, TRUE);
+	GString *fname = g_string_new(element->output_name);
+	trigger_stats_xml_dump(element->bgstats, element->hist_trials, fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
+	trigger_stats_xml_dump(element->bgstats, element->hist_trials, fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+	g_string_free(fname, TRUE);
     }
 
       break;
@@ -353,9 +361,8 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			element->ifos = g_value_dup_string(value);
 			element->nifo = strlen(element->ifos) / IFO_LEN;
 			element->ncombo = get_ncombo(element->nifo);
-			element->stats_snapshot = background_stats_create(element->ifos);
-			// element->stats_prompt = background_stats_create(element->ifos);
-			// element->stats_list = background_stats_list_create(element->ifos);
+			element->bgstats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_BACKGROUND);
+			element->zlstats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_ZEROLAG);
 			break;
 
 		case PROP_HISTORY_FNAME:
@@ -363,7 +370,8 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			/* must make sure ifos have been loaded */
 			g_assert(element->ifos != NULL);
 			element->history_fname = g_value_dup_string(value);
-			background_stats_from_xml(element->stats_snapshot, element->ncombo, &(element->hist_trials), element->history_fname);
+			trigger_stats_xml_from_xml(element->bgstats, &(element->hist_trials), element->history_fname);
+			trigger_stats_xml_from_xml(element->zlstats, &(element->hist_trials), element->history_fname);
 			break;
 
 		case PROP_OUTPUT_NAME:
@@ -444,7 +452,7 @@ static void cohfar_accumbackground_dispose(GObject *object)
 {
 	CohfarAccumbackground *element = COHFAR_ACCUMBACKGROUND(object);
 
-	if(element->stats_snapshot) {
+	if(element->bgstats) {
 		// FIXME: free stats
 	}
 	G_OBJECT_CLASS(parent_class)->dispose(object);
@@ -610,8 +618,9 @@ static void cohfar_accumbackground_init(CohfarAccumbackground *element, CohfarAc
 	gst_pad_set_chain_function(element->sinkpad,
 					GST_DEBUG_FUNCPTR(cohfar_accumbackground_chain));
 
-	element->stats_snapshot = NULL;
-	element->stats_prompt = NULL;
+	element->bgstats = NULL;
+	element->zlstats = NULL;
+    element->stats_writer = NULL;
 	element->t_roll_start = GST_CLOCK_TIME_NONE;
 	element->snapshot_interval = NOT_INIT;
 }

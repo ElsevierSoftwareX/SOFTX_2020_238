@@ -1159,6 +1159,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 				g_string_free(filename, TRUE);
 			} else
 				output->skymap_fname[0] = '\0';
+            output->rank = 0;
 
 			GST_LOG_OBJECT(postcoh, "end_time_L %d, ipeak %d, peak_cur %d, len_cur %d, tmplt_idx %d, pix_idx %d \t,"
 				"snglsnr_L %f, snglsnr_H %f, snglsnr_V %f,"

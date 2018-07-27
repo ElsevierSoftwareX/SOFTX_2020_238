@@ -30,6 +30,7 @@
 
 #include <glib.h>
 #include <cohfar/background_stats.h>
+#include <LIGOLwHeader.h>
 
 	
 Bins1D *
@@ -41,33 +42,39 @@ bins2D_create(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cm
 Bins2D *
 bins2D_create_long(double cmin_x, double cmax_x, int nbin_x, double cmin_y, double cmax_y, int nbin_y);
 
-BackgroundStats **
-background_stats_create(char *ifos);
+TriggerStats **
+trigger_stats_create(int ncombo);
 
 int
 bins1D_get_idx(double val, Bins1D *bins);
 
 void
-background_stats_feature_rates_update(double snr, double chisq, FeatureStats *feature, BackgroundStats *cur_stats);
+trigger_stats_feature_rates_update(double snr, double chisq, FeatureStats *feature, TriggerStats *cur_stats);
  
 void
-background_stats_feature_rates_add(FeatureStats *feature1, FeatureStats *feature2, BackgroundStats *cur_stats);
+trigger_stats_feature_rates_add(FeatureStats *feature1, FeatureStats *feature2, TriggerStats *cur_stats);
  
 
 void
-background_stats_feature_rates_to_pdf(FeatureStats *feature);
+trigger_stats_feature_rates_to_pdf(FeatureStats *feature);
 
 
 double
 bins2D_get_val(double snr, double chisq, Bins2D *bins);
 
 gboolean
-background_stats_from_xml(BackgroundStats **stats, const int ncombo, int *hist_trials, const char *filename);
+trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char *filename);
 
 gboolean
-background_stats_to_xml(BackgroundStats **stats, const int ncombo, int hist_trials, const char *filename);
+trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *filename, int write_status, xmlTextWriterPtr *pwriter);
+
+TriggerStatsXML *
+trigger_stats_xml_create(char *ifos, int stats_type);
+
+void
+trigger_stats_xml_destroy(TriggerStatsXML * stats);
 
 double
-gen_fap_from_feature(double snr, double chisq, BackgroundStats *stats);
+gen_fap_from_feature(double snr, double chisq, TriggerStats *stats);
 #endif /* __BACKGROUND_STATS_UTILS_H__ */
 

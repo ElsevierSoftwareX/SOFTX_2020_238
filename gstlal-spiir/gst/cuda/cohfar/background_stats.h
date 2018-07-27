@@ -79,7 +79,7 @@ typedef struct {
 
 
 /*
- * background statistics
+ * background or foreground (zerolag) statistics
  */
 
 typedef struct {
@@ -89,15 +89,21 @@ typedef struct {
 	int hist_trials;
 	long nevent;
 	long livetime;
-} BackgroundStats;
+} TriggerStats;
 
-
-typedef	BackgroundStats** BackgroundStatsPointer;
 typedef struct {
-	BackgroundStatsPointer *plist;
+    TriggerStats ** multistats;
+	GString *rank_xmlname;
+	GString *feature_xmlname;
+    int ncombo;
+} TriggerStatsXML;
+
+typedef	TriggerStats** TriggerStatsPointer;
+typedef struct {
+	TriggerStatsPointer *plist;
 	int size;
 	int pos;
-} BackgroundStatsPointerList; 
+} TriggerStatsPointerList; 
 
 
 #endif /* __BACKGROUND_STATS_H__ */

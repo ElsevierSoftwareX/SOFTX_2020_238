@@ -62,9 +62,10 @@ typedef struct {
 	int nifo;
 	int ncombo; // ifo combination
 	int write_ifo_mapping[MAX_NIFO];
-	BackgroundStats **stats_snapshot;
-	BackgroundStats **stats_prompt;
-	BackgroundStatsPointerList *stats_list;
+	TriggerStatsXML *bgstats;
+	TriggerStatsXML *zlstats;
+    xmlTextWriterPtr stats_writer;
+
 
 	int snapshot_interval;
 	int hist_trials;

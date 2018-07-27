@@ -60,9 +60,9 @@ typedef struct {
 	int nifo;
 	int ncombo; // ifo combination
 	int hist_trials;
-	BackgroundStats **stats_2h;
-	BackgroundStats **stats_1d;
-	BackgroundStats **stats_1w;
+	TriggerStatsXML *bgstats_2h;
+	TriggerStatsXML *bgstats_1d;
+	TriggerStatsXML *bgstats_1w;
 
 	int silent_time;
 	gboolean pass_silent_time;

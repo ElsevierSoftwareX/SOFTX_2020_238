@@ -54,5 +54,13 @@ int get_icombo(char *ifos);
 #define	RANK_PDF_SUFFIX				"_rank_pdf"	
 #define	RANK_FAP_SUFFIX				"_rank_fap"	
 
+#define	ZEROLAG_XML_FEATURE_NAME		"zerolag_feature"
+#define	ZEROLAG_XML_RANK_NAME		"zerolag_rank"	
+#define STATS_XML_ID_NAME   "gstlal_postcohspiir_stats"
+#define STATS_XML_TYPE_BACKGROUND   1
+#define STATS_XML_TYPE_ZEROLAG   2
+#define STATS_XML_WRITE_START   1
+#define STATS_XML_WRITE_END 2
+#define MAX(a,b) (a>b?a:b)
 #endif
 

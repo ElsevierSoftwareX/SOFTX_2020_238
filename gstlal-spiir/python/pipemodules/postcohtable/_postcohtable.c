@@ -107,6 +107,7 @@ static struct PyMemberDef members[] = {
 	{"far_h_2h", T_FLOAT, offsetof(gstlal_GSTLALPostcohInspiral, row.far_h_2h), 0, "far_h_2h"},
 	{"far_l_2h", T_FLOAT, offsetof(gstlal_GSTLALPostcohInspiral, row.far_l_2h), 0, "far_l_2h"},
 	{"far_v_2h", T_FLOAT, offsetof(gstlal_GSTLALPostcohInspiral, row.far_v_2h), 0, "far_v_2h"},
+	{"rank", T_DOUBLE, offsetof(gstlal_GSTLALPostcohInspiral, row.rank), 0, "rank"},
 	{"template_duration", T_DOUBLE, offsetof(gstlal_GSTLALPostcohInspiral, row.template_duration), 0, "template_duration"},
 	{"mass1", T_FLOAT, offsetof(gstlal_GSTLALPostcohInspiral, row.mass1), 0, "mass1"},
 	{"mass2", T_FLOAT, offsetof(gstlal_GSTLALPostcohInspiral, row.mass2), 0, "mass2"},

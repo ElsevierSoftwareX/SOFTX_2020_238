@@ -125,18 +125,17 @@ void cohfar_get_data_from_file(gchar **in_fnames, gsl_vector **pdata_dim1, gsl_v
 	gsl_vector_free(*pdata_dim2);
 }	
 
-void cohfar_get_stats_from_file(gchar **in_fnames, BackgroundStats **stats_in, BackgroundStats **stats_out, int *hist_trials, int ncombo)
+void cohfar_get_stats_from_file(gchar **in_fnames, TriggerStatsXML *stats_in, TriggerStatsXML *stats_out, int *hist_trials)
 {
 	gchar **ifname;
 	int icombo;
 	for (ifname = in_fnames; *ifname; ifname++) {
 		printf("%s\n", *ifname);
-		background_stats_from_xml(stats_in, ncombo, hist_trials, *ifname);
-		for (icombo=0; icombo<ncombo; icombo++){
-			background_stats_feature_rates_add(stats_out[icombo]->feature, stats_in[icombo]->feature, stats_out[icombo]);
-			background_stats_livetime_add(stats_out, stats_in, icombo);
+		trigger_stats_xml_from_xml(stats_in, hist_trials, *ifname);
+		for (icombo=0; icombo<stats_in->ncombo; icombo++){
+			trigger_stats_feature_rates_add(stats_out->multistats[icombo]->feature, stats_in->multistats[icombo]->feature, stats_out->multistats[icombo]);
+			trigger_stats_livetime_add(stats_out->multistats, stats_in->multistats, icombo);
 		}
-		printf("%s done loading\n", *ifname);
 	}
 }
 
@@ -152,37 +151,52 @@ int main(int argc, char *argv[])
 	parse_opts(argc, argv, pin, pfmt, pout, pifos, pwalltime);
 	int nifo = strlen(*pifos) / IFO_LEN;
 	int icombo, ncombo = get_ncombo(nifo), hist_trials;
-	
-	BackgroundStats **stats_in = background_stats_create(*pifos);
-	BackgroundStats **stats_out = background_stats_create(*pifos);
+		
+	TriggerStatsXML *zlstats_in = trigger_stats_xml_create(*pifos, STATS_XML_TYPE_ZEROLAG);
+	TriggerStatsXML *zlstats_out = trigger_stats_xml_create(*pifos, STATS_XML_TYPE_ZEROLAG);
+
+	TriggerStatsXML *bgstats_in = trigger_stats_xml_create(*pifos, STATS_XML_TYPE_BACKGROUND);
+	TriggerStatsXML *bgstats_out = trigger_stats_xml_create(*pifos, STATS_XML_TYPE_BACKGROUND);
 	gchar **in_fnames = g_strsplit(*pin, ",", -1); // split the string completely
 
 	if (g_strcmp0(*pfmt, "data") == 0) {
 		gsl_vector *data_dim1 = NULL, *data_dim2 = NULL;
 		cohfar_get_data_from_file(in_fnames, &data_dim1, &data_dim2);
 		// FIXME: hardcoded to only update the last stats
-		background_stats_feature_rates_update_all(data_dim1, data_dim2, stats_out[ncombo-1]->feature, stats_out[ncombo-1]);
-		background_stats_feature_rates_to_pdf(stats_out[ncombo-1]->feature);
-		background_stats_feature_to_rank(stats_out[ncombo-1]->feature, stats_out[ncombo-1]->rank);
+		trigger_stats_feature_rates_update_all(data_dim1, data_dim2, bgstats_out->multistats[ncombo-1]->feature, bgstats_out->multistats[ncombo-1]);
+		trigger_stats_feature_rates_to_pdf(bgstats_out->multistats[ncombo-1]->feature);
+		trigger_stats_feature_to_rank(bgstats_out->multistats[ncombo-1]->feature, bgstats_out->multistats[ncombo-1]->rank);
 		if (data_dim1) {
 			free(data_dim1);
 			free(data_dim2);
 		}
 		
-		// background_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
+		// trigger_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
 	} else if(g_strcmp0(*pfmt, "stats") == 0) {
-		cohfar_get_stats_from_file(in_fnames, stats_in, stats_out, &hist_trials, ncombo);
+		cohfar_get_stats_from_file(in_fnames, bgstats_in, bgstats_out, &hist_trials);
+		cohfar_get_stats_from_file(in_fnames, zlstats_in, zlstats_out, &hist_trials);
 		for (icombo=0; icombo<ncombo; icombo++) {
-			background_stats_feature_rates_to_pdf(stats_out[icombo]->feature);
-			background_stats_feature_to_rank(stats_out[icombo]->feature, stats_out[icombo]->rank);
+			trigger_stats_feature_rates_to_pdf(zlstats_out->multistats[icombo]->feature);
+			trigger_stats_feature_to_rank(zlstats_out->multistats[icombo]->feature, zlstats_out->multistats[icombo]->rank);
 			/* livetime calculated from all walltimes in the input files, will deprecate the following */
 			//stats_out[icombo]->livetime = atol(*pwalltime);
-			printf("stats_out livetime %d\n", stats_out[icombo]->livetime );
+			printf("stats_out livetime %d\n", zlstats_out->multistats[icombo]->livetime );
+			trigger_stats_feature_rates_to_pdf(bgstats_out->multistats[icombo]->feature);
+			trigger_stats_feature_to_rank(bgstats_out->multistats[icombo]->feature, bgstats_out->multistats[icombo]->rank);
+			/* livetime calculated from all walltimes in the input files, will deprecate the following */
+			//stats_out[icombo]->livetime = atol(*pwalltime);
+			printf("stats_out livetime %d\n", bgstats_out->multistats[icombo]->livetime );
 		}
 	}
-	background_stats_to_xml(stats_out, ncombo, hist_trials, *pout);
-	background_stats_destroy(stats_in, ncombo);
-	background_stats_destroy(stats_out, ncombo);
+    xmlTextWriterPtr stats_writer = NULL;
+	trigger_stats_xml_dump(bgstats_out, hist_trials, *pout, STATS_XML_WRITE_START, &stats_writer);
+	trigger_stats_xml_dump(zlstats_out, hist_trials, *pout, STATS_XML_WRITE_END, &stats_writer);
+	
+	trigger_stats_xml_destroy(bgstats_in);
+	trigger_stats_xml_destroy(bgstats_out);
+	trigger_stats_xml_destroy(zlstats_in);
+	trigger_stats_xml_destroy(zlstats_out);
+
 	g_strfreev(in_fnames);
 
 	g_free(*pin);
