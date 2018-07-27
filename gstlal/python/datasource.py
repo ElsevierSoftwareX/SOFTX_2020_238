@@ -442,7 +442,6 @@ class GWDataSourceInfo(object):
 
 		## A dictionary of the requested channels, e.g., {"H1":"LDAS-STRAIN", "L1":"LDAS-STRAIN"}
 		self.channel_dict = channel_dict_from_channel_list(options.channel_name)
-		self.state_channel_type = None
 
 		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
@@ -500,8 +499,6 @@ class GWDataSourceInfo(object):
 			state_channel_dict_from_options = channel_dict_from_channel_list( options.state_channel_name )
 			instrument = state_channel_dict_from_options.keys()[0]
 			self.state_channel_dict.update( state_channel_dict_from_options )
-			if "ODC_" in self.state_channel_dict[instrument].split("-")[1]:
-				self.state_channel_type = "ODC"
 
 		if options.dq_channel_name is not None:
 			dq_channel_dict_from_options = channel_dict_from_channel_list( options.dq_channel_name )
