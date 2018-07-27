@@ -128,7 +128,7 @@ import lal
 # @enddot
 def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		psd_fft_length = 8, ht_gate_threshold = float("inf"),
-		veto_segments = None, seekevent = None, nxydump_segment = None,
+		veto_segments = None, seekevent = None, nxydump_segment = None, nxydump_directory = '.',
 		track_psd = False, block_duration = 1 * gst.SECOND, zero_pad =
 		0, width = 64, fir_whitener = 0, statevector = None, dqvector =
 		None):
@@ -181,7 +181,7 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 	head = pipeparts.mktee(pipeline, head)
 
 	if nxydump_segment is not None:
-                pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "before_whitened_data_%s_%d.dump" % (instrument, nxydump_segment[0]), segment = nxydump_segment)
+                pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/before_whitened_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
 
 	#
 	# construct whitener.
@@ -354,7 +354,7 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 
 	head = pipeparts.mktee(pipeline, head)
 	if nxydump_segment is not None:
-		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whitened_data_%s_%d.dump" % (instrument, nxydump_segment[0]), segment = nxydump_segment)
+		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/whitened_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
 	
 	return head
 
