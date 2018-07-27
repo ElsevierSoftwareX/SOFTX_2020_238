@@ -9,7 +9,9 @@ spiirbankdir = $(pkgpythondir)/spiirbank
 spiirbank_PYTHON = \
 	__init__.py \
 	spiir_utils.py \
-	spiir_decomp.py
+	spiir_decomp.py \
+	cbc_template_iir.py \
+	optimize_mf.py
 
 spiirbank_LTLIBRARIES = _spiir_decomp.la
 
