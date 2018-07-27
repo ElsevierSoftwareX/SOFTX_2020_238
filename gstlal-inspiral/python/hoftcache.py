@@ -30,6 +30,7 @@
 import os
 import sys
 import tempfile
+import uuid
 
 
 import gi
@@ -172,7 +173,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 #
 
 
-def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir(), sample_rate = None, description = "TMPFILE_DELETE_ME", channel_comment = None, frame_duration = 1, frames_per_file = 1024, verbose = False):
+def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir(), sample_rate = None, description = "TMPFILE_DELETE_ME_%s" % uuid.uuid4().hex, channel_comment = None, frame_duration = 1, frames_per_file = 1024, verbose = False):
 	#
 	# get instrument and channel name (requires exactly one
 	# instrument+channel)
