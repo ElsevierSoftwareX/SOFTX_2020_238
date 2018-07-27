@@ -208,7 +208,9 @@ class FAPUpdater(object):
             return
         ls_proc.wait()
         ls_fnames = ls_out.split("\n")
-        return ls_fnames
+        # remove file names that contain "next" which are temporary files
+        valid_fnames = [one_fname for one_fname in ls_fnames if not re.search("next", one_fname)]
+        return valid_fnames
 
     def update_fap_stats(self, cur_buftime):
         self.wait_last_process_finish(self.procs_update_fap_stats)
@@ -245,10 +247,12 @@ class FAPUpdater(object):
         proc = subprocess.Popen(cmd)
         return proc
 
+    # combine stats every day
     def combine_stats(self, combine_duration = 86400):
         self.wait_last_process_finish(self.procs_combine_stats)
-        if len(self.rm_fnames) >0:
-            os.remove(ifname for ifname in self.rm_fnames)
+        # remove files that have been combined from last process
+        map(lambda x: os.remove(x), self.rm_fnames)
+        self.rm_fnames = []
         # max number of files to be combined
         max_nfile_input = 6
         if self.verbose:
