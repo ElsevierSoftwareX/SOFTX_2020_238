@@ -53,6 +53,7 @@ stages:
     - level2
     - test
     - nightly-pages
+    - verify
 
 level0:gstlal:
   image: aepace/gstlal-dev:stretch-mkl
@@ -158,6 +159,59 @@ level2:gstlal-burst:
     - pushes
     - schedules
   
+gstlal-verify:
+  image: aepace/gstlal-dev:stretch-mkl
+  stage: verify
+  script:
+    # -------------------------------------------------------------------
+    #  gstlal
+    # -------------------------------------------------------------------
+    #- echo "$PWD" > ./pwd_output.out
+    - cd gstlal
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+    - cd ..
+    # -------------------------------------------------------------------
+    #  gstlal-ugly
+    # -------------------------------------------------------------------
+    - cd gstlal-ugly
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+    - cd ..
+    # -------------------------------------------------------------------
+    #  gstlal-calibration
+    # -------------------------------------------------------------------
+    - cd gstlal-calibration
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+    - cd ..
+    # -------------------------------------------------------------------
+    #  gstlal-inspiral
+    # -------------------------------------------------------------------
+    - cd gstlal-inspiral
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+    - cd ..
+    # -------------------------------------------------------------------
+    #  gstlal-burst
+    # -------------------------------------------------------------------
+    - cd gstlal-burst
+    - ./00init.sh
+    - ./configure --prefix=${GSTLAL_DIR}
+    - make
+    - make install
+    - cd ..
+  only:
+    - manual
+
 test:gstlal:
   image: aepace/gstlal-dev:stretch-mkl
   stage: test

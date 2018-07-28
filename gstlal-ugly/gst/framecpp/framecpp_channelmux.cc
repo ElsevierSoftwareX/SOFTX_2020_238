@@ -69,6 +69,8 @@
 #include <framecpp/OFrameStream.hh>
 
 
+typedef FrameCPP::OFrameFStream::frameh_type gst_framecpp_frameh;
+
 /*
  * our own stuff
  */
@@ -278,7 +280,7 @@ static GstFlowReturn build_and_push_frame_file(GstFrameCPPChannelMux *mux, GstCl
 			guint i;
 			GSList *collectdatalist;
 			FrameCPP::GPSTime gpstime(frame_t_start / GST_SECOND, frame_t_start % GST_SECOND);
-			LDASTools::AL::SharedPtr<FrameCPP::FrameH> frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) (frame_t_end - frame_t_start) / GST_SECOND));
+			gst_framecpp_frameh frame(new FrameCPP::FrameH(mux->frame_name, mux->frame_run, mux->frame_number, gpstime, gpstime.GetLeapSeconds(), (double) (frame_t_end - frame_t_start) / GST_SECOND));
 
 			GST_LOG_OBJECT(mux, "building frame %d [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", mux->frame_number, GST_TIME_SECONDS_ARGS(frame_t_start), GST_TIME_SECONDS_ARGS(frame_t_end));
 

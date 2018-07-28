@@ -67,6 +67,13 @@
 
 
 /*
+ * Allows for version agnostic programming by ensuring correct smart pointer usage
+ * as defined by FrameCPP
+ */
+typedef FrameCPP::Common::Container< FrameCPP::FrVect >::value_type gst_framecpp_frvect;
+
+
+/*
  * our own stuff
  */
 
@@ -172,7 +179,7 @@ static gboolean is_requested_channel(GstFrameCPPChannelDemux *element, const cha
  */
 
 
-static GstCaps *FrVect_get_caps(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, gint *rate, guint *unit_size)
+static GstCaps *FrVect_get_caps( gst_framecpp_frvect vect, gint *rate, guint *unit_size)
 {
 	GstCaps *caps;
 
@@ -248,7 +255,7 @@ static void vectdata_free(FrameCPP::FrVect::data_type *ptr)
 }
 
 
-static GstBuffer *FrVect_to_GstBuffer(LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp, guint64 offset, gint rate)
+static GstBuffer *FrVect_to_GstBuffer( gst_framecpp_frvect vect, GstClockTime timestamp, guint64 offset, gint rate)
 {
 	GstBuffer *buffer;
 	FrameCPP::FrVect::data_type *data = new FrameCPP::FrVect::data_type;
@@ -557,7 +564,7 @@ static gboolean src_pad_do_pending_events(GstFrameCPPChannelDemux *element, GstP
  */
 
 
-static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element, GstPad *pad, LDASTools::AL::SharedPtr<FrameCPP::FrVect> vect, GstClockTime timestamp)
+static GstFlowReturn frvect_to_buffer_and_push(GstFrameCPPChannelDemux *element, GstPad *pad, gst_framecpp_frvect vect, GstClockTime timestamp)
 {
 	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 	GstCaps *caps, *current_caps;
