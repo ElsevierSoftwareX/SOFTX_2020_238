@@ -925,7 +925,6 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
     free(array_rank_pdf[icombo].data);
     free(array_rank_fap[icombo].data);
   }
-  free(param_hist_trials->data);
   free(array_lgsnr_rates);
   free(array_lgchisq_rates);
   free(array_lgsnr_lgchisq_rates);
@@ -936,7 +935,9 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
   free(array_rank_rates);
   free(array_rank_pdf);
   free(array_rank_fap);
+  free(param_hist_trials->data);
   free(param_hist_trials);
+  free(xns);
 
   return TRUE;
 }
