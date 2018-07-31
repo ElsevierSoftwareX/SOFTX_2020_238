@@ -210,9 +210,10 @@ def calc_amp_phase(hc,hp):
     
         phaseUW[index] = phase[index] + count*lal.TWOPI
         prevval = val
-    
+
+    tmp = phaseUW[0]
     for index, val in enumerate(phase):
-        phaseUW[index] = phaseUW[index] - phaseUW[0]
+        phaseUW[index] = phaseUW[index] - tmp
 
     phase = phaseUW
     return amp,phase
