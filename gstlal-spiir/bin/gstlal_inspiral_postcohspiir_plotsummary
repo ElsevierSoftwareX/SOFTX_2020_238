@@ -45,7 +45,7 @@ matplotlib.rcParams.update({
 })
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-import scipy
+from scipy import stats as scipy_stats
 import numpy
 from optparse import OptionParser
 import sqlite3
@@ -58,15 +58,10 @@ from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
 from glue import lal
-from pylal import db_thinca_rings
-from pylal import git_version
-from pylal import SimBurstUtils
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
-from gstlal import cohfar
-from gstlal import far
-from gstlal import inspiral_pipe
+from lal import LIGOTimeGPS
 
-from gstlal import postcoh_table_def
+from gstlal.pipemodules.postcohtable import postcoh_table_def
+from gstlal.workflow.utils import T050017_filename
 from gstlal import gviz_api
 import pdb
 
@@ -123,8 +118,7 @@ postcoh_table_def.PostcohInspiralDBTable.RowType = PostcohInspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
-__version__ = "git id %s" % git_version.id
-__date__ = git_version.date
+__version__ = "some version" 
 
 
 #
@@ -138,7 +132,7 @@ __date__ = git_version.date
 
 def parse_command_line():
 	parser = OptionParser(
-		version = "Name: %%prog\n%s" % git_version.verbose_msg
+		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("--noninj-database", metavar = "noninj-database", default = None, help = "noninj database.")
 	parser.add_option("--shift-database", metavar = "shift-database", default = None, help = "shifted database.")
@@ -150,6 +144,7 @@ def parse_command_line():
 	parser.add_option("-f", "--format", metavar = "{\"png\",\"pdf\",\"svg\",\"eps\",...}", action = "append", default = [], help = "Set the output image format.  Can be given multiple times (default = \"png\").")
 	parser.add_option("--segments-name", metavar = "name", default = "statevectorsegments", help = "Set the name of the segments that were analyzed (default = \"statevectorsegments\").")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the veto segments (default = \"vetoes\").")
+	parser.add_option("--ifos", metavar = "ifo-names", default = "H1L1", help = "Set the name of the ifo names (default = \"H1L1\").")
 	parser.add_option("--plot-group", metavar = "number", action = "append", default = None, help = """Generate the given plot group.  Can be given multiple times (default = make all plot groups)
  0. Segments Table (Analytical time)
  1. Summary Table (top 10 loudest events globally across all zero lag triggers read in)
@@ -194,27 +189,26 @@ def parse_command_line():
 #
 
 class SegmentsTable(object):
-	def __init__(self, base):
-		self.all_segs_dict = {}
-		self.data = []
-		self.table = []
-		self.base = base
+    def __init__(self, base):
+        self.all_segs_dict = {}
+        self.data = []
+        self.table = []
+        self.base = base
 
-	def add_contents(self, contents):
-
+    def add_contents(self, contents):
 		# only process non-injection documents
-		if contents.sim_inspiral_table is None:
-                    for ifo, one_seg_list in contents.seglists.items():
-                    	for seg in one_seg_list:
-                    		self.data.append(["%s: %s" % (str(ifo), str("datasegments")), "", "%.2f-%.2f" % (float(seg[0]), float(seg[1])), float(seg[0])*1000 + 315964800000 - 17000, float(seg[1])*1000 + 315964800000 - 17000])
+        if contents.sim_inspiral_table is None:
+            for ifo, one_seg_list in contents.seglists.items():
+                for seg in one_seg_list:
+                    self.data.append(["%s: %s" % (str(ifo), str("datasegments")), "", "%.2f-%.2f" % (float(seg[0]), float(seg[1])), float(seg[0])*1000 + 315964800000 - 17000, float(seg[1])*1000 + 315964800000 - 17000])
                     
 
 	def finish(self):
-                # FIXME: add segments_table.json
+        # FIXME: add segments_table.json
 		f = open("%s_segments.json" % self.base, "w")
-		f.write(repr(self.data))
-		f.close()
-                yield None, None, None
+        f.write(repr(self.data))
+        f.close()
+        yield None, None, None
 
 
 
@@ -242,7 +236,6 @@ class CoincDatabase(object):
 		except ValueError:
 			self.postcoh_inspiral_table = None
 
-		#pdb.set_trace()
 		# retrieve the distinct on and participating instruments
 		self.on_instruments_combos = [frozenset(lsctables.instrument_set_from_ifos(x)) for x, in cursor.execute("SELECT DISTINCT(ifos) FROM postcoh")]
 		self.participating_instruments_combos = [frozenset(lsctables.instrument_set_from_ifos(x)) for x, in cursor.execute("SELECT DISTINCT(ifos) FROM postcoh")]
@@ -669,7 +662,6 @@ FROM
 
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
-                                #pdb.set_trace()
 				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
 					if cnt == 0:
 						self.missed_found_plots.injection_summary_data.append(["Found", "".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)])
@@ -789,8 +781,8 @@ FROM
 	def finish(self):
 
 		def hist(arr, axes):
-			start = scipy.stats.mstats.mquantiles(arr, 0.01)
-			end = scipy.stats.mstats.mquantiles(arr, 0.99)
+			start = scipy_stats.mstats.mquantiles(arr, 0.01)
+			end = scipy_stats.mstats.mquantiles(arr, 0.99)
 			axes.hist(arr, numpy.linspace(start, end, 100))
 
 		for (waveform, ifos), pairs in self.sim_postcoh_pairs.items():
@@ -1369,9 +1361,9 @@ def setup_plot(dbname, plot_group, options, user_tag, wiki):
     if contents.sim_inspiral_table is not None:
         create_sim_coinc_view(connection)
     for (n, plot) in plot_group:
-	if options.verbose:
-		print >>sys.stderr, "adding to plot group %d ..." % n
-	plot.add_contents(contents)
+	    if options.verbose:
+		    print >>sys.stderr, "adding to plot group %s ..." % PlotDescriptionMap[n]
+	    plot.add_contents(contents)
     connection.close()
     dbtables.discard_connection_filename(dbname, working_filename, verbose = options.verbose)
     return contents
@@ -1379,23 +1371,34 @@ def setup_plot(dbname, plot_group, options, user_tag, wiki):
 def finish_plot(contents, plot_group, options, user_tag):
     for (n, plot) in plot_group:
         for (fig, filename_fragment, is_open_box) in plot.finish():
-	    for format in options.format:
-		if filename_fragment and fig:
-                        filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_POSTCOHSPIIR_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all()[0], contents.seglists.extent_all()[0], "%s", path = options.output_dir)
-			filename = filename_template % (user_tag, n, filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
-			if options.verbose:
-				print >>sys.stderr, "writing %s ..." % filename
-			fig.savefig(filename)
+            for format in options.format:
+                if filename_fragment and fig:
+                    filename_template = T050017_filename(options.ifos, "GSTLAL_INSPIRAL_POSTCOHSPIIR_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all(), "%s", path = options.output_dir)
+                    filename = filename_template % (user_tag, n, filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
+                    if options.verbose:
+                        print >>sys.stderr, "writing %s ..." % filename
+                    fig.savefig(filename)
 
 
 wiki = open(os.path.join(options.output_dir, "%s" % "plotsummary.txt"),"w")
+
+PlotDescriptionMap = {
+        0: SegmentsTable.__name__,
+        1: SummaryTable.__name__,
+        2: MissedFoundPlots.__name__,
+        3: ParameterAccuracyPlots.__name__,
+        4: BackgroundVsInjectionPlots.__name__,
+        5: BackgroundVsInjectionPlotsMulti.__name__,
+        6: RateVsThreshold.__name__,
+        7: InjectionParameterDistributionPlots.__name__
+}
 
 if options.noninj_database:
     plots = []
     base = os.path.join(options.output_dir, options.noninj_user_tag)
     plots.append(SegmentsTable(base))
     plots.append(SummaryTable("noninj"))
-    # need the shift database to plot rates
+    # need the shift database to plot rates, see shift
     rate_plot = RateVsThreshold("noninj")
     plots.append(rate_plot)
     plot_group = zip([0,1,6], plots)
@@ -1410,7 +1413,7 @@ if options.shift_database:
     plots.append(SegmentsTable(base))
     plots.append(SummaryTable("shift"))
     if rate_plot:
-	rate_plot.reset_tag("shift")
+        rate_plot.reset_tag("shift")
     else:
     	rate_plot = RateVsThreshold("shift")
     plots.append(rate_plot)
@@ -1420,7 +1423,6 @@ if options.shift_database:
     finish_plot(contents, plot_group, options, options.shift_user_tag)
     del contents
 
-
 if options.inj_database:
     for (inj_name, tag_name) in zip(options.inj_database.split(","), options.inj_user_tag.split(",")):
         plots = []
@@ -1428,7 +1430,7 @@ if options.inj_database:
         plots.append(MissedFoundPlots(far_thresh = options.far_threshold))
         plots.append(ParameterAccuracyPlots(far_thresh = options.far_threshold))
         plots.append(InjectionParameterDistributionPlots())
-        plot_group = zip([2,3,7], plots)
+        plot_group = zip([2, 3, 7], plots)
         dbname = inj_name
         contents = setup_plot(dbname, plot_group, options, tag_name, wiki)
         finish_plot(contents, plot_group, options, tag_name)

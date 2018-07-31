@@ -10,4 +10,5 @@ workflow_PYTHON = \
 	__init__.py \
 	dbtables_postcoh.py \
 	ligolw_inspinjfind_postcoh.py \
-	ligolw_sqlite_postcoh.py
+	ligolw_sqlite_postcoh.py \
+	utils.py
