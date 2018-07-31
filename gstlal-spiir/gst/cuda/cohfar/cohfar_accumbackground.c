@@ -254,17 +254,16 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
 	if (element->snapshot_interval > 0 && duration >= element->snapshot_interval) {
 	    gint gps_time = (int) (element->t_roll_start / GST_SECOND);
-	GString *fname = g_string_new(element->output_prefix);
-	GString *tmp_fname = g_string_new(element->output_prefix);
-	g_string_append_printf(fname, "_%d_%d.xml.gz", gps_time, duration);
-	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz_next", gps_time, duration);
-	trigger_stats_xml_dump(element->bgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
-	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
-    printf("rename from %s\n", tmp_fname->str);
-    g_rename(tmp_fname->str, fname->str);
-	g_string_free(fname, TRUE);
-	g_string_free(tmp_fname, TRUE);
-
+    	GString *fname = g_string_new(element->output_prefix);
+    	GString *tmp_fname = g_string_new(element->output_prefix);
+    	g_string_append_printf(fname, "_%d_%d.xml.gz", gps_time, duration);
+    	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz_next", gps_time, duration);
+    	trigger_stats_xml_dump(element->bgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+        printf("rename from %s\n", tmp_fname->str);
+        g_rename(tmp_fname->str, fname->str);
+    	g_string_free(fname, TRUE);
+    	g_string_free(tmp_fname, TRUE);
 		trigger_stats_xml_reset(element->bgstats);
 		trigger_stats_xml_reset(element->zlstats);
 		element->t_roll_start = t_cur;
@@ -316,24 +315,24 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
 
     GST_LOG_OBJECT(element, "EVENT EOS. ");
     if (element->snapshot_interval > 0) {
-	gint gps_time = (int) (element->t_roll_start / GST_SECOND);
-	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
-	GString *fname = g_string_new(element->output_prefix);
-	GString *tmp_fname = g_string_new(element->output_prefix);
-	g_string_append_printf(fname, "_%d_%d.xml.gz", gps_time, duration);
-	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz_next", gps_time, duration);
-	trigger_stats_xml_dump(element->bgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
-	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
-    printf("rename from %s\n", tmp_fname->str);
-    g_rename(tmp_fname->str, fname->str);
-	g_string_free(fname, TRUE);
-	g_string_free(tmp_fname, TRUE);
+        gint gps_time = (int) (element->t_roll_start / GST_SECOND);
+    	gint duration = (int) ((element->t_end - element->t_roll_start) / GST_SECOND);
+    	GString *fname = g_string_new(element->output_prefix);
+    	GString *tmp_fname = g_string_new(element->output_prefix);
+        g_string_append_printf(fname, "_%d_%d.xml.gz", gps_time, duration);
+    	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz_next", gps_time, duration);
+    	trigger_stats_xml_dump(element->bgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+        printf("rename from %s\n", tmp_fname->str);
+        g_rename(tmp_fname->str, fname->str);
+    	g_string_free(fname, TRUE);
+    	g_string_free(tmp_fname, TRUE);
 
     } else {
-	GString *fname = g_string_new(element->output_name);
-	trigger_stats_xml_dump(element->bgstats, element->hist_trials, fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
-	trigger_stats_xml_dump(element->bgstats, element->hist_trials, fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
-	g_string_free(fname, TRUE);
+    	GString *fname = g_string_new(element->output_name);
+    	trigger_stats_xml_dump(element->bgstats, element->hist_trials, fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->bgstats, element->hist_trials, fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+    	g_string_free(fname, TRUE);
     }
 
       break;
