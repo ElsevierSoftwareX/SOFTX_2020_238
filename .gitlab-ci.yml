@@ -42,6 +42,7 @@ before_script:
     
     - export TMPDIR=/tmp
     
+    
 cache:
   key: $CI_JOB_NAME
   paths:
@@ -51,7 +52,10 @@ stages:
     - level0
     - level1
     - level2
-    - test
+    - test-gstlal
+    - test-inspiral
+    - test-burst
+    - test-offline
     - nightly-pages
     - verify
 
@@ -214,7 +218,7 @@ gstlal-verify:
 
 test:gstlal:
   image: aepace/gstlal-dev:stretch-mkl
-  stage: test
+  stage: test-gstlal
   dependencies:
     - level0:gstlal
   script:
@@ -228,7 +232,7 @@ test:gstlal:
 
 test:gstlal-inspiral:
   image: aepace/gstlal-dev:stretch-mkl
-  stage: test
+  stage: test-inspiral
   dependencies:
     - level2:gstlal-inspiral
   script:
@@ -243,7 +247,7 @@ test:gstlal-inspiral:
 
 test:gstlal-burst:
   image: aepace/gstlal-dev:stretch-mkl
-  stage: test
+  stage: test-burst
   dependencies:
     - level2:gstlal-burst
   script:
@@ -257,7 +261,7 @@ test:gstlal-burst:
 
 test:offline:
   image: aepace/gstlal-dev:stretch-mkl
-  stage: test
+  stage: test-offline
   dependencies:
     - level1:gstlal-ugly
     - level2:gstlal-inspiral
@@ -305,7 +309,7 @@ pages:
     - apt-get install --assume-yes texlive-fonts-recommended-doc texlive-generic-extra texlive-generic-recommended texlive-latex-base texlive-latex-base-doc texlive-latex-extra
     - apt-get install --assume-yes texlive-latex-extra-doc texlive-latex-recommended texlive-latex-recommended-doc texlive-pictures texlive-pictures-doc texlive-pstricks texlive-pstricks-doc texlive-science texlive-science-doc
     - export GSTLAL_FIR_WHITEN=0
-    - export TMPDIR=tmp/
+    - export TMPDIR=tmp/ 
     - cd doc; make html
     - cd ..; cp -rf doc/_build/* public/
   dependencies:
