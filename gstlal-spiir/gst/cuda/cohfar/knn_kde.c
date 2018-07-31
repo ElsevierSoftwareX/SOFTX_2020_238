@@ -192,17 +192,18 @@ knn_kde(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long *histogram, gsl_ma
 	int knn_k = 11;
 	double band_const = 0.4;
 	int num_nonzero = get_num_nonzero(histogram);
+    // if all rates are zero, do not calc pdf, return
+    if (num_nonzero == 0)
+        return;
+
+    if (knn_k > num_nonzero)
+        knn_k = num_nonzero;
 
 	gsl_matrix_long * nonzero_idx = gsl_matrix_long_calloc(num_nonzero, 2);
 
 	find_nonzero_idx(histogram, nonzero_idx);
     // set the knn_k to be num_nonzero if there are too few bins that have values
     // attempt to solve the gsl subset_source.c error length k exceeds vector length h
-    if (knn_k > num_nonzero)
-        knn_k = num_nonzero;
-    // if all rates are zero, do not calc pdf, return
-    if (num_nonzero == 0)
-        return;
 	gsl_vector * kth_dist = gsl_vector_alloc(num_nonzero);
 	find_kth_dist(tin_x, tin_y, nonzero_idx, knn_k, kth_dist);
 	calc_pdf(band_const, tin_x, tin_y, histogram, nonzero_idx, kth_dist, pdf);
