@@ -30,8 +30,6 @@ import tempfile
 
 import lal
 import lalsimulation
-import matplotlib
-matplotlib.use('Agg')
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from pylal import datatypes as laltypes
 from pylal import lalfft
@@ -64,123 +62,6 @@ lsctables.use_in(DefaultContentHandler)
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
     pass
 
-def tukeywindow(data, samps = 200.):
-    assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-    tp = float(samps) / len(data)
-    return lal.CreateTukeyREAL8Window(len(data), tp).data.data
-
-
-def ceil_pow_2(x):
-    """ Return the smallest power of 2 that is larger than x.
-
-    Parameters
-    ----------
-    x : int or float
-    A positive integer number
-
-    Returns
-    -------
-    Number : int
-    The smallest power of 2 that is larger than x
-    
-    Example
-    -------
-    >>> ceil_pow_2(25)
-    32
-    """
-    x = int(math.ceil(x))
-    x -= 1
-    n = 1
-    while n and (x & (x+1)):
-        x |= x >> n
-        n <<= 1
-    return x + 1
-
-def lefttukeywindow(data, samps = 200.):
-    assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
-    tp = float(samps) / len(data)
-    wn = lal.CreateTukeyREAL8Window(len(data), tp).data.data
-    wn[len(wn)//2:] = 1.0
-    return wn
-
-def Theta(eta, Mtot, t):
-    Tsun = lal.MTSUN_SI #4.925491e-6
-    theta = eta / (5.0 * Mtot * Tsun) * -t
-    return theta
-
-def freq(eta, Mtot, t):
-    theta = Theta(eta, Mtot, t)
-    Tsun = lal.MTSUN_SI #4.925491e-6
-    f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (
-            theta**(-3.0/8.0) +
-            (743.0/2688.0 + 11.0 /32.0 * eta) * theta**(-5.0 /8.0) -
-            3.0 * scipy.pi / 10.0 * theta**(-3.0 / 4.0) +
-            (1855099.0 / 14450688.0 + 56975.0 / 258048.0 * eta + 371.0 / 2048.0 * eta**2.0) * theta**(-7.0/8.0))
-    return f
-
-def Phase(eta, Mtot, t, phic = 0.0):
-    theta = Theta(eta, Mtot, t)
-    phi = phic - 2.0 / eta * (
-            theta**(5.0 / 8.0) +
-            (3715.0 /8064.0 +55.0 /96.0 *eta) * theta**(3.0/8.0) -
-            3.0 *scipy.pi / 4.0 * theta**(1.0/4.0) +
-            (9275495.0 / 14450688.0 + 284875.0 / 258048.0 * eta + 1855.0 /2048.0 * eta**2) * theta**(1.0/8.0))
-    return phi
-
-def Amp(eta, Mtot, t):
-    theta = Theta(eta, Mtot, t)
-    c = lal.C_SI #3.0e10
-    Tsun = lal.MTSUN_SI #4.925491e-6
-    Mpc = 1e6 * lal.PC_SI #3.08568025e24
-    f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (theta**(-3.0/8.0))
-    amp = - 4.0/Mpc * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
-    return amp
-
-
-# For IIR bank construction we use LALSimulation waveforms
-# FIR matrix code has not been updated but it is not used
-
-def waveform(m1, m2, fLow, fhigh, sampleRate):
-    deltaT = 1.0 / sampleRate
-    T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
-    tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
-    # the last sampling point of any waveform is always set 
-    # at abs(t) >= delta. this is to avoid ill-condition of 
-    # frequency when abs(t) < 1e-5
-    n_start = math.floor((tc-T) / deltaT + 0.5)
-    n_end = min(math.floor(tc/deltaT), -1)
-    t = numpy.arange(n_start, n_end+1, 1) * deltaT
-    Mtot = m1 + m2
-    eta = m1 * m2 / Mtot**2
-    f = freq(eta, Mtot, t)
-    amp = Amp(eta, Mtot, t);
-    phase = Phase(eta, Mtot, t);
-    return amp, phase, f
-
-# end of DEPRECATION
-
-# Clean up the start and end frequencies
-# Modifies the f array in place
-
-def cleanFreq(f,fLower):
-    i = 0;
-    fStartFix = 0; #So if f is 0, -1, -2, 15, -3 15 16 17 18 then this will be 4
-    while(i< 100): #This should be enough
-        if(f[i] < fLower-5 or f[i] > fLower+5):  ##Say, 5 or 10 Hz)
-            fStartFix = i;
-        i=i+1;
-    
-    if(fStartFix != 0):
-        f[0:fStartFix+1] = fLower
-
-    i=-100;
-    while(i<-1):
-        #require monotonicity
-        if(f[i]>f[i+1]):
-            f[i+1:]=10; #effectively throw away the end
-            break;
-        else:
-            i=i+1;
     
 # Calculate the phase and amplitude from hc and hp
 # Unwind the phase (this is slow - consider C extension or using SWIG
@@ -217,15 +98,6 @@ def calc_amp_phase(hc,hp):
 
     phase = phaseUW
     return amp,phase
-
-def sigmasq2(mchirp, fLow, fhigh, psd_interp):
-    c = lal.C_SI #299792458
-    G = lal.G_SI #6.67259e-11
-    M = lal.MSUN_SI #1.98892e30
-    Mpc =1e6 * lal.PC_SI #3.0856775807e22
-    #mchirp = 1.221567#30787
-    const = numpy.sqrt((5.0 * math.pi)/(24.*c**3))*(G*mchirp*M)**(5./6.)*math.pi**(-7./6.)/Mpc
-    return  const * numpy.sqrt(4.*integrate.quad(lambda x: x**(-7./3.) / psd_interp(x), fLow, fhigh)[0])
 
 def sample_rates_array_to_str(sample_rates):
         return ",".join([str(a) for a in sample_rates])
@@ -274,23 +146,6 @@ def normalized_crosscorr(a, b, autocorrelation_length = 201):
             auto_bank /= temp_corr[max_idx]
     
     return auto_bank
-
-def normalized_convolv(a, b, autocorrelation_length = 201):
-    af = scipy.fft(a)
-    bf = scipy.fft(b)
-    corr = scipy.ifft( af *  bf )
-    abs_corr = abs(corr)
-    max_idx = numpy.where(abs_corr == max(abs_corr))[0][0]
-    if max_idx > len(abs_corr)/2:
-        max_idx = max_idx - len(abs_corr)
-    tmp_corr = corr
-    corr = tmp_corr / tmp_corr[max_idx]
-
-    #FIXME: The following code will raise type error
-    auto_bank = numpy.concatenate(corr[max_idx -(autocorrelation_length // 2):min(max_idx,0)], corr[min(max_idx,0):max(max_idx, 0)])
-    auto_bank = numpy.concatenate(auto, corr[max(max_idx, 0):max_idx + (autocorrelation_length // 2 + 1)])
-    return auto_bank
-
 
 def matched_filt(template, strain, sampleRate = 4096.0):
 
@@ -345,34 +200,6 @@ def matched_filt(template, strain, sampleRate = 4096.0):
 	    raise ValueError("max SNR is outside the data, need to collect more data for a more correct SNR estimation")
     return SNR, sigma, indmax, timemax
 
-# working length, length_max deprecated
-def M_chi2_readline(flower=30., sampleRate=2048.):
-    fh = open('m1_m2_mc_1xyz_2xyz.dat')
-    line = fh.readline()
-    #m1, m2, mc, s1x, s1y, s1z, s2x, s2y, s2z = line.strip().split(',')
-    params = [float(pa) for pa in line.strip().split(',')]
-    
-    tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, params[0] * lal.MSUN_SI, params[1] * lal.MSUN_SI, 0., 0.)
-
-    # FIXME: This is a hack to calculate the maximum length of given table, we 
-    # know that working_f_low_extra_time is about 1/10 of the maximum duration
-    working_f_low_extra_time = .1 * tchirp + 1.0
-    length_max = working_f_low_extra_time * 10 * sampleRate
-
-    # Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-    working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
-    working_duration = float(working_length) / sampleRate
-    
-    amp, phase = gen_whitened_amp_phase(None, params[0], params[1], sampleRate, flower, 0, working_length, working_duration, length_max, params[3], params[4], params[5], params[6], params[7], params[8] )
-    fh.close()
-    
-    print len(amp)
-    import matplotlib.pyplot as plt
-    plt.figure()
-    plt.plot(range(len(amp)), amp*numpy.cos(phase),'b')
-    plt.show()
-
-
 def gen_template_working_state(sngl_inspiral_table, f_low = 30., sampleRate = 2048.):
     # Some input checking to avoid incomprehensible error messages
     if not sngl_inspiral_table:
@@ -406,58 +233,6 @@ def gen_template_working_state(sngl_inspiral_table, f_low = 30., sampleRate = 20
     working_state["working_duration"] = working_duration
     working_state["length_max"] = length_max
     return working_state
-
-
-def M_chi2(flower=30., sampleRate=2048.):
-    
-    #m1, m2, mc, s1x, s1y, s1z, s2x, s2y, s2z = line.strip().split(',')
-    params = numpy.loadtxt('test.dat')
-
-    temp_list = []
-    
-    for ii in range(len(params[:,0])):
-        tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, params[ii, 0] * lal.MSUN_SI, params[ii, 1] * lal.MSUN_SI, 0., 0.)
-
-        # FIXME: This is a hack to calculate the maximum length of given table, we 
-        # know that working_f_low_extra_time is about 1/10 of the maximum duration
-        working_f_low_extra_time = .1 * tchirp + 1.0
-        length_max = working_f_low_extra_time * 10 * sampleRate
-
-        # Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
-        working_length = templates.ceil_pow_2(length_max + round((32.0 + working_f_low_extra_time) * sampleRate))
-        working_duration = float(working_length) / sampleRate
-    
-        amp, phase = gen_whitened_amp_phase(None, params[ii, 0], params[ii, 1], sampleRate, flower, 0, working_length, working_duration, length_max, params[ii, 3], params[ii, 4], params[ii, 5], params[ii, 6], params[ii, 7], params[ii, 8] )
-        phase = phase - phase[-1]
-        h_temp = amp*numpy.exp(phase*1j)
-        h_temp /= numpy.sqrt(numpy.sum(amp*amp))
-        temp_list.append(h_temp)
-        # print len(amp)
-    
-    m_chi2 = numpy.zeros( (len(temp_list),len(temp_list)), dtype=complex )
-    for ii in range(len(temp_list)):
-        for jj in range(len(temp_list)):
-            minlen = min(len(temp_list[ii][:]), len(temp_list[jj][:]))
-            m_chi2[ii, jj] = numpy.dot( temp_list[ii][-minlen:], numpy.conj(temp_list[jj][-minlen:]))
-    
-    import matplotlib.pyplot as plt
-    #plt.figure()
-    #plt.plot(range(len(temp_list)), numpy.abs(m_chi2[0,:]),'b')
-    ax = plt.figure().gca()
-    im = ax.imshow(numpy.abs(m_chi2))
-    plt.colorbar(im)
-    plt.show()
-
-def smooth_and_interp(psd, width=1, length = 10):
-        data = psd.data
-        f = numpy.arange(len(psd.data)) * psd.deltaF
-        ln = len(data)
-        x = numpy.arange(-width*length, width*length)
-        sfunc = numpy.exp(-x**2 / 2.0 / width**2) / (2. * numpy.pi * width**2)**0.5
-        out = numpy.zeros(ln)
-        for i,d in enumerate(data[width*length:ln-width*length]):
-                out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
-        return interpolate.interp1d(f, out)
 
 def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
 
