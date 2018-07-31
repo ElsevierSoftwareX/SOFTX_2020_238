@@ -3,6 +3,7 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_postcohspiir_inspiral_pipe \
 	gstlal_postcoh_skymap2fits \
 	gstlal_periodic_postcoh_update_detrspmap \
+	gstlal_iir_bank \
 	gstlal_inspiral_spiir \
 	gstlal_inspiral_postcohspiir_workflow \
 	gstlal_inspiral_postcohspiir_online \
