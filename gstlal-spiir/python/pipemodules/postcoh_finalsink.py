@@ -218,6 +218,9 @@ class FAPUpdater(object):
         #nprefix = len(self.input_prefix_list[0].split("_"))
         # FIXME: hard-coded keyword, assuming name name e.g. bank16_stats_1187008882_1800.xml.gz
         ls_fnames = self.get_fnames("stats")
+        if ls_fnames is None:
+            return
+
         for (i, collect_walltime) in enumerate(self.collect_walltime):
             boundary = cur_buftime - collect_walltime
             # find the files within the collection time
@@ -258,6 +261,8 @@ class FAPUpdater(object):
         if self.verbose:
             print "combining %s" % self.path
         ls_fnames = self.get_fnames("bank")
+        if ls_fnames is None:
+            return
     
         # FIXME: decode information assuming fixed stats name e.g. bank16_stats_1187008882_1800.xml.gz
         # decode to {'16', ['bank16_stats_1187008882_1800.xml.gz', '..']}
