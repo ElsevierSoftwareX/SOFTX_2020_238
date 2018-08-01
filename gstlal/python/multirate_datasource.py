@@ -216,7 +216,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
 
 		# FIR filter for whitening kernel
-		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.zeros((1, 1 + max(rates) * psd_fft_length), dtype=numpy.float64), block_stride = block_stride, time_domain = False, latency = 0)
+		head = pipeparts.mktdwhiten(pipeline, head, kernel = numpy.zeros(1 + max(rates) * psd_fft_length, dtype=numpy.float64), latency = 0)
 
 		# compute whitening kernel from PSD
 		def set_fir_psd(whiten, pspec, firelem, psd_fir_kernel):
@@ -232,7 +232,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			psd.data.data = psd_data
 			kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
 			kernel, phase = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
-			firelem.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
+			firelem.set_property("kernel", kernel)
 		firkernel = reference_psd.PSDFirKernel()
 		if fir_whiten_reference_psd is not None:
 			assert fir_whiten_reference_psd.f0 == 0.
