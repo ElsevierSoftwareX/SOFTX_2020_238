@@ -284,7 +284,7 @@ segments.xml.gz:
 vetoes.xml.gz:
 	# Produce a dummy veto file
 	@echo "Produce veto file"
-	echo 0 1 > vetoes.txt
+	echo 999999997 999999998 > vetoes.txt
 	ligolw_segments --insert-from-segwizard=H1=vetoes.txt --output H1_vetoes.xml.gz --name=vetoes
 	ligolw_segments --insert-from-segwizard=L1=vetoes.txt --output L1_vetoes.xml.gz --name=vetoes
 	ligolw_add --output $@ H1_vetoes.xml.gz L1_vetoes.xml.gz
