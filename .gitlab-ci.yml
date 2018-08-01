@@ -294,7 +294,6 @@ test:offline:
   only:
     - pushes
     - schedules
-  allow_failure: true
   
 pages:
   image: aepace/gstlal-dev:stretch-mkl
