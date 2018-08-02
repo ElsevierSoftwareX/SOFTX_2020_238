@@ -18,5 +18,6 @@ dist_bin_SCRIPTS = \
 	ligolw_inspinjfind_postcoh \
 	ligolw_sqlite_postcoh \
 	gstlal_matched_filter \
-	gstlal_bank_extract \
+	gstlal_tmpltbank_extract \
+	gstlal_injxml_extract \
 	gstlal_periodic_get_urls
