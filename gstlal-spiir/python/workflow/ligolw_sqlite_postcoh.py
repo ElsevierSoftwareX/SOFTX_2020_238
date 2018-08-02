@@ -20,7 +20,7 @@
 #
 # =============================================================================
 #
-#                                   Preamble
+#								   Preamble
 #
 # =============================================================================
 #
@@ -49,11 +49,10 @@ import sys
 from glue import git_version
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables
+from glue.ligolw import table as ligolw_table
 from glue.ligolw import utils as ligolw_utils
 
-from gstlal import dbtables_postcoh
-
-import pdb
+from gstlal.pipemodules.postcohtable import postcoh_table_def
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -64,7 +63,7 @@ __date__ = git_version.date
 #
 # =============================================================================
 #
-#                                 Library Code
+#								 Library Code
 #
 # =============================================================================
 #
@@ -102,7 +101,7 @@ def update_ids(connection, xmldoc, verbose = False):
 	for i, tbl in enumerate(table_elems):
 		if verbose:
 			print >>sys.stderr, "updating IDs: %d%%\r" % (100.0 * i / len(table_elems)),
-		#tbl.applyKeyMapping()
+		tbl.applyKeyMapping()
 	if verbose:
 		print >>sys.stderr, "updating IDs: 100%"
 
@@ -228,18 +227,21 @@ def insert_from_xmldoc(connection, source_xmldoc, preserve_ids = False, verbose 
 			# instantiate the correct table class, connected to the
 			# target database, and save in XML tree
 			#
-
 			name = tbl.Name
-			try:
-				cls = dbtables.TableByName[name]
-			except KeyError:
-				cls = dbtables.DBTable
+			if name == "postcoh":
+				cls = postcoh_table_def.PostcohInspiralDBTable
+			else:
+				try:
+					cls = dbtables.TableByName[name]
+				except KeyError:
+					cls = dbtables.DBTable
 			dbtbl = xmldoc.childNodes[-1].appendChild(cls(tbl.attributes, connection = connection))
 
 			#
 			# copy table element child nodes from source XML tree
 			#
 
+			# table AttriName is postcoh:chisq_H, dbtbl AttrName is only chisq_H
 			for elem in tbl.childNodes:
 				if elem.tagName == ligolw.Stream.tagName:
 					dbtbl._end_of_columns()
@@ -250,7 +252,12 @@ def insert_from_xmldoc(connection, source_xmldoc, preserve_ids = False, verbose 
 			#
 
 			for row in tbl:
-				dbtbl.append(row)
+				try:
+					dbtbl.append(row)
+				except:
+					update_ids(connection, xmldoc, verbose = verbose)
+					dbtbl.append(row)
+
 			dbtbl._end_of_rows()
 
 		#

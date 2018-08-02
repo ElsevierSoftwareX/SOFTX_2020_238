@@ -20,7 +20,7 @@
 #
 # =============================================================================
 #
-#                                   Preamble
+#								   Preamble
 #
 # =============================================================================
 #
@@ -30,7 +30,7 @@
 The difference between this file and the glue/bin/ligolw_sqlite is:
 1. add postcoh_table_def.DB_use_in before dbtables.use_in for a wrapper over dbtables.DBTable for event_id to work when xml->sqlite 
 2. local extract() function to call custom get_xml() function in postcoh_table_def
-    while in the original file glue.ligolw.ligolw_sqlite, extract() will call dbtables.get_xml()
+	while in the original file glue.ligolw.ligolw_sqlite, extract() will call dbtables.get_xml()
 """
 """
 Transfer table data between LIGO Light Weight XML files and SQLite
@@ -52,9 +52,10 @@ from glue import git_version
 from glue.lal import CacheEntry
 from glue.ligolw import ligolw
 from glue.ligolw import dbtables
+from glue.ligolw import lsctables
 from glue.ligolw.utils import local_path_from_url
-from glue.ligolw.utils import ligolw_sqlite
-from gstlal import postcoh_table_def
+from gstlal.pipemodules.postcohtable import postcoh_table_def
+from gstlal.workflow import ligolw_sqlite_postcoh
 # NOTE: more imports for extract 
 from glue.ligolw import table
 from glue.ligolw import utils as ligolw_utils
@@ -71,7 +72,7 @@ __date__ = git_version.date
 #
 # =============================================================================
 #
-#                                 Command Line
+#								 Command Line
 #
 # =============================================================================
 #
@@ -107,7 +108,7 @@ def parse_command_line():
 #
 # =============================================================================
 #
-#                                     Main
+#									 Main
 #
 # =============================================================================
 #
@@ -116,10 +117,17 @@ def parse_command_line():
 #
 # DB content handler
 #
-#@postcoh_table_def.use_in
 @postcoh_table_def.DB_use_in
 @dbtables.use_in
-class ContentHandler(ligolw.LIGOLWContentHandler):
+class DBContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+#
+# XML content handler
+#
+@postcoh_table_def.use_in
+@lsctables.use_in
+class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
 # NOTE: custom extract
@@ -164,7 +172,7 @@ if __name__ == '__main__':
 		print >>sys.stderr, "'%s': no such file" % options.database
 		sys.exit(1)
 	target = dbtables.get_connection_filename(options.database, tmp_path = options.tmp_space if will_use_tmp_space else None, replace_file = will_replace_file, verbose = options.verbose)
-	ContentHandler.connection = sqlite3.connect(target)
+	DBContentHandler.connection = sqlite3.connect(target)
 
 
 	#
@@ -181,12 +189,15 @@ if __name__ == '__main__':
 					print >>sys.stderr, "reading '%s' ..." % source_filename
 				# NOTE: changed to custom get_xml by Chichi
 				xmldoc = postcoh_table_def.get_xml(sqlite3.connect(source_filename))
-				ligolw_sqlite.insert_from_xmldoc(ContentHandler.connection, xmldoc, preserve_ids = options.preserve_ids, verbose = options.verbose)
-				xmldoc.unlink()
+				ligolw_sqlite_postcoh.insert_from_xmldoc(DBContentHandler.connection, xmldoc, preserve_ids = options.preserve_ids, verbose = options.verbose)
 				dbtables.discard_connection_filename(local_path_from_url(url), source_filename, verbose = options.verbose)
+				xmldoc.unlink()
 			else:
-				ligolw_sqlite.insert_from_url(url, contenthandler = ContentHandler, preserve_ids = options.preserve_ids, verbose = options.verbose)
-		dbtables.build_indexes(ContentHandler.connection, options.verbose)
+				xmldoc = ligolw_utils.load_filename(url, contenthandler = XMLContentHandler, verbose = options.verbose)
+				ligolw_sqlite_postcoh.insert_from_xmldoc(DBContentHandler.connection, xmldoc, preserve_ids = options.preserve_ids, verbose = options.verbose)
+				xmldoc.unlink()
+				#ligolw_sqlite.insert_from_url(url, contenthandler = ContentHandler, preserve_ids = options.preserve_ids, verbose = options.verbose)
+		dbtables.build_indexes(DBContentHandler.connection, options.verbose)
 
 
 	#
@@ -197,12 +208,12 @@ if __name__ == '__main__':
 	if options.extract is not None:
 		if options.extract == "-":
 			# stdout
-                        # NOTE: changed to custom extract by Chichi
+			# NOTE: changed to custom extract by Chichi
 			#ligolw_sqlite.extract(ContentHandler.connection, None, verbose = options.verbose)
-			extract(ContentHandler.connection, None, verbose = options.verbose)
+			extract(DBContentHandler.connection, None, verbose = options.verbose)
 		else:
 			#ligolw_sqlite.extract(ContentHandler.connection, options.extract, verbose = options.verbose)
-			extract(ContentHandler.connection, options.extract, verbose = options.verbose)
+			extract(DBContentHandler.connection, options.extract, verbose = options.verbose)
 
 
 	#
@@ -210,7 +221,7 @@ if __name__ == '__main__':
 	#
 
 
-	ContentHandler.connection.close()
+	DBContentHandler.connection.close()
 
 
 	#
