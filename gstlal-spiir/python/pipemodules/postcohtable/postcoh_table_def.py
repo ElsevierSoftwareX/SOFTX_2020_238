@@ -96,7 +96,7 @@ class PostcohInspiral(table.Table.RowType):
 			return None
 		return LIGOTimeGPS(self.end_time, self.end_time_ns)
 
-        @end.setter
+	@end.setter
 	def end(self, gps):
 		if gps is None:
 			self.end_time = self.end_time_ns = None
@@ -130,6 +130,8 @@ def use_in(ContentHandler):
 	>>> use_in(MyContentHandler)
 	<class 'glue.ligolw.lsctables.MyContentHandler'>
 	"""
+	# need to comment out the next clause in case there are other use_in performed
+	# e.g. lsctables.use_in before this use_in
 	#ContentHandler = table.use_in(ContentHandler)
 
 	def startTable(self, parent, attrs, __orig_startTable = ContentHandler.startTable):
@@ -192,7 +194,7 @@ def DB_use_in(ContentHandler):
 
 """
 get_xml() will use the custom postcoh_table_def.DBTableByName to ganrantee valid column types when sqlite->xml
-    e.g. sqlite REAL to real_4 instead of the default real_8
+e.g. sqlite REAL to real_4 instead of the default real_8
 original code: dbtables.get_xml()
 
 """
