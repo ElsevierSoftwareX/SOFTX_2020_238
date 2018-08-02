@@ -21,7 +21,7 @@
 #
 # =============================================================================
 #
-#                                   Preamble
+#								   Preamble
 #
 # =============================================================================
 #
@@ -39,10 +39,10 @@ import sys
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
-from pylal import git_version
-#from pylal import ligolw_inspinjfind
-from gstlal import postcoh_table_def
-from gstlal import ligolw_inspinjfind_postcoh
+from glue.ligolw import ligolw
+from glue import git_version
+from gstlal.pipemodules.postcohtable import postcoh_table_def
+from gstlal.workflow import ligolw_inspinjfind_postcoh
 
 import pdb
 
@@ -52,13 +52,21 @@ __version__ = "git id %s" % git_version.id
 __date__ = git_version.date
 
 
-process_program_name = "ligolw_inspinjfind"
+process_program_name = "ligolw_inspinjfind_postcoh"
+
+#
+# XML content handler
+#
+@postcoh_table_def.use_in
+@lsctables.use_in
+class XMLContentHandler(ligolw.LIGOLWContentHandler):
+	pass
 
 
 #
 # =============================================================================
 #
-#                                 Command Line
+#								 Command Line
 #
 # =============================================================================
 #
@@ -86,13 +94,15 @@ def parse_command_line():
 	if options.time_window < 0.:
 		raise ValueError("--time-window must be non-negative")
 
-	return options, (filenames or [None])
+	process_params = options.__dict__.copy() 
+
+	return options, (filenames or [None]), process_params
 
 
 #
 # =============================================================================
 #
-#                                    Input
+#									Input
 #
 # =============================================================================
 #
@@ -103,7 +113,7 @@ def parse_command_line():
 #
 
 
-#lsctables.table.TableStream.RowBuilder = lsctables.table.InterningRowBuilder
+lsctables.table.TableStream.RowBuilder = lsctables.table.InterningRowBuilder
 
 
 #
@@ -126,7 +136,7 @@ postcoh_table_def.PostcohInspiralTable.RowType = postcoh_table_def.PostcohInspir
 #
 # =============================================================================
 #
-#                                     Main
+#									 Main
 #
 # =============================================================================
 #
@@ -137,7 +147,7 @@ postcoh_table_def.PostcohInspiralTable.RowType = postcoh_table_def.PostcohInspir
 #
 
 
-options, filenames = parse_command_line()
+options, filenames, process_params = parse_command_line()
 
 # must match columns in sngl_inspiral table
 search = {
@@ -161,8 +171,7 @@ for n, filename in enumerate(filenames, start = 1):
 
 	if options.verbose:
 		print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
-	pdb.set_trace()
-	xmldoc = ligolw_utils.load_filename(filename, contenthandler = ligolw_inspinjfind_postcoh.LIGOLWContentHandler, verbose = options.verbose)
+	xmldoc = ligolw_utils.load_filename(filename, contenthandler = XMLContentHandler, verbose = options.verbose)
 
 	#
 	# process
@@ -189,20 +198,21 @@ for n, filename in enumerate(filenames, start = 1):
 		#
 		# add process metadata to document
 		#
-
-		process = ligolw_process.register_to_xmldoc(xmldoc, process_program_name, options.__dict__, version = __version__, cvs_repository = u"lscsoft", cvs_entry_time = __date__, comment = options.comment)
+		# FIXME: register_to_xmldoc does not work due to sync_next_id of proctable = lsctables.ProcessTable.get_table(xmldoc). TypeError: coercing to Unicode: need string or buffer, int found when executing next_id = max(proctable.getColumnByName(proctable.next_id.column_name)) + 1 in table.py
+		#process = ligolw_process.register_to_xmldoc(xmldoc, process_program_name, options.__dict__, version = __version__, cvs_repository = u"lscsoft", cvs_entry_time = __date__, comment = options.comment)
 
 		#
 		# run inspinjfind algorithm
 		#
 
-		ligolw_inspinjfind_postcoh.injfind(xmldoc, process, search, end_time_bisect_window = options.time_window, verbose = options.verbose)
+		#ligolw_inspinjfind_postcoh.injfind(xmldoc, process, search, end_time_bisect_window = options.time_window, verbose = options.verbose)
 
+		ligolw_inspinjfind_postcoh.injfind(xmldoc, process_params, search, end_time_bisect_window = options.time_window, verbose = options.verbose)
 		#
 		# close out the process metadata
 		#
 
-		ligolw_process.set_process_end_time(process)
+		#ligolw_process.set_process_end_time(process)
 
 	#
 	# done

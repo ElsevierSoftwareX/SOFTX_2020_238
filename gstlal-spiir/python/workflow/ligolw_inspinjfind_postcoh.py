@@ -48,7 +48,7 @@ from glue.ligolw import lsctables
 from glue.text_progress_bar import ProgressBar
 from pylal import git_version
 
-from gstlal import postcoh_table_def 
+from gstlal.pipemodules.postcohtable import postcoh_table_def 
 from glue.ligolw import ilwd
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -131,8 +131,7 @@ class DocContents(object):
 		# time and a inspiral event's end time differ by more than
 		# this it is *impossible* for them to match one another.
 		#
-
-                self.end_time_bisect_window = lsctables.LIGOTimeGPS(end_time_bisect_window)
+		self.end_time_bisect_window = lsctables.LIGOTimeGPS(end_time_bisect_window)
 
 
 	def postcoh_inspirals_near_endtime(self, t):
@@ -156,7 +155,9 @@ class DocContents(object):
 		by the given coinc_def_id.
 		"""
 		coinc = lsctables.Coinc()
-		coinc.process_id = self.process.process_id
+		# FIXME: revert when register_to_xml works in bin/ligolw_inspinjfind_postcoh
+		#coinc.process_id = self.process.process_id
+		coinc.process_id = u"process:process_id:10" 
 		coinc.coinc_def_id = coinc_def_id
 		coinc.coinc_event_id = self.coinctable.get_next_id()
 		coinc.time_slide_id = self.tisi_id
