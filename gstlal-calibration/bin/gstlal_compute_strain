@@ -349,7 +349,7 @@ else:
 	remove_esd_act_line = False
 
 # How many EPICS will we for the CALIB_STATE_VECTOR calculation? It depends on the IFO and the time we are calibrating
-if compute_calib_statevector:
+if not compute_calib_statevector:
 	num_dq_epics = 0
 elif InputConfigs["datasource"] == "lvshm":
 	num_dq_epics = 14
@@ -369,7 +369,7 @@ if (not factors_from_filters_file) and (compute_fs or compute_srcq) and ((InputC
 filters = numpy.load(InputConfigs["filtersfilename"])
 
 # If we're reading the reference model factors from the filters file, load them
-if factors_from_filters_file or not compute_calib_statevector:
+if factors_from_filters_file or compute_calib_statevector:
 	try:
 		EP1_real = float(filters["EP1_real"])
 		EP1_imag = float(filters["EP1_imag"])
@@ -561,30 +561,29 @@ if compute_calib_statevector:
 	channel_list.append((instrument, ChannelNames["inputdqchannel"]))
 	headkeys.append("odcstatevector")
 
+# If we are using the front-end EPICS records to either compute the TDCFs or the CALIB_STATE_VECTOR, we need to add those channels
+# Needed for kappa_tst, kappa_pu, kappa_c and f_cc
+if not factors_from_filters_file and (compute_kappatst or compute_kappapu or compute_kappap or compute_kappau or compute_kappac or compute_fcc or compute_fs or compute_srcq) or num_dq_epics > 0:
+	channel_list.extend(((instrument, ChannelNames["ep1realchannel"]), (instrument, ChannelNames["ep1imagchannel"])))
+	headkeys.extend(("EP1_real", "EP1_imag"))
+# These are needed for kappa_pu and kappa_c and f_cc
+if not factors_from_filters_file and (compute_kappac or compute_fcc or compute_kappapu or compute_fs or compute_srcq) or num_dq_epics > 3:
+	channel_list.extend(((instrument, ChannelNames["ep2realchannel"]), (instrument, ChannelNames["ep2imagchannel"]), (instrument, ChannelNames["ep3realchannel"]), (instrument, ChannelNames["ep3imagchannel"]), (instrument, ChannelNames["ep4realchannel"]), (instrument, ChannelNames["ep4imagchannel"])))
+	headkeys.extend(("EP2_real", "EP2_imag", "EP3_real", "EP3_imag", "EP4_real", "EP4_imag"))
+# If we are computing either kappa_c or f_cc, we need some more EPICS records
+if not factors_from_filters_file and (compute_kappac or compute_fcc or compute_fs or compute_srcq) or num_dq_epics > 8:
+	channel_list.extend(((instrument, ChannelNames["ep6realchannel"]), (instrument, ChannelNames["ep6imagchannel"]), (instrument, ChannelNames["ep7realchannel"]), (instrument, ChannelNames["ep7imagchannel"]), (instrument, ChannelNames["ep8realchannel"]), (instrument, ChannelNames["ep8imagchannel"]), (instrument, ChannelNames["ep9realchannel"]), (instrument, ChannelNames["ep9imagchannel"])))
+	headkeys.extend(("EP6_real", "EP6_imag", "EP7_real", "EP7_imag", "EP8_real", "EP8_imag", "EP9_real", "EP9_imag"))
 
-if not factors_from_filters_file:
-	# Needed for kappa_tst, kappa_pu, kappa_c and f_cc
-	if (compute_kappatst or compute_kappapu or compute_kappap or compute_kappau or compute_kappac or compute_fcc or compute_fs or compute_srcq) or num_dq_epics > 0:
-		channel_list.extend(((instrument, ChannelNames["ep1realchannel"]), (instrument, ChannelNames["ep1imagchannel"])))
-		headkeys.extend(("EP1_real", "EP1_imag"))
-	# These are needed for kappa_pu and kappa_c and f_cc
-	if (compute_kappac or compute_fcc or compute_kappapu or compute_fs or compute_srcq) or num_dq_epics > 3:
-		channel_list.extend(((instrument, ChannelNames["ep2realchannel"]), (instrument, ChannelNames["ep2imagchannel"]), (instrument, ChannelNames["ep3realchannel"]), (instrument, ChannelNames["ep3imagchannel"]), (instrument, ChannelNames["ep4realchannel"]), (instrument, ChannelNames["ep4imagchannel"])))
-		headkeys.extend(("EP2_real", "EP2_imag", "EP3_real", "EP3_imag", "EP4_real", "EP4_imag"))
-	# If we are computing either kappa_c or f_cc, we need some more EPICS records
-	if (compute_kappac or compute_fcc or compute_fs or compute_srcq) or num_dq_epics > 8:
-		channel_list.extend(((instrument, ChannelNames["ep6realchannel"]), (instrument, ChannelNames["ep6imagchannel"]), (instrument, ChannelNames["ep7realchannel"]), (instrument, ChannelNames["ep7imagchannel"]), (instrument, ChannelNames["ep8realchannel"]), (instrument, ChannelNames["ep8imagchannel"]), (instrument, ChannelNames["ep9realchannel"]), (instrument, ChannelNames["ep9imagchannel"])))
-		headkeys.extend(("EP6_real", "EP6_imag", "EP7_real", "EP7_imag", "EP8_real", "EP8_imag", "EP9_real", "EP9_imag"))
+# EP10 is needed to remove the ESD line
+if not factors_from_filters_file and remove_esd_act_line or num_dq_epics > 9:
+	channel_list.extend(((instrument, ChannelNames["ep10realchannel"]), (instrument, ChannelNames["ep10imagchannel"])))
+	headkeys.extend(("EP10_real", "EP10_imag"))
 
-	# EP10 is needed to remove the ESD line
-	if remove_esd_act_line or num_dq_epics > 9:
-		channel_list.extend(((instrument, ChannelNames["ep10realchannel"]), (instrument, ChannelNames["ep10imagchannel"])))
-		headkeys.extend(("EP10_real", "EP10_imag"))
-
-	# These are needed if we compute the optical spring frequency and/or Q-factor of the Signal Recycling Cavity (SRC)
-	if (compute_fs or compute_srcq) or num_dq_epics > 13:
-		channel_list.extend(((instrument, ChannelNames["ep11realchannel"]), (instrument, ChannelNames["ep11imagchannel"]), (instrument, ChannelNames["ep12realchannel"]), (instrument, ChannelNames["ep12imagchannel"]), (instrument, ChannelNames["ep13realchannel"]), (instrument, ChannelNames["ep13imagchannel"]), (instrument, ChannelNames["ep14realchannel"]), (instrument, ChannelNames["ep14imagchannel"])))
-		headkeys.extend(("EP11_real", "EP11_imag", "EP12_real", "EP12_imag", "EP13_real", "EP13_imag", "EP14_real", "EP14_imag"))
+# These are needed if we compute the optical spring frequency and/or Q-factor of the Signal Recycling Cavity (SRC)
+if not factors_from_filters_file and (compute_fs or compute_srcq) or num_dq_epics > 13:
+	channel_list.extend(((instrument, ChannelNames["ep11realchannel"]), (instrument, ChannelNames["ep11imagchannel"]), (instrument, ChannelNames["ep12realchannel"]), (instrument, ChannelNames["ep12imagchannel"]), (instrument, ChannelNames["ep13realchannel"]), (instrument, ChannelNames["ep13imagchannel"]), (instrument, ChannelNames["ep14realchannel"]), (instrument, ChannelNames["ep14imagchannel"])))
+	headkeys.extend(("EP11_real", "EP11_imag", "EP12_real", "EP12_imag", "EP13_real", "EP13_imag", "EP14_real", "EP14_imag"))
 
 # If we are using pre-computed coherence to gate kappas
 if use_coherence:
