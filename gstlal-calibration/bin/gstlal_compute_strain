@@ -312,6 +312,10 @@ apply_kappatst = Config.getboolean("TDCFConfigurations", "applykappatst")
 apply_complex_kappatst = Config.getboolean("TDCFConfigurations", "applycomplexkappatst")
 apply_kappapu = Config.getboolean("TDCFConfigurations", "applykappapu")
 apply_complex_kappapu = Config.getboolean("TDCFConfigurations", "applycomplexkappapu")
+apply_kappap = Config.getboolean("TDCFConfigurations", "applykappap")
+apply_complex_kappap = Config.getboolean("TDCFConfigurations", "applycomplexkappap")
+apply_kappau = Config.getboolean("TDCFConfigurations", "applykappau")
+apply_complex_kappau = Config.getboolean("TDCFConfigurations", "applycomplexkappau")
 apply_kappac = Config.getboolean("TDCFConfigurations", "applykappac")
 apply_fcc = Config.getboolean("TDCFConfigurations", "applyfcc")
 apply_srcq = Config.getboolean("TDCFConfigurations", "applysrcq")
@@ -345,7 +349,7 @@ else:
 	remove_esd_act_line = False
 
 # How many EPICS will we for the CALIB_STATE_VECTOR calculation? It depends on the IFO and the time we are calibrating
-if compute_calibstatevector:
+if compute_calib_statevector:
 	num_dq_epics = 0
 elif InputConfigs["datasource"] == "lvshm":
 	num_dq_epics = 14
@@ -365,7 +369,7 @@ if (not factors_from_filters_file) and (compute_fs or compute_srcq) and ((InputC
 filters = numpy.load(InputConfigs["filtersfilename"])
 
 # If we're reading the reference model factors from the filters file, load them
-if factors_from_filters_file or not compute_calibstatevector:
+if factors_from_filters_file or not compute_calib_statevector:
 	try:
 		EP1_real = float(filters["EP1_real"])
 		EP1_imag = float(filters["EP1_imag"])
@@ -464,7 +468,7 @@ try:
 	srcQ_default = float(filters["srcQ"])
 except:
 	fs_default = expected_fs
-	srcQ_default = expected_srcQ
+	srcQ_default = expected_srcq
 
 if dewhitening:
 	try:
@@ -793,29 +797,29 @@ if compute_kappac or compute_fcc or compute_kappatst or compute_kappapu or compu
 		smooth_ktstItee = pipeparts.mktee(pipeline, smooth_ktstI)
 
 # If we're also computing \kappa_pu, \kappa_c, f_cc, f_s, or Q, keep going
-if not options.no_kappapu or not options.no_kappac or not options.no_fcc or not options.no_fs or not options.no_srcQ:
+if compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcQ:
 	# demodulate excitation channel at PU actuation line frequency
-	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, options.compute_factors_sr, options.demodulation_filter_time, options.filter_latency)
+	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency)
 
 	# demodulate DARM_ERR at PU actuation line frequency
-	derr_at_pu_act_freq = calibration_parts.demodulate(pipeline, derrtee, pu_act_esd_line_freq, td, options.compute_factors_sr, options.demodulation_filter_time, options.filter_latency)
-	if options.dewhitening:
+	derr_at_pu_act_freq = calibration_parts.demodulate(pipeline, derrtee, pu_act_esd_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency)
+	if dewhitening:
 		# dewhiten DARM_ERR at the PU actuation line frequency
 		derr_at_pu_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_pu_act_freq, derr_dewhiten_at_pu_act_freq_real, derr_dewhiten_at_pu_act_freq_imag)
 
 	# compute the factor Afctrl that will be used in the computation of kappa_pu and kappa_a, either using reference factors from the filters file or reading them from EPICS channels
-	if not options.factors_from_filters_file:
+	if not factors_from_filters_file:
 		EP2 = calibration_parts.merge_into_complex(pipeline, head_dict["EP2_real"], head_dict["EP2_imag"])
 		EP3 = calibration_parts.merge_into_complex(pipeline, head_dict["EP3_real"], head_dict["EP3_imag"])
 		EP4 = calibration_parts.merge_into_complex(pipeline, head_dict["EP4_real"], head_dict["EP4_imag"])
 		afctrl = calibration_parts.compute_afctrl(pipeline, derr_at_pu_act_freq, exc_at_pu_act_freq, pcal_at_darm_act_freq, derr_at_darm_act_freq, EP2)
-	elif options.factors_from_filters_file:
+	elif factors_from_filters_file:
 		afctrl = calibration_parts.compute_afctrl_from_filters_file(pipeline, derr_at_pu_act_freq, exc_at_pu_act_freq, pcal_at_darm_act_freq, derr_at_darm_act_freq, EP2_real, EP2_imag)
 
 	# \kappa_pu calcuation, which needs to happen for any of the other kappas to be computed
-	if not options.factors_from_filters_file:
+	if not factors_from_filters_file:
 		kpu = calibration_parts.compute_kappapu(pipeline, EP3, afctrl, ktst, EP4)
-	elif options.factors_from_filters_file:
+	elif factors_from_filters_file:
 		kpu = calibration_parts.compute_kappapu_from_filters_file(pipeline, EP3_real, EP3_imag, afctrl, ktst, EP4_real, EP4_imag)
 
 	kpu = pipeparts.mktee(pipeline, kpu)
@@ -1023,7 +1027,7 @@ if apply_complex_kappatst:
 	# We will apply an adaptive FIR filter to the TST component of the actuation that includes time-dependence in the gain and computational time delay
 	adaptive_tst_filter = pipeparts.mkgeneric(pipeline, smooth_ktsttee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = tstfilt, variable_filter_length = len(tstfilt), adaptive_filter_length = len(tstfilt), tukey_param = 0.5, filter_sample_rate = tstchainsr)
 
-if apply_fcc or apply_fs or apply_srcQ:
+if apply_fcc or apply_fs or apply_srcq:
 	# We will apply an adaptive FIR filter to DARM_ERR that allows corrections for poles, zeros, and gain
 	# We need to track the number of time-dependent and static zeros and poles in the adaptive filter
 	variable_invsens_zeros = 0
@@ -1041,12 +1045,12 @@ if apply_fcc or apply_fs or apply_srcQ:
 		tdep_zpk.append(complex_fcc)
 
 	# There are two zeros that depend on fs and Q, both of which depend on both fs and Q
-	if apply_fs or apply_srcQ:
+	if apply_fs or apply_srcq:
 		variable_invsens_zeros += 2
 		static_invsens_poles.extend([(fs_default / 2.0) * (pow(srcQ_default, -1.0) + pow(pow(srcQ_default, -2.0) + 4.0, 0.5)), 0.0])
 		static_invsens_poles.extend([(fs_default / 2.0) * (pow(srcQ_default, -1.0) - pow(pow(srcQ_default, -2.0) + 4.0, 0.5)), 0.0])
 
-	if apply_fs and apply_srcQ:
+	if apply_fs and apply_srcq:
 		# The variable zeros depend on the computed values of fs and Q
 		Q_inv_squared = calibration_parts.mkpow(pipeline, smooth_srcQ_inv, exponent = 2.0)
 		sqrt_Q_inv_squared_plus4 = calibration_parts.mkpow(pipeline, pipeparts.mkgeneric(pipeline, Q_inv_squared, "lal_add_constant", value = 4.0), exponent = 0.5)
@@ -1083,7 +1087,7 @@ if apply_fcc or apply_fs or apply_srcQ:
 		# This will be added into tdep_zpk at the end, as required by lal_adaptivefirfilt
 		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, smooth_fs, exponent = 2.0), pow(fs_default, -2.0))
 
-	elif apply_srcQ:
+	elif apply_srcq:
 		# The variable zeros depend on the model value of fs and the computed value of Q
 		Q_inv_squared = calibration_parts.mkpow(pipeline, smooth_srcQ_inv, exponent = 2.0)
 		sqrt_Q_inv_squared_plus4 = calibration_parts.mkpow(pipeline, pipeparts.mkgeneric(pipeline, Q_inv_squared, "lal_add_constant", value = 4.0), exponent = 0.5)
@@ -1115,7 +1119,7 @@ if apply_fcc or apply_fs or apply_srcQ:
 
 	# Now interleave the correction channels in tdep_zpk and feed them into lal_adaptivefirfilt to update the inverse sensing filter
 	tdep_zpk = calibration_parts.mkinterleave(pipeline, tdep_zpk, complex_data = True)
-	adaptive_invsens_filter = pipeparts.mkgeneric(pipeline, tdep_zpk, "lal_adaptivefirfilt", update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, static_poles = static_invsens_poles, static_filter = reschainfilt, variable_filter_length = len(reschainfilt), adaptive_filter_length = len(reschainfilt), tukey_param = 0.5, filter_sample_rate = hoftsr)
+	adaptive_invsens_filter = pipeparts.mkgeneric(pipeline, tdep_zpk, "lal_adaptivefirfilt", update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, static_poles = static_invsens_poles, static_filter = reschainfilt, variable_filter_length = len(reschainfilt), adaptive_filter_length = len(reschainfilt), tukey_param = 0.5, filter_sample_rate = hoft_sr)
 
 #
 # CONTROL BRANCH
@@ -1245,7 +1249,7 @@ if pumuimchainsr < tstchainsr:
 # Add the TST and PUM/UIM chains together to form the full actuation chain
 ctrl = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, tst, pumuim))
 # Resample to the full h(t) sample rate
-if max(tstchainsr, pumuimchainsr) != hoftsr:
+if max(tstchainsr, pumuimchainsr) != hoft_sr:
 	ctrl = calibration_parts.mkresample(pipeline, ctrl, 5, False, hoft_caps)
 
 #
@@ -1279,7 +1283,7 @@ if any(invsens_highpass):
 	res_filter_settle_time += float(len(invsens_highpass)-invsens_highpass_delay)/hoft_sr
 	res_filter_latency += float(invsens_highpass_delay)/hoft_sr
 
-if apply_fcc or apply_fs or apply_srcQ:
+if apply_fcc or apply_fs or apply_srcq:
 	# Apply an adaptive filter to include the time-dependence of any sensing function parameters
 	res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = reschainfilt[::-1], latency = reschaindelay, taper_length = sensing_filter_taper_length)
 	# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
@@ -1298,11 +1302,11 @@ else:
 	res = pipeparts.mkfirbank(pipeline, res, latency = int(reschaindelay), fir_matrix = [reschainfilt[::-1]], time_domain = td)
 
 # Account for filter latency and settle time for the CALIB_STATE_VECTOR
-res_filter_settle_time += float(len(reschainfilt)-reschaindelay)/hoftsr
-res_filter_latency += float(reschaindelay)/hoftsr
+res_filter_settle_time += float(len(reschainfilt)-reschaindelay)/hoft_sr
+res_filter_latency += float(reschaindelay)/hoft_sr
 
 # Apply \kappa_c if we haven't already
-if apply_kappac and not (apply_fcc or apply_fs or apply_srcQ):
+if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
 	kc_modify_res = calibration_parts.mkresample(pipeline, smooth_kctee, 3, False, hoft_caps)
 	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, calibration_parts.mkpow(pipeline, kc_modify_res, exponent = -1.0)))
 
@@ -1791,7 +1795,7 @@ if remove_cal_lines:
 		elif apply_kappatst:
 			# Multiply by the real part of kappa_tst
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, esd_act_line, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_ktstRtee, matrix = [[1.0, 0.0]]))))
-		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoftsr)
+		esd_act_line = calibration_parts.mkresample(pipeline, esd_act_line, 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoft_sr)
 		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line, "lal_demodulate", line_frequency = -1.0 * esd_act_line_freq, prefactor_real = 2.0)
 		esd_act_line_remove = pipeparts.mkgeneric(pipeline, esd_act_line_remove, "creal")
 
