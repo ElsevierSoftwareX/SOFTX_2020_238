@@ -416,7 +416,7 @@ if factors_from_filters_file or not compute_calib_statevector:
 		EP14_real = float(filters["EP14_real"])
 		EP14_imag = float(filters["EP14_imag"])
 	except:
-		if factors_from_filters_file and (compute_srcQ or compute_fs):
+		if factors_from_filters_file and (compute_srcq or compute_fs):
 			raise ValueError("Cannot compute SRC spring frequency or Q, as the needed EPICS are not contained in the specified filters file.")
 		if num_dq_epics > 10:
 			num_dq_epics = 10
@@ -441,7 +441,7 @@ try:
 	if src_pcal_line_freq > 10.0 and remove_cal_lines and src_pcal_line_freq != darm_act_line_freq:
 		pcal_line_removal_dict["pcal4"] = [src_pcal_line_freq, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag, None]
 except:
-	if compute_srcQ or compute_fs:
+	if compute_srcq or compute_fs:
 		raise ValueError("Cannot compute SRC spring frequency or Q, as the calibration line frequency is not contained in the specified filters file.")
 try:
 	high_pcal_line_freq = float(filters["high_pcal_line_freq"])
@@ -572,7 +572,7 @@ if not factors_from_filters_file:
 		channel_list.extend(((instrument, ChannelNames["ep2realchannel"]), (instrument, ChannelNames["ep2imagchannel"]), (instrument, ChannelNames["ep3realchannel"]), (instrument, ChannelNames["ep3imagchannel"]), (instrument, ChannelNames["ep4realchannel"]), (instrument, ChannelNames["ep4imagchannel"])))
 		headkeys.extend(("EP2_real", "EP2_imag", "EP3_real", "EP3_imag", "EP4_real", "EP4_imag"))
 	# If we are computing either kappa_c or f_cc, we need some more EPICS records
-	if (compute_kappac or compute_fcc or compute_fs or compute_srcQ) or num_dq_epics > 8:
+	if (compute_kappac or compute_fcc or compute_fs or compute_srcq) or num_dq_epics > 8:
 		channel_list.extend(((instrument, ChannelNames["ep6realchannel"]), (instrument, ChannelNames["ep6imagchannel"]), (instrument, ChannelNames["ep7realchannel"]), (instrument, ChannelNames["ep7imagchannel"]), (instrument, ChannelNames["ep8realchannel"]), (instrument, ChannelNames["ep8imagchannel"]), (instrument, ChannelNames["ep9realchannel"]), (instrument, ChannelNames["ep9imagchannel"])))
 		headkeys.extend(("EP6_real", "EP6_imag", "EP7_real", "EP7_imag", "EP8_real", "EP8_imag", "EP9_real", "EP9_imag"))
 
@@ -699,7 +699,7 @@ for key in headkeys:
 		head_dict[key] = pipeparts.mktee(pipeline, head_dict[key])
 
 if use_coherence:
-	if compute_kappatst or compute_kappapu or compute_kappac or compute_fcco or compute_fs or compute_srcq:
+	if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
 		pcaly_line1_coh = calibration_parts.caps_and_progress(pipeline, head_dict["pcaly_line1_coh"], coh_caps, "pcaly_line1_coh")
 		pcaly_line1_coh = calibration_parts.mkresample(pipeline, pcaly_line1_coh, 0, False, compute_calib_factors_caps)
 		sus_coh = calibration_parts.caps_and_progress(pipeline, head_dict["sus_coh"], coh_caps, "sus_coh")
@@ -797,7 +797,7 @@ if compute_kappac or compute_fcc or compute_kappatst or compute_kappapu or compu
 		smooth_ktstItee = pipeparts.mktee(pipeline, smooth_ktstI)
 
 # If we're also computing \kappa_pu, \kappa_c, f_cc, f_s, or Q, keep going
-if compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcQ:
+if compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
 	# demodulate excitation channel at PU actuation line frequency
 	exc_at_pu_act_freq = calibration_parts.demodulate(pipeline, exc, pu_act_esd_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency)
 
@@ -1236,6 +1236,7 @@ pumuim_filter_settle_time += float(len(pumuimfilt)-pumuimdelay)/pumuimchainsr
 pumuim_filter_latency += float(pumuimdelay)/pumuimchainsr
 
 # apply kappa_pu if we haven't already
+print apply_kappapu
 if apply_kappapu and not apply_complex_kappapu:
 	# Only apply the real part of \kappa_pu as a correction to A_pu
 	kpu_for_pu = calibration_parts.mkresample(pipeline, smooth_kpuRtee, 3, False, pumuimchainsr)
@@ -1733,7 +1734,7 @@ if compute_calib_statevector:
 	if compute_kappatst and not apply_kappatst and not apply_complex_kappatst:
 		all_bits_list.append(ktstSmoothInRange)
 	# FIXME: Is this logic right? Should it be compute_kappap or compute_kappapu?
-	if (compute_kappap and compute_kappapu) and not (apply_kappap or apply_complex_kappap or apply_kappapu or apply_complex_kappapu):
+	if (compute_kappap or compute_kappapu) and not (apply_kappap or apply_complex_kappap or apply_kappapu or apply_complex_kappapu):
 		all_bits_list.append(kpSmoothInRange)
 	if compute_kappau and not (apply_kappau or apply_complex_kappau):
 		all_bits_list.append(kuSmoothInRange)
