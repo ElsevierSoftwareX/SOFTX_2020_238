@@ -1,0 +1,15 @@
+# time of GW170817 1187008882
+START = 1187007882 # Thu Aug 17 12:24:24 GMT 2017
+END = 1187008482 # Thu Aug 17 12:36:04 GMT 2017
+
+all: L1_hoft_frames.cache
+
+L1_raw_frames.cache: 
+	gw_data_find -o L -t L1_R -s $(START) -e $(END) -l --url-type file > $@
+
+L1_hoft_frames.cache: L1_raw_frames.cache
+	gstlal_compute_strain --config-file /home/wademc/calibration/config_file_testing/gstlal_compute_strain_config_example.ini --gps-start-time $(START) --gps-end-time $(END)
+	ls *.gwf | lalapps_path2cache > $@
+
+clean: 
+	rm *.cache *.gwf
