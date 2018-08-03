@@ -176,7 +176,7 @@ if InputConfigs["datasource"] not in data_sources:
 if InputConfigs["datasource"] == "frames" and InputConfigs["framecache"] is None:
 	raise ValueError("FrameCache must be specified when using DataSource: frames")
 
-if int(InputConfigs["wings"] != 0) and InputConfigs["datasource"] != "frames":
+if int(options.wings != 0) and InputConfigs["datasource"] != "frames":
 	raise ValueError("Wings can only be set when DataSource: frames")
 
 if CalibrationConfigs["ifo"] is None:
@@ -1988,8 +1988,8 @@ if compute_srcq:
 
 mux = pipeparts.mkframecppchannelmux(pipeline, None)
 
-mux.set_property("frame-duration", int(OutputConfigs["frameduration"]))
-mux.set_property("frames-per-file", int(OutputConfigs["framesperfile"]))
+mux.set_property("frame-duration", options.frame_duration)
+mux.set_property("frames-per-file", options.frames_per_file)
 mux.set_property("compression-scheme", int(OutputConfigs["compressionscheme"]))
 mux.set_property("compression-level", int(OutputConfigs["compressionscheme"]))
 
@@ -2076,18 +2076,18 @@ else:
 	output_start = start + int(filter_settle_time)
 
 # If the wings option is set, need to also check that frames aren't written during the requested wing time
-wings = int(InputConfigs["wings"])
+wings = options.wings
 if wings != 0:
 	wings_start = gps_start_time + wings
 	wings_end = gps_end_time - wings
-	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(int(OutputConfigs["frameduration"])*int(OutputConfigs["framesperfile"]),0), lal.LIGOTimeGPS(wings_start, 0), lal.LIGOTimeGPS(wings_end, 0)))
+	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), lal.LIGOTimeGPS(wings_start, 0), lal.LIGOTimeGPS(wings_end, 0)))
 else:
-	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(int(OutputConfigs["frameduration"])*int(OutputConfigs["framesperfile"]),0), None, None))
+	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), None, None))
 
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 
 if OutputConfigs["datasink"] == "lvshm":
-	pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", sync=False, async=False, shm_name = OutputConfigs["outputshmpartition"], num_buffers = int(OutputConfigs["numbuffers"]), blocksize = int(OutputConfigs["framesize"])*int(OutputConfigs["frameduration"])*int(OutputConfigs["framesperfile"]), buffer_mode = int(OutputConfigs["buffermode"]))
+	pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", sync=False, async=False, shm_name = OutputConfigs["outputshmpartition"], num_buffers = int(OutputConfigs["numbuffers"]), blocksize = int(OutputConfigs["framesize"])*options.frame_duration*options.frames_per_file, buffer_mode = int(OutputConfigs["buffermode"]))
 elif OutputConfigs["datasink"] == "frames":
 	pipeparts.mkframecppfilesink(pipeline, mux, frame_type = OutputConfigs["frametype"], path = OutputConfigs["outputpath"], instrument = instrument) 
 
