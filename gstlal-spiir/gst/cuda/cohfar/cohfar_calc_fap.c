@@ -180,12 +180,12 @@ int main(int argc, char *argv[])
 			trigger_stats_feature_to_rank(zlstats_out->multistats[icombo]->feature, zlstats_out->multistats[icombo]->rank);
 			/* livetime calculated from all walltimes in the input files, will deprecate the following */
 			//stats_out[icombo]->livetime = atol(*pwalltime);
-			printf("stats_out livetime %d\n", zlstats_out->multistats[icombo]->livetime );
+			printf("zlstats_out livetime %d\n", zlstats_out->multistats[icombo]->livetime );
 			trigger_stats_feature_rates_to_pdf(bgstats_out->multistats[icombo]->feature);
 			trigger_stats_feature_to_rank(bgstats_out->multistats[icombo]->feature, bgstats_out->multistats[icombo]->rank);
 			/* livetime calculated from all walltimes in the input files, will deprecate the following */
 			//stats_out[icombo]->livetime = atol(*pwalltime);
-			printf("stats_out livetime %d\n", bgstats_out->multistats[icombo]->livetime );
+			printf("bgstats_out livetime %d\n", bgstats_out->multistats[icombo]->livetime );
 		}
 	}
     xmlTextWriterPtr stats_writer = NULL;

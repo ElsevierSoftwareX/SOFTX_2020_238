@@ -159,17 +159,19 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 		PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
 			icombo = get_icombo(table->ifos);
+			if (icombo < 0)
+				exit(0);
 			cur_stats = element->bgstats_1w->multistats[icombo];
 			if (icombo > -1 && cur_stats->nevent > MIN_BACKGROUND_NEVENT)
 			{
 				table->far_1w = gen_fap_from_feature((double)table->cohsnr, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-                rank_1w = trigger_stats_rank_get_val_from_map((double)table->cohsnr, (double)table->cmbchisq, cur_stats->rank);
+                rank_1w = trigger_stats_rank_get_val_from_map((double)table->cohsnr, (double)table->cmbchisq, cur_stats->rank->rank_map);
 				cur_stats = element->bgstats_1d->multistats[icombo];
 				table->far_1d = gen_fap_from_feature((double)table->cohsnr, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-                rank_1d = trigger_stats_rank_get_val_from_map((double)table->cohsnr, (double)table->cmbchisq, cur_stats->rank);
+                rank_1d = trigger_stats_rank_get_val_from_map((double)table->cohsnr, (double)table->cmbchisq, cur_stats->rank->rank_map);
 				cur_stats = element->bgstats_2h->multistats[icombo];
 				table->far_2h = gen_fap_from_feature((double)table->cohsnr, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-                rank_2h = trigger_stats_rank_get_val_from_map((double)table->cohsnr, (double)table->cmbchisq, cur_stats->rank);
+                rank_2h = trigger_stats_rank_get_val_from_map((double)table->cohsnr, (double)table->cmbchisq, cur_stats->rank->rank_map);
                 table->rank = MAX(MAX(rank_1w, rank_1d), rank_2h);
 
 				/* FIXME: currently hardcoded for single detectors FAR */
