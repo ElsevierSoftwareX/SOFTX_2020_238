@@ -127,7 +127,7 @@ parser = OptionParser(description = __doc__)
 # These options should be used whether the pipeline runs in full calibration mode or partial calibration mode
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
-parser.add_option("--wings", metavar = "seconds", type = "int", help = "Number of seconds to trim off of the beginning and end of the output. Should only be used if --data-source=frames.")
+parser.add_option("--wings", metavar = "seconds", default = 0, type = "int", help = "Number of seconds to trim off of the beginning and end of the output. Should only be used if --data-source=frames.")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", default = 4, help = "Set the number of seconds for each frame. (Default = 4)")
 parser.add_option("--frames-per-file", metavar = "count", type = "int", default = 1, help = "Set the number of frames per frame file. (Default = 1)")
 parser.add_option("--config-file", metavar = "name", help = "Full path to configuration file for running.")
@@ -2076,7 +2076,7 @@ else:
 	output_start = start + int(filter_settle_time)
 
 # If the wings option is set, need to also check that frames aren't written during the requested wing time
-wings = options.wings
+wings = int(options.wings)
 if wings != 0:
 	wings_start = gps_start_time + wings
 	wings_end = gps_end_time - wings
