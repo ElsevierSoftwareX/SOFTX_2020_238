@@ -455,7 +455,7 @@ try:
 	roaming_pcal_line_freq = float(filters["roaming_pcal_line_freq"])
 	pcal_corr_at_roaming_line_real = float(filters["roaming_pcal_corr_re"])
 	pcal_corr_at_roaming_line_imag = float(filters["roaming_pcal_corr_im"])
-	if roaming_pcal_line_freq > 0.0 and options.remove_callines:
+	if roaming_pcal_line_freq > 0.0 and remove_cal_lines:
 		pcal_line_removal_dict["pcal5"] = [roaming_pcal_line_freq, pcal_corr_at_roaming_line_real, pcal_corr_at_roaming_line_imag, None]
 except:
 	roaming_pcal_line_freq = 0.0
@@ -627,8 +627,8 @@ if remove_power_lines:
 
 # If we are using witness channels to clean h(t), add those to the channel list
 if ChannelNames["witnesschannellist"] != "None":
-	witness_channel_list = ChannelNames["witnesschannellist"].split(',')
-	witness_notch_frequencies = DataCleaningConfigurations["witnessnotchfrequencies"].split(';')
+	witness_channel_list = ChannelNames["witnesschannellist"].split(';')
+	witness_notch_frequencies = DataCleaningConfigs["witnessnotchfrequencies"].split(';')
 	witness_rates = SampleRates["witnesschannelsr"].split(';')
 	if len(witness_channel_list) != len(witness_notch_frequencies) or len(witness_channel_list) != len(witness_rates):
 		raise ValueError("WitnessChannelList, WitnessChannelSR, and WitnessNotchFrequencies must all be the same length, i.e, they must all have the same number of semicolons (;)")
@@ -1190,7 +1190,7 @@ if any(act_highpass):
 
 if apply_complex_kappatst:
 	# Filter the TST chain with an adaptive TST actuation filter that includes a linear-phase correction from kappa_tst
-	tst = pipeparts.mkgeneric(pipeline, tst, "lal_tdwhiten", kernel = tstfilt[::-1], latency = tstdelay, taper_length = options.actuation_filter_taper_length)
+	tst = pipeparts.mkgeneric(pipeline, tst, "lal_tdwhiten", kernel = tstfilt[::-1], latency = tstdelay, taper_length = actuation_filter_taper_length)
 	# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
 	adaptive_tst_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, tst, "adaptive-filter", "kernel")
 
@@ -1224,7 +1224,7 @@ if any(act_highpass):
 
 if apply_complex_kappapu:
 	# Filter the PUM/UIM chain with an adaptive PUM/UIM actuation filter that includes a linear-phase correction from kappa_pu
-	pumuim = pipeparts.mkgeneric(pipeline, pumuim, "lal_tdwhiten", kernel = pumuimfilt[::-1], latency = pumuimdelay, taper_length = options.actuation_filter_taper_length)
+	pumuim = pipeparts.mkgeneric(pipeline, pumuim, "lal_tdwhiten", kernel = pumuimfilt[::-1], latency = pumuimdelay, taper_length = actuation_filter_taper_length)
 	# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
 	adaptive_pumuim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pumuim, "adaptive-filter", "kernel")
 
@@ -1236,7 +1236,6 @@ pumuim_filter_settle_time += float(len(pumuimfilt)-pumuimdelay)/pumuimchainsr
 pumuim_filter_latency += float(pumuimdelay)/pumuimchainsr
 
 # apply kappa_pu if we haven't already
-print apply_kappapu
 if apply_kappapu and not apply_complex_kappapu:
 	# Only apply the real part of \kappa_pu as a correction to A_pu
 	kpu_for_pu = calibration_parts.mkresample(pipeline, smooth_kpuRtee, 3, False, pumuimchainsr)
@@ -1826,7 +1825,7 @@ if witness_channel_list is not None:
 	# Remove initial data from computation of transfer functions and wait until the filters and kappas settle
 	witness_chop_time = filter_settle_time + (1.0 - filter_latency) * (demodulation_filter_time + median_smoothing_time + factors_averaging_time)
 	# In high latency, make the witnesses wait to be filtered until new filters are ready
-	witness_wait_time = (filter_settle_time + options.demodulation_filter_time + median_smoothing_time + factors_averaging_time + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0)) if filter_latency else 0.0
+	witness_wait_time = (filter_settle_time + demodulation_filter_time + median_smoothing_time + factors_averaging_time + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0)) if filter_latency else 0.0
 	# How much does the "chop_time" need to increase per iteration of cleaning?
 	witness_chop_increment = witness_filter_taper_time + (witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0) if not filter_latency else 0.0)
 	# How much does the "wait_time" need to increase per iteration of cleaning?
@@ -1864,7 +1863,7 @@ if witness_channel_list is not None:
 if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
 	clean_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
-	if not options.no_dq_vector:
+	if compute_calib_statevector:
 		clean_straintee = pipeparts.mktee(pipeline, clean_strain)
 		clean_strain = pipeparts.mktaginject(pipeline, clean_straintee, clean_straintagstr)
 	else:
@@ -1888,7 +1887,7 @@ if compute_calib_statevector and (remove_cal_lines or remove_power_lines or witn
 	clean_hoft_ok_lowfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_lowfreq, calibstate_caps)
 
 	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
-	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = options.cleaning_check_range_mid_max, filter_latency = filter_latency, rate_out = calibstate_sr, td = td)
+	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = filter_latency, rate_out = calibstate_sr, td = td)
 	# Compute the RMS of the cleaned strain in a mid-frequency range
 	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = filter_latency, rate_out = calibstate_sr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
