@@ -28,6 +28,7 @@
 
 import math
 import numpy
+import scipy
 import os
 try:
 	from pyfftw.interfaces import scipy_fftpack as fftpack
@@ -876,3 +877,17 @@ def one_second_highpass_kernel(rate, cutoff = 12):
 	mid = len(x) / 2.
 	highpass_filter_kernel *= 1. - (x-mid)**2 / mid**2
 	return highpass_filter_kernel
+
+def fixed_duration_bandpass_kernel(rate, flow = 0, fhigh = float("inf"), duration = 1.0):
+	deltaF = 1. / duration
+	nsamps = int(rate * duration) + 1
+	f = numpy.arange(nsamps) * deltaF - rate / 2.
+	filt = numpy.ones(len(f))
+	ix1 = numpy.logical_and(f <= -flow, f >= -fhigh)
+	ix2 = numpy.logical_and(f >= flow, f <= fhigh)
+	filt[numpy.logical_not(numpy.logical_or(ix1, ix2))] = 0.
+	filt = numpy.real(scipy.ifft(scipy.fftpack.ifftshift(filt))) / nsamps
+	window = numpy.sinc(2 * f / rate)
+	out = numpy.roll(filt, nsamps / 2) * window
+	out /= (out**2).sum()**.5
+	return out
