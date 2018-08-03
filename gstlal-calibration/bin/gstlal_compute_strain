@@ -1269,7 +1269,7 @@ if CalibrationConfigs["calibrationmode"] == "Full":
 	else:
 		res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "res")
 		res = restee = pipeparts.mktee(pipeline, res)
-elif CalibroptionConfigs["calibrationmode"] == "Partial":
+elif CalibrationConfigs["calibrationmode"] == "Partial":
 	res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "res")
 	res = restee = pipeparts.mktee(pipeline, res)
 
@@ -1823,15 +1823,15 @@ if remove_power_lines:
 # Remove excess noise using any provided witness channels
 if witness_channel_list is not None:
 	# Remove initial data from computation of transfer functions and wait until the filters and kappas settle
-	witness_chop_time = filter_settle_time + (1.0 - filter_latency) * (demodulation_filter_time + median_smoothing_time + factors_averaging_time)
+	witness_chop_time = filter_settle_time + (1.0 - filter_latency) * (demodulation_filter_time + median_smoothing_samples / compute_factors_sr + factors_average_samples / compute_factors_sr)
 	# In high latency, make the witnesses wait to be filtered until new filters are ready
-	witness_wait_time = (filter_settle_time + demodulation_filter_time + median_smoothing_time + factors_averaging_time + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0)) if filter_latency else 0.0
+	witness_wait_time = (filter_settle_time + demodulation_filter_time + median_smoothing_samples / compute_factors_sr + factors_average_samples / compute_factors_sr + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0)) if filter_latency else 0.0
 	# How much does the "chop_time" need to increase per iteration of cleaning?
 	witness_chop_increment = witness_filter_taper_time + (witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0) if not filter_latency else 0.0)
 	# How much does the "wait_time" need to increase per iteration of cleaning?
 	witness_wait_increment = (witness_filter_taper_time + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0)) if filter_latency else 0.0
 	# If we haven't removed any lines, clean the regular h(t) data
-	if not (remove_cal_lines or remove_powerlines):
+	if not (remove_cal_lines or remove_power_lines):
 		clean_strain = straintee
 
 	# If possible, gate the data being used to compute transfer functions to be sure we are locked
