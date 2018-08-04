@@ -107,7 +107,7 @@ html_logo = "gstlal.png"
 html_theme_options = {
     'fixed_sidebar': 'true',
     'sidebar_width': '300px',
-    'page_width': '1800px',
+    'page_width': '80%',
     'show_powered_by': 'false',
     'logo_name': 'true',
 }
