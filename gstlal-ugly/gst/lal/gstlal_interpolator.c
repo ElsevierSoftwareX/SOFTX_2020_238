@@ -51,7 +51,7 @@
 #define PI 3.141592653589793
 
 
-gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
+static gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
 
 	/*
 	 * This is a parabolic windowed sinc function kernel
@@ -136,7 +136,7 @@ gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
 }
 
 
-void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
+static void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
 
 	/* 
 	 * This function will multiply a matrix of input values by vector to
@@ -152,7 +152,7 @@ void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint k
 	return;
 }
 
-void resample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
+static void upsample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
 
 	/*
 	 * This function is responsible for the resampling of the input time
@@ -283,7 +283,7 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element)
 
 	/* Upsample factor */
 	element->factor = 0;
-	element->kernel = NULL;
+	element->upkernel = NULL;
 	element->workspace = NULL;
 
 	/* hardcoded kernel size */
@@ -336,7 +336,8 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "rate", &outrate), FALSE);
 
 	g_return_val_if_fail(inchannels == outchannels, FALSE);
-	g_return_val_if_fail(outrate >= inrate, FALSE);
+	// enable downsampling too
+	//g_return_val_if_fail(outrate >= inrate, FALSE);
 	g_return_val_if_fail(outrate % inrate == 0, FALSE);
 
 	element->inrate = inrate;
@@ -637,7 +638,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			else
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, &copied_nongap);
 
-			resample(output, element->upkernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout, copied_nongap);
+			upsample(output, element->upkernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout, copied_nongap);
 
 			if (element->need_pretend) {
 				element->need_pretend = FALSE;
