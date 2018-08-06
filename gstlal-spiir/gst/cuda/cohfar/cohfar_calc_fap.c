@@ -180,24 +180,29 @@ int main(int argc, char *argv[])
 			trigger_stats_feature_to_rank(zlstats_out->multistats[icombo]->feature, zlstats_out->multistats[icombo]->rank);
 			/* livetime calculated from all walltimes in the input files, will deprecate the following */
 			//stats_out[icombo]->livetime = atol(*pwalltime);
-			printf("zlstats_out livetime %d\n", zlstats_out->multistats[icombo]->livetime );
+			//printf("zlstats_out livetime %d\n", zlstats_out->multistats[icombo]->livetime );
 			trigger_stats_feature_rates_to_pdf(bgstats_out->multistats[icombo]->feature);
 			trigger_stats_feature_to_rank(bgstats_out->multistats[icombo]->feature, bgstats_out->multistats[icombo]->rank);
 			/* livetime calculated from all walltimes in the input files, will deprecate the following */
 			//stats_out[icombo]->livetime = atol(*pwalltime);
-			printf("bgstats_out livetime %d\n", bgstats_out->multistats[icombo]->livetime );
+			//printf("bgstats_out livetime %d\n", bgstats_out->multistats[icombo]->livetime );
 		}
 	}
     xmlTextWriterPtr stats_writer = NULL;
-	trigger_stats_xml_dump(bgstats_out, hist_trials, *pout, STATS_XML_WRITE_START, &stats_writer);
-	trigger_stats_xml_dump(zlstats_out, hist_trials, *pout, STATS_XML_WRITE_END, &stats_writer);
-	
+	GString *tmp_fname = g_string_new(*pout);
+	g_string_append_printf(tmp_fname, "_next");
+	trigger_stats_xml_dump(bgstats_out, hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &stats_writer);
+	trigger_stats_xml_dump(zlstats_out, hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &stats_writer);
+	printf("rename from %s\n", tmp_fname->str);
+    g_rename(tmp_fname->str, *pout);
+
 	trigger_stats_xml_destroy(bgstats_in);
 	trigger_stats_xml_destroy(bgstats_out);
 	trigger_stats_xml_destroy(zlstats_in);
 	trigger_stats_xml_destroy(zlstats_out);
 
 	g_strfreev(in_fnames);
+	g_string_free(tmp_fname, TRUE);
 
 	g_free(*pin);
 	g_free(*pfmt);
