@@ -28,7 +28,6 @@ import time
 import numpy
 import os
 import fcntl
-import copy
 import pdb
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -727,7 +726,7 @@ class FinalSink(object):
 		# free the last used memory
 		del self.thread_snapshot_segment
 		# copy the memory
-		seg_document_cpy = copy.deepcopy(self.seg_document)
+		seg_document_cpy = self.seg_document
 		seg_document_cpy.set_filename(filename)
 		# free thread context
 		# start new thread
@@ -745,8 +744,8 @@ class FinalSink(object):
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
 			self.thread_snapshot.join()
 	
-		# deep copy the memory
-		postcoh_document_cpy = copy.deepcopy(self.postcoh_document)
+		# copy the memory
+		postcoh_document_cpy = self.postcoh_document
 		postcoh_document_cpy.set_filename(filename)
 		# free thread context
 		del self.thread_snapshot
