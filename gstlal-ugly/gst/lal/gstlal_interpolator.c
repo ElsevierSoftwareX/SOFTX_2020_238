@@ -334,8 +334,6 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "rate", &outrate), FALSE);
 
 	g_return_val_if_fail(inchannels == outchannels, FALSE);
-	// enable downsampling too
-	//g_return_val_if_fail(outrate >= inrate, FALSE);
 	g_return_val_if_fail(outrate % inrate == 0, FALSE);
 
 	element->inrate = inrate;
@@ -353,7 +351,8 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->need_pretend = TRUE;
 
 	if (element->upkernel)
-		free(element->upkernel);
+		for (guint i = 0; i < element->outrate / element->inrate; i++)
+			gsl_vector_float_free(element->upkernel[i]);
 	element->upkernel = upkernel(element->half_length, element->outrate / element->inrate);
 
 	/*
