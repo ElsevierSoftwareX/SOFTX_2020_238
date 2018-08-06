@@ -140,7 +140,7 @@ void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint k
 
 	/* 
 	 * This function will multiply a matrix of input values by vector to
- 	 * produce a vector of output values.  It is a single sample output of a
+	 * produce a vector of output values.  It is a single sample output of a
 	 * convolution with channels number of channels
 	 */
 
@@ -207,9 +207,9 @@ void resample(float *output, gsl_vector_float **thiskernel, float *input, guint 
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 G_DEFINE_TYPE_WITH_CODE(
-        GSTLALInterpolator,
-        gstlal_interpolator,
-        GST_TYPE_BASE_TRANSFORM,
+	GSTLALInterpolator,
+	gstlal_interpolator,
+	GST_TYPE_BASE_TRANSFORM,
 	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_interpolator", 0, "lal_interpolator element")
 );
 
@@ -269,11 +269,11 @@ static gboolean stop(GstBaseTransform *trans);
 static void gstlal_interpolator_class_init(GSTLALInterpolatorClass *klass)
 {
 
-        GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-        GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
-        GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
-        gst_element_class_set_details_simple(element_class, "Interpolator", "Filter/Audio", "Interpolates multichannel audio data using BLAS", "Chad Hanna <chad.hanna@ligo.org>, Kipp Cannon <kipp.cannon@ligo.org>, Patrick Brockill <brockill@uwm.edu>, Alex Pace <alexander.pace@ligo.org>");
+	gst_element_class_set_details_simple(element_class, "Interpolator", "Filter/Audio", "Interpolates multichannel audio data using BLAS", "Chad Hanna <chad.hanna@ligo.org>, Kipp Cannon <kipp.cannon@ligo.org>, Patrick Brockill <brockill@uwm.edu>, Alex Pace <alexander.pace@ligo.org>");
 
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
@@ -284,8 +284,8 @@ static void gstlal_interpolator_class_init(GSTLALInterpolatorClass *klass)
 	transform_class->start = GST_DEBUG_FUNCPTR(start);
 	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
 
-        gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_template));
-        gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_template));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_template));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_template));
 }
 
 
@@ -317,7 +317,7 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element)
 static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter) {
 
 	/* 
-         * FIXME actually pull out the allowed rates so that we can prevent
+	 * FIXME actually pull out the allowed rates so that we can prevent
 	 *  downsampling at the negotiation stage
 	 */
 
@@ -360,13 +360,13 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->channels = inchannels;
 	element->factor = outrate / inrate;
 
-        get_unit_size(base, outcaps, &(element->unitsize));
+	get_unit_size(base, outcaps, &(element->unitsize));
 
 	/* Timestamp and offset bookeeping */
 	element->t0 = GST_CLOCK_TIME_NONE;
-        element->offset0 = GST_BUFFER_OFFSET_NONE;
-        element->next_input_offset = GST_BUFFER_OFFSET_NONE;
-        element->next_output_offset = GST_BUFFER_OFFSET_NONE;
+	element->offset0 = GST_BUFFER_OFFSET_NONE;
+	element->next_input_offset = GST_BUFFER_OFFSET_NONE;
+	element->next_output_offset = GST_BUFFER_OFFSET_NONE;
 	element->need_discont = TRUE;
 	element->need_pretend = TRUE;
 
@@ -537,7 +537,7 @@ static gboolean stop(GstBaseTransform *trans)
 	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(trans);
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
-        return TRUE;
+	return TRUE;
 }
 
 
@@ -636,14 +636,14 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
 		float *output = (float *) mapinfo.data;
 		memset(mapinfo.data, 0, mapinfo.size);	
- 		/* FIXME- clean up this print statement (format) */
+		/* FIXME- clean up this print statement (format) */
 		/* GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length); */
 
 		while (processed < output_length) {
 
 
 			/* Special case to handle discontinuities: effectively
- 			 * zero pad. FIXME make this more elegant
+			 * zero pad. FIXME make this more elegant
 			 */
 
 			if (element->need_pretend) {
@@ -675,20 +675,19 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 static void finalize(GObject *object)
 {
-        GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(object);
+	GSTLALInterpolator *element = GSTLAL_INTERPOLATOR(object);
 
-        /*
-         * free resources
-         */
+	/*
+	 * free resources
+	 */
 
 	for (guint i = 0; i < element->factor; i++)	
 		gsl_vector_float_free(element->kernel[i]);
 	gsl_matrix_float_free(element->workspace);
 
-        /*
-         * chain to parent class' finalize() method
-         */
+	/*
+	 * chain to parent class' finalize() method
+	 */
 
-        G_OBJECT_CLASS(gstlal_interpolator_parent_class)->finalize(object);
+	G_OBJECT_CLASS(gstlal_interpolator_parent_class)->finalize(object);
 }
-
