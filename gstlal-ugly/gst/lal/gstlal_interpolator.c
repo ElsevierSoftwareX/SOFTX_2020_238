@@ -51,7 +51,7 @@
 #define PI 3.141592653589793
 
 
-gsl_vector_float** kernel(int half_length_at_original_rate, int f) {
+gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
 
 	/*
 	 * This is a parabolic windowed sinc function kernel
@@ -370,9 +370,9 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->need_discont = TRUE;
 	element->need_pretend = TRUE;
 
-	if (element->kernel)
-		free(element->kernel);
-	element->kernel = kernel(element->half_length, element->factor);
+	if (element->upkernel)
+		free(element->upkernel);
+	element->upkernel = upkernel(element->half_length, element->factor);
 
 	/*
 	 * Keep blockstride small to prevent GAPS from growing to be large
@@ -653,7 +653,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			else
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, &copied_nongap);
 
-			resample(output, element->kernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout, copied_nongap);
+			resample(output, element->upkernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout, copied_nongap);
 
 			if (element->need_pretend) {
 				element->need_pretend = FALSE;
@@ -682,7 +682,7 @@ static void finalize(GObject *object)
 	 */
 
 	for (guint i = 0; i < element->factor; i++)	
-		gsl_vector_float_free(element->kernel[i]);
+		gsl_vector_float_free(element->upkernel[i]);
 	gsl_matrix_float_free(element->workspace);
 
 	/*
