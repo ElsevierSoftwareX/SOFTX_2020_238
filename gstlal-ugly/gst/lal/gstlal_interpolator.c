@@ -281,8 +281,6 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element)
 	element->inrate = 0;
 	element->outrate = 0;
 
-	/* Upsample factor */
-	element->factor = 0;
 	element->upkernel = NULL;
 	element->workspace = NULL;
 
@@ -343,7 +341,6 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->inrate = inrate;
 	element->outrate = outrate;
 	element->channels = inchannels;
-	element->factor = outrate / inrate;
 
 	get_unit_size(base, outcaps, &(element->unitsize));
 
@@ -357,7 +354,7 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 
 	if (element->upkernel)
 		free(element->upkernel);
-	element->upkernel = upkernel(element->half_length, element->factor);
+	element->upkernel = upkernel(element->half_length, element->outrate / element->inrate);
 
 	/*
 	 * Keep blockstride small to prevent GAPS from growing to be large
@@ -366,8 +363,8 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 
 	element->blockstridein = 32;//element->inrate;
 	element->blocksampsin = element->blockstridein + element->kernel_length;
-	element->blockstrideout = element->blockstridein * element->factor;//element->outrate;
-	element->blocksampsout = element->blockstrideout + (element->kernel_length) * element->factor;
+	element->blockstrideout = element->blockstridein * element->outrate / element->inrate;
+	element->blocksampsout = element->blockstrideout + (element->kernel_length) * element->outrate / element->inrate;
 
 	GST_INFO_OBJECT(element, "blocksampsin %d, blocksampsout %d, blockstridein %d, blockstrideout %d", element->blocksampsin, element->blocksampsout, element->blockstridein, element->blockstrideout);
 
@@ -419,7 +416,7 @@ static guint64 get_available_samples(GSTLALInterpolator *element)
 
 
 static guint minimum_input_length(GSTLALInterpolator *element, guint samps) {
-	return samps / element->factor + element->kernel_length;
+	return samps / element->outrate / element->inrate + element->kernel_length;
 }
 
 
@@ -441,7 +438,7 @@ static guint get_output_length(GSTLALInterpolator *element, guint samps) {
 	guint numinsamps = get_available_samples(element) + samps + pretend_samps;
 	if (numinsamps <= element->kernel_length)
 		return 0;
-	guint numoutsamps = (numinsamps - element->kernel_length) * element->factor;
+	guint numoutsamps = (numinsamps - element->kernel_length) * element->outrate / element->inrate;
 	guint numblocks = numoutsamps / element->blockstrideout;
 
 	/* NOTE could be zero */
@@ -638,7 +635,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			else
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, &copied_nongap);
 
-			upsample(output, element->upkernel, element->workspace->data, element->kernel_length, element->factor, element->channels, element->blockstrideout, copied_nongap);
+			upsample(output, element->upkernel, element->workspace->data, element->kernel_length, element->outrate / element->inrate, element->channels, element->blockstrideout, copied_nongap);
 
 			if (element->need_pretend) {
 				element->need_pretend = FALSE;
@@ -666,7 +663,7 @@ static void finalize(GObject *object)
 	 * free resources
 	 */
 
-	for (guint i = 0; i < element->factor; i++)	
+	for (guint i = 0; i < element->outrate / element->inrate; i++)
 		gsl_vector_float_free(element->upkernel[i]);
 	gsl_matrix_float_free(element->workspace);
 

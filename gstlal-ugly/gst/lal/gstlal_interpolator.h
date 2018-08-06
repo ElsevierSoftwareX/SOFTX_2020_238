@@ -93,7 +93,6 @@ struct _GSTLALInterpolator {
 	guint blocksampsout;
 	guint blockstridein;
 	guint blockstrideout;
-	guint factor;
 	guint half_length;
 	guint kernel_length;
 	//float *kernel;
