@@ -97,7 +97,7 @@ struct _GSTLALInterpolator {
 	guint half_length;
 	guint kernel_length;
 	//float *kernel;
-	gsl_vector_float **kernel;
+	gsl_vector_float **upkernel;
 	gsl_matrix_float *workspace;
 };
 
