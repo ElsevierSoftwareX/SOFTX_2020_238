@@ -152,22 +152,6 @@ void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint k
 	return;
 }
 
-void copy_input(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
-
-	/*
-	 * For a special set of input samples a convolution is not necessary.
-	 * These are input samples that are exactly divisble by the upsample
-	 * factor. For these we can save computation and simply copy the input
-	 * samples to the output.
-	 *
-	 */
-
-	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
-	gsl_vector_float_view input_vector = gsl_vector_float_view_array(input + kernel_length / 2, channels);
-	gsl_blas_scopy(&(input_vector.vector), &(output_vector.vector));
-	return;
-}
-
 void resample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
 
 	/*
