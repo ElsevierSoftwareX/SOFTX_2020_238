@@ -71,7 +71,7 @@ struct _GSTLALInterpolator {
 	GstBaseTransform element;
 
 	GstAudioInfo audio_info;
-        GstAudioAdapter *adapter;
+	GstAudioAdapter *adapter;
 
 	gint inrate;
 	gint outrate;
@@ -109,7 +109,7 @@ struct _GSTLALInterpolator {
 
 
 struct _GSTLALInterpolatorClass {
-        GstBaseTransformClass parent_class;
+	GstBaseTransformClass parent_class;
 };
 
 
