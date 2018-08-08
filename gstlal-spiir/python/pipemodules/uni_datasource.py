@@ -289,15 +289,13 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 			units = lal.Unit(elem.get_property("psd-units"))
 			if units == lal.DimensionlessUnit:
 				return
-			# FIXME: scale needs to work for the latest master code
-			#scale = float(psd.sampleUnits / units)
+			scale = float(psd.sampleUnits / units)
 			# get frequency resolution and number of bins
 			delta_f = elem.get_property("delta-f")
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 			# interpolate, rescale, and install PSD
 			psd = reference_psd.interpolate_psd(psd, delta_f)
-			#elem.set_property("mean-psd", psd.data.data[:n] * scale)
-			elem.set_property("mean-psd", psd.data[:n]) 
+			elem.set_property("mean-psd", psd.data.data[:n] * scale)
 		whiten.connect_after("notify::f-nyquist", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::delta-f", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::psd-units", psd_units_or_resolution_changed, psd)

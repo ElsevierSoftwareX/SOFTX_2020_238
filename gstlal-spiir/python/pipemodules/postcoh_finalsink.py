@@ -43,6 +43,7 @@ try:
 	from ligo.gracedb.rest import GraceDb
 except ImportError:
 	print >>sys.stderr, "warning: gracedb import failed, program will crash if gracedb uploads are attempted"
+	GraceDb = None
 
 from glue import iterutils
 from glue import segments
@@ -302,7 +303,7 @@ class FAPUpdater(object):
 					collected_fnames.append("%s/%s" % (self.path, one_bank_fname))
 
 class FinalSink(object):
-	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, cohfar_assignfar_input_fname = "marginalized_stats", fapupdater_collect_walltime_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
+	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, cohfar_assignfar_input_fname = "marginalized_stats_1w.xml.gz,marginalized_stats_1d.xml.gz,marginalized_2h.xml.gz", fapupdater_collect_walltime_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
 		#
 		# initialize
 		#
