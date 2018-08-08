@@ -119,9 +119,19 @@ else:
 
 x = []
 y = []
+#csv = []
 for args, kwargs, lnP in itertools.islice(rankingstat.denominator.random_params(), n_samples):
 	x.append(rankingstat(*args, **kwargs))
 	y.append(datalessrankingstat(*args, **kwargs))
+	#csv.append((
+	#	x[-1],
+	#	y[-1],
+	#	(kwargs["H1_snr_chi"][0] if "H1_snr_chi" in kwargs else 0.),
+	#	(kwargs["H1_snr_chi"][1] if "H1_snr_chi" in kwargs else 0.),
+	#	(kwargs["L1_snr_chi"][0] if "L1_snr_chi" in kwargs else 0.),
+	#	(kwargs["L1_snr_chi"][1] if "L1_snr_chi" in kwargs else 0.),
+	#	kwargs["segments"]["H1"][1]
+	#))
 	if progress is not None:
 		progress.increment()
 
@@ -138,10 +148,15 @@ FigureCanvas(fig)
 fig.set_size_inches((8., 8. / plotutil.golden_ratio))
 axes = fig.gca()
 axes.plot(x, y, "k.", markersize = 2.)
-axes.set_xlim(-10, 50)
-axes.set_ylim(-60, 50)
+axes.set_xlim(-20, 60)
+axes.set_ylim(-20, 60)
 axes.set_title(r"Dataless vs.\ Data-defined $\ln \mathcal{L}$")
 axes.set_xlabel(r"Data-defined $\ln \mathcal{L}$")
 axes.set_ylabel(r"Dataless $\ln \mathcal{L}$")
 fig.tight_layout(pad = 0.8)
 fig.savefig("dlrs_diag%s" % options.output_format)
+
+#csv_file = open("dlrs_diag.csv", "w")
+#csv_file.write("# datadefined, dataless, H1snr, H1chi, L1snr, L1chi, t\n")
+#for row in csv:
+#	csv_file.write("%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g\n" % row)
