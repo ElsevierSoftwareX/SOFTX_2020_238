@@ -157,7 +157,8 @@ class DocContents(object):
 		coinc = lsctables.Coinc()
 		# FIXME: revert when register_to_xml works in bin/ligolw_inspinjfind_postcoh
 		#coinc.process_id = self.process.process_id
-		coinc.process_id = u"process:process_id:10" 
+		ilwd_process_id = ilwd.get_ilwdchar_class("process", "process")
+		coinc.process_id = ilwd_process_id(10)
 		coinc.coinc_def_id = coinc_def_id
 		coinc.coinc_event_id = self.coinctable.get_next_id()
 		coinc.time_slide_id = self.tisi_id
@@ -187,8 +188,11 @@ def add_sim_postcoh_coinc(contents, sim, event_ids):
 	ilwd_postcoh_id = ilwd.get_ilwdchar_class("postcoh", "event_id")
 	for one_event_id in event_ids:
 		coincmap = lsctables.CoincMap()
-		coincmap.coinc_event_id = ilwd_postcoh_id(one_event_id)
-		coincmap.table_name = sim.simulation_id.table_name
+		coincmap.coinc_event_id = one_event_id
+		# FIXME: this does not work due to load xmldoc problem in 
+		# bin/ligolw_inspinjfind_postcoh, related to the last FIXME
+		# coincmap.table_name = sim.simulation_id.table_name
+		coincmap.table_name = sim.simulation_id.split(':')[0]
 		coincmap.event_id = sim.simulation_id
 		contents.coincmaptable.append(coincmap)
 
@@ -213,7 +217,6 @@ def find_exact_postcoh_matches(contents, t):
 	# any(...) --> at least one inspiral does not match sim
 	# not any(...) --> all inspirals match sim
 	#
-	#pdb.set_trace()
 	postcohs = contents.postcoh_inspirals_near_endtime(t)
 
 	return set(one_postcoh.event_id for one_postcoh in postcohs)

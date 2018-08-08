@@ -23,7 +23,7 @@
 #
 # =============================================================================
 #
-#                                   Preamble
+#								   Preamble
 #
 # =============================================================================
 #
@@ -52,6 +52,8 @@ import sqlite3
 import sys
 import os
 import re
+import operator
+import itertools
 
 from glue import segments
 from glue.ligolw import dbtables
@@ -85,9 +87,11 @@ class SimInspiral(lsctables.SimInspiral):
 
 	def get_exp_snr(self, instrument):
 		if instrument == "H1":
-			return self.alpha1
+			return self.alpha4
 		if instrument == "L1":
-			return self.alpha2
+			return self.alpha5
+		if instrument == "V1":
+			return self.alpha6
 		return 0.0
 
 
@@ -100,16 +104,16 @@ class PostcohInspiral(postcoh_table_def.PostcohInspiral):
 	def get_effective_snr(self, fac):
 		return self.snr / (self.chisq / self.chisq_dof)**.5
 
-        def get_ifo_endtime(self, instrument):
-                end_time = getattr(self, "end_time_%s" % instrument[0])
-                end_time_ns = getattr(self, "end_time_ns_%s" % instrument[0])
-                return LIGOTimeGPS(end_time, end_time_ns)
+	def get_ifo_endtime(self, instrument):
+		end_time = getattr(self, "end_time_%s" % instrument[0])
+		end_time_ns = getattr(self, "end_time_ns_%s" % instrument[0])
+		return LIGOTimeGPS(end_time, end_time_ns)
 
-        def get_eff_distance(self, instrument):
-                return getattr(self, "deff_%s" % instrument[0])
+	def get_eff_distance(self, instrument):
+		return getattr(self, "deff_%s" % instrument[0])
 
-        def get_snglsnr(self, instrument):
-                return getattr(self, "snglsnr_%s" % instrument[0])
+	def get_snglsnr(self, instrument):
+		return getattr(self, "snglsnr_%s" % instrument[0])
 
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
@@ -124,7 +128,7 @@ __version__ = "some version"
 #
 # =============================================================================
 #
-#                                 Command Line
+#								 Command Line
 #
 # =============================================================================
 #
@@ -165,14 +169,14 @@ def parse_command_line():
 	if not options.format:
 		options.format = ["png"]
 
-        if options.noninj_database is not None and options.noninj_user_tag is None:
-            raise ValueError("Need to set the noninj-user-tag since noninj-database is set") 
+		if options.noninj_database is not None and options.noninj_user_tag is None:
+			raise ValueError("Need to set the noninj-user-tag since noninj-database is set") 
 
-        if options.inj_database is not None and options.inj_user_tag is None:
-            raise ValueError("Need to set the inj-user-tag since inj-database is set") 
+		if options.inj_database is not None and options.inj_user_tag is None:
+			raise ValueError("Need to set the inj-user-tag since inj-database is set") 
 
-        if options.shift_database is not None and options.shift_user_tag is None:
-            raise ValueError("Need to set the shift-user-tag since shift-database is set") 
+		if options.shift_database is not None and options.shift_user_tag is None:
+			raise ValueError("Need to set the shift-user-tag since shift-database is set") 
 
 	if not filenames:
 		filenames = []
@@ -183,35 +187,57 @@ def parse_command_line():
 #
 # =============================================================================
 #
-#                                   Database
+#								   Database
 #
 # =============================================================================
 #
 
 class SegmentsTable(object):
-    def __init__(self, base):
-        self.all_segs_dict = {}
-        self.data = []
-        self.table = []
-        self.base = base
+	def __init__(self, base):
+		self.all_segs_dict = {}
+		self.data = []
+		self.table = []
+		self.base = base
 
-    def add_contents(self, contents):
+	def add_contents(self, contents):
 		# only process non-injection documents
-        if contents.sim_inspiral_table is None:
-            for ifo, one_seg_list in contents.seglists.items():
-                for seg in one_seg_list:
-                    self.data.append(["%s: %s" % (str(ifo), str("datasegments")), "", "%.2f-%.2f" % (float(seg[0]), float(seg[1])), float(seg[0])*1000 + 315964800000 - 17000, float(seg[1])*1000 + 315964800000 - 17000])
-                    
+		if contents.sim_inspiral_table is None:
+			for name, seglists in contents.all_segs_dict.items():
+				# need to use operator because Python won't
+				# allow a function call on the LHS of |=
+				# for some mystery reason.
+				operator.ior(self.all_segs_dict.setdefault(name, segments.segmentlistdict()), seglists)
 
 	def finish(self):
-        # FIXME: add segments_table.json
-		f = open("%s_segments.json" % self.base, "w")
-        f.write(repr(self.data))
-        f.close()
-        yield None, None, None
+		segs = reduce(segments.segmentlistdict.__or__, self.all_segs_dict.values(), segments.segmentlistdict())
+		self.extent = segs.extent_all()
 
+		for name, seglists in self.all_segs_dict.items():
+			for ifo, seglist in seglists.items():
+				for seg in seglist:
+					self.data.append(["%s: %s" % (str(ifo), str(name)), "", "%.2f-%.2f" % (float(seg[0]), float(seg[1])), float(seg[0])*1000 + 315964800000 - 17000, float(seg[1])*1000 + 315964800000 - 17000])
 
+			analyzable_instruments_set = set(segs.keys())
+			for n in range(1, 1 + len(segs)):
+				for ifo_combos in itertools.combinations(list(analyzable_instruments_set), n):
+					this = segs.intersection(ifo_combos) - segs.union(analyzable_instruments_set - set(ifo_combos))
+					if len(this) > 0:
+						#FIXME inf is not handled properly
+						start = float(this.extent()[0])
+						end = float(this.extent()[1])
+						if end == float("inf"):
+							end = 2000000000.
+						duration = end - start
+						self.table.append([name, ",".join(ifo_combos), start, end, duration])
 
+			self.table.insert(0, ["all", "all", float(self.extent[0]), float(self.extent[1]), float(abs(self.extent))])
+			f = open("%s_segments.json" % self.base, "w")
+			f.write(repr(self.data))
+			f.close()
+			to_google_json("%s_segment_table.json" % self.base, [("name","string"), ("ifos", "string"), ("start","number"), ("end", "number"), ("extent", "number")], self.table)
+			yield None, None, None
+
+	
 class CoincDatabase(object):
 	def __init__(self, connection, data_segments_name, veto_segments_name = None, verbose = False, plotsummary_json = None, wiki = None, base = None, program_name = "gstlal_inspiral"):
 		"""
@@ -222,6 +248,7 @@ class CoincDatabase(object):
 		self.base = base
 		self.connection = connection
 		xmldoc = postcoh_table_def.get_xml(connection)
+		self.all_segs_dict = {}
 
 		cursor = connection.cursor()
 
@@ -249,8 +276,12 @@ class CoincDatabase(object):
 			self.veto_segments = segments.segmentlistdict()
 		self.seglists -= self.veto_segments
 
-		# FIXME: no search table Get the live time used for the far calculation.  By convention this is simply the entire interval of the analysis with no regard for segments
-		# self.farsegs = far.get_live_time_segs_from_search_summary_table(connection)
+		# get all the segments in the database to use as a summary
+		for llwsegs in ligolw_segments.LigolwSegments(xmldoc).coalesce():
+			seglists = self.all_segs_dict.setdefault(llwsegs.name, segments.segmentlistdict())
+			# FIXME:  should be populating valid segments upstream
+			seglists |= segments.segmentlistdict.fromkeys(llwsegs.instruments, llwsegs.active) #& llwsegs.valid)
+
 
 		# get the live time
 		if verbose:
@@ -296,6 +327,7 @@ class CoincDatabase(object):
 				data.append(["inspiral events", str(len(self.postcoh_inspiral_table))])
 			if self.sim_inspiral_table is not None:
 				data.append(["injections", str(len(self.sim_inspiral_table))])
+			# only output this summary for noninj or shift
 			if self.sim_inspiral_table is None:
 				to_google_json("%s_%s" % (self.base, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
 
@@ -303,7 +335,7 @@ class CoincDatabase(object):
 #
 # =============================================================================
 #
-#                                  Utilities
+#								  Utilities
 #
 # =============================================================================
 #
@@ -342,12 +374,12 @@ def create_sim_coinc_view(connection):
 	Construct a sim_inspiral --> best matching coinc_event mapping.
 	Only injections that match at least one coinc get an entry in this
 	table. if there are more than entries, select the smallest far one
-        the format is like:
-            simulation_id, event_id, far
-            sim_inspiral:simulation_id:32135,postcoh:event_id:241023,1.3e-7
-            sim_inspiral:simulation_id:32155,postcoh:event_id:250000,4.5e-3
-        note the simulation_id and event_id may not be continous
-        """
+		the format is like:
+			simulation_id, event_id, far
+			sim_inspiral:simulation_id:32135,postcoh:event_id:241023,1.3e-7
+			sim_inspiral:simulation_id:32155,postcoh:event_id:250000,4.5e-3
+		note the simulation_id and event_id may not be continous
+		"""
 	#
 	# the log likelihood ratio stored in the likelihood column of the
 	# coinc_event table is the ranking statistic.  the "best match" is
@@ -394,7 +426,7 @@ AS
 				postcoh.far ASC
 			LIMIT 1
 		) as far
-        FROM
+		FROM
 		sim_inspiral
 	WHERE
 		coinc_event_id IS NOT NULL
@@ -404,15 +436,15 @@ AS
 #
 # =============================================================================
 #
-#                      Summary Table
+#					  Summary Table
 #
 # =============================================================================
 #
 
 """
 split the Summary Table for 2 purposes:
-    1. display 10 most significant events for noninj database
-    2. display 10 most significant events for shift database
+	1. display 10 most significant events for noninj database
+	2. display 10 most significant events for shift database
 """
 class SummaryTable(object):
 	def __init__(self, tag):
@@ -420,14 +452,14 @@ class SummaryTable(object):
 		self.bgcandidates = []
 		self.livetime = {}
 		self.num_trigs = {}
-                self.tag = tag
+		self.tag = tag
 
 	def add_contents(self, contents):
 		self.base = contents.base
 		if contents.sim_inspiral_table:
 			#For now we only return summary information on non injections
 			return
-                # FIXME: third should be ranking_statistic
+		# FIXME: third should be ranking_statistic
 		select_candidates = contents.connection.cursor().execute("""
 SELECT
 	postcoh.far,
@@ -438,14 +470,14 @@ SELECT
 	postcoh.mtotal,
 	postcoh.mchirp,
 	postcoh.ifos,
-        postcoh.mass1,
-        postcoh.mass2,
-        postcoh.spin1z,
-        postcoh.spin2z,
-        postcoh.snglsnr_H,
-        postcoh.chisq_H,
-        postcoh.snglsnr_L,
-        postcoh.chisq_L
+		postcoh.mass1,
+		postcoh.mass2,
+		postcoh.spin1z,
+		postcoh.spin2z,
+		postcoh.snglsnr_H,
+		postcoh.chisq_H,
+		postcoh.snglsnr_L,
+		postcoh.chisq_L
 FROM
 	postcoh
 ORDER BY
@@ -453,9 +485,9 @@ ORDER BY
 LIMIT 10
 		""").fetchall()
 
-                if self.tag == "noninj":
+		if self.tag == "noninj":
 			self.candidates = select_candidates
-                elif self.tag == "shift":
+		elif self.tag == "shift":
 			self.bgcandidates = select_candidates
 		else:
 			raise ValueError
@@ -492,21 +524,20 @@ LIMIT 10
 		to_google_json(fname, description, data)
 
 	def finish(self):
-                if self.tag == "noninj":
-		    self.candidates.sort()
-		    self.write_candidate_json(self.candidates[:101], self.base+'_summary_table.json')
-		    yield None, None, None
-	    	elif self.tag == "shift":
-		    self.bgcandidates.sort()
-		    self.write_candidate_json(self.bgcandidates[:101], self.base+'_bgsummary_table.json')
-		    yield None, None, None
-
+		if self.tag == "noninj":
+			self.candidates.sort()
+			self.write_candidate_json(self.candidates[:101], self.base+'_summary_table.json')
+			yield None, None, None
+		elif self.tag == "shift":
+			self.bgcandidates.sort()
+			self.write_candidate_json(self.bgcandidates[:101], self.base+'_bgsummary_table.json')
+			yield None, None, None
 
 
 #
 # =============================================================================
 #
-#                      Injection Parameter Distributions
+#					  Injection Parameter Distributions
 #
 # =============================================================================
 #
@@ -534,11 +565,11 @@ FROM
 	def finish(self):
 		for waveform, sims in self.injections.items():
 			for col1,col2,ax1,ax2,name,aspect in [
-							([sim.mass1 for sim in sims], [sim.mass2 for sim in sims], r"$M_{1}$ ($\mathrm{M}_{\odot}$)", r"$M_{2}$ ($\mathrm{M}_{\odot}$)", "sim_dist_m1_m2_%s", 1),
-							([sim.geocent_end_time for sim in sims], [math.log10(sim.distance) for sim in sims], r"Time (s)", r"$\log_{10} (\mathrm{distance} / 1\,\mathrm{Mpc})$", "sim_dist_time_distance_%s",None),
-							([sim.longitude * 12 / math.pi for sim in sims], [math.sin(sim.latitude) for sim in sims], r"RA (h)", r"$\sin \mathrm{dec}$", "sim_dist_ra_dec_%s",None),
-							([math.cos(sim.inclination) for sim in sims], [sim.polarization for sim in sims], r"$\cos $Inclination (rad)", r"Polarization (rad)", "sim_dist_inc_pol_%s",None),
-							([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"Spin 1 z", r"Spin 2 z", "sim_dist_spin1z_spin2z_%s",None)]:
+					([sim.mass1 for sim in sims], [sim.mass2 for sim in sims], r"$M_{1}$ ($\mathrm{M}_{\odot}$)", r"$M_{2}$ ($\mathrm{M}_{\odot}$)", "sim_dist_m1_m2_%s", 1),
+					([sim.geocent_end_time for sim in sims], [math.log10(sim.distance) for sim in sims], r"Time (s)", r"$\log_{10} (\mathrm{distance} / 1\,\mathrm{Mpc})$", "sim_dist_time_distance_%s",None),
+					([sim.longitude * 12 / math.pi for sim in sims], [math.sin(sim.latitude) for sim in sims], r"RA (h)", r"$\sin \mathrm{dec}$", "sim_dist_ra_dec_%s",None),
+					([math.cos(sim.inclination) for sim in sims], [sim.polarization for sim in sims], r"$\cos $Inclination (rad)", r"Polarization (rad)", "sim_dist_inc_pol_%s",None),
+					([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"Spin 1 z", r"Spin 2 z", "sim_dist_spin1z_spin2z_%s",None)]:
 				fig, axes = create_plot(ax1,ax2, aspect = aspect)
 				axes.set_title(r"Injection Parameter Distribution (%s Injections)" % waveform)
 				if len(col1) > 16383:
@@ -556,7 +587,7 @@ FROM
 #
 # =============================================================================
 #
-#                              Missed/Found Plot
+#							  Missed/Found Plot
 #
 # =============================================================================
 #
@@ -568,7 +599,7 @@ class MissedFoundPlots(object):
 			self.on_instruments = on_instruments
 			self.far_thresh = far_thresh
 			self.found_in = {}
-                        self.missed_found_plots = missed_found_plots
+			self.missed_found_plots = missed_found_plots
 
 		def add_contents(self, contents):
 			self.base = contents.base
@@ -593,6 +624,7 @@ FROM
 			""", (self.far_thresh if self.far_thresh is not None else float("+inf"),)):
 				sim = contents.sim_inspiral_table.row_from_cols(values)
 				del sim.process_id, sim.source, sim.simulation_id
+
 				if sim.get_time_geocent() in zerolag_segments:
 					participating_instruments = lsctables.instrument_set_from_ifos(values[-1])
 					if participating_instruments is not None:
@@ -601,7 +633,6 @@ FROM
 						self.found_in[participating_instruments].append(sim)
 					except KeyError:
 						self.found_in[participating_instruments] = [sim]
-
 
 		def finish(self):
 
@@ -620,35 +651,41 @@ FROM
 					return sim.get_chirp_eff_dist(list(instruments)[0])
 
 			def found_decisive_charsnr(sim, oninstruments, partinstruments):
-				if len(oninstruments) == 2:
-					if len(partinstruments) == 2:
-						return sorted([sim.alpha1, sim.alpha2])[0]
+				if len(oninstruments) == 1:
+					ifo, = oninstruments
+					if ifo == 'H1':
+						return sim.alpha4
+					if ifo == 'L1':
+						return sim.alpha5
+					if ifo == 'V1':
+						return sim.alpha6
+				if len(oninstruments) > 3:
+					raise ValueError("More than 3 instruments not supported for injection snr calculation at this time.")
+				else:
 					if len(partinstruments) == 1:
 						ifo, = partinstruments
 						if ifo == 'H1':
-							return sim.alpha1
+							return sim.alpha4
 						if ifo == 'L1':
-							return sim.alpha2
-				elif len(oninstruments) == 1:
-					ifo, = oninstruments
-					if ifo == 'H1':
-						return sim.alpha1
-					if ifo == 'L1':
-						return sim.alpha2
-				else:
-					raise ValueError("More than 2 instruments not supported for injection snr calculation at this time.")
+							return sim.alpha5
+						if ifo == 'V1':
+							return sim.alpha6
+					else:
+						return sorted([sim.alpha4, sim.alpha5, sim.alpha6])[1]
 
 			def missed_decisive_charsnr(sim, oninstruments):
-				if len(oninstruments) == 2:
-					return sorted([sim.alpha1, sim.alpha2])[0]
-				elif len(oninstruments) == 1:
+				if len(oninstruments) == 1:
 					ifo, = oninstruments
 					if ifo == 'H1':
-						return sim.alpha1
+						return sim.alpha4
 					if ifo == 'L1':
-						return sim.alpha2
+						return sim.alpha5
+					if ifo == 'V1':
+						return sim.alpha6
+				if len(oninstruments) > 3:
+					raise ValueError("More than 3 instruments not supported for injection snr calculation at this time.")
 				else:
-					raise ValueError("More than 2 instruments not supported for injection snr calculation at this time.")
+					return sorted([sim.alpha4, sim.alpha5, sim.alpha6])[1]
 
 			for cnt, (title, x_label, x_func, y_label, y_func, filename_fragment) in enumerate((
 				(r"$\textrm{Distance vs.\ Chirp Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"$D$ ($\mathrm{Mpc}$)", lambda sim, instruments: sim.distance, "d_vs_mchirp"),
@@ -662,25 +699,26 @@ FROM
 
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
-				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
+				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty(x[0]))):
 					if cnt == 0:
 						self.missed_found_plots.injection_summary_data.append(["Found", "".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)])
+						f.write("Found in %s: %d" % (", ".join(sorted(participating_instruments)), len(sims)))
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
 					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, participating_instruments) for sim in sims], ".")
 				if missed:
 					if cnt == 0:
 						self.missed_found_plots.injection_summary_data.append(["Missed", "".join(sorted(self.on_instruments)), "---", len(missed)])
+						f.write("Missed in %s: %d" % (", ".join(sorted(participating_instruments)), len(missed)))
 						for rank, sim in enumerate(missed):
-							self.missed_found_plots.missed_summary_data.append(["".join(sorted(self.on_instruments)), sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, decisive_chirp_distance(sim, self.on_instruments), sim.inclination, sim.alpha1, sim.alpha2, missed_decisive_charsnr(sim, self.on_instruments)])
+							self.missed_found_plots.missed_summary_data.append(["".join(sorted(self.on_instruments)), sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, decisive_chirp_distance(sim, self.on_instruments), sim.inclination, sim.alpha4, sim.alpha5, missed_decisive_charsnr(sim, self.on_instruments)])
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
-
-
 				if legend:
 					axes.legend(legend)
 				axes.set_title(title)
 				yield fig, filename_fragment, False
 
+			f.close()
 			for cnt, (title, x_label, x_func, y_label, filename_fragment) in enumerate((
 				(r"Decisive Characteristic SNR vs.\ Chirp Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mchirp, r"Decisive Characteristic SNR", "dec_expsnr_vs_mchirp"),
 				(r"Decisive Characteristic SNR vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"Decisive Characteristic SNR", "dec_expsnr_vs_mtotal"),
@@ -691,7 +729,7 @@ FROM
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
 				try:
-					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.ifos_from_instrument_set(x[0]))):
+					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
 						legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
 						axes.semilogy([x_func(sim) for sim in sims], [found_decisive_charsnr(sim, self.on_instruments, participating_instruments) for sim in sims], ".")
 					if missed:
@@ -708,8 +746,8 @@ FROM
 	def __init__(self, far_thresh):
 		self.far_thresh = far_thresh
 		self.plots = {}
-                self.injection_summary_data = []
-                self.missed_summary_data = []
+		self.injection_summary_data = []
+		self.missed_summary_data = []
 
 	def add_contents(self, contents):
 		self.base = contents.base
@@ -740,7 +778,7 @@ FROM
 #
 # =============================================================================
 #
-#                              Parameter Accuracy
+#							  Parameter Accuracy
 #
 # =============================================================================
 #
@@ -749,7 +787,7 @@ FROM
 class ParameterAccuracyPlots(object):
 	def __init__(self, far_thresh = 1e-4):
 		self.sim_postcoh_pairs = {}
-                self.far_thresh = far_thresh
+		self.far_thresh = far_thresh
 
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is None:
@@ -768,15 +806,15 @@ FROM
 	JOIN postcoh ON (
 		postcoh.event_id == sim_coinc_map.coinc_event_id
 	)
-	WHERE postcoh.cohsnr > 8.0
+	WHERE postcoh.cohsnr > 4.0
 		"""):
 			sim = contents.sim_inspiral_table.row_from_cols(values)
 			postcoh = contents.postcoh_inspiral_table.row_from_cols(values[n_simcolumns:-1])
-                        far = values[-1]
+			far = values[-1]
 			del sim.process_id, sim.source, sim.simulation_id
 			del postcoh.event_id
-                        if far <= self.far_thresh:
-			    self.sim_postcoh_pairs.setdefault((sim.waveform, postcoh.ifos), []).append((sim, postcoh, far))
+			if far <= self.far_thresh:
+				self.sim_postcoh_pairs.setdefault((sim.waveform, postcoh.ifos), []).append((sim, postcoh, far))
 
 	def finish(self):
 
@@ -863,12 +901,12 @@ FROM
 				hist(numpy.array([(postcoh.get_eff_distance(instrument) - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, postcoh, far in pairs]), axes)
 				yield fig, "deff_acc_frac_hist_%s_%s" % (waveform, instrument), False
 	
-	                        if postcoh.get_eff_distance(instrument) > 0.0:
-	    			    fig, axes = create_plot(r"(Rec. $1/D_{\mathrm{eff}}$ - Injection $1/D_{\mathrm{eff}}$) / Injection $1/D_{\mathrm{eff}}$", "Number")
-	           		    axes.set_title(r"Fractional Effective Amplitude Accuracy in %s (%s Injections)" % (instrument, waveform))
-	        		    hist(numpy.array([(1. / postcoh.get_eff_distance(instrument) - 1. / sim.get_eff_dist(instrument)) / (1. / sim.get_eff_dist(instrument)) for sim, postcoh, far in pairs]), axes)
-	        		    yield fig, "deff_acc_frac_inv_hist_%s_%s" % (waveform, instrument), False
-	        
+				if postcoh.get_eff_distance(instrument) > 0.0:
+					fig, axes = create_plot(r"(Rec. $1/D_{\mathrm{eff}}$ - Injection $1/D_{\mathrm{eff}}$) / Injection $1/D_{\mathrm{eff}}$", "Number")
+			   		axes.set_title(r"Fractional Effective Amplitude Accuracy in %s (%s Injections)" % (instrument, waveform))
+					hist(numpy.array([(1. / postcoh.get_eff_distance(instrument) - 1. / sim.get_eff_dist(instrument)) / (1. / sim.get_eff_dist(instrument)) for sim, postcoh, far in pairs]), axes)
+					yield fig, "deff_acc_frac_inv_hist_%s_%s" % (waveform, instrument), False
+			
 				fig, axes = create_plot(r"Inj. $\chi$", r"Rec. $\chi$")
 				axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform))
 				axes.plot([sim.chi for sim, postcoh, far in pairs], [postcoh.chi for sim, postcoh, far in pairs], "kx")
@@ -876,7 +914,7 @@ FROM
 	
 				fig, axes = create_plot(r"Inj. SNR", r"Rec. SNR")
 				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform))
-				if max([sim.alpha1 for sim, postcoh, far in pairs]) > 20:
+				if max([sim.alpha4 for sim, postcoh, far in pairs]) > 20:
 					axes.loglog([sim.get_exp_snr(instrument) for sim, postcoh, far in pairs], [postcoh.get_snglsnr(instrument) for sim, postcoh, far in pairs], "kx")
 				else:
 					axes.plot([sim.get_exp_snr(instrument) for sim, postcoh, far in pairs], [postcoh.get_snglsnr(instrument) for sim, postcoh, far in pairs], "kx")
@@ -886,7 +924,7 @@ FROM
 #
 # =============================================================================
 #
-#               Background vs. Injections --- Single Instrument
+#			   Background vs. Injections --- Single Instrument
 #
 # =============================================================================
 #
@@ -1009,7 +1047,7 @@ FROM
 #
 # =============================================================================
 #
-#               Background vs. Injections --- Multi Instrument
+#			   Background vs. Injections --- Multi Instrument
 #
 # =============================================================================
 #
@@ -1149,7 +1187,7 @@ WHERE
 #
 # =============================================================================
 #
-#                           Rate vs. Threshold Plots
+#						   Rate vs. Threshold Plots
 #
 # =============================================================================
 #
@@ -1333,7 +1371,7 @@ WHERE
 #
 # =============================================================================
 #
-#                                     Main
+#									 Main
 #
 # =============================================================================
 #
@@ -1355,86 +1393,86 @@ options, filenames = parse_command_line()
 # how many there could be, so we know how many digits for the filenames
 
 def setup_plot(dbname, plot_group, options, user_tag, wiki):
-    working_filename = dbtables.get_connection_filename(dbname, tmp_path = options.tmp_space, verbose = options.verbose)
-    connection = sqlite3.connect(working_filename)
-    contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(dbname)[-1].replace(".sqlite","").replace(".tmp",""), wiki = wiki, base = os.path.join(options.output_dir, user_tag))
-    if contents.sim_inspiral_table is not None:
-        create_sim_coinc_view(connection)
-    for (n, plot) in plot_group:
-	    if options.verbose:
-		    print >>sys.stderr, "adding to plot group %s ..." % PlotDescriptionMap[n]
-	    plot.add_contents(contents)
-    connection.close()
-    dbtables.discard_connection_filename(dbname, working_filename, verbose = options.verbose)
-    return contents
+	working_filename = dbtables.get_connection_filename(dbname, tmp_path = options.tmp_space, verbose = options.verbose)
+	connection = sqlite3.connect(working_filename)
+	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(dbname)[-1].replace(".sqlite","").replace(".tmp",""), wiki = wiki, base = os.path.join(options.output_dir, user_tag))
+	if contents.sim_inspiral_table is not None:
+		create_sim_coinc_view(connection)
+	for (n, plot) in plot_group:
+		if options.verbose:
+			print >>sys.stderr, "adding to plot group %d %s ..." % (n, PlotDescriptionMap[n])
+		plot.add_contents(contents)
+	connection.close()
+	dbtables.discard_connection_filename(dbname, working_filename, verbose = options.verbose)
+	return contents
 
 def finish_plot(contents, plot_group, options, user_tag):
-    for (n, plot) in plot_group:
-        for (fig, filename_fragment, is_open_box) in plot.finish():
-            for format in options.format:
-                if filename_fragment and fig:
-                    filename_template = T050017_filename(options.ifos, "GSTLAL_INSPIRAL_POSTCOHSPIIR_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all(), "%s", path = options.output_dir)
-                    filename = filename_template % (user_tag, n, filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
-                    if options.verbose:
-                        print >>sys.stderr, "writing %s ..." % filename
-                    fig.savefig(filename)
+	for (n, plot) in plot_group:
+		for (fig, filename_fragment, is_open_box) in plot.finish():
+			for format in options.format:
+				if filename_fragment and fig:
+					filename_template = T050017_filename(options.ifos, "GSTLAL_INSPIRAL_POSTCOHSPIIR_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all(), "%s", path = options.output_dir)
+					filename = filename_template % (user_tag, n, filename_fragment, ("openbox" if is_open_box else "closedbox"), format)
+					if options.verbose:
+						print >>sys.stderr, "writing %s ..." % filename
+					fig.savefig(filename)
 
 
 wiki = open(os.path.join(options.output_dir, "%s" % "plotsummary.txt"),"w")
 
 PlotDescriptionMap = {
-        0: SegmentsTable.__name__,
-        1: SummaryTable.__name__,
-        2: MissedFoundPlots.__name__,
-        3: ParameterAccuracyPlots.__name__,
-        4: BackgroundVsInjectionPlots.__name__,
-        5: BackgroundVsInjectionPlotsMulti.__name__,
-        6: RateVsThreshold.__name__,
-        7: InjectionParameterDistributionPlots.__name__
+		11: SegmentsTable.__name__,
+		0: SummaryTable.__name__,
+		1: MissedFoundPlots.__name__,
+		2: ParameterAccuracyPlots.__name__,
+		3: BackgroundVsInjectionPlots.__name__,
+		4: BackgroundVsInjectionPlotsMulti.__name__,
+		5: RateVsThreshold.__name__,
+		6: InjectionParameterDistributionPlots.__name__
 }
 
 if options.noninj_database:
-    plots = []
-    base = os.path.join(options.output_dir, options.noninj_user_tag)
-    plots.append(SegmentsTable(base))
-    plots.append(SummaryTable("noninj"))
-    # need the shift database to plot rates, see shift
-    rate_plot = RateVsThreshold("noninj")
-    plots.append(rate_plot)
-    plot_group = zip([0,1,6], plots)
-    dbname = options.noninj_database
-    contents = setup_plot(dbname, plot_group, options, options.noninj_user_tag, wiki)
-    finish_plot(contents, plot_group, options, options.noninj_user_tag)
-    del contents
+	plots = []
+	base = os.path.join(options.output_dir, options.noninj_user_tag)
+	plots.append(SegmentsTable(base))
+	plots.append(SummaryTable("noninj"))
+	# need the shift database to plot rates, see shift
+	rate_plot = RateVsThreshold("noninj")
+	plots.append(rate_plot)
+	plot_group = zip([11,0,5], plots)
+	dbname = options.noninj_database
+	contents = setup_plot(dbname, plot_group, options, options.noninj_user_tag, wiki)
+	finish_plot(contents, plot_group, options, options.noninj_user_tag)
+	del contents
 
 if options.shift_database:
-    plots = []
-    base = os.path.join(options.output_dir, options.shift_user_tag)
-    plots.append(SegmentsTable(base))
-    plots.append(SummaryTable("shift"))
-    if rate_plot:
-        rate_plot.reset_tag("shift")
-    else:
-    	rate_plot = RateVsThreshold("shift")
-    plots.append(rate_plot)
-    plot_group = zip([0,1,6], plots)
-    dbname = options.shift_database
-    contents = setup_plot(dbname, plot_group, options, options.shift_user_tag, wiki)
-    finish_plot(contents, plot_group, options, options.shift_user_tag)
-    del contents
+	plots = []
+	base = os.path.join(options.output_dir, options.shift_user_tag)
+	plots.append(SegmentsTable(base))
+	plots.append(SummaryTable("shift"))
+	if rate_plot:
+		rate_plot.reset_tag("shift")
+	else:
+		rate_plot = RateVsThreshold("shift")
+	plots.append(rate_plot)
+	plot_group = zip([11,0,5], plots)
+	dbname = options.shift_database
+	contents = setup_plot(dbname, plot_group, options, options.shift_user_tag, wiki)
+	finish_plot(contents, plot_group, options, options.shift_user_tag)
+	del contents
 
 if options.inj_database:
-    for (inj_name, tag_name) in zip(options.inj_database.split(","), options.inj_user_tag.split(",")):
-        plots = []
-        base = os.path.join(options.output_dir, tag_name)
-        plots.append(MissedFoundPlots(far_thresh = options.far_threshold))
-        plots.append(ParameterAccuracyPlots(far_thresh = options.far_threshold))
-        plots.append(InjectionParameterDistributionPlots())
-        plot_group = zip([2, 3, 7], plots)
-        dbname = inj_name
-        contents = setup_plot(dbname, plot_group, options, tag_name, wiki)
-        finish_plot(contents, plot_group, options, tag_name)
-        del contents
+	for (inj_name, tag_name) in zip(options.inj_database.split(","), options.inj_user_tag.split(",")):
+		plots = []
+		base = os.path.join(options.output_dir, tag_name)
+		plots.append(MissedFoundPlots(far_thresh = options.far_threshold))
+		plots.append(ParameterAccuracyPlots(far_thresh = options.far_threshold))
+		plots.append(InjectionParameterDistributionPlots())
+		plot_group = zip([1, 2, 6], plots)
+		dbname = inj_name
+		contents = setup_plot(dbname, plot_group, options, tag_name, wiki)
+		finish_plot(contents, plot_group, options, tag_name)
+		del contents
 
 #
 # Process files

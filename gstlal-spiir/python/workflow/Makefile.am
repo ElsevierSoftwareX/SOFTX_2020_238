@@ -8,6 +8,8 @@ workflowdir = $(pkgpythondir)/workflow
 
 workflow_PYTHON = \
 	__init__.py \
+	lvalert_helper.py \
+	webpage.py \
 	dbtables_postcoh.py \
 	ligolw_inspinjfind_postcoh.py \
 	ligolw_sqlite_postcoh.py \
