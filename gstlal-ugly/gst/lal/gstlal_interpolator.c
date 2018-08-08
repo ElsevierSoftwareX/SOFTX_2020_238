@@ -147,14 +147,23 @@ static gsl_vector_float** downkernel(int half_length_at_target_rate, int f) {
 	// instead the convolution is on a stride.
 	gsl_vector_float **vecs = malloc(sizeof(*vecs));
 	vecs[0] = gsl_vector_float_calloc(kernel_length);
-
+	double val = 0.;
+	double norm = 0.;
 	for (int i = 0; i < kernel_length; i++) {
 		int x = i - c;
-		if (x == 0)
+		if (x == 0) {
 			gsl_vector_float_set(vecs[0], i, 1.0);
-		else
-			gsl_vector_float_set(vecs[0], i, sin(PI * f * x) / (PI * f * x) * (1. - (float) x*x / c / c));
+			norm += 1.;
+		}
+		else {
+			val = sin(PI * x / f) / (PI * x / f) * (1. - (float) x*x / c / c);
+			norm += val * val;
+			gsl_vector_float_set(vecs[0], i, val);
+		}
 	}
+
+	for (int i = 0; i < kernel_length; i++)
+		gsl_vector_float_set(vecs[0], i, gsl_vector_float_get(vecs[0], i) / sqrt(norm * f));
 	return vecs;
 }
 
@@ -169,8 +178,6 @@ static void convolve(float *output, gsl_vector_float *thiskernel, float *input, 
 
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
 	gsl_matrix_float_view input_matrix = gsl_matrix_float_view_array(input, kernel_length, channels);
-
-	fprintf(stderr, "input matrix %d %d kernel %d output %d\n", input_matrix.matrix.size1, input_matrix.matrix.size2, thiskernel->size, output_vector.vector.size);
 
 	gsl_blas_sgemv (CblasTrans, 1.0, &(input_matrix.matrix), thiskernel, 0, &(output_vector.vector));
 	return;
@@ -224,11 +231,9 @@ static void downsample(float *output, gsl_vector_float **thiskernel, float *inpu
 		return;
 	}
 	guint output_offset, input_offset;
-	// FIXME FIXME FIXME We must make sure that blockstride out % factor = 0
-	fprintf(stderr, "kernel_length %d, factor %d, channels %d, blockstrideout %d\n", kernel_length, factor, channels, blockstrideout);
-	for (guint samp = 0; samp < blockstrideout; samp+=factor) {
-		output_offset = samp * channels / factor;
-		input_offset = samp * channels;
+	for (guint samp = 0; samp < blockstrideout; samp++) {
+		output_offset = samp * channels;
+		input_offset = samp * channels * factor;
 		convolve(output + output_offset, thiskernel[0], input + input_offset, kernel_length, channels);
 	}
 	return;
@@ -325,6 +330,12 @@ static void gstlal_interpolator_class_init(GSTLALInterpolatorClass *klass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_template));
 }
 
+static float kernel_length(GSTLALInterpolator *element) {
+	if (element->outrate > element->inrate)
+		return element->half_length * 2 + 1;
+	else
+		return element->half_length * 2 * element->inrate / element->outrate + 1;
+}
 
 static void gstlal_interpolator_init(GSTLALInterpolator *element)
 {
@@ -338,8 +349,7 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element)
 	element->workspace = NULL;
 
 	/* hardcoded kernel size */
-	element->half_length = 8;
-	element->kernel_length = element->half_length * 2 + 1;
+	element->half_length = 0;
 
 	/* Always initialize with a discont */
 	element->need_discont = TRUE;
@@ -408,10 +418,16 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 		for (guint i = 1; i < element->outrate / element->inrate; i++)
 			gsl_vector_float_free(element->kernel[i]);
 	}
-	if (element->outrate > element->inrate)
+	if (element->outrate > element->inrate) {
+		/* hardcoded kernel size */
+		element->half_length = 8;
 		element->kernel = upkernel(element->half_length, element->outrate / element->inrate);
-	else
+	}
+	else {
+		/* hardcoded kernel size */
+		element->half_length = 16;
 		element->kernel = downkernel(element->half_length, element->inrate / element->outrate);
+	}
 	/*
 	 * Keep blockstride small to prevent GAPS from growing to be large
 	 * FIXME probably this should be decoupled
@@ -420,16 +436,16 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	// Upsampling
 	if (element->outrate > element->inrate) {
 		element->blockstridein = 32;
-		element->blocksampsin = element->blockstridein + element->kernel_length;
+		element->blocksampsin = element->blockstridein + kernel_length(element) - 1;
 		element->blockstrideout = element->blockstridein * element->outrate / element->inrate;
-		element->blocksampsout = element->blockstrideout + (element->kernel_length) * element->outrate / element->inrate;
+		element->blocksampsout = element->blocksampsin * element->outrate / element->inrate;
 	}
 	// Downsampling
 	else {
 		element->blockstrideout = 32;
-		element->blocksampsout = element->blockstrideout + (element->kernel_length);
 		element->blockstridein = element->blockstrideout * element->inrate / element->outrate;
-		element->blocksampsin = element->blockstridein + element->kernel_length * element->inrate / element->outrate;
+		element->blocksampsin = element->blockstridein + kernel_length(element) - 1;
+		element->blocksampsout = element->blocksampsin * element->outrate / element->inrate;
 	}
 	GST_INFO_OBJECT(element, "blocksampsin %d, blocksampsout %d, blockstridein %d, blockstrideout %d", element->blocksampsin, element->blocksampsout, element->blockstridein, element->blockstrideout);
 
@@ -483,10 +499,10 @@ static guint64 get_available_samples(GSTLALInterpolator *element)
 static guint minimum_input_length(GSTLALInterpolator *element, guint samps) {
 	// Upsampling
 	if (element->outrate >  element->inrate)
-		return samps / element->outrate / element->inrate + element->kernel_length;
+		return samps / element->outrate / element->inrate + kernel_length(element);
 	// Downsampling
 	else
-		return samps / element->outrate / element->inrate + element->kernel_length * element->inrate / element->outrate;
+		return samps / element->outrate / element->inrate + kernel_length(element) * element->inrate / element->outrate;
 }
 
 
@@ -504,13 +520,19 @@ static guint get_output_length(GSTLALInterpolator *element, guint samps) {
 	*/
 
 	/* Pretend that we have a half_length set of samples if we are at a discont */
-	guint pretend_samps = element->need_pretend ? element->half_length : 0;
+	guint pretend_samps = 0;
+	if (element->need_pretend) {
+		if (element->outrate > element->inrate)
+			pretend_samps = element->half_length;
+		else
+			pretend_samps = element->half_length * element->inrate / element->outrate;
+	}
 	guint numinsamps = get_available_samples(element) + samps + pretend_samps;
-	guint filtersamples = (element->outrate > element->inrate) ? element->kernel_length : element->kernel_length * element->inrate / element->outrate;
-	if (numinsamps <= filtersamples)
+	//guint filtersamples = (element->outrate > element->inrate) ? kernel_length(element) : kernel_length(element) * element->inrate / element->outrate;
+	if (numinsamps <= kernel_length(element))
 		return 0;
 	// Note this could be zero
-	guint numoutsamps = (numinsamps - filtersamples) * element->outrate / element->inrate;
+	guint numoutsamps = (numinsamps - kernel_length(element)) * element->outrate / element->inrate;
 	guint numblocks = numoutsamps / element->blockstrideout;
 
 	/* NOTE could be zero */
@@ -708,9 +730,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, &copied_nongap);
 
 			if (element->outrate > element->inrate)
-				upsample(output, element->kernel, element->workspace->data, element->kernel_length, element->outrate / element->inrate, element->channels, element->blockstrideout, copied_nongap);
+				upsample(output, element->kernel, element->workspace->data, kernel_length(element), element->outrate / element->inrate, element->channels, element->blockstrideout, copied_nongap);
 			else
-				downsample(output, element->kernel, element->workspace->data, element->kernel_length, element->inrate / element->outrate, element->channels, element->blockstrideout, copied_nongap);
+				downsample(output, element->kernel, element->workspace->data, kernel_length(element), element->inrate / element->outrate, element->channels, element->blockstrideout, copied_nongap);
 			if (element->need_pretend) {
 				element->need_pretend = FALSE;
 				if (element->outrate > element->inrate)
