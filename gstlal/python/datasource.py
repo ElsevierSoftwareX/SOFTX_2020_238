@@ -67,7 +67,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue import segments
 import lal
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from lal import LIGOTimeGPS
 
 
 ## #### ContentHandler

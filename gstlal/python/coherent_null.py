@@ -31,7 +31,6 @@ import numpy
 import math
 
 import lal
-from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 
 #
 # =============================================================================
@@ -109,7 +108,7 @@ def psd_to_impulse_response(PSD1, PSD2):
 	assert PSD1.deltaF == PSD2.deltaF
 	assert len(PSD1.data) == len(PSD2.data)
 
-	coh_facs_H1 = REAL8FrequencySeries()
+	coh_facs_H1 = lal.createREAL8FrequencySeries()
 	coh_facs_H1.f0 = PSD1.f0
 	coh_facs_H1.deltaF = PSD1.deltaF
 	coh_facs_H1.data = PSD2.data/(PSD1.data + PSD2.data)
@@ -118,7 +117,7 @@ def psd_to_impulse_response(PSD1, PSD2):
 	data[0] = data[-1] = 0.0
 	coh_facs_H1.data = data
 
-	coh_facs_H2 = REAL8FrequencySeries()
+	coh_facs_H2 = lal.REAL8FrequencySeries()
 	coh_facs_H2.f0 = PSD2.f0
 	coh_facs_H2.deltaF = PSD2.deltaF
 	coh_facs_H2.data = PSD1.data/(PSD1.data + PSD2.data)

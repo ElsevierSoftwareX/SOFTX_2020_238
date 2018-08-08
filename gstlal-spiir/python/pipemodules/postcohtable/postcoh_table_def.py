@@ -3,7 +3,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import table
 from glue.ligolw import ilwd
 from glue.ligolw import dbtables
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from lal import LIGOTimeGPS
 from xml.sax.xmlreader import AttributesImpl
 # so they can be inserted into a database
 dbtables.ligolwtypes.ToPyType["ilwd:char"] = unicode

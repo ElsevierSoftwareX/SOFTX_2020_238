@@ -39,8 +39,7 @@ import pygst
 pygst.require('0.10')
 import gst
 
-
-from pylal import datatypes as laltypes
+import lal
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -204,12 +203,12 @@ def parse_spectrum_message(message):
 	LAL REAL8FrequencySeries containing the strain spectral density.
 	"""
 	s = message.structure
-	return laltypes.REAL8FrequencySeries(
+	return lal.REAL8FrequencySeries(
 		name = s["instrument"] if s.has_field("instrument") else "",
-		epoch = laltypes.LIGOTimeGPS(0, message.timestamp),
+		epoch = lal.LIGOTimeGPS(0, message.timestamp),
 		f0 = 0.0,
 		deltaF = s["delta-f"],
-		sampleUnits = laltypes.LALUnit(s["sample-units"].strip()),
+		sampleUnits = lal.Unit(s["sample-units"].strip()),
 		data = numpy.array(s["magnitude"])
 	)
 
