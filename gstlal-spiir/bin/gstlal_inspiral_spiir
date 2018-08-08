@@ -79,20 +79,18 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
-from pylal.datatypes import LIGOTimeGPS
-from pylal import series as lalseries
+import lal
+from lal import LIGOTimeGPS
 from gstlal import bottle
 from gstlal import datasource
-from gstlal import lloidparts
-from gstlal import far
 from gstlal import httpinterface
 from gstlal import hoftcache
-from gstlal import inspiral
 from gstlal import pipeparts
+from gstlal import pipemodules
 from gstlal import simulation
 
-from gstlal import spiirparts
-from gstlal import simplehandler
+from gstlal.spiirbank import spiir_utils
+from gstlal.pipemodules import spiirparts
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
   pass
@@ -188,7 +186,7 @@ def parse_command_line():
     print("only process one detector")
 
   # Get the banks and make the detectors
-  iir_banks = [inspiral.parse_iirbank_string(iirbank) for iirbank in options.iir_bank]
+  iir_banks = [spiir_utils.parse_iirbank_string(iirbank) for iirbank in options.iir_bank]
 	
   # FIXME: should also check for read permissions
   required_files = []
@@ -286,37 +284,6 @@ def parse_command_line():
 # end parse_command_line
 ################################################################
 
-################################################################
-    #
-    # setup sigint handler to shutdown pipeline.  this is how the program stops
-    # gracefully, it is the only way to stop it.  Otherwise it runs forever
-    # man.
-    #
-###############################################################
-
-class OneTimeSignalHandler(object):
-  def __init__(self, pipeline):
-    self.pipeline = pipeline
-    self.count = 0
-
-  def __call__(self, signum, frame):
-    self.count += 1
-    if self.count == 1:
-      print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
-      try:
-	#FIXME how do I choose a timestamp?
-	self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
-	if not self.pipeline.send_event(gst.event_new_eos()):
-	  raise Exception("pipeline.send_event(EOS) returned failure")
-      except Exception, e:
-	print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
-	os._exit(1)
-    else:
-      print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
-#################################################################
-# end class OneTimeSignalHandler()
-#################################################################
-
 #
 # =============================================================================
 #
@@ -359,7 +326,7 @@ else:
 
 
 if options.reference_psd is not None:
-  psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
+  psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
 else:
   psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
@@ -405,16 +372,6 @@ def one_pipeline(iir_bank,
   # FIXME:  get service-discovery working, then don't do this
   if "GSTLAL_LL_JOB" in os.environ:
     open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
-
-#  banks = {}
-#  banks = inspiral.parse_iirbank_files(iir_bank, verbose = options.verbose)
-#  for instrument in banks:
-#    for n, bank in enumerate(banks[instrument]):
-#      bank.logname = "%sbank%d" % (instrument,n)
-#  @bottle.route("/bank.txt")
-#  def get_name(banks = banks):
-#    bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
-#    yield '%.14g %.4g ' % (float(now()), bank.template_bank_filename)
 
   #
   # Build pipeline
@@ -524,8 +481,8 @@ def one_pipeline(iir_bank,
     # setup sigint handler to shutdown pipeline. This is
     # how the program stops gracefully.
     # Otherwise it runs forever.
-    signal.signal(signal.SIGINT, OneTimeSignalHandler(pipeline))
-    signal.signal(signal.SIGTERM, OneTimeSignalHandler(pipeline))
+    signal.signal(signal.SIGINT, simplehandler.OneTimeSignalHandler(pipeline))
+    signal.signal(signal.SIGTERM, simplehandler.OneTimeSignalHandler(pipeline))
     
   if options.verbose:
     print >>sys.stderr, "setting pipeline state to playing ..."
