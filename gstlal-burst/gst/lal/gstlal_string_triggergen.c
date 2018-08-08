@@ -72,7 +72,7 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-#define DEFAULT_THRES 5.5 
+#define DEFAULT_THRES 5.5
 #define DEFAULT_CLUSTER 0.1
 
 
@@ -157,7 +157,7 @@ static SnglBurst *record_string_event(SnglBurst *dest, LIGOTimeGPS peak_time, fl
 	 */
 
 	dest->snr = snr;
-	dest->peak_time = peak_time; 
+	dest->peak_time = peak_time;
 
 	/*
 	 * done
@@ -170,7 +170,7 @@ static SnglBurst *record_string_event(SnglBurst *dest, LIGOTimeGPS peak_time, fl
 /*
  *======================================================
  *
- *               Trigger Generator 
+ *               Trigger Generator
  *
  *======================================================
  */
@@ -202,8 +202,7 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 	length = GST_BUFFER_PTS(inbuf) + GST_BUFFER_DURATION(inbuf);
 
 	t0 = GST_BUFFER_PTS(inbuf);
-
-	length = gst_util_uint64_scale_int_round(length > t0 ? length - t0 : 0, GST_AUDIO_INFO_RATE(&element->audio_info), GST_SECOND); 
+	length = gst_util_uint64_scale_int_round(length > t0 ? length - t0 : 0, GST_AUDIO_INFO_RATE(&element->audio_info), GST_SECOND);
 
 	GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
 	for(sample = 0; sample < length; sample++){
@@ -224,6 +223,7 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 						new->next = head;
 						head = new;
 						nevents++;
+						free(new);
 					}
 					record_string_event(&element->last_event[channel], t, *snrdata, channel, element);
 				} else if(*snrdata > element->last_event[channel].snr) {
@@ -238,7 +238,7 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 				}
 				element->last_time[channel] = t;
 			} else {
-				/* FIXME: if more than cluster samples elapse, we should flush the triggers */ 
+				/* FIXME: if more than cluster samples elapse, we should flush the triggers */
 				}
 			snrdata++;
 		}
@@ -261,6 +261,7 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 */
 	gst_buffer_unmap(inbuf,&inmap);
 	gst_buffer_unmap(outbuf,&outmap);
+
 /*
 	GST_DEBUG_OBJECT(element->srcpad, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
 	return gst_pad_push(element->srcpad, outbuf);
@@ -293,7 +294,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 	else {
 		GstCaps * src_caps=gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans));
 		if(gst_caps_is_strictly_equal (caps, src_caps)){
-			*size = sizeof(SnglBurst); 
+			*size = sizeof(SnglBurst);
 			success = TRUE;
 		}
 		gst_caps_unref(src_caps);
@@ -308,12 +309,12 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
  */
 
 static GstCaps *transform_caps(GstBaseTransform * trans, GstPadDirection direction, GstCaps * caps, GstCaps *filter)
-{ 
+{
   /*
    * always return the template caps of the other pad
    * FIXME the number of templates is fixed, so need to constrain the sink pad
    */
-  
+
   switch (direction) {
     case GST_PAD_SRC:
       caps = gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans));
@@ -322,20 +323,20 @@ static GstCaps *transform_caps(GstBaseTransform * trans, GstPadDirection directi
     case GST_PAD_SINK:
       caps = gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans));
       break;
-    
+
     default:
       GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction"));
       caps = GST_CAPS_NONE;
       gst_caps_ref(caps);
       break;
   }
-  
+
   if(filter) {
     GstCaps *intersection = gst_caps_intersect(caps, filter);
     gst_caps_unref(caps);
     caps = intersection;
   }
-  
+
   return caps;
 }
 
@@ -565,7 +566,7 @@ static void gstlal_string_triggergen_class_init(GSTLALStringTriggergenClass *kla
 		g_param_spec_float(
 			"cluster",
 			"cluster",
-			"Time window of which events are clustered. Two events with interval smaller than this value will be integrated into a single event.",
+			"Time window in seconds of which events are clustered. Two events with interval smaller than this value will be integrated into a single event.",
 			0, G_MAXFLOAT, DEFAULT_CLUSTER,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
