@@ -56,15 +56,15 @@ static gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
 	/*
 	 * This is a parabolic windowed sinc function kernel
 	 * The baseline kernel is defined as
-	 * 
+	 *
 	 * g[k] = sin(pi / f * (k-c)) / (pi / f * (k-c)) * (1 - (k-c)^2 / c / c)	k != c
 	 * g[k] = 1									k = c
-	 * 
+	 *
 	 * Where:
 	 *
 	 * 	f: interpolation factor, must be power of 2, e.g., 2, 4, 8, ...
 	 * 	c: defined as half the full kernel length
-	 * 
+	 *
 	 * You specify the half filter length at the original rate in samples,
 	 * the kernel length is then given by:
 	 *
@@ -73,29 +73,29 @@ static gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
 	 * Interpolation is then defined as a two step process.  First the
 	 * input data is zero filled to bring it up to the new sample rate,
 	 * i.e., the input data, x, is transformed to x' such that:
-	 * 
+	 *
 	 * x'[i] = x[i/f]	if (i%f) == 0
 	 *	 = 0		if (i%f) > 0
-	 * 
+	 *
 	 * y[i] = sum_{k=0}^{2c+1} x'[i-k] g[k]
-	 * 
+	 *
 	 * Since more than half the terms in this series would be zero, the
 	 * convolution is implemented by breaking up the kernel into f separate
 	 * kernels each 1/f as large as the originalcalled z, i.e.,:
-	 * 
+	 *
 	 * z[0][k/f] = g[k*f]
 	 * z[1][k/f] = g[k*f+1]
 	 * ...
 	 * z[f-1][k/f] = g[k*f + f-1]
 	 *
 	 * Now the convolution can be written as:
-	 * 
+	 *
 	 * y[i] = sum_{k=0}^{2c/f+1} x[i/f] z[i%f][k]
-	 * 
+	 *
 	 * which avoids multiplying zeros.  Note also that by construction the
 	 * sinc function has its zeros arranged such that z[0][:] had only one
 	 * nonzero sample at its center. Therefore the actual convolution is:
-	 * 
+	 *
 	 * y[i] = x[i/f]					if i%f == 0
 	 * y[i] = sum_{k=0}^{2c/f+1} x[i/f] z[i%f][k]		otherwise
 	 *
@@ -130,13 +130,31 @@ static gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
 				gsl_vector_float_set(vecs[j], sub_kernel_length - i - 1, out[index]);
 		}
 	}
-			
+
 	free(out);
 	return vecs;
 }
 
 
 static gsl_vector_float** downkernel(int half_length_at_target_rate, int f) {
+
+	/*
+	 * This is a parabolic windowed sinc function kernel
+	 * The baseline kernel is defined as
+	 *
+	 * g[k] = sin(pi / f * (k-c)) / (pi / f * (k-c)) * (1 - (k-c)^2 / c / c)	k != c
+	 * g[k] = 1									k = c
+	 *
+	 * Where:
+	 *
+	 * 	f: downsample factor, must be power of 2, e.g., 2, 4, 8, ...
+	 * 	c: defined as half the full kernel length
+	 *
+	 * You specify the half filter length at the target rate in samples,
+	 * the kernel length is then given by:
+	 *
+	 *	kernel_length = half_length_at_original_rate * 2 * f + 1
+	 */
 
 	int kernel_length = 2 * half_length_at_target_rate * f + 1;
 
@@ -170,10 +188,10 @@ static gsl_vector_float** downkernel(int half_length_at_target_rate, int f) {
 
 static void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
 
-	/* 
+	/*
 	 * This function will multiply a matrix of input values by vector to
 	 * produce a vector of output values.  It is a single sample output of a
-	 * convolution with channels number of channels
+	 * convolution with "channels" number of channels
 	 */
 
 	gsl_vector_float_view output_vector = gsl_vector_float_view_array(output, channels);
@@ -233,6 +251,11 @@ static void downsample(float *output, gsl_vector_float **thiskernel, float *inpu
 	guint output_offset, input_offset;
 	for (guint samp = 0; samp < blockstrideout; samp++) {
 		output_offset = samp * channels;
+		/*
+		 * NOTE that only every "factor" if input samples is convolved
+		 * since the convolution of inbetween samples would be dropped
+		 * in the output anyway.
+		 */
 		input_offset = samp * channels * factor;
 		convolve(output + output_offset, thiskernel[0], input + input_offset, kernel_length, channels);
 	}
@@ -284,7 +307,7 @@ static GstStaticPadTemplate src_template =
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0")
-		
+
 	);
 
 
@@ -331,6 +354,9 @@ static void gstlal_interpolator_class_init(GSTLALInterpolatorClass *klass)
 }
 
 static float kernel_length(GSTLALInterpolator *element) {
+	/*
+	 * The kernel length is specified relative to the input rate
+	 */
 	if (element->outrate > element->inrate)
 		return element->half_length * 2 + 1;
 	else
@@ -361,9 +387,10 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element)
 
 static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter) {
 
-	/* 
-	 * FIXME actually pull out the allowed rates so that we can prevent
-	 *  downsampling at the negotiation stage
+	/*
+	 * All powers of two rates from 4 to 32768 Hz are allowed.  This
+	 * element is designed to be efficient when using power of two rate
+	 * ratios.
 	 */
 
 	GstStructure *capsstruct;
@@ -397,7 +424,6 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "rate", &outrate), FALSE);
 
 	g_return_val_if_fail(inchannels == outchannels, FALSE);
-	//g_return_val_if_fail(outrate % inrate == 0, FALSE);
 
 	element->inrate = inrate;
 	element->outrate = outrate;
@@ -418,11 +444,13 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 		for (guint i = 1; i < element->outrate / element->inrate; i++)
 			gsl_vector_float_free(element->kernel[i]);
 	}
+	// Upsampling
 	if (element->outrate > element->inrate) {
 		/* hardcoded kernel size */
 		element->half_length = 8;
 		element->kernel = upkernel(element->half_length, element->outrate / element->inrate);
 	}
+	// Downsampling
 	else {
 		/* hardcoded kernel size */
 		element->half_length = 16;
@@ -436,14 +464,19 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	// Upsampling
 	if (element->outrate > element->inrate) {
 		element->blockstridein = 32;
+		// You can produce blockstridein samples of output by having an
+		// extra kernel length (minus 1) of input samples
 		element->blocksampsin = element->blockstridein + kernel_length(element) - 1;
+		// Upsampling produces an output that is the ratio of rates larger.
 		element->blockstrideout = element->blockstridein * element->outrate / element->inrate;
 		element->blocksampsout = element->blocksampsin * element->outrate / element->inrate;
 	}
 	// Downsampling
 	else {
 		element->blockstrideout = 32;
+		// Downsampling requires the ratio of rates (in/out) of input to produce a given output
 		element->blockstridein = element->blockstrideout * element->inrate / element->outrate;
+		// We need to have kernel length -1 extra samples going in to hit a target input stride.
 		element->blocksampsin = element->blockstridein + kernel_length(element) - 1;
 		element->blocksampsout = element->blocksampsin * element->outrate / element->inrate;
 	}
@@ -516,7 +549,7 @@ static guint get_output_length(GSTLALInterpolator *element, guint samps) {
 	/*
 	 * The output length is either a multiple of the blockstride or 0 if
 	 * there is not enough data.
-	 * 
+	 *
 	*/
 
 	/* Pretend that we have a half_length set of samples if we are at a discont */
@@ -529,7 +562,7 @@ static guint get_output_length(GSTLALInterpolator *element, guint samps) {
 	}
 	guint numinsamps = get_available_samples(element) + samps + pretend_samps;
 	//guint filtersamples = (element->outrate > element->inrate) ? kernel_length(element) : kernel_length(element) * element->inrate / element->outrate;
-	if (numinsamps <= kernel_length(element))
+	if (numinsamps < kernel_length(element))
 		return 0;
 	// Note this could be zero
 	guint numoutsamps = (numinsamps - kernel_length(element)) * element->outrate / element->inrate;
@@ -654,7 +687,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	g_assert(GST_BUFFER_DURATION_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
-		
+
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_input_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
 
 		/*
@@ -696,7 +729,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	gst_buffer_ref(inbuf);  /* don't let calling code free buffer */
 	gst_audioadapter_push(element->adapter, inbuf);
 	GST_INFO_OBJECT(element, "adapter_size %u (samples)", (guint) get_available_samples(element));
-	
+
 	/*
 	 * Handle the different possiblilities
 	 */
@@ -711,7 +744,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		guint processed = 0;
 		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
 		float *output = (float *) mapinfo.data;
-		memset(mapinfo.data, 0, mapinfo.size);	
+		memset(mapinfo.data, 0, mapinfo.size);
 		/* FIXME- clean up this print statement (format) */
 		/* GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length); */
 
@@ -724,7 +757,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 			if (element->need_pretend) {
 				memset(element->workspace->data, 0, sizeof(*element->workspace->data) * element->workspace->size1 * element->workspace->size2);
-				gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
+				if (element->outrate > element->inrate)
+					gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
+				else
+					gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length * element->inrate / element->outrate) * element->channels, element->blocksampsin - element->half_length * element->inrate / element->outrate, NULL, &copied_nongap);
 			}
 			else
 				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, &copied_nongap);
