@@ -532,10 +532,10 @@ static guint64 get_available_samples(GSTLALInterpolator *element)
 static guint minimum_input_length(GSTLALInterpolator *element, guint samps) {
 	// Upsampling
 	if (element->outrate >  element->inrate)
-		return samps / element->outrate / element->inrate + kernel_length(element);
+		return (guint) ceil( (float) samps * element->inrate / element->outrate) + kernel_length(element) - 1;
 	// Downsampling
 	else
-		return samps / element->outrate / element->inrate + kernel_length(element) * element->inrate / element->outrate;
+		return (guint) ceil( (float) samps * element->outrate / element->inrate) + kernel_length(element) - 1;
 }
 
 
@@ -561,11 +561,10 @@ static guint get_output_length(GSTLALInterpolator *element, guint samps) {
 			pretend_samps = element->half_length * element->inrate / element->outrate;
 	}
 	guint numinsamps = get_available_samples(element) + samps + pretend_samps;
-	//guint filtersamples = (element->outrate > element->inrate) ? kernel_length(element) : kernel_length(element) * element->inrate / element->outrate;
-	if (numinsamps < kernel_length(element))
+	if (numinsamps < kernel_length(element) - 1)
 		return 0;
 	// Note this could be zero
-	guint numoutsamps = (numinsamps - kernel_length(element)) * element->outrate / element->inrate;
+	guint numoutsamps = (numinsamps - kernel_length(element) - 1) * element->outrate / element->inrate;
 	guint numblocks = numoutsamps / element->blockstrideout;
 
 	/* NOTE could be zero */
