@@ -600,11 +600,13 @@ if compute_kappac or compute_fcc or compute_fs or compute_srcq or compute_kappap
 	channel_list.append((instrument, ChannelNames["darmexcchannel"]))
 	headkeys.append("exc")
 
-# We need to make sure we have DARM_ERR and the PCAL channel for computing \kappas
-if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
+# We need the PCAL channel if we are computing \kappas or removing the calibration lines
+if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or remove_cal_lines:
 	channel_list.append((instrument, ChannelNames["pcalchannel"]))
 	headkeys.append("pcal")
-	if CalibrationConfigs["calibrationmode"] == "Partial":
+
+# We also need DARM_ERR if we are computing the kappas
+if (compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq) and CalibrationConfigs["calibrationmode"] == "Partial":
 		channel_list.append((instrument, ChannelNames["darmerrchannel"]))
 		headkeys.append("darm_err")
 
@@ -666,7 +668,7 @@ if not verbose:
 #
 
 if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memory; "low-latency" mode
-	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = int(InputConfigs["inputframduration"]))
+	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = int(InputConfigs["inputframeduration"]))
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
 	src = pipeparts.mklalcachesrc(pipeline, location = InputConfigs["framecache"], cache_dsc_regex = instrument)
 
