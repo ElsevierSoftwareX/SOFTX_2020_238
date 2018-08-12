@@ -990,15 +990,10 @@ class ParameterAccuracyPlots(object):
 				axes.plot([get_inj_snr(sim, instrument) for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
 			yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injection SNR", r"(Rec. SNR - Injection SNR) / Injection SNR")
-			axes.set_title(r"Fractional SNR Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			axes.semilogx([get_inj_snr(sim, instrument) for sim, sngl, far in pairs], [(sngl.snr - get_inj_snr(sim, instrument)) / get_inj_snr(sim, instrument) for sim, sngl, far in pairs], "kx")
-			yield fig, "snr_acc_frac_scatter_%s_%s" % (waveform, instrument), False
-
-			fig, axes = create_plot(r"(Rec. SNR - SNR) / Injection SNR", "Number")
-			axes.set_title(r"Fractional SNR Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([(sngl.snr - get_inj_snr(sim, instrument)) / get_inj_snr(sim, instrument) for sim, sngl, far in pairs]), axes)
-			yield fig, "snr_acc_frac_hist_%s_%s" % (waveform, instrument), False
+			fig, axes = create_plot(r"(Rec. SNR - Inj SNR)", "Number")
+			axes.set_title(r"SNR Diff in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
+			hist(numpy.array([(sngl.snr - get_inj_snr(sim, instrument)) for sim, sngl, far in pairs]), axes)
+			yield fig, "snr_diff_hist_%s_%s" % (waveform, instrument), False
 
 #
 # =============================================================================
