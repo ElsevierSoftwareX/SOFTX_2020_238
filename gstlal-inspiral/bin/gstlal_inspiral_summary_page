@@ -134,11 +134,14 @@ inj_acc_mtotal += webpage.image_glob(os.path.join(opts.glob_path, '*2_mtotal_acc
 inj_acc_time = webpage.section("Time Parameter Accuracy")
 inj_acc_time += webpage.image_glob(os.path.join(opts.glob_path, '*2_t_acc_*.png'), "Accuracy of time")
 
+inj_acc_eff_dist = webpage.section("Effective Distance Accuracy")
+inj_acc_eff_dist += webpage.image_glob(os.path.join(opts.glob_path, '*2_deff_acc_frac_*.png'), "Accuracy of effective distance")
+
 inj_acc_spin = webpage.section("Effective Spin Accuracy")
 inj_acc_spin += webpage.image_glob(os.path.join(opts.glob_path, '*2_chi_acc_scatter*.png'), "Accuracy of mass-weighted spin")
 
 inj_acc_snr = webpage.section("SNR Recovery")
-inj_acc_snr += webpage.image_glob(os.path.join(opts.glob_path, '*2_snr_*.png'), "Injected expected SNR vs recovered SNR")
+inj_acc_snr += webpage.image_glob(os.path.join(opts.glob_path, '*2_snr_rec_scatter*.png'), "Injected expected SNR vs recovered SNR")
 
 
 
@@ -193,7 +196,7 @@ for tag in opts.output_user_tag:
 	fm_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % tag])]
 	fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % tag)]
 
-inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_spin, inj_acc_snr, horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
+inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_eff_dist, inj_acc_spin, inj_acc_snr, horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
 
 
 #

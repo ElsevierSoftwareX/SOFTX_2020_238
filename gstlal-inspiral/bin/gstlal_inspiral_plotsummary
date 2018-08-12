@@ -758,8 +758,6 @@ FROM
 			missed = self.found_in.pop(None, [])
 
 			# Define decisive distance even if there is one instrument
-			# FIXME We have NANs in the eff_distance column now so this
-			# function does not work
 			def decisive_distance(sim, instruments):
 				if len(instruments) > 1:
 					return sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1]
@@ -994,33 +992,51 @@ class ParameterAccuracyPlots(object):
 			hist(numpy.array([float(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs]), axes)
 			yield fig, "t_acc_hist_%s_%s" % (waveform, instrument), False
 
+			fig, axes = create_plot(r"Injection $D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", r"(Rec. $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$")
+			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
+			axes.semilogx([sim.get_eff_dist(instrument) for sim, sngl, far in pairs], [(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl, far in pairs], "kx")
+			yield fig, "deff_acc_frac_scatter_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"(Rec. $D_{\mathrm{eff}}$ - Injection $D_{\mathrm{eff}}$) / Injection $D_{\mathrm{eff}}$", "Number")
+			axes.set_title(r"Fractional Effective Distance Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
+			hist(numpy.array([(sngl.eff_distance - sim.get_eff_dist(instrument)) / sim.get_eff_dist(instrument) for sim, sngl, far in pairs]), axes)
+			yield fig, "deff_acc_frac_hist_%s_%s" % (waveform, instrument), False
+
+			fig, axes = create_plot(r"(Rec. $1/D_{\mathrm{eff}}$ - Injection $1/D_{\mathrm{eff}}$) / Injection $1/D_{\mathrm{eff}}$", "Number")
+			axes.set_title(r"Fractional Effective Amplitude Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
+			hist(numpy.array([(1. / sngl.eff_distance - 1. / sim.get_eff_dist(instrument)) / (1. / sim.get_eff_dist(instrument)) for sim, sngl, far in pairs]), axes)
+			yield fig, "deff_acc_frac_inv_hist_%s_%s" % (waveform, instrument), False
+
 			fig, axes = create_plot(r"Inj. $\chi$", r"Rec. $\chi$")
 			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
 			axes.plot([sim.chi for sim, sngl, far in pairs], [sngl.chi for sim, sngl, far in pairs], "kx")
 			yield fig, "chi_acc_scatter_%s_%s" % (waveform, instrument), False
 
+			if instrument == 'H1':
+				fig, axes = create_plot(r"Inj. H1 SNR", r"Rec. H1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
+				if max([sim.alpha4 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha4 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha4 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
-			def get_inj_snr(sim, instrument):
-				alphas = {'H1':'alpha4', 'L1':'alpha5', 'V1':'alpha6'}
-				return getattr(sim, "%s" % alphas[instrument])
-
-			fig, axes = create_plot(r"Inj. SNR", r"Rec. SNR")
-			axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			if max([get_inj_snr(sim, instrument) for sim, sngl, far in pairs]) > 20:
-				axes.loglog([get_inj_snr(sim, instrument) for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
-			else:
-				axes.plot([get_inj_snr(sim, instrument) for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
-			yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
-
-			fig, axes = create_plot(r"Injection SNR", r"(Rec. SNR - Injection SNR) / Injection SNR")
-			axes.set_title(r"Fractional SNR Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			axes.semilogx([get_inj_snr(sim, instrument) for sim, sngl, far in pairs], [(sngl.snr - get_inj_snr(sim, instrument)) / get_inj_snr(sim, instrument) for sim, sngl, far in pairs], "kx")
-			yield fig, "snr_acc_frac_scatter_%s_%s" % (waveform, instrument), False
-
-			fig, axes = create_plot(r"(Rec. SNR - SNR) / Injection SNR", "Number")
-			axes.set_title(r"Fractional SNR Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([(sngl.snr - get_inj_snr(sim, instrument)) / get_inj_snr(sim, instrument) for sim, sngl, far in pairs]), axes)
-			yield fig, "snr_acc_frac_hist_%s_%s" % (waveform, instrument), False
+			if instrument == 'L1':
+				fig, axes = create_plot(r"Inj. L1 SNR", r"Rec. L1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
+				if max([sim.alpha5 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha5 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha5 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
+			if instrument == 'V1':
+				fig, axes = create_plot(r"Inj. V1 SNR", r"Rec. V1 SNR")
+				axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
+				if max([sim.alpha6 for sim, sngl, far in pairs]) > 20:
+					axes.loglog([sim.alpha6 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				else:
+					axes.plot([sim.alpha6 for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
 #
 # =============================================================================
@@ -1284,6 +1300,7 @@ WHERE
 					self.points[instrument_pair] = self.Points()
 				if is_background:
 					self.points[instrument_pair].background_snr.append((x.snr, y.snr))
+					self.points[instrument_pair].background_deff.append((x.eff_distance, y.eff_distance))
 					eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
 					mtot = x.mass1 + x.mass2
 					self.points[instrument_pair].background_eta.append(eta)
@@ -1293,6 +1310,7 @@ WHERE
 
 				else:
 					self.points[instrument_pair].zerolag_snr.append((x.snr, y.snr))
+					self.points[instrument_pair].zerolag_deff.append((x.eff_distance, y.eff_distance))
 		else:
 			# injections file
 			for values in contents.connection.cursor().execute("""
@@ -1312,6 +1330,7 @@ WHERE
 				if instrument_pair not in self.points:
 					self.points[instrument_pair] = self.Points()
 				self.points[instrument_pair].injections_snr.append((x.snr, y.snr))
+				self.points[instrument_pair].injections_deff.append((x.eff_distance, y.eff_distance))
 				eta = x.mass1 * x.mass2 / (x.mass1 + x.mass2)**2
 				mtot = x.mass1 + x.mass2
 				self.points[instrument_pair].injections_mchirp.append(mtot * eta**(3./5))
