@@ -89,7 +89,7 @@ class SnglInspiral(snglinspiraltable.GSTLALSnglInspiral):
 
 
 class StreamThinca(object):
-	def __init__(self, coincidence_threshold, thinca_interval = 50.0, min_instruments = 2, min_log_L = None, sngls_snr_threshold = None):
+	def __init__(self, coincidence_threshold, thinca_interval = 50.0, min_instruments = 2, min_log_L = None, sngls_snr_threshold = None, network_snrsq_threshold = 49.):
 		self.thinca_interval = thinca_interval	# seconds
 		self.last_coincs = {}
 		if min_instruments < 1:
@@ -97,6 +97,7 @@ class StreamThinca(object):
 		self.min_instruments = min_instruments
 		self.min_log_L = min_log_L
 		self.sngls_snr_threshold = sngls_snr_threshold
+		self.network_snrsq_threshold = network_snrsq_threshold
 		self.sngl_inspiral_table = None
 		self.ln_likelihood_func = None
 
@@ -250,9 +251,10 @@ class StreamThinca(object):
 		# events with an SNR less than 5.  Less than SNR 5 triggers
 		# will never produce an log LR greater than 4, so we can
 		# safely discard them.
-		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - self.coincidence_back_off, boundary - self.coincidence_back_off)):
+		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - self.coincidence_back_off, boundary - self.coincidence_back_off), network_snrsq_threshold = self.network_snrsq_threshold):
 			# False/0 = keep, True/non-0 = discard
-			if len(events) == 1 and events[0].snr < 5:
+			# Impose a network SNR cut of 7
+			if sum(e.snr**2 for e in events) < network_snrsq_threshold:
 				return True
 			return min(event.end for event in events) not in seg
 
