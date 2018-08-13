@@ -411,8 +411,10 @@ def parse_command_line():
 
 	if options.reference_psd is None:
 		options.track_psd = True
+	if options.psd_fft_length < 4:
+		raise ValueError("--psd-fft-length cannot be less than 4")
 	if options.psd_fft_length < 32:
-		raise ValueError("--psd-fft-length cannot be less than 32")
+		warnings.warn("It is not advised to choose PSD lengths below 32s, since a loss in sensitivity may occur")
 	if options.local_frame_caching and not options.data_source == "frames":
 		raise ValueError("--local-frame-caching can only be used if --data-source is frames")
 	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
