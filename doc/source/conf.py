@@ -99,14 +99,14 @@ todo_include_todos = True
 # a list of builtin themes.
 #
 html_theme = 'alabaster'#'classic'
-html_logo = "gstlal.png"
+html_logo = "gstlal_small.png"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 html_theme_options = {
     'fixed_sidebar': 'true',
-    'sidebar_width': '300px',
+    'sidebar_width': '250px',
     'page_width': '80%',
     'show_powered_by': 'false',
     'logo_name': 'true',
@@ -119,6 +119,7 @@ html_static_path = ['_static']
 
 # Custom sidebar templates, maps document names to template names.
 html_sidebars = { '**': ['navigation.html', 'relations.html', 'searchbox.html'] }
+html_last_updated_fmt = None
 
 # -- Options for HTMLHelp output ------------------------------------------
 
