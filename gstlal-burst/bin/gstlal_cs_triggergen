@@ -1,0 +1,166 @@
+#!/usr/bin/env python
+
+import sys
+import math
+import numpy
+import gi
+gi.require_version('Gst','1.0')
+from gi.repository import GObject
+GObject.threads_init()
+from gi.repository import Gst
+Gst.init(None)
+
+from gstlal import simplehandler
+from gstlal import pipeparts
+from gstlal import datasource
+from gstlal import snglbursttable 
+from lal import LIGOTimeGPS
+from optparse import OptionParser
+
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+
+import lalsimulation
+
+#
+# ================================================================================ 
+#
+#                                  Command Line
+#
+# ================================================================================ 
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		description = "GstLAL-based cosmic string search pipeline."
+	)
+
+	parser.add_option("--sample-rate", metavar = "rate", type = "float", help = "Desired sample rate (Hz)")
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the cache file to load as input data")
+        parser.add_option("--channel", metavar = "channel", help = "Name of channel")
+	parser.add_option("--template-bank", metavar = "filename", help = "Name of template file")
+	parser.add_option("--gps-start-time", metavar = "start_time", help = "GPS start time")
+	parser.add_option("--gps-end-time", metavar = "end_time", help = "GPS end time")
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+#
+# ================================================================================ 
+#
+#				      Main
+#
+# ================================================================================ 
+#
+
+#
+# parse command line
+#
+
+options, filenames = parse_command_line()
+options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
+options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
+
+
+#
+# get data
+#
+
+pipeline = Gst.Pipeline(name="pipeline")
+mainloop = GObject.MainLoop()
+handler = simplehandler.Handler(mainloop, pipeline)
+
+head = pipeparts.mklalcachesrc(pipeline, options.frame_cache)
+head = pipeparts.mkframecppchanneldemux(pipeline, head)
+
+
+#
+# whiten
+#
+
+elem = pipeparts.mkwhiten(pipeline, None)
+pipeparts.src_deferred_link(head, options.channel, elem.get_static_pad("sink"))
+head = elem
+
+
+#
+# resampler and caps filter
+#
+
+head = pipeparts.mkaudioconvert(pipeline,head)
+head = pipeparts.mkresample(pipeline,head)
+head = pipeparts.mkcapsfilter(pipeline,head,"audio/x-raw, format=F32LE, rate=%d" % options.sample_rate)
+head = pipeparts.mkqueue(pipeline,head)
+
+
+#
+# load xml file and find single burst table
+#
+
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+xmldoc = ligolw_utils.load_filename(options.template_bank, contenthandler = LIGOLWContentHandler, verbose = True)
+
+sngl_burst_table = lsctables.SnglBurstTable.get_table(xmldoc)
+
+
+#
+# filter bank
+#
+
+template_bank = [None] * len(sngl_burst_table)
+for i, row in enumerate(sngl_burst_table):
+	template_bank[i], _ = lalsimulation.GenerateStringCusp(1.0,row.central_freq,1.0/options.sample_rate)
+	template_bank[i] = template_bank[i].data.data
+	template_bank[i] /= math.sqrt(numpy.dot(template_bank[i], template_bank[i]))
+head = pipeparts.mkfirbank(pipeline, head, latency = -(len(template_bank[0]) - 1) // 2, fir_matrix = template_bank, block_stride = 4 * options.sample_rate)
+
+
+#
+# trigger generator
+#
+
+head = pipeparts.mkgeneric(pipeline, head, "lal_string_triggergen", threshold = 5.5, cluster = 0.1, bank_filename = options.template_bank)
+
+
+#
+# appsync
+#
+
+def appsink_new_buffer(elem):
+	buf = elem.emit("pull-sample").get_buffer()
+	events = []
+	for i in range(buf.n_memory()):
+		memory = buf.peek_memory(i)
+		result, mapinfo = memory.map(Gst.MapFlags.READ)
+		assert result
+		if mapinfo.data:
+			events.extend(snglbursttable.GSTLALSnglBurst.from_buffer(mapinfo.data))
+		memory.unmap(mapinfo)
+	print(len(events))
+
+appsync = pipeparts.AppSync(appsink_new_buffer = appsink_new_buffer)
+appsync.add_sink(pipeline, head, caps = Gst.Caps.from_string("application/x-lal-snglburst"))
+
+
+if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline did not enter ready state")
+
+
+#
+# seek
+#
+
+datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time);
+
+if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline did not enter playing state")
+
+
+mainloop.run()
+sys.exit()

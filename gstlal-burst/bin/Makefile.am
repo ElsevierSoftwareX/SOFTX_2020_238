@@ -1,4 +1,5 @@
 dist_bin_SCRIPTS = \
+	gstlal_cs_triggergen \
 	gstlal_excesspower \
 	gstlal_excesspower_trigvis \
 	gstlal_feature_extractor \
