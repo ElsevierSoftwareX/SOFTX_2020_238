@@ -179,7 +179,7 @@ trigger_stats_reset(TriggerStats **multistats, int ncombo)
 void
 trigger_stats_xml_reset(TriggerStatsXML *stats)
 {
-    trigger_stats_reset(stats->multistats, stats->ncombo);
+	trigger_stats_reset(stats->multistats, stats->ncombo);
 }
 
 FeatureStats *
@@ -239,37 +239,37 @@ trigger_stats_create(int ncombo)
 
   int icombo = 0;
   for (icombo=0; icombo<ncombo; icombo++) {
-    multistats[icombo] = (TriggerStats *) malloc(sizeof(TriggerStats));
-    TriggerStats *cur_stats = multistats[icombo];
-    // FIXME: what if HV or LV combo
-    //printf("len %s, %d\n", IFOComboMap[icombo].name, strlen(IFOComboMap[icombo].name));
-    cur_stats->ifos = malloc(strlen(IFOComboMap[icombo].name) * sizeof(char));
-    strncpy(cur_stats->ifos, IFOComboMap[icombo].name, strlen(IFOComboMap[icombo].name) * sizeof(char));
-    // create feature
-    cur_stats->feature = feature_stats_create();
-    // our rank, cdf
-    cur_stats->rank = rank_stats_create();
-    cur_stats->nevent = 0;
-    cur_stats->livetime = 0;
+	multistats[icombo] = (TriggerStats *) malloc(sizeof(TriggerStats));
+	TriggerStats *cur_stats = multistats[icombo];
+	// FIXME: what if HV or LV combo
+	//printf("len %s, %d\n", IFOComboMap[icombo].name, strlen(IFOComboMap[icombo].name));
+	cur_stats->ifos = malloc(strlen(IFOComboMap[icombo].name) * sizeof(char));
+	strncpy(cur_stats->ifos, IFOComboMap[icombo].name, strlen(IFOComboMap[icombo].name) * sizeof(char));
+	// create feature
+	cur_stats->feature = feature_stats_create();
+	// our rank, cdf
+	cur_stats->rank = rank_stats_create();
+	cur_stats->nevent = 0;
+	cur_stats->livetime = 0;
   }
   return multistats;
 }
 
 TriggerStatsXML *
 trigger_stats_xml_create(char *ifos, int stats_type) {
-    TriggerStatsXML * stats = (TriggerStatsXML *) malloc(sizeof(TriggerStatsXML));
-    if (stats_type == STATS_XML_TYPE_BACKGROUND) {
-        stats->feature_xmlname = g_string_new(BACKGROUND_XML_FEATURE_NAME);
-        stats->rank_xmlname = g_string_new(BACKGROUND_XML_RANK_NAME);
-    } else if (stats_type == STATS_XML_TYPE_ZEROLAG) {
-        stats->feature_xmlname = g_string_new(ZEROLAG_XML_FEATURE_NAME);
-        stats->rank_xmlname = g_string_new(ZEROLAG_XML_RANK_NAME);
-    }
-    int nifo = strlen(ifos) / IFO_LEN;
-    int ncombo = get_ncombo(nifo);
-    stats->multistats = trigger_stats_create(ncombo);
-    stats->ncombo = ncombo;
-    return stats;
+	TriggerStatsXML * stats = (TriggerStatsXML *) malloc(sizeof(TriggerStatsXML));
+	if (stats_type == STATS_XML_TYPE_BACKGROUND) {
+		stats->feature_xmlname = g_string_new(BACKGROUND_XML_FEATURE_NAME);
+		stats->rank_xmlname = g_string_new(BACKGROUND_XML_RANK_NAME);
+	} else if (stats_type == STATS_XML_TYPE_ZEROLAG) {
+		stats->feature_xmlname = g_string_new(ZEROLAG_XML_FEATURE_NAME);
+		stats->rank_xmlname = g_string_new(ZEROLAG_XML_RANK_NAME);
+	}
+	int nifo = strlen(ifos) / IFO_LEN;
+	int ncombo = get_ncombo(nifo);
+	stats->multistats = trigger_stats_create(ncombo);
+	stats->ncombo = ncombo;
+	return stats;
 }
 
 
@@ -280,15 +280,15 @@ trigger_stats_destroy(TriggerStats **multistats, int ncombo)
   int icombo = 0;
 
   for (icombo=0; icombo<ncombo; icombo++) {
-    TriggerStats *cur_stats = multistats[icombo];
-    feature_stats_destroy(cur_stats->feature);
-    cur_stats->feature = NULL;
-    rank_stats_destroy(cur_stats->rank);
-    cur_stats->rank = NULL;
-    free(cur_stats->ifos);
-    cur_stats->ifos = NULL;
-    free(cur_stats);
-    cur_stats = NULL;
+	TriggerStats *cur_stats = multistats[icombo];
+	feature_stats_destroy(cur_stats->feature);
+	cur_stats->feature = NULL;
+	rank_stats_destroy(cur_stats->rank);
+	cur_stats->rank = NULL;
+	free(cur_stats->ifos);
+	cur_stats->ifos = NULL;
+	free(cur_stats);
+	cur_stats = NULL;
   }
   free(multistats);
   multistats = NULL;
@@ -296,9 +296,9 @@ trigger_stats_destroy(TriggerStats **multistats, int ncombo)
 void
 trigger_stats_xml_destroy(TriggerStatsXML * stats)
 {
-    g_string_free(stats->feature_xmlname, TRUE);
-    g_string_free(stats->rank_xmlname, TRUE);
-    trigger_stats_destroy(stats->multistats, stats->ncombo);
+	g_string_free(stats->feature_xmlname, TRUE);
+	g_string_free(stats->rank_xmlname, TRUE);
+	trigger_stats_destroy(stats->multistats, stats->ncombo);
 }
 
 TriggerStatsPointerList *
@@ -317,17 +317,17 @@ trigger_stats_list_create(char *ifos)
   TriggerStats **stats = NULL;
 
   for (ilist=0; ilist<NSTATS_TO_PROMPT; ilist++) {
-    stats = (TriggerStats **) malloc(sizeof(TriggerStats *) * ncombo);
-    for (icombo=0; icombo<ncombo; icombo++) {
-      stats[icombo] = (TriggerStats *) malloc(sizeof(TriggerStats));
-      TriggerStats *cur_stats = stats[icombo];
-      //printf("len %s, %d\n", IFOComboMap[icombo].name, strlen(IFOComboMap[icombo].name));
-      cur_stats->ifos = malloc(strlen(IFOComboMap[icombo].name) * sizeof(char));
-      strncpy(cur_stats->ifos, IFOComboMap[icombo].name, strlen(IFOComboMap[icombo].name) * sizeof(char));
-      cur_stats->nevent = 0;
-      cur_stats->livetime = 0;
-    }
-    stats_list->plist[ilist] = stats;
+	stats = (TriggerStats **) malloc(sizeof(TriggerStats *) * ncombo);
+	for (icombo=0; icombo<ncombo; icombo++) {
+	  stats[icombo] = (TriggerStats *) malloc(sizeof(TriggerStats));
+	  TriggerStats *cur_stats = stats[icombo];
+	  //printf("len %s, %d\n", IFOComboMap[icombo].name, strlen(IFOComboMap[icombo].name));
+	  cur_stats->ifos = malloc(strlen(IFOComboMap[icombo].name) * sizeof(char));
+	  strncpy(cur_stats->ifos, IFOComboMap[icombo].name, strlen(IFOComboMap[icombo].name) * sizeof(char));
+	  cur_stats->nevent = 0;
+	  cur_stats->livetime = 0;
+	}
+	stats_list->plist[ilist] = stats;
   }
   return stats_list;
 }
@@ -344,10 +344,10 @@ bins1D_get_idx(double val, Bins1D *bins)
   int bin = (log10(val) - bins->cmin - bins->step_2) / bins->step;
 
   if (bin < 0)
-    bin = 0;
+	bin = 0;
   
   if (bin >= bins->nbin)
-    bin = bins->nbin - 1;
+	bin = bins->nbin - 1;
 
   return bin;
 }
@@ -547,7 +547,7 @@ trigger_stats_feature_rates_to_pdf_ssvkernel(FeatureStats *feature)
 	// normalize pdf
 	double step_x = pdf->step_x, step_y = pdf->step_y;
 	double pdf_sum;
-       	pdf_sum = step_x * step_y * gsl_matrix_sum(result);
+	   	pdf_sum = step_x * step_y * gsl_matrix_sum(result);
 	gsl_matrix_scale(result, 1/pdf_sum);
 	//printf("pdf sum %f\n", gsl_matrix_sum(result) * step_x * step_y);
 	
@@ -613,7 +613,7 @@ trigger_stats_pdf_to_fap(Bins2D *pdf, Bins2D *fap)
 {
 	int nbin_x = pdf->nbin_x, nbin_y = pdf->nbin_y;
 	int ibin_x, ibin_y;
-       	double	tmp;
+	   	double	tmp;
 	gsl_matrix *pdfdata = pdf->data, *fapdata = fap->data;
 	double pdf_sum = gsl_matrix_sum(pdfdata);
 	// no data values, return
@@ -621,7 +621,7 @@ trigger_stats_pdf_to_fap(Bins2D *pdf, Bins2D *fap)
 		return;
 
 	/* cdf is our rankings statistic, 
-         * NOTE, here cdf is not a real cumulative distribution function since it is multiplied by step_x*step_y  */
+		 * NOTE, here cdf is not a real cumulative distribution function since it is multiplied by step_x*step_y  */
 	gsl_matrix *cdfdata = gsl_matrix_calloc(pdfdata->size1, pdfdata->size2);
 
 	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
@@ -669,15 +669,133 @@ trigger_stats_pdf_to_fap(Bins2D *pdf, Bins2D *fap)
 	//printf("fap cmax %f\n", gsl_matricmax_x(fapdata));
 }
 
+static double
+get_signal_prob(double logcohsnr, double logcmbchisq)
+{
+	// FIXME: theoretical or from injection?
+	/* follow covariant Gaussian distribution */
+	double p_signal = 0.0;
+	double cohsnr = pow(10, logcohsnr), cmbchisq = pow(10, logcmbchisq);
+	return p_signal;
 
-/* convert collected rates into rank rates*/
+}
+/* convert collected rates into rank rates */
+void
+trigger_stats_feature_to_rank_lr(FeatureStats *feature, RankingStats *rank)
+{
+	Bins2D *fpdf = feature->lgsnr_lgchisq_pdf;
+	int nbin_x = fpdf->nbin_x, nbin_y = fpdf->nbin_y;
+	int ibin_x, ibin_y;
+   	double	tmp;
+	gsl_matrix *fpdfdata = fpdf->data;
+	double fpdf_sum = gsl_matrix_sum(fpdfdata);
+	// no data values, return
+	if (fpdf_sum < 1e-5)
+		return;
+
+	/* likelihood ratio is our rankings statistic
+	 * rankval_mat = P(cohsnr, cmbchisq|signal) - P(cohsnr, cmbchisq|noise)
+	 * where P(cohsnr, cmbchisq|noise) is the old rank(cdf)
+	 * use the enlongated-estimated pdf to get the full cdf to cover very significant region
+	 * this requires that the pdf estimation should be realiable in that region. We will later
+	 * use the elonged pdf to get the distribution of cdf.  */
+	gsl_matrix *rankval_mat = rank->rank_map->data;
+
+	/* set the P(cohsnr, cmbchisq|noise) to be the rankval_mat first */
+	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
+		for (ibin_y=0; ibin_y<=nbin_y-1; ibin_y++) {
+			tmp = 0;
+			if (ibin_y > 0)
+				tmp += gsl_matrix_get(rankval_mat, ibin_x, ibin_y-1);
+			if (ibin_x < nbin_x-1)
+				tmp += gsl_matrix_get(rankval_mat, ibin_x+1, ibin_y);
+			if (ibin_x < nbin_x-1 && ibin_y > 0)
+				tmp -= gsl_matrix_get(rankval_mat, ibin_x+1, ibin_y-1);
+			tmp += gsl_matrix_get(fpdfdata, ibin_x, ibin_y) * fpdf->step_x * fpdf->step_y;
+			// note here we actually assign comulative prob. FIXME: overflow problem ?
+			gsl_matrix_set(rankval_mat, ibin_x, ibin_y, tmp);
+
+		}
+	}
+
+	// note the rank_min and max is based on log10 scale, need to log10 the rankval_mat data
+	// also set minimal p_noise to be PNOISE_MIN_LIMIT
+	double p_signal, p_noise, logcohsnr, logcmbchisq;
+	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
+		for (ibin_y=0; ibin_y<=nbin_y-1; ibin_y++) {
+			logcohsnr = fpdf->step_x * ibin_x + fpdf->cmin_x;
+			logcmbchisq = fpdf->step_y * ibin_y + fpdf->cmin_y;
+			p_signal = get_signal_prob(logcohsnr, logcmbchisq);
+			p_noise = gsl_matrix_get(rankval_mat, ibin_x, ibin_y);
+			p_noise = MAX(PNOISE_MIN_LIMIT, p_noise);
+			gsl_matrix_set(rankval_mat, ibin_x, ibin_y, log10(p_signal) - log10(p_noise));
+		}
+	}
+	
+	/* generate rank distribution from rates. The rank_rates will only be used for reference.
+	 * We generate fap using the enlongated pdf
+	 * to cover significant region */
+	gsl_vector_long *rratesdata = rank->rank_rates->data;
+	gsl_matrix_long *fratesdata = feature->lgsnr_lgchisq_rates->data;
+	double cur_rankval_min, cur_rankval_max, cur_pdf;
+	int nbin_rank = rank->rank_rates->nbin, ibin;
+	gsl_vector *rpdfdata = rank->rank_pdf->data;
+	long cur_rates;
+	for (ibin=0; ibin<nbin_rank; ibin++) {
+		// FIXME:consider non-even distribution of cdf bins
+		if (ibin == 0)
+			cur_rankval_min = log10(LR_MIN_LIMIT) -1;
+		else
+			cur_rankval_min = bins1D_get_low_bound(rank->rank_pdf, ibin);
+		cur_rankval_max = bins1D_get_up_bound(rank->rank_pdf, ibin);
+		cur_pdf = calc_rank_pdf_val(fpdfdata, rankval_mat, cur_rankval_min, cur_rankval_max);
+		cur_pdf = cur_pdf*fpdf->step_x*fpdf->step_y/rank->rank_pdf->step;
+		gsl_vector_set(rpdfdata, ibin, cur_pdf);
+		/* set the rates */
+		cur_rates = calc_rank_rates_val(fratesdata, rankval_mat, cur_rankval_min, cur_rankval_max);
+		gsl_vector_long_set(rratesdata, ibin, cur_rates);
+	}
+	/* rank pdf could be zero, set pdf=0 to pdf=next smallest value */
+	double second_smallest_pdf = 1.0;
+	for (ibin_x=0; ibin_x<nbin_rank; ibin_x++) {
+			cur_pdf = gsl_vector_get(rpdfdata, ibin_x);
+			if (cur_pdf > 0.0 && second_smallest_pdf > cur_pdf) 
+				second_smallest_pdf = cur_pdf;
+	}
+
+	double pdf_sum = 0;
+	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
+		cur_pdf = gsl_vector_get(rpdfdata, ibin_x);
+		if (cur_pdf < 1e-200) 
+			gsl_vector_set(rpdfdata, ibin_x, second_smallest_pdf);
+		pdf_sum += gsl_vector_get(rpdfdata, ibin_x);
+
+	}
+	/* normalize pdf */
+	gsl_vector_scale(rpdfdata, 1/(pdf_sum*rank->rank_pdf->step));
+
+	/* calculate fap from pdf */
+	gsl_vector *rfapdata = rank->rank_fap->data;
+	double pdf_acum = 0;
+	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
+		cur_pdf = gsl_vector_get(rpdfdata, ibin_x);
+		pdf_acum += cur_pdf;
+		gsl_vector_set(rfapdata, ibin_x, pdf_acum * (rank->rank_pdf->step));
+	}
+
+	if (abs(gsl_vector_max(rfapdata) - 1.0) > 1e-2)
+		fprintf(stderr, "fap cmax %f\n", gsl_vector_max(rfapdata));
+}
+
+
+/* convert collected rates into rank rates */
 void
 trigger_stats_feature_to_rank(FeatureStats *feature, RankingStats *rank)
 {
 	Bins2D *fpdf = feature->lgsnr_lgchisq_pdf;
 	int nbin_x = fpdf->nbin_x, nbin_y = fpdf->nbin_y;
 	int ibin_x, ibin_y;
-       	double	tmp;
+   	double	tmp;
 	gsl_matrix *fpdfdata = fpdf->data;
 	double fpdf_sum = gsl_matrix_sum(fpdfdata);
 	// no data values, return
@@ -701,20 +819,21 @@ trigger_stats_feature_to_rank(FeatureStats *feature, RankingStats *rank)
 				tmp -= gsl_matrix_get(cdfdata, ibin_x+1, ibin_y-1);
 			tmp += gsl_matrix_get(fpdfdata, ibin_x, ibin_y) * fpdf->step_x * fpdf->step_y;
 			// note here we actually assign comulative prob. FIXME: overflow problem ?
-		        gsl_matrix_set(cdfdata, ibin_x, ibin_y, tmp);
+			gsl_matrix_set(cdfdata, ibin_x, ibin_y, tmp);
 
 		}
 	}
-        // note the rank_min and max is based on log10 scale, need to log10 the cdf data
-        double cur_cdf;
+	// note the rank_min and max is based on log10 scale, need to log10 the cdf data
+	// also set minimal cdf to be RANK_MIN_LIMIT
+	double cur_cdf;
 	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
 		for (ibin_y=0; ibin_y<=nbin_y-1; ibin_y++){
-                    /* avoid the log10(0) error, since the rank_min is -30, assign rank to be less than -30 is accurate enough*/
-                    cur_cdf = gsl_matrix_get(cdfdata, ibin_x, ibin_y);
-                    cur_cdf = MAX(RANK_MIN_LIMIT, cur_cdf);
-	            gsl_matrix_set(cdfdata, ibin_x, ibin_y, log10(cur_cdf));
-                }
-        }
+			/* avoid the log10(0) error, since the rank_min is -30, assign rank to be less than -30 is accurate enough*/
+			cur_cdf = gsl_matrix_get(cdfdata, ibin_x, ibin_y);
+			cur_cdf = MAX(RANK_MIN_LIMIT, cur_cdf);
+			gsl_matrix_set(cdfdata, ibin_x, ibin_y, log10(cur_cdf));
+		}
+	}
 	/* generate rank distribution from rates. The rank_rates will only be used for reference.
 	 * We generate fap using the enlongated pdf
 	 * to cover significant region */
@@ -726,10 +845,10 @@ trigger_stats_feature_to_rank(FeatureStats *feature, RankingStats *rank)
 	long cur_rates;
 	for (ibin=0; ibin<nbin_rank; ibin++) {
 		// FIXME:consider non-even distribution of cdf bins
-                if (ibin == 0)
-		    cur_rank_min = log10(RANK_MIN_LIMIT) -1;
-                else
-		    cur_rank_min = bins1D_get_low_bound(rank->rank_pdf, ibin);
+		if (ibin == 0)
+			cur_rank_min = log10(RANK_MIN_LIMIT) -1;
+		else
+			cur_rank_min = bins1D_get_low_bound(rank->rank_pdf, ibin);
 		cur_rank_max = bins1D_get_up_bound(rank->rank_pdf, ibin);
 		cur_pdf = calc_rank_pdf_val(fpdfdata, cdfdata, cur_rank_min, cur_rank_max);
 		cur_pdf = cur_pdf*fpdf->step_x*fpdf->step_y/rank->rank_pdf->step;
@@ -805,55 +924,55 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
 
   int pos_xns;
   for (icombo=0; icombo<ncombo; icombo++) {
-    pos_xns = icombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_RATES_SUFFIX);
-    xns[pos_xns].processPtr = readArray;
-    xns[pos_xns].data = &(array_lgsnr_rates[icombo]);
+	pos_xns = icombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_RATES_SUFFIX);
+	xns[pos_xns].processPtr = readArray;
+	xns[pos_xns].data = &(array_lgsnr_rates[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, CHISQ_RATES_SUFFIX);
-    xns[pos_xns].processPtr = readArray;
-    xns[pos_xns].data = &(array_lgchisq_rates[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, CHISQ_RATES_SUFFIX);
+	xns[pos_xns].processPtr = readArray;
+	xns[pos_xns].data = &(array_lgchisq_rates[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_CHISQ_RATES_SUFFIX);
-    xns[pos_xns].processPtr = readArray;
-    xns[pos_xns].data = &(array_lgsnr_lgchisq_rates[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_CHISQ_RATES_SUFFIX);
+	xns[pos_xns].processPtr = readArray;
+	xns[pos_xns].data = &(array_lgsnr_lgchisq_rates[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_CHISQ_PDF_SUFFIX);
-    xns[pos_xns].processPtr = readArray;
-    xns[pos_xns].data = &(array_lgsnr_lgchisq_pdf[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_CHISQ_PDF_SUFFIX);
+	xns[pos_xns].processPtr = readArray;
+	xns[pos_xns].data = &(array_lgsnr_lgchisq_pdf[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_MAP_SUFFIX);
-    xns[pos_xns].processPtr = readArray;
-    xns[pos_xns].data = &(array_rank_map[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_MAP_SUFFIX);
+	xns[pos_xns].processPtr = readArray;
+	xns[pos_xns].data = &(array_rank_map[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s_nevent:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
-    xns[pos_xns].processPtr = readParam;
-    xns[pos_xns].data = &(param_nevent[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s_nevent:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
+	xns[pos_xns].processPtr = readParam;
+	xns[pos_xns].data = &(param_nevent[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s_livetime:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
-    xns[pos_xns].processPtr = readParam;
-    xns[pos_xns].data = &(param_livetime[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s_livetime:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
+	xns[pos_xns].processPtr = readParam;
+	xns[pos_xns].data = &(param_livetime[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_RATES_SUFFIX);
-    xns[pos_xns].processPtr = readArray;
-    xns[pos_xns].data = &(array_rank_rates[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_RATES_SUFFIX);
+	xns[pos_xns].processPtr = readArray;
+	xns[pos_xns].data = &(array_rank_rates[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_PDF_SUFFIX);
-    xns[pos_xns].processPtr = readArray;
-    xns[pos_xns].data = &(array_rank_pdf[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_PDF_SUFFIX);
+	xns[pos_xns].processPtr = readArray;
+	xns[pos_xns].data = &(array_rank_pdf[icombo]);
 
-    pos_xns += ncombo;
-    sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_FAP_SUFFIX);
-    xns[pos_xns].processPtr = readArray;
-    xns[pos_xns].data = &(array_rank_fap[icombo]);
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_FAP_SUFFIX);
+	xns[pos_xns].processPtr = readArray;
+	xns[pos_xns].data = &(array_rank_fap[icombo]);
 
   }
 
@@ -880,22 +999,22 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
   g_assert(array_lgchisq_rates[0].dim[0] == nbin_y);
 
   for (icombo=0; icombo<ncombo; icombo++) {
-    TriggerStats *cur_stats = multistats[icombo];
-    FeatureStats *feature = cur_stats->feature;
-    RankingStats *rank = cur_stats->rank;
-    memcpy(((gsl_vector_long *)feature->lgsnr_rates->data)->data, (long *)array_lgsnr_rates[icombo].data, x_size);
-    memcpy(((gsl_vector_long *)feature->lgchisq_rates->data)->data, (long *)array_lgchisq_rates[icombo].data, y_size);
-    memcpy(((gsl_matrix_long *)feature->lgsnr_lgchisq_rates->data)->data, (long *)array_lgsnr_lgchisq_rates[icombo].data, xy_size);
-    memcpy(((gsl_matrix *)feature->lgsnr_lgchisq_pdf->data)->data, array_lgsnr_lgchisq_pdf[icombo].data, xy_size);
+	TriggerStats *cur_stats = multistats[icombo];
+	FeatureStats *feature = cur_stats->feature;
+	RankingStats *rank = cur_stats->rank;
+	memcpy(((gsl_vector_long *)feature->lgsnr_rates->data)->data, (long *)array_lgsnr_rates[icombo].data, x_size);
+	memcpy(((gsl_vector_long *)feature->lgchisq_rates->data)->data, (long *)array_lgchisq_rates[icombo].data, y_size);
+	memcpy(((gsl_matrix_long *)feature->lgsnr_lgchisq_rates->data)->data, (long *)array_lgsnr_lgchisq_rates[icombo].data, xy_size);
+	memcpy(((gsl_matrix *)feature->lgsnr_lgchisq_pdf->data)->data, array_lgsnr_lgchisq_pdf[icombo].data, xy_size);
 
-    memcpy(((gsl_matrix *)rank->rank_map->data)->data, array_rank_map[icombo].data, xy_size);
-    memcpy(((gsl_vector_long *)rank->rank_rates->data)->data, (long *)array_rank_rates[icombo].data, y_size);
-    memcpy(((gsl_vector *)rank->rank_pdf->data)->data, (long *)array_rank_pdf[icombo].data, y_size);
-    memcpy(((gsl_vector *)rank->rank_fap->data)->data, (long *)array_rank_fap[icombo].data, y_size);
-    cur_stats->nevent = *((long *)param_nevent[icombo].data);
-    cur_stats->livetime = *((long *)param_livetime[icombo].data);
-    //printf("filename %s, icombo %d, fap addr %p\n", filename, icombo, ((gsl_matrix *)cur_stats->fap->data)->data);
-    //printf("icombo %d, nevent addr %p, %p\n", icombo, (param_nevent[icombo].data), (&(param_nevent[icombo]))->data);
+	memcpy(((gsl_matrix *)rank->rank_map->data)->data, array_rank_map[icombo].data, xy_size);
+	memcpy(((gsl_vector_long *)rank->rank_rates->data)->data, (long *)array_rank_rates[icombo].data, y_size);
+	memcpy(((gsl_vector *)rank->rank_pdf->data)->data, (long *)array_rank_pdf[icombo].data, y_size);
+	memcpy(((gsl_vector *)rank->rank_fap->data)->data, (long *)array_rank_fap[icombo].data, y_size);
+	cur_stats->nevent = *((long *)param_nevent[icombo].data);
+	cur_stats->livetime = *((long *)param_livetime[icombo].data);
+	//printf("filename %s, icombo %d, fap addr %p\n", filename, icombo, ((gsl_matrix *)cur_stats->fap->data)->data);
+	//printf("icombo %d, nevent addr %p, %p\n", icombo, (param_nevent[icombo].data), (&(param_nevent[icombo]))->data);
   }
   *hist_trials = *((int *)param_hist_trials->data);
 
@@ -914,16 +1033,16 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
    * free the allocated memory for xml reading
    */
   for (icombo=0; icombo<ncombo; icombo++) {
-    free(array_lgsnr_rates[icombo].data);
-    free(array_lgchisq_rates[icombo].data);
-    free(array_lgsnr_lgchisq_rates[icombo].data);
-    free(array_lgsnr_lgchisq_pdf[icombo].data);
-    free(param_nevent[icombo].data);
-    free(param_livetime[icombo].data);
-    free(array_rank_map[icombo].data);
-    free(array_rank_rates[icombo].data);
-    free(array_rank_pdf[icombo].data);
-    free(array_rank_fap[icombo].data);
+	free(array_lgsnr_rates[icombo].data);
+	free(array_lgchisq_rates[icombo].data);
+	free(array_lgsnr_lgchisq_rates[icombo].data);
+	free(array_lgsnr_lgchisq_pdf[icombo].data);
+	free(param_nevent[icombo].data);
+	free(param_livetime[icombo].data);
+	free(array_rank_map[icombo].data);
+	free(array_rank_rates[icombo].data);
+	free(array_rank_pdf[icombo].data);
+	free(array_rank_fap[icombo].data);
   }
   free(array_lgsnr_rates);
   free(array_lgchisq_rates);
@@ -948,8 +1067,8 @@ write_stats_xmlheader(xmlTextWriterPtr *pwriter, const char *filename, gchar *id
   *pwriter = xmlNewTextWriterFilename(filename, 1);
   xmlTextWriterPtr writer = *pwriter;
   if (writer == NULL) {
-      printf("testXmlwriterFilename: Error creating the xml writer\n");
-      return FALSE;
+	  printf("testXmlwriterFilename: Error creating the xml writer\n");
+	  return FALSE;
   }
 
   int rc;
@@ -961,42 +1080,42 @@ write_stats_xmlheader(xmlTextWriterPtr *pwriter, const char *filename, gchar *id
    * declaration. */
   rc = xmlTextWriterStartDocument(writer, NULL, MY_ENCODING, NULL);
   if (rc < 0) {
-      printf
-          ("testXmlwriterFilename: Error at xmlTextWriterStartDocument\n");
-      return FALSE;
+	  printf
+		  ("testXmlwriterFilename: Error at xmlTextWriterStartDocument\n");
+	  return FALSE;
   }
 
   rc = xmlTextWriterWriteDTD(writer, BAD_CAST "LIGO_LW", NULL, BAD_CAST "http://ldas-sw.ligo.caltech.edu/doc/ligolwAPI/html/ligolw_dtd.txt", NULL);
   if (rc < 0) {
-      printf
-          ("testXmlwriterFilename: Error at xmlTextWriterWriteDTD\n");
-      return FALSE;
+	  printf
+		  ("testXmlwriterFilename: Error at xmlTextWriterWriteDTD\n");
+	  return FALSE;
   }
 
   /* Start an element named "LIGO_LW". Since thist is the first
    * element, this will be the root element of the document. */
   rc = xmlTextWriterStartElement(writer, BAD_CAST "LIGO_LW");
   if (rc < 0) {
-      printf
-          ("testXmlwriterFilename: Error at xmlTextWriterStartElement\n");
-      return FALSE;
+	  printf
+		  ("testXmlwriterFilename: Error at xmlTextWriterStartElement\n");
+	  return FALSE;
   }
 
   /* Start an element named "LIGO_LW" as child of EXAMPLE. */
   rc = xmlTextWriterStartElement(writer, BAD_CAST "LIGO_LW");
   if (rc < 0) {
-      printf
-          ("testXmlwriterFilename: Error at xmlTextWriterStartElement\n");
-      return FALSE;
+	  printf
+		  ("testXmlwriterFilename: Error at xmlTextWriterStartElement\n");
+	  return FALSE;
   }
 
   /* Add an attribute with name "Name" and value id_name to LIGO_LW. */
   rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "Name",
-                                   BAD_CAST id_name);
+								   BAD_CAST id_name);
   if (rc < 0) {
-      printf
-          ("testXmlwriterFilename: Error at xmlTextWriterWriteAttribute\n");
-      return FALSE;
+	  printf
+		  ("testXmlwriterFilename: Error at xmlTextWriterWriteAttribute\n");
+	  return FALSE;
   }
   return TRUE;
 }
@@ -1005,10 +1124,10 @@ gboolean
 trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *filename, int write_status, xmlTextWriterPtr *pwriter)
 {
   if (write_status == STATS_XML_WRITE_START) {
-      gboolean rt = write_stats_xmlheader(pwriter, filename, STATS_XML_ID_NAME);
-      if (rt == FALSE) {
-          printf("not able to write stats header\n");
-      }
+	  gboolean rt = write_stats_xmlheader(pwriter, filename, STATS_XML_ID_NAME);
+	  if (rt == FALSE) {
+		  printf("not able to write stats header\n");
+	  }
   }
   xmlTextWriterPtr writer = *pwriter;
   int icombo = 0, ncombo = stats->ncombo;
@@ -1027,52 +1146,52 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
   int xy_size = sizeof(double) * nbin_x * nbin_y;
 
   for (icombo=0; icombo<ncombo; icombo++) {
-    TriggerStats *cur_stats = multistats[icombo];
-    FeatureStats *feature = cur_stats->feature;
-    RankingStats *rank = cur_stats->rank;
-    // assemble lgsnr_rates
-    array_lgsnr_rates[icombo].ndim = 1;
-    array_lgsnr_rates[icombo].dim[0] = nbin_x;
-    array_lgsnr_rates[icombo].data = (long *) malloc(x_size);
-    memcpy(array_lgsnr_rates[icombo].data, ((gsl_vector_long *)feature->lgsnr_rates->data)->data, x_size);
-    // assemble lgchisq_rates
-    array_lgchisq_rates[icombo].ndim = 1;
-    array_lgchisq_rates[icombo].dim[0] = nbin_y;
-    array_lgchisq_rates[icombo].data = (long *) malloc(y_size);
-    memcpy(array_lgchisq_rates[icombo].data, ((gsl_vector_long *)feature->lgchisq_rates->data)->data, y_size);
-    // assemble lgsnr_lgchisq_rates
-    array_lgsnr_lgchisq_rates[icombo].ndim = 2;
-    array_lgsnr_lgchisq_rates[icombo].dim[0] = nbin_x;
-    array_lgsnr_lgchisq_rates[icombo].dim[1] = nbin_y;
-    array_lgsnr_lgchisq_rates[icombo].data = (long *) malloc(xy_size);
-    memcpy(array_lgsnr_lgchisq_rates[icombo].data, ((gsl_matrix_long *)feature->lgsnr_lgchisq_rates->data)->data, xy_size);
-    // aseemble lgsnr_lgchisq_pdf
-    array_lgsnr_lgchisq_pdf[icombo].ndim = 2;
-    array_lgsnr_lgchisq_pdf[icombo].dim[0] = nbin_x;
-    array_lgsnr_lgchisq_pdf[icombo].dim[1] = nbin_y;
-    array_lgsnr_lgchisq_pdf[icombo].data = (double *) malloc(xy_size);
-    memcpy(array_lgsnr_lgchisq_pdf[icombo].data, ((gsl_matrix *)feature->lgsnr_lgchisq_pdf->data)->data, xy_size);
-    // assemble rank_map
-    array_rank_map[icombo].ndim = 2;
-    array_rank_map[icombo].dim[0] = nbin_x;
-    array_rank_map[icombo].dim[1] = nbin_y;
-    array_rank_map[icombo].data = (double *) malloc(x_size * y_size);
-    memcpy(array_rank_map[icombo].data, ((gsl_matrix *)rank->rank_map->data)->data, xy_size);
-    // assemble rank_rates
-    array_rank_rates[icombo].ndim = 1;
-    array_rank_rates[icombo].dim[0] = nbin_x;
-    array_rank_rates[icombo].data = (long *) malloc(x_size);
-    memcpy(array_rank_rates[icombo].data, ((gsl_vector_long *)rank->rank_rates->data)->data, x_size);
-    // assemble rank_pdf
-    array_rank_pdf[icombo].ndim = 1;
-    array_rank_pdf[icombo].dim[0] = nbin_x;
-    array_rank_pdf[icombo].data = (double *) malloc(x_size);
-    memcpy(array_rank_pdf[icombo].data, ((gsl_vector *)rank->rank_pdf->data)->data, x_size);
-    // assemble rank_fap_
-    array_rank_fap[icombo].ndim = 1;
-    array_rank_fap[icombo].dim[0] = nbin_x;
-    array_rank_fap[icombo].data = (double *) malloc(x_size);
-    memcpy(array_rank_fap[icombo].data, ((gsl_vector *)rank->rank_fap->data)->data, x_size);
+	TriggerStats *cur_stats = multistats[icombo];
+	FeatureStats *feature = cur_stats->feature;
+	RankingStats *rank = cur_stats->rank;
+	// assemble lgsnr_rates
+	array_lgsnr_rates[icombo].ndim = 1;
+	array_lgsnr_rates[icombo].dim[0] = nbin_x;
+	array_lgsnr_rates[icombo].data = (long *) malloc(x_size);
+	memcpy(array_lgsnr_rates[icombo].data, ((gsl_vector_long *)feature->lgsnr_rates->data)->data, x_size);
+	// assemble lgchisq_rates
+	array_lgchisq_rates[icombo].ndim = 1;
+	array_lgchisq_rates[icombo].dim[0] = nbin_y;
+	array_lgchisq_rates[icombo].data = (long *) malloc(y_size);
+	memcpy(array_lgchisq_rates[icombo].data, ((gsl_vector_long *)feature->lgchisq_rates->data)->data, y_size);
+	// assemble lgsnr_lgchisq_rates
+	array_lgsnr_lgchisq_rates[icombo].ndim = 2;
+	array_lgsnr_lgchisq_rates[icombo].dim[0] = nbin_x;
+	array_lgsnr_lgchisq_rates[icombo].dim[1] = nbin_y;
+	array_lgsnr_lgchisq_rates[icombo].data = (long *) malloc(xy_size);
+	memcpy(array_lgsnr_lgchisq_rates[icombo].data, ((gsl_matrix_long *)feature->lgsnr_lgchisq_rates->data)->data, xy_size);
+	// aseemble lgsnr_lgchisq_pdf
+	array_lgsnr_lgchisq_pdf[icombo].ndim = 2;
+	array_lgsnr_lgchisq_pdf[icombo].dim[0] = nbin_x;
+	array_lgsnr_lgchisq_pdf[icombo].dim[1] = nbin_y;
+	array_lgsnr_lgchisq_pdf[icombo].data = (double *) malloc(xy_size);
+	memcpy(array_lgsnr_lgchisq_pdf[icombo].data, ((gsl_matrix *)feature->lgsnr_lgchisq_pdf->data)->data, xy_size);
+	// assemble rank_map
+	array_rank_map[icombo].ndim = 2;
+	array_rank_map[icombo].dim[0] = nbin_x;
+	array_rank_map[icombo].dim[1] = nbin_y;
+	array_rank_map[icombo].data = (double *) malloc(x_size * y_size);
+	memcpy(array_rank_map[icombo].data, ((gsl_matrix *)rank->rank_map->data)->data, xy_size);
+	// assemble rank_rates
+	array_rank_rates[icombo].ndim = 1;
+	array_rank_rates[icombo].dim[0] = nbin_x;
+	array_rank_rates[icombo].data = (long *) malloc(x_size);
+	memcpy(array_rank_rates[icombo].data, ((gsl_vector_long *)rank->rank_rates->data)->data, x_size);
+	// assemble rank_pdf
+	array_rank_pdf[icombo].ndim = 1;
+	array_rank_pdf[icombo].dim[0] = nbin_x;
+	array_rank_pdf[icombo].data = (double *) malloc(x_size);
+	memcpy(array_rank_pdf[icombo].data, ((gsl_vector *)rank->rank_pdf->data)->data, x_size);
+	// assemble rank_fap_
+	array_rank_fap[icombo].ndim = 1;
+	array_rank_fap[icombo].dim[0] = nbin_x;
+	array_rank_fap[icombo].data = (double *) malloc(x_size);
+	memcpy(array_rank_fap[icombo].data, ((gsl_vector *)rank->rank_fap->data)->data, x_size);
   }
 
   XmlParam param_range;
@@ -1099,32 +1218,32 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
 
   GString *array_name = g_string_new(NULL);
   for (icombo=0; icombo<ncombo; icombo++) {
-    // write features
-    g_string_printf(array_name, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_RATES_SUFFIX);
-    ligoxml_write_Array(writer, &(array_lgsnr_rates[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
-    g_string_printf(array_name, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, CHISQ_RATES_SUFFIX);
-    ligoxml_write_Array(writer, &(array_lgchisq_rates[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
-    g_string_printf(array_name, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_CHISQ_RATES_SUFFIX);
-    ligoxml_write_Array(writer, &(array_lgsnr_lgchisq_rates[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
-    g_string_printf(array_name, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_CHISQ_PDF_SUFFIX);
-    ligoxml_write_Array(writer, &(array_lgsnr_lgchisq_pdf[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
+	// write features
+	g_string_printf(array_name, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_RATES_SUFFIX);
+	ligoxml_write_Array(writer, &(array_lgsnr_rates[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
+	g_string_printf(array_name, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, CHISQ_RATES_SUFFIX);
+	ligoxml_write_Array(writer, &(array_lgchisq_rates[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
+	g_string_printf(array_name, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_CHISQ_RATES_SUFFIX);
+	ligoxml_write_Array(writer, &(array_lgsnr_lgchisq_rates[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
+	g_string_printf(array_name, "%s:%s%s:array",  stats->feature_xmlname->str, IFOComboMap[icombo].name, SNR_CHISQ_PDF_SUFFIX);
+	ligoxml_write_Array(writer, &(array_lgsnr_lgchisq_pdf[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
 
-    // write rank
-    g_string_printf(array_name, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_MAP_SUFFIX);
-    ligoxml_write_Array(writer, &(array_rank_map[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
-    g_string_printf(array_name, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_RATES_SUFFIX);
-    ligoxml_write_Array(writer, &(array_rank_rates[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
-    g_string_printf(array_name, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_PDF_SUFFIX);
-    ligoxml_write_Array(writer, &(array_rank_pdf[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
-    g_string_printf(array_name, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_FAP_SUFFIX);
-    ligoxml_write_Array(writer, &(array_rank_fap[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
+	// write rank
+	g_string_printf(array_name, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_MAP_SUFFIX);
+	ligoxml_write_Array(writer, &(array_rank_map[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
+	g_string_printf(array_name, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_RATES_SUFFIX);
+	ligoxml_write_Array(writer, &(array_rank_rates[icombo]), BAD_CAST "int_8s", BAD_CAST " ", BAD_CAST array_name->str);
+	g_string_printf(array_name, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_PDF_SUFFIX);
+	ligoxml_write_Array(writer, &(array_rank_pdf[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
+	g_string_printf(array_name, "%s:%s%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_FAP_SUFFIX);
+	ligoxml_write_Array(writer, &(array_rank_fap[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
 
-    g_string_printf(param_name, "%s:%s_nevent:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
-    ((long *)param_nevent.data)[0] = multistats[icombo]->nevent;
-    ligoxml_write_Param(writer, &param_nevent, BAD_CAST "int_8s", BAD_CAST param_name->str);
-    g_string_printf(param_name, "%s:%s_livetime:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
-    ((long *)param_livetime.data)[0] = multistats[icombo]->livetime;
-    ligoxml_write_Param(writer, &param_livetime, BAD_CAST "int_8s", BAD_CAST param_name->str);
+	g_string_printf(param_name, "%s:%s_nevent:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
+	((long *)param_nevent.data)[0] = multistats[icombo]->nevent;
+	ligoxml_write_Param(writer, &param_nevent, BAD_CAST "int_8s", BAD_CAST param_name->str);
+	g_string_printf(param_name, "%s:%s_livetime:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
+	((long *)param_livetime.data)[0] = multistats[icombo]->livetime;
+	ligoxml_write_Param(writer, &param_livetime, BAD_CAST "int_8s", BAD_CAST param_name->str);
   }
 
   XmlParam param_hist_trials;
@@ -1137,17 +1256,17 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
   g_string_free(array_name, TRUE);
 
   if (write_status == STATS_XML_WRITE_END) {
-    /* Since we do not want to
-     * write any other elements, we simply call xmlTextWriterEndDocument,
-     * which will do all the work. */
-    int rc = xmlTextWriterEndDocument(writer);
-    if (rc < 0) {
-        printf
-            ("testXmlwriterFilename: Error at xmlTextWriterEndDocument\n");
-        return FALSE;
-    }
+	/* Since we do not want to
+	 * write any other elements, we simply call xmlTextWriterEndDocument,
+	 * which will do all the work. */
+	int rc = xmlTextWriterEndDocument(writer);
+	if (rc < 0) {
+		printf
+			("testXmlwriterFilename: Error at xmlTextWriterEndDocument\n");
+		return FALSE;
+	}
   
-    xmlFreeTextWriter(writer);
+	xmlFreeTextWriter(writer);
   }
   /*
    * free all alocated memory
@@ -1157,14 +1276,14 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
   free(param_livetime.data);
   free(param_hist_trials.data);
   for (icombo=ncombo-1; icombo>=0; icombo--) {
-    freeArray(array_lgsnr_rates + icombo);
-    freeArray(array_lgchisq_rates + icombo);
-    freeArray(array_lgsnr_lgchisq_rates + icombo);
-    freeArray(array_lgsnr_lgchisq_pdf + icombo);
-    freeArray(array_rank_map + icombo);
-    freeArray(array_rank_rates + icombo);
-    freeArray(array_rank_pdf + icombo);
-    freeArray(array_rank_fap + icombo);
+	freeArray(array_lgsnr_rates + icombo);
+	freeArray(array_lgchisq_rates + icombo);
+	freeArray(array_lgsnr_lgchisq_rates + icombo);
+	freeArray(array_lgsnr_lgchisq_pdf + icombo);
+	freeArray(array_rank_map + icombo);
+	freeArray(array_rank_rates + icombo);
+	freeArray(array_rank_pdf + icombo);
+	freeArray(array_rank_fap + icombo);
   }
   free(array_lgsnr_rates);
   free(array_lgchisq_rates);
@@ -1188,9 +1307,9 @@ trigger_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins1D
 	size_t num_bin1 = LOGSNR_NBIN, num_bin2 = LOGCHISQ_NBIN; //each bin's size
 	gsl_vector * tin_dim1 =  gsl_vector_alloc(num_bin1);
 	gsl_vector * tin_dim2 =  gsl_vector_alloc(num_bin2);
-    //bin of each dimension
+	//bin of each dimension
 #if 0
-    	double tin_dim1_cmax = gsl_vector_max(data_dim1) + 0.5;  // linspace in power (i.e. logspace)
+		double tin_dim1_cmax = gsl_vector_max(data_dim1) + 0.5;  // linspace in power (i.e. logspace)
 	double tin_dim1_cmin = gsl_vector_cmin(data_dim1) - 0.5;
 	double tin_dim2_cmax = gsl_vector_max(data_dim2) + 0.5;
 	double tin_dim2_cmin = gsl_vector_cmin(data_dim2) - 0.5;
@@ -1203,7 +1322,7 @@ trigger_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins1D
 	gsl_vector_linspace(LOGCHISQ_CMIN, LOGCHISQ_CMAX, LOGCHISQ_NBIN, tin_dim2);
 	gsl_vector * y_hist_result_dim1 = gsl_vector_alloc(num_bin1);
 	gsl_vector * y_hist_result_dim2 = gsl_vector_alloc(num_bin2);
-    //histogram of each dimension
+	//histogram of each dimension
 	gsl_matrix * result_dim1  = gsl_matrix_alloc(tin_dim1->size,tin_dim1->size);
 	gsl_matrix * result_dim2  = gsl_matrix_alloc(tin_dim2->size,tin_dim2->size);
 

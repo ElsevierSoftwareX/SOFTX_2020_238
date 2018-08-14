@@ -331,7 +331,8 @@ __global__ void ker_coh_skymap
 			al_all = 0.0f;
 			for (int j = 2; j < nifo; ++j)
 				al_all += utdka[j];	
-			nullsnr_skymap[ipeak * num_sky_directions + ipix] = 1 - gser(al_all, 1.0f);
+			//nullsnr_skymap[ipeak * num_sky_directions + ipix] = 1 - gser(al_all, 1.0f);
+			nullsnr_skymap[ipeak * num_sky_directions + ipix] = al_all;
 		}
 	}
 }
@@ -508,7 +509,8 @@ __global__ void ker_coh_max_and_chisq
         if (threadIdx.x == 0)
         {
             cohsnr[peak_cur]    = snr_shared[0];
-            nullsnr[peak_cur]   = 1 - gser(nullstream_shared[0], 1.0f); // nullstream_shared[0];
+			//nullsnr[peak_cur]   = 1 - gser(nullstream_shared[0], 1.0f); // nullstream_shared[0];
+            nullsnr[peak_cur]   = nullstream_shared[0]; // nullstream_shared[0];
             pix_idx[peak_cur]   = sky_idx_shared[0];            
 
         }
@@ -673,7 +675,8 @@ __global__ void ker_coh_max_and_chisq
         if (srcLane == 0)
         {
             cohsnr_bg[output_offset]        = snr_max;
-            nullsnr_bg[output_offset]   = 1 - gser(nullstream_max, 1.0f); //nullstream_max;;
+			//nullsnr_bg[output_offset]   = 1 - gser(nullstream_max, 1.0f); //nullstream_max;;
+            nullsnr_bg[output_offset]   = nullstream_max;;
             /* background need this for Ntoff */
             pix_idx_bg[output_offset]       = sky_idx;          
 

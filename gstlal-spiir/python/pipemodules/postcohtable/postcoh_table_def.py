@@ -38,6 +38,7 @@ class PostcohInspiralTable(table.Table):
 			"ifos":		"lstring",
 			"pivotal_ifo":	"lstring",
 			"tmplt_idx":	"int_4s",
+			"bankid":	"int_4s",
 			"pix_idx":	"int_4s",
 			"cohsnr":	"real_4",
 			"nullsnr":	"real_4",

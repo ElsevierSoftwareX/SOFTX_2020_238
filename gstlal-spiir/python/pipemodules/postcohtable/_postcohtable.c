@@ -85,6 +85,7 @@ static struct PyMemberDef members[] = {
 	{"is_background", T_INT, offsetof(gstlal_GSTLALPostcohInspiral, row.is_background), 0, "is_background"},
 	{"livetime", T_INT, offsetof(gstlal_GSTLALPostcohInspiral, row.livetime), 0, "livetime"},
 	{"tmplt_idx", T_INT, offsetof(gstlal_GSTLALPostcohInspiral, row.tmplt_idx), 0, "tmplt_idx"},
+	{"bankid", T_INT, offsetof(gstlal_GSTLALPostcohInspiral, row.bankid), 0, "bankid"},
 	{"pix_idx", T_INT, offsetof(gstlal_GSTLALPostcohInspiral, row.pix_idx), 0, "pix_idx"},
 	{"cohsnr", T_FLOAT, offsetof(gstlal_GSTLALPostcohInspiral, row.cohsnr), 0, "cohsnr"},
 	{"nullsnr", T_FLOAT, offsetof(gstlal_GSTLALPostcohInspiral, row.nullsnr), 0, "nullsnr"},

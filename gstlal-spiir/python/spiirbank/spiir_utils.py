@@ -1,4 +1,5 @@
-
+import os
+import re
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 
 # FIXME:  require calling code to provide the content handler
@@ -7,6 +8,16 @@ class DefaultContentHandler(ligolw.LIGOLWContentHandler):
 array.use_in(DefaultContentHandler)
 param.use_in(DefaultContentHandler)
 lsctables.use_in(DefaultContentHandler)
+
+def get_bankid_from_bankname(bankname):
+	tmp_name = os.path.split(bankname)[-1]
+	search_result = re.search(r'\d{3,4}', tmp_name)
+	try:
+		bankid = search_result.group()
+		bankid = int(bankid.lstrip('0'))
+	except:
+		raise ValueError("bankid should be the first 3/4 digits of the given name, could not find the digits")
+	return bankid
 
 def parse_iirbank_string(bank_string):
 	"""

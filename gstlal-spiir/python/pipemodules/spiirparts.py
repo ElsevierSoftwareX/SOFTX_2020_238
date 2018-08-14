@@ -260,9 +260,9 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	# format of bank: <H1bank0>
 
 #	pdb.set_trace()
-	bank_count = 0
 	for instrument, bank_name in [(instrument, bank_name) for instrument, banklist in banks.items() for bank_name in banklist]:
-		suffix = "%s%s" % (instrument,  "_%d" % bank_count)
+		bankid = spiir_utils.get_bankid_from_bankname(bank_name)
+		suffix = "%s_%d" % (instrument, bankid)
 		head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		max_bank_rate = spiir_utils.get_maxrate_from_xml(bank_name)
 		if max_bank_rate < max_instru_rates[instrument]:
@@ -270,7 +270,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		snr = pipeparts.mkreblock(pipeline, head)
 
 #		bank_struct = build_bank_struct(bank, max_rates[instrument])
-		snr = pipemodules.mkcudamultiratespiir(pipeline, snr, bank_name, gap_handle = 0, stream_id = bank_count) # treat gap as zeros
+		snr = pipemodules.mkcudamultiratespiir(pipeline, snr, bank_name, gap_handle = 0, stream_id = bankid) # treat gap as zeros
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
 		snr = pipeparts.mktee(pipeline, snr)
@@ -295,7 +295,6 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 			triggersrcs[instrument].add(head)
 		# FIXME:  find a way to use less memory without this hack
 		del bank_struct.autocorrelation_bank
-		bank_count = bank_count + 1
 		if nxydump_segment is not None:
 			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_gpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
@@ -375,8 +374,6 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 	#			 {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
 	#			 ...]
 	# format of bank_dict: {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
-	bank_count = 0
-	postcoh_count = 0
 	autocorrelation_fname_list = []
 	for bank_dict in banks:
 		autocorrelation_fname = ""
@@ -398,23 +395,23 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		head = None
 
 		for instrument, bank_list in bank_dict.items():
-			max_bank_rate = spiir_utils.get_maxrate_from_xml(bank_list[0])
+			bankname = bank_list[0]
+			bankid = spiir_utils.get_bankid_from_bankname(bankname)
+			max_bank_rate = spiir_utils.get_maxrate_from_xml(bankname)
 			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
-			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
+			suffix = "%s_%d" % (instrument, bankid)
 	
 			head = pipeparts.mkreblock(pipeline, head)
-			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
+			snr = pipeparts.mkcudamultiratespiir(pipeline, head, bankname, gap_handle = 0, stream_id = bankid) # treat gap as zeros
 			if verbose:
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
-				postcoh = pipemodules.mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = postcoh_count)
-				postcoh_count += 1
+				postcoh = pipemodules.mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = bankid)
 			else:
 				snr.link_pads(None, postcoh, instrument)
-			bank_count += 1
 
 		# FIXME: hard-coded to do compression
 		if verbose:
@@ -536,8 +533,6 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 	#			 {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
 	#			 ...]
 	# format of bank_dict: {'H1': <H1Bank1>; 'L1': <L1Bank1>..;}
-	bank_count = 0
-	postcoh_count = 0
 
 	# assemble autocorrelation_fname for postcoh chisq calculation
 	autocorrelation_fname_list = []
@@ -564,19 +559,20 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		head = None
 
 		for instrument, bank_list in bank_dict.items():
-			max_bank_rate = spiir_utils.get_maxrate_from_xml(bank_list[0])
+			bankname = bank_list[0]
+			bankid = spiir_utils.get_bankid_from_bankname(bankname)
+			max_bank_rate = spiir_utils.get_maxrate_from_xml(bankname)
 			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
-			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
+			suffix = "%s_%d" % (instrument,  bankid)
 			if instrument in shift_dict.keys():
 				head = mktimeshift(pipeline, head, float(shift_dict[instrument]))
 				if verbose:
 					head = pipeparts.mkprogressreport(pipeline, head, "after_timeshift_%s" % suffix)
 
-
 			head = pipeparts.mkreblock(pipeline, head)
-			snr = pipemodules.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
+			snr = pipemodules.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bankid) # treat gap as zeros
 			if verbose:
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
@@ -589,11 +585,9 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 
 			if postcoh is None:
 				# make a queue for postcoh, otherwise it will be in the same thread with the first bank	
-				postcoh = pipemodules.mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, cohsnr_thresh = cuda_postcoh_cohsnr_thresh, output_skymap = cuda_postcoh_output_skymap, detrsp_refresh_interval = cuda_postcoh_detrsp_refresh_interval, stream_id = postcoh_count)
-				postcoh_count += 1
+				postcoh = pipemodules.mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, cohsnr_thresh = cuda_postcoh_cohsnr_thresh, output_skymap = cuda_postcoh_output_skymap, detrsp_refresh_interval = cuda_postcoh_detrsp_refresh_interval, stream_id = bankid)
 			else:
 				snr.link_pads(None, postcoh, instrument)
-			bank_count += 1
 
 		# FIXME: hard-coded to do compression
 		if verbose:
@@ -682,8 +676,6 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 	#			 {'h1': <h1bank1>; 'l1': <l1bank1>..;}
 	#			 ...]
 	# format of bank_dict: {'h1': <h1bank1>; 'l1': <l1bank1>..;}
-	bank_count = 0
-	postcoh_count = 0
 
 	autocorrelation_fname_list = []
 	for bank_dict in banks:
@@ -710,29 +702,29 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 		head = None
 
 		for instrument, bank_list in bank_dict.items():
-			max_bank_rate = spiir_utils.get_maxrate_from_xml(bank_list[0])
+			bankname = bank_list[0]
+			bankid = spiir_utils.get_bankid_from_bankname(bankname)
+			max_bank_rate = spiir_utils.get_maxrate_from_xml(bankname)
 			head = pipeparts.mkqueue(pipeline, hoftdicts[instrument], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 			if max_bank_rate < max_instru_rates[instrument]:
 				head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % max_bank_rate)
-			suffix = "%s%s" % (instrument,  "_stream%d" % bank_count)
+			suffix = "%s_%d" % (instrument,  bankid)
 
 			if instrument in shift_dict.keys():
 				head = mktimeshift(pipeline, head, float(shift_dict[instrument]))
 
 
 			head = pipeparts.mkreblock(pipeline, head)
-			snr = pipemodules.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bank_count) # treat gap as zeros
+			snr = pipemodules.mkcudamultiratespiir(pipeline, head, bank_list[0], gap_handle = 0, stream_id = bankid) # treat gap as zeros
 			if verbose:
 				snr = pipeparts.mkprogressreport(pipeline, snr, "progress_done_gpu_filtering_%s" % suffix)
 
 			if postcoh is None:
 				# make a queue for postcoh, otherwise it will be in the same thread with the first bank	
 				snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
-				postcoh = pipemodules.mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, cohsnr_thresh = cuda_postcoh_cohsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = postcoh_count)
-				postcoh_count += 1
+				postcoh = pipemodules.mkcudapostcoh(pipeline, snr, instrument, cuda_postcoh_detrsp_fname, autocorrelation_fname_list[i_dict], bank_list[0], hist_trials = cuda_postcoh_hist_trials, snglsnr_thresh = cuda_postcoh_snglsnr_thresh, cohsnr_thresh = cuda_postcoh_cohsnr_thresh, output_skymap = cuda_postcoh_output_skymap, stream_id = bankid)
 			else:
 				snr.link_pads(None, postcoh, instrument)
-			bank_count += 1
 
 		# FIXME: hard-coded to do compression
 		if verbose:

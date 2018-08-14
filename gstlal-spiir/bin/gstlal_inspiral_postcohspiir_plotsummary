@@ -587,6 +587,100 @@ FROM
 #
 # =============================================================================
 #
+#							  ROC plots
+#
+# =============================================================================
+#
+
+
+class ROCPlots(object):
+	class ROC(object):
+		def __init__(self, on_instruments):
+			self.on_instruments = on_instruments
+			self.ln_far_thresh = numpy.linspace(-9., -3., 100)
+			trigger_thresh = numpy.log10(1/30./86400)
+			self.trigger_idx = min(numpy.where(self.ln_far_thresh > trigger_thresh)[0])
+			self.nfound = numpy.zeros(len(self.ln_far_thresh))
+			self.nfa = numpy.zeros(len(self.ln_far_thresh))
+			self.myfound = []
+			self.myfa = []
+
+		def add_contents(self, contents):
+			zerolag_segments = contents.seglists.intersection(self.on_instruments) - contents.seglists.union(contents.instruments - self.on_instruments)
+			init_far_thresh = numpy.power(10, max(self.ln_far_thresh))
+			for values in contents.connection.cursor().execute("""
+SELECT
+	sim_inspiral.*,
+	(
+		SELECT
+			postcoh.far
+		FROM
+			sim_coinc_map
+			JOIN postcoh ON (
+				postcoh.event_id == sim_coinc_map.coinc_event_id
+			)
+		WHERE
+			sim_coinc_map.simulation_id == sim_inspiral.simulation_id
+			AND postcoh.far < ?
+	)
+FROM
+	sim_inspiral
+		""", (init_far_thresh, )):
+				sim = contents.sim_inspiral_table.row_from_cols(values)
+				if sim.get_time_geocent() in zerolag_segments and values[-1] is not None:
+					self.myfound.append((sim.simulation_id, values[-1]))
+
+			for values in contents.connection.cursor().execute("""
+SELECT
+	postcoh.event_id, postcoh.far
+FROM
+	postcoh
+	LEFT JOIN coinc_event_map ON (
+		postcoh.event_id == coinc_event_map.coinc_event_id
+	)
+WHERE
+	postcoh.far < ?
+	AND coinc_event_map.coinc_event_id IS NULL
+		""", (init_far_thresh, )):
+				self.myfa.append((values[0], values[-1]))
+
+			for i, ln_far_thresh in enumerate(self.ln_far_thresh):
+				this_far_thresh = numpy.power(10, ln_far_thresh)
+				this_found = [one_found for one_found in self.myfound if one_found[-1] < this_far_thresh]
+				self.nfound[i] = len(this_found)
+				this_fa = [one_fa for one_fa in self.myfa if one_fa[-1] < this_far_thresh]
+				self.nfa[i] = len(this_fa)
+
+		def finish(self):
+			fig, axes = create_plot(r"Found (n)", r"False alarms (n)")
+			axes.set_title(r"Found vs.\ False Alarms (With %s Operating)" % ", ".join(sorted(self.on_instruments)))
+			axes.plot(self.nfound, self.nfa, "kx")
+			axes.plot(self.nfound[self.trigger_idx], self.nfa[self.trigger_idx], "ro")
+			yield fig, "found_vs_fa", False
+	
+	def __init__(self):
+		self.plots = {}
+		self.base = ''
+
+	def add_contents(self, contents):
+		self.base = contents.base
+		if contents.sim_inspiral_table is None:
+			# no injections
+			return
+		for on_instruments in contents.on_instruments_combos:
+			if on_instruments not in self.plots:
+				self.plots[on_instruments] = ROCPlots.ROC(on_instruments)
+			self.plots[on_instruments].add_contents(contents)
+
+	def finish(self):
+		for on_instruments, plot in self.plots.items():
+			for fig, filename_fragment, is_open_box in plot.finish():
+				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box
+
+		
+#
+# =============================================================================
+#
 #							  Missed/Found Plot
 #
 # =============================================================================
@@ -1428,7 +1522,8 @@ PlotDescriptionMap = {
 		3: BackgroundVsInjectionPlots.__name__,
 		4: BackgroundVsInjectionPlotsMulti.__name__,
 		5: RateVsThreshold.__name__,
-		6: InjectionParameterDistributionPlots.__name__
+		6: InjectionParameterDistributionPlots.__name__,
+		7: ROCPlots.__name__
 }
 
 if options.noninj_database:
@@ -1468,7 +1563,8 @@ if options.inj_database:
 		plots.append(MissedFoundPlots(far_thresh = options.far_threshold))
 		plots.append(ParameterAccuracyPlots(far_thresh = options.far_threshold))
 		plots.append(InjectionParameterDistributionPlots())
-		plot_group = zip([1, 2, 6], plots)
+		plots.append(ROCPlots())
+		plot_group = zip([1, 2, 6, 7], plots)
 		dbname = inj_name
 		contents = setup_plot(dbname, plot_group, options, tag_name, wiki)
 		finish_plot(contents, plot_group, options, tag_name)

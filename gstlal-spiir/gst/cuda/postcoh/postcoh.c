@@ -1112,9 +1112,10 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->livetime = livetime;
 			strncpy(output->ifos, state->cur_ifos, ifos_size);
 			output->ifos[2*state->cur_nifo] = '\0';
-		       	strncpy(output->pivotal_ifo, state->all_ifos + IFO_LEN*iifo, one_ifo_size);
+		    strncpy(output->pivotal_ifo, state->all_ifos + IFO_LEN*iifo, one_ifo_size);
 			output->pivotal_ifo[2] = '\0';
 			output->tmplt_idx = cur_tmplt_idx;
+			output->bankid = postcoh->stream_id;
 			output->pix_idx = pklist->pix_idx[peak_cur];
 			output->cohsnr = sqrt(pklist->cohsnr[peak_cur]); /* the returned snr from cuda kernel is snr^2 */
 			output->nullsnr = pklist->nullsnr[peak_cur];

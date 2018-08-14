@@ -52,6 +52,7 @@ tagPostcohInspiralTable
   CHAR		ifos[MAX_ALLIFO_LEN];
   CHAR		pivotal_ifo[MAX_IFO_LEN];
   INT4		tmplt_idx;
+  INT4		bankid;
   INT4		pix_idx;
   REAL4		snglsnr_H;
   REAL4		snglsnr_L;

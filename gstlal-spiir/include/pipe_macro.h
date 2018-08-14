@@ -62,5 +62,8 @@ int get_icombo(char *ifos);
 #define STATS_XML_WRITE_START   1
 #define STATS_XML_WRITE_END 2
 #define MAX(a,b) (a>b?a:b)
+#define	PNOISE_MIN_LIMIT	-30
+#define	PSIG_MIN_LIMIT	-30
+#define	LR_MIN_LIMIT	-30
 #endif
 

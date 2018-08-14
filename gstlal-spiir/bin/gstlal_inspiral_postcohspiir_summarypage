@@ -160,6 +160,7 @@ fm_eta = webpage.section("Found / Missed Eta")
 fm_time = webpage.section("Found / Missed Time")
 fm_spin = webpage.section("Found / Missed Spin")
 fm_snr = webpage.section("Found / Missed Expected SNR")
+fm_roc = webpage.section("Found / Missed ROC")
 fm_mtab = webpage.section("Missed Table")
 
 horizon += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
@@ -191,12 +192,14 @@ for tag in opts.output_user_tag[1:]:
 
 	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag), "Expected SNR of found and missed injections as a function of time")
 
+	fm_roc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*7_found_vs_fa_*.png' % tag), "Number of found and false alarms as a function of FAR threshold. Red circle marks the FAR at 1/30days.")
+
 	# FIXME stupid convention to rely on the first tag being all of them. Note, previously we just used opts.output_user_tag[0] here.
 	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag), "%smissed_summary" % tag, gpscolumns = [2,3]))
 	fm_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % tag])]
 	fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % tag)]
 
-inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_eff_dist, inj_acc_spin, inj_acc_snr, horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
+inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_eff_dist, inj_acc_spin, inj_acc_snr, horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_roc, fm_mtab])
 
 
 #
