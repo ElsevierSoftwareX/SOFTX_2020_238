@@ -291,6 +291,7 @@ static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_i
 	 * respose).
 	 */
 
+	GST_CAT_INFO(GST_CAT_DEFAULT, "Generating injection with parameters: m1=%e m2=%e spin1x=%e spin1y=%e spin1z=%e spin2x=%e spin2y=%e spin2z=%e geocent_end_time=%d geocent_end_time_ns=%d waveform=%s", sim_inspiral->mass1, sim_inspiral->mass2, sim_inspiral->spin1x, sim_inspiral->spin1y, sim_inspiral->spin1z, sim_inspiral->spin2x, sim_inspiral->spin2y, sim_inspiral->spin2z, sim_inspiral->geocent_end_time.gpsSeconds, sim_inspiral->geocent_end_time.gpsNanoSeconds, sim_inspiral->waveform);
 	if(XLALInspiralTDWaveformFromSimInspiral(&hplus, &hcross, sim_inspiral, deltaT) == XLAL_FAILURE)
 		XLAL_ERROR(XLAL_EFUNC);
 
