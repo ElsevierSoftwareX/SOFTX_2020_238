@@ -5,13 +5,17 @@ Prerequisites
 -------------
 
  - Fully functional gstlal, gstlal-ugly, gstlal-inspiral installation
- - Condor managed computing resource with dedicated nodes to support online jobs (which run indefinitely)
+ - Condor managed computing resource using the LIGO Data Grid configuraiton with dedicated nodes to support online jobs (which run indefinitely)
  - Network streaming gravitational wave data
+ - Optional, but recommended, accounts for LVAlert and a robot certificate to
+   authtenticate uploades to the GRavitational-wave Candidate Event DataBase
+   (GraceDB).
 
 Introduction
 ------------
 
-FIXME add more
+This tutorial will will help you to setup a real-time gravitational wave search
+for merging neutron stars and black holes.  
 
 The online analysis has a somewhat involved setup procedure.  This
 documentation covers all of it. The steps are:
@@ -31,6 +35,20 @@ tutorial should be considered to be a guide, not cut-and-paste instructions.**
 
 Generate template banks for the target search area
 --------------------------------------------------
+
+This tutorial will describe the steps relative to the root directory on the CIT
+cluster::
+
+ /home/gstlalcbc/observing/3/online/sept_opa
+
+While not necessary, it is best to organize the analysis into distinct
+sub-directories.  We will do that for this tutorial::
+
+ mkdir -p sept_opa/banks/bns sept_opa/banks/nsbh sept_opa/banks/bbh sept_opa/banks/imbh
+ cd sept_opa/banks/bns
+
+ 
+
 
 Decompose the template waveforms using the SVD in chirpmass and chi bins
 ------------------------------------------------------------------------
