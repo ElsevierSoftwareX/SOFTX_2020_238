@@ -17,7 +17,7 @@ NUM_SPLIT_TEMPLATES = 500
 # How many effective spin bins to use.  If this is a nonspinning bank, then use
 # 1.  For a fully spinning bank 20 is a good number.  In this example we have
 # spin magnitudes up to 0.05 so we choose 3.
-NUM_CHI_BINS = 3
+NUM_CHI_BINS = 20
 
 # This determines how many overlap tempates are used the boundaries of each sub
 # bank.  NOTE that the overlap templates are only used to help compute the SVD,
@@ -28,7 +28,7 @@ OVERLAP = 50
 # NOTE 1000 is used in place of "infinty" it is possible to specify additiona
 # approximantes. The format is (chirp mass start):approximant:(chirp mass end)
 # which allows the user to specify different chirp masses for each approximant
-APPROXIMANT1 = 0.00:1000:TaylorF2
+APPROXIMANT1 = 0.00:1000:SEOBNRv4_ROM
 
 # This determines how many sub banks go into each file.  The interpretation is
 # that the number of times you specify a given integer in this list will
@@ -43,13 +43,13 @@ APPROXIMANT1 = 0.00:1000:TaylorF2
 #
 # Here 1/4 would have 3 sub banks, 1/2 would have 4 and 1/4 would have 5.  Again, the lowest mass templates would have three sub banks. The in-the-middle mass templates would have 4 and the highest mass templates would have 5.
 #
-NUMBANKS = 4,5
+NUMBANKS = 5,6,7,8
 
 # The reference PSD
 PSD = ../../banks/bns/H1L1V1-REFERENCE_PSD-1186624818-687900.xml.gz
 
 # The template bank file that you want to split up and decompose.
-BANK = ../../banks/bns/SBANK_COMBINED-GSTLAL_BNS.xml.gz
+BANK = ../../banks/bns/SBANK_COMBINED-GSTLAL_BBH.xml.gz
 
 # Condor information
 ACCOUNTING_GROUP=ligo.dev.o3.cbc.em.gstlalonline
