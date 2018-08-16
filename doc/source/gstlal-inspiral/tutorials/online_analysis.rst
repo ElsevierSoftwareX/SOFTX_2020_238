@@ -74,6 +74,7 @@ You can monitor the progress by doing::
 
  tail -f GSTLAL_BNS.dag.dagman.out
 
+You need to wait for this to finish before moving on to the SVD decompositions step.
 
 Making the NSBH, BBH, and IMBH banks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -89,8 +90,57 @@ You can repeat the above procedure for generating the NSBH, BBH and IMBH banks. 
 Decompose the template waveforms using the SVD in chirpmass and chi bins
 ------------------------------------------------------------------------
 
+
+In order to remain organized we will make new directories for the svd decomposed template banks.  First go to the projects root directory, e.g.::
+
+ cd /home/gstlalcbc/observing/3/online/
+
+Then make new directories for the bank::
+
+ mkdir -p sept_opa/svd/bns sept_opa/svd/nsbh sept_opa/svd/bbh sept_opa/svd/imbh
+
+
+Decomposing the BNS bank
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+Go into the bns svd sub directory::
+
+ cd sept_opa/svd/bns
+
+Get the config file example::
+
+ wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/sept_opa/Makefile.bns_svd
+
+**NOTE this file is provided as an example. You will in general have to suit it to the spcifics of your environment and the search you plan to conduct**
+
+Then run make to generate an SVD dag::
+
+ make -f Makefile.bns_svd 
+
+Submit it::
+
+ condor_submit_dag bank.dag
+
+You have to wait for this dag to finish before starting the actual analysis.  
+
+
+Decomposing the NSBH, BBH and IMBH banks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+You can repeat the above procedure for the NSBH, BBH and IMBH banks.  You should modify these example files to suit your needs, but here are example make files.
+
+ - https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/sept_opa/Makefile.nsbh_svd
+ - https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/sept_opa/Makefile.bbh_svd
+ - https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/sept_opa/Makefile.imbh_svd
+
+
 Setup and run the actual online analysis
 ----------------------------------------
+
+
+
 
 Basic LIGO/ALIGO colored Gaussian noise on the command line
 -----------------------------------------------------------
