@@ -139,6 +139,9 @@ in fact it appears that the reimplementation is a bit more sensitive.
 .. |O2_O3_HVtest| image:: ../images/HVtest.png
    :width: 400px
 
+.. |O2_O3_LR_ROC| image:: ../images/O2_O3_LR_ROC.png
+   :width: 400px
+
 +-------------------+-------------------------+-------------------------+
 |                   | O2 Code                 | O3 Code                 |
 +===================+=========================+=========================+
@@ -183,29 +186,46 @@ that the assumption is optimal.
 
 |O2_O3_HVtest|
 
+ROC Curves for HL Analysis with the O2 and O3 code
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Using the code here
+
+- https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/tests/lv_stat_test
+
+we generated ROC curves for discriminiting a synthetic signal and noise model
+in H and L.  Three traces are shown.  First, the the SNR only terms in the
+likelihood ratio, which was the situation in O1 Code (red).  Second, the O2
+code with the previous implementation of additional dt and dphi terms (green)
+and finally the current implementation (blue).  The improvement of the present
+implementation is consistent with the above injection results and this further
+demonstrates that the reimplementation has "done no harm" to the O2
+configuration. 
+
+|O2_O3_LR_ROC|
 
 Review Status
 -------------
 
-Do no harm check of O2 results  
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Do no harm check of O2 results (Complete)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - Comparing runs before and after (done) 
-- Checking the probabilities returned by new code and old code (sarah is working on it) to show consistent results
+- Checking the probabilities returned by new code and old code to show consistent results (done)
 
-Check of error assumptions
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+Check of error assumptions (For O3)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - Calculate theoretical delta T, delta phi and snr ratio values of an O2 injection set.  Then compute same parameters from injections.  The difference between those (in e.g., a scatter plot) should give a sense of the errors on those parameters caused by noise.  (sarah is working on it)
 - Eventually use the fisher matrix for the error estimates (chad will do it, but not for O2)
 
 
-Inclusion of virgo
-^^^^^^^^^^^^^^^^^^
+Inclusion of virgo (Partially complete, rest for O3)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- Virgo should not make the analysis worse in an average sense. (this has been demonstrated, but Chad will make it a bit more quantitative)
-- Understand cases where / if virgo does downrank a trigger
-- Consider having the likelihood calculation maximize over all trigger subsets (Chad and Kipp, but not for O2)
+- Virgo should not make the analysis worse in an average sense. (done, see https://dcc.ligo.org/LIGO-G1801491)
+- Understand cases where / if virgo does downrank a trigger (addressed by below)
+- Consider having the likelihood calculation maximize over all trigger subsets (Chad and Kipp will do this for O3)
 
 
 +-------------------------------------------------+------------------------------------------+------------+
@@ -1668,3 +1688,132 @@ class InspiralExtrinsics(object):
 			return 1.0
 		on_ifos = tuple(sorted(horizons.keys()))
 		return self.p_of_ifos[on_ifos](instruments, horizons)
+
+#
+# =============================================================================
+#
+#          NOTE OLD CODE!                       dt dphi PDF
+#
+# =============================================================================
+#
+
+
+dt_chebyshev_coeffs_polynomials = []
+dt_chebyshev_coeffs_polynomials.append(numpy.poly1d([-597.94227757949329, 2132.773853473127, -2944.126306979932, 1945.3033368083029, -603.91576991927593, 70.322754873993347]))
+dt_chebyshev_coeffs_polynomials.append(numpy.poly1d([-187.50681052710425, 695.84172327044325, -1021.0688423797938, 744.3266490236075, -272.12853221391498, 35.542404632554508]))
+dt_chebyshev_coeffs_polynomials.append(numpy.poly1d([52.128579054466599, -198.32054234352267, 301.34865541080791, -230.8522943433488, 90.780611645135437, -16.310130528927655]))
+dt_chebyshev_coeffs_polynomials.append(numpy.poly1d([48.216566165393878, -171.70632176976451, 238.48370471322843, -159.65005032451785, 50.122296925755677, -5.5466740894321367]))
+dt_chebyshev_coeffs_polynomials.append(numpy.poly1d([-34.030336093450863, 121.44714070928059, -169.91439486329773, 115.86873916702386, -38.08411813067778, 4.7396784315927816]))
+dt_chebyshev_coeffs_polynomials.append(numpy.poly1d([3.4576823675810178, -12.362609260376738, 17.3300203922424, -11.830868787176165, 3.900284020272442, -0.47157315012399248]))
+dt_chebyshev_coeffs_polynomials.append(numpy.poly1d([4.0423239651315113, -14.492611904657275, 20.847419746265583, -15.033846689362553, 5.3953159232942216, -0.78132676885883601]))
+norm_polynomial = numpy.poly1d([-348550.84040194791, 2288151.9147818103, -6623881.5646601757, 11116243.157047395, -11958335.1384027, 8606013.1361163966, -4193136.6690072878, 1365634.0450674745, -284615.52077054407, 34296.855844416605, -1815.7135263788341])
+
+dt_chebyshev_coeffs = [0]*13
+
+
+def __dphi_calc_A(combined_snr, delta_t):
+        B = -10.840765 * numpy.abs(delta_t) + 1.072866
+        M = 46.403738 * numpy.abs(delta_t) - 0.160205
+        nu = 0.009032 * numpy.abs(delta_t) + 0.001150
+        return (1.0 / (1.0 + math.exp(-B*(combined_snr - M)))**(1.0/nu))
+
+
+def __dphi_calc_mu(combined_snr, delta_t):
+        if delta_t >= 0.0:
+                A = 76.234617*delta_t + 0.001639
+                B = 0.290863
+                C = 4.775688
+                return (3.145953 - A* math.exp(-B*(combined_snr-C)))
+        elif delta_t < 0.0:
+                A = -130.877663*delta_t - 0.002814
+                B = 0.31023
+                C = 3.184671
+                return (3.145953 + A* math.exp(-B*(combined_snr-C)))
+
+
+def __dphi_calc_kappa(combined_snr, delta_t):
+        K = -176.540199*numpy.abs(delta_t) + 7.4387
+        B = -7.599585*numpy.abs(delta_t) + 0.215074
+        M = -1331.386835*numpy.abs(delta_t) - 35.309173
+        nu = 0.012225*numpy.abs(delta_t) + 0.000066
+        return (K / (1.0 + math.exp(-B*(combined_snr - M)))**(1.0/nu))
+
+
+def lnP_dphi_signal(delta_phi, delta_t, combined_snr):
+	# Compute von mises parameters
+	A_param = __dphi_calc_A(combined_snr, delta_t)
+	mu_param = __dphi_calc_mu(combined_snr, delta_t)
+	kappa_param = __dphi_calc_kappa(combined_snr, delta_t)
+	C_param = 1.0 - A_param
+
+	return math.log(A_param*stats.vonmises.pdf(delta_phi, kappa_param, loc=mu_param) + C_param/(2*math.pi))
+
+
+def lnP_dt_signal(dt, snr_ratio):
+	# FIXME Work out correct model
+
+	# Fits below an snr ratio of 0.33 are not reliable
+	if snr_ratio < 0.33:
+		snr_ratio = 0.33
+
+	dt_chebyshev_coeffs[0] = dt_chebyshev_coeffs_polynomials[0](snr_ratio)
+	dt_chebyshev_coeffs[2] = dt_chebyshev_coeffs_polynomials[1](snr_ratio)
+	dt_chebyshev_coeffs[4] = dt_chebyshev_coeffs_polynomials[2](snr_ratio)
+	dt_chebyshev_coeffs[6] = dt_chebyshev_coeffs_polynomials[3](snr_ratio)
+	dt_chebyshev_coeffs[8] = dt_chebyshev_coeffs_polynomials[4](snr_ratio)
+	dt_chebyshev_coeffs[10] = dt_chebyshev_coeffs_polynomials[5](snr_ratio)
+	dt_chebyshev_coeffs[12] = dt_chebyshev_coeffs_polynomials[6](snr_ratio)
+
+	return numpy.polynomial.chebyshev.chebval(dt/0.015013, dt_chebyshev_coeffs) - numpy.log(norm_polynomial(snr_ratio))
+
+def lnP_dt_dphi_uniform_H1L1(coincidence_window_extension):
+	# FIXME Dont hardcode
+	# NOTE This assumes the standard delta t
+	return -math.log((snglcoinc.light_travel_time("H1", "L1") + coincidence_window_extension) * (2. * math.pi))
+
+
+def lnP_dt_dphi_uniform(coincidence_window_extension):
+	# NOTE Currently hardcoded for H1L1
+	# NOTE this is future proofed so that in > 2 ifo scenarios, the
+	# appropriate length can be chosen for the uniform dt distribution
+	return lnP_dt_dphi_uniform_H1L1(coincidence_window_extension)
+
+
+def lnP_dt_dphi_signal(snrs, phase, dt, horizons, coincidence_window_extension):
+	# Return P(dt, dphi|{rho_{IFO}}, signal)
+	# FIXME Insert actual signal models
+	if sorted(dt.keys()) == ("H1", "L1"):
+		delta_t = float(dt["H1"] - dt["L1"])
+		delta_phi = (phase["H1"] - phase["L1"]) % (2*math.pi)
+		combined_snr = math.sqrt(snrs["H1"]**2. + snrs["L1"]**2.)
+		if horizons["H1"] != 0 and horizons["L1"] != 0:
+			# neither are zero, proceed as normal
+			H1_snr_over_horizon = snrs["H1"] / horizons["H1"]
+			L1_snr_over_horizon = snrs["L1"] / horizons["L1"]
+
+		elif horizons["H1"] == horizons["L1"]:
+			# both are zero, treat as equal
+			H1_snr_over_horizon = snrs["H1"]
+			L1_snr_over_horizon = snrs["L1"]
+
+		else:
+			# one of them is zero, treat snr_ratio as 0, which will get changed to 0.33 in lnP_dt_signal
+			# FIXME is this the right thing to do?
+			return lnP_dt_signal(abs(delta_t), 0.33) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
+
+		if H1_snr_over_horizon > L1_snr_over_horizon:
+			snr_ratio = L1_snr_over_horizon / H1_snr_over_horizon
+
+		else:
+			snr_ratio = H1_snr_over_horizon / L1_snr_over_horizon
+
+		return lnP_dt_signal(abs(delta_t), snr_ratio) + lnP_dphi_signal(delta_phi, delta_t, combined_snr)
+
+	else:
+		# IFOs != {H1,L1} case, thus just return uniform
+		# distribution so that dt/dphi terms dont affect
+		# likelihood ratio
+		# FIXME Work out general N detector case
+		return lnP_dt_dphi_uniform(coincidence_window_extension)
+
+
