@@ -50,6 +50,18 @@
 
 #define PI 3.141592653589793
 
+#define GST_CAT_DEFAULT gstlal_interpolator_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+G_DEFINE_TYPE_WITH_CODE(
+	GSTLALInterpolator,
+	gstlal_interpolator,
+	GST_TYPE_BASE_TRANSFORM,
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_interpolator", 0, "lal_interpolator element")
+);
+
+
+
 
 static gsl_vector_float** upkernel32(int half_length_at_original_rate, int f) {
 
@@ -386,17 +398,6 @@ static void downsample64(double *output, gsl_vector **thiskernel, double *input,
  */
 
 
-#define GST_CAT_DEFAULT gstlal_interpolator_debug
-GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
-
-G_DEFINE_TYPE_WITH_CODE(
-	GSTLALInterpolator,
-	gstlal_interpolator,
-	GST_TYPE_BASE_TRANSFORM,
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_interpolator", 0, "lal_interpolator element")
-);
-
-
 /*
  * Pads
  */
@@ -525,7 +526,6 @@ static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection directi
 	}
 
 	return gst_caps_from_string("audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
-
 }
 
 
@@ -543,6 +543,9 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	g_return_val_if_fail(gst_structure_get_int (instruct, "rate", &inrate), FALSE);
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "channels", &outchannels), FALSE);
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "rate", &outrate), FALSE);
+
+	GST_CAT_INFO(GST_CAT_DEFAULT, "set caps");
+	GST_CAT_INFO(GST_CAT_DEFAULT, "in channels %d in rate %d out channels %d out rate %d", inchannels, inrate, outchannels, outrate);
 
 	g_return_val_if_fail(inchannels == outchannels, FALSE);
 
