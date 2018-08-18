@@ -76,6 +76,7 @@ struct _GSTLALInterpolator {
 	gint inrate;
 	gint outrate;
 	guint channels;
+	gint width;
 	
 	/* Timestamp and offset bookeeping */
 	guint64 t0;
@@ -95,8 +96,10 @@ struct _GSTLALInterpolator {
 	guint blockstrideout;
 	guint half_length;
 	//float *kernel;
-	gsl_vector_float **kernel;
-	gsl_matrix_float *workspace;
+	gsl_vector_float **kernel32;
+	gsl_matrix_float *workspace32;
+	gsl_vector **kernel64;
+	gsl_matrix *workspace64;
 };
 
 

@@ -51,7 +51,7 @@
 #define PI 3.141592653589793
 
 
-static gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
+static gsl_vector_float** upkernel32(int half_length_at_original_rate, int f) {
 
 	/*
 	 * This is a parabolic windowed sinc function kernel
@@ -136,7 +136,44 @@ static gsl_vector_float** upkernel(int half_length_at_original_rate, int f) {
 }
 
 
-static gsl_vector_float** downkernel(int half_length_at_target_rate, int f) {
+static gsl_vector** upkernel64(int half_length_at_original_rate, int f) {
+
+	int kernel_length = 2 * half_length_at_original_rate * f + 1;
+	int sub_kernel_length = 2 * half_length_at_original_rate + 1;
+
+	/* the domain should be the kernel_length divided by two */
+	int c = kernel_length / 2;
+
+	gsl_vector **vecs = malloc(sizeof(*vecs) * f);
+	for (int i = 0; i < f; i++)
+		vecs[i] = gsl_vector_calloc(sub_kernel_length);
+
+	double *out = fftw_malloc(sizeof(*out) * kernel_length);
+	memset(out, 0, kernel_length * sizeof(*out));
+
+
+	for (int i = 0; i < kernel_length; i++) {
+		int x = i - c;
+		if (x == 0)
+			out[i] = 1.;
+		else
+			out[i] = sin(PI * x / f) / (PI * x / f) * (1. - (double) x*x / c / c);
+	}
+
+	for (int j = 0; j < f; j++) {
+		for (int i = 0; i < sub_kernel_length; i++) {
+			int index = i * f + j;
+			if (index < kernel_length)
+				gsl_vector_set(vecs[j], sub_kernel_length - i - 1, out[index]);
+		}
+	}
+
+	free(out);
+	return vecs;
+}
+
+
+static gsl_vector_float** downkernel32(int half_length_at_target_rate, int f) {
 
 	/*
 	 * This is a parabolic windowed sinc function kernel
@@ -186,7 +223,39 @@ static gsl_vector_float** downkernel(int half_length_at_target_rate, int f) {
 }
 
 
-static void convolve(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
+static gsl_vector **downkernel64(int half_length_at_target_rate, int f) {
+
+	int kernel_length = 2 * half_length_at_target_rate * f + 1;
+
+	/* the domain should be the kernel_length divided by two */
+	int c = kernel_length / 2;
+
+	// There is only one kernel for downsampling, it is not interleaved,
+	// instead the convolution is on a stride.
+	gsl_vector **vecs = malloc(sizeof(*vecs));
+	vecs[0] = gsl_vector_calloc(kernel_length);
+	double val = 0.;
+	double norm = 0.;
+	for (int i = 0; i < kernel_length; i++) {
+		int x = i - c;
+		if (x == 0) {
+			gsl_vector_set(vecs[0], i, 1.0);
+			norm += 1.;
+		}
+		else {
+			val = sin(PI * x / f) / (PI * x / f) * (1. - (double) x*x / c / c);
+			norm += val * val;
+			gsl_vector_set(vecs[0], i, val);
+		}
+	}
+
+	for (int i = 0; i < kernel_length; i++)
+		gsl_vector_set(vecs[0], i, gsl_vector_get(vecs[0], i) / sqrt(norm * f));
+	return vecs;
+}
+
+
+static void convolve32(float *output, gsl_vector_float *thiskernel, float *input, guint kernel_length, guint channels) {
 
 	/*
 	 * This function will multiply a matrix of input values by vector to
@@ -201,7 +270,16 @@ static void convolve(float *output, gsl_vector_float *thiskernel, float *input, 
 	return;
 }
 
-static void upsample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
+static void convolve64(double *output, gsl_vector *thiskernel, double *input, guint kernel_length, guint channels) {
+
+	gsl_vector_view output_vector = gsl_vector_view_array(output, channels);
+	gsl_matrix_view input_matrix = gsl_matrix_view_array(input, kernel_length, channels);
+
+	gsl_blas_dgemv (CblasTrans, 1.0, &(input_matrix.matrix), thiskernel, 0, &(output_vector.vector));
+	return;
+}
+
+static void upsample32(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
 
 	/*
 	 * This function is responsible for the resampling of the input time
@@ -225,13 +303,32 @@ static void upsample(float *output, gsl_vector_float **thiskernel, float *input,
 		input_offset = samp / factor;
 		input_offset *= channels;
 
-		convolve(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
+		convolve32(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
 	}
 	return;
 }
 
 
-static void downsample(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
+static void upsample64(double *output, gsl_vector **thiskernel, double *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
+
+	if (!nongap) {
+		memset(output, 0, sizeof(*output) * blockstrideout * channels);
+		return;
+	}
+	guint kernel_offset, output_offset, input_offset;
+	for (guint samp = 0; samp < blockstrideout; samp++) {
+		kernel_offset = samp % factor;
+		output_offset = samp * channels;
+		input_offset = samp / factor;
+		input_offset *= channels;
+
+		convolve64(output + output_offset, thiskernel[kernel_offset], input + input_offset, kernel_length, channels);
+	}
+	return;
+}
+
+
+static void downsample32(float *output, gsl_vector_float **thiskernel, float *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
 
 	/*
 	 * This function is responsible for the resampling of the input time
@@ -257,7 +354,28 @@ static void downsample(float *output, gsl_vector_float **thiskernel, float *inpu
 		 * in the output anyway.
 		 */
 		input_offset = samp * channels * factor;
-		convolve(output + output_offset, thiskernel[0], input + input_offset, kernel_length, channels);
+		convolve32(output + output_offset, thiskernel[0], input + input_offset, kernel_length, channels);
+	}
+	return;
+}
+
+
+static void downsample64(double *output, gsl_vector **thiskernel, double *input, guint kernel_length, guint factor, guint channels, guint blockstrideout, gboolean nongap) {
+
+	if (!nongap) {
+		memset(output, 0, sizeof(*output) * blockstrideout * channels);
+		return;
+	}
+	guint output_offset, input_offset;
+	for (guint samp = 0; samp < blockstrideout; samp++) {
+		output_offset = samp * channels;
+		/*
+		 * NOTE that only every "factor" if input samples is convolved
+		 * since the convolution of inbetween samples would be dropped
+		 * in the output anyway.
+		 */
+		input_offset = samp * channels * factor;
+		convolve64(output + output_offset, thiskernel[0], input + input_offset, kernel_length, channels);
 	}
 	return;
 }
@@ -289,7 +407,7 @@ static GstStaticPadTemplate sink_template =
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS ("audio/x-raw, " \
-		"format = (string) {" GST_AUDIO_NE(F32) "}, " \
+		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
 		"rate =  (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"layout = (string) interleaved, " \
@@ -302,7 +420,7 @@ static GstStaticPadTemplate src_template =
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS ("audio/x-raw, " \
-		"format = (string) {" GST_AUDIO_NE(F32) "}, " \
+		"format = (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, " \
 		"rate =  (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, " \
 		"channels = " GST_AUDIO_CHANNELS_RANGE ", " \
 		"layout = (string) interleaved, " \
@@ -371,8 +489,10 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element)
 	element->inrate = 0;
 	element->outrate = 0;
 
-	element->kernel = NULL;
-	element->workspace = NULL;
+	element->kernel32 = NULL;
+	element->kernel64 = NULL;
+	element->workspace32 = NULL;
+	element->workspace64 = NULL;
 
 	/* hardcoded kernel size */
 	element->half_length = 0;
@@ -399,11 +519,12 @@ static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection directi
 	char capsstr[256] = {0};
 
 	if (direction == GST_PAD_SINK && gst_structure_get_int (capsstruct, "channels", &channels)) {
-		sprintf(capsstr, "audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
+		sprintf(capsstr, "audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
+		
 		return gst_caps_from_string(capsstr);
 	}
 
-	return gst_caps_from_string("audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
+	return gst_caps_from_string("audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) [1, MAX]");
 
 }
 
@@ -428,6 +549,7 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->inrate = inrate;
 	element->outrate = outrate;
 	element->channels = inchannels;
+	element->width = GST_AUDIO_INFO_WIDTH(&element->audio_info);
 
 	get_unit_size(base, outcaps, &(element->unitsize));
 
@@ -439,22 +561,29 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	element->need_discont = TRUE;
 	element->need_pretend = TRUE;
 
-	if (element->kernel) {
-		gsl_vector_float_free(element->kernel[0]);
+	if (element->kernel32) {
+		gsl_vector_float_free(element->kernel32[0]);
 		for (guint i = 1; i < element->outrate / element->inrate; i++)
-			gsl_vector_float_free(element->kernel[i]);
+			gsl_vector_float_free(element->kernel32[i]);
+	}
+	if (element->kernel64) {
+		gsl_vector_free(element->kernel64[0]);
+		for (guint i = 1; i < element->outrate / element->inrate; i++)
+			gsl_vector_free(element->kernel64[i]);
 	}
 	// Upsampling
 	if (element->outrate > element->inrate) {
 		/* hardcoded kernel size */
 		element->half_length = 8;
-		element->kernel = upkernel(element->half_length, element->outrate / element->inrate);
+		element->kernel32 = upkernel32(element->half_length, element->outrate / element->inrate);
+		element->kernel64 = upkernel64(element->half_length, element->outrate / element->inrate);
 	}
 	// Downsampling
 	else {
 		/* hardcoded kernel size */
 		element->half_length = 16;
-		element->kernel = downkernel(element->half_length, element->inrate / element->outrate);
+		element->kernel32 = downkernel32(element->half_length, element->inrate / element->outrate);
+		element->kernel64 = downkernel64(element->half_length, element->inrate / element->outrate);
 	}
 	/*
 	 * Keep blockstride small to prevent GAPS from growing to be large
@@ -482,9 +611,13 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	}
 	GST_INFO_OBJECT(element, "blocksampsin %d, blocksampsout %d, blockstridein %d, blockstrideout %d", element->blocksampsin, element->blocksampsout, element->blockstridein, element->blockstrideout);
 
-	if (element->workspace)
-		gsl_matrix_float_free(element->workspace);
-	element->workspace = gsl_matrix_float_calloc (element->blocksampsin, element->channels);
+	if (element->workspace32)
+		gsl_matrix_float_free(element->workspace32);
+	element->workspace32 = gsl_matrix_float_calloc (element->blocksampsin, element->channels);
+	if (element->workspace64)
+		gsl_matrix_free(element->workspace64);
+	element->workspace64 = gsl_matrix_calloc (element->blocksampsin, element->channels);
+
 	g_object_set(element->adapter, "unit-size", element->unitsize, NULL);
 
 	return success;
@@ -739,51 +872,96 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		set_metadata(element, outbuf, 0, FALSE);
 	else {
 
+		if (element->width == 32) {
+			guint processed = 0;
+			gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+			float *output = (float *) mapinfo.data;
+			memset(mapinfo.data, 0, mapinfo.size);
+			/* FIXME- clean up this print statement (format) */
+			/* GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length); */
 
-		guint processed = 0;
-		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-		float *output = (float *) mapinfo.data;
-		memset(mapinfo.data, 0, mapinfo.size);
-		/* FIXME- clean up this print statement (format) */
-		/* GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length); */
-
-		while (processed < output_length) {
+			while (processed < output_length) {
 
 
-			/* Special case to handle discontinuities: effectively
-			 * zero pad. FIXME make this more elegant
-			 */
+				/* Special case to handle discontinuities: effectively
+				 * zero pad. FIXME make this more elegant
+				 */
 
-			if (element->need_pretend) {
-				memset(element->workspace->data, 0, sizeof(*element->workspace->data) * element->workspace->size1 * element->workspace->size2);
-				if (element->outrate > element->inrate)
-					gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
+				if (element->need_pretend) {
+					memset(element->workspace32->data, 0, sizeof(*element->workspace32->data) * element->workspace32->size1 * element->workspace32->size2);
+					if (element->outrate > element->inrate)
+						gst_audioadapter_copy_samples(element->adapter, element->workspace32->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
+					else
+						gst_audioadapter_copy_samples(element->adapter, element->workspace32->data + (element->half_length * element->inrate / element->outrate) * element->channels, element->blocksampsin - element->half_length * element->inrate / element->outrate, NULL, &copied_nongap);
+				}
 				else
-					gst_audioadapter_copy_samples(element->adapter, element->workspace->data + (element->half_length * element->inrate / element->outrate) * element->channels, element->blocksampsin - element->half_length * element->inrate / element->outrate, NULL, &copied_nongap);
-			}
-			else
-				gst_audioadapter_copy_samples(element->adapter, element->workspace->data, element->blocksampsin, NULL, &copied_nongap);
+					gst_audioadapter_copy_samples(element->adapter, element->workspace32->data, element->blocksampsin, NULL, &copied_nongap);
 
-			if (element->outrate > element->inrate)
-				upsample(output, element->kernel, element->workspace->data, kernel_length(element), element->outrate / element->inrate, element->channels, element->blockstrideout, copied_nongap);
-			else
-				downsample(output, element->kernel, element->workspace->data, kernel_length(element), element->inrate / element->outrate, element->channels, element->blockstrideout, copied_nongap);
-			if (element->need_pretend) {
-				element->need_pretend = FALSE;
 				if (element->outrate > element->inrate)
-					gst_audioadapter_flush_samples(element->adapter, element->blockstridein - element->half_length);
+					upsample32(output, element->kernel32, element->workspace32->data, kernel_length(element), element->outrate / element->inrate, element->channels, element->blockstrideout, copied_nongap);
 				else
-					gst_audioadapter_flush_samples(element->adapter, element->blockstridein - element->half_length * element->inrate / element->outrate);
+					downsample32(output, element->kernel32, element->workspace32->data, kernel_length(element), element->inrate / element->outrate, element->channels, element->blockstrideout, copied_nongap);
+				if (element->need_pretend) {
+					element->need_pretend = FALSE;
+					if (element->outrate > element->inrate)
+						gst_audioadapter_flush_samples(element->adapter, element->blockstridein - element->half_length);
+					else
+						gst_audioadapter_flush_samples(element->adapter, element->blockstridein - element->half_length * element->inrate / element->outrate);
+				}
+				else
+					gst_audioadapter_flush_samples(element->adapter, element->blockstridein);
+				output += element->blockstrideout * element->channels;
+				processed += element->blockstrideout;
 			}
-			else
-				gst_audioadapter_flush_samples(element->adapter, element->blockstridein);
-			output += element->blockstrideout * element->channels;
-			processed += element->blockstrideout;
+			GST_INFO_OBJECT(element, "Processed a %d samples", processed);
+			set_metadata(element, outbuf, output_length, !copied_nongap);
+			gst_buffer_unmap(outbuf, &mapinfo);
 		}
-		GST_INFO_OBJECT(element, "Processed a %d samples", processed);
-		set_metadata(element, outbuf, output_length, !copied_nongap);
-		gst_buffer_unmap(outbuf, &mapinfo);
+		if (element->width == 64) {
+			guint processed = 0;
+			gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+			double *output = (double *) mapinfo.data;
+			memset(mapinfo.data, 0, mapinfo.size);
+			/* FIXME- clean up this print statement (format) */
+			/* GST_INFO_OBJECT(element, "Processing a %d sample output buffer from %d input", output_length); */
 
+			while (processed < output_length) {
+
+
+				/* Special case to handle discontinuities: effectively
+				 * zero pad. FIXME make this more elegant
+				 */
+
+				if (element->need_pretend) {
+					memset(element->workspace64->data, 0, sizeof(*element->workspace64->data) * element->workspace64->size1 * element->workspace64->size2);
+					if (element->outrate > element->inrate)
+						gst_audioadapter_copy_samples(element->adapter, element->workspace64->data + (element->half_length) * element->channels, element->blocksampsin - element->half_length, NULL, &copied_nongap);
+					else
+						gst_audioadapter_copy_samples(element->adapter, element->workspace64->data + (element->half_length * element->inrate / element->outrate) * element->channels, element->blocksampsin - element->half_length * element->inrate / element->outrate, NULL, &copied_nongap);
+				}
+				else
+					gst_audioadapter_copy_samples(element->adapter, element->workspace64->data, element->blocksampsin, NULL, &copied_nongap);
+
+				if (element->outrate > element->inrate)
+					upsample64(output, element->kernel64, element->workspace64->data, kernel_length(element), element->outrate / element->inrate, element->channels, element->blockstrideout, copied_nongap);
+				else
+					downsample64(output, element->kernel64, element->workspace64->data, kernel_length(element), element->inrate / element->outrate, element->channels, element->blockstrideout, copied_nongap);
+				if (element->need_pretend) {
+					element->need_pretend = FALSE;
+					if (element->outrate > element->inrate)
+						gst_audioadapter_flush_samples(element->adapter, element->blockstridein - element->half_length);
+					else
+						gst_audioadapter_flush_samples(element->adapter, element->blockstridein - element->half_length * element->inrate / element->outrate);
+				}
+				else
+					gst_audioadapter_flush_samples(element->adapter, element->blockstridein);
+				output += element->blockstrideout * element->channels;
+				processed += element->blockstrideout;
+			}
+			GST_INFO_OBJECT(element, "Processed a %d samples", processed);
+			set_metadata(element, outbuf, output_length, !copied_nongap);
+			gst_buffer_unmap(outbuf, &mapinfo);
+		}
 	}
 	return result;
 }
@@ -797,10 +975,14 @@ static void finalize(GObject *object)
 	 * free resources
 	 */
 
-	gsl_vector_float_free(element->kernel[0]);
+	gsl_vector_float_free(element->kernel32[0]);
 	for (guint i = 1; i < element->outrate / element->inrate; i++)
-		gsl_vector_float_free(element->kernel[i]);
-	gsl_matrix_float_free(element->workspace);
+		gsl_vector_float_free(element->kernel32[i]);
+	gsl_vector_free(element->kernel64[0]);
+	for (guint i = 1; i < element->outrate / element->inrate; i++)
+		gsl_vector_free(element->kernel64[i]);
+	gsl_matrix_float_free(element->workspace32);
+	gsl_matrix_free(element->workspace64);
 
 	/*
 	 * chain to parent class' finalize() method
