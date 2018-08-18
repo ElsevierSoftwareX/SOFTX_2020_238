@@ -64,6 +64,8 @@ struct _GSTLALTransferFunction {
 	gint unit_size;
 	gint channels;
 	gint64 sample_count;
+	gint64 gap_samples;
+	int num_tfs_since_gap;
 	enum gstlal_transferfunction_data_type {
 		GSTLAL_TRANSFERFUNCTION_F32 = 0,
 		GSTLAL_TRANSFERFUNCTION_F64,
@@ -87,7 +89,12 @@ struct _GSTLALTransferFunction {
 			gint64 num_leftover;
 			complex float *ffts;
 			gint64 num_ffts_in_avg;
+			gint64 num_ffts_dropped;
 			complex float *autocorrelation_matrix;
+			float *autocorrelation_median_real;
+			gint64 *index_median_real;
+			float *autocorrelation_median_imag;
+			gint64 *index_median_imag;
 
 			/* gsl stuff */
 			gsl_vector_complex *transfer_functions_at_f;
@@ -112,7 +119,12 @@ struct _GSTLALTransferFunction {
 			gint64 num_leftover;
 			complex double *ffts;
 			gint64 num_ffts_in_avg;
+			gint64 num_ffts_dropped;
 			complex double *autocorrelation_matrix;
+			double *autocorrelation_median_real;
+			gint64 *index_median_real;
+			double *autocorrelation_median_imag;
+			gint64 *index_median_imag;
 
 			/* gsl stuff */
 			gsl_vector_complex *transfer_functions_at_f;
@@ -132,8 +144,10 @@ struct _GSTLALTransferFunction {
 	gint64 fft_length;
 	gint64 fft_overlap;
 	gint64 num_ffts;
+	gboolean use_median;
 	gint64 update_samples;
 	gboolean update_after_gap;
+	gint64 use_first_after_gap;
 	gboolean write_to_screen;
 	char *filename;
 	double make_fir_filters;
@@ -144,6 +158,8 @@ struct _GSTLALTransferFunction {
 	double *notch_frequencies;
 	gint64 *notch_indices;
 	int num_notches;
+	complex double *post_gap_transfer_functions;
+	double *post_gap_fir_filters;
 	complex double *transfer_functions;
 	double *fir_filters;
 };

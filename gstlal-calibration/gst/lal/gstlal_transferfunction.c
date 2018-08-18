@@ -19,7 +19,7 @@
 
 /*
  * SECTION:gstlal_transferfunction
- * @short_description:  Compute transfer function between two or more
+ * @short_description:  Compute transfer functions between two or more
  * time series.
  */
 
@@ -111,8 +111,10 @@ enum property {
 	ARG_FFT_LENGTH = 1,
 	ARG_FFT_OVERLAP,
 	ARG_NUM_FFTS,
+	ARG_USE_MEDIAN,
 	ARG_UPDATE_SAMPLES,
 	ARG_UPDATE_AFTER_GAP,
+	ARG_USE_FIRST_AFTER_GAP,
 	ARG_WRITE_TO_SCREEN,
 	ARG_FILENAME,
 	ARG_MAKE_FIR_FILTERS,
@@ -273,6 +275,61 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 	if(free_name)
 		g_free(element_name);
 }
+
+
+#define DEFINE_UPDATE_MEDIAN(DTYPE) \
+static void update_median_ ## DTYPE(DTYPE *median_array, DTYPE new_element, gint64 array_size, gint64 num_in_median, gint64 *index_median) { \
+	gint64 i; \
+	if(!num_in_median) { \
+		/* This will be the first element in the array */ \
+		*median_array = new_element; \
+		*index_median = 0; \
+ \
+	} else if(num_in_median < array_size) { \
+		/* If the array is not full, start at the last value and work down */ \
+		i = num_in_median; \
+		while(i && new_element < median_array[i > 1 ? i - 1 : 0]) { \
+			median_array[i] = median_array[i - 1]; \
+			i--; \
+		} \
+		median_array[i] = new_element; \
+		/* Reset the location of the median in the array. Note that if the array size is even, we choose the later/larger value. */ \
+		*index_median = (num_in_median + 1) / 2; \
+ \
+	} else if(new_element > median_array[array_size / 2]) { \
+		/* If the array is full and the new value is larger than the central value, start at the end and work down */ \
+		if(new_element < median_array[array_size - 1]) { \
+			i = array_size - 2; \
+			while(new_element < median_array[i]) { \
+				median_array[i + 1] = median_array[i]; \
+				i--; \
+			} \
+			median_array[i + 1] = new_element; \
+			/* We want to shift the location of the median up one slot if the new number of samples is even */ \
+			if(num_in_median % 2) \
+				(*index_median)++; \
+		} \
+	} else { \
+		/* The array is full and the new value is smaller than the central value, so we start at the beginning */ \
+		if(new_element > *median_array) { \
+			i = 1; \
+			while(new_element > median_array[i]) { \
+				median_array[i - 1] = median_array[i]; \
+				i++; \
+			} \
+			median_array[i - 1] = new_element; \
+			/* We want to shift the location of the median down one slot if the new number of samples is odd */ \
+			if(!(num_in_median % 2)) \
+				(*index_median)--; \
+		} \
+	} \
+ \
+	return; \
+}
+
+
+DEFINE_UPDATE_MEDIAN(float);
+DEFINE_UPDATE_MEDIAN(double);
 
 
 #define DEFINE_UPDATE_TRANSFER_FUNCTIONS(DTYPE, F_OR_BLANK) \
@@ -507,7 +564,51 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		for(j = 0; j < fd_fft_length * element->channels; j++) \
 			success &= isnormal(creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.ffts[j])); \
  \
-		if(success) { \
+		if(success && element->use_median) { \
+			/*
+			 * Put all the transfer functions of the autocorrelation matrix in a median
+			 * array. We will track the location of the median as the array gets filled.
+			 * Note that the data in the median array is stored in "frequency-major"
+			 * order: transfer functions at a particular frequency are stored
+			 * contiguously in memory before incrementing to the next frequency.
+			 */ \
+			DTYPE complex cplx; \
+			DTYPE real; \
+			DTYPE imag; \
+			gint64 max_in_median = element->num_ffts / 2 + 1; \
+			gint64 num_in_median = element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped + i; \
+			gint64 median_array_num; \
+			for(j = 0; j < fd_fft_length; j++) { \
+				first_index = j * element->channels * num_tfs - 1; \
+				for(k = 1; k <= num_tfs; k++) { \
+					/* First, divide FFTs of first channel by others to get those transfer functions */ \
+					cplx = element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+					median_array_num = j * num_tfs * num_tfs + k - 1; \
+					real = creal ## F_OR_BLANK(cplx); \
+					update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real + median_array_num * max_in_median, real, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_real + median_array_num); \
+					imag = cimag ## F_OR_BLANK(cplx); \
+					update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag + median_array_num * max_in_median, imag, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_imag + median_array_num); \
+ \
+					/* Now find off-diagonal elements of the autocorrelation matrix */ \
+					for(m = 1; m < k; m++) { \
+						/* Elements above diagonal */ \
+						cplx = element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + m * fd_fft_length]; \
+						median_array_num = j * num_tfs * num_tfs + num_tfs + (m - 1) * (num_tfs - 1) + k - 2; \
+						real = creal ## F_OR_BLANK(cplx); \
+						update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real + median_array_num * max_in_median, real, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_real + median_array_num); \
+						imag = cimag ## F_OR_BLANK(cplx); \
+						update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag + median_array_num * max_in_median, imag, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_imag + median_array_num); \
+						/* Elements below diagonal */ \
+						cplx = element->workspace.w ## S_OR_D ## pf.ffts[j + m * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+						median_array_num = j * num_tfs * num_tfs + num_tfs + (k - 1) * (num_tfs - 1) + m - 1; \
+						real = creal ## F_OR_BLANK(cplx); \
+						update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real + median_array_num * max_in_median, real, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_real + median_array_num); \
+						imag = cimag ## F_OR_BLANK(cplx); \
+						update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag + median_array_num * max_in_median, imag, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_imag + median_array_num); \
+					} \
+				} \
+			} \
+		} else if(success) { \
 			/* 
 			 * Add into the autocorrelation matrix to be averaged. The autocorrelation
 			 * matrix includes all transfer functions. Note that the data is stored in
@@ -517,7 +618,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			for(j = 0; j < fd_fft_length; j++) { \
 				first_index = j * element->channels * num_tfs - 1; \
 				for(k = 1; k <= num_tfs; k++) { \
-					/* First, divide FFT's of first channel by others to get those transfer functions */ \
+					/* First, divide FFTs of first channel by others to get those transfer functions */ \
 					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
  \
 					/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
@@ -533,6 +634,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			} \
 		} else { \
 			GST_WARNING_OBJECT(element, "Computed FFT is not usable. Dropping..."); \
+			element->workspace.w ## S_OR_D ## pf.num_ffts_dropped++; \
 			success = TRUE; \
 		} \
 	} \
@@ -585,7 +687,51 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		for(j = 0; j < fd_fft_length * element->channels; j++) \
 			success &= isnormal(creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.ffts[j])); \
  \
-		if(success) { \
+		if(success && element->use_median) { \
+			/*
+			 * Put all the transfer functions of the autocorrelation matrix in a median
+			 * array. We will track the location of the median as the array gets filled.
+			 * Note that the data in the median array is stored in "frequency-major"
+			 * order: transfer functions at a particular frequency are stored
+			 * contiguously in memory before incrementing to the next frequency.
+			 */ \
+			DTYPE complex cplx; \
+			DTYPE real; \
+			DTYPE imag; \
+			gint64 max_in_median = element->num_ffts / 2 + 1; \
+			gint64 num_in_median = element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped + i; \
+			gint64 median_array_num; \
+			for(j = 0; j < fd_fft_length; j++) { \
+				first_index = j * element->channels * num_tfs - 1; \
+				for(k = 1; k <= num_tfs; k++) { \
+					/* First, divide FFTs of first channel by others to get those transfer functions */ \
+					cplx = element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+					median_array_num = j * num_tfs * num_tfs + k - 1; \
+					real = creal ## F_OR_BLANK(cplx); \
+					update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real + median_array_num * max_in_median, real, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_real + median_array_num); \
+					imag = cimag ## F_OR_BLANK(cplx); \
+					update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag + median_array_num * max_in_median, imag, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_imag + median_array_num); \
+ \
+					/* Now find off-diagonal elements of the autocorrelation matrix */ \
+					for(m = 1; m < k; m++) { \
+						/* Elements above diagonal */ \
+						cplx = element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + m * fd_fft_length]; \
+						median_array_num = j * num_tfs * num_tfs + num_tfs + (m - 1) * (num_tfs - 1) + k - 2; \
+						real = creal ## F_OR_BLANK(cplx); \
+						update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real + median_array_num * max_in_median, real, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_real + median_array_num); \
+						imag = cimag ## F_OR_BLANK(cplx); \
+						update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag + median_array_num * max_in_median, imag, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_imag + median_array_num); \
+						/* Elements below diagonal */ \
+						cplx = element->workspace.w ## S_OR_D ## pf.ffts[j + m * fd_fft_length] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
+						median_array_num = j * num_tfs * num_tfs + num_tfs + (k - 1) * (num_tfs - 1) + m - 1; \
+						real = creal ## F_OR_BLANK(cplx); \
+						update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real + median_array_num * max_in_median, real, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_real + median_array_num); \
+						imag = cimag ## F_OR_BLANK(cplx); \
+						update_median_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag + median_array_num * max_in_median, imag, max_in_median, num_in_median, element->workspace.w ## S_OR_D ## pf.index_median_imag + median_array_num); \
+					} \
+				} \
+			} \
+		} else if(success) { \
 			/* 
 			 * Add into the autocorrelation matrix to be averaged. The autocorrelation
 			 * matrix includes all transfer functions. Note that the data is stored in
@@ -595,7 +741,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			for(j = 0; j < fd_fft_length; j++) { \
 				first_index = j * element->channels * num_tfs - 1; \
 				for(k = 1; k <= num_tfs; k++) { \
-					/* First, divide FFT's of first channel by others to get those transfer functions */ \
+					/* First, divide FFTs of first channel by others to get those transfer functions */ \
 					element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[first_index + k] += element->workspace.w ## S_OR_D ## pf.ffts[j] / element->workspace.w ## S_OR_D ## pf.ffts[j + k * fd_fft_length]; \
  \
 					/* Now set elements of the autocorrelation matrix along the diagonal equal to one */ \
@@ -611,6 +757,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			} \
 		} else { \
 			GST_WARNING_OBJECT(element, "Computed FFT is not usable. Dropping..."); \
+			element->workspace.w ## S_OR_D ## pf.num_ffts_dropped++; \
 			success = TRUE; \
 		} \
 	} \
@@ -644,7 +791,41 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
  \
 	/* Finally, update transfer functions if ready */ \
 	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
-		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->num_ffts, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
+		if(element->use_median) { \
+			/* Then we still need to fill the autocorrelation matrix with median values */ \
+			gint64 median_length = element->num_ffts / 2 + 1; \
+			int elements_per_freq = element->channels * num_tfs; \
+			int medians_per_freq = num_tfs * num_tfs; \
+			gint64 median_array_num; \
+			if((element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped) % 2) { \
+				/* Length of median array is odd, so the median is just the middle value */ \
+				for(i = 0; i < fd_fft_length; i++) { \
+					for(j = 0; j < num_tfs; j++) { \
+						for(k = 0; k < num_tfs; k++) { \
+							/* Off-diagonal elements come from the median array */ \
+							median_array_num = i * medians_per_freq + j * num_tfs + k; \
+							element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + k] = element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real[median_array_num * median_length + element->workspace.w ## S_OR_D ## pf.index_median_real[median_array_num]] + I * element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.w ## S_OR_D ## pf.index_median_imag[median_array_num]]; \
+							/* Elements along the diagonal are one */ \
+							element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + num_tfs] = 1.0; \
+						} \
+					} \
+				} \
+			} else { \
+				/* Length of median array is even, so the median is the average of the two middle values */ \
+				for(i = 0; i < fd_fft_length; i++) { \
+					for(j = 0; j < num_tfs; j++) { \
+						for(k = 0; k < num_tfs; k++) { \
+							/* Off-diagonal elements come from the median array */ \
+							median_array_num = i * medians_per_freq + j * num_tfs + k; \
+							element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + k] = (element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real[median_array_num * median_length + element->workspace.w ## S_OR_D ## pf.index_median_real[median_array_num] - 1] + element->workspace.w ## S_OR_D ## pf.autocorrelation_median_real[median_array_num * median_length + element->workspace.w ## S_OR_D ## pf.index_median_real[median_array_num]] + I * (element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.w ## S_OR_D ## pf.index_median_imag[median_array_num] - 1] + element->workspace.w ## S_OR_D ## pf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.w ## S_OR_D ## pf.index_median_imag[median_array_num]])) / 2.0; \
+							/* Elements along the diagonal are one */ \
+							element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + num_tfs] = 1.0; \
+						} \
+					} \
+				} \
+			} \
+		} \
+		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->use_median ? 1 : element->num_ffts - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
 		if(success) { \
 			GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
 			/* Let other elements know about the update */ \
@@ -652,13 +833,20 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			/* Write transfer functions to the screen or a file if we want */ \
 			if(element->write_to_screen || element->filename) \
 				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
+			/* If this is this first transfer function after a gap, we may wish to store it */ \
+			if(element->use_first_after_gap && !element->num_tfs_since_gap) { \
+				for(i = 0; i < num_tfs * fd_tf_length; i++) \
+					element->post_gap_transfer_functions[i] = element->transfer_functions[i]; \
+			} \
+			element->num_tfs_since_gap++; \
 		} else \
 			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Trying again."); \
 		element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
 		element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg = 0; \
+		element->workspace.w ## S_OR_D ## pf.num_ffts_dropped = 0; \
  \
 		/* Update FIR filters if we want */ \
-		if(element->make_fir_filters) { \
+		if(success && element->make_fir_filters) { \
 			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
 			if(success) { \
 				GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
@@ -667,6 +855,11 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 				/* Write FIR filters to the screen or a file if we want */ \
 				if(element->write_to_screen || element->filename) \
 					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
+				/* If this is this first FIR filter after a gap, we may wish to store it */ \
+				if(element->use_first_after_gap && element->num_tfs_since_gap == 1) { \
+					for(i = 0; i < num_tfs * element->fir_length; i++) \
+						element->post_gap_fir_filters[i] = element->fir_filters[i]; \
+				} \
 			} else \
 				GST_WARNING_OBJECT(element, "FIR filter(s) computation failed. Trying again."); \
 		} \
@@ -736,6 +929,157 @@ static gboolean start(GstBaseSink *sink) {
 
 
 /*
+ * event()
+ */
+
+
+static gboolean event(GstBaseSink *sink, GstEvent *event) {
+	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(sink);
+	gboolean success = TRUE;
+	GST_DEBUG_OBJECT(element, "Got %s event on sink pad", GST_EVENT_TYPE_NAME(event));
+
+	if(GST_EVENT_TYPE(event) == GST_EVENT_EOS) {
+		/* If End Of Stream is here and we have not yet computed any transfer functions, we should use whatever data we have to compute them now. */
+		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
+			if(element->workspace.wspf.num_ffts_in_avg > element->workspace.wspf.num_ffts_dropped && *element->transfer_functions == 0.0) {
+				/* Then we should use the transfer functions we have now, since they won't get any better */
+				gint64 fd_fft_length = element->fft_length / 2 + 1;
+				gint64 fd_tf_length = element->fir_length / 2 + 1;
+				gint64 num_tfs = element->channels - 1;
+				if(element->use_median) {
+					/* Then we still need to fill the autocorrelation matrix with median values */
+					gint64 median_length = element->num_ffts / 2 + 1;
+					int elements_per_freq = element->channels * num_tfs;
+					int medians_per_freq = num_tfs * num_tfs;
+					gint64 median_array_num;
+					gint64 i, j, k;
+					if((element->workspace.wspf.num_ffts_in_avg - element->workspace.wspf.num_ffts_dropped) % 2) {
+						/* Length of median array is odd, so the median is just the middle value */
+						for(i = 0; i < fd_fft_length; i++) {
+							for(j = 0; j < num_tfs; j++) {
+								for(k = 0; k < num_tfs; k++) {
+									/* Off-diagonal elements come from the median array */
+									median_array_num = i * medians_per_freq + j * num_tfs + k;
+									element->workspace.wspf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + k] = element->workspace.wspf.autocorrelation_median_real[median_array_num * median_length + element->workspace.wspf.index_median_real[median_array_num]] + I * element->workspace.wspf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.wspf.index_median_imag[median_array_num]];
+									/* Elements along the diagonal are one */
+									element->workspace.wspf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + num_tfs] = 1.0;
+								}
+							}
+						}
+					} else {
+						/* Length of median array is even, so the median is the average of the two middle values */
+						for(i = 0; i < fd_fft_length; i++) {
+							for(j = 0; j < num_tfs; j++) {
+								for(k = 0; k < num_tfs; k++) {
+									/* Off-diagonal elements come from the median array */
+									median_array_num = i * medians_per_freq + j * num_tfs + k;
+									element->workspace.wspf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + k] = (element->workspace.wspf.autocorrelation_median_real[median_array_num * median_length + element->workspace.wspf.index_median_real[median_array_num] - 1] + element->workspace.wspf.autocorrelation_median_real[median_array_num * median_length + element->workspace.wspf.index_median_real[median_array_num]] + I * (element->workspace.wspf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.wspf.index_median_imag[median_array_num] - 1] + element->workspace.wspf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.wspf.index_median_imag[median_array_num]])) / 2.0;
+									/* Elements along the diagonal are one */
+									element->workspace.wspf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + num_tfs] = 1.0;
+								}
+							}
+						}
+					}
+				}
+				success &= update_transfer_functions_float(element->workspace.wspf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.wspf.sinc_table, element->workspace.wspf.sinc_length, element->workspace.wspf.sinc_taps_per_df, element->use_median ? 1 : element->num_ffts - element->workspace.wspf.num_ffts_dropped, element->workspace.wspf.transfer_functions_at_f, element->workspace.wspf.transfer_functions_solved_at_f, element->workspace.wspf.autocorrelation_matrix_at_f, element->workspace.wspf.permutation, element->transfer_functions);
+				if(success) {
+					GST_INFO_OBJECT(element, "Just computed new transfer functions");
+					/* Let other elements know about the update */
+					g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
+					/* Write transfer functions to the screen or a file if we want */
+					if(element->write_to_screen || element->filename)
+						write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->write_to_screen, element->filename, TRUE);
+				} else
+					GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. No transfer functions will be produced.");
+				/* Update FIR filters if we want */
+				if(success && element->make_fir_filters) {
+					success &= update_fir_filters_float(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wspf.fir_filter, element->workspace.wspf.fir_plan, element->workspace.wspf.fir_window, element->workspace.wspf.tukey, element->fir_filters);
+					if(success) {
+						GST_INFO_OBJECT(element, "Just computed new FIR filters");
+						/* Let other elements know about the update */
+						g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
+						/* Write FIR filters to the screen or a file if we want */
+						if(element->write_to_screen || element->filename)
+							write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->write_to_screen, element->filename, TRUE);
+					} else
+						GST_WARNING_OBJECT(element, "FIR filter(s) computation failed. No FIR filters will be produced.");
+				}
+			}
+		} else {
+			if(element->workspace.wdpf.num_ffts_in_avg > element->workspace.wdpf.num_ffts_dropped && *element->transfer_functions == 0.0) {
+				/* Then we should use the transfer functions we have now, since they won't get any better */
+				gint64 fd_fft_length = element->fft_length / 2 + 1;
+				gint64 fd_tf_length = element->fir_length / 2 + 1;
+				gint64 num_tfs = element->channels - 1;
+				if(element->use_median) {
+					/* Then we still need to fill the autocorrelation matrix with median values */
+					gint64 median_length = element->num_ffts / 2 + 1;
+					int elements_per_freq = element->channels * num_tfs;
+					int medians_per_freq = num_tfs * num_tfs;
+					gint64 median_array_num;
+					gint64 i, j, k;
+					if((element->workspace.wdpf.num_ffts_in_avg - element->workspace.wdpf.num_ffts_dropped) % 2) {
+						/* Length of median array is odd, so the median is just the middle value */
+						for(i = 0; i < fd_fft_length; i++) {
+							for(j = 0; j < num_tfs; j++) {
+								for(k = 0; k < num_tfs; k++) {
+									/* Off-diagonal elements come from the median array */
+									median_array_num = i * medians_per_freq + j * num_tfs + k;
+									element->workspace.wdpf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + k] = element->workspace.wdpf.autocorrelation_median_real[median_array_num * median_length + element->workspace.wdpf.index_median_real[median_array_num]] + I * element->workspace.wdpf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.wdpf.index_median_imag[median_array_num]];
+									/* Elements along the diagonal are one */
+									element->workspace.wdpf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + num_tfs] = 1.0;
+								}
+							}
+						}
+					} else {
+						/* Length of median array is even, so the median is the average of the two middle values */
+						for(i = 0; i < fd_fft_length; i++) {
+							for(j = 0; j < num_tfs; j++) {
+								for(k = 0; k < num_tfs; k++) {
+									/* Off-diagonal elements come from the median array */
+									median_array_num = i * medians_per_freq + j * num_tfs + k;
+									element->workspace.wdpf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + k] = (element->workspace.wdpf.autocorrelation_median_real[median_array_num * median_length + element->workspace.wdpf.index_median_real[median_array_num] - 1] + element->workspace.wdpf.autocorrelation_median_real[median_array_num * median_length + element->workspace.wdpf.index_median_real[median_array_num]] + I * (element->workspace.wdpf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.wdpf.index_median_imag[median_array_num] - 1] + element->workspace.wdpf.autocorrelation_median_imag[median_array_num * median_length + element->workspace.wdpf.index_median_imag[median_array_num]])) / 2.0;
+									/* Elements along the diagonal are one */
+									element->workspace.wdpf.autocorrelation_matrix[i * elements_per_freq * j * (num_tfs + 1) + num_tfs] = 1.0;
+								}
+							}
+						}
+					}
+				}
+				success &= update_transfer_functions_double(element->workspace.wdpf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.wdpf.sinc_table, element->workspace.wdpf.sinc_length, element->workspace.wdpf.sinc_taps_per_df, element->use_median ? 1 : element->num_ffts - element->workspace.wdpf.num_ffts_dropped, element->workspace.wdpf.transfer_functions_at_f, element->workspace.wdpf.transfer_functions_solved_at_f, element->workspace.wdpf.autocorrelation_matrix_at_f, element->workspace.wdpf.permutation, element->transfer_functions);
+				if(success) {
+					GST_INFO_OBJECT(element, "Just computed new transfer functions");
+					/* Let other elements know about the update */
+					g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
+					/* Write transfer functions to the screen or a file if we want */
+					if(element->write_to_screen || element->filename)
+						write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->write_to_screen, element->filename, TRUE);
+				} else
+					GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. No transfer functions will be produced.");
+				/* Update FIR filters if we want */
+				if(success && element->make_fir_filters) {
+					success &= update_fir_filters_double(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wdpf.fir_filter, element->workspace.wdpf.fir_plan, element->workspace.wdpf.fir_window, element->workspace.wdpf.tukey, element->fir_filters);
+					if(success) {
+						GST_INFO_OBJECT(element, "Just computed new FIR filters");
+						/* Let other elements know about the update */
+						g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
+						/* Write FIR filters to the screen or a file if we want */
+						if(element->write_to_screen || element->filename)
+							write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->write_to_screen, element->filename, TRUE);
+					} else
+						GST_WARNING_OBJECT(element, "FIR filter(s) computation failed. No FIR filters will be produced.");
+				}
+			}
+		}
+	}
+
+	success = GST_BASE_SINK_CLASS(gstlal_transferfunction_parent_class)->event(sink, event);
+
+	return success;
+}
+
+
+/*
  * set_caps()
  */
 
@@ -774,6 +1118,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	 * Free any memory that depends on stream parameters
 	 */
 
+	if(element->post_gap_transfer_functions) {
+		g_free(element->post_gap_transfer_functions);
+		element->post_gap_transfer_functions = NULL;
+	}
+	if(element->post_gap_fir_filters) {
+		g_free(element->post_gap_fir_filters);
+		element->post_gap_fir_filters = NULL;
+	}
 	if(element->transfer_functions) {
 		g_free(element->transfer_functions);
 		element->transfer_functions = NULL;
@@ -800,6 +1152,19 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->workspace.wspf.ffts = NULL;
 	}
 	element->workspace.wspf.num_ffts_in_avg = 0;
+	element->workspace.wspf.num_ffts_dropped = 0;
+	if(element->workspace.wspf.autocorrelation_matrix) {
+		g_free(element->workspace.wspf.autocorrelation_matrix);
+		element->workspace.wspf.autocorrelation_matrix = NULL;
+	}
+	if(element->workspace.wspf.autocorrelation_median_real) {
+		g_free(element->workspace.wspf.autocorrelation_median_real);
+		element->workspace.wspf.autocorrelation_median_real = NULL;
+	}
+	if(element->workspace.wspf.autocorrelation_median_imag) {
+		g_free(element->workspace.wspf.autocorrelation_median_imag);
+		element->workspace.wspf.autocorrelation_median_imag = NULL;
+	}
 	if(element->workspace.wspf.transfer_functions_at_f) {
 		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_at_f);
 		element->workspace.wspf.transfer_functions_at_f = NULL;
@@ -848,6 +1213,19 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->workspace.wdpf.ffts = NULL;
 	}
 	element->workspace.wdpf.num_ffts_in_avg = 0;
+	element->workspace.wspf.num_ffts_dropped = 0;
+	if(element->workspace.wdpf.autocorrelation_matrix) {
+		g_free(element->workspace.wdpf.autocorrelation_matrix);
+		element->workspace.wdpf.autocorrelation_matrix = NULL;
+	}
+	if(element->workspace.wdpf.autocorrelation_median_real) {
+		g_free(element->workspace.wdpf.autocorrelation_median_real);
+		element->workspace.wdpf.autocorrelation_median_real = NULL;
+	}
+	if(element->workspace.wdpf.autocorrelation_median_imag) {
+		g_free(element->workspace.wdpf.autocorrelation_median_imag);
+		element->workspace.wdpf.autocorrelation_median_imag = NULL;
+	}
 	if(element->workspace.wdpf.transfer_functions_at_f) {
 		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_at_f);
 		element->workspace.wdpf.transfer_functions_at_f = NULL;
@@ -888,8 +1266,19 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->fir_length = element->fft_length;
 	gint64 fd_fir_length = element->fir_length / 2 + 1;
 	element->transfer_functions = g_malloc((element->channels - 1) * fd_fir_length * sizeof(*element->transfer_functions));
-	if(element->make_fir_filters)
+	memset(element->transfer_functions, 0, (element->channels - 1) * fd_fir_length * sizeof(*element->transfer_functions));
+	if(element->use_first_after_gap) {
+		element->post_gap_transfer_functions = g_malloc((element->channels - 1) * fd_fir_length * sizeof(*element->post_gap_transfer_functions));
+		memset(element->post_gap_transfer_functions, 0, (element->channels - 1) * fd_fir_length * sizeof(*element->post_gap_transfer_functions));
+	}
+	if(element->make_fir_filters) {
 		element->fir_filters = g_malloc((element->channels - 1) * element->fir_length * sizeof(*element->fir_filters));
+		memset(element->fir_filters, 0, (element->channels - 1) * element->fir_length * sizeof(*element->fir_filters));
+		if(element->use_first_after_gap) {
+			element->post_gap_fir_filters = g_malloc((element->channels - 1) * element->fir_length * sizeof(*element->post_gap_fir_filters));
+			memset(element->post_gap_fir_filters, 0, (element->channels - 1) * element->fir_length * sizeof(*element->post_gap_fir_filters));
+		}
+	}
 
 	/* Prepare to deal with any notches */
 	if(element->num_notches && !element->notch_indices) {
@@ -1053,6 +1442,12 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->workspace.wspf.ffts = g_malloc(element->channels * fd_fft_length * sizeof(*element->workspace.wspf.ffts));
 		element->workspace.wspf.num_ffts_in_avg = 0;
 		element->workspace.wspf.autocorrelation_matrix = g_malloc(element->channels * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wspf.autocorrelation_matrix));
+		if(element->use_median) {
+			element->workspace.wspf.autocorrelation_median_real = g_malloc((element->num_ffts / 2 + 1) * (element->channels - 1) * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wspf.autocorrelation_median_real));
+			element->workspace.wspf.index_median_real = g_malloc((element->channels - 1) * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wspf.index_median_real));
+			element->workspace.wspf.autocorrelation_median_imag = g_malloc((element->num_ffts / 2 + 1) * (element->channels - 1) * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wspf.autocorrelation_median_imag));
+			element->workspace.wspf.index_median_imag = g_malloc((element->channels - 1) * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wspf.index_median_imag));
+		}
 
 		/* Allocate memory for gsl matrix manipulations. The same memory locations will be used repeatedly */
 		element->workspace.wspf.transfer_functions_at_f = gsl_vector_complex_alloc(element->channels - 1);
@@ -1229,6 +1624,12 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->workspace.wdpf.ffts = g_malloc(element->channels * fd_fft_length * sizeof(*element->workspace.wdpf.ffts));
 		element->workspace.wdpf.num_ffts_in_avg = 0;
 		element->workspace.wdpf.autocorrelation_matrix = g_malloc(element->channels * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
+		if(element->use_median) {
+			element->workspace.wdpf.autocorrelation_median_real = g_malloc((element->num_ffts / 2 + 1) * (element->channels - 1) * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wdpf.autocorrelation_median_real));
+			element->workspace.wdpf.index_median_real = g_malloc((element->channels - 1) * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wdpf.index_median_real));
+			element->workspace.wdpf.autocorrelation_median_imag = g_malloc((element->num_ffts / 2 + 1) * (element->channels - 1) * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wdpf.autocorrelation_median_imag));
+			element->workspace.wdpf.index_median_imag = g_malloc((element->channels - 1) * (element->channels - 1) * fd_fft_length * sizeof(*element->workspace.wdpf.index_median_imag));
+		}
 
 		/* Allocate memory for gsl matrix manipulations. The same memory locations will be used repeatedly */
 		element->workspace.wdpf.transfer_functions_at_f = gsl_vector_complex_alloc(element->channels - 1);
@@ -1298,6 +1699,35 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 
 	/* Deal with gaps */
 	if(GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP) && mapinfo.size != 0) {
+		/* Check if we should switch over to post-gap transfer functions */
+		if(element->gap_samples < element->use_first_after_gap && element->gap_samples + (gint64) (mapinfo.size / element->unit_size) > element->use_first_after_gap && *element->post_gap_transfer_functions) {
+			/* Reset the transfer function count */
+			element->num_tfs_since_gap = 0;
+			/* Copy samples from post-gap transfer functions and fir filters */
+			gint64 i;
+			for(i = 0; i < (element->channels - 1) * (element->fir_length / 2 + 1); i++)
+				element->transfer_functions[i] = element->post_gap_transfer_functions[i];
+			GST_INFO_OBJECT(element, "Just reverted to post-gap transfer functions");
+			/* Let other elements know about the update */
+			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
+			/* Write transfer functions to the screen or a file if we want */
+			if(element->write_to_screen || element->filename)
+				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), (double) element->rate / element->fir_length, element->fir_length / 2 + 1, element->channels - 1, element->write_to_screen, element->filename, TRUE);
+			if(element->make_fir_filters) {
+				for(i = 0; i < (element->channels - 1) * element->fir_length; i++)
+					element->fir_filters[i] = element->post_gap_fir_filters[i];
+				GST_INFO_OBJECT(element, "Just reverted to post-gap FIR filters");
+				/* Let other elements know about the update */
+				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
+				/* Write FIR filters to the screen or a file if we want */
+				if(element->write_to_screen || element->filename)
+					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, element->channels - 1, element->write_to_screen, element->filename, TRUE);
+			}
+			
+		}
+		/* Track the number of samples since the last non-gap data */
+		element->gap_samples += (mapinfo.size / element->unit_size);
+		/* Trick it into updating things after the gap ends, if we want */
 		if(element->update_after_gap || element->sample_count > element->update_samples)
 			element->sample_count = element->update_samples;
 		else
@@ -1312,6 +1742,8 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 	} else {
 		/* Increment the sample count */
 		element->sample_count += (mapinfo.size / element->unit_size);
+		/* Reset the count of gap samples */
+		element->gap_samples = 0;
 	}
 
 	/* Check whether we need to do anything with this data */
@@ -1486,12 +1918,20 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->num_ffts = g_value_get_int64(value);
 		break;
 
+	case ARG_USE_MEDIAN:
+		element->use_median = g_value_get_boolean(value);
+		break;
+
 	case ARG_UPDATE_SAMPLES:
 		element->update_samples = g_value_get_int64(value);
 		break;
 
 	case ARG_UPDATE_AFTER_GAP:
 		element->update_after_gap = g_value_get_boolean(value);
+		break;
+
+	case ARG_USE_FIRST_AFTER_GAP:
+		element->use_first_after_gap = g_value_get_int64(value);
 		break;
 
 	case ARG_WRITE_TO_SCREEN:
@@ -1579,12 +2019,20 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_int64(value, element->num_ffts);
 		break;
 
+	case ARG_USE_MEDIAN:
+		g_value_set_boolean(value, element->use_median);
+		break;
+
 	case ARG_UPDATE_SAMPLES:
 		g_value_set_int64(value, element->update_samples);
 		break;
 
 	case ARG_UPDATE_AFTER_GAP:
 		g_value_set_boolean(value, element->update_after_gap);
+		break;
+
+	case ARG_USE_FIRST_AFTER_GAP:
+		g_value_set_int64(value, element->use_first_after_gap);
 		break;
 
 	case ARG_WRITE_TO_SCREEN:
@@ -1667,6 +2115,14 @@ static void finalize(GObject *object) {
 
 	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(object);
 
+	if(element->post_gap_transfer_functions) {
+		g_free(element->post_gap_transfer_functions);
+		element->post_gap_transfer_functions = NULL;
+	}
+	if(element->post_gap_fir_filters) {
+		g_free(element->post_gap_fir_filters);
+		element->post_gap_fir_filters = NULL;
+	}
 	if(element->transfer_functions) {
 		g_free(element->transfer_functions);
 		element->transfer_functions = NULL;
@@ -1703,8 +2159,9 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
 
-	gstbasesink_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	gstbasesink_class->start = GST_DEBUG_FUNCPTR(start);
+	gstbasesink_class->event = GST_DEBUG_FUNCPTR(event);
+	gstbasesink_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	gstbasesink_class->render = GST_DEBUG_FUNCPTR(render);
 	gstbasesink_class->stop = GST_DEBUG_FUNCPTR(stop);
 
@@ -1756,6 +2213,15 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		1, G_MAXINT64, 16,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_USE_MEDIAN] = g_param_spec_boolean(
+		"use-median",
+		"Use Median",
+		"Set to True in order to take a median of transfer functions instead of a\n\t\t\t"
+		"mean. This is more expensive in terms of memory and CPU, but it makes the\n\t\t\t"
+		"result less sensitive to occasional outliers such as glitches.",
+		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 	properties[ARG_UPDATE_SAMPLES] = g_param_spec_int64(
 		"update-samples",
 		"Update Samples",
@@ -1769,6 +2235,17 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		"Set to True in order to update the transfer function(s) after a gap in the\n\t\t\t"
 		"input data.",
 		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_USE_FIRST_AFTER_GAP] = g_param_spec_int64(
+		"use-first-after-gap",
+		"Use first computed transfer function after a gap",
+		"If set to a positive value, the element will revert to the most recent\n\t\t\t"
+		"transfer function computed just after a gap, instead of using the most\n\t\t\t"
+		"recently-computed transfer function. The integer value of the property\n\t\t\t"
+		"(if positive) is the number of gap samples necessary for this to take\n\t\t\t"
+		"effect.",
+		0, G_MAXINT64, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_WRITE_TO_SCREEN] = g_param_spec_boolean(
@@ -1906,6 +2383,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_USE_MEDIAN,
+		properties[ARG_USE_MEDIAN]
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_UPDATE_SAMPLES,
 		properties[ARG_UPDATE_SAMPLES]
 	);
@@ -1913,6 +2395,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_UPDATE_AFTER_GAP,
 		properties[ARG_UPDATE_AFTER_GAP]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_USE_FIRST_AFTER_GAP,
+		properties[ARG_USE_FIRST_AFTER_GAP]
 	);
 	g_object_class_install_property(
 		gobject_class,
@@ -1976,6 +2463,8 @@ static void gstlal_transferfunction_init(GSTLALTransferFunction *element) {
 
 	g_signal_connect(G_OBJECT(element), "notify::transfer-functions", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 	g_signal_connect(G_OBJECT(element), "notify::fir-filters", G_CALLBACK(rebuild_workspace_and_reset), NULL);
+	element->post_gap_transfer_functions = NULL;
+	element->post_gap_fir_filters = NULL;
 	element->transfer_functions = NULL;
 	element->fir_filters = NULL;
 	element->notch_frequencies = NULL;
@@ -1984,6 +2473,8 @@ static void gstlal_transferfunction_init(GSTLALTransferFunction *element) {
 	element->rate = 0;
 	element->unit_size = 0;
 	element->channels = 0;
+	element->gap_samples = 0;
+	element->num_tfs_since_gap = 0;
 
 	gst_base_sink_set_sync(GST_BASE_SINK(element), FALSE);
 	gst_base_sink_set_async_enabled(GST_BASE_SINK(element), FALSE);
