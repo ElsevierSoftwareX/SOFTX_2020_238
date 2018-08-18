@@ -54,7 +54,7 @@
 static gsl_vector_float** upkernel32(int half_length_at_original_rate, int f) {
 
 	/*
-	 * This is a parabolic windowed sinc function kernel
+	 * This is a sinc windowed sinc function kernel
 	 * The baseline kernel is defined as
 	 *
 	 * g[k] = sin(pi / f * (k-c)) / (pi / f * (k-c)) * (1 - (k-c)^2 / c / c)	k != c
@@ -120,7 +120,7 @@ static gsl_vector_float** upkernel32(int half_length_at_original_rate, int f) {
 		if (x == 0)
 			out[i] = 1.;
 		else
-			out[i] = sin(PI * x / f) / (PI * x / f) * (1. - (float) x*x / c / c);
+			out[i] = sin(PI * x / f) / (PI * x / f) * sin(PI * x / c) / (PI * x / c);
 	}
 
 	for (int j = 0; j < f; j++) {
@@ -157,7 +157,7 @@ static gsl_vector** upkernel64(int half_length_at_original_rate, int f) {
 		if (x == 0)
 			out[i] = 1.;
 		else
-			out[i] = sin(PI * x / f) / (PI * x / f) * (1. - (double) x*x / c / c);
+			out[i] = sin(PI * x / f) / (PI * x / f) * sin(PI * x / c) / (PI * x / c);
 	}
 
 	for (int j = 0; j < f; j++) {
@@ -176,7 +176,7 @@ static gsl_vector** upkernel64(int half_length_at_original_rate, int f) {
 static gsl_vector_float** downkernel32(int half_length_at_target_rate, int f) {
 
 	/*
-	 * This is a parabolic windowed sinc function kernel
+	 * This is a sinc windowed sinc function kernel
 	 * The baseline kernel is defined as
 	 *
 	 * g[k] = sin(pi / f * (k-c)) / (pi / f * (k-c)) * (1 - (k-c)^2 / c / c)	k != c
@@ -211,7 +211,7 @@ static gsl_vector_float** downkernel32(int half_length_at_target_rate, int f) {
 			norm += 1.;
 		}
 		else {
-			val = sin(PI * x / f) / (PI * x / f) * (1. - (float) x*x / c / c);
+			val = sin(PI * x / f) / (PI * x / f) * sin(PI * x / c) / (PI * x / c);
 			norm += val * val;
 			gsl_vector_float_set(vecs[0], i, val);
 		}
@@ -243,7 +243,7 @@ static gsl_vector **downkernel64(int half_length_at_target_rate, int f) {
 			norm += 1.;
 		}
 		else {
-			val = sin(PI * x / f) / (PI * x / f) * (1. - (double) x*x / c / c);
+			val = sin(PI * x / f) / (PI * x / f) * sin(PI * x / c) / (PI * x / c);
 			norm += val * val;
 			gsl_vector_set(vecs[0], i, val);
 		}
@@ -581,7 +581,7 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	// Downsampling
 	else {
 		/* hardcoded kernel size */
-		element->half_length = 16;
+		element->half_length = 32;
 		element->kernel32 = downkernel32(element->half_length, element->inrate / element->outrate);
 		element->kernel64 = downkernel64(element->half_length, element->inrate / element->outrate);
 	}
