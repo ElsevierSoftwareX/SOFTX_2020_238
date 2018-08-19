@@ -332,8 +332,8 @@ class DataSourceInfo(object):
 		""" 
 
 		## A list of possible, valid data sources ("frames", "framexmit", "lvshm", "white", "silence")
-		self.data_sources = set(("framexmit", "lvshm", "frames", "white", "silence"))
-		self.live_sources = set(("framexmit", "lvshm"))
+		self.data_sources = set(("framexmit", "lvshm", "frames", "white", "silence", "white_live"))
+		self.live_sources = set(("framexmit", "lvshm", "white_live"))
 		assert self.live_sources <= self.data_sources
 
 		# Sanity check the options
@@ -460,7 +460,7 @@ def append_options(parser):
 	for applications that read GW data.
 	
 -	--data-source [string]
-		Set the data source from [framexmit|lvshm|silence|white].
+		Set the data source from [framexmit|lvshm|frames|silence|white|white_live].
 
 -	--block-size [int] (bytes)
 		Data block size to read in bytes. Default 16384 * 8 * 512 which is 512 seconds of double
@@ -555,7 +555,7 @@ def append_options(parser):
 	-# Many other combinations possible, please add some!
 	"""
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
-	group.add_option("--data-source", metavar = "source", help = "Set the data source from [framexmit|lvshm|silence|white].  Required.")
+	group.add_option("--data-source", metavar = "source", help = "Set the data source from [framexmit|lvshm|frames|silence|white|white_live].  Required.")
 	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is only used if --data-source is one of white, silence.")
 	group.add_option("--gps-start-time", type="int", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--gps-end-time", type="int", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
@@ -641,9 +641,11 @@ def mkbasicmultisrc(pipeline, data_source_info, channels, verbose = False):
 	"""
 
 	if data_source_info.data_source == "white":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[channel]['fsamp']) for channel in channels}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[channel]['fsamp'], timestamp_offset = int(gw_data_source_info.seg[0]) * Gst.SECOND) for channel in channels}
 	elif data_source_info.data_source == "silence":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, wave = 4) for channel in channels}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, rate = data_source_info.channel_dict[channel]['fsamp'], timestamp_offset = int(data_source_info.seg[0]) * Gst.SECOND) for channel in channels}
+	elif data_source_info.data_source == "white_live":
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, volume = 1.0, is_live = True, rate = data_source_info.channel_dict[channel]['fsamp'], timestamp_offset = int(data_source_info.seg[0]) * Gst.SECOND) for channel in channels}
 	elif data_source_info.data_source == "frames":
 		src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = data_source_info.instrument[0], cache_dsc_regex = data_source_info.instrument)
 		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channels)
@@ -663,7 +665,7 @@ def mkbasicmultisrc(pipeline, data_source_info, channels, verbose = False):
 			# fill in holes, skip duplicate data
 			head[channel] = pipeparts.mkaudiorate(pipeline, head[channel], skip_to_first = True, silent = False)
 
-	elif data_source_info.data_source in ("framexmit", "lvshm"):
+	elif data_source_info.data_source in ("framexmit", "lvshm", "white_live"):
 		if data_source_info.data_source == "lvshm":
 			# FIXME make wait_time adjustable through web interface or command line or both
 			src = pipeparts.mklvshmsrc(pipeline, shm_name = data_source_info.shm_part_dict[data_source_info.instrument], assumed_duration = data_source_info.shm_assumed_duration, blocksize = data_source_info.shm_block_size, wait_time = 120)

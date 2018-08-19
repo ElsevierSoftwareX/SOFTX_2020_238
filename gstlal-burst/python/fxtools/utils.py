@@ -129,7 +129,7 @@ def to_trigger_path(rootdir, basename, start_time, job_id, subset_id):
 
 		${rootdir}/${basename}/${basename}-${start_time_mod1e5}/${basename}-${job_id}-${subset_id}/
 	"""
-	start_time_mod1e5 = str(start_time)[:5]
+	start_time_mod1e5 = str(start_time).zfill(10)[:5]
 	return os.path.join(rootdir, basename, '-'.join([basename, start_time_mod1e5]), '-'.join([basename, job_id, subset_id]))
 
 def to_trigger_filename(basename, start_time, duration, suffix, tmp=False):

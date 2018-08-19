@@ -198,19 +198,20 @@ def parse_command_line():
 	multichannel_datasource.append_options(parser)
 	feature_extractor.append_options(parser)
 
-	#
-	# parse the arguments and sanity check
-	#
-
+	# parse the arguments
 	options, filenames = parser.parse_args()
 
 	# Sanity check the options
 
 	# set gps ranges for live and offline sources
-	if options.data_source in ("lvshm", "framexmit"):
-		options.gps_start_time = int(aggregator.now())
-		# NOTE: set the gps end time to be "infinite"
-		options.gps_end_time = 2000000000
+	if options.data_source in ("framexmit", "lvshm", "white_live"):
+
+		if options.data_source in ("framexmit", "lvshm"):
+			options.gps_start_time = int(aggregator.now())
+		else:
+			options.gps_start_time = 0 # NOTE: set start time for 'fake' live sources to zero, since seeking doesn't work with 'is_live' option
+
+		options.gps_end_time = 2000000000 # NOTE: set the gps end time to be "infinite"
 
 	if options.feature_start_time is None:
 		options.feature_start_time = int(options.gps_start_time)
@@ -299,7 +300,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	# checkpointing for offline analysis for hdf5 output
 	#
 
-	if options.data_source not in ("lvshm", "framexmit") and options.save_format == 'hdf5':
+	if options.data_source not in data_source_info.live_sources and options.save_format == 'hdf5':
 		try:
 			# get path where triggers are located
 			duration = options.feature_end_time - options.feature_start_time
@@ -458,13 +459,13 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 
 	# Allow Ctrl+C or sig term to gracefully shut down the program for online
 	# sources, otherwise it will just kill it
-	if data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
+	if data_source_info.data_source in data_source_info.live_sources:# what about nds online?
 		simplehandler.OneTimeSignalHandler(pipeline)
 
 	# Seek
 	if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter READY state")
-	if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
+	if data_source_info.data_source not in data_source_info.live_sources:# what about nds online?
 		datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time)
 
 	#
@@ -528,5 +529,5 @@ if options.local_frame_caching:
 # close program manually if data source is live
 #
 
-if options.data_source in ("lvshm", "framexmit"):
+if options.data_source in data_source_info.live_sources:
 	sys.exit(0)
