@@ -1,7 +1,7 @@
 from glue.ligolw import ilwd
 from glue.ligolw import lsctables
 import lal
-from . import _snglbursttable
+from gstlal import _snglbursttable
 
 
 __all__ = ["GSTLALSnglBurst"]
