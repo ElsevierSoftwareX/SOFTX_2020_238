@@ -24,5 +24,6 @@ dist_bin_SCRIPTS = \
 	gstlal_cohfar_plot_ifar \
 	gstlal_cohfar_assign_far \
 	ligolw_inspinjfind_postcoh \
+	gstlal_inspiral_spiir_filt \
 	gstlal_spiir_plot_waveform 
 
