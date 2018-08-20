@@ -1,7 +1,7 @@
 
 from glue.ligolw import table
 from glue.ligolw import ilwd
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from lal import LIGOTimeGPS
 
 PostcohInspiralID = ilwd.get_ilwdchar_class(u"postcoh", u"event_id")
 # defined in postcohinspiral_table.h
