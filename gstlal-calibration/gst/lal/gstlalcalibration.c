@@ -65,6 +65,7 @@
 #include <gstlal_transferfunction.h>
 #include <gstlal_trackfrequency.h>
 #include <gstlal_adaptivefirfilt.h>
+#include <gstlal_dqtukey.h>
 
 
 /*
@@ -97,6 +98,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_transferfunction", GSTLAL_TRANSFERFUNCTION_TYPE},
 		{"lal_trackfrequency", GSTLAL_TRACKFREQUENCY_TYPE},
 		{"lal_adaptivefirfilt", GSTLAL_ADAPTIVEFIRFILT_TYPE},
+		{"lal_dqtukey", GSTLAL_DQTUKEY_TYPE},
 		{NULL, 0},
 	};
 
