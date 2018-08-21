@@ -91,6 +91,7 @@ struct _GSTLALDQTukey {
 	gint64 ramp_up_index;
 	gint64 ramp_down_index;
 	gint64 num_leftover;
+	int remainder;
 	gint64 num_since_bad;
 	void *ramp;
 

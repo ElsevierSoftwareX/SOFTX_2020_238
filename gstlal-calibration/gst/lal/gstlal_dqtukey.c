@@ -59,7 +59,7 @@
 
 
 #define DEFINE_DQ_TO_TUKEY(INTYPE, WIDTH, OUTTYPE) \
-static void dq_g ## INTYPE ## WIDTH ## _to_tukey_ ## OUTTYPE(const g ## INTYPE ## WIDTH *src, gint64 src_size, OUTTYPE *dst, enum gstlal_dqtukey_state *state, guint32 required_on, guint32 required_on_xor_off, OUTTYPE *ramp, gint64 transition_samples, gint64 *ramp_up_index, gint64 *ramp_down_index, int num_cycle_in, int num_cycle_out, gint64 *num_leftover, gint64 *num_since_bad, gboolean invert_window, gboolean invert_control) { \
+static void dq_g ## INTYPE ## WIDTH ## _to_tukey_ ## OUTTYPE(const g ## INTYPE ## WIDTH *src, gint64 src_size, OUTTYPE *dst, enum gstlal_dqtukey_state *state, guint32 required_on, guint32 required_on_xor_off, OUTTYPE *ramp, gint64 transition_samples, gint64 *ramp_up_index, gint64 *ramp_down_index, int num_cycle_in, int num_cycle_out, gint64 *num_leftover, int *remainder, gint64 *num_since_bad, gboolean invert_window, gboolean invert_control) { \
  \
 	gint64 i, i_stop; \
 	i = 0; \
@@ -130,15 +130,15 @@ start: \
 			*state = ZEROS; \
 		else \
 			*state = RAMP_UP; \
-		*num_leftover = 0; \
+		*num_leftover = transition_samples; \
 		return; \
 	} else { \
 		/* Decide what we should do with the next data on this buffer */ \
 		if(*num_since_bad == *num_leftover) { \
-			*num_leftover = 0; \
+			*num_leftover = transition_samples; \
 			goto ones; \
 		} \
-		*num_leftover = 0; \
+		*num_leftover = transition_samples; \
 		if(*num_since_bad <= transition_samples) \
 			goto zeros; \
 		else \
@@ -148,13 +148,13 @@ start: \
 ones: \
 	/* Deal with any output samples that still need to be produced from the last input */ \
 	if(invert_window) { \
-		for(j = 0; j < *num_leftover; j++, dst++) \
+		for(j = 0; j < *remainder; j++, dst++) \
 			*dst = 0.0; \
 	} else { \
-		for(j = 0; j < *num_leftover; j++, dst++) \
+		for(j = 0; j < *remainder; j++, dst++) \
 			*dst = 1.0; \
 	} \
-	*num_leftover = 0; \
+	*remainder = 0; \
 	while(i < src_size) { \
 		if((gboolean) ((src[i] ^ required_on) & required_on_xor_off) == invert_control) { \
 			/* Conditions were met */ \
@@ -181,13 +181,13 @@ ones: \
 zeros: \
 	/* Deal with any output samples that still need to be produced from the last input */ \
 	if(invert_window) { \
-		for(j = 0; j < *num_leftover; j++, dst++) \
+		for(j = 0; j < *remainder; j++, dst++) \
 			*dst = 1.0; \
 	} else { \
-		for(j = 0; j < *num_leftover; j++, dst++) \
+		for(j = 0; j < *remainder; j++, dst++) \
 			*dst = 0.0; \
 	} \
-	*num_leftover = 0; \
+	*remainder = 0; \
 	while(i < src_size) { \
 		if((gboolean) ((src[i] ^ required_on) & required_on_xor_off) == invert_control) { \
 			/* Conditions were met */ \
@@ -217,7 +217,7 @@ zeros: \
 					for(j = 0; j < *num_since_bad - transition_samples; j++, dst++) \
 						*dst = 0.0; \
 				} \
-				*num_leftover = num_cycle_out - *num_since_bad + transition_samples; \
+				*remainder = num_cycle_out - *num_since_bad + transition_samples; \
 				*state = RAMP_UP; \
 				goto ramp_up; \
 			} \
@@ -228,13 +228,13 @@ zeros: \
 ramp_up: \
 	/* Deal with any output samples that still need to be produced from the last input */ \
 	if(invert_window) { \
-		for(j = 0; j < *num_leftover; j++, dst++, (*ramp_up_index)++) \
+		for(j = 0; j < *remainder; j++, dst++, (*ramp_up_index)++) \
 			*dst = 1.0 - ramp[*ramp_up_index]; \
 	} else { \
-		for(j = 0; j < *num_leftover; j++, dst++, (*ramp_up_index)++) \
+		for(j = 0; j < *remainder; j++, dst++, (*ramp_up_index)++) \
 			*dst = ramp[*ramp_up_index]; \
 	} \
-	*num_leftover = 0; \
+	*remainder = 0; \
 	while(i < src_size) { \
 		if((gboolean) ((src[i] ^ required_on) & required_on_xor_off) == invert_control) { \
 			/* Conditions were met */ \
@@ -245,7 +245,7 @@ ramp_up: \
 						/* The transition is over */ \
 						*ramp_up_index = 0; \
 						*state = ONES; \
-						*num_leftover = (num_cycle_out - j) % num_cycle_out; \
+						*remainder = (num_cycle_out - j) % num_cycle_out; \
 						i++; \
 						goto ones; \
 					} \
@@ -284,7 +284,7 @@ ramp_down: \
 					/* The transition is over */ \
 					*ramp_down_index = 0; \
 					*state = ZEROS; \
-					*num_leftover = (num_cycle_out - j) % num_cycle_out; \
+					*remainder = (num_cycle_out - j) % num_cycle_out; \
 					goto zeros; \
 				} \
 				if(invert_window) \
@@ -316,7 +316,7 @@ double_ramp: \
 					*ramp_up_index = 0; \
 					*ramp_down_index = 0; \
 					*state = ZEROS; \
-					*num_leftover = (num_cycle_out - j) % num_cycle_out; \
+					*remainder = (num_cycle_out - j) % num_cycle_out; \
 					goto zeros; \
 				} \
 				if(invert_window) \
@@ -349,8 +349,8 @@ DEFINE_DQ_TO_TUKEY(uint, 32, double)
  */
 
 
-static void set_metadata(GSTLALDQTukey *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
-{
+static void set_metadata(GSTLALDQTukey *element, GstBuffer *buf, guint64 outsamples, gboolean gap) {
+
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
@@ -427,8 +427,8 @@ G_DEFINE_TYPE(
  */
 
 
-static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
-{
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size) {
+
 	GstAudioInfo info;
 	gboolean success = TRUE;
 
@@ -444,12 +444,59 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 
 
 /*
+ * transform_caps()
+ */
+
+
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter) {
+
+	GstCaps *othercaps = NULL;
+
+	if(gst_caps_get_size(caps) > 1)
+		GST_WARNING_OBJECT(trans, "not yet smart enough to transform complex formats");
+
+	switch(direction) {
+	case GST_PAD_SRC:
+		/*
+		 * The sink pad caps are always the same, regardless of the caps
+		 * on the source pad.
+		 */
+		othercaps = gst_caps_normalize(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)));
+		break;
+
+	case GST_PAD_SINK:
+		/*
+		 * The source pad caps are always the same, regardless of the caps
+		 * on the sink pad.
+		 */
+		othercaps = gst_caps_normalize(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans)));
+		break;
+
+	case GST_PAD_UNKNOWN:
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
+		gst_caps_unref(caps);
+		return GST_CAPS_NONE;
+	}
+
+	othercaps = gst_caps_simplify(othercaps);
+
+	if(filter) {
+		GstCaps *intersection = gst_caps_intersect(othercaps, filter);
+		gst_caps_unref(othercaps);
+		othercaps = intersection;
+	}
+
+	return othercaps;
+}
+
+
+/*
  * set_caps()
  */
 
 
-static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
-{
+static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps) {
+
 	GSTLALDQTukey *element = GSTLAL_DQTUKEY(trans);
 	gint rate_in, rate_out;
 	gsize unit_size_in, unit_size_out;
@@ -530,8 +577,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
  */
 
 
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
-{
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize) {
+
 	GSTLALDQTukey *element = GSTLAL_DQTUKEY(trans);
 	gint64 temp_othersize;
 
@@ -568,6 +615,17 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		break;
 
 	case GST_PAD_SINK:
+
+		/*
+		 * convert byte count to samples
+		 */
+
+		if(G_UNLIKELY(size % element->unit_size_in)) {
+			GST_DEBUG_OBJECT(element, "buffer size %" G_GSIZE_FORMAT " is not a multiple of unit_size %" G_GSIZE_FORMAT, size, (gsize) element->unit_size_in);
+			return FALSE;
+		}
+		size /= element->unit_size_in;
+
 		/*
 		 * compute othersize = # of samples to be produced on
 		 * source pad from sample count available on sink pad
@@ -601,7 +659,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
  */
 
 
-static gboolean start(GstBaseTransform *trans)
+static gboolean start(GstBaseTransform *trans) 
 {
 	GSTLALDQTukey *element = GSTLAL_DQTUKEY(trans);
 
@@ -615,6 +673,7 @@ static gboolean start(GstBaseTransform *trans)
 	element->ramp_up_index = 0;
 	element->ramp_down_index = 0;
 	element->num_leftover = 0;
+	element->remainder = 0;
 	element->num_since_bad = 0;
 
 	if(element->required_on & element->required_off)
@@ -630,8 +689,8 @@ static gboolean start(GstBaseTransform *trans)
  */
 
 
-static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
-{
+static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf) {
+
 	GSTLALDQTukey *element = GSTLAL_DQTUKEY(trans);
 	GstMapInfo inmap, outmap;
 	GstFlowReturn result = GST_FLOW_OK;
@@ -649,6 +708,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->ramp_up_index = 0;
 		element->ramp_down_index = 0;
 		element->num_leftover = 0;
+		element->remainder = 0;
 		element->num_since_bad = 0;
 
 		/* If we haven't made a half-Hann window for transitions between zeros and ones yet, do it now */
@@ -687,40 +747,40 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	case 1:
 		if(element->sign) {
 			if(element->unit_size_out == 4)
-				dq_gint8_to_tukey_float((const gint8 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_gint8_to_tukey_float((const gint8 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 			else
-				dq_gint8_to_tukey_double((const gint8 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_gint8_to_tukey_double((const gint8 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 		} else {
 			if(element->unit_size_out == 4)
-				dq_guint8_to_tukey_float((const guint8 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_guint8_to_tukey_float((const guint8 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 			else
-				dq_guint8_to_tukey_double((const guint8 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_guint8_to_tukey_double((const guint8 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 		}
 		break;
 	case 2:
 		if(element->sign) {
 			if(element->unit_size_out == 4)
-				dq_gint16_to_tukey_float((const gint16 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_gint16_to_tukey_float((const gint16 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 			else
-				dq_gint16_to_tukey_double((const gint16 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_gint16_to_tukey_double((const gint16 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 		} else {
 			if(element->unit_size_out == 4)
-				dq_guint16_to_tukey_float((const guint16 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_guint16_to_tukey_float((const guint16 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 			else
-				dq_guint16_to_tukey_double((const guint16 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_guint16_to_tukey_double((const guint16 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 		}
 		break;
 	case 4:
 		if(element->sign) {
 			if(element->unit_size_out == 4)
-				dq_gint32_to_tukey_float((const gint32 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_gint32_to_tukey_float((const gint32 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 			else
-				dq_gint32_to_tukey_double((const gint32 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_gint32_to_tukey_double((const gint32 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 		} else {
 			if(element->unit_size_out == 4)
-				dq_guint32_to_tukey_float((const guint32 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_guint32_to_tukey_float((const guint32 *) inmap.data, src_size, (float *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 			else
-				dq_guint32_to_tukey_double((const guint32 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->num_since_bad, element->invert_window, element->invert_control);
+				dq_guint32_to_tukey_double((const guint32 *) inmap.data, src_size, (double *) outmap.data, &element->state, element->required_on, element->required_on_xor_off, element->ramp, element->transition_samples, &element->ramp_up_index, &element->ramp_down_index, element->num_cycle_in, element->num_cycle_out, &element->num_leftover, &element->remainder, &element->num_since_bad, element->invert_window, element->invert_control);
 		}
 		break;
 	default:
@@ -762,8 +822,8 @@ enum property {
 };
 
 
-static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
-{
+static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec) {
+
 	GSTLALDQTukey *element = GSTLAL_DQTUKEY(object);
 
 	GST_OBJECT_LOCK(element);
@@ -798,8 +858,8 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 }
 
 
-static void get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
-{
+static void get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec) {
+
 	GSTLALDQTukey *element = GSTLAL_DQTUKEY(object);
 
 	GST_OBJECT_LOCK(element);
@@ -839,8 +899,8 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
  */
 
 
-static void gstlal_dqtukey_class_init(GSTLALDQTukeyClass *klass)
-{
+static void gstlal_dqtukey_class_init(GSTLALDQTukeyClass *klass) {
+
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
@@ -848,6 +908,7 @@ static void gstlal_dqtukey_class_init(GSTLALDQTukeyClass *klass)
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
@@ -936,8 +997,8 @@ static void gstlal_dqtukey_class_init(GSTLALDQTukeyClass *klass)
  */
 
 
-static void gstlal_dqtukey_init(GSTLALDQTukey *element)
-{
+static void gstlal_dqtukey_init(GSTLALDQTukey *element) {
+
 	element->rate_in = 0;
 	element->rate_out = 0;
 	element->unit_size_in = 0;
