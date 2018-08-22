@@ -136,13 +136,17 @@ start: \
 		/* Decide what we should do with the next data on this buffer */ \
 		if(*num_since_bad == *num_leftover) { \
 			*num_leftover = transition_samples; \
+			*state = ONES; \
 			goto ones; \
 		} \
 		*num_leftover = transition_samples; \
-		if(*num_since_bad <= transition_samples) \
+		if(*num_since_bad <= transition_samples) { \
+			*state = ZEROS; \
 			goto zeros; \
-		else \
+		} else { \
+			*state = RAMP_UP; \
 			goto ramp_up; \
+		} \
 	} \
  \
 ones: \
