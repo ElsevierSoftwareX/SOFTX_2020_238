@@ -211,13 +211,13 @@ zeros: \
 				} \
 			} else { \
 				if(invert_window) { \
-					for(j = 0; j < *num_since_bad - transition_samples; j++, dst++) \
+					for(j = 0; j < transition_samples + num_cycle_out - *num_since_bad; j++, dst++) \
 						*dst = 1.0; \
 				} else { \
-					for(j = 0; j < *num_since_bad - transition_samples; j++, dst++) \
+					for(j = 0; j < transition_samples + num_cycle_out - *num_since_bad; j++, dst++) \
 						*dst = 0.0; \
 				} \
-				*remainder = num_cycle_out - *num_since_bad + transition_samples; \
+				*remainder = *num_since_bad - transition_samples; \
 				*state = RAMP_UP; \
 				goto ramp_up; \
 			} \
@@ -227,12 +227,19 @@ zeros: \
  \
 ramp_up: \
 	/* Deal with any output samples that still need to be produced from the last input */ \
-	if(invert_window) { \
-		for(j = 0; j < *remainder; j++, dst++, (*ramp_up_index)++) \
+	for(j = 0; j < *remainder; j++, dst++, (*ramp_up_index)++) { \
+		if(invert_window) \
 			*dst = 1.0 - ramp[*ramp_up_index]; \
-	} else { \
-		for(j = 0; j < *remainder; j++, dst++, (*ramp_up_index)++) \
+		else \
 			*dst = ramp[*ramp_up_index]; \
+		if(*ramp_up_index == transition_samples - 1) { \
+			/* The transition is over */ \
+			*ramp_up_index = 0; \
+			*state = ONES; \
+			*remainder -= j + 1; \
+			dst++; \
+			goto ones; \
+		} \
 	} \
 	*remainder = 0; \
 	while(i < src_size) { \
@@ -241,18 +248,20 @@ ramp_up: \
 			if(!((i + 1) % num_cycle_in)) { \
 				/* In case rate in > rate out */ \
 				for(j = 0; j < num_cycle_out; j++, dst++, (*ramp_up_index)++) { \
-					if(*ramp_up_index == transition_samples) { \
-						/* The transition is over */ \
-						*ramp_up_index = 0; \
-						*state = ONES; \
-						*remainder = (num_cycle_out - j) % num_cycle_out; \
-						i++; \
-						goto ones; \
-					} \
 					if(invert_window) \
 						*dst = 1.0 - ramp[*ramp_up_index]; \
 					else \
 						*dst = ramp[*ramp_up_index]; \
+ \
+					if(*ramp_up_index == transition_samples - 1) { \
+						/* The transition is over */ \
+						*ramp_up_index = 0; \
+						*state = ONES; \
+						*remainder = (num_cycle_out - j - 1) % num_cycle_out; \
+						i++; \
+						dst++; \
+						goto ones; \
+					} \
 				} \
 			} \
 		} else { \
@@ -277,22 +286,25 @@ ramp_down: \
 			/* Failed to meet conditions */ \
 			*num_since_bad = 0; \
 		} \
-		i++; \
 		if(!(i % num_cycle_in)) { \
 			for(j = 0; j < num_cycle_out; j++, dst++, (*ramp_down_index)++) { \
-				if(*ramp_down_index == transition_samples) { \
-					/* The transition is over */ \
-					*ramp_down_index = 0; \
-					*state = ZEROS; \
-					*remainder = (num_cycle_out - j) % num_cycle_out; \
-					goto zeros; \
-				} \
 				if(invert_window) \
 					*dst = ramp[*ramp_down_index]; \
 				else \
 					*dst = 1.0 - ramp[*ramp_down_index]; \
+ \
+				if(*ramp_down_index == transition_samples - 1) { \
+					/* The transition is over */ \
+					*ramp_down_index = 0; \
+					*state = ZEROS; \
+					*remainder = (num_cycle_out - j - 1) % num_cycle_out; \
+					i++; \
+					dst++; \
+					goto zeros; \
+				} \
 			} \
 		} \
+		i++; \
 	} \
 	return; \
  \
@@ -308,23 +320,26 @@ double_ramp: \
 			/* Failed to meet conditions */ \
 			*num_since_bad = 0; \
 		} \
-		i++; \
 		if(!(i % num_cycle_in)) { \
-			for(j = 0; j < num_cycle_out; j++, dst++, (*ramp_down_index)++) { \
-				if(*ramp_down_index == transition_samples) { \
-					/* The transition is over */ \
-					*ramp_up_index = 0; \
-					*ramp_down_index = 0; \
-					*state = ZEROS; \
-					*remainder = (num_cycle_out - j) % num_cycle_out; \
-					goto zeros; \
-				} \
+			for(j = 0; j < num_cycle_out; j++, dst++, (*ramp_down_index)++, (*ramp_up_index)++) { \
 				if(invert_window) \
 					*dst = ramp[*ramp_down_index] * (1.0 - (*ramp_up_index < transition_samples ? ramp[*ramp_up_index] : 1.0)); \
 				else \
 					*dst = (1.0 - ramp[*ramp_down_index]) * (*ramp_up_index < transition_samples ? ramp[*ramp_up_index] : 1.0); \
+ \
+				if(*ramp_down_index == transition_samples - 1) { \
+					/* The transition is over */ \
+					*ramp_up_index = 0; \
+					*ramp_down_index = 0; \
+					*state = ZEROS; \
+					*remainder = (num_cycle_out - j - 1) % num_cycle_out; \
+					i++; \
+					dst++; \
+					goto zeros; \
+				} \
 			} \
 		} \
+		i++; \
 	} \
 	return; \
 }
