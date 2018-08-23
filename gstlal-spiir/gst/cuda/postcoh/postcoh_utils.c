@@ -154,7 +154,7 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		pklist->len_snglsnr_buffer = 0;
 
 		int mem_alloc_size = sizeof(float) * max_npeak * state->npix * 2;
-		printf("alloc cohsnr_skymap size %d B\n", (int) mem_alloc_size);
+		printf("alloc cohsnr_skymap size %d MB\n", (int) mem_alloc_size/1000000);
 
 		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_cohsnr_skymap), mem_alloc_size));
 		pklist->d_nullsnr_skymap = pklist->d_cohsnr_skymap + max_npeak * state->npix;
