@@ -18,6 +18,7 @@
 
 import sys
 import sqlite3
+from optparse import OptionParser
 from glue.ligolw import dbtables
 from ligo import segments
 from glue import segmentsUtils
@@ -26,7 +27,26 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
 
-connection = sqlite3.connect(sys.argv[1])
+from gstlal import far
+
+def parse_command_line():
+	parser = OptionParser(usage="%prog [options] database.sqlite")
+	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Path of marginalized likelihood file")
+	options, database = parser.parse_args()
+
+	return options, database
+
+
+options, database = parse_command_line()
+
+_, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.marginalized_likelihood_file, contenthandler=far.RankingStat.LIGOLWContentHandler))
+
+fapfar = far.FAPFAR(rankingstatpdf)
+
+livetime = fapfar.livetime
+print "%s: livetime used in making IFAR plots\n" % (livetime,)
+
+connection = sqlite3.connect(database[0])
 xmldoc = dbtables.get_xml(connection)
 
 for name, in set(connection.cursor().execute("SELECT name from segment_definer")):
@@ -37,4 +57,9 @@ for name, in set(connection.cursor().execute("SELECT name from segment_definer")
 datasegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("datasegments")).coalesce()
 vetosegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("vetoes")).coalesce()
 
-print "analyzable time %s" % abs(segmentsUtils.vote((datasegs-vetosegs).values(),2))
+coinclivetime=abs(segmentsUtils.vote((datasegs-vetosegs).values(),2))
+
+print "analyzable time (datasegments-vetosegments): %s" % (coinclivetime,)
+
+for end_time, end_time_ns, combined_far, false_alarm_rate in connection.cursor().execute("SELECT end_time, end_time_ns, combined_far, false_alarm_rate from coinc_inspiral ORDER BY false_alarm_rate ASC LIMIT 5"):
+	print "gps=%s: gstlalFAP=%s, gstlalFAR(Hz)=%.3E, gstlalFAR(/yr)=%.3E, coincltFAR(Hz)=%.3E, coincltFAR(/yr)=%.3E" % (end_time + end_time_ns * 1e-9, false_alarm_rate, combined_far, combined_far * 86400 * 365.25, combined_far * livetime / coinclivetime, combined_far * livetime / coinclivetime * 86400. * 365.25,)
