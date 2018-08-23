@@ -164,8 +164,11 @@ class EyeCandy(object):
 		bottle.route("/far_history.txt")(self.web_get_far_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
 
-	def update(self, last_coincs):
+	def update(self, events, last_coincs):
 		self.ram_history.append((float(lal.UTCToGPS(time.gmtime())), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
+		if events:
+			max_snr_event = max(events, key = lambda event: event.snr)
+			self.ifo_snr_history[max_snr_event.ifo].append((float(max_snr_event.end), max_snr_event.snr))
 		if last_coincs:
 			latency_val = None
 			snr_val = (0,0)
@@ -852,11 +855,6 @@ class Handler(simplehandler.Handler):
 			for event in events:
 				event.eff_distance = NaN
 
-			# Find max SNR sngles
-			if events:
-				max_snr_event = max(events, key = lambda t: t.snr)
-				self.ifo_snr_history[max_snr_event.ifo].append((float(max_snr_event.end), max_snr_event.snr))
-
 			# set metadata on triggers.  because this uses the
 			# ID generator attached to the database-backed
 			# sngl_inspiral table, and that generator has been
@@ -1014,7 +1012,7 @@ class Handler(simplehandler.Handler):
 
 			# do GraceDB alerts and update eye candy
 			self.__do_gracedb_alerts()
-			self.eye_candy.update(self.stream_thinca.last_coincs)
+			self.eye_candy.update(events, self.stream_thinca.last_coincs)
 
 			# after doing alerts, no longer need per-trigger
 			# SNR data for the triggers that are too old to be
