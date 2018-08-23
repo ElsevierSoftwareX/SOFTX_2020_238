@@ -183,9 +183,8 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	# sample rate of your data source.
 	#
 
-	quality = 9
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max(rates))
-	head = pipeparts.mkresample(pipeline, head, quality = quality)
+	head = pipeparts.mkinterpolator(pipeline, head)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
 
 	#
@@ -398,10 +397,12 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		# normalized, otherwise the audio resampler removes power
 		# according to the rate difference and filter rolloff
 		if unit_normalize:
-			head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
+			# NOTE the interpolator is about as good as the
+			# audioresampler at quality 10, hence the 10.
+			head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1. / math.sqrt(pipeparts.audioresample_variance_gain(10, max(rates), rate)))
 		else:
 			head[rate] = head[max(rates)]
-		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw, rate=%d" % rate)
+		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head[rate]), caps = "audio/x-raw, rate=%d" % rate)
 		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
 
 		head[rate] = pipeparts.mktee(pipeline, head[rate])
