@@ -160,7 +160,12 @@ ones: \
 	} \
 	*remainder = 0; \
 	while(i < src_size) { \
-		if((gboolean) ((src[i] ^ required_on) & required_on_xor_off) == invert_control) { \
+		/*
+		 * (a ? b : !b) is the equivalent of (a == b), that is, checking if a and b have the same
+		 * truth value. Using (a == b) does not work, even if a is typecasted to a boolean. The
+		 * case where a is nonzero and not 1 and b is TRUE fails.
+		 */ \
+		if((src[i] ^ required_on) & required_on_xor_off ? invert_control : !invert_control) { \
 			/* Conditions were met */ \
 			if(!((i + 1) % num_cycle_in)) { \
 				/* In case rate in > rate out */ \
@@ -193,7 +198,7 @@ zeros: \
 	} \
 	*remainder = 0; \
 	while(i < src_size) { \
-		if((gboolean) ((src[i] ^ required_on) & required_on_xor_off) == invert_control) { \
+		if((src[i] ^ required_on) & required_on_xor_off ? invert_control : !invert_control) { \
 			/* Conditions were met */ \
 			if(!(i % num_cycle_in)) { \
 				/* In case rate in > rate out */ \
@@ -247,7 +252,7 @@ ramp_up: \
 	} \
 	*remainder = 0; \
 	while(i < src_size) { \
-		if((gboolean) ((src[i] ^ required_on) & required_on_xor_off) == invert_control) { \
+		if((src[i] ^ required_on) & required_on_xor_off ? invert_control : !invert_control) { \
 			/* Conditions were met */ \
 			if(!((i + 1) % num_cycle_in)) { \
 				/* In case rate in > rate out */ \
@@ -280,7 +285,7 @@ ramp_up: \
  \
 ramp_down: \
 	while(i < src_size) { \
-		if((gboolean) ((src[i] ^ required_on) & required_on_xor_off) == invert_control) { \
+		if((src[i] ^ required_on) & required_on_xor_off ? invert_control : !invert_control) { \
 			/* Conditions were met */ \
 			if(!(i % num_cycle_in)) { \
 				/* In case rate in > rate out */ \
@@ -314,7 +319,7 @@ ramp_down: \
  \
 double_ramp: \
 	while(i < src_size) { \
-		if((gboolean) ((src[i] ^ required_on) & required_on_xor_off) == invert_control) { \
+		if((src[i] ^ required_on) & required_on_xor_off ? invert_control : !invert_control) { \
 			/* Conditions were met */ \
 			if(!(i % num_cycle_in)) { \
 				/* In case rate in > rate out */ \
