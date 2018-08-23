@@ -49,7 +49,8 @@ def lal_dqtukey_01(pipeline, name):
 	rate_in = 16		# Hz
 	rate_out = 16384	# Hz
 	buffer_length = 1.0	# seconds
-	test_duration = 30.0	# seconds
+	test_duration = 300.0	# seconds
+	transition_samples = 997
 
 	#
 	# build pipeline
@@ -58,10 +59,10 @@ def lal_dqtukey_01(pipeline, name):
 	head = test_common.int_test_src(pipeline, buffer_length = buffer_length, rate = rate_in, width = 32, test_duration = test_duration, wave = 5, freq = 0)
 	head = pipeparts.mktee(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, head, "%s_in.txt" % name)
-	normal = pipeparts.mkgeneric(pipeline, head, "lal_dqtukey", transition_samples = 1024, required_on = 2, required_off = 1, invert_control = False)
-	invert = pipeparts.mkgeneric(pipeline, head, "lal_dqtukey", transition_samples = 1024, required_on = 2, required_off = 1, invert_control = True)
-	invwin = pipeparts.mkgeneric(pipeline, head, "lal_dqtukey", transition_samples = 1024, required_on = 2, required_off = 1, invert_control = False, invert_window = True)
-	invboth = pipeparts.mkgeneric(pipeline, head, "lal_dqtukey", transition_samples = 1024, required_on = 2, required_off = 1, invert_control = True, invert_window = True)
+	normal = pipeparts.mkgeneric(pipeline, head, "lal_dqtukey", transition_samples = transition_samples, required_on = 2, required_off = 1, invert_control = False)
+	invert = pipeparts.mkgeneric(pipeline, head, "lal_dqtukey", transition_samples = transition_samples, required_on = 2, required_off = 1, invert_control = True)
+	invwin = pipeparts.mkgeneric(pipeline, head, "lal_dqtukey", transition_samples = transition_samples, required_on = 2, required_off = 1, invert_control = False, invert_window = True)
+	invboth = pipeparts.mkgeneric(pipeline, head, "lal_dqtukey", transition_samples = transition_samples, required_on = 2, required_off = 1, invert_control = True, invert_window = True)
 	normal = pipeparts.mkcapsfilter(pipeline, normal, "audio/x-raw,rate=%s,format=F64LE" % rate_out)
 	invert = pipeparts.mkcapsfilter(pipeline, invert, "audio/x-raw,rate=%s,format=F64LE" % rate_out)
 	invwin = pipeparts.mkcapsfilter(pipeline, invwin, "audio/x-raw,rate=%s,format=F64LE" % rate_out)

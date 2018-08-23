@@ -332,7 +332,7 @@ double_ramp: \
 		if(!(i % num_cycle_in)) { \
 			for(j = 0; j < num_cycle_out; j++, dst++, (*ramp_down_index)++, (*ramp_up_index)++) { \
 				if(invert_window) \
-					*dst = ramp[*ramp_down_index] * (1.0 - (*ramp_up_index < transition_samples ? ramp[*ramp_up_index] : 1.0)); \
+					*dst = 1.0 - (1.0 - ramp[*ramp_down_index]) * (*ramp_up_index < transition_samples ? ramp[*ramp_up_index] : 1.0); \
 				else \
 					*dst = (1.0 - ramp[*ramp_down_index]) * (*ramp_up_index < transition_samples ? ramp[*ramp_up_index] : 1.0); \
  \
