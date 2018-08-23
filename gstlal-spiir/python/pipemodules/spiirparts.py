@@ -137,7 +137,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		if nxydump_segment is not None:
-			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_cpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
+			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_gpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#
@@ -441,7 +441,6 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		cohfar_assignfar_refresh_interval = 86400,
 		cohfar_assignfar_silent_time = 2147483647,
 		cohfar_assignfar_input_fname = None):
-#	pdb.set_trace()
 	#
 	# check for recognized value of chisq_type
 	#
@@ -566,7 +565,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 			snr = pipeparts.mktee(pipeline, snr)
 
 			if nxydump_segment is not None:
-				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_cpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
+				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_gpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
 
 			snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=10, max_size_bytes=100000000)
 
