@@ -88,17 +88,13 @@ from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
-from pylal.datatypes import LIGOTimeGPS
-from pylal import series as lalseries
-from gstlal import far
-from gstlal import inspiral
+from lal import LIGOTimeGPS
 from gstlal import pipeparts
-from gstlal import lloidparts
-from gstlal import spiirparts
 from gstlal import simplehandler
-from gstlal import inspiral
 from gstlal import httpinterface
 from gstlal import datasource
+from gstlal.pipemodules import spiirparts
+from gstlal.spiirbank import spiir_utils
 #from gstlal import postcoh_output
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -225,7 +221,7 @@ def parse_command_line():
     raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
 
   # Get the banks and make the detectors
-  iir_banks = [inspiral.parse_iirbank_string(iirbank) for iirbank in options.iir_bank]
+  iir_banks = [spiir_utils.parse_iirbank_string(iirbank) for iirbank in options.iir_bank]
 	
   # FIXME: should also check for read permissions
   required_files = []
@@ -348,7 +344,7 @@ else:
 
 
 if options.reference_psd is not None:
-  psd = lalseries.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
+  psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = LIGOLWContentHandler))
 else:
   psd = dict((instrument, None) for instrument in detectors.channel_dict)
 
@@ -364,7 +360,7 @@ if 1==1:
 
   # show trackbacks when something fails
   #bottle.app().catchall = False
-  httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_iir_inspiral" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
+  httpservers = httpinterface.HTTPServers(0, bottle_app = bottle.default_app(), service_name = "gstlal_inspiral_postcohspiir_offline" + (" (%s)" % options.job_tag if options.job_tag is not None else ""), service_properties = {"job_tag": options.job_tag if options.job_tag is not None else ""}, verbose = options.verbose)
 
   # Set up a registry of the resources that this job provides
   @bottle.route("/")
@@ -408,7 +404,7 @@ if 1==1:
   if options.verbose:
     print >>sys.stderr, "assembling pipeline ...",
 
-  pipeline = gst.Pipeline("gstlal_postcoh_inspiral")
+  pipeline = gst.Pipeline("gstlal_inspiral_postcohspiir_offline")
   mainloop = gobject.MainLoop()
 
   postcohsrcs = spiirparts.mkPostcohSPIIROffline(
