@@ -33,6 +33,7 @@ import numpy
 
 import gi
 gi.require_version('Gst', '1.0')
+gi.require_version('GstAudio', '1.0')
 from gi.repository import GObject, Gst, GstAudio
 GObject.threads_init()
 Gst.init(None)
@@ -47,6 +48,7 @@ from gstlal import datasource
 # FIXME: Find a better way than using global variables.
 PSD_FFT_LENGTH = 32
 PSD_DROP_TIME = 16 * PSD_FFT_LENGTH
+NATIVE_RATE_CUTOFF = 128
 
 # FIXME: this Gstreamer graph is outdated, need to update it
 ## #### produced whitened h(t) at (possibly) multiple sample rates
@@ -137,11 +139,14 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 		raise ValueError("psd_fft_length must be an integer")
 	psd_fft_length = int(psd_fft_length)
 
+	#
 	# down-sample to highest of target sample rates.
-	quality = 9
+	#
+
+	quality = 10 # set by interpolator
 	max_rate = max(rates)
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max_rate)
-	head = pipeparts.mkresample(pipeline, head, quality = quality)
+	head = pipeparts.mkinterpolator(pipeline, head)
 
 	#
 	# construct whitener.
@@ -152,19 +157,27 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_%s_lalwhiten" % (instrument, channel_name))
 	pipeparts.mkfakesink(pipeline, whiten)
 
+	#
 	# high pass filter
+	#
+
 	block_stride = block_duration * max_rate // Gst.SECOND
-	# FIXME: don't hardcode native rate cutoff for high-pass filtering
-	if native_rate >= 128:
+	if native_rate >= NATIVE_RATE_CUTOFF:
 		kernel = reference_psd.one_second_highpass_kernel(max_rate, cutoff = 12)
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
 		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
 
+	#
 	# FIR filter for whitening kernel
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.zeros((1, 1 + max_rate * psd_fft_length), dtype=numpy.float64), block_stride = block_stride, time_domain = False, latency = 0)
+	#
 
+	head = pipeparts.mktdwhiten(pipeline, head, kernel = numpy.zeros(1 + max_rate * psd_fft_length, dtype=numpy.float64), latency = 0)
+
+	#
 	# compute whitening kernel from PSD
-	def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
+	#
+
+	def set_fir_psd(whiten, pspec, firelem, psd_fir_kernel):
 		psd_data = numpy.array(whiten.get_property("mean-psd"))
 		psd = lal.CreateREAL8FrequencySeries(
 			name = "psd",
@@ -178,15 +191,19 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 		kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
 		kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
 		kernel -= numpy.mean(kernel) # subtract DC offset from signal
-		firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
+		firelem.set_property("kernel", kernel)
 	whiten.connect_after("notify::mean-psd", set_fir_psd, head, reference_psd.PSDFirKernel())
 
+	#
 	# Drop initial data to let the PSD settle
+	#
+
 	head = pipeparts.mkdrop(pipeline, head, drop_samples = PSD_DROP_TIME * max_rate)
 
 	#
 	# enable/disable PSD tracking
 	#
+
 	whiten.set_property("psd-mode", 0 if track_psd else 1)
 
 	#
@@ -232,12 +249,16 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 		head = datasource.mksegmentsrcgate(pipeline, head, veto_segments, invert_output=True)
 
 	#
-	# tee for highest sample rate stream
+	# if segments are specified to dump whitened timeseries, do so
 	#
 
 	tee = pipeparts.mktee(pipeline, head)
 	if nxydump_segment:
 		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "whitenedtimeseries_%s.txt" % channel_name, segment = nxydump_segment)
+
+	#
+	# tee for highest sample rate stream
+	#
 
 	head = {rate: None for rate in rates}
 	head[max_rate] = pipeparts.mkqueue(pipeline, tee, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 8)
@@ -249,11 +270,10 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	for rate in sorted(set(rates))[:-1]:
 		head[rate] = pipeparts.mkqueue(pipeline, tee, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 8)
 		head[rate] = pipeparts.mkaudioamplify(pipeline, head[rate], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max_rate, rate)))
-		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw, rate=%d" % rate)
+		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head[rate]), caps = "audio/x-raw, rate=%d" % rate)
 
 	#
-	# done.  return value is a dictionary of tee elements indexed by
-	# sample rate
+	# return value is a dictionary of elements indexed by sample rate
 	#
 
 	return head
