@@ -1,5 +1,5 @@
 # Copyright (C) 2009--2013  Kipp Cannon, Chad Hanna, Drew Keppel
-# Copyright (C) 2017 	    Patrick Godwin
+# Copyright (C) 2017--2018 	Patrick Godwin
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -50,67 +50,14 @@ PSD_FFT_LENGTH = 32
 PSD_DROP_TIME = 16 * PSD_FFT_LENGTH
 NATIVE_RATE_CUTOFF = 128
 
-# FIXME: this Gstreamer graph is outdated, need to update it
-## #### produced whitened h(t) at (possibly) multiple sample rates
-# ##### Gstreamer graph describing this function
 #
-# @dot
-# digraph mkbasicsrc {
-#	rankdir = LR;
-#	compound=true;
-#	node [shape=record fontsize=10 fontname="Verdana"];
-#	edge [fontsize=8 fontname="Verdana"];
+# =============================================================================
 #
-#	capsfilter1 [URL="\ref pipeparts.mkcapsfilter()"];
-#	audioresample [URL="\ref pipeparts.mkresample()"];
-#	capsfilter2 [URL="\ref pipeparts.mkcapsfilter()"];
-#	reblock [URL="\ref pipeparts.mkreblock()"];
-#	whiten [URL="\ref pipeparts.mkwhiten()"];
-#	audioconvert [URL="\ref pipeparts.mkaudioconvert()"];
-#	capsfilter3 [URL="\ref pipeparts.mkcapsfilter()"];
-#	"segmentsrcgate()" [URL="\ref datasource.mksegmentsrcgate()", label="segmentsrcgate() \n [iff veto segment list provided]", style=filled, color=lightgrey];
-#	tee [URL="\ref pipeparts.mktee()"];
-#	audioamplifyr1 [URL="\ref pipeparts.mkaudioamplify()"];
-#	capsfilterr1 [URL="\ref pipeparts.mkcapsfilter()"];
-#	htgater1 [URL="\ref datasource.mkhtgate()", label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
-#	tee1 [URL="\ref pipeparts.mktee()"];
-#	audioamplifyr2 [URL="\ref pipeparts.mkaudioamplify()"];
-#	capsfilterr2 [URL="\ref pipeparts.mkcapsfilter()"];
-#	htgater2 [URL="\ref datasource.mkhtgate()", label="htgate() \n [iff ht gate specified]", style=filled, color=lightgrey];
-#	tee2 [URL="\ref pipeparts.mktee()"];
-#	audioamplify_rn [URL="\ref pipeparts.mkaudioamplify()"];
-#	capsfilter_rn [URL="\ref pipeparts.mkcapsfilter()"];
-#	htgate_rn [URL="\ref datasource.mkhtgate()", style=filled, color=lightgrey, label="htgate() \n [iff ht gate specified]"];
-#	tee [URL="\ref pipeparts.mktee()"];
+#                                Pipeline Parts
 #
-#	// nodes
+# =============================================================================
 #
-#	"?" -> capsfilter1 -> audioresample;
-#	audioresample -> capsfilter2;
-#	capsfilter2 -> reblock;
-#	reblock -> whiten;
-#	whiten -> audioconvert;
-#	audioconvert -> capsfilter3;
-#	capsfilter3 -> "segmentsrcgate()";
-#	"segmentsrcgate()" -> tee;
-#
-#	tee -> audioamplifyr1 [label="Rate 1"];
-#	audioamplifyr1 -> capsfilterr1;
-#	capsfilterr1 -> htgater1;
-#	htgater1 -> tee1 -> "? 1";
-#
-#	tee -> audioamplifyr2 [label="Rate 2"];
-#	audioamplifyr2 -> capsfilterr2;
-#	capsfilterr2 -> htgater2;
-#	htgater2 -> tee2 -> "? 2";
-#
-#	tee ->  audioamplify_rn [label="Rate N"];
-#	audioamplify_rn -> capsfilter_rn;
-#	capsfilter_rn -> htgate_rn;
-#	htgate_rn -> tee_n -> "? 3";
-#
-# }
-# @enddot
+
 def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd = None, psd_fft_length = PSD_FFT_LENGTH, veto_segments = None, nxydump_segment = None, track_psd = True, block_duration = int(1 * Gst.SECOND), width = 64, channel_name = "hoft"):
 	"""!
 	Build pipeline stage to whiten and downsample auxiliary channels.
@@ -127,6 +74,55 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	- track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
 	- width: type convert to either 32 or 64 bit float
 	- channel_name: channel to whiten and downsample
+
+	**Gstreamer graph describing this function**
+
+	.. graphviz::
+
+	   digraph mkwhitened_multirate_src {
+	     rankdir = LR;
+	     compound=true;
+	     node [shape=record fontsize=10 fontname="Verdana"];
+	     edge [fontsize=8 fontname="Verdana"];
+
+	     capsfilter1;
+	     interpolator;
+	     highpass;
+	     whiten;
+	     audioconvert;
+	     capsfilter2;
+	     tee;
+	     segmentsrcgate;
+	     audioamplifyr1;
+	     audioamplifyr2;
+	     audioamplifyrn;
+	     interpolatorr1;
+	     interpolatorr2;
+	     interpolatorrn;
+	     capsfilterr1;
+	     capsfilterr2;
+	     capsfilterrn;
+
+	     // nodes
+
+	     "?" -> capsfilter1 -> interpolator -> whiten;
+	     highpass -> whiten -> audioconvert -> capsfilter2 -> tee;
+	     tee -> segmentsrcgate [label="Whitened timeseries to disk"];
+
+	     tee -> audioamplifyr1 [label="Rate 1"];
+	     audioamplifyr1 -> interpolatorr1;
+	     interpolatorr1 -> capsfilterr1 -> "? 1";
+
+	     tee -> audioamplifyr2 [label="Rate 2"];
+	     audioamplifyr2 -> interpolatorr2;
+	     interpolatorr2 -> capsfilterr2 -> "? 2";
+
+	     tee -> audioamplifyrn [label="Rate N"];
+	     audioamplifyrn -> interpolatorrn;
+	     interpolatorrn -> capsfilterrn -> "? N";
+
+	   }
+
 	"""
 
 	#
