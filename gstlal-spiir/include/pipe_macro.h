@@ -44,26 +44,33 @@ int get_icombo(char *ifos);
 
 /* array names in xml files */
 #define	BACKGROUND_XML_FEATURE_NAME		"background_feature"
-#define	SNR_RATES_SUFFIX			"_lgsnr_rates"
-#define	CHISQ_RATES_SUFFIX			"_lgchisq_rates"
-#define	SNR_CHISQ_RATES_SUFFIX			"_lgsnr_lgchisq_rates"	
-#define	SNR_CHISQ_PDF_SUFFIX			"_lgsnr_lgchisq_pdf"	
+#define	SNR_RATE_SUFFIX			"lgsnr_rate"
+#define	CHISQ_RATE_SUFFIX			"lgchisq_rate"
+#define	SNR_CHISQ_RATE_SUFFIX			"lgsnr_lgchisq_rate"	
+#define	SNR_CHISQ_PDF_SUFFIX			"lgsnr_lgchisq_pdf"	
 #define	BACKGROUND_XML_RANK_NAME		"background_rank"	
-#define	RANK_MAP_SUFFIX				"_rank_map"	
-#define	RANK_RATES_SUFFIX			"_rank_rates"	
-#define	RANK_PDF_SUFFIX				"_rank_pdf"	
-#define	RANK_FAP_SUFFIX				"_rank_fap"	
+#define	RANK_MAP_SUFFIX				"rank_map"	
+#define	RANK_RATE_SUFFIX			"rank_rate"	
+#define	RANK_PDF_SUFFIX				"rank_pdf"	
+#define	RANK_FAP_SUFFIX				"rank_fap"	
 
 #define	ZEROLAG_XML_FEATURE_NAME		"zerolag_feature"
 #define	ZEROLAG_XML_RANK_NAME		"zerolag_rank"	
+#define	SIGNAL_XML_FEATURE_NAME		"signal_feature"
+#define	SIGNAL_XML_RANK_NAME		"signal_rank"	
+
 #define STATS_XML_ID_NAME   "gstlal_postcohspiir_stats"
 #define STATS_XML_TYPE_BACKGROUND   1
 #define STATS_XML_TYPE_ZEROLAG   2
+#define STATS_XML_TYPE_SIGNAL   3
+
 #define STATS_XML_WRITE_START   1
-#define STATS_XML_WRITE_END 2
+#define STATS_XML_WRITE_MID 2
+#define STATS_XML_WRITE_END 3
 #define MAX(a,b) (a>b?a:b)
 #define	PNOISE_MIN_LIMIT	-30
 #define	PSIG_MIN_LIMIT	-30
 #define	LR_MIN_LIMIT	-30
+#define SOURCE_TYPE_BNS	1
 #endif
 

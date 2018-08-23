@@ -88,6 +88,7 @@ enum property {
 	PROP_0,
 	PROP_IFOS,
 	PROP_HIST_TRIALS,
+	PROP_SOURCE_TYPE,
 	PROP_SNAPSHOT_INTERVAL,
 	PROP_HISTORY_FNAME,
 	PROP_OUTPUT_PREFIX,
@@ -193,37 +194,31 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
         }
 	}
 	/*
-	 * update background rates
+	 * update background rate
 	 */
 
 	intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 	int isingle, nifo;
 	for (; intable<intable_end; intable++) {
-		//printf("is_back %d\n", intable->is_background);
 		if (intable->is_background == 1) {
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1) {
-				trigger_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, bgstats->multistats[icombo]->feature, bgstats->multistats[icombo]);
-				//printf("eventime %d, cohsnr %f, chisq %f\n", intable->end_time.gpsSeconds, intable->cohsnr, intable->cmbchisq);
+				trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, bgstats->multistats[icombo]->feature, bgstats->multistats[icombo]);
 			}	
 
 			nifo = strlen(intable->ifos)/IFO_LEN;
 			/* add single detector stats */
 			get_write_ifo_mapping(IFOComboMap[icombo].name, nifo, element->write_ifo_mapping);
-			//printf("found combo %s\n", IFOComboMap[icombo]);
 
 			for (isingle=0; isingle< nifo; isingle++){
 				int write_isingle = element->write_ifo_mapping[isingle];
-				//printf("write isingle %d->%d\n", isingle, write_isingle);
-				trigger_stats_feature_rates_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), bgstats->multistats[write_isingle]->feature, bgstats->multistats[write_isingle]);
-				// printf("eventime %d, single %d, snr %f, chisq %f\n", intable->end_time.gpsSeconds, isingle, (double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)));
+				trigger_stats_feature_rate_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), bgstats->multistats[write_isingle]->feature, bgstats->multistats[write_isingle]);
 			}
 		} else { /* coherent trigger entry */
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1) {
-				trigger_stats_feature_rates_update((double)intable->cohsnr, (double)intable->cmbchisq, zlstats->multistats[icombo]->feature, zlstats->multistats[icombo]);
-				//printf("eventime %d, cohsnr %f, chisq %f\n", intable->end_time.gpsSeconds, intable->cohsnr, intable->cmbchisq);
+				trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, zlstats->multistats[icombo]->feature, zlstats->multistats[icombo]);
 			}	
 
 			nifo = strlen(intable->ifos)/IFO_LEN;
@@ -234,7 +229,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 			for (isingle=0; isingle< nifo; isingle++){
 				int write_isingle = element->write_ifo_mapping[isingle];
 				//printf("write isingle %d->%d\n", isingle, write_isingle);
-				trigger_stats_feature_rates_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), zlstats->multistats[write_isingle]->feature, zlstats->multistats[write_isingle]);
+				trigger_stats_feature_rate_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), zlstats->multistats[write_isingle]->feature, zlstats->multistats[write_isingle]);
             }
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
@@ -259,7 +254,8 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
     	g_string_append_printf(fname, "_%d_%d.xml.gz", gps_time, duration);
     	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz_next", gps_time, duration);
     	trigger_stats_xml_dump(element->bgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
-    	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_MID, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->sgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
         printf("rename from %s\n", tmp_fname->str);
         g_rename(tmp_fname->str, fname->str);
     	g_string_free(fname, TRUE);
@@ -322,7 +318,8 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
         g_string_append_printf(fname, "_%d_%d.xml.gz", gps_time, duration);
     	g_string_append_printf(tmp_fname, "_%d_%d.xml.gz_next", gps_time, duration);
     	trigger_stats_xml_dump(element->bgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
-    	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_MID, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->sgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
         printf("rename from %s\n", tmp_fname->str);
         g_rename(tmp_fname->str, fname->str);
     	g_string_free(fname, TRUE);
@@ -331,7 +328,8 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
     } else {
     	GString *fname = g_string_new(element->output_name);
     	trigger_stats_xml_dump(element->bgstats, element->hist_trials, fname->str, STATS_XML_WRITE_START, &(element->stats_writer));
-    	trigger_stats_xml_dump(element->bgstats, element->hist_trials, fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->zlstats, element->hist_trials, fname->str, STATS_XML_WRITE_MID, &(element->stats_writer));
+    	trigger_stats_xml_dump(element->sgstats, element->hist_trials, fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
     	g_string_free(fname, TRUE);
     }
 
@@ -362,15 +360,22 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			element->ncombo = get_ncombo(element->nifo);
 			element->bgstats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_BACKGROUND);
 			element->zlstats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_ZEROLAG);
+			element->sgstats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_SIGNAL);
+			break;
+
+		case PROP_SOURCE_TYPE:
+			/* must make sure ifos have been loaded, so stats have been created */
+			g_assert(element->ifos != NULL);
+			element->source_type = g_value_get_int(value);
+			signal_stats_init(element->sgstats, element->source_type);
 			break;
 
 		case PROP_HISTORY_FNAME:
 
-			/* must make sure ifos have been loaded */
+			/* must make sure ifos have been loaded, so stats have been created */
 			g_assert(element->ifos != NULL);
 			element->history_fname = g_value_dup_string(value);
 			trigger_stats_xml_from_xml(element->bgstats, &(element->hist_trials), element->history_fname);
-			trigger_stats_xml_from_xml(element->zlstats, &(element->hist_trials), element->history_fname);
 			break;
 
 		case PROP_OUTPUT_NAME:
@@ -431,6 +436,11 @@ static void cohfar_accumbackground_get_property(GObject *object, enum property p
 			g_value_set_int(value, element->hist_trials);
 			break;
 	
+		case PROP_SOURCE_TYPE:
+			g_value_set_int(value, element->source_type);
+			break;
+	
+
 		case PROP_SNAPSHOT_INTERVAL:
 			g_value_set_int(value, element->snapshot_interval);
 			break;
@@ -577,6 +587,19 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 			"number of shifted slides",
 			"Number of shifted slides.",
 			0, G_MAXINT, 1,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+
+	g_object_class_install_property(
+		gobject_class,
+		PROP_SOURCE_TYPE,
+		g_param_spec_int(
+			"source-type",
+			"source type",
+		   	"(1) BNS, (2) NSBH, or (3) BBH",
+			1, 3, 1,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);

@@ -68,6 +68,7 @@ typedef struct {
 	gboolean pass_silent_time;
 	int refresh_interval;
 	gchar **input_fnames;
+	int ninput;
 
 	/*
 	 * timestamp book-keeping

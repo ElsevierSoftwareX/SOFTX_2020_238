@@ -64,16 +64,16 @@ typedef struct {
 typedef struct {
 	Bins1D	*rank_pdf;
 	Bins1D	*rank_fap;
-	Bins1D	*rank_rates;
+	Bins1D	*rank_rate;
 	Bins2D	*rank_map; // map of the lgsnr-lgchisq value to rank value
 } RankingStats;
 
 
 // FIXME: extend to 3D to include null-snr
 typedef struct {
-	Bins1D	*lgsnr_rates; // dimension 1 rates, lgsnr
-	Bins1D	*lgchisq_rates; // dimension 2 rates, lgchisq
-	Bins2D	*lgsnr_lgchisq_rates; // histogram of the (lgsnr,lgchisq) from background
+	Bins1D	*lgsnr_rate; // dimension 1 rates, lgsnr
+	Bins1D	*lgchisq_rate; // dimension 2 rates, lgchisq
+	Bins2D	*lgsnr_lgchisq_rate; // histogram of the (lgsnr,lgchisq) from background
 	Bins2D  *lgsnr_lgchisq_pdf;
 } FeatureStats;
 

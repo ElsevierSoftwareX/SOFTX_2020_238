@@ -64,6 +64,8 @@ typedef struct {
 	int write_ifo_mapping[MAX_NIFO];
 	TriggerStatsXML *bgstats;
 	TriggerStatsXML *zlstats;
+	TriggerStatsXML *sgstats;
+	int source_type; // BNS, NSBH, or BBH
     xmlTextWriterPtr stats_writer;
 
 

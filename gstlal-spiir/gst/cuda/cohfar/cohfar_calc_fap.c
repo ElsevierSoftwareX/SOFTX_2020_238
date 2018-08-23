@@ -133,7 +133,7 @@ void cohfar_get_stats_from_file(gchar **in_fnames, TriggerStatsXML *stats_in, Tr
 		printf("%s\n", *ifname);
 		trigger_stats_xml_from_xml(stats_in, hist_trials, *ifname);
 		for (icombo=0; icombo<stats_in->ncombo; icombo++){
-			trigger_stats_feature_rates_add(stats_out->multistats[icombo]->feature, stats_in->multistats[icombo]->feature, stats_out->multistats[icombo]);
+			trigger_stats_feature_rate_add(stats_out->multistats[icombo]->feature, stats_in->multistats[icombo]->feature, stats_out->multistats[icombo]);
 			trigger_stats_livetime_add(stats_out->multistats, stats_in->multistats, icombo);
 		}
 	}
@@ -157,31 +157,39 @@ int main(int argc, char *argv[])
 
 	TriggerStatsXML *bgstats_in = trigger_stats_xml_create(*pifos, STATS_XML_TYPE_BACKGROUND);
 	TriggerStatsXML *bgstats_out = trigger_stats_xml_create(*pifos, STATS_XML_TYPE_BACKGROUND);
+
+	TriggerStatsXML *sgstats_in = trigger_stats_xml_create(*pifos, STATS_XML_TYPE_SIGNAL);
+	TriggerStatsXML *sgstats_out = trigger_stats_xml_create(*pifos, STATS_XML_TYPE_SIGNAL);
+
 	gchar **in_fnames = g_strsplit(*pin, ",", -1); // split the string completely
 
 	if (g_strcmp0(*pfmt, "data") == 0) {
 		gsl_vector *data_dim1 = NULL, *data_dim2 = NULL;
 		cohfar_get_data_from_file(in_fnames, &data_dim1, &data_dim2);
 		// FIXME: hardcoded to only update the last stats
-		trigger_stats_feature_rates_update_all(data_dim1, data_dim2, bgstats_out->multistats[ncombo-1]->feature, bgstats_out->multistats[ncombo-1]);
-		trigger_stats_feature_rates_to_pdf(bgstats_out->multistats[ncombo-1]->feature);
+		trigger_stats_feature_rate_update_all(data_dim1, data_dim2, bgstats_out->multistats[ncombo-1]->feature, bgstats_out->multistats[ncombo-1]);
+		trigger_stats_feature_rate_to_pdf(bgstats_out->multistats[ncombo-1]->feature);
 		trigger_stats_feature_to_rank(bgstats_out->multistats[ncombo-1]->feature, bgstats_out->multistats[ncombo-1]->rank);
 		if (data_dim1) {
 			free(data_dim1);
 			free(data_dim2);
 		}
 		
-		// trigger_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rates->lgsnr_bins, stats_out[ncombo-1]->rates->lgchisq_bins, stats_out[ncombo-1]->pdf);
+		// trigger_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rate->lgsnr_bins, stats_out[ncombo-1]->rate->lgchisq_bins, stats_out[ncombo-1]->pdf);
 	} else if(g_strcmp0(*pfmt, "stats") == 0) {
-		cohfar_get_stats_from_file(in_fnames, bgstats_in, bgstats_out, &hist_trials);
+		cohfar_get_stats_from_file(in_fnames, sgstats_in, sgstats_out, &hist_trials);
 		cohfar_get_stats_from_file(in_fnames, zlstats_in, zlstats_out, &hist_trials);
+		cohfar_get_stats_from_file(in_fnames, bgstats_in, bgstats_out, &hist_trials);
 		for (icombo=0; icombo<ncombo; icombo++) {
-			trigger_stats_feature_rates_to_pdf(zlstats_out->multistats[icombo]->feature);
+			trigger_stats_feature_rate_to_pdf(sgstats_out->multistats[icombo]->feature);
+			trigger_stats_feature_to_rank(sgstats_out->multistats[icombo]->feature, sgstats_out->multistats[icombo]->rank);
+
+			trigger_stats_feature_rate_to_pdf(zlstats_out->multistats[icombo]->feature);
 			trigger_stats_feature_to_rank(zlstats_out->multistats[icombo]->feature, zlstats_out->multistats[icombo]->rank);
 			/* livetime calculated from all walltimes in the input files, will deprecate the following */
 			//stats_out[icombo]->livetime = atol(*pwalltime);
 			//printf("zlstats_out livetime %d\n", zlstats_out->multistats[icombo]->livetime );
-			trigger_stats_feature_rates_to_pdf(bgstats_out->multistats[icombo]->feature);
+			trigger_stats_feature_rate_to_pdf(bgstats_out->multistats[icombo]->feature);
 			trigger_stats_feature_to_rank(bgstats_out->multistats[icombo]->feature, bgstats_out->multistats[icombo]->rank);
 			/* livetime calculated from all walltimes in the input files, will deprecate the following */
 			//stats_out[icombo]->livetime = atol(*pwalltime);
@@ -192,7 +200,8 @@ int main(int argc, char *argv[])
 	GString *tmp_fname = g_string_new(*pout);
 	g_string_append_printf(tmp_fname, "_next");
 	trigger_stats_xml_dump(bgstats_out, hist_trials, tmp_fname->str, STATS_XML_WRITE_START, &stats_writer);
-	trigger_stats_xml_dump(zlstats_out, hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &stats_writer);
+	trigger_stats_xml_dump(zlstats_out, hist_trials, tmp_fname->str, STATS_XML_WRITE_MID, &stats_writer);
+	trigger_stats_xml_dump(sgstats_out, hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &stats_writer);
 	printf("rename from %s\n", tmp_fname->str);
     g_rename(tmp_fname->str, *pout);
 
@@ -200,6 +209,9 @@ int main(int argc, char *argv[])
 	trigger_stats_xml_destroy(bgstats_out);
 	trigger_stats_xml_destroy(zlstats_in);
 	trigger_stats_xml_destroy(zlstats_out);
+	trigger_stats_xml_destroy(sgstats_in);
+	trigger_stats_xml_destroy(sgstats_out);
+
 
 	g_strfreev(in_fnames);
 	g_string_free(tmp_fname, TRUE);
