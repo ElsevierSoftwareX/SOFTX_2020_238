@@ -13,4 +13,5 @@ pipemodules_PYTHON = \
 	homomorphic.py \
 	uni_datasource.py \
 	postcoh_finalsink.py \
-	spiirparts.py
+	spiirparts.py \
+	pipe_macro.py

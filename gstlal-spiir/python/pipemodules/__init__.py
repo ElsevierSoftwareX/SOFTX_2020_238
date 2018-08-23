@@ -27,6 +27,7 @@ import gst
 
 from gstlal import pipeio
 from gstlal import pipeparts
+from gstlal.pipemodules import pipe_macro
 #
 # SPIIR many instruments, many template banks
 #
@@ -88,11 +89,12 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 	return elem
 
 
-def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snapshot_interval = 0, history_fname = None, output_prefix = None, output_name = None):
+def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snapshot_interval = 0, history_fname = None, output_prefix = None, output_name = None, source_type = pipe_macro.SOURCE_TYPE_BNS):
 	properties = {
 		"ifos": ifos,
 		"snapshot_interval": snapshot_interval,
-		"hist_trials": hist_trials
+		"hist_trials": hist_trials,
+		"source_type": source_type
 	}
 	if history_fname is not None:
 		properties["history_fname"] = history_fname
@@ -101,6 +103,7 @@ def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snaps
 	if output_name is not None:
 		properties["output_name"] = output_name
 
+	print "source type %d" % source_type
 	if "name" in properties:
 		elem = gst.element_factory_make("cohfar_accumbackground", properties.pop("name"))
 	else:
@@ -110,7 +113,7 @@ def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snaps
 		if name == "ifos":
 			elem.set_property(name.replace("_", "-"), value)
 	for name, value in properties.items():
-		if name != "ifos":
+		if name is not "ifos":
 			elem.set_property(name.replace("_", "-"), value)
 
 	pipeline.add(elem)
@@ -146,6 +149,19 @@ def mkcohfar_assignfar(pipeline, src, ifos= "H1L1", assignfar_refresh_interval =
 		src.get_parent_element().link_pads(src, elem, None)
 	elif src is not None:
 		src.link(elem)
+	return elem
+
+
+def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1, snapshot_interval = 0):
+	properties = dict((name, value) for name, value in zip(("location", "compression", "snapshot-interval", "sync", "async"), (location, compression, snapshot_interval, False, False)))
+	if "name" in properties:
+		elem = gst.element_factory_make("postcoh_filesink", properties.pop("name"))
+	else:
+		elem = gst.element_factory_make("postcoh_filesink")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	postcoh.link(elem)
 	return elem
 
 

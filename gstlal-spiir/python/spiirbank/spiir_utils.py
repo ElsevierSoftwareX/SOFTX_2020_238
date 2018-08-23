@@ -11,13 +11,18 @@ lsctables.use_in(DefaultContentHandler)
 
 def get_bankid_from_bankname(bankname):
 	tmp_name = os.path.split(bankname)[-1]
-	search_result = re.search(r'\d{3,4}', tmp_name)
+	tmp_name = re.sub(r'[HLV]1', '', tmp_name)
+	search_result = re.search(r'\d{1,4}', tmp_name)
 	try:
 		bankid = search_result.group()
-		bankid = int(bankid.lstrip('0'))
 	except:
-		raise ValueError("bankid should be the first 3/4 digits of the given name, could not find the digits")
-	return bankid
+		raise ValueError("bankid should be the first 3/4 digits of the given name, could not find the digits from %s" % tmp_name)
+
+	bankid_strip = bankid.lstrip('0')
+	if bankid_strip is '':
+		return 0
+	else:
+		return int(bankid_strip)
 
 def parse_iirbank_string(bank_string):
 	"""

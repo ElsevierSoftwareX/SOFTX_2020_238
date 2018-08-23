@@ -306,19 +306,6 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 	assert any(triggersrcs.values())
 	return triggersrcs
 
-def mkpostcohfilesink(pipeline, postcoh, location = ".", compression = 1, snapshot_interval = 0):
-	properties = dict((name, value) for name, value in zip(("location", "compression", "snapshot-interval", "sync", "async"), (location, compression, snapshot_interval, False, False)))
-	if "name" in properties:
-		elem = gst.element_factory_make("postcoh_filesink", properties.pop("name"))
-	else:
-		elem = gst.element_factory_make("postcoh_filesink")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	postcoh.link(elem)
-	return elem
-
-
 def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, cuda_postcoh_snglsnr_thresh = 4, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials = 1, output_prefix = None, cuda_postcoh_output_skymap = 0):
 #	pdb.set_trace()
 	#
