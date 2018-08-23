@@ -601,7 +601,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
 		printf( "Allocating %d MB\n", (int) (mem_alloc_size / 1024 / 1024) );
 
-	       	CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
+		CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMemsetAsync(state->d_snglsnr[cur_ifo], 0, mem_alloc_size, postcoh->stream));
 		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, postcoh->stream));
 
@@ -1118,7 +1118,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->bankid = postcoh->stream_id;
 			output->pix_idx = pklist->pix_idx[peak_cur];
 			output->cohsnr = sqrt(pklist->cohsnr[peak_cur]); /* the returned snr from cuda kernel is snr^2 */
-			output->nullsnr = pklist->nullsnr[peak_cur];
+			output->nullsnr = sqrt(pklist->nullsnr[peak_cur]);
 			output->cmbchisq = pklist->cmbchisq[peak_cur];
 			output->spearman_pval = 0;
 			output->fap = 0;
@@ -1212,7 +1212,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	
 					//output->pix_idx = pklist->pix_idx[itrial*max_npeak + peak_cur];
 					output->cohsnr = sqrt(pklist->cohsnr_bg[peak_cur_bg]);
-					output->nullsnr = pklist->nullsnr_bg[peak_cur_bg];
+					output->nullsnr = sqrt(pklist->nullsnr_bg[peak_cur_bg]);
 					output->cmbchisq = pklist->cmbchisq_bg[peak_cur_bg];
 					output->spearman_pval = 0;
 					output->fap = 0;

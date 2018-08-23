@@ -33,7 +33,6 @@ extern "C" {
 const int GAMMA_ITMAX = 50;
 // const float GAMMA_EPS = 2.22e-16;
 
-
 #define WARP_SIZE 		32
 #define WARP_MASK		31
 #define LOG_WARP_SIZE	5
@@ -331,7 +330,6 @@ __global__ void ker_coh_skymap
 			al_all = 0.0f;
 			for (int j = 2; j < nifo; ++j)
 				al_all += utdka[j];	
-			//nullsnr_skymap[ipeak * num_sky_directions + ipix] = 1 - gser(al_all, 1.0f);
 			nullsnr_skymap[ipeak * num_sky_directions + ipix] = al_all;
 		}
 	}
@@ -374,7 +372,8 @@ __global__ void ker_coh_max_and_chisq
     int srcLane = threadIdx.x & 0x1f;
     // store snr_max, nullstream_max and sky_idx, each has (blockDim.x / WARP_SIZE) elements
     extern __shared__ float smem[];
-    volatile float *snr_shared = &smem[0];
+    volatile float *stat_shared = &smem[0];
+    volatile float *snr_shared = &stat_shared[wn];
     volatile float *nullstream_shared = &snr_shared[wn];
     volatile int *sky_idx_shared = (int*)&nullstream_shared[wn];
 
@@ -386,7 +385,8 @@ __global__ void ker_coh_max_and_chisq
     float   real, imag;
     float   al_all = 0.0f, chisq_cur;
 
-    float   snr_max         = 0.0f, snr_tmp = 0.0f;
+    float   stat_max, stat_tmp;
+    float   snr_max, snr_tmp;
     float   nullstream_max, nullstream_max_tmp;
     int sky_idx = 0, sky_idx_tmp = 0;   
     int i, itrial, trial_offset, output_offset, len_cur;
@@ -408,6 +408,7 @@ __global__ void ker_coh_max_and_chisq
         tmplt_cur = peak_pos[peak_cur + 2 * max_npeak];
 
         itrial = 0;
+        stat_max = 0.0;
         snr_max = 0.0;
         nullstream_max = 0.0f;
         sky_idx = 0;
@@ -442,7 +443,6 @@ __global__ void ker_coh_max_and_chisq
                 }
                 (j < 2 ? snr_tmp: al_all) += real * real + imag * imag;   
             }   
-            // cohsnr[l * num_sky_directions + i] = (2 * (utdka[0] + utdka[1]) - 4) / sqrt(8.0f);
 #if 0
             if (ipix < 3072) {
             printf("ipeak %d, ipix %d, trial %d, dk[0].re %f, dk[0].im %f," 
@@ -458,22 +458,26 @@ __global__ void ker_coh_max_and_chisq
                 nullsnr_skymap[peak_cur * num_sky_directions + ipix] = al_all;
             }
 
-            if (snr_tmp > snr_max)
+            stat_tmp = snr_tmp - 0.0;
+            if (stat_tmp > stat_max)
             {
+                stat_max = stat_tmp;
                 snr_max = snr_tmp;
-                nullstream_max = al_all;  //1 - gser(al_all, 1.0f);;
+                nullstream_max = al_all;
                 sky_idx = ipix;
             }
         }
 
         for (i = WARP_SIZE / 2; i > 0; i = i >> 1)
         {
+            stat_tmp = __shfl_xor(stat_max, i);
             snr_tmp = __shfl_xor(snr_max, i);
             nullstream_max_tmp = __shfl_xor(nullstream_max, i);
             sky_idx_tmp = __shfl_xor(sky_idx, i);
 
-            if (snr_tmp > snr_max)
+            if (stat_tmp > stat_max)
             {
+                stat_max = stat_tmp;
                 snr_max = snr_tmp;
                 nullstream_max = nullstream_max_tmp;
                 sky_idx = sky_idx_tmp;
@@ -482,6 +486,7 @@ __global__ void ker_coh_max_and_chisq
 
         if (srcLane == 0)
         {
+            stat_shared[wID]    = stat_max;
             snr_shared[wID]     = snr_max;
             nullstream_shared[wID]  = nullstream_max;
             sky_idx_shared[wID] = sky_idx;
@@ -492,12 +497,13 @@ __global__ void ker_coh_max_and_chisq
         {
             if (threadIdx.x < i)
             {
-                snr_tmp = snr_shared[threadIdx.x + i];
-                snr_max = snr_shared[threadIdx.x];
+                stat_tmp = stat_shared[threadIdx.x + i];
+                stat_max = stat_shared[threadIdx.x];
 
-                if (snr_tmp > snr_max)
+                if (stat_tmp > stat_max)
                 {
-                    snr_shared[threadIdx.x] = snr_tmp;
+                    stat_shared[threadIdx.x] = stat_tmp;
+                    snr_shared[threadIdx.x] = snr_shared[threadIdx.x + i];
                     nullstream_shared[threadIdx.x] = nullstream_shared[threadIdx.x + i];
                     sky_idx_shared[threadIdx.x] = sky_idx_shared[threadIdx.x + i];
                 }
@@ -509,8 +515,7 @@ __global__ void ker_coh_max_and_chisq
         if (threadIdx.x == 0)
         {
             cohsnr[peak_cur]    = snr_shared[0];
-			//nullsnr[peak_cur]   = 1 - gser(nullstream_shared[0], 1.0f); // nullstream_shared[0];
-            nullsnr[peak_cur]   = nullstream_shared[0]; // nullstream_shared[0];
+			nullsnr[peak_cur]   = nullstream_shared[0];
             pix_idx[peak_cur]   = sky_idx_shared[0];            
 
         }
@@ -651,22 +656,26 @@ __global__ void ker_coh_max_and_chisq
             }
 #endif
     
-            if (snr_tmp > snr_max)
+            stat_tmp = snr_tmp - 0.0;
+            if (stat_tmp > stat_max)
             {
+                stat_max = stat_tmp;
                 snr_max = snr_tmp;
-                nullstream_max = al_all; // 1 - gser(al_all, 1.0f);;
+                nullstream_max = al_all;
                 sky_idx = ipix;
             }
         }
 
         for (i = WARP_SIZE / 2; i > 0; i = i >> 1)
         {
+            stat_tmp = __shfl_xor(stat_max, i);
             snr_tmp = __shfl_xor(snr_max, i);
             nullstream_max_tmp = __shfl_xor(nullstream_max, i);
             sky_idx_tmp = __shfl_xor(sky_idx, i);
 
-            if (snr_tmp > snr_max)
+            if (stat_tmp > stat_max)
             {
+                stat_max = stat_tmp;
                 snr_max = snr_tmp;
                 nullstream_max = nullstream_max_tmp;
                 sky_idx = sky_idx_tmp;
@@ -675,8 +684,7 @@ __global__ void ker_coh_max_and_chisq
         if (srcLane == 0)
         {
             cohsnr_bg[output_offset]        = snr_max;
-			//nullsnr_bg[output_offset]   = 1 - gser(nullstream_max, 1.0f); //nullstream_max;;
-            nullsnr_bg[output_offset]   = nullstream_max;;
+			nullsnr_bg[output_offset]   = nullstream_max;
             /* background need this for Ntoff */
             pix_idx_bg[output_offset]       = sky_idx;          
 
@@ -860,7 +868,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	size_t totalmem;
 
 	int threads = 256;
-	int sharedmem	 = 3 * threads / WARP_SIZE * sizeof(float);
+    int sharedmem     = 4 * threads / WARP_SIZE * sizeof(float);
 	PeakList *pklist = state->peak_list[iifo];
 	int npeak = pklist->npeak[0];
 
