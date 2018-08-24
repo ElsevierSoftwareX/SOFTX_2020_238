@@ -393,7 +393,7 @@ class RankingStatPDF(object):
 			queue.put((None, None))
 			raise
 
-	def __init__(self, rankingstat, sampler_rankingstat = None, nsamples = 2**24, nthreads = 8, verbose = False):
+	def __init__(self, rankingstat, signal_noise_pdfs = None, nsamples = 2**24, nthreads = 8, verbose = False):
 		#
 		# bailout out used by .from_xml() class method to get an
 		# uninitialized instance
@@ -426,8 +426,8 @@ class RankingStatPDF(object):
 		# binnings.
 		#
 
-		if sampler_rankingstat is None:
-			sampler_rankingstat = rankingstat
+		if signal_noise_pdfs is None:
+			signal_noise_pdfs = rankingstat
 
 		nthreads = int(nthreads)
 		assert nthreads >= 1
@@ -439,7 +439,7 @@ class RankingStatPDF(object):
 				q,
 				self.signal_lr_lnpdf,
 				self.noise_lr_lnpdf,
-				rankingstat.ln_lr_samples(sampler_rankingstat.denominator.random_params(), sampler_rankingstat),
+				rankingstat.ln_lr_samples(rankingstat.denominator.random_params(), signal_noise_pdfs),
 				nsamples = nsamples // nthreads
 			))
 			p.start()

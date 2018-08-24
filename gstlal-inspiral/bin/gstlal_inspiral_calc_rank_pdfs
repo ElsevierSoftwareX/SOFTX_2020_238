@@ -113,11 +113,11 @@ rankingstat = far.marginalize_pdf_urls(urls, "RankingStat", verbose = options.ve
 lr_rankingstat = rankingstat.copy()
 lr_rankingstat.finish()
 if options.add_zerolag_to_background:
-	sampler_rankingstat = rankingstat.copy()
-	sampler_rankingstat.denominator.lnzerolagdensity = sampler_rankingstat.zerolag
-	sampler_rankingstat.finish()
+	signal_noise_pdfs = rankingstat.copy()
+	signal_noise_pdfs.denominator.lnzerolagdensity = signal_noise_pdfs.zerolag
+	signal_noise_pdfs.finish()
 else:
-	sampler_rankingstat = None
+	signal_noise_pdfs = None
 
 
 #
@@ -125,7 +125,7 @@ else:
 #
 
 
-rankingstatpdf = far.RankingStatPDF(lr_rankingstat, sampler_rankingstat = sampler_rankingstat, nsamples = options.ranking_stat_samples, verbose = options.verbose)
+rankingstatpdf = far.RankingStatPDF(lr_rankingstat, signal_noise_pdfs = signal_noise_pdfs, nsamples = options.ranking_stat_samples, verbose = options.verbose)
 
 
 #
