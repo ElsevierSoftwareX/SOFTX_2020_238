@@ -39,7 +39,7 @@ const int GAMMA_ITMAX = 50;
 
 #define MIN_EPSILON 1e-7
 #define MAXIFOS 6
-#define BACKGROUND_NSKY_RATIO 4
+#define NSKY_REDUCE_RATIO 4
 
 
 #if 0
@@ -271,65 +271,55 @@ __global__ void ker_coh_skymap
 	int		ntmplt		/* INPUT, number of templates */
 )
 {
-	int bid	= blockIdx.x;
-	int bn	= gridDim.x;
+    int bid = blockIdx.x;
+    int bn  = gridDim.x;
 
-	// float	*mu;	// matrix u for certain sky direction
-	int		peak_cur, tmplt_cur, len_cur;
-	COMPLEX_F	dk[6];
-	int		NtOff;
-	int		map_idx;
-	float	real, imag;
-	float	utdka[6];
-	float	al_all = 0.0f;
-	for (int ipeak = bid; ipeak < npeak; ipeak += bn)
-	{
-		peak_cur = peak_pos[ipeak];
-		// find the len_cur from len_idx
-		len_cur = peak_pos[peak_cur + max_npeak];
-		// find the tmplt_cur from tmplt_idx
-		tmplt_cur = peak_pos[peak_cur + 2 * max_npeak];
+    int     peak_cur, tmplt_cur, len_cur;
+    COMPLEX_F   dk[MAXIFOS];
+    int     NtOff;
+    int     map_idx, ipix;
+    float   real, imag;
+    float   snr_tmp, al_all = 0.0f;
 
-		for (int ipix = threadIdx.x; ipix < num_sky_directions; ipix += blockDim.x)
-		{
-			// matrix u is stored in column order
-			// mu = u_map + nifo * nifo * i;			
+    for (int ipeak = bid; ipeak < npeak; ipeak += bn)
+    {
+        peak_cur = peak_pos[ipeak];
+        // find the len_cur from len_idx
+        len_cur = peak_pos[peak_cur + max_npeak];
+        // find the tmplt_cur from tmplt_idx
+        tmplt_cur = peak_pos[peak_cur + 2 * max_npeak];
 
-			for (int j = 0; j < nifo; ++j)
-			{
-				/* this is a simplified algorithm to get map_idx */
-				map_idx = iifo * nifo + j;
-				NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
-				/* NOTE: The snr is stored channel-wise */
-				if ( j == iifo )
-					// NOTE: transpose snr for new postcoh kernel
-					// dk[j] = snr[j][((start_exe + len_cur + len) % len) * ntmplt + tmplt_cur ]; 	
-					dk[j] = snr[j][tmplt_cur * len + ((start_exe + len_cur + len) % len)];  
-				else
-					// NOTE: transpose snr for new postcoh kernel
-					// dk[j] = snr[j][((start_exe + len_cur + NtOff + len) % len) * ntmplt + tmplt_cur ]; 	
-					dk[j] = snr[j][tmplt_cur * len + ((start_exe + len_cur + NtOff + len) % len)];  
-			}
+        for (int seed_pix = threadIdx.x; seed_pix < num_sky_directions; seed_pix += blockDim.x)
+        {
+            snr_tmp = 0.0;
+            al_all = 0.0;
+            // matrix u is stored in column order
+            // mu = u_map + nifo * nifo * i;            
+            ipix = seed_pix;
 
-			for (int j = 0; j < nifo; ++j)
-			{
-				real = 0.0f;
-				imag = 0.0f;
-				for (int k = 0; k < nifo; ++k)
-				{
-					// real += mu[j * nifo + k] * dk[k].x;
-					// imag += mu[j * nifo + k] * dk[k].y;
-					real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
-					imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
-				}
-				utdka[j] = real * real + imag * imag;	
-			}
+            for (int j = 0; j < nifo; ++j)
+            {
+                /* this is a simplified algorithm to get map_idx */
+                map_idx = iifo * nifo + j;
+                NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
+                NtOff = (j == iifo ? 0 : NtOff);
+                // dk[j] = snr[j][((start_exe + len_cur + NtOff + len) % len) * ntmplt + tmplt_cur ];  
+                dk[j] = snr[j][tmplt_cur * len + ((start_exe + len_cur + NtOff + len) % len)];  
+            }
 
-			cohsnr_skymap[ipeak * num_sky_directions + ipix] = utdka[0] + utdka[1];
+            for (int j = 0; j < nifo; ++j)
+            {
+                real = 0.0f;
+                imag = 0.0f;
+                for (int k = 0; k < nifo; ++k)
+                {
+                    real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
+                    imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
+                }
+                (j < 2 ? snr_tmp: al_all) += real * real + imag * imag;   
+            }   
 
-			al_all = 0.0f;
-			for (int j = 2; j < nifo; ++j)
-				al_all += utdka[j];	
+			cohsnr_skymap[ipeak * num_sky_directions + ipix] = snr_tmp;
 			nullsnr_skymap[ipeak * num_sky_directions + ipix] = al_all;
 		}
 	}
@@ -346,7 +336,7 @@ __global__ void ker_coh_max_and_chisq
     float       *snglsnr_bg_H,      /* INPUT, maximum single snr    */
     float       *cohsnr_skymap,
     float       *nullsnr_skymap,
-    int     output_skymap, /* INPUT, whether to output skymap */
+	int			output_skymap,	/* INPUT, whether to write to cohsnr_skymap and nullsnr_skymap */
     int     npeak,      /* INPUT, number of triggers */
     float       *u_map,             /* INPUT, u matrix map */
     float       *toa_diff_map,      /* INPUT, time of arrival difference map */
@@ -369,7 +359,7 @@ __global__ void ker_coh_max_and_chisq
     int wn  = blockDim.x >> LOG_WARP_SIZE;
     int wID = threadIdx.x >> LOG_WARP_SIZE;     
 
-    int srcLane = threadIdx.x & 0x1f;
+    int srcLane = threadIdx.x & 0x1f, ipix;
     // store snr_max, nullstream_max and sky_idx, each has (blockDim.x / WARP_SIZE) elements
     extern __shared__ float smem[];
     volatile float *stat_shared = &smem[0];
@@ -413,8 +403,10 @@ __global__ void ker_coh_max_and_chisq
         nullstream_max = 0.0f;
         sky_idx = 0;
 
-        for (int ipix = threadIdx.x; ipix < num_sky_directions; ipix += blockDim.x)
+        for (int seed_pix = threadIdx.x; seed_pix < num_sky_directions/NSKY_REDUCE_RATIO; seed_pix += blockDim.x)
         {
+            ipix = seed_pix * NSKY_REDUCE_RATIO;
+
             snr_tmp = 0.0;
             al_all = 0.0;
             // matrix u is stored in column order
@@ -451,12 +443,6 @@ __global__ void ker_coh_max_and_chisq
                         dk[1].re, dk[1].im, dk[2].re, dk[2].im, snr_max);
             }
 #endif
-
-            if (output_skymap)
-            {
-                cohsnr_skymap[peak_cur * num_sky_directions + ipix] = snr_tmp;
-                nullsnr_skymap[peak_cur * num_sky_directions + ipix] = al_all;
-            }
 
             stat_tmp = snr_tmp - 0.0;
             if (stat_tmp > stat_max)
@@ -616,14 +602,14 @@ __global__ void ker_coh_max_and_chisq
             //trial_offset = rand()% rand_range + 1;
             trial_offset = itrial * trial_sample_inv;
             output_offset = peak_cur + (itrial - 1)* max_npeak;
-        for (int seed_pix = srcLane; seed_pix < num_sky_directions/BACKGROUND_NSKY_RATIO; seed_pix += WARP_SIZE)
+        for (int seed_pix = srcLane; seed_pix < num_sky_directions/NSKY_REDUCE_RATIO; seed_pix += WARP_SIZE)
         {
             snr_tmp = 0.0;
             al_all = 0.0;
             // matrix u is stored in column order
             // mu = u_map + nifo * nifo * i;            
 
-            ipix = (seed_pix * BACKGROUND_NSKY_RATIO) + (itrial & (BACKGROUND_NSKY_RATIO - 1));
+            ipix = (seed_pix * NSKY_REDUCE_RATIO) + (itrial & (NSKY_REDUCE_RATIO - 1));
             for (int j = 0; j < nifo; ++j)
             {
                 /* this is a simplified algorithm to get map_idx */
@@ -913,8 +899,27 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 			cudaMemcpyDeviceToHost,
 			stream));
 
-	if(output_skymap)
+	if(output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR)
 	{
+		ker_coh_skymap<<<npeak, threads, sharedmem, stream>>>(
+									pklist->d_cohsnr_skymap,
+									pklist->d_nullsnr_skymap,
+									state->dd_snglsnr,
+									iifo,	
+									state->nifo,
+									pklist->d_peak_pos,
+									pklist->npeak[0],
+									state->d_U_map[gps_idx],
+									state->d_diff_map[gps_idx],
+									state->npix,
+									state->max_npeak,
+									state->snglsnr_len,
+									state->snglsnr_start_exe,
+									state->dt,
+									state->ntmplt
+									);
+
+
 		CUDA_CHECK(cudaMemcpyAsync(pklist->cohsnr_skymap,
 			pklist->d_cohsnr_skymap,
 			sizeof(float) * state->max_npeak * state->npix * 2,
