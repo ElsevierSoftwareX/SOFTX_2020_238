@@ -54,7 +54,7 @@ import scipy
 import sys
 
 
-from gstlal import spawaveform
+#from gstlal import spawaveform
 import lal
 import lalsimulation as lalsim
 

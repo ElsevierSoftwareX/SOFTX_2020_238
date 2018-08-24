@@ -46,6 +46,7 @@ import sys
 import lalsimulation as lalsim
 
 from gstlal import chirptime
+import lal
 from lal import MSUN_SI
 
 
@@ -106,7 +107,7 @@ def add_quadrature_phase(fseries, n):
 	# prepare output frequency series
 	#
 
-	out_fseries = laltypes.COMPLEX16FrequencySeries(
+	out_fseries = lal.CreateCOMPLEX16FrequencySeries(
 		name = fseries.name,
 		epoch = fseries.epoch,
 		f0 = fseries.f0,	# caution: only 0 is supported
@@ -182,8 +183,8 @@ def normalized_autocorrelation(fseries, revplan):
 		length = len(data)
 	)
 	fseries.data.data = data * numpy.conj(data)
-	tseries = laltypes.COMPLEX16TimeSeries(
-		data = numpy.empty((len(data),), dtype = "cdouble")
+	tseries = lal.CreateCOMPLEX16TimeSeries(
+		length = len(data)
 	)
 	lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 	data = tseries.data

@@ -18,6 +18,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import os
+import sys
 import numpy
 import scipy
 import cmath
@@ -31,20 +32,18 @@ import tempfile
 import lal
 import lalsimulation
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
-from pylal import datatypes as laltypes
-from pylal import lalfft
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 from gstlal import cbc_template_fir
 from gstlal import chirptime
 from gstlal import templates
 import random
 import pdb
-from gstlal.optimize_mf import OptimizerIIR
+from gstlal.spiirbank.optimize_mf import OptimizerIIR
 
 Attributes = ligolw.sax.xmlreader.AttributesImpl
 
 # will be DEPRECATED once the C SPIIR coefficient code be swig binded
-from pylal import spawaveform
+from gstlal.spiirbank import spiir_decomp as spawaveform
 
 
 # FIXME:  require calling code to provide the content handler
@@ -62,7 +61,12 @@ lsctables.use_in(DefaultContentHandler)
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
     pass
 
-    
+def tukeywindow(data, samps = 200.):
+    assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
+    tp = float(samps) / len(data)
+    return lal.CreateTukeyREAL8Window(len(data), tp).data.data
+
+
 # Calculate the phase and amplitude from hc and hp
 # Unwind the phase (this is slow - consider C extension or using SWIG
 # if speed is needed)
@@ -243,7 +247,7 @@ def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
     and use this waveform to calculate a autocorrelation function.
 
 
-    from pylal import datatypes as laltypes
+    from pylal import datatypes as lal
     from pylal import lalfft
     lalwhiten_amp, lalwhiten_phase = lalwhiten(psd, hp, working_length, working_duration, sampleRate, length_max)
     lalwhiten_wave = lalwhiten_amp * numpy.exp(1j * lalwhiten_phase)
@@ -251,9 +255,14 @@ def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
         auto_h[-len(lalwhiten_wave):] = lalwhiten_wave
     auto_bank_new = normalized_crosscorr(auto_h, auto_h, autocorrelation_length)
     """
-    revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_state["working_length"], 1)
-    tseries = laltypes.COMPLEX16TimeSeries(
-        data = numpy.zeros((working_state["working_length"],), dtype = "cdouble")
+    revplan = lal.CreateReverseCOMPLEX16FFTPlan(working_state["working_length"], 1)
+    tseries = lal.CreateCOMPLEX16TimeSeries(
+        name = "timeseries",
+        epoch = lal.LIGOTimeGPS(0.),
+        f0 = 0.,
+        deltaT = 1.0 / sampleRate,
+        length = working_state["working_length"],
+        sampleUnits = lal.Unit("strain")
     )
 
 
@@ -262,17 +271,17 @@ def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
     #
 
     if psd is not None:
-        lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
+        lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
     fseries = templates.add_quadrature_phase(fseries, working_state["working_length"])
 
     #
     # transform template to time domain
     #
 
-    lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+    lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
 
-    data = tseries.data
+    data = tseries.data.data
 
     # FIXME: need to condition for IMR wave templates
     data *= tukeywindow(data, samps = 32)
@@ -326,17 +335,23 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     if verbose:
         logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
         logging.info("working_f_low %f, working_duration %f, flower %f, sampleRate %f" % (working_f_low, working_duration, f_low, sampleRate))
-    revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
-    fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(working_length, 1)
-    tseries = laltypes.COMPLEX16TimeSeries(
-        data = numpy.zeros((working_length,), dtype = "cdouble")
+    revplan = lal.CreateReverseCOMPLEX16FFTPlan(working_length, 1)
+    fwdplan = lal.CreateForwardREAL8FFTPlan(working_length, 1)
+    tseries = lal.CreateCOMPLEX16TimeSeries(
+        name = "timeseries",
+        epoch = lal.LIGOTimeGPS(0.),
+        f0 = 0.,
+        deltaT = 1.0 / sample_rate_max,
+        length = working_length,
+        sampleUnits = lal.Unit("strain")
     )
-    fworkspace = laltypes.COMPLEX16FrequencySeries(
+    fworkspace = lal.CreateCOMPLEX16FrequencySeries(
         name = "template",
-        epoch = laltypes.LIGOTimeGPS(0),
+        epoch = lal.LIGOTimeGPS(0),
         f0 = 0.0,
         deltaF = 1.0 / working_duration,
-        data = numpy.zeros((working_length//2 + 1,), dtype = "cdouble")
+        length = working_length // 2 + 1,
+        sampleUnits = lal.Unit("strain s")
     )
 
     # Check parity of autocorrelation length
@@ -373,7 +388,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     #
 
     if psd is not None:
-        lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
+        lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
     fseries = templates.add_quadrature_phase(fseries, working_length)
 
     #
@@ -388,9 +403,9 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     # transform template to time domain
     #
 
-    lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+    lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
-    data = tseries.data
+    data = tseries.data.data
     epoch_time = fseries.epoch.seconds + fseries.epoch.nanoseconds*1.e-9
     #
     # extract the portion to be used for filtering
@@ -405,7 +420,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     if approximant in templates.gstlal_IMR_approximants:
         data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
         # record the new end times for the waveforms (since we performed the shifts)
-        row.end = laltypes.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
+        row.end = lal.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
     else:
         data *= tukeywindow(data, samps = 32)
 
@@ -562,7 +577,7 @@ def gen_lalsim_waveform(row, flower, sampleRate):
     return hp, hc
 
 
-def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = False):
+def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, snr_cut = 0.998, is_frequency_whiten = 1, verbose = False):
     """ Generates whitened waveform from given parameters and PSD, then returns the amplitude and the phase.
     
     Parameters
@@ -601,13 +616,14 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
     """
 
     # prepare the working space for FD whitening
-    fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(working_state["working_length"], 1)
-    fworkspace = laltypes.COMPLEX16FrequencySeries(
+    fwdplan = lal.CreateForwardREAL8FFTPlan(working_state["working_length"], 1)
+    fworkspace = lal.CreateCOMPLEX16FrequencySeries(
         name = "template",
-        epoch = laltypes.LIGOTimeGPS(0),
+        epoch = lal.LIGOTimeGPS(0),
         f0 = 0.0,
         deltaF = 1.0 / working_state["working_duration"],
-        data = numpy.zeros((working_state["working_length"]//2 + 1,), dtype = "cdouble")
+        length = (working_state["working_length"]//2 + 1),
+        sampleUnits = lal.Unit("strain s")
     )
 
 
@@ -632,26 +648,29 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
         tmptdata[-hplus.data.length:] = hplus.data.data
     
     
-        tmptseries = laltypes.REAL8TimeSeries(
+        tmptseries = lal.CreateREAL8TimeSeries(
             name = "template",
-            epoch = laltypes.LIGOTimeGPS(0),
+            epoch = lal.LIGOTimeGPS(0),
             f0 = 0.0,
             deltaT = 1.0 / sampleRate,
-            sampleUnits = laltypes.LALUnit("strain"),
-            data = tmptdata
+            sampleUnits = lal.Unit("strain"),
+            length = len(tmptdata)
         )
+        tmptseries.data.data = tmptdata
             
-        lalfft.XLALREAL8TimeFreqFFT(fworkspace, tmptseries, fwdplan)
+        lal.CreateREAL8TimeFreqFFT(fworkspace, tmptseries, fwdplan)
         tmpfseries = numpy.copy(fworkspace.data)
     
-        fseries = laltypes.COMPLEX16FrequencySeries(
+        fseries = lal.CreateCOMPLEX16FrequencySeries(
             name = "template",
-            epoch = laltypes.LIGOTimeGPS(0),
+            epoch = lal.LIGOTimeGPS(0),
             f0 = 0.0,
             deltaF = 1.0 / working_state["working_duration"],
-            sampleUnits = laltypes.LALUnit("strain"),
-            data = tmpfseries 
+            sampleUnits = lal.Unit("strain"),
+            length = len(tmpfseries)
         )
+        fseries.data.data = tmpfseries
+
         # whiten the FD waveform and transform it back to TD 
         data_full = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
         if verbose:
@@ -661,43 +680,13 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
         # Need to transform them first into time domain to perform following whitening
         print >> sys.stderr, "Time domain whitening not supported"
         sys.exit()
- 
-        amp, phase = calc_amp_phase(hc.data.data, hp.data.data)
-        amp = amp /numpy.sqrt(numpy.dot(amp,numpy.conj(amp))); 
- 
-        f = numpy.gradient(phase)/(2.0*numpy.pi * (1.0/sampleRate))
-        cleanFreq(f,flower)
 
 
-        # The whitening in frequency domain
-        # can also be achieved in time domain,
-        # when the frequency evolution is monotonic.
-        # But the following are a bit obsolete.
+    cumag = numpy.cumsum(numpy.multiply(data_full,numpy.conj(data_full)))
+    cumag = cumag/cumag[-1]
+    filter_start = numpy.argmax(cumag > 1-snr_cut)
 
-        if psd is not None:
-            fsampling = numpy.arange(len(psd.data)) * psd.deltaF
-                # FIXME: which interpolation method should we choose,
-                # currently we are using linear interpolation, splrep 
-                # will generate negative values at the edge of psd. pchip is too slow
-                #psd_interp = interpolate.splrep(fsampling, psd.data)
-                #newpsd = interpolate.splev(f, psd_interp)
-                #newpsd = interpolate.pchip_interpolate(fsampling, psd.data, f)
-            psd_interp = interpolate.interp1d(fsampling, psd.data)
-            newpsd = psd_interp(f)
-            amp[0:len(f)] /= newpsd ** 0.5
-
-        return amp, phase
-
-    #
-    # extract the portion to be used for filtering
-    #
-    hp, hc = gen_lalsim_waveform(row, flower, sampleRate)
-    filter_len = min(working_state["length_max"], 1.0 * len(hp.data.data))
-    # the time domain whitened data is chosen to be the same length as the original
-    # template. The length_max from tchirp and the working_length are too
-    # long, may cause too many spiir filters. 
-    # FIXME: should we allow a little more time for low-frequency boundary?
-    data = data_full[-filter_len:]
+    data = data_full[filter_start:]
     amp_lalwhiten, phase_lalwhiten = calc_amp_phase(numpy.imag(data), numpy.real(data))
 
     if verbose:
@@ -862,7 +851,7 @@ class Bank(object):
                 
             fFinal = row.f_final
 
-            amp, phase, data, data_full = gen_whitened_amp_phase(psd, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
+            amp, phase, data, data_full = gen_whitened_amp_phase(psd, 'IMRPhenomB', waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
             
             iir_type_flag = 1
 	    nround = 1
@@ -1034,25 +1023,25 @@ class Bank(object):
 
         root.appendChild(new_sngl_table)
 
-        root.appendChild(param.new_param('template_bank_filename', types.FromPyType[str], self.template_bank_filename))
-        root.appendChild(param.new_param('sample_rate', types.FromPyType[str], sample_rates_array_to_str(self.sample_rates)))
-        root.appendChild(param.new_param('flower', types.FromPyType[float], self.flower))
-        root.appendChild(param.new_param('epsilon', types.FromPyType[float], self.epsilon))
-        root.appendChild(param.new_param('alpha', types.FromPyType[float], self.alpha))
-        root.appendChild(param.new_param('beta', types.FromPyType[float], self.beta))
+        root.appendChild(param.Param.build('template_bank_filename', types.FromPyType[str], self.template_bank_filename))
+        root.appendChild(param.Param.build('sample_rate', types.FromPyType[str], sample_rates_array_to_str(self.sample_rates)))
+        root.appendChild(param.Param.build('flower', types.FromPyType[float], self.flower))
+        root.appendChild(param.Param.build('epsilon', types.FromPyType[float], self.epsilon))
+        root.appendChild(param.Param.build('alpha', types.FromPyType[float], self.alpha))
+        root.appendChild(param.Param.build('beta', types.FromPyType[float], self.beta))
 
         # FIXME:  ligolw format now supports complex-valued data
-        root.appendChild(array.from_array('autocorrelation_bank_real', self.autocorrelation_bank.real))
-        root.appendChild(array.from_array('autocorrelation_bank_imag', self.autocorrelation_bank.imag))
-        root.appendChild(array.from_array('autocorrelation_mask', self.autocorrelation_mask))
-        root.appendChild(array.from_array('sigmasq', numpy.array(self.sigmasq)))
-        root.appendChild(array.from_array('matches', numpy.array(self.matches)))
+        root.appendChild(array.Array.build('autocorrelation_bank_real', self.autocorrelation_bank.real))
+        root.appendChild(array.Array.build('autocorrelation_bank_imag', self.autocorrelation_bank.imag))
+        root.appendChild(array.Array.build('autocorrelation_mask', self.autocorrelation_mask))
+        root.appendChild(array.Array.build('sigmasq', numpy.array(self.sigmasq)))
+        root.appendChild(array.Array.build('matches', numpy.array(self.matches)))
 
         # put the SPIIR coeffs in
         for rate in self.A.keys():
-            root.appendChild(array.from_array('a_%d' % (rate), repack_complex_array_to_real(self.A[rate])))
-            root.appendChild(array.from_array('b_%d' % (rate), repack_complex_array_to_real(self.B[rate])))
-            root.appendChild(array.from_array('d_%d' % (rate), self.D[rate]))
+            root.appendChild(array.Array.build('a_%d' % (rate), repack_complex_array_to_real(self.A[rate])))
+            root.appendChild(array.Array.build('b_%d' % (rate), repack_complex_array_to_real(self.B[rate])))
+            root.appendChild(array.Array.build('d_%d' % (rate), self.D[rate]))
 
         # add top level LIGO_LW to document
         xmldoc.appendChild(lw)

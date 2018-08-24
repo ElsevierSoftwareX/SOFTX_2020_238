@@ -48,7 +48,7 @@ param.use_in(ligolw.LIGOLWContentHandler)
 
 from glue.ligolw import utils, lsctables
 from lal.series import read_psd_xmldoc
-from gstlal.cbc_template_iir import Bank
+from gstlal.spiirbank.cbc_template_iir import Bank
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
