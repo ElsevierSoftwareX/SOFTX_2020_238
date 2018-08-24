@@ -47,7 +47,7 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 
 from glue.ligolw import utils, lsctables
-from pylal.series import read_psd_xmldoc
+from lal.series import read_psd_xmldoc
 from gstlal.cbc_template_iir import Bank
 
 parser = OptionParser(description = __doc__)

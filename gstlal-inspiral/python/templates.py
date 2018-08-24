@@ -43,10 +43,8 @@ import numpy
 import math
 
 import sys
-from pylal import datatypes as laltypes
-from pylal import lalfft
-from pylal import spawaveform
 import lalsimulation as lalsim
+
 from gstlal import chirptime
 from lal import MSUN_SI
 
@@ -88,18 +86,6 @@ def add_quadrature_phase(fseries, n):
 	number of samples in the original time series.
 	"""
 	#
-	# prepare output frequency series
-	#
-
-	out_fseries = laltypes.COMPLEX16FrequencySeries(
-		name = fseries.name,
-		epoch = fseries.epoch,
-		f0 = fseries.f0,	# caution: only 0 is supported
-		deltaF = fseries.deltaF,
-		sampleUnits = fseries.sampleUnits
-	)
-
-	#
 	# positive frequencies include Nyquist if n is even
 	#
 
@@ -109,16 +95,26 @@ def add_quadrature_phase(fseries, n):
 	# shuffle frequency bins
 	#
 
-	positive_frequencies = fseries.data
+	positive_frequencies = numpy.array(fseries.data.data)
 	positive_frequencies[0] = 0	# set DC to zero
-	if have_nyquist:
-		positive_frequencies[-1] = 0	# set Nyquist to 0
 	zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
 	if have_nyquist:
 		# complex transform never includes positive Nyquist
 		positive_frequencies = positive_frequencies[:-1]
 
-	out_fseries.data = numpy.concatenate((zeros, 2 * positive_frequencies[1:]))
+	#
+	# prepare output frequency series
+	#
+
+	out_fseries = laltypes.COMPLEX16FrequencySeries(
+		name = fseries.name,
+		epoch = fseries.epoch,
+		f0 = fseries.f0,	# caution: only 0 is supported
+		deltaF = fseries.deltaF,
+		sampleUnits = fseries.sampleUnits,
+		length = len(zeros) + len(positive_frequencies) - 1
+	)
+	out_fseries.data.data = numpy.concatenate((zeros, 2 * positive_frequencies[1:]))
 
 	return out_fseries
 
@@ -143,9 +139,9 @@ class QuadraturePhase(object):
 		be processed.  This is used to pre-allocate work space.
 		"""
 		self.n = n
-		self.fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(n, 1)
-		self.revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(n, 1)
-		self.in_fseries = lalfft.prepare_fseries_for_real8tseries(laltypes.REAL8TimeSeries(deltaT = 1.0, data = numpy.zeros((n,), dtype = "double")))
+		self.fwdplan = lal.CreateForwardREAL8FFTPlan(n, 1)
+		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(n, 1)
+		self.in_fseries = lal.prepare_fseries_for_real8tseries(lal.CreateREAL8TimeSeries(deltaT = 1.0, length = n))
 
 	def __call__(self, tseries):
 		"""
@@ -159,14 +155,14 @@ class QuadraturePhase(object):
 		# transform to frequency series
 		#
 
-		lalfft.XLALREAL8TimeFreqFFT(self.in_fseries, tseries, self.fwdplan)
+		lal.REAL8TimeFreqFFT(self.in_fseries, tseries, self.fwdplan)
 
 		#
 		# transform to complex time series
 		#
 
-		tseries = laltypes.COMPLEX16TimeSeries(data = numpy.zeros((self.n,), dtype = "cdouble"))
-		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, add_quadrature_phase(self.in_fseries, self.n), self.revplan)
+		tseries = lal.CreateCOMPLEX16TimeSeries(length = self.n)
+		lal.COMPLEX16FreqTimeFFT(tseries, add_quadrature_phase(self.in_fseries, self.n), self.revplan)
 
 		#
 		# done
@@ -176,15 +172,16 @@ class QuadraturePhase(object):
 
 
 def normalized_autocorrelation(fseries, revplan):
-	data = fseries.data
-	fseries = laltypes.COMPLEX16FrequencySeries(
+	data = fseries.data.data
+	fseries = lal.CreateCOMPLEX16FrequencySeries(
 		name = fseries.name,
 		epoch = fseries.epoch,
 		f0 = fseries.f0,
 		deltaF = fseries.deltaF,
 		sampleUnits = fseries.sampleUnits,
-		data = data * numpy.conj(data)
+		length = len(data)
 	)
+	fseries.data.data = data * numpy.conj(data)
 	tseries = laltypes.COMPLEX16TimeSeries(
 		data = numpy.empty((len(data),), dtype = "cdouble")
 	)

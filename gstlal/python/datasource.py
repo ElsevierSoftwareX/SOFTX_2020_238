@@ -67,7 +67,6 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue import segments
 import lal
-from lal import LIGOTimeGPS
 
 
 ## #### ContentHandler
@@ -293,8 +292,8 @@ def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 	Create a new seek event, i.e., gst.event_new_seek()  for a given
 	gps_start_time and gps_end_time, with optional flags.  
 
-	@param gps_start_time start time as LIGOTimeGPS, double or float
-	@param gps_end_time start time as LIGOTimeGPS, double or float
+	@param gps_start_time start time as lal.LIGOTimeGPS, double or float
+	@param gps_end_time start time as lal.LIGOTimeGPS, double or float
 	"""
 	def seek_args_for_gps(gps_time):
 		"""!
@@ -372,17 +371,17 @@ class GWDataSourceInfo(object):
 			if options.data_source in self.live_sources:
 				raise ValueError("cannot set --gps-start-time or --gps-end-time with %s" % " or ".join("--data-source=%s" % src for src in sorted(self.live_sources)))
 			try:
-				start = LIGOTimeGPS(options.gps_start_time)
+				start = lal.LIGOTimeGPS(options.gps_start_time)
 			except ValueError:
 				raise ValueError("invalid --gps-start-time '%s'" % options.gps_start_time)
 			try:
-				end = LIGOTimeGPS(options.gps_end_time)
+				end = lal.LIGOTimeGPS(options.gps_end_time)
 			except ValueError:
 				raise ValueError("invalid --gps-end-time '%s'" % options.gps_end_time)
 			if start >= end:
 				raise ValueError("--gps-start-time must be < --gps-end-time: %s < %s" % (options.gps_start_time, options.gps_end_time))
 			## Segment from gps start and stop time if given
-			self.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
+			self.seg = segments.segment(lal.LIGOTimeGPS(options.gps_start_time), lal.LIGOTimeGPS(options.gps_end_time))
 			## Seek event from the gps start and stop time if given
 			self.seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, self.seg[0].ns(), gst.SEEK_TYPE_SET, self.seg[1].ns())
  

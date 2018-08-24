@@ -50,7 +50,6 @@ import gst
 from glue.ligolw import utils as ligolw_utils
 import lal
 import lal.series
-from lal import LIGOTimeGPS
 import lalsimulation
 
 
@@ -274,7 +273,7 @@ class HorizonDistance(object):
 		>>> horizon_distance = HorizonDistance(10., 1024., 1./32., 1.4, 1.4)
 		>>> # populate a PSD for testing
 		>>> import lal, lalsimulation
-		>>> psd = lal.CreateREAL8FrequencySeries("psd", lal.LIGOTimeGPS(0), 0., 1./32., lal.Unit("strain^2 s"), horizon_distance.model.data.length)
+		>>> psd = lal.CreateREAL8FrequencySeries("psd", lal.lal.LIGOTimeGPS(0), 0., 1./32., lal.Unit("strain^2 s"), horizon_distance.model.data.length)
 		>>> lalsimulation.SimNoisePSDaLIGODesignSensitivityP1200087(psd, 0.)
 		0
 		>>> # compute horizon distance
@@ -336,7 +335,7 @@ class HorizonDistance(object):
 
 		self.model = lal.CreateREAL8FrequencySeries(
 			name = "signal spectrum",
-			epoch = LIGOTimeGPS(0),
+			epoch = lal.LIGOTimeGPS(0),
 			f0 = hp.f0,
 			deltaF = hp.deltaF,
 			sampleUnits = hp.sampleUnits * hp.sampleUnits,
@@ -514,7 +513,7 @@ class PSDFirKernel(object):
 
 		kernel_fseries = lal.CreateCOMPLEX16FrequencySeries(
 			name = "double sided psd",
-			epoch = LIGOTimeGPS(0),
+			epoch = lal.LIGOTimeGPS(0),
 			f0 = 0.0,
 			deltaF = psd.deltaF,
 			length = len(data),
@@ -523,7 +522,7 @@ class PSDFirKernel(object):
 
 		kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "timeseries of whitening kernel",
-			epoch = LIGOTimeGPS(0.),
+			epoch = lal.LIGOTimeGPS(0.),
 			f0 = 0.,
 			deltaT = 1.0 / sample_rate,
 			length = len(data),
@@ -591,7 +590,7 @@ class PSDFirKernel(object):
 
 		kernel_tseries = lal.CreateCOMPLEX16TimeSeries(
 			name = "timeseries of whitening kernel",
-			epoch = LIGOTimeGPS(0.),
+			epoch = lal.LIGOTimeGPS(0.),
 			f0 = 0.,
 			deltaT = deltaT,
 			length = working_length,
@@ -601,7 +600,7 @@ class PSDFirKernel(object):
 
 		absX = lal.CreateCOMPLEX16FrequencySeries(
 			name = "absX",
-			epoch = LIGOTimeGPS(0),
+			epoch = lal.LIGOTimeGPS(0),
 			f0 = 0.0,
 			deltaF = deltaF,
 			length = working_length,
@@ -610,7 +609,7 @@ class PSDFirKernel(object):
 
 		logabsX = lal.CreateCOMPLEX16FrequencySeries(
 			name = "absX",
-			epoch = LIGOTimeGPS(0),
+			epoch = lal.LIGOTimeGPS(0),
 			f0 = 0.0,
 			deltaF = deltaF,
 			length = working_length,
@@ -619,7 +618,7 @@ class PSDFirKernel(object):
 
 		cepstrum = lal.CreateCOMPLEX16TimeSeries(
 			name = "cepstrum",
-			epoch = LIGOTimeGPS(0.),
+			epoch = lal.LIGOTimeGPS(0.),
 			f0 = 0.,
 			deltaT = deltaT,
 			length = working_length,
@@ -628,7 +627,7 @@ class PSDFirKernel(object):
 
 		theta = lal.CreateCOMPLEX16FrequencySeries(
 			name = "theta",
-			epoch = LIGOTimeGPS(0),
+			epoch = lal.LIGOTimeGPS(0),
 			f0 = 0.0,
 			deltaF = deltaF,
 			length = working_length,
@@ -637,7 +636,7 @@ class PSDFirKernel(object):
 
 		min_phase_kernel = lal.CreateCOMPLEX16TimeSeries(
 			name = "min phase kernel",
-			epoch = LIGOTimeGPS(0.),
+			epoch = lal.LIGOTimeGPS(0.),
 			f0 = 0.,
 			deltaT = deltaT,
 			length = working_length,
