@@ -186,7 +186,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		# is the same for all instruments.
 		#
 
-		reference = min(events, key = lambda event: event.end)
+		reference = min(events, key = lambda event: event.ifo)
 		ref_end, ref_offset = reference.end, offsetvector[reference.ifo]
 		# FIXME:  use a proper ID column when one is available
 		template_id = reference.Gamma0
