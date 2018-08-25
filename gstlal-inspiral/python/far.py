@@ -215,10 +215,10 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 			return self(
 				segments = segs,
 				snrs = dict((event.ifo, event.snr) for event in events),
+				chi2s_over_snr2s = dict((event.ifo, event.chisq / event.snr**2.) for event in events),
 				phase = dict((event.ifo, event.coa_phase) for event in events),
 				dt = dict((event.ifo, float(event.end - ref_end) + offsetvector[event.ifo] - ref_offset) for event in events),
-				template_id = template_id,
-				**dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2.)) for event in events)
+				template_id = template_id
 			)
 		except (ValueError, AssertionError) as e:
 			raise type(e)("%s: event IDs %s, offsets %s" % (str(e), ", ".join(sorted(str(event.event_id) for event in events)), str(offsetvector)))

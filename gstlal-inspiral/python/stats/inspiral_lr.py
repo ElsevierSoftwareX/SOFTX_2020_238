@@ -273,7 +273,7 @@ class LnSignalDensity(LnLRDensity):
 
 		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 
-	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
+	def __call__(self, segments, snrs, chi2s_over_snr2s, phase, dt, template_id):
 		assert frozenset(segments) == self.instruments
 		if len(snrs) < self.min_instruments:
 			return float("-inf")
@@ -328,7 +328,7 @@ class LnSignalDensity(LnLRDensity):
 		# evalute the (snr, \chi^2 | snr) PDFs (same for all
 		# instruments)
 		interp = self.interps["snr_chi"]
-		return lnP + sum(interp(*value) for name, value in kwargs.items() if name.endswith("_snr_chi"))
+		return lnP + sum(interp(snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
 	def __iadd__(self, other):
 		super(LnSignalDensity, self).__iadd__(other)
@@ -525,7 +525,7 @@ class DatalessLnSignalDensity(LnSignalDensity):
 		# so we're ready to go!
 		self.add_signal_model()
 
-	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
+	def __call__(self, segments, snrs, chi2s_over_snr2s, phase, dt, template_id):
 		# evaluate P(t) \propto number of templates
 		lnP = math.log(len(self.template_ids))
 
@@ -553,7 +553,7 @@ class DatalessLnSignalDensity(LnSignalDensity):
 		# evalute the (snr, \chi^2 | snr) PDFs (same for all
 		# instruments)
 		interp = self.interps["snr_chi"]
-		return lnP + sum(interp(*value) for name, value in kwargs.items() if name.endswith("_snr_chi"))
+		return lnP + sum(interp(snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
 	def __iadd__(self, other):
 		raise NotImplementedError
@@ -663,7 +663,7 @@ class LnNoiseDensity(LnLRDensity):
 	def segmentlists(self):
 		return self.triggerrates.segmentlistdict()
 
-	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
+	def __call__(self, segments, snrs, chi2s_over_snr2s, phase, dt, template_id):
 		assert frozenset(segments) == self.instruments
 		if len(snrs) < self.min_instruments:
 			return float("-inf")
@@ -700,7 +700,7 @@ class LnNoiseDensity(LnLRDensity):
 
 		# evaluate the rest
 		interps = self.interps
-		return lnP + sum(interps[name](*value) for name, value in kwargs.items() if name in interps)
+		return lnP + sum(interps["%s_snr_chi" % instrument](snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
 	def __iadd__(self, other):
 		super(LnNoiseDensity, self).__iadd__(other)
@@ -803,9 +803,6 @@ class LnNoiseDensity(LnLRDensity):
 		"""
 		snr_slope = 0.8 / len(self.instruments)**3
 
-		# evaluate dt and dphi parameters
-		# NOTE: uniform and normalized so that the log should be zero, but there is no point in doing that
-		#lnP_dt_dphi = 0
 		snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next) for instrument in self.instruments)
 		t_and_rate_gen = iter(self.triggerrates.random_uniform()).next
 		t_offsets_gen = dict((instruments, self.coinc_rates.plausible_toas(instruments).next) for instruments in self.coinc_rates.all_instrument_combos)
@@ -831,35 +828,38 @@ class LnNoiseDensity(LnLRDensity):
 				continue
 			# to pick instruments, we first pick an integer k
 			# between m = min_instruments and n =
-			# len(instruments) inclusively, then choose than
+			# len(instruments) inclusively, then choose that
 			# many unique names from among the available
 			# instruments.  the probability of the outcome is
 			#
 			# = P(k) * P(selection | k)
 			# = 1 / (n - m + 1) * 1 / nCk
 			#
-			# where nCk = number of k choices possible from a
-			# collection of n things.
+			# where nCk = number of k choices without
+			# replacement from a collection of n things.
 			k = random_randint(self.min_instruments, len(instruments))
 			lnP_instruments = -math.log((len(instruments) - self.min_instruments + 1) * nCk(len(instruments), k))
 			instruments = frozenset(random_sample(instruments, k))
 
 			seq = sum((snrchi2gens[instrument]() for instrument in instruments), ())
-			kwargs = dict(("%s_snr_chi" % instrument, value) for instrument, value in zip(instruments, seq[0::2]))
-			# FIXME: waveform duration hard-coded to 10 s,
-			# generalize
-			kwargs["segments"] = dict.fromkeys(self.instruments, segment(t - 10.0, t))
-			kwargs["snrs"] = dict((instrument, kwargs["%s_snr_chi" % instrument][0]) for instrument in instruments)
-			# FIXME:  add dt to segments?  not self-consistent
-			# if we don't, but doing so screws up the test that
-			# was done to check which instruments are on and
-			# off at "t"
-			kwargs["dt"] = t_offsets_gen[instruments]()
-			kwargs["phase"] = dict((instrument, random_uniform(0., twopi)) for instrument in instruments)
-			# FIXME random_params needs to be given a meaningful
-			# template_id, but for now it is not used in the
-			# likelihood-ratio assignment so we don't care
-			kwargs["template_id"] = random.choice(template_ids)
+			kwargs = {
+				# FIXME: waveform duration hard-coded to
+				# 10 s, generalize
+				"segments": dict.fromkeys(self.instruments, segment(t - 10.0, t)),
+				"snrs": dict((instrument, value[0]) for instrument, value in zip(instruments, seq[0::2])),
+				"chi2s_over_snr2s": dict((instrument, value[1]) for instrument, value in zip(instruments, seq[0::2])),
+				"phase": dict((instrument, random_uniform(0., twopi)) for instrument in instruments),
+				# FIXME:  add dt to segments?  not
+				# self-consistent if we don't, but doing so
+				# screws up the test that was done to check
+				# which instruments are on and off at "t"
+				"dt": t_offsets_gen[instruments](),
+				# FIXME random_params needs to be given a
+				# meaningful template_id, but for now it is
+				# not used in the likelihood-ratio
+				# assignment so we don't care
+				"template_id": random.choice(template_ids)
+			}
 			# NOTE:  I think the result of this sum is, in
 			# fact, correctly normalized, but nothing requires
 			# it to be (only that it be correct up to an
@@ -914,7 +914,7 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 		}
 
 
-	def __call__(self, segments, snrs, phase, dt, template_id, **kwargs):
+	def __call__(self, segments, snrs, chi2s_over_snr2s, phase, dt, template_id):
 		# assume all instruments are on, 1 trigger per second per
 		# template
 		triggers_per_second_per_template = dict.fromkeys(segments, 1.)
@@ -933,9 +933,10 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 		# P(instruments | t, noise)
 		lnP += self.coinc_rates.lnP_instruments(**triggers_per_second_per_template)[frozenset(snrs)]
 
-		# evaluate the SNR, \chi^2 factors
+		# evalute the (snr, \chi^2 | snr) PDFs (same for all
+		# instruments)
 		interp = self.interps["snr_chi"]
-		return lnP + sum(interp(*value) for name, value in kwargs.items() if name.endswith("_snr_chi"))
+		return lnP + sum(interp(snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
 	def random_params(self):
 		# won't work
