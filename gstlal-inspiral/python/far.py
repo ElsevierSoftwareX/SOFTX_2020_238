@@ -90,6 +90,29 @@ from gstlal.stats import inspiral_lr
 #
 
 
+def kwarggeniter(d, min_instruments):
+	d = tuple(sorted(d.items()))
+	return map(dict, itertools.chain(*(itertools.combinations(d, i) for i in range(min_instruments, len(d) + 1))))
+
+
+def kwarggen(segments, snrs, chi2s_over_snr2s, phase, dt, template_id, min_instruments):
+	# segments and template_id held fixed
+	for snrs, chi2s_over_snr2s, phase, dt in zip(
+		kwarggeniter(snrs, min_instruments),
+		kwarggeniter(chi2s_over_snr2s, min_instruments),
+		kwarggeniter(phase, min_instruments),
+		kwarggeniter(dt, min_instruments)
+	):
+		return {
+			"segments": segments,
+			"snrs": snrs,
+			"chi2s_over_snr2s": chi2s_over_snr2s,
+			"phase": phase,
+			"dt": dt,
+			"template_id": template_id
+		}
+
+
 class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	ligo_lw_name_suffix = u"gstlal_inspiral_rankingstat"
 
@@ -112,12 +135,14 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		self.denominator = inspiral_lr.LnNoiseDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 		self.zerolag = inspiral_lr.LnLRDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 
-	def __call__(self, *args, **kwargs):
+	def __call__(self, **kwargs):
 		# fast-path:  network SNR cut
 		if sum(snr**2. for snr in kwargs["snrs"].values()) < self.network_snrsq_threshold:
 			return NegInf
-		# full ln L ranking stat
-		return super(RankingStat, self).__call__(*args, **kwargs)
+		# full ln L ranking stat.  we define the ranking statistic
+		# to be the largest ln L from all allowed subsets of
+		# triggers
+		return max(super(RankingStat, self).__call__(**kwargs) for kwargs in kwarggen(**kwargs))
 
 	@property
 	def template_ids(self):
