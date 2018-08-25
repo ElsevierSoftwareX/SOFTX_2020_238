@@ -104,10 +104,20 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 		pass
 
+	# network SNR threshold
+	network_snrsq_threshold = 7.**2.
+
 	def __init__(self, template_ids = None, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 1, delta_t = 0.005):
 		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 		self.denominator = inspiral_lr.LnNoiseDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 		self.zerolag = inspiral_lr.LnLRDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
+
+	def __call__(self, *args, **kwargs):
+		# fast-path:  network SNR cut
+		if sum(snr**2. for snr in kwargs["snrs"].values()) < self.network_snrsq_threshold:
+			return NegInf
+		# full ln L ranking stat
+		return super(RankingStat, self).__call__(*args, **kwargs)
 
 	@property
 	def template_ids(self):
