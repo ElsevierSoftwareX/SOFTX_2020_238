@@ -65,6 +65,7 @@ SnglTriggerTable;
  */
 GstBuffer *gstlal_sngltrigger_new_buffer_from_peak(struct gstlal_peak_state *input, char *channel_name, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, GstClockTimeDiff, gboolean max_snr);
 
+void add_buffer_from_channel(struct gstlal_peak_state *input, char *channel_name, GstPad *pad, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *snr_matrix_view, int channel, GstBuffer *srcbuf);
 
 G_END_DECLS
 #endif	/* __GSTLAL_SNGLTRIGGER_H__ */
