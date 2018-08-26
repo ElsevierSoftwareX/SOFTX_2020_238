@@ -222,6 +222,7 @@ test:gstlal:
   dependencies:
     - level0:gstlal
   script:
+    - export GSTLAL_FIR_WHITEN=0
     - apt-get install -y python-pytest
     - cd gstlal
     - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py
