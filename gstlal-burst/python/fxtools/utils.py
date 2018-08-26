@@ -309,16 +309,11 @@ class TimeseriesFeatureQueue(object):
 		>>> queue.append(123451, 'channel1', {'trigger_time': 123451.7, 'snr': 6.5})
 		>>> queue.append(123452, 'channel1', {'trigger_time': 123452.4, 'snr': 5.2})
 		>>> # get oldest feature
-		>>> queue.pop()
-		{'timestamp': 123450, 'features': {'channel1': [{'snr': 3.0, 'trigger_time': 123450.3}]}}
-		>>> # flush queue and get rest of features
-		>>> queue.flush()
-		>>> len(queue)
-		2
-		>>> queue.pop()
-		{'timestamp': 123451, 'features': {'channel1': [{'snr': 6.5, 'trigger_time': 123451.7}]}}
-		>>> queue.pop()
-		{'timestamp': 123452, 'features': {'channel1': [{'snr': 5.2, 'trigger_time': 123452.4}]}}
+		>>> row = queue.pop()
+		>>> row['timestamp']
+		123450
+		>>> row['features']['channel1']
+		[{'snr': 3.0, 'trigger_time': 123450.3}]
 
 	"""
 	def __init__(self, channels, columns, **kwargs):
