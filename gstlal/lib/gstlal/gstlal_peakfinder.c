@@ -208,12 +208,14 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 		case GSTLAL_PEAK_FLOAT:
 		{
 			float max_val = 0;
+			float current_val = 0;
 			/* Type casting unsigned int (guint) to int */
 			for(i = 0; i < (int)state->channels; i++)
 			{
-				if(fabsf(state->values.as_float[i]) > max_val)
+				current_val = fabsf(state->values.as_float[i]);
+				if(current_val > max_val)
 				{
-					max_val = fabsf(state->values.as_float[i]);
+					max_val = current_val;
 					out = i;
 				}
 			}
@@ -223,12 +225,14 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 		case GSTLAL_PEAK_DOUBLE:
 		{
 			double max_val = 0;
+			double current_val = 0;
 			/* Type casting unsigned int (guint) to int */
 			for(i = 0; i < (int)state->channels; i++)
 			{
-				if(fabs(state->values.as_double[i]) > max_val)
+				current_val = fabsf(state->values.as_double[i]);
+				if(current_val > max_val)
 				{
-					max_val = fabs(state->values.as_double[i]);
+					max_val = current_val;
 					out = i;
 				}
 			}
@@ -238,12 +242,14 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 		case GSTLAL_PEAK_COMPLEX:
 		{
 			float max_val = 0;
+			float current_val = 0;
 			/* Type casting unsigned int (guint) to int */
 			for(i = 0; i < (int)state->channels; i++)
 			{
-				if(cabsf(state->values.as_float_complex[i]) > max_val)
+				current_val = cabsf(state->values.as_float_complex[i]);
+				if(current_val > max_val)
 				{
-					max_val = cabsf(state->values.as_float_complex[i]);
+					max_val = current_val;
 					out = i;
 				}
 			}
@@ -253,12 +259,14 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 		case GSTLAL_PEAK_DOUBLE_COMPLEX:
 		{
 			double max_val = 0;
+			double current_val = 0;
 			/* Type casting unsigned int (guint) to int */
 			for(i = 0; i < (int)state->channels; i++)
 			{
-				if(cabs(state->values.as_double_complex[i]) > max_val)
+				current_val = cabsf(state->values.as_double_complex[i]);
+				if(current_val > max_val)
 				{
-					max_val = cabs(state->values.as_double_complex[i]);
+					max_val = current_val;
 					out = i;
 				}
 			}
