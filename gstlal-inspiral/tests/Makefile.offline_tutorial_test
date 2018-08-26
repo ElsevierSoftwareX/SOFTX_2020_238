@@ -75,9 +75,9 @@ TIME=time -p
 ##############################
 
 # The GPS start time to generate data
-DATASTART = 999999998
+DATASTART = 999999952
 # The GPS stop time to generate data
-DATASTOP = 1000002070
+DATASTOP = 1000002100
 # Sampling rate of fake data
 SAMPLE_RATE = 4096
 
