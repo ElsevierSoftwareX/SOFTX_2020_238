@@ -185,6 +185,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max(rates))
 	head = pipeparts.mkinterpolator(pipeline, head)
+	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
 
 	#
