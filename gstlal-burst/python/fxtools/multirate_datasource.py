@@ -143,6 +143,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	max_rate = max(rates)
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max_rate)
 	head = pipeparts.mkinterpolator(pipeline, head)
+	head = pipeparts.mkaudioconvert(pipeline, head)
 
 	#
 	# construct whitener.
@@ -167,7 +168,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	# FIR filter for whitening kernel
 	#
 
-	head = pipeparts.mktdwhiten(pipeline, head, kernel = numpy.zeros(1 + max_rate * psd_fft_length, dtype=numpy.float64), latency = 0)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.zeros((1, 1 + max_rate * psd_fft_length), dtype=numpy.float64), block_stride = block_stride, time_domain = False, latency = 0)
 
 	#
 	# compute whitening kernel from PSD
@@ -187,7 +188,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 		kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
 		kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
 		kernel -= numpy.mean(kernel) # subtract DC offset from signal
-		firelem.set_property("kernel", kernel)
+		firelem.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
 	whiten.connect_after("notify::mean-psd", set_fir_psd, head, reference_psd.PSDFirKernel())
 
 	#
