@@ -521,7 +521,7 @@ static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection directi
 	if (direction == GST_PAD_SINK && gst_caps_is_fixed(caps)) {
 		gst_audio_info_from_caps(&info, caps);
 		channels = GST_AUDIO_INFO_CHANNELS(&info);
-		sprintf(capsstr, "audio/x-raw, format= (string) %s, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", GST_AUDIO_INFO_NAME(&info), channels);
+		sprintf(capsstr, "audio/x-raw, format = (string) %s, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d, layout=(string)interleaved, channel-mask=(bitmask)0", GST_AUDIO_INFO_NAME(&info), channels);
 		
 		return gst_caps_from_string(capsstr);
 	}
