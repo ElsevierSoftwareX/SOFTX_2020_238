@@ -514,13 +514,14 @@ static GstCaps* transform_caps (GstBaseTransform *trans, GstPadDirection directi
 	 * ratios.
 	 */
 
-	GstStructure *capsstruct;
 	gint channels;
-	capsstruct = gst_caps_get_structure (caps, 0);
+	GstAudioInfo info;
 	char capsstr[256] = {0};
 
-	if (direction == GST_PAD_SINK && gst_structure_get_int (capsstruct, "channels", &channels)) {
-		sprintf(capsstr, "audio/x-raw, format= (string) {" GST_AUDIO_NE(F32) ", " GST_AUDIO_NE(F64) "}, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", channels);
+	if (direction == GST_PAD_SINK && gst_caps_is_fixed(caps)) {
+		gst_audio_info_from_caps(&info, caps);
+		channels = GST_AUDIO_INFO_CHANNELS(&info);
+		sprintf(capsstr, "audio/x-raw, format= (string) %s, rate = (int) {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}, channels = (int) %d", GST_AUDIO_INFO_NAME(&info), channels);
 		
 		return gst_caps_from_string(capsstr);
 	}
@@ -544,8 +545,7 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "channels", &outchannels), FALSE);
 	g_return_val_if_fail(gst_structure_get_int (outstruct, "rate", &outrate), FALSE);
 
-	GST_CAT_INFO(GST_CAT_DEFAULT, "set caps");
-	GST_CAT_INFO(GST_CAT_DEFAULT, "in channels %d in rate %d out channels %d out rate %d", inchannels, inrate, outchannels, outrate);
+	GST_INFO_OBJECT(element, "in channels %d in rate %d out channels %d out rate %d", inchannels, inrate, outchannels, outrate);
 
 	g_return_val_if_fail(inchannels == outchannels, FALSE);
 
@@ -566,12 +566,12 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 
 	if (element->kernel32) {
 		gsl_vector_float_free(element->kernel32[0]);
-		for (guint i = 1; i < element->outrate / element->inrate; i++)
+		for (int i = 1; i < element->outrate / element->inrate; i++)
 			gsl_vector_float_free(element->kernel32[i]);
 	}
 	if (element->kernel64) {
 		gsl_vector_free(element->kernel64[0]);
-		for (guint i = 1; i < element->outrate / element->inrate; i++)
+		for (int i = 1; i < element->outrate / element->inrate; i++)
 			gsl_vector_free(element->kernel64[i]);
 	}
 	// Upsampling
@@ -612,7 +612,7 @@ static gboolean set_caps (GstBaseTransform * base, GstCaps * incaps, GstCaps * o
 		element->blocksampsin = element->blockstridein + kernel_length(element) - 1;
 		element->blocksampsout = element->blocksampsin * element->outrate / element->inrate;
 	}
-	GST_INFO_OBJECT(element, "blocksampsin %d, blocksampsout %d, blockstridein %d, blockstrideout %d", element->blocksampsin, element->blocksampsout, element->blockstridein, element->blockstrideout);
+	GST_INFO_OBJECT(element, "blocksampsin %d, blocksampsout %d, blockstridein %d, blockstrideout %d unit size %d width %d", element->blocksampsin, element->blocksampsout, element->blockstridein, element->blockstrideout, (int) element->unitsize, element->width);
 
 	if (element->workspace32)
 		gsl_matrix_float_free(element->workspace32);
@@ -859,7 +859,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GST_INFO_OBJECT(element, "%s input_buffer %p spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
 	/* FIXME- clean up this debug statement */
-	/* GST_INFO_OBJECT(element, "pushing %d (bytes) %d (samples) sample buffer into adapter with size %d (samples)", GST_BUFFER_SIZE(inbuf), GST_BUFFER_SIZE(inbuf) / element->unitsize, get_available_samples(element));*/
+	GST_INFO_OBJECT(element, "pushing %d (bytes) %d (samples) sample buffer into adapter with size %d (samples) offset %d offset end %d: unitsize %d adapter->unit-size %d", (int) gst_buffer_get_size(inbuf), (int) gst_buffer_get_size(inbuf) / (int) element->unitsize, (int) get_available_samples(element), (int) GST_BUFFER_OFFSET(inbuf), (int) GST_BUFFER_OFFSET_END(inbuf), (int) element->unitsize, (int) element->adapter->unit_size);
 
 	gst_buffer_ref(inbuf);  /* don't let calling code free buffer */
 	gst_audioadapter_push(element->adapter, inbuf);
@@ -911,8 +911,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 					else
 						gst_audioadapter_flush_samples(element->adapter, element->blockstridein - element->half_length * element->inrate / element->outrate);
 				}
-				else
+				else {
+					GST_INFO_OBJECT(element, "Flushing %d samples : processed %d samples : output length %d samples", element->blockstridein, processed, output_length);
 					gst_audioadapter_flush_samples(element->adapter, element->blockstridein);
+				}
 				output += element->blockstrideout * element->channels;
 				processed += element->blockstrideout;
 			}
@@ -956,8 +958,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 					else
 						gst_audioadapter_flush_samples(element->adapter, element->blockstridein - element->half_length * element->inrate / element->outrate);
 				}
-				else
+				else {
+					GST_INFO_OBJECT(element, "Flushing %d samples : processed %d samples : output length %d samples", element->blockstridein, processed, output_length);
 					gst_audioadapter_flush_samples(element->adapter, element->blockstridein);
+				}
 				output += element->blockstrideout * element->channels;
 				processed += element->blockstrideout;
 			}
@@ -979,10 +983,10 @@ static void finalize(GObject *object)
 	 */
 
 	gsl_vector_float_free(element->kernel32[0]);
-	for (guint i = 1; i < element->outrate / element->inrate; i++)
+	for (int i = 1; i < element->outrate / element->inrate; i++)
 		gsl_vector_float_free(element->kernel32[i]);
 	gsl_vector_free(element->kernel64[0]);
-	for (guint i = 1; i < element->outrate / element->inrate; i++)
+	for (int i = 1; i < element->outrate / element->inrate; i++)
 		gsl_vector_free(element->kernel64[i]);
 	gsl_matrix_float_free(element->workspace32);
 	gsl_matrix_free(element->workspace64);
