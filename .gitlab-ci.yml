@@ -223,6 +223,13 @@ test:gstlal:
     - level0:gstlal
   script:
     - export GSTLAL_FIR_WHITEN=0
+
+    # Get the necessary ROM data:
+    - git lfs install
+    - git clone https://git.ligo.org/lscsoft/lalsuite-extra.git ${GSTLAL_DIR}/lalsuite-extra
+    - export LAL_DATA_PATH=${GSTLAL_DIR}/lalsuite-extra/data/lalsimulation/
+
+    # Run doctests
     - apt-get install -y python-pytest
     - cd gstlal
     - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py
