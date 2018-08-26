@@ -361,7 +361,7 @@ class TimeseriesFeatureQueue(object):
 			self.out_queue.append({'timestamp': oldest_timestamp, 'features': self.in_queue.pop(oldest_timestamp)})
 
 	def _create_buffer(self):
-		return {channel: [None for x in range(self.sample_rate)] for channel in self.channels}
+		return defaultdict(lambda: [None for ii in range(self.sample_rate)])
 
 	def _idx(self, timestamp):
 		return int(numpy.floor((timestamp % 1) * self.sample_rate))
@@ -411,7 +411,7 @@ class ETGFeatureQueue(object):
 			self.out_queue.append({'timestamp': oldest_timestamp, 'features': self.in_queue.pop(oldest_timestamp)})
 
 	def _create_buffer(self):
-		return {channel: [] for channel in self.channels}
+		return defaultdict(list)
 
 	def __len__(self):
 		return len(self.out_queue)

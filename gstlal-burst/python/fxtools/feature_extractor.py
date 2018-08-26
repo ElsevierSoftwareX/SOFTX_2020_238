@@ -113,7 +113,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.persist_cadence = options.persist_cadence
 		self.feature_start_time = options.feature_start_time
 		self.feature_end_time = options.feature_end_time
-		self.columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
+		self.columns = ['trigger_time', 'frequency', 'q', 'snr', 'phase']
 
 		### set up queue to cache features depending on pipeline mode
 		self.feature_mode = options.feature_mode
@@ -286,24 +286,11 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		if not self.frame_segments[self.instrument] or self.frame_segments[self.instrument].intersects_segment(trigger_seg):
 			freq, q, duration = self.waveforms[channel].parameter_grid[rate][row.channel_index]
-			filter_duration = self.waveforms[channel].filter_duration[rate]
-			filter_stop_time = row.end_time + row.end_time_ns * 1e-9
-
-			# set trigger time based on waveform
-			if self.waveform_type == 'sine_gaussian':
-				trigger_time = filter_stop_time
-				start_time = trigger_time - duration / 2.
-				stop_time = trigger_time + duration / 2.
-
-			elif self.waveform_type == 'half_sine_gaussian':
-				trigger_time = filter_stop_time
-				start_time = trigger_time - duration
-				stop_time = trigger_time
+			trigger_time = row.end_time + row.end_time_ns * 1e-9
 
 			# append row for data transfer/saving
 			timestamp = int(numpy.floor(trigger_time))
-			feature_row = {'timestamp':timestamp, 'channel':channel, 'start_time':start_time, 'stop_time':stop_time, 'snr':row.snr,
-			               'trigger_time':trigger_time, 'frequency':freq, 'q':q, 'phase':row.phase, 'sigmasq':row.sigmasq, 'chisq':row.chisq}
+			feature_row = {'channel':channel, 'snr':row.snr, 'trigger_time':trigger_time, 'frequency':freq, 'q':q, 'phase':row.phase}
 			self.feature_queue.append(timestamp, channel, feature_row)
 
 			# save iDQ compatible data
