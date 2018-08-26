@@ -11,7 +11,7 @@ pipemodulesdir = $(pkgpythondir)/pipemodules
 pipemodules_PYTHON = \
 	__init__.py \
 	homomorphic.py \
-	uni_datasource.py \
+	snglrate_datasource.py \
 	postcoh_finalsink.py \
 	spiirparts.py \
 	pipe_macro.py
