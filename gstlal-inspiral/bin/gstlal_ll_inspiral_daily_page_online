@@ -19,5 +19,5 @@
 
 while true ; do
 	gstlal_ll_inspiral_daily_page "$@"
-	sleep 60
+	sleep 3600
 done
