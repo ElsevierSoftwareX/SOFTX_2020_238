@@ -487,9 +487,6 @@ def groups(l, n):
 	for i in xrange(0, len(l), n):
 		yield l[i:i+n]
 
-#for g in groups(jobTags, 10):
-	#urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
-
 margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 
 #
@@ -497,17 +494,15 @@ margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files =
 # job tag, but this should be made to be more flexible
 #
 
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": ["H1_snr_history"]})
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": ["L1_snr_history"]})
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["far_history", "latency_history", "likelihood_history", "snr_history"], "data-type":["max", "min"]})
+snr_routes = ["%s_snr_history" % ifo for ifo in channel_dict]
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": snr_routes})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": ["likelihood_history", "snr_history", "latency_history"]})
+aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["far_history", "latency_history"], "data-type":["min"]})
 
-analysisStateNode = inspiral_pipe.generic_node(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2})
+analysisStateNode = inspiral_pipe.generic_node(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2, "instrument": channel_dict.keys()})
 
 # summary page
 if options.injection_file:
-	# we don't really need these at the moment
-	#for g in groups(inj_jobTags, 10):
-	#	urlsNode = inspiral_pipe.generic_node(urlsJob, dag, [], opts = {}, input_files = {"":" ".join(g)}, output_files = {})
 
 	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":os.getcwd(), "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
@@ -547,15 +542,15 @@ dag.write_cache()
 #
 
 
-cgibinpath = os.path.expanduser("~/public_html/cgi-bin")
-if not os.path.isdir(cgibinpath):
-	os.makedirs(cgibinpath)
-shutil.copy2(dagparts.which('gstlalcbcsummary'), cgibinpath)
-shutil.copy2(dagparts.which('gstlalcbcnode'), cgibinpath)
-query = "id=%s,%s&dir=%s&ifos=%s" % (jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
-# Write the analysis to a special file that the summary page can find by default
-with open(os.path.join(cgibinpath, "gstlalcbc_analysis.txt"), "w") as webfile:
-	webfile.write(query)
-print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], query)
-if inj_jobTags:
-	print >>sys.stderr, "\n\n NOTE! You can monitor the injection analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], inj_jobTags[0], inj_jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
+#cgibinpath = os.path.expanduser("~/public_html/cgi-bin")
+#if not os.path.isdir(cgibinpath):
+#	os.makedirs(cgibinpath)
+#shutil.copy2(dagparts.which('gstlalcbcsummary'), cgibinpath)
+#shutil.copy2(dagparts.which('gstlalcbcnode'), cgibinpath)
+#query = "id=%s,%s&dir=%s&ifos=%s" % (jobTags[0], jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
+## Write the analysis to a special file that the summary page can find by default
+#with open(os.path.join(cgibinpath, "gstlalcbc_analysis.txt"), "w") as webfile:
+#	webfile.write(query)
+#print >>sys.stderr, "\n\n NOTE! You can monitor the analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], query)
+#if inj_jobTags:
+#	print >>sys.stderr, "\n\n NOTE! You can monitor the injection analysis at this url: %s/~%s/cgi-bin/gstlalcbcsummary?id=%s,%s&dir=%s&ifos=%s \n\n" % (inspiral_pipe.webserver_url(), os.environ['USER'], inj_jobTags[0], inj_jobTags[-1], os.getcwd(), ",".join(sorted(bank_cache.keys())))
