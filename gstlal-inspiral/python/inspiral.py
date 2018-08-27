@@ -76,7 +76,9 @@ from glue.ligolw.utils import time_slide as ligolw_time_slide
 import lal
 from lal import LIGOTimeGPS
 from lal import series as lalseries
+import ligo.gracedb.rest
 from ligo import gracedb
+
 
 from gstlal import bottle
 from gstlal import cbc_template_iir
