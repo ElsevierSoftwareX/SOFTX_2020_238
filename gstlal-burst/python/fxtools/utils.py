@@ -63,11 +63,14 @@ def get_dataset(path, base, name = 'data', group = None):
 	except IOError:
 		return fname, []
 
-def create_new_dataset(path, base, data, name = 'data', group = None, tmp = False):
+def create_new_dataset(path, base, data, name = 'data', group = None, tmp = False, metadata = None):
 	"""
 	A function to create a new dataset with data @param data.
 	The data will be stored in an hdf5 file at path @param path with
 	base name @param base.  You can also make a temporary file.
+	If specified, will also save metadata given as key value pairs.
+
+	Returns the filename where the dataset was created.
 	"""
 	if tmp:
 		fname = os.path.join(path, "%s.h5.tmp" % base)
@@ -80,6 +83,13 @@ def create_new_dataset(path, base, data, name = 'data', group = None, tmp = Fals
 
 	# save data to hdf5
 	with h5py.File(fname, 'a') as hfile:
+
+		# set global metadata if specified
+		if metadata and not hfile.attrs:
+			for key, value in metadata.items():
+				hfile.attrs.create(key, value)
+
+		# create dataset
 		if group:
 			if group not in hfile:
 				hfile.create_group(group)
@@ -227,8 +237,10 @@ class HDF5TimeseriesFeatureData(FeatureData):
 	"""
 	def __init__(self, columns, keys, **kwargs):
 		super(HDF5TimeseriesFeatureData, self).__init__(columns, keys = keys, **kwargs)
-		self.cadence = kwargs.pop('cadence')
-		self.sample_rate = kwargs.pop('sample_rate')
+		self.cadence = kwargs['cadence']
+		self.sample_rate = kwargs['sample_rate']
+		self.waveform = kwargs['waveform']
+		self.metadata = dict(**kwargs)
 		self.dtype = [(column, '<f8') for column in self.columns]
 		self.feature_data = {key: numpy.empty((self.cadence * self.sample_rate,), dtype = self.dtype) for key in keys}
 		self.last_save_time = 0
@@ -240,7 +252,7 @@ class HDF5TimeseriesFeatureData(FeatureData):
 		"""
 		name = "%d_%d" % (start_time, self.cadence)
 		for key in self.keys:
-			create_new_dataset(path, base, self.feature_data[key], name=name, group=key, tmp=tmp)
+			create_new_dataset(path, base, self.feature_data[key], name=name, group=key, tmp=tmp, metadata=self.metadata)
 		self.clear()
 
 	def append(self, timestamp, features):
@@ -266,7 +278,9 @@ class HDF5ETGFeatureData(FeatureData):
 	"""
 	def __init__(self, columns, keys, **kwargs):
 		super(HDF5ETGFeatureData, self).__init__(columns, keys = keys, **kwargs)
-		self.cadence = kwargs.pop('cadence')
+		self.cadence = kwargs['cadence']
+		self.waveform = kwargs['waveform']
+		self.metadata = dict(**kwargs)
 		self.dtype = [(column, '<f8') for column in self.columns]
 		self.feature_data = {key: [] for key in keys}
 		self.clear()
@@ -277,7 +291,7 @@ class HDF5ETGFeatureData(FeatureData):
 		"""
 		name = "%d_%d" % (start_time, self.cadence)
 		for key in self.keys:
-			create_new_dataset(path, base, numpy.array(self.feature_data[key], dtype=self.dtype), name=name, group=key, tmp=tmp)
+			create_new_dataset(path, base, numpy.array(self.feature_data[key], dtype=self.dtype), name=name, group=key, tmp=tmp, metadata=self.metadata)
 		self.clear()
 
 	def append(self, timestamp, features):

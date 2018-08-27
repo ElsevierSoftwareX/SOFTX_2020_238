@@ -135,9 +135,9 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.save_format = options.save_format
 		if self.save_format == 'hdf5':
 			if self.feature_mode == 'timeseries':
-				self.fdata = utils.HDF5TimeseriesFeatureData(self.columns, keys = self.keys, cadence = self.cadence, sample_rate = self.sample_rate)
+				self.fdata = utils.HDF5TimeseriesFeatureData(self.columns, keys = self.keys, cadence = self.cadence, sample_rate = self.sample_rate, waveform = self.waveform_type)
 			elif self.feature_mode == 'etg':
-				self.fdata = utils.HDF5ETGFeatureData(self.columns, keys = self.keys, cadence = self.cadence)
+				self.fdata = utils.HDF5ETGFeatureData(self.columns, keys = self.keys, cadence = self.cadence, waveform = self.waveform_type)
 			else:
 				raise KeyError, 'not a valid feature mode option'
 
