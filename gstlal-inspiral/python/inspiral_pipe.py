@@ -387,7 +387,7 @@ if __name__ == "__main__":
 	doctest.testmod()
 
 
-def condor_command_dict_from_opts(opts, defaultdict = {}):
+def condor_command_dict_from_opts(opts, defaultdict = None):
 	"""!
 	A function to turn a list of options into a dictionary of condor commands, e.g.,
 
@@ -399,6 +399,8 @@ def condor_command_dict_from_opts(opts, defaultdict = {}):
 	{'TARGET.Online_CBC_SVD ': '?= True', '+Online_CBC_SVD': 'True'}
 	"""
 
+	if defaultdict is None:
+		defaultdict = {}
 	for o in opts:
 		osplit = o.split("=")
 		k = osplit[0]
