@@ -84,8 +84,8 @@ class page(object):
 
 
 	def write(self, f):
-		gstlal_css_file = open(webvis_dir + 'gstlal.css')
-		gstlal_js_file = open(webvis_dir + 'gstlal.js')
+		gstlal_css_file = open(os.path.join(webvis_dir,'gstlal.css'))
+		gstlal_js_file = open(os.path.join(webvis_dir,'gstlal.js'))
 		gstlal_css = """<style>""" + gstlal_css_file.read() + """</style>"""
 		gstlal_js = """<script>""" + gstlal_js_file.read()  + """</script>"""
 		gstlal_list = [elem("head", [gstlal_css, gstlal_js])]
