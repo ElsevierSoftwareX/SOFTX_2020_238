@@ -156,7 +156,16 @@ def plot_snr_chi_pdf(rankingstat, instrument, which, snr_max, event_snr = None, 
 		axes.set_title(r"$\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise})$ in %s" % instrument)
 	else:
 		raise ValueError(tag)
-	fig.tight_layout(pad = .8)
+	try:
+		fig.tight_layout(pad = .8)
+	except RuntimeError:
+		if tag.lower() in ("signal",):
+			axes.set_title("ln P(chi^2 / SNR^2 | SNR, %s) in %s" % (tag.lower(), instrument))
+		elif tag.lower() in ("noise", "candidates"):
+			axes.set_title("ln P(SNR, chi^2 / SNR^2 | %s) in %s" % (tag.lower(), instrument))
+		elif tag.lower() in ("lr",):
+			axes.set_title("ln P(chi^2 / SNR^2 | SNR, signal) / P(SNR, chi^2 / SNR^2 | noise) in %s" % instrument)
+		fig.tight_layout(pad = .8)
 	return fig
 
 
@@ -402,7 +411,7 @@ def plot_horizon_distance_vs_time(rankingstat, (tlo, thi), masses = (1.4, 1.4), 
 	axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50.))
 
 	yhi = 1.
-	for instrument, history in rankingstat.horizon_history.items():
+	for instrument, history in rankingstat.numerator.horizon_history.items():
 		x = numpy.array([t for t in history.keys() if tlo <= t < thi])
 		y = list(map(history.__getitem__, x))
 		if tref is not None:
