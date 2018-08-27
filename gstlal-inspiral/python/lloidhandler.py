@@ -622,10 +622,14 @@ class Handler(simplehandler.Handler):
 		#
 
 		if self.ranking_stat_input_url is not None:
-			if self.rankingstat.is_healthy():
+			if self.rankingstat.is_healthy(self.verbose):
 				self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
+				if self.verbose:
+					print >>sys.stderr, "ranking statistic assignment ENABLED"
 			else:
 				del self.stream_thinca.rankingstat
+				if self.verbose:
+					print >>sys.stderr, "ranking statistic assignment DISABLED"
 		elif min_log_L is not None:
 			self.stream_thinca.rankingstat = far.DatalessRankingStat(
 				template_ids = rankingstat.template_ids,
@@ -633,6 +637,12 @@ class Handler(simplehandler.Handler):
 				min_instruments = rankingstat.min_instruments,
 				delta_t = rankingstat.delta_t
 			).finish()
+			if self.verbose:
+				print >>sys.stderr, "ranking statistic assignment ENABLED"
+		else:
+			del self.stream_thinca.rankingstat
+			if self.verbose:
+				print >>sys.stderr, "ranking statistic assignment DISABLED"
 
 		#
 		# zero_lag_ranking_stats is a RankingStatPDF object that is
@@ -789,10 +799,14 @@ class Handler(simplehandler.Handler):
 				raise ValueError("\"%s\" does not contain ranking statistic PDFs" % url)
 			if not self.rankingstat.template_ids <= self.rankingstatpdf.template_ids:
 				raise ValueError("\"%s\" is for the wrong templates")
-			if self.rankingstatpdf.is_healthy():
+			if self.rankingstatpdf.is_healthy(self.verbose):
 				self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())
+				if self.verbose:
+					print >>sys.stderr, "false-alarm probability and rate assignment ENABLED"
 			else:
 				self.fapfar = None
+				if self.verbose:
+					print >>sys.stderr, "false-alarm probability and rate assignment DISABLED"
 		else:
 			self.rankingstatpdf = None
 			self.fapfar = None
@@ -908,10 +922,14 @@ class Handler(simplehandler.Handler):
 
 				# update streamthinca's ranking statistic
 				# data
-				if self.rankingstat.is_healthy():
+				if self.rankingstat.is_healthy(self.verbose):
 					self.stream_thinca.rankingstat = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish()
+					if self.verbose:
+						print >>sys.stderr, "ranking statistic assignment ENABLED"
 				else:
 					del self.stream_thinca.rankingstat
+					if self.verbose:
+						print >>sys.stderr, "ranking statistic assignment DISABLED"
 
 				# optionally get updated ranking statistic
 				# PDF data and enable FAP/FAR assignment

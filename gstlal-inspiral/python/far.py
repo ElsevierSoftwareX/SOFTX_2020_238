@@ -73,6 +73,7 @@ from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
+from glue.text_progress_bar import ProgressBar
 from lal import rate
 from lalburst import snglcoinc
 
@@ -254,7 +255,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		self.zerolag.finish()
 		return self
 
-	def is_healthy(self):
+	def is_healthy(self, verbose = False):
 		# do we believe the PDFs are sufficiently well-defined to
 		# compute ln L?  not healthy until at least one instrument
 		# in the analysis has produced triggers, and until all that
@@ -270,7 +271,10 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		# approximately one snapshot interval around the addition
 		# of the new detector.
 		nonzero_counts = [count for count in self.denominator.triggerrates.counts.values() if count]
-		return nonzero_counts and min(nonzero_counts) > 10000000
+		health = 0. if not nonzero_counts else min(nonzero_counts) / 10000000.
+		if verbose:
+			ProgressBar(text = "ranking stat. health", value = health).show()
+		return health >= 1.
 
 	@classmethod
 	def get_xml_root(cls, xml, name):
@@ -328,7 +332,9 @@ class DatalessRankingStat(RankingStat):
 		self.denominator.finish()
 		return self
 
-	def is_healthy(self):
+	def is_healthy(self, verbose = False):
+		if verbose:
+			ProgressBar(text = "ranking stat. health", value = 1.).show()
 		return True
 
 
@@ -698,10 +704,13 @@ WHERE
 		return self
 
 
-	def is_healthy(self):
+	def is_healthy(self, verbose = False):
 		# do we believe the PDFs are sufficiently well-defined to
 		# compute FAPs and FARs?
-		return self.noise_lr_lnpdf.array.sum() > 1000000 and self.zero_lag_lr_lnpdf.array.sum() > 10000
+		health = min(self.noise_lr_lnpdf.array.sum() / 1000000., self.zero_lag_lr_lnpdf.array.sum() / 10000.)
+		if verbose:
+			ProgressBar(text = "ranking stat. health", value = health).show()
+		return health >= 1.
 
 
 	@classmethod
