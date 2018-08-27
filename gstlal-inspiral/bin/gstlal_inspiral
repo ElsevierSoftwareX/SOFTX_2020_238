@@ -796,7 +796,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			search = options.gracedb_search,
 			pipeline = options.gracedb_pipeline,
 			service_url = options.gracedb_service_url,
-			upload_auxiliary_data = (options.gracedb_service_url == gracedb_default_service_url),
+			upload_auxiliary_data = True,
 			verbose = options.verbose
 		),
 		ranking_stat_input_url = options.ranking_stat_input,
