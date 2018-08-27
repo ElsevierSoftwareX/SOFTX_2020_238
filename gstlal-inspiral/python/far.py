@@ -104,7 +104,7 @@ def kwarggen(segments, snrs, chi2s_over_snr2s, phase, dt, template_id, min_instr
 		kwarggeniter(phase, min_instruments),
 		kwarggeniter(dt, min_instruments)
 	):
-		return {
+		yield {
 			"segments": segments,
 			"snrs": snrs,
 			"chi2s_over_snr2s": chi2s_over_snr2s,
@@ -143,7 +143,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		# full ln L ranking stat.  we define the ranking statistic
 		# to be the largest ln L from all allowed subsets of
 		# triggers
-		return max(super(RankingStat, self).__call__(**kwargs) for kwargs in kwarggen(**kwargs))
+		return max(super(RankingStat, self).__call__(**kwargs) for kwargs in kwarggen(min_instruments = self.min_instruments, **kwargs))
 
 	@property
 	def template_ids(self):
