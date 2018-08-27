@@ -144,12 +144,18 @@ def lower_bound_in_seglist(seglist, x):
 class EyeCandy(object):
 	def __init__(self, instruments):
 		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
-		self.latency_history = deque(maxlen = 1000)
-		self.snr_history = deque(maxlen = 1000)
-		self.likelihood_history = deque(maxlen = 1000)
-		self.far_history = deque(maxlen = 1000)
+		# NOTE most of this data is collected at 1Hz, thus a 300
+		# element deque should hold about 5 minutes of history.
+		# Keeping the deque short is desirable for efficiency in
+		# downloads, but it could mean that data is lost (though the
+		# snapshot every ~4 hours will contain the information in
+		# general)
+		self.latency_history = deque(maxlen = 300)
+		self.snr_history = deque(maxlen = 300)
+		self.likelihood_history = deque(maxlen = 300)
+		self.far_history = deque(maxlen = 300)
 		self.ram_history = deque(maxlen = 2)
-		self.ifo_snr_history = dict((instrument, deque(maxlen = 10000)) for instrument in instruments)
+		self.ifo_snr_history = dict((instrument, deque(maxlen = 300)) for instrument in instruments)
 
 		#
 		# setup bottle routes
