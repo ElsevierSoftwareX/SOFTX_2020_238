@@ -31,6 +31,7 @@ import glob
 import logging
 import os
 import sys
+import timeit
 
 import h5py
 import numpy
@@ -128,6 +129,13 @@ def floor_div(x, n):
 	"""
 	assert n > 0
 	return (x / n) * n
+
+def gps2latency(gps_time):
+	"""
+	Given a gps time, measures the latency to ms precision relative to now.
+	"""
+	current_gps_time = float(gpstime.tconvert('now')) + (timeit.default_timer() % 1)
+	return round(current_gps_time - gps_time, 3)
 
 #----------------------------------
 ### pathname utilities
