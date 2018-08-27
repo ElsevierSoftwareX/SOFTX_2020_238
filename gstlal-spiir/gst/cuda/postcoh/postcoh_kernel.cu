@@ -273,17 +273,22 @@ __global__ void ker_coh_skymap
 {
     int bid = blockIdx.x;
     int bn  = gridDim.x;
+    int tid = threadIdx.x;
+
+    int wn  = blockDim.x >> LOG_WARP_SIZE;
+    int wID = threadIdx.x >> LOG_WARP_SIZE;     
 
     int     peak_cur, tmplt_cur, len_cur;
     COMPLEX_F   dk[MAXIFOS];
     int     NtOff;
-    int     map_idx, ipix;
+    int     map_idx, ipix, i;
     float   real, imag;
     float   snr_tmp, al_all = 0.0f;
 
-    for (int ipeak = bid; ipeak < npeak; ipeak += bn)
+
+	if (npeak > 0)
     {
-        peak_cur = peak_pos[ipeak];
+        peak_cur = peak_pos[0];
         // find the len_cur from len_idx
         len_cur = peak_pos[peak_cur + max_npeak];
         // find the tmplt_cur from tmplt_idx
@@ -319,8 +324,8 @@ __global__ void ker_coh_skymap
                 (j < 2 ? snr_tmp: al_all) += real * real + imag * imag;   
             }   
 
-			cohsnr_skymap[ipeak * num_sky_directions + ipix] = snr_tmp;
-			nullsnr_skymap[ipeak * num_sky_directions + ipix] = al_all;
+			cohsnr_skymap[ipix] = snr_tmp;
+			nullsnr_skymap[ipix] = al_all;
 		}
 	}
 }
@@ -359,7 +364,7 @@ __global__ void ker_coh_max_and_chisq
     int wn  = blockDim.x >> LOG_WARP_SIZE;
     int wID = threadIdx.x >> LOG_WARP_SIZE;     
 
-    int srcLane = threadIdx.x & 0x1f, ipix;
+    int srcLane = threadIdx.x & 0x1f, ipix; // binary: 11111, decimal 31
     // store snr_max, nullstream_max and sky_idx, each has (blockDim.x / WARP_SIZE) elements
     extern __shared__ float smem[];
     volatile float *stat_shared = &smem[0];
@@ -368,7 +373,7 @@ __global__ void ker_coh_max_and_chisq
     volatile int *sky_idx_shared = (int*)&nullstream_shared[wn];
 
     // float    *mu;    // matrix u for certain sky direction
-    int     peak_cur, tmplt_cur;
+    int     peak_cur, tmplt_cur, ipeak_max = 0;
     COMPLEX_F   dk[MAXIFOS];
     int     NtOff;
     int     map_idx;
@@ -503,28 +508,11 @@ __global__ void ker_coh_max_and_chisq
             cohsnr[peak_cur]    = snr_shared[0];
 			nullsnr[peak_cur]   = nullstream_shared[0];
             pix_idx[peak_cur]   = sky_idx_shared[0];            
-
         }
         __syncthreads();
 
-        /*
-        COMPLEX_F data;
-        chisq[peak_cur] = 0.0;
-        int autochisq_half_len = autochisq_len /2;
-        for (int j = 0; j < nifo; ++j)
-        {   data = 0;
-            // this is a simplified algorithm to get map_idx 
-            map_idx = iifo * nifo + j;
-            NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
-            for(int ishift=-autochisq_half_len; ishift<=autochisq_half_len; ishift++)
-            {
+		/* chisq calculation */
 
-            data += snr[j][((start_exe + peak_cur + NtOff + ishift) % len) * ntmplt + tmplt_cur] - maxsnglsnr[peak_cur] * autocorr_matrix[j][ tmplt_cur * autochisq_len + ishift + autochisq_half_len];     
-            }
-            chisq[peak_cur] += (data.re * data.re + data.im * data.im) / autocorr_norm[j][tmplt_cur];
-        }
-        */
-#if 1
         COMPLEX_F data, tmp_snr, tmp_autocorr, tmp_maxsnr;
         float laneChi2 = 0.0f;
         int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
@@ -584,7 +572,6 @@ __global__ void ker_coh_max_and_chisq
         }
 
         __syncthreads();
-#endif
 
         /*
          *
@@ -756,6 +743,54 @@ __global__ void ker_coh_max_and_chisq
 #endif
     }
     }
+	/* find maximum cohsnr and swope to the first pos */
+    volatile float *cohsnr_shared = &smem[0];
+    volatile float *ipeak_shared = &smem[blockDim.x];
+	float cohsnr_max = 0.0, cohsnr_cur;
+
+	if (bid == 0) {
+		/* clean up smem history */
+		cohsnr_shared[threadIdx.x] = 0.0;
+		ipeak_shared[threadIdx.x] = 0;
+		__syncthreads();
+	    for (i = threadIdx.x; i < npeak; i += blockDim.x) {
+			peak_cur = peak_pos[i];
+			cohsnr_cur = cohsnr[peak_cur];
+			if (cohsnr_cur > cohsnr_max) {
+				cohsnr_shared[threadIdx.x] = cohsnr_cur;
+				ipeak_shared[threadIdx.x] = i;
+				cohsnr_max = cohsnr_cur;
+			}
+		}
+		__syncthreads();
+	    for (i = wn >> 1; i > 0; i = i >> 1)
+	    {
+	        if (threadIdx.x < i)
+	        {
+				cohsnr_cur = cohsnr_shared[threadIdx.x + i];
+	            cohsnr_max = cohsnr_shared[threadIdx.x];
+	
+	            if (cohsnr_cur > cohsnr_max)
+	            {
+	                cohsnr_shared[threadIdx.x] = cohsnr_cur;
+	                ipeak_shared[threadIdx.x] = ipeak_shared[threadIdx.x + i];
+	            }
+	
+	        }   
+	            __syncthreads();
+	    }
+	
+		/* swope the first and max peak_cur in peak_pos */
+	
+	    if (threadIdx.x == 0)
+	    {
+			ipeak_max = ipeak_shared[0];
+			peak_cur = peak_pos[ipeak_max];
+			peak_pos[ipeak_max] = peak_pos[0];
+			peak_pos[0] = peak_cur;
+	    }
+
+	} 
 }
 
 #define TRANSPOSE_TILE_DIM 32
@@ -854,7 +889,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	size_t totalmem;
 
 	int threads = 256;
-    int sharedmem     = 4 * threads / WARP_SIZE * sizeof(float);
+    int sharedmem     = MAX(2*threads*sizeof(float), 4 * threads / WARP_SIZE * sizeof(float));
 	PeakList *pklist = state->peak_list[iifo];
 	int npeak = pklist->npeak[0];
 
@@ -886,22 +921,10 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 
 	cudaStreamSynchronize(stream);
 	CUDA_CHECK(cudaPeekAtLastError());
-	/* copy the snr, cohsnr, nullsnr, chisq out */
-	CUDA_CHECK(cudaMemcpyAsync(	pklist->snglsnr_H, 
-			pklist->d_snglsnr_H, 
-			sizeof(float) * (pklist->peak_floatlen), 
-			cudaMemcpyDeviceToHost,
-			stream));
-
-	CUDA_CHECK(cudaMemcpyAsync(	pklist->npeak, 
-			pklist->d_npeak, 
-			sizeof(int) * (pklist->peak_intlen), 
-			cudaMemcpyDeviceToHost,
-			stream));
 
 	if(output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR)
 	{
-		ker_coh_skymap<<<npeak, threads, sharedmem, stream>>>(
+		ker_coh_skymap<<<1, threads, sharedmem, stream>>>(
 									pklist->d_cohsnr_skymap,
 									pklist->d_nullsnr_skymap,
 									state->dd_snglsnr,
@@ -922,10 +945,23 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 
 		CUDA_CHECK(cudaMemcpyAsync(pklist->cohsnr_skymap,
 			pklist->d_cohsnr_skymap,
-			sizeof(float) * state->max_npeak * state->npix * 2,
+			sizeof(float) * state->npix * 2,
 			cudaMemcpyDeviceToHost,
 			stream));
 	}
+
+	/* copy the snr, cohsnr, nullsnr, chisq out */
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->snglsnr_H, 
+			pklist->d_snglsnr_H, 
+			sizeof(float) * (pklist->peak_floatlen), 
+			cudaMemcpyDeviceToHost,
+			stream));
+
+	CUDA_CHECK(cudaMemcpyAsync(	pklist->npeak, 
+			pklist->d_npeak, 
+			sizeof(int) * (pklist->peak_intlen), 
+			cudaMemcpyDeviceToHost,
+			stream));
 
 
 	cudaStreamSynchronize(stream);

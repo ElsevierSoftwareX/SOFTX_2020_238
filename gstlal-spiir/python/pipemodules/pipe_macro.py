@@ -15,3 +15,5 @@ rankstep = 0.1 # 30/299
 
 SOURCE_TYPE_BNS = 1
 STATS_XML_ID_NAME = "gstlal_postcohspiir_stats"
+DETRSP_XML_ID_NAME = "gstlal_postcoh_detrsp_map"
+DETRSP_XML_PARAM_NAME_GPS_START = "gps_start"

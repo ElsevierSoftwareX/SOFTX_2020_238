@@ -72,5 +72,7 @@ int get_icombo(char *ifos);
 #define	PSIG_MIN_LIMIT	-30
 #define	LR_MIN_LIMIT	-30
 #define SOURCE_TYPE_BNS	1
+
+#define DETRSP_XML_ID_NAME	"gstlal_postcoh_detrsp_map"
 #endif
 
