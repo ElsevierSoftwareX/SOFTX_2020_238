@@ -199,20 +199,6 @@ for gid in gid_list:
 				fig.savefig(filename)
 
 
-	# function returns None if it can't make a plot, e.g., if there are
-	# more than 2 instruments involved (don't know how to make 3D PDF
-	# plots yet)
-	fig = plotfar.plot_snr_joint_pdf(rankingstat.numerator.SNRPDF, sngl_inspirals.keys(), rankingstat.numerator.horizon_history.getdict(coinc_inspiral.end), rankingstat.min_instruments, options.max_snr, sngls = [dict((row.ifo, (row.snr, row.chisq / row.chisq_dof)) for row in sngl_inspirals.values())])
-	if fig is not None:
-		filename = "%s_%s_jointsnr_pdf.png" % (gid, "_".join(sorted(sngl_inspirals.keys())))
-		if not options.no_upload:
-			lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "%s SNR PDF" % ", ".join(sorted(sngl_inspirals.keys())), tagname = "background")
-		if options.output_path is not None:
-			filename = os.path.join(options.output_path, filename)
-			logging.info("writing %s ..." % filename)
-			fig.savefig(filename)
-
-
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
 	filename = "%s_likehoodratio_ccdf.png" % gid
 	if not options.no_upload:
