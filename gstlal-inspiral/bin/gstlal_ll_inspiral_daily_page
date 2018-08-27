@@ -211,14 +211,14 @@ if __name__ == '__main__':
 	#for d in os.listdir(options.directory):
 	#	m = pattern.match(d)
 	#	if m:
-	#		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", m.group("id"), "--verbose", d])
+	#		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", plot_dir, "--user-tag", m.group("id"), "--verbose", d])
 
 	#
 	# Plot background
 	#
 
 	try:
-		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", os.path.join(options.directory, "plots"), "--user-tag", "ALL", "--database", noninjdb, "--verbose", "marginalized_likelihood.xml.gz"])
+		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", plot_dir, "--user-tag", "ALL", "--database", noninjdb, "--verbose", "rankingstat_pdf.xml.gz"])
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
@@ -227,7 +227,10 @@ if __name__ == '__main__':
 	#
 
 	try:
-		subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "marginalized_likelihood.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", "%s" % os.path.join(options.directory, "plots"), "%s" % noninjdb] + injdb.values())
+		if inj_file_bins:
+			subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "rankingstat_pdf.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", plot_dir, "%s" % noninjdb] + injdb.values())
+		else:
+			subprocess.check_call(["gstlal_inspiral_plotsummary", "--verbose", "--likelihood-file", "rankingstat_pdf.xml.gz", "--segments-name", "statevectorsegments", "--user-tag", "ALL_LLOID_COMBINED", "--output-dir", plot_dir, "--plot-group", "0", "--plot-group", "5", "%s" % noninjdb])
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
@@ -235,10 +238,11 @@ if __name__ == '__main__':
 	# Plot sensitivity
 	#
 
-	try:
-		subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", os.path.join(options.directory, "plots"), "--bin-by-source-type", "--zero-lag-database", noninjdb, "--dist-bins", "200",  "--user-tag", "ALL_LLOID_COMBINED", "--include-play",  "--data-segments-name", "statevectorsegments"] + injdb.values())
-	except subprocess.CalledProcessError as plot_error:
-		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
+	if inj_file_bins:
+		try:
+			subprocess.check_call(["gstlal_inspiral_plot_sensitivity", "--verbose", "--output-dir", plot_dir, "--bin-by-source-type", "--zero-lag-database", noninjdb, "--dist-bins", "200",  "--user-tag", "ALL_LLOID_COMBINED", "--data-segments-name", "statevectorsegments"] + injdb.values())
+		except subprocess.CalledProcessError as plot_error:
+			print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
 	#
 	# Summary page
@@ -256,7 +260,7 @@ if __name__ == '__main__':
 			except IOError:
 				pass
 
-		subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", "plots", "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
+		subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", os.path.join("plots", os.path.basename(plot_dir)), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
