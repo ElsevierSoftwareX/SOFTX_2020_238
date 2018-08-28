@@ -22,6 +22,5 @@ dist_bin_SCRIPTS = \
 	gstlal_tmpltbank_extract \
 	gstlal_injxml_extract \
 	gstlal_inspiral_injection_snr \
-	gstlal_periodic_postcohspiir_summarypage \
 	gstlal_inspiral_postcohspiir_combo_plotsummary \
 	gstlal_periodic_get_urls
