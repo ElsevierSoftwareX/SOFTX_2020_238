@@ -1297,18 +1297,11 @@ class Handler(simplehandler.Handler):
 		# check for no-op
 		if self.rankingstatpdf is None or not self.rankingstatpdf.is_healthy():
 			return
-		# FIXME: this is redundant with checks inside
-		# gracedbwrapper, which is where it logically belongs, but
-		# we need it here to avoid triggering the ValuError that
-		# follows when alerts are disabled.  think of some
-		# different way to organize the safety checks to avoid the
-		# need for this redundancy
-		if self.gracedbwrapper.far_threshold is None:
-			return
-
-		# sanity check
-		if self.fapfar is None:
-			raise ValueError("gracedb alerts cannot be enabled without fap/far data")
+		# sanity check.  all code paths that result in an
+		# initialized and healthy rankingstatpdf object also
+		# initialize a fapfar object from it;  this is here to make
+		# sure that remains true
+		assert self.fapfar is not None
 
 		# do alerts
 		self.gracedbwrapper.__do_alerts(self.stream_thinca.last_coincs, self.psds, self.__get_rankingstat_xmldoc)
