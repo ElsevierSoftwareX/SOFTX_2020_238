@@ -9,12 +9,14 @@ spiirbankdir = $(pkgpythondir)/spiirbank
 spiirbank_PYTHON = \
 	__init__.py \
 	spiir_utils.py \
-	spiir_decomp.py
+	spiir_decomp.py \
+	cbc_template_iir.py \
+	optimize_mf.py
 
 spiirbank_LTLIBRARIES = _spiir_decomp.la
 
 _spiir_decomp_la_SOURCES = _spiir_decomp.c
 _spiir_decomp_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS) -DMODULE_NAME="\"gstlal.spiirbank._spiir_decomp\""
 _spiir_decomp_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSL_CFLAGS) -fno-strict-aliasing -DMODULE_NAME="\"gstlal.spiirbank._spiir_decomp\""
-_spiir_decomp_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSL_LIBS) $(PYTHON_LIBS) -module -avoid-version
+_spiir_decomp_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSL_LIBS) $(PYTHON_LIBS) -module -avoid-version -llalinspiral
 

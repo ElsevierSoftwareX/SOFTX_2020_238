@@ -180,6 +180,7 @@ def parse_command_line():
     parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
     parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
     parser.add_option("--nxydump-segment", metavar = "start:stop", default = None, help = "Set the time interval to dump from nxydump elments (optional).    The default is None, i.e. no dump.")
+    parser.add_option("--nxydump-directory", metavar = "name", default = '.', help = "Set the directory to dump from nxydump elments (optional).  The default is '.', i.e. current directory.")
     parser.add_option("--cohfar-accumbackground-snapshot-interval", type = "int", metavar = "seconds", default = 0, help = "How often to snapshot the stats files. (optional)")
     parser.add_option("--cohfar-accumbackground-history-fname", metavar = "filename", help = "Set the history filename to read stats from (optional)")
     parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (optional)")
@@ -434,6 +435,7 @@ postcohsrcs = spiirparts.mkPostcohSPIIROnline(
             veto_segments = veto_segments,
             verbose = options.verbose,
             nxydump_segment = options.nxydump_segment,
+            nxydump_directory = options.nxydump_directory,
             chisq_type = options.chisq_type,
             track_psd = options.track_psd,
             blind_injections = options.blind_injections,

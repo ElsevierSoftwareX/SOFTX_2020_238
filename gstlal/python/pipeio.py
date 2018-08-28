@@ -203,14 +203,16 @@ def parse_spectrum_message(message):
 	LAL REAL8FrequencySeries containing the strain spectral density.
 	"""
 	s = message.structure
-	return lal.REAL8FrequencySeries(
+	psd = lal.CreateREAL8FrequencySeries(
 		name = s["instrument"] if s.has_field("instrument") else "",
 		epoch = lal.LIGOTimeGPS(0, message.timestamp),
 		f0 = 0.0,
 		deltaF = s["delta-f"],
 		sampleUnits = lal.Unit(s["sample-units"].strip()),
-		data = numpy.array(s["magnitude"])
+		length = len(s["magnitude"])
 	)
+        psd.data.data = s["magnitude"]
+        return psd
 
 
 #
@@ -232,7 +234,7 @@ def parse_framesrc_tags(taglist):
 	except KeyError:
 		channel_name = None
 	if "units" in taglist:
-		sample_units = laltypes.LALUnit(taglist["units"].strip())
+		sample_units = lal.Unit(taglist["units"].strip())
 	else:
 		sample_units = None
 	return {

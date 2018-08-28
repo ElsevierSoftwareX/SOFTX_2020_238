@@ -54,14 +54,12 @@ import scipy
 import sys
 
 
-from pylal import datatypes as laltypes
-from pylal import lalfft
-from pylal import spawaveform
+#from gstlal import spawaveform
 import lal
 import lalsimulation as lalsim
 
 
-from gstlal.reference_psd import HorizonDistance as horizon_distance
+from gstlal.reference_psd import HorizonDistance
 from gstlal.reference_psd import interpolate_psd
 
 
@@ -96,53 +94,39 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	 (2) has an IFFT which is duration seconds long and
 	 (3) has an IFFT which is sampled at sample_rate Hz
 	"""
-	if approximant in templates.gstlal_approximants:
-
-		# FIXME use hcross somday?
-		# We don't here because it is not guaranteed to be orthogonal
-		# and we add orthogonal phase later
-
-		hplus,hcross = lalsim.SimInspiralFD(
-			0., # phase
-			1.0 / duration, # sampling interval
-			lal.MSUN_SI * template_bank_row.mass1,
-			lal.MSUN_SI * template_bank_row.mass2,
-			template_bank_row.spin1x,
-			template_bank_row.spin1y,
-			template_bank_row.spin1z,
-			template_bank_row.spin2x,
-			template_bank_row.spin2y,
-			template_bank_row.spin2z,
-			f_low,
-			f_high,
-			0., #FIXME chosen until suitable default value for f_ref is defined
-			1.e6 * lal.PC_SI, # distance
-			0., # redshift
-			0., # inclination
-			0., # tidal deformability lambda 1
-			0., # tidal deformability lambda 2
-			None, # waveform flags
-			None, # Non GR params
-			amporder,
-			order,
-			lalsim.GetApproximantFromString(str(approximant))
-			)
-
-		# NOTE assumes fhigh is the Nyquist frequency!!!
-		z = hplus.data.data
-		assert len(z) == int(round(sample_rate * duration))//2 +1
-
-	else:
+	if approximant not in templates.gstlal_approximants:
 		raise ValueError("Unsupported approximant given %s" % approximant)
 
-	return laltypes.COMPLEX16FrequencySeries(
-		name = "template",
-		epoch = laltypes.LIGOTimeGPS(hplus.epoch.gpsSeconds, hplus.epoch.gpsNanoSeconds),
-		f0 = 0.0,
-		deltaF = 1.0 / duration,
-		sampleUnits = laltypes.LALUnit("strain"),
-		data = z
-	)
+	# FIXME use hcross somday?
+	# We don't here because it is not guaranteed to be orthogonal
+	# and we add orthogonal phase later
+
+	parameters = {}
+	parameters['m1'] = lal.MSUN_SI * template_bank_row.mass1
+	parameters['m2'] = lal.MSUN_SI * template_bank_row.mass2
+	parameters['S1x'] = template_bank_row.spin1x
+	parameters['S1y'] = template_bank_row.spin1y
+	parameters['S1z'] = template_bank_row.spin1z
+	parameters['S2x'] = template_bank_row.spin2x
+	parameters['S2y'] = template_bank_row.spin2y
+	parameters['S2z'] = template_bank_row.spin2z
+	parameters['distance'] = 1.e6 * lal.PC_SI
+	parameters['inclination'] = 0.
+	parameters['phiRef'] = 0.
+	parameters['longAscNodes'] = 0.
+	parameters['eccentricity'] = 0.
+	parameters['meanPerAno'] = 0.
+	parameters['deltaF'] = 1.0 / duration
+	parameters['f_min'] = f_low
+	parameters['f_max'] = f_high
+	parameters['f_ref'] = 0.
+	parameters['LALparams'] = None
+	parameters['approximant'] = lalsim.GetApproximantFromString(str(approximant))
+
+	hplus, hcross = lalsim.SimInspiralFD(**parameters)
+	# NOTE assumes fhigh is the Nyquist frequency!!!
+	assert len(hplus.data.data) == int(round(sample_rate * duration))//2 +1
+	return hplus
 
 def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
 	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
@@ -203,7 +187,8 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	# store the psd horizon before conditioning
 	#
 
-	horizon_before = horizon_distance(psd, 1.4, 1.4, 8.0, minfs[1], maxfs[0])
+	horizon_distance = HorizonDistance(minfs[1], maxfs[0], 8.0, 1.4, 1.4)
+	horizon_before, model = horizon_distance(psd)
 	
 	#
 	# interpolate to new \Delta f
@@ -215,7 +200,7 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	# Smooth the psd
 	#
 
-	psddata = psd.data
+	psddata = psd.data.data
 	avgwindow = int(smoothing_frequency / newdeltaF)
 	psddata = movingmedian(psddata, avgwindow)
 	psddata = movingaverage(psddata, avgwindow)
@@ -234,16 +219,16 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	psddata[kmax:] = float('Inf')
 	psddata[kmin:kmax] /= numpy.cos(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
 
-	psd.data = psddata
+	psd.data.data = psddata
 	
 	#
 	# compute the psd horizon after conditioning and renormalize
 	#
 
-	horizon_after = horizon_distance(psd, 1.4, 1.4, 8.0, minfs[1], maxfs[0])
+	horizon_after, model = horizon_distance(psd)
 
-	psddata = psd.data
-	psd.data =  psddata * (horizon_after / horizon_before)**2
+	psddata = psd.data.data
+	psd.data.data =  psddata * (horizon_after / horizon_before)**2
 
 	#
 	# done
@@ -288,17 +273,23 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	if psd is not None:
 		psd = condition_psd(psd, 1.0 / working_duration, minfs = (working_f_low, f_low), maxfs = (sample_rate_max / 2.0 * 0.90, sample_rate_max / 2.0))
 
-	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
-	fwdplan = lalfft.XLALCreateForwardREAL8FFTPlan(working_length, 1)
-	tseries = laltypes.COMPLEX16TimeSeries(
-		data = numpy.zeros((working_length,), dtype = "cdouble")
+	revplan = lal.CreateReverseCOMPLEX16FFTPlan(working_length, 1)
+	fwdplan = lal.CreateForwardREAL8FFTPlan(working_length, 1)
+	tseries = lal.CreateCOMPLEX16TimeSeries(
+		name = "timeseries",
+		epoch = LIGOTimeGPS(0.),
+		f0 = 0.,
+		deltaT = 1.0 / sample_rate_max,
+		length = working_length,
+		sampleUnits = lal.Unit("strain")
 	)
-	fworkspace = laltypes.COMPLEX16FrequencySeries(
+	fworkspace = lal.CreateCOMPLEX16FrequencySeries(
 		name = "template",
-		epoch = laltypes.LIGOTimeGPS(0),
+		epoch = LIGOTimeGPS(0),
 		f0 = 0.0,
 		deltaF = 1.0 / working_duration,
-		data = numpy.zeros((working_length//2 + 1,), dtype = "cdouble")
+		length = working_length // 2 + 1,
+		sampleUnits = lal.Unit("strain s")
 	)
 
 	# Check parity of autocorrelation length
@@ -337,7 +328,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		#
 
 		if psd is not None:
-			lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
+			lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
 		fseries = templates.add_quadrature_phase(fseries, working_length)
 
 		#
@@ -352,7 +343,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# transform template to time domain
 		#
 
-		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+		lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
 		data = tseries.data
 		epoch_time = fseries.epoch.seconds + fseries.epoch.nanoseconds*1.e-9
