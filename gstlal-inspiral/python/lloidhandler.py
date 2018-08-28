@@ -335,8 +335,8 @@ class SegmentsTracker(object):
 		"""
 		timestamp = LIGOTimeGPS(0, timestamp)	# timestamp is in nanoseconds
 
-		if self.verbose and elem is not None:
-			print >>sys.stderr, "%s: %s '%s' state transition: %s @ %s" % (elem.get_name(), instrument, segtype, new_state, str(timestamp))
+		if self.verbose:
+			print >>sys.stderr, "%s: %s '%s' state transition: %s @ %s" % ((elem.get_name() if elem is not None else "<internal>"), instrument, segtype, new_state, str(timestamp))
 
 		if new_state == "off":
 			# record end of segment
