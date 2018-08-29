@@ -52,6 +52,7 @@ var time_since_last_wrapper;
 var time_since_trigger_wrapper;
 
 var vt_wrapper;
+var far_inj_history_wrapper;
 
 var charts = [];
 
@@ -155,10 +156,7 @@ function openGstlalTab(evt, tabName) {
 		arguments[i].clear();
 		// FIXME allow this function to accept a custom refresh
 		// interval for each chart instead of this hardcoded BS
-		if (arguments[i] == time_since_last_wrapper || arguments[i] == noise_wrapper) 
-			arguments[i].setRefreshInterval(refresh);
-		else
-			arguments[i].setRefreshInterval(longrefresh);
+		arguments[i].setRefreshInterval(longrefresh);
 		arguments[i].draw();
         }
 }
@@ -195,7 +193,7 @@ function updateClock ( )
 $(document).ready(function()
 {
 	setInterval('updateClock()', 1000);
-	$(".fancybox").fancybox();
+	//$(".fancybox").fancybox();
 	//openGstlalTab(event, 'Status', time_since_last_wrapper, time_since_trigger_wrapper, up_time_wrapper, dropped_wrapper, ram_status_wrapper);
 });
 
@@ -306,14 +304,14 @@ function ChartWrapper(obj) {
 }
 
 
-function drawLatencyStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
+function drawLatencyStatusByNodes(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] };
 	these_options.title = 'Latency';
 
 	latency_status_by_nodes_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:0&gpstime=' + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:0&gpstime=' + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select latency_history where status by node',
 		refreshInterval: refresh,
 		options: these_options, 
@@ -324,14 +322,14 @@ function drawLatencyStatusByNodes(gps, duration, refresh, analysis_path, job_ids
 }
 
 
-function drawLatencyHistory(gps, duration, refresh, analysis_path, job_ids) {
+function drawLatencyHistory(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] };
 	these_options.title = 'Latency';
 
 	latency_history_wrapper = new ChartWrapper({
 		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:100&gpstime=' + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:100&gpstime=' + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select latency_history where node is all',
 		refreshInterval: refresh,
 		options: these_options,
@@ -342,10 +340,10 @@ function drawLatencyHistory(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawLatencyGauge(gps, duration, refresh, analysis_path, job_ids) {
+function drawLatencyGauge(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	latency_gauge_wrapper = new ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:200' + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:200' + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 	query: 'select latency_history where now',
 	refreshInterval: refresh,
         options: {
@@ -371,14 +369,14 @@ function drawLatencyGauge(gps, duration, refresh, analysis_path, job_ids) {
  */
 
 
-function drawSNRStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
+function drawSnrStatusByNodes(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'SNR';
 
 	snr_status_by_nodes_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:300'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:300'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select snr_history where status by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -389,7 +387,7 @@ function drawSNRStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawSNRHistory(gps, duration, refresh, analysis_path, job_ids) {
+function drawSnrHistory(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'SNR';
@@ -399,7 +397,7 @@ function drawSNRHistory(gps, duration, refresh, analysis_path, job_ids) {
 
 	snr_history_wrapper = new ChartWrapper({
 		chartType: 'ScatterChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:400'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:400'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select snr_history where scatter by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -410,14 +408,14 @@ function drawSNRHistory(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawLikelihoodStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
+function drawLikelihoodStatusByNodes(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	these_options.title = 'Log likelihood ratio';
 
 	likelihood_status_by_nodes_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:301'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:301'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select likelihood_history where status by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -428,7 +426,7 @@ function drawLikelihoodStatusByNodes(gps, duration, refresh, analysis_path, job_
 }
 
 
-function drawLikelihoodHistory(gps, duration, refresh, analysis_path, job_ids) {
+function drawLikelihoodHistory(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	//these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:4, maxValue:150, textPosition: 'out', ticks: [4,8,16,32,64] };
 	//these_options.title = 'Likelihood';
@@ -440,7 +438,7 @@ function drawLikelihoodHistory(gps, duration, refresh, analysis_path, job_ids) {
 
 	likelihood_history_wrapper = new ChartWrapper({
 		chartType: 'ScatterChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:401'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:401'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select likelihood_history where node is all',
 		refreshInterval: refresh,
 		options: these_options,
@@ -451,14 +449,14 @@ function drawLikelihoodHistory(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawFARStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
+function drawFarStatusByNodes(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:0.00000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
 	these_options.title = 'FAR';
 
 	far_status_by_nodes_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:302'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:302'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select far_history where status by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -469,7 +467,7 @@ function drawFARStatusByNodes(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawFARHistory(gps, duration, refresh, analysis_path, job_ids) {
+function drawFarHistory(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	//these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:0.0000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
 	//these_options.title = 'FAR';
@@ -481,7 +479,7 @@ function drawFARHistory(gps, duration, refresh, analysis_path, job_ids) {
 
 	far_history_wrapper = new ChartWrapper({
 		chartType: 'ScatterChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:402'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:402'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select far_history where node is all',
 		refreshInterval: refresh,
 		options: these_options,
@@ -495,14 +493,14 @@ function drawFARHistory(gps, duration, refresh, analysis_path, job_ids) {
  * Charts about sensitivity
  */
 
-function drawHorizon(gps, duration, refresh, analysis_path, job_ids) {
+function drawHorizon(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'linear', minValue:0, maxValue:150, textPosition: 'out', ticks: [10,20,30,40,50,60,70,80,90,100] };
 	these_options.title = 'Range';
 
 	horizon_wrapper = new ChartWrapper({
 		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:500'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:500'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select horizon_history',
 		refreshInterval: refresh,
 		options: these_options,
@@ -512,7 +510,7 @@ function drawHorizon(gps, duration, refresh, analysis_path, job_ids) {
 /*
 	horizon_table_wrapper = new ChartWrapper({
 		chartType: 'Table',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:501'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:501'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + ''&dir=' + analysis_path,dir=' + analysis_path + ''&dir=' + analysis_path,ifos=' + ifos,
 		query: 'select horizon_history',
 		refreshInterval: refresh,
 		containerId: 'horizon_table_wrapper',
@@ -527,7 +525,7 @@ function drawHorizon(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawPSD(gps, duration, refresh, analysis_path, job_ids) {
+function drawPsd(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', textPosition: 'out', viewWindowMode:'explicit', viewWindow:{max:1e-18, min:1e-24}, format: 'scientific'};
 	these_options.hAxis = {textStyle: {color: darkblue}, scaleType: 'log', textPosition: 'out', viewWindowMode:'explicit', viewWindow:{min:10, max:2048}};
@@ -536,7 +534,7 @@ function drawPSD(gps, duration, refresh, analysis_path, job_ids) {
 
 	psd_wrapper = new ChartWrapper({
 		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:600'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:600'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select psd' + ((gps == "-1") ? 'where now' : ''),
 		refreshInterval: refresh,
 		options: these_options,
@@ -547,20 +545,20 @@ function drawPSD(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawRangeGauge(gps, duration, refresh, analysis_path, job_ids) {
+function drawRangeGauge(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	range_gauge_wrapper = new ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:700'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:700'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 	query: 'select horizon_history where now',
 	refreshInterval: refresh,
         options: {
 		animation: {duration: 4000, easing: 'linear'},
 		width: 1000, height: 1000,
 		redFrom: 0, redTo: 40,
-		yellowFrom: 40, yellowTo: 60,
-		greenFrom: 60, greenTo: 100,
+		yellowFrom: 40, yellowTo: 100,
+		greenFrom: 100, greenTo: 150,
 		minorTicks: 5,
-		max: 100,
+		max: 150,
 		min: 0
 		},
 	containerId: 'range_gauge_wrapper',
@@ -576,7 +574,7 @@ function drawRangeGauge(gps, duration, refresh, analysis_path, job_ids) {
  */
 
 
-function drawNoise(gps, duration, refresh, analysis_path, job_ids) {
+function drawNoise(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	// Setup the custom options
 	var these_options = clone(default_options);
 	these_options.title = "Whitened h(t)";
@@ -584,26 +582,17 @@ function drawNoise(gps, duration, refresh, analysis_path, job_ids) {
 
 	noise_wrapper = new ChartWrapper({
 		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:800'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:800'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select noise',
 		refreshInterval: refresh,
 		options: these_options,
 		containerId: 'noise_wrapper',
 	});
 
-	noise_wrapper_2 = new ChartWrapper({
-		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:800'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
-		query: 'select noise',
-		refreshInterval: refresh,
-		options: these_options,
-		containerId: 'noise_wrapper_2',
-	});
-
 /*
 	noise_table_wrapper = new ChartWrapper({
 		chartType: 'Table',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:801'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:801'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + ''&dir=' + analysis_path,dir=' + analysis_path + ''&dir=' + analysis_path,ifos=' + ifos,
 		query: 'select noise',
 		refreshInterval: refresh,
 		containerId: 'noise_table_wrapper',
@@ -611,18 +600,16 @@ function drawNoise(gps, duration, refresh, analysis_path, job_ids) {
 	});
 */
 	noise_wrapper.draw();
-	noise_wrapper_2.draw();
 	//noise_table_wrapper.draw();
 	charts.push(noise_wrapper);
-	charts.push(noise_wrapper_2);
 	//charts.push(noise_table_wrapper);
 }
 
 
-function drawNoiseGauge(gps, duration, refresh, analysis_path, job_ids) {
+function drawNoiseGauge(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	noise_gauge_wrapper = new ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:900'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:900'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 	query: 'select noise where now',
 	refreshInterval: refresh,
         options: {
@@ -648,13 +635,13 @@ function drawNoiseGauge(gps, duration, refresh, analysis_path, job_ids) {
  */
 
 
-function drawUpTime(gps, duration, refresh, analysis_path, job_ids) {
+function drawUpTime(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.title = 'Up Time';
 	these_options.vAxis = {textStyle: {color: darkblue}, textPosition: 'out', viewWindowMode:'explicit', gridlines: {color:darkblue}, scaleType: 'log', minValue:1, maxValue:100000000, format: 'scientific'}
 	up_time_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1000'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:1000'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select _state_vector_on_off_gap where status by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -664,10 +651,10 @@ function drawUpTime(gps, duration, refresh, analysis_path, job_ids) {
 	charts.push(up_time_wrapper);
 }
 
-function drawUpTimeGauge(gps, duration, refresh, analysis_path, job_ids) {
+function drawUpTimeGauge(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	uptime_gauge_wrapper = new ChartWrapper({
 	chartType: 'Gauge',
-	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1010'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+	dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:1010'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 	query: 'select _state_vector_on_off_gap where now',
 	refreshInterval: refresh,
         options: {
@@ -687,13 +674,13 @@ function drawUpTimeGauge(gps, duration, refresh, analysis_path, job_ids) {
 	charts.push(uptime_gauge_wrapper);
 }
 
-function drawDroppedData(gps, duration, refresh, analysis_path, job_ids) {
+function drawDropped(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.title = 'Dropped Data';
 	these_options.vAxis = {textStyle: {color: darkblue}, textPosition: 'out', viewWindowMode:'explicit', gridlines: {color:darkblue}, scaleType: 'log', minValue:1, maxValue:100000000, format: 'scientific'}
 	dropped_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1100'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:1100'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select _strain_add_drop where status by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -703,14 +690,14 @@ function drawDroppedData(gps, duration, refresh, analysis_path, job_ids) {
 	charts.push(dropped_wrapper);
 }
 
-function drawRAMStatus(gps, duration, refresh, analysis_path, job_ids) {
+function drawRamStatus(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:1, maxValue:16, textPosition: 'out', ticks: [1,2,4,8,16] };
 	these_options.title = 'RAM';
 
 	ram_status_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1200'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:1200'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select ram_history where status by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -721,14 +708,14 @@ function drawRAMStatus(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawTimeSinceLast(gps, duration, refresh, analysis_path, job_ids) {
+function drawTimeSinceLast(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:1, maxValue:1000000, textPosition: 'out', ticks: [1,10,100,1000,10000,100000], format: 'scientific'};
 	these_options.title = 'Time Since Last Heartbeat';
 
 	time_since_last_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1300'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:1300'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select time_since_last where status by node',
 		refreshInterval: refresh,
 		options: these_options,
@@ -739,14 +726,14 @@ function drawTimeSinceLast(gps, duration, refresh, analysis_path, job_ids) {
 }
 
 
-function drawTimeSinceTrigger(gps, duration, refresh, analysis_path, job_ids) {
+function drawTimeSinceTrigger(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:1, maxValue:1000000, textPosition: 'out', ticks: [1,10,100,1000,10000,100000], format: 'scientific'};
 	these_options.title = 'Time Since Last Trigger';
 
 	time_since_trigger_wrapper = new ChartWrapper({
 		chartType: 'ColumnChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1301'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:1301'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select time_since_trigger',
 		refreshInterval: refresh,
 		options: these_options,
@@ -756,7 +743,7 @@ function drawTimeSinceTrigger(gps, duration, refresh, analysis_path, job_ids) {
 	charts.push(time_since_trigger_wrapper);
 }
 
-function drawVT(gps, duration, refresh, analysis_path, job_ids) {
+function drawVt(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	// Setup the custom options
 	var these_options = clone(default_options);
 	these_options.title = "log_10 VT (Gpc^3/yr)";
@@ -764,7 +751,7 @@ function drawVT(gps, duration, refresh, analysis_path, job_ids) {
 
 	vt_wrapper = new ChartWrapper({
 		chartType: 'LineChart',
-		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server_latest_by_job?tqx=reqId:1400'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path,
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:1400'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
 		query: 'select vt',
 		refreshInterval: refresh,
 		options: these_options,
@@ -774,4 +761,27 @@ function drawVT(gps, duration, refresh, analysis_path, job_ids) {
 	vt_wrapper.draw();
 	charts.push(vt_wrapper);
 }
+
+function drawFarInjHistory(gps, duration, refresh, analysis_path, job_ids, ifos) {
+	var these_options = clone(default_options);
+	//these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:0.0000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific' };
+	//these_options.title = 'FAR';
+	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:0.00000001, maxValue:1, textPosition: 'out', ticks: [0.00000001, 0.000001, 0.0001, 0.01, 1], format: 'scientific'};
+	these_options.title = 'FAR (injections)';
+	these_options.pointShape = 'star';
+	these_options.lineWidth = 0;
+	these_options.dataOpacity =  "1.0",
+
+	far_inj_history_wrapper = new ChartWrapper({
+		chartType: 'ScatterChart',
+		dataSourceUrl: 'https://ldas-jobs.ligo.caltech.edu/~gstlalcbctest/cgi-bin/gstlal_data_server?tqx=reqId:1401'  + '&gpstime='  + gps + '&duration=' + duration + '&id=' + job_ids + '&dir=' + analysis_path + '&ifos=' + ifos,
+		query: 'select far_inj_history',
+		refreshInterval: refresh,
+		options: these_options,
+		containerId: 'far_inj_history_wrapper',
+	});
+	far_inj_history_wrapper.draw();
+	charts.push(far_inj_history_wrapper);
+}
+
 
