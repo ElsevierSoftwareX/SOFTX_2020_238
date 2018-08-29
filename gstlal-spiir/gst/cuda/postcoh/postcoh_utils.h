@@ -10,6 +10,9 @@ extern "C" {
 
 #define POSTCOH_PARAMS_NOT_INIT -1
 #define POSTCOH_PARAMS_INIT 1
+
+void cuda_device_print(int deviceCount);
+
 PeakList *create_peak_list(PostcohState *state, cudaStream_t stream);
 
 void
