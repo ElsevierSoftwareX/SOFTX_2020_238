@@ -48,7 +48,7 @@ from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import pipemodules
 from gstlal import simulation
-from gstlal.pipemodules import uni_datasource
+from gstlal.pipemodules import snglrate_datasource
 from gstlal.spiirbank import spiir_utils
 
 
@@ -227,7 +227,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		if veto_segments is not None and instrument in veto_segments.keys():
 			# fir_whitener set to 0, use FFT whitener
 			hoftdicts[instrument] = \
-			uni_datasource.mkwhitened_src(pipeline, src,
+			snglrate_datasource.mkwhitened_src(pipeline, src,
 					sngl_max_rate, instrument, psd =
 					psd[instrument], psd_fft_length =
 					psd_fft_length, ht_gate_threshold =
@@ -239,7 +239,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 					dqvector = dqvector)
 		else:
 			hoftdicts[instrument] = \
-			uni_datasource.mkwhitened_src(pipeline, src,
+			snglrate_datasource.mkwhitened_src(pipeline, src,
 					sngl_max_rate, instrument, psd =
 					psd[instrument], psd_fft_length =
 					psd_fft_length, ht_gate_threshold =
@@ -348,9 +348,9 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 		max_instru_rates[instrument] = sngl_max_rate
 		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:		
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = snglrate_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
-			hoftdicts[instrument] = uni_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
+			hoftdicts[instrument] = snglrate_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 
 	#
 	# construct trigger generators
@@ -484,7 +484,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		  print "%s: max rate of all banks %d Hz" % (instrument, sngl_max_rate)
 		if veto_segments is not None and instrument in veto_segments.keys():
 			hoftdicts[instrument] = \
-			uni_datasource.mkwhitened_src(pipeline, src,
+			snglrate_datasource.mkwhitened_src(pipeline, src,
 					sngl_max_rate, instrument, psd =
 					psd[instrument], psd_fft_length =
 					psd_fft_length, ht_gate_threshold =
@@ -496,7 +496,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 					dqvector = dqvector)
 		else:
 			hoftdicts[instrument] = \
-			uni_datasource.mkwhitened_src(pipeline, src,
+			snglrate_datasource.mkwhitened_src(pipeline, src,
 					sngl_max_rate, instrument, psd =
 					psd[instrument], psd_fft_length =
 					psd_fft_length, ht_gate_threshold =
@@ -631,7 +631,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 		src, statevector, dqvector  = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
 		if veto_segments is not None:		
 			hoftdicts[instrument] = \
-			uni_datasource.mkwhitened_src(pipeline, src,
+			snglrate_datasource.mkwhitened_src(pipeline, src,
 					sngl_max_rate, instrument, psd =
 					psd[instrument], psd_fft_length =
 					psd_fft_length, ht_gate_threshold =
@@ -641,7 +641,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 					zero_pad = 0, width = 32, fir_whitener = 0, statevector = statevector, dqvector = dqvector)
 		else:
 			hoftdicts[instrument] = \
-			uni_datasource.mkwhitened_src(pipeline, src,
+			snglrate_datasource.mkwhitened_src(pipeline, src,
 					sngl_max_rate, instrument, psd =
 					psd[instrument], psd_fft_length =
 					psd_fft_length, ht_gate_threshold =

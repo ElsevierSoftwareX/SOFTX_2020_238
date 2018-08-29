@@ -426,6 +426,9 @@ class FinalSink(object):
 			# the logic of clustering here is quite complicated, fresh up
 			# yourself before reading the code
 			# check if the newevents is over boundary
+			# this loop will exit when the cluster_boundary is incremented to be > the buf_timestamp, see plot in self.cluster()
+
+
 			while self.cluster_window > 0 and self.cluster_boundary and buf_timestamp > self.cluster_boundary:
 				self.cluster(self.cluster_window)
 
@@ -478,14 +481,26 @@ class FinalSink(object):
 		return head_event
 
 	def cluster(self, cluster_window):
+		# send candidate to be gracedb checked only when:
+		# time ->->->->
+		#                     |buf_timestamp
+		#          ___________(cur_table)
+		#                |boundary
+		#           |candidate to be gracedb checked = peak of cur_table < boundary
+		#                  |candidate remain = peak of cur_table > boundary
+		# afterwards:
+		#                     |buf_timestamp
+		#                 ____(cur_table cleaned)
+		#                           |boundary incremented
 
-		# moving window clustering
+		# always choose the head event to test its end against boundary
 		if self.candidate is None:
 			self.candidate = self.__select_head_event()
 
+		# make sure the candidate is within the boundary
 		if self.candidate is None or self.candidate.end > self.cluster_boundary:
 			self.cluster_boundary = self.cluster_boundary + cluster_window
-			self.candidate = None
+			self.candidate = None # so we can reselect a candidate next time
 			return
 		# the first event in cur_event_table
 		peak_event = self.__select_head_event()
@@ -494,6 +509,7 @@ class FinalSink(object):
 			if row.end <= self.cluster_boundary and row.cohsnr > peak_event.cohsnr:
 				peak_event = row
 
+		# cur_table is empty and we do have a candidate, so need to check the candidate
 		if peak_event is None:
 			# no event within the boundary, candidate is the peak, update boundary
 			self.cluster_boundary = self.cluster_boundary + cluster_window
