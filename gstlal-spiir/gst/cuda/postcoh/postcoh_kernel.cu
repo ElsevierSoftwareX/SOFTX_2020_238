@@ -271,10 +271,6 @@ __global__ void ker_coh_skymap
 	int		ntmplt		/* INPUT, number of templates */
 )
 {
-    int bid = blockIdx.x;
-    int bn  = gridDim.x;
-    int tid = threadIdx.x;
-
     int wn  = blockDim.x >> LOG_WARP_SIZE;
     int wID = threadIdx.x >> LOG_WARP_SIZE;     
 
@@ -748,7 +744,7 @@ __global__ void ker_coh_max_and_chisq
     volatile float *ipeak_shared = &smem[blockDim.x];
 	float cohsnr_max = 0.0, cohsnr_cur;
 
-	if (bid == 0) {
+	if (bid == 0 && npeak > 0) {
 		/* clean up smem history */
 		cohsnr_shared[threadIdx.x] = 0.0;
 		ipeak_shared[threadIdx.x] = 0;
@@ -889,11 +885,11 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	size_t totalmem;
 
 	int threads = 256;
-    int sharedmem     = MAX(2*threads*sizeof(float), 4 * threads / WARP_SIZE * sizeof(float));
+    int sharedsize     = MAX(2*threads*sizeof(float), 4 * threads / WARP_SIZE * sizeof(float));
 	PeakList *pklist = state->peak_list[iifo];
 	int npeak = pklist->npeak[0];
 
-	ker_coh_max_and_chisq<<<npeak, threads, sharedmem, stream>>>(
+	ker_coh_max_and_chisq<<<npeak, threads, sharedsize, stream>>>(
 									state->dd_snglsnr,
 									iifo,	
 									state->nifo,
@@ -924,7 +920,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 
 	if(output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR)
 	{
-		ker_coh_skymap<<<1, threads, sharedmem, stream>>>(
+		ker_coh_skymap<<<1, threads, sharedsize, stream>>>(
 									pklist->d_cohsnr_skymap,
 									pklist->d_nullsnr_skymap,
 									state->dd_snglsnr,
@@ -942,12 +938,15 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->ntmplt
 									);
 
+		cudaStreamSynchronize(stream);
+		CUDA_CHECK(cudaPeekAtLastError());
 
 		CUDA_CHECK(cudaMemcpyAsync(pklist->cohsnr_skymap,
 			pklist->d_cohsnr_skymap,
 			sizeof(float) * state->npix * 2,
 			cudaMemcpyDeviceToHost,
 			stream));
+
 	}
 
 	/* copy the snr, cohsnr, nullsnr, chisq out */
