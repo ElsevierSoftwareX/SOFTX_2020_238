@@ -166,6 +166,7 @@ static void cuda_postcoh_device_set_init(CudaPostcoh *element)
 	if (element->device_id == POSTCOH_PARAMS_NOT_INIT) {
 		int deviceCount;
 		CUDA_CHECK(cudaGetDeviceCount(&deviceCount));
+		cuda_device_print(deviceCount);
 		element->device_id = element->stream_id % deviceCount;
 		GST_LOG("device for postcoh %d\n", element->device_id);
 		CUDA_CHECK(cudaSetDevice(element->device_id));
@@ -556,9 +557,9 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 			state->hist_trials, state->autochisq_len, postcoh->preserved_len, state->snglsnr_len, state->snglsnr_start_load, state->snglsnr_start_exe, state->max_npeak);
 
 	state->ntmplt = postcoh->channels/2;
-	cudaMemGetInfo(&freemem, &totalmem);
+	CUDA_CHECK(cudaMemGetInfo(&freemem, &totalmem));
 	printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
-	printf( "Allocating %d B\n", (int) sizeof(COMPLEX_F *) * state->nifo );
+	printf( "Allocating %d B for dd_snglsnr\n", (int) sizeof(COMPLEX_F *) * state->nifo );
 
 	CUDA_CHECK(cudaMalloc((void **)&(state->dd_snglsnr), sizeof(COMPLEX_F *) * state->nifo));
 	state->d_snglsnr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * state->nifo);
@@ -597,9 +598,9 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		guint mem_alloc_size = state->snglsnr_len * postcoh->bps;
 		//printf("device id %d, stream addr %p, alloc for snglsnr %d\n", postcoh->device_id, postcoh->stream, mem_alloc_size);
 		
-		cudaMemGetInfo(&freemem, &totalmem);
+		CUDA_CHECK(cudaMemGetInfo(&freemem, &totalmem));
 		printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
-		printf( "Allocating %d MB\n", (int) (mem_alloc_size / 1024 / 1024) );
+		printf( "Allocating SNR series %u B, i.e. %d MB for ifo %d\n", mem_alloc_size, (int) (mem_alloc_size / 1024 / 1024), cur_ifo);
 
 		CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMemsetAsync(state->d_snglsnr[cur_ifo], 0, mem_alloc_size, postcoh->stream));
@@ -609,7 +610,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	}
 	get_write_ifo_mapping(state->all_ifos, nifo, state->write_ifo_mapping);
 
-       	CUDA_CHECK(cudaMalloc((void**) &state->d_write_ifo_mapping, sizeof(int) * state->nifo));
+    CUDA_CHECK(cudaMalloc((void**) &state->d_write_ifo_mapping, sizeof(int) * state->nifo));
 	CUDA_CHECK(cudaMemsetAsync(state->d_write_ifo_mapping, 0, sizeof(int) * state->nifo, postcoh->stream));
 	CUDA_CHECK(cudaMemcpyAsync(state->d_write_ifo_mapping, state->write_ifo_mapping, sizeof(int)* state->nifo, cudaMemcpyHostToDevice, postcoh->stream));
 
