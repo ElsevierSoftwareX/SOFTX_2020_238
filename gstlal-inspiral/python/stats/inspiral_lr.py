@@ -140,8 +140,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		# this test is intended to fail if .template_ids is None:
 		# must not collect trigger statistics unless we can verify
 		# that they are for the correct templates.
-		# FIXME:  use a proper ID column when one is available
-		if event.Gamma0 not in self.template_ids:
+		if event.template_id not in self.template_ids:
 			raise ValueError("event from wrong template")
 		self.densities["%s_snr_chi" % event.ifo].count[event.snr, event.chisq / event.snr**2.] += 1.0
 

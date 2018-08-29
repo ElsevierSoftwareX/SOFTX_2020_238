@@ -224,8 +224,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 
 		reference = min(events, key = lambda event: event.ifo)
 		ref_end, ref_offset = reference.end, offsetvector[reference.ifo]
-		# FIXME:  use a proper ID column when one is available
-		template_id = reference.Gamma0
+		template_id = reference.template_id
 		if template_id not in self.template_ids:
 			raise ValueError("event IDs %s are from the wrong template" % ", ".join(sorted(str(event.event_id) for event in events)))
 		# segment spanned by reference event
@@ -535,6 +534,8 @@ class RankingStatPDF(object):
 
 
 	def collect_zero_lag_rates(self, connection, coinc_def_id):
+		# FIXME:  Gamma0 contains the template_id, switch to proper
+		# column when one is available
 		for ln_likelihood_ratio, template_id in connection.cursor().execute("""
 SELECT
 	likelihood,

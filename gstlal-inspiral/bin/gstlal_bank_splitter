@@ -145,7 +145,7 @@ sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 
 # assign ids and write out the full template bank with ids assigned
 for nrow, row in enumerate(sngl_inspiral_table):
-	row.Gamma0 = nrow + options.template_id_start_index
+	row.template_id = nrow + options.template_id_start_index
 # FIXME
 #process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
 ligolw_utils.write_filename(xmldoc, options.output_full_bank_file_with_ids, gz = options.output_full_bank_file_with_ids.endswith('gz'), verbose = options.verbose)

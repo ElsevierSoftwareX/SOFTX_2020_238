@@ -115,7 +115,7 @@ for gid in gid_list:
 	# COMPLEX8TimeSeries which contain the snr time series, the second dict
 	# contains a tuple with the ifo and template number
 	timeseries_ligolw_dict = dict((ligolw_param.get_pyvalue(elem, u"event_id"), lalseries.parse_COMPLEX8TimeSeries(elem)) for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"COMPLEX8TimeSeries")
-	eventid_ifoGamma0_dict = dict((row.event_id, (row.ifo, row.Gamma0)) for row in lsctables.SnglInspiralTable.get_table(xmldoc)) 
+	eventid_ifotemplate_id_dict = dict((row.event_id, (row.ifo, row.template_id)) for row in lsctables.SnglInspiralTable.get_table(xmldoc))
 
 	# Parse the bank files
 	# NOTE This assumes --svd-bank will also be provided once in the ProcessParamsTable
@@ -128,8 +128,8 @@ for gid in gid_list:
 	banknum = None
 	for i, bank in enumerate(banks.values()[0]):
 		for j, row in enumerate(bank.sngl_inspiral_table):
-			# The templates should all have the same Gamma0, so just grab one
-			if row.Gamma0 == eventid_ifoGamma0_dict.values()[0][-1]:
+			# The templates should all have the same template_id, so just grab one
+			if row.template_id == eventid_ifotemplate_id_dict.values()[0][-1]:
 				banknum = i
 				tmpltnum = j
 				break
@@ -147,7 +147,7 @@ for gid in gid_list:
 	FigureCanvas(fig)
 
 	for i, (eventid, complex8timeseries) in enumerate(timeseries_ligolw_dict.items()):
-		ifo = eventid_ifoGamma0_dict[eventid][0]
+		ifo = eventid_ifotemplate_id_dict[eventid][0]
 		complex_snr_timeseries = complex8timeseries.data.data
 		autocorr_length = complex8timeseries.data.length
 		time = numpy.linspace(float(complex8timeseries.epoch), float(complex8timeseries.epoch)+(autocorr_length-1)*complex8timeseries.deltaT, autocorr_length)
