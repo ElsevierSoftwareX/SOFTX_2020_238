@@ -1384,6 +1384,12 @@ class TimePhaseSNR(object):
 		array([  9.51668418e-14], dtype=float32)
 
 		"""
+		#
+		# NOTE shortcut for single IFO
+		#
+		if len(snr) == 1:
+			return 1. /  self.norm * 5.66 / (sum(s**2 for s in snr.values())**.5)**4
+
 		deff = dict((k, horizon[k] / snr[k] * 8.0) for k in snr)
 		# FIXME can this be a function call??
 		slices = dict((pair, [3*n,3*n+1,3*n+2]) for n,pair in enumerate(self.instrument_pairs(time)))
