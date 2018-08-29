@@ -52,7 +52,7 @@ from gstlal.pipemodules import uni_datasource
 from gstlal.spiirbank import spiir_utils
 
 
-def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, gpu_acc = False):
+def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, nxydump_directory = '.', chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, blind_injections = None, peak_thresh = 4, gpu_acc = False):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -137,7 +137,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		if nxydump_segment is not None:
-			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_gpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
+			pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "%s/snr_gpu_%d_%s.dump" % (nxydump_directory, nxydump_segment[0], suffix), segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#
@@ -430,7 +430,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		control_time_shift_string = None, psd_fft_length = 8,
 		fir_whitener = 0,
 		ht_gate_threshold = None, veto_segments = None, verbose = False,
-		nxydump_segment = None, chisq_type = 'autochisq', track_psd =
+		nxydump_segment = None, nxydump_directory = '.', chisq_type = 'autochisq', track_psd =
 		False, block_duration = gst.SECOND, blind_injections = None,
 		cuda_postcoh_snglsnr_thresh = 4.0, cuda_postcoh_cohsnr_thresh =
 		5.0, cuda_postcoh_detrsp_fname = None, cuda_postcoh_hist_trials
@@ -490,7 +490,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 					psd_fft_length, ht_gate_threshold =
 					ht_gate_threshold, veto_segments =
 					veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment =
-					nxydump_segment, track_psd = track_psd,
+					nxydump_segment, nxydump_directory = nxydump_directory, track_psd = track_psd,
 					zero_pad = 0, width = 32, fir_whitener =
 					fir_whitener, statevector = statevector,
 					dqvector = dqvector)
@@ -501,7 +501,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 					psd[instrument], psd_fft_length =
 					psd_fft_length, ht_gate_threshold =
 					ht_gate_threshold, veto_segments = None, seekevent = detectors.seekevent, 
-					nxydump_segment = nxydump_segment,
+					nxydump_segment = nxydump_segment, nxydump_directory = nxydump_directory,
 					track_psd = track_psd, zero_pad = 0,
 					width = 32, fir_whitener =
 					fir_whitener, statevector =
@@ -565,7 +565,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 			snr = pipeparts.mktee(pipeline, snr)
 
 			if nxydump_segment is not None:
-				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_gpu_%d_%s.dump" % (nxydump_segment[0], suffix), segment = nxydump_segment)
+				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "%s/snr_gpu_%d_%s.dump" % (nxydump_directory, nxydump_segment[0], suffix), segment = nxydump_segment)
 
 			snr = pipeparts.mkqueue(pipeline, snr, max_size_time=gst.SECOND * 10, max_size_buffers=10, max_size_bytes=100000000)
 

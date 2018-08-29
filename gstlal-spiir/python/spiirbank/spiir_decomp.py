@@ -36,7 +36,7 @@ rather than importing _spiir directly.
 import math
 
 import lal
-from ._spiir import *
+from ._spiir_decomp import *
 
 
 __author__ = "Qi Chu <qi.chu@ligo.org>"

@@ -30,7 +30,6 @@ import commands
 import sys
 import os
 import unittest
-import matplotlib.pyplot as plt
 import re
 import numpy
 import scipy

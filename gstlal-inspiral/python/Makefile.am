@@ -10,7 +10,6 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	cbc_template_fir.py \
-	cbc_template_iir.py \
 	chirptime.py \
 	curve_fit.py \
 	far.py \
@@ -21,7 +20,6 @@ pkgpython_PYTHON = \
 	lloidplots.py \
 	llweb.py \
 	lvalert_helper.py \
-	optimize_mf.py \
 	plotfar.py \
 	plotsegments.py \
 	plotsensitivity.py \

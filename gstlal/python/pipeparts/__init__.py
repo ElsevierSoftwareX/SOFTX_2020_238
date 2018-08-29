@@ -43,7 +43,6 @@ from glue import iterutils
 from glue import lal
 from glue import segments
 from gstlal import pipeio
-from lal import LIGOTimeGPS
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -171,7 +170,7 @@ class framecpp_channeldemux_set_units(object):
 
 
 class framecpp_channeldemux_check_segments(object):
-	def __init__(self, elem, seglists, jitter = LIGOTimeGPS(0, 1)):
+	def __init__(self, elem, seglists, jitter = lal.LIGOTimeGPS(0, 1)):
 		self.elem = elem
 		self.probe_handler_ids = {}
 		self.jitter = jitter
@@ -187,7 +186,7 @@ class framecpp_channeldemux_check_segments(object):
 			self.probe_handler_ids[name] = self.set_probe(pad, seglists[name], self.jitter)
 
 	@staticmethod
-	def set_probe(pad, seglist, jitter = LIGOTimeGPS(0, 1)):
+	def set_probe(pad, seglist, jitter = lal.LIGOTimeGPS(0, 1)):
 		# use a copy of the segmentlist so the probe can modify it
 		return pad.add_data_probe(framecpp_channeldemux_check_segments.probe, (segments.segmentlist(seglist), jitter))
 
@@ -197,13 +196,13 @@ class framecpp_channeldemux_check_segments(object):
 			if not obj.flag_is_set(gst.BUFFER_FLAG_GAP):
 				# remove the current buffer from the data
 				# we're expecting to see
-				seglist -= segments.segmentlist([segments.segment((LIGOTimeGPS(0, obj.timestamp), LIGOTimeGPS(0, obj.timestamp + obj.duration)))])
+				seglist -= segments.segmentlist([segments.segment((lal.LIGOTimeGPS(0, obj.timestamp), lal.LIGOTimeGPS(0, obj.timestamp + obj.duration)))])
 				# ignore missing data intervals unless
 				# they're bigger than the jitter
 				iterutils.inplace_filter(lambda seg: abs(seg) > jitter, seglist)
 			# are we still expecting to see something that
 			# precedes the current buffer?
-			preceding = segments.segment((segments.NegInfinity, LIGOTimeGPS(0, obj.timestamp)))
+			preceding = segments.segment((segments.NegInfinity, lal.LIGOTimeGPS(0, obj.timestamp)))
 			if seglist.intersects_segment(preceding):
 				raise ValueError("%s: detected missing data:  %s" % (pad.get_name(), seglist & segments.segmentlist([preceding])))
 		elif isinstance(obj, gst.Event) and obj.type == gst.EVENT_EOS:
@@ -247,8 +246,8 @@ def framecpp_filesink_cache_entry_from_mfs_message(message):
 	describing the file being written by the multifilesink element.
 	"""
 	# extract the segment spanned by the file from the message directly
-	start = LIGOTimeGPS(0, message.structure["timestamp"])
-	end = start + LIGOTimeGPS(0, message.structure["duration"])
+	start = lal.LIGOTimeGPS(0, message.structure["timestamp"])
+	end = start + lal.LIGOTimeGPS(0, message.structure["duration"])
 
 	# retrieve the framecpp_filesink bin (for instrument/observatory
 	# and frame file type)

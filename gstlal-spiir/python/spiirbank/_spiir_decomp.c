@@ -218,7 +218,7 @@ static struct PyMethodDef methods[] = {
 	};
 
 /* The init function for this module */
-void init_spiir(void)
+void init_spiir_decomp(void)
 	{
 	(void) Py_InitModule3(MODULE_NAME, methods, SPIIRDocstring);
 	import_array();
