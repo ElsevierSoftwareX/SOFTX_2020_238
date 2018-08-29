@@ -21,15 +21,56 @@ Produce a fits file from binary sky map file
 import struct
 from lalinference.io import fits
 import numpy as np
+import scipy as sp
 import pdb
 from optparse import Option, OptionParser
 
+from glue.ligolw import ligolw, array, param, utils
+from gstlal.pipemodules import pipe_macro
+
+# FIXME:  require calling code to provide the content handler
+class DefaultContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+array.use_in(DefaultContentHandler)
+param.use_in(DefaultContentHandler)
+ 
+def find_closest_gps(event_time, start, gps_step):
+	gps_len = 86400 /gps_step;
+	days_from_start = np.floor((event_time - start)/86400.)
+	time_in_one_day = event_time - ( start + days_from_start * 86400)
+	idx = int( round( time_in_one_day/float(gps_step))) % gps_len
+
+
+def param_from_xml(filename, param_name, contenthandler = DefaultContentHandler, verbose = False):
+
+	# Load document
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+
+	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == pipe_macro.DETRSP_XML_ID_NAME):
+		result = param.get_param(root, param_name).pcdata
+	return result
+
+
+def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
+
+	# Load document
+	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+
+	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == pipe_macro.DETRSP_XML_ID_NAME):
+		result = array.get_array(root, array_name).array 
+	return result
+
+
 parser = OptionParser(
   description = __doc__,
-  usage = '%prog [options] [INPUT]',
+  usage = '%prog [opts] [INPUT]',
   option_list = [
 	  Option("--output", "-o", 
 		  help="Output filename"),
+	  Option("--event-time", "-t",
+		  help="Event GPS time"),
+	  Option("--cuda-postcoh-detrsp-fname", "-m",
+		  help="Detector response map used for postcoh"),
 	  Option("--event-id", "-e",
 		  help="Postcoh event ID")]
 )
@@ -40,27 +81,41 @@ import logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('Postcoh_skymap')
 
-postcoh_skymap = []
+cohsnr_skymap = []
+nullsnr_skymap = []
+allread_skymap = []
 input_fname = args[0]
+
 instruments = input_fname.split('/')[-1].split('_')[0]
 f = open(input_fname, 'rb')
 
 for chunk in iter(lambda: f.read(4), ''):
-	postcoh_skymap.append(struct.unpack('f', chunk)[0])
+	allread_skymap.append(struct.unpack('f', chunk)[0])
 
-#FIXME: This is no reason
-min_skymap = min(postcoh_skymap)
-range_skymap = max(postcoh_skymap) - min_skymap
-for i in range(len(postcoh_skymap)):
-	postcoh_skymap[i] = np.exp(postcoh_skymap[i]/2)
-sum_skymap = sum(postcoh_skymap)
-for i in range(len(postcoh_skymap)):
-	postcoh_skymap[i] = postcoh_skymap[i]/sum_skymap
+npix = len(allread_skymap)/2
+cohsnr_skymap = allread_skymap[0:npix]
+nullsnr_skymap = allread_skymap[npix:]
+
+detrsp_start_time = long(param_from_xml(opts.cuda_postcoh_detrsp_fname, pipe_macro.DETRSP_XML_PARAM_NAME_GPS_START))
+
+gps_step = long(param_from_xml(opts.cuda_postcoh_detrsp_fname, pipe_macro.DETRSP_XML_PARAM_NAME_GPS_STEP))
+
+event_time = long(opts.event_time)
+igps = find_closest_gps(event_time, detrsp_start_time, gps_step)
+
+Det_name = "Det_map_gps_%d" % igps
+Det_array = array_from_xml(opts.cuda_postcoh_detrsp_fname, Det_name)
+for i in range(npix):
+	null = nullsnr_skymap[i]
+	prob_null = 1 - sp.special.gammainc(ndof/2.0, null**2/2)
+	log_prob_null = np.log(prob_null)
+	log_prob_final = np.log(4*np.pi**2/det_array[i]) + cohsnr_skymap[i]**2 + log_prob_null
+	prob = sp.special.logsumexp(log_prob_final, axis = 0)
 
 log.info("begin to write skymap in fits format")
 #FIXME: gps_time/ runtime are not input
-fits.write_sky_map(opts.output, postcoh_skymap,
-			objid = str(opts.event_id), gps_time=0,
+fits.write_sky_map(opts.output, prob,
+			objid = str(opts.event_id), gps_time=event_time,
 			creator = 'postcoh', runtime = 0, 
 			instruments = instruments, nest = True)
 
