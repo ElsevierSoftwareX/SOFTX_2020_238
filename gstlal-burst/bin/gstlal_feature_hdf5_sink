@@ -56,6 +56,7 @@ def parse_command_line():
     parser.add_option("--basename", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Sets the basename for files written to disk. Default = GSTLAL_IDQ_FEATURES")
     parser.add_option("--instrument", metavar = "string", default = "H1", help = "Sets the instrument for files written to disk. Default = H1")
     parser.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
+    parser.add_option("--waveform", type="string", default = "sine_gaussian", help = "Set the waveform used for producing features. Default = sine_gaussian.")
     parser.add_option("--channel-list", type="string", metavar = "name", help = "Set the list of the channels to process. Command given as --channel-list=location/to/file")
     parser.add_option("--sample-rate", type = "int", metavar = "Hz", default = 1, help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
     parser.add_option("--write-cadence", type = "int", default = 100, help = "Rate at which the feature data is written to disk. Default = 100 seconds.")
@@ -107,9 +108,10 @@ class HDF5StreamSink(object):
         self.sample_rate = options.sample_rate
         self.write_cadence = options.write_cadence
         self.persist_cadence = options.persist_cadence
+        self.waveform = options.waveform
         self.basename = '%s-%s' % (options.instrument[:1], options.basename)
-        self.columns = ['start_time', 'stop_time', 'trigger_time', 'frequency', 'q', 'snr', 'phase', 'sigmasq', 'chisq']
-        self.feature_data = utils.HDF5TimeseriesFeatureData(self.columns, keys = self.keys, cadence = self.write_cadence, sample_rate = self.sample_rate)
+        self.columns = ['trigger_time', 'frequency', 'q', 'snr', 'phase']
+        self.feature_data = utils.HDF5TimeseriesFeatureData(self.columns, keys = self.keys, cadence = self.write_cadence, sample_rate = self.sample_rate, waveform = self.waveform)
 
         ### get base temp directory
         if '_CONDOR_SCRATCH_DIR' in os.environ:

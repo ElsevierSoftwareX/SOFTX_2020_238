@@ -228,6 +228,7 @@ if options.save_format == 'kafka':
 	hdf5_sink_options = {
 		"instrument": ifo,
 		"channel-list": options.channel_list,
+		"waveform": options.waveform,
 		"write-cadence": options.cadence,
 		"persist-cadence": options.persist_cadence,
 		"input-topic-basename": '_'.join(['synchronizer', options.tag])
