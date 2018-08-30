@@ -176,6 +176,7 @@ from gstlal import inspiral_pipe
 from gstlal import lloidhandler
 from gstlal import lloidparts
 from gstlal import pipeparts
+from gstlal import servicediscovery
 from gstlal import simulation
 
 @lsctables.use_in
@@ -200,6 +201,10 @@ setrlimit(resource.RLIMIT_RSS, None)
 # possible that SL7 has lowered the default stack size from SL6 and we
 # don't need to do this anymore.  remove?
 setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
+
+
+def service_domain(gracedb_search, gracedb_pipeline):
+	return "%s_%s.%s" % (gracedb_pipeline.lower(), gracedb_search.lower(), servicediscovery.DEFAULT_SERVICE_DOMAIN)
 
 
 #
@@ -623,6 +628,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	#bottle.app().catchall = False
 	httpservers = httpinterface.HTTPServers(
 		service_name = "%s.gstlal_inspiral" % (options.job_tag if options.job_tag is not None else base64.urlsafe_b64encode(uuid.uuid4().bytes)),
+		service_domain = service_domain(options.gracedb_search, options.gracedb_pipeline),
 		service_properties = {
 			"cwd": os.getcwd(),
 			"pid": str(os.getpid()),
