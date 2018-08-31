@@ -120,23 +120,37 @@ def excepthook(*args):
 
 sys.excepthook = excepthook
 
-#
-# Make sure we have sufficient resources
-# We allocate far more memory than we need, so this is okay
-#
+def print_resource():
+	print "RLIMIT_STACK {0}".format(resource.getrlimit(resource.RLIMIT_STACK))
+	print "FSIZE {0}".format(resource.getrlimit(resource.RLIMIT_FSIZE))
+	print "MEMLOCK {0}".format( resource.getrlimit(resource.RLIMIT_MEMLOCK))
+	print "RSS {0}".format( resource.getrlimit(resource.RLIMIT_RSS))
+	print "DATA {0}".format( resource.getrlimit(resource.RLIMIT_DATA))
+	print "NOFILE {0}".format( resource.getrlimit(resource.RLIMIT_NOFILE))
+	print "AS {0}".format( resource.getrlimit(resource.RLIMIT_AS))
+	print "CORE {0}".format( resource.getrlimit(resource.RLIMIT_CORE))
 
-# set the number of processes up to hard limit
-maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
-resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
 
-# set the total set size up to hard limit
-maxas = resource.getrlimit(resource.RLIMIT_AS)[1]
-resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
-
-# remove: set the stack size per thread to be smaller
-maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
-# resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
-
+def set_rlimit():
+	#
+	# different nodes may have different limits
+	# X2200 nodes have small RLIMIT_AS and CORE than K10 nodes
+	# Make sure we have sufficient resources
+	# We allocate far more memory than we need, so this is okay
+	#
+	
+	# set the number of processes up to hard limit
+	maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
+	resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
+	# set the total set size up to hard limit
+	maxas = resource.getrlimit(resource.RLIMIT_AS)[1]
+	if maxas != -1 and maxas <= 20520825056:
+		print_resource()
+		raise ValueError("RLIMIT_AS is too small for 4bank job")
+	resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
+	# remove: set the stack size per thread to be smaller
+	maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
+	# resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
 
 def now():
     return XLALUTCToGPS(time.gmtime())
@@ -336,11 +350,14 @@ def parse_command_line():
 # =============================================================================
 #
 
+#
+# set resource limit for the pipeline
+#
+set_rlimit()
 
 #
 # parse command line
 #
-
 
 options, filenames, process_params, iir_banks, detectors = parse_command_line()
 
