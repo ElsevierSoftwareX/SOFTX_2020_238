@@ -50,6 +50,7 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_inspiral_plot_sensitivity \
 	gstlal_ll_inspiral_save_state \
 	gstlal_inspiral_summary_page \
+	gstlal_inspiral_summary_page_lite \
 	gstlalcbcnode \
 	gstlalcbcsummary \
 	gstlal_svd_bank
