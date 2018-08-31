@@ -915,7 +915,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->hist_trials,
 									state->trial_sample_inv);
 
-	cudaStreamSynchronize(stream);
+	CUDA_CHECK(cudaStreamSynchronize(stream));
 	CUDA_CHECK(cudaPeekAtLastError());
 
 	if(output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR)
@@ -938,7 +938,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									state->ntmplt
 									);
 
-		cudaStreamSynchronize(stream);
+		CUDA_CHECK(cudaStreamSynchronize(stream));
 		CUDA_CHECK(cudaPeekAtLastError());
 
 		CUDA_CHECK(cudaMemcpyAsync(pklist->cohsnr_skymap,

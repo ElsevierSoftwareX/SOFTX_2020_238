@@ -166,6 +166,7 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		int hist_trials = state->hist_trials;
 		g_assert(hist_trials != -1);
 		int max_npeak = state->max_npeak;
+		printf("max_npeak %d\n", max_npeak);
 		PeakList *pklist = (PeakList *)malloc(sizeof(PeakList));
 
 		int peak_intlen = (7 + hist_trials) * max_npeak + 1;
@@ -272,10 +273,15 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		printf("alloc cohsnr_skymap size %f MB\n", (float) mem_alloc_size/1000000);
 
 		CUDA_CHECK(cudaMalloc((void **)&(pklist->d_cohsnr_skymap), mem_alloc_size));
+		CUDA_CHECK(cudaMemsetAsync(pklist->d_cohsnr_skymap, 0, mem_alloc_size, stream));
 		pklist->d_nullsnr_skymap = pklist->d_cohsnr_skymap + state->npix;
 
 		CUDA_CHECK(cudaMallocHost((void **) &(pklist->cohsnr_skymap), mem_alloc_size));
+		memset(pklist->cohsnr_skymap, 0, mem_alloc_size);
 		pklist->nullsnr_skymap = pklist->cohsnr_skymap + state->npix;
+
+		CUDA_CHECK(cudaStreamSynchronize(stream));
+		CUDA_CHECK(cudaPeekAtLastError());
 
 		return pklist;
 }
@@ -538,8 +544,8 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	/* allocate memory for host autocorr list pointer and device auto list pointer*/
 	COMPLEX_F **autocorr = (COMPLEX_F **)malloc(sizeof(COMPLEX_F *) * nifo );
 	float **autocorr_norm = (float **)malloc(sizeof(float *) * nifo );
-	cudaMalloc((void **)&(state->dd_autocorr_matrix), sizeof(COMPLEX_F *) * nifo);
-	cudaMalloc((void **)&(state->dd_autocorr_norm), sizeof(float *) * nifo);
+	CUDA_CHECK(cudaMalloc((void **)&(state->dd_autocorr_matrix), sizeof(COMPLEX_F *) * nifo));
+	CUDA_CHECK(cudaMalloc((void **)&(state->dd_autocorr_norm), sizeof(float *) * nifo));
 
 	end_ifo = NULL;
 	strcpy(fname_cpy, fname);

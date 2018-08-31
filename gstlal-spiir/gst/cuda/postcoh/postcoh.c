@@ -166,7 +166,8 @@ static void cuda_postcoh_device_set_init(CudaPostcoh *element)
 	if (element->device_id == POSTCOH_PARAMS_NOT_INIT) {
 		int deviceCount;
 		CUDA_CHECK(cudaGetDeviceCount(&deviceCount));
-		cuda_device_print(deviceCount);
+		/* FIXME: only print device info like runtime version in debug mode */
+		// cuda_device_print(deviceCount);
 		element->device_id = element->stream_id % deviceCount;
 		GST_LOG("device for postcoh %d\n", element->device_id);
 		CUDA_CHECK(cudaSetDevice(element->device_id));
@@ -599,12 +600,14 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 		//printf("device id %d, stream addr %p, alloc for snglsnr %d\n", postcoh->device_id, postcoh->stream, mem_alloc_size);
 		
 		CUDA_CHECK(cudaMemGetInfo(&freemem, &totalmem));
-		printf( "Free memory: %d MB\nTotal memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
+		printf( "Free memory: %d MB  Total memory: %d MB\n", (int)(freemem / 1024 / 1024), (int)(totalmem / 1024 / 1024) );
 		printf( "Allocating SNR series %u B, i.e. %d MB for ifo %d\n", mem_alloc_size, (int) (mem_alloc_size / 1024 / 1024), cur_ifo);
 
 		CUDA_CHECK(cudaMalloc((void**) &(state->d_snglsnr[cur_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMemsetAsync(state->d_snglsnr[cur_ifo], 0, mem_alloc_size, postcoh->stream));
 		CUDA_CHECK(cudaMemcpyAsync(&(state->dd_snglsnr[cur_ifo]), &(state->d_snglsnr[cur_ifo]), sizeof(COMPLEX_F *), cudaMemcpyHostToDevice, postcoh->stream));
+		CUDA_CHECK(cudaStreamSynchronize(postcoh->stream));
+		CUDA_CHECK(cudaPeekAtLastError());
 
 		state->peak_list[cur_ifo] = create_peak_list(postcoh->state, postcoh->stream);
 	}
