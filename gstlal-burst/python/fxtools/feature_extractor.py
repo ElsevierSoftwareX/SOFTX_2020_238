@@ -285,12 +285,12 @@ class MultiChannelHandler(simplehandler.Handler):
 			trigger_seg = segments.segment(LIGOTimeGPS(row.end_time, row.end_time_ns), LIGOTimeGPS(row.end_time, row.end_time_ns))
 
 		if not self.frame_segments[self.instrument] or self.frame_segments[self.instrument].intersects_segment(trigger_seg):
-			freq, q, duration = self.waveforms[channel].parameter_grid[rate][row.channel_index]
+			waveform = self.waveforms[channel].parameter_grid[rate][row.channel_index]
 			trigger_time = row.end_time + row.end_time_ns * 1e-9
 
 			# append row for data transfer/saving
 			timestamp = int(numpy.floor(trigger_time))
-			feature_row = {'channel':channel, 'snr':row.snr, 'trigger_time':trigger_time, 'frequency':freq, 'q':q, 'phase':row.phase}
+			feature_row = {'channel':channel, 'snr':row.snr, 'trigger_time':trigger_time, 'frequency':waveform['frequency'], 'q':waveform['q'], 'phase':row.phase}
 			self.feature_queue.append(timestamp, channel, feature_row)
 
 			# save iDQ compatible data

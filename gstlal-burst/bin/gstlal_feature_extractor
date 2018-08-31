@@ -400,10 +400,12 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			qhigh = options.qhigh
 
 		# generate templates
-		if options.waveform == 'half_sine_gaussian':
-			waveforms[channel] = utils.HalfSineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
-		elif options.waveform == 'sine_gaussian':
-			waveforms[channel] = utils.SineGaussianGenerator((flow, fhigh), (qlow, qhigh), rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
+		if 'sine_gaussian' in options.waveform:
+			parameter_range = {'frequency': (flow, fhigh), 'q': (qlow, qhigh)}
+			if options.waveform == 'half_sine_gaussian':
+				waveforms[channel] = utils.HalfSineGaussianGenerator(parameter_range, rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
+			elif options.waveform == 'sine_gaussian':
+				waveforms[channel] = utils.SineGaussianGenerator(parameter_range, rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
 		else:
 			raise NotImplementedError
 
@@ -416,12 +418,12 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('afterwhitening', 3, channel, rate))
 
 			# determine whether to do time-domain or frequency-domain convolution
-			time_domain = (waveforms[channel].sample_pts[rate]*rate) < (5*waveforms[channel].sample_pts[rate]*numpy.log2(rate))
+			time_domain = (waveforms[channel].sample_pts(rate)*rate) < (5*waveforms[channel].sample_pts(rate)*numpy.log2(rate))
 
 			# create FIR bank of half sine-gaussian templates
 			fir_matrix = numpy.array([waveform for waveform in waveforms[channel].generate_templates(rate)])
 			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
-			thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = waveforms[channel].latency[rate])
+			thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = waveforms[channel].latency(rate))
 
 			# add queues, change stream format, add tags
 			if options.latency_output:
