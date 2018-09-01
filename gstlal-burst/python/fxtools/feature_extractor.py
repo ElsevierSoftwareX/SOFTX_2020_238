@@ -141,11 +141,6 @@ class MultiChannelHandler(simplehandler.Handler):
 			else:
 				raise KeyError, 'not a valid feature mode option'
 
-		elif self.save_format == 'ascii':
-			self.header = "# %18s\t%20s\t%20s\t%10s\t%8s\t%8s\t%8s\t%10s\t%s\n" % ("start_time", "stop_time", "trigger_time", "frequency", "phase", "q", "chisq", "snr", "channel")
-			self.fdata = deque(maxlen = 25000)
-			self.fdata.append(self.header)
-
 		elif self.save_format == 'kafka':
 			check_kafka()
 			self.data_transfer = options.data_transfer
@@ -218,15 +213,10 @@ class MultiChannelHandler(simplehandler.Handler):
 						self.set_hdf_file_properties(self.timestamp, duration)
 
 				# Save triggers once per cadence if saving to disk
-				if self.save_format == 'hdf5' or self.save_format == 'ascii':
+				if self.save_format == 'hdf5':
 					if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_save_time, self.cadence) or (self.timestamp == self.feature_end_time):
 						self.logger.info("saving features to disk at timestamp = %d" % self.timestamp)
-						if self.save_format == 'hdf5':
-							self.to_hdf_file()
-						elif self.save_format == 'ascii':
-							self.to_trigger_file(self.timestamp)
-							self.fdata.clear()
-							self.fdata.append(self.header)
+						self.to_hdf_file()
 						self.last_save_time = self.timestamp
 
 				# persist triggers once per persist cadence if using hdf5 format
@@ -293,37 +283,6 @@ class MultiChannelHandler(simplehandler.Handler):
 			feature_row = {'channel':channel, 'snr':row.snr, 'trigger_time':trigger_time, 'frequency':waveform['frequency'], 'q':waveform['q'], 'phase':row.phase}
 			self.feature_queue.append(timestamp, channel, feature_row)
 
-			# save iDQ compatible data
-			if self.save_format == 'ascii':
-				channel_tag = ('%s_%i_%i' %(channel, rate/4, rate/2)).replace(":","_",1)
-				self.fdata.append("%20.9f\t%20.9f\t%20.9f\t%10.3f\t%8.3f\t%8.3f\t%8.3f\t%10.3f\t%s\n" % (start_time, stop_time, trigger_time, freq, row.phase, q, row.chisq, row.snr, channel_tag))
-
-
-	def to_trigger_file(self, buftime = None):
-		"""
-		Dumps triggers saved in memory to disk, following an iDQ ingestion format.
-		Contains a header specifying aligned columns, along with triggers, one per row.
-		Uses the T050017 filenaming convention.
-		NOTE: This method should only be called by an instance that is locked.
-		"""
-		# Only write triggers to disk where the associated data structure has more
-		# than the header stored within.
-		if len(self.fdata) > 1 :
-			fname = '%s-%d-%d.%s' % (self.tag, utils.floor_div(self.last_save_time, self.cadence), self.cadence, "trg")
-			path = os.path.join(self.out_path, self.tag, self.tag+"-"+str(fname.split("-")[2])[:5])
-			fpath = os.path.join(path, fname)
-			tmpfile = fpath+"~"
-			try:
-				os.makedirs(path)
-			except OSError:
-				pass
-			with open(tmpfile, 'w') as f:
- 				f.write(''.join(self.fdata))
-			shutil.move(tmpfile, fpath)
-			if buftime:
-				latency = numpy.round(int(aggregator.now()) - buftime)
-				self.logger.info("buffer timestamp = %d, latency at write stage = %d" % (buftime, latency))
-
 	def to_hdf_file(self):
 		"""
 		Dumps triggers saved in memory to disk in hdf5 format.
@@ -354,9 +313,6 @@ class MultiChannelHandler(simplehandler.Handler):
 
 			self.to_hdf_file()
 			self.finish_hdf_file()
-
-		elif self.save_format == 'ascii':
-			self.to_trigger_file()
 
 	def set_hdf_file_properties(self, start_time, duration):
 		"""
@@ -526,7 +482,7 @@ def append_options(parser):
 	group = optparse.OptionGroup(parser, "Saving Options", "Adjust parameters used for saving/persisting features to disk as well as directories specified")
 	group.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	group.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Set the filename description in which to save the output.")
-	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (ascii/hdf5/kafka/bottle) of features written to disk. Default = hdf5")
+	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (hdf5/kafka/bottle) of features written to disk. Default = hdf5")
 	group.add_option("--feature-mode", metavar = "string", default = "timeseries", help = "Specifies the mode for which features are generated (timeseries/etg). Default = timeseries")
 	group.add_option("--data-transfer", metavar = "string", default = "table", help = "Specifies the format of features transferred over-the-wire (table/row). Default = table")
 	group.add_option("--cadence", type = "int", default = 20, help = "Rate at which to write trigger files to disk. Default = 20 seconds.")
