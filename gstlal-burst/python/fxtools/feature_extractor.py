@@ -519,7 +519,8 @@ def append_options(parser):
 	group = optparse.OptionGroup(parser, "Waveform Options", "Adjust waveforms/parameter space used for feature extraction")
 	group.add_option("-m", "--mismatch", type = "float", default = 0.2, help = "Mismatch between templates, mismatch = 1 - minimal match. Default = 0.2.")
 	group.add_option("-q", "--qhigh", type = "float", default = 20, help = "Q high value for half sine-gaussian waveforms. Default = 20.")
-	group.add_option("--waveform", metavar = "string", default = "half_sine_gaussian", help = "Specifies the waveform used for matched filtering. Possible options: (half_sine_gaussian, sine_gaussian). Default = half_sine_gaussian")
+	group.add_option("--waveform", metavar = "string", default = "half_sine_gaussian", help = "Specifies the waveform used for matched filtering. Possible options: (half_sine_gaussian, sine_gaussian, tapered_sine_gaussian). Default = half_sine_gaussian")
+	group.add_option("--max-latency", type = "float", default = 1.0, help = "Maximum latency allowed from acausal waveforms, only used when using tapered_sine_gaussian templates. Default = 1.0")
 	parser.add_option_group(group)
 
 	group = optparse.OptionGroup(parser, "Saving Options", "Adjust parameters used for saving/persisting features to disk as well as directories specified")
