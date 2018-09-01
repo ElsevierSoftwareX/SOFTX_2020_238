@@ -216,14 +216,14 @@ class MultiChannelHandler(simplehandler.Handler):
 				if self.save_format == 'hdf5':
 					if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_save_time, self.cadence) or (self.timestamp == self.feature_end_time):
 						self.logger.info("saving features to disk at timestamp = %d" % self.timestamp)
-						self.to_hdf_file()
+						self.save_features()
 						self.last_save_time = self.timestamp
 
 				# persist triggers once per persist cadence if using hdf5 format
 				if self.save_format == 'hdf5':
 					if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_persist_time, self.persist_cadence):
 						self.logger.info("persisting features to disk at timestamp = %d" % self.timestamp)
-						self.finish_hdf_file()
+						self.persist_features()
 						self.last_persist_time = self.timestamp
 						self.set_hdf_file_properties(self.timestamp, self.persist_cadence)
 
@@ -283,44 +283,44 @@ class MultiChannelHandler(simplehandler.Handler):
 			feature_row = {'channel':channel, 'snr':row.snr, 'trigger_time':trigger_time, 'frequency':waveform['frequency'], 'q':waveform['q'], 'phase':row.phase}
 			self.feature_queue.append(timestamp, channel, feature_row)
 
-	def to_hdf_file(self):
+	def save_features(self):
 		"""
-		Dumps triggers saved in memory to disk in hdf5 format.
+		Dumps features saved in memory to disk.
 		Uses the T050017 filenaming convention.
 		NOTE: This method should only be called by an instance that is locked.
 		"""
 		self.fdata.dump(self.tmp_path, self.fname, utils.floor_div(self.last_save_time, self.cadence), tmp = True)
 
-	def finish_hdf_file(self):
+	def persist_features(self):
 		"""
-		Move a temporary hdf5 file to its final location after
+		Move a temporary file to its final location after
 		all file writes have been completed.
 		"""
 		final_path = os.path.join(self.fpath, self.fname)+".h5"
 		tmp_path = os.path.join(self.tmp_path, self.fname)+".h5.tmp"
 		shutil.move(tmp_path, final_path)
 
-	def finalize(self):
+	def flush_and_save_features(self):
 		"""
-		Clears out remaining features from the queue for saving to disk.
+		Flushes out remaining features from the queue for saving to disk.
 		"""
-		# save remaining triggers
 		if self.save_format == 'hdf5':
 			self.feature_queue.flush()
 			while len(self.feature_queue):
 				feature_subset = self.feature_queue.pop()
 				self.fdata.append(feature_subset['timestamp'], feature_subset['features'])
 
-			self.to_hdf_file()
-			self.finish_hdf_file()
+			self.save_features()
+			self.persist_features()
 
 	def set_hdf_file_properties(self, start_time, duration):
 		"""
-		Returns the file name, as well as locations of temporary and permanent locations of
+		Updates the file name, as well as locations of temporary and permanent locations of
 		directories where triggers will live, when given the current gps time and a gps duration.
 		Also takes care of creating new directories as needed and removing any leftover temporary files.
 		"""
 		# set/update file names and directories with new gps time and duration
+		duration = min(duration, self.feature_end_time - start_time)
 		self.fname = os.path.splitext(utils.to_trigger_filename(self.basename, start_time, duration, 'h5'))[0]
 		self.fpath = utils.to_trigger_path(os.path.abspath(self.out_path), self.basename, start_time, self.job_id, self.subset_id)
 		self.tmp_path = utils.to_trigger_path(self.tmp_dir, self.basename, start_time, self.job_id, self.subset_id)

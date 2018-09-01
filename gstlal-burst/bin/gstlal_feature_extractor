@@ -486,7 +486,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 
 	# save remaining triggers
 	logger.info("persisting features to disk...")
-	handler.finalize()
+	handler.flush_and_save_features()
 
 	#
 	# Shut down pipeline
