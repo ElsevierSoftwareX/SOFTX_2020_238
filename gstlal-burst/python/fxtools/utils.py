@@ -460,7 +460,7 @@ class TemplateGenerator(object):
 	def __init__(self, parameter_ranges, sampling_rates, mismatch=0.2, tolerance=5e-3, downsample_factor=0.8):
 
 		### set parameter range
-		self.parameter_ranges = parameter_ranges
+		self.parameter_ranges = dict(parameter_ranges)
 		self.parameter_ranges['frequency'] = (downsample_factor * self.parameter_ranges['frequency'][0], downsample_factor * self.parameter_ranges['frequency'][1])
 		self.parameter_names = self._default_parameters
 		self.phases = [0., numpy.pi/2.]
@@ -583,16 +583,16 @@ class HalfSineGaussianGenerator(TemplateGenerator):
 		construct half sine gaussian waveforms that taper to tolerance at edges of window
 		f is the central frequency of the waveform
 		"""
-		assert f < rate/2. 
-	
+		assert f < rate/2.
+
 		# phi is the central frequency of the sine gaussian
 		tau = q/(2.*numpy.pi*f)
 		template = numpy.cos(2.*numpy.pi*f*self.times(rate) + phase)*numpy.exp(-1.*self.times(rate)**2./tau**2.)
-	
+
 		# normalize sine gaussians to have unit length in their vector space
 		inner_product = numpy.sum(template*template)
 		norm_factor = 1./(inner_product**0.5)
-	
+
 		return norm_factor * template
 
 	def generate_grid(self):
@@ -641,7 +641,6 @@ class HalfSineGaussianGenerator(TemplateGenerator):
 		"""
 		num_q = self._num_q_templates(q_min, q_max)
 		return [q_min*(q_max/q_min)**((0.5+q)/num_q) for q in range(num_q)]
-	
 
 class SineGaussianGenerator(HalfSineGaussianGenerator):
 	"""
@@ -666,3 +665,52 @@ class SineGaussianGenerator(HalfSineGaussianGenerator):
 		Return the time samples associated with half-Sine-Gaussians with a particular sampling rate.
 		"""
 		return self._times.get(rate, numpy.linspace(-((self.sample_pts(rate) - 1)  / 2.) / rate, ((self.sample_pts(rate) - 1)  / 2.) / rate, self.sample_pts(rate), endpoint=True))
+
+class TaperedSineGaussianGenerator(HalfSineGaussianGenerator):
+	"""
+	Generates tapered sine-Gaussian templates based on a f, Q range and a sampling frequency.
+
+	Tapering is based off of a 'max_latency' kwarg that a sine-Gaussian template should incur.
+	"""
+	_default_parameters = ['frequency', 'q']
+
+	def __init__(self, parameter_ranges, sampling_rates, mismatch=0.2, tolerance=5e-3, downsample_factor=0.8, max_latency=1):
+		self.max_latency = max_latency
+		super(TaperedSineGaussianGenerator, self).__init__(parameter_ranges, sampling_rates, mismatch=mismatch, tolerance=tolerance, downsample_factor=downsample_factor)
+
+	def waveform(self, rate, phase, f, q):
+		"""
+		construct tapered sine-Gaussian waveforms that taper to tolerance at edges of window
+		f is the central frequency of the waveform
+		"""
+		assert f < rate/2.
+
+		# phi is the central frequency of the sine gaussian
+		tau = q/(2.*numpy.pi*f)
+		damping_factor = numpy.log(self.tolerance) / self.max_latency
+		template = numpy.cos(2.*numpy.pi*f*self.times(rate) + phase)*numpy.exp(-1.*self.times(rate)**2./tau**2.) * min(1, numpy.exp(damping_factor * self.times(rate)))
+
+		# normalize sine gaussians to have unit length in their vector space
+		inner_product = numpy.sum(template*template)
+		norm_factor = 1./(inner_product**0.5)
+
+		return norm_factor * template
+
+	def duration(self, f, q):
+		"""
+		return the duration of a sine-gaussian waveform such that its edges will die out to tolerance of the peak.
+		"""
+		hsg_duration = super(TaperedSineGaussianGenerator, self).duration(f, q)
+		return hsg_duration + min(self.max_latency, hsg_duration)
+
+	def latency(self, rate):
+		"""
+		Return the latency in sample points associated with half-Sine-Gaussians with a particular sampling rate.
+		"""
+		return min(self._latency.get(rate, int((self.sample_pts(rate) - 1)  / 2)), int(self.max_latency * rate))
+
+	def times(self, rate):
+		"""
+		Return the time samples associated with half-Sine-Gaussians with a particular sampling rate.
+		"""
+		return self._times.get(rate, numpy.linspace(-((self.sample_pts(rate) - 1)  / 2.) / rate, float(self.latency(rate)) / rate, self.sample_pts(rate), endpoint=True))
