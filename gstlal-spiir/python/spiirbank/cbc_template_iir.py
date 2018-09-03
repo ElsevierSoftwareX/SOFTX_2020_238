@@ -1,4 +1,3 @@
-
 # Copyright (C) 2010-2012 Shaun Hooper
 # Copyright (C) 2013-2014 Qi Chu, David Mckenzie, Kipp Cannon, Chad Hanna, Leo Singer
 # Copyright (C) 2015 Qi Chu, Shin Chung, David Mckenzie, Yan Wang
@@ -53,7 +52,7 @@ array.use_in(DefaultContentHandler)
 param.use_in(DefaultContentHandler)
 lsctables.use_in(DefaultContentHandler)
 
-# DEPRECATED: The following code is ued to generate the amplitude and phase 
+# DEPRECATED: The following code is ued to generate the amplitude and phase
 #           information of a waveform. NOW we use the standard lalsimulation
 #             to obtain amp and phase.
 
@@ -74,13 +73,13 @@ def tukeywindow(data, samps = 200.):
 def calc_amp_phase(hc,hp):
     amp = numpy.sqrt(hc*hc + hp*hp)
     phase = numpy.arctan2(hc,hp)
-    
+
     #Unwind the phase
     #Based on the unwinding codes in pycbc
     #and the old LALSimulation interface
     count=0
     prevval = None
-    phaseUW = phase 
+    phaseUW = phase
 
     #Pycbc uses 2*PI*0.7 for some reason
     #We use the more conventional PI (more in line with MATLAB)
@@ -92,7 +91,7 @@ def calc_amp_phase(hc,hp):
             count = count+1
         elif val - prevval >= thresh:
             count = count-1
-    
+
         phaseUW[index] = phase[index] + count*lal.TWOPI
         prevval = val
 
@@ -119,36 +118,36 @@ def compute_autocorrelation_mask( autocorrelation ):
     return numpy.ones( autocorrelation.shape, dtype="int" )
 
 def normalized_crosscorr(a, b, autocorrelation_length = 201):
-    
+
     n_temp = len(a)
     if autocorrelation_length > n_temp:
         raise ValueError, "autocorrelation length (%d) cannot be larger than the template length (%d)" % (autocorrelation_length, n_temp)
     if n_temp != len(b):
         raise ValueError, "len(a) should be the same as len(b)"
-    
+
     af = scipy.fft(a)
     bf = scipy.fft(b)
     corr = scipy.ifft( af * numpy.conj( bf ))
     abs_corr = abs(corr)
     max_idx = numpy.where(abs_corr == max(abs_corr))[0][0]
-    
+
     half_len = autocorrelation_length//2
     auto_bank = numpy.zeros(autocorrelation_length, dtype = 'cdouble')
     if max_idx == 0:
         auto_bank[::-1] = numpy.concatenate((corr[-half_len:],corr[:half_len+1]))
         auto_bank /= corr[max_idx]
-    else:    
+    else:
         print "Warning: max of autocorrelation happen at position [%d]" % max_idx
         temp_idx = (n_temp-1)//2
         temp_corr = numpy.concatenate((corr[-temp_idx:], corr[:-temp_idx]))
         max_idx = numpy.where(abs(temp_corr) == max(abs(temp_corr)))[0][0]
-        
+
         if max_idx-half_len<0 or max_idx+half_len+1>n_temp:
             raise ValueError, "cannot generate cross-correlation of the given (autocorrelation) length, insufficient data"
         else:
             auto_bank[::-1] = temp_corr[max_idx-half_len:max_idx+half_len+1]
             auto_bank /= temp_corr[max_idx]
-    
+
     return auto_bank
 
 def matched_filt(template, strain, sampleRate = 4096.0):
@@ -162,7 +161,7 @@ def matched_filt(template, strain, sampleRate = 4096.0):
     It needs to be normalized so the unit is s^-1/2, same as the template for unit consistency.
     '''
     # the data is generated from gstlal_play --whiten where the unit is dimensionless.
-    # needs to be normalized so the unit is s^-1/2, i.e., *1/sqrt(dt). 
+    # needs to be normalized so the unit is s^-1/2, i.e., *1/sqrt(dt).
     time = strain[:, 0]
     data = strain[:, 1]
     data /= numpy.sqrt(2.0/sampleRate)
@@ -184,7 +183,7 @@ def matched_filt(template, strain, sampleRate = 4096.0):
     template_fft = numpy.fft.fft(template_pad)/ fs
 
     snr_fft = data_fft * template_fft.conjugate()
-    snr_time = 2 * numpy.fft.ifft(snr_fft) * fs # times df then the unit is dimensionless, default ifft has the output scaled by 1/N 
+    snr_time = 2 * numpy.fft.ifft(snr_fft) * fs # times df then the unit is dimensionless, default ifft has the output scaled by 1/N
     sigmasq = (template_fft * template_fft.conjugate()).sum() * df
     sigma = numpy.sqrt(abs(sigmasq))
     #pdb.set_trace()
@@ -199,9 +198,9 @@ def matched_filt(template, strain, sampleRate = 4096.0):
     SNR = abs(snr_time)
     indmax = numpy.argmax(SNR)
     try:
-    	timemax = time[indmax]
+        timemax = time[indmax]
     except:
-	    raise ValueError("max SNR is outside the data, need to collect more data for a more correct SNR estimation")
+            raise ValueError("max SNR is outside the data, need to collect more data for a more correct SNR estimation")
     return SNR, sigma, indmax, timemax
 
 def gen_template_working_state(sngl_inspiral_table, f_low = 30., sampleRate = 2048.):
@@ -222,7 +221,7 @@ def gen_template_working_state(sngl_inspiral_table, f_low = 30., sampleRate = 20
     tchirp = lalsimulation.SimInspiralChirpTimeBound(f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, 0., 0.)
     working_f_low = lalsimulation.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
 
-    # FIXME: This is a hack to calculate the maximum length of given table, we 
+    # FIXME: This is a hack to calculate the maximum length of given table, we
     # know that working_f_low_extra_time is about 1/10 of the maximum duration
     working_f_low_extra_time = .1 * tchirp + 1.0
     length_max = int(round(working_f_low_extra_time * 10 * sampleRate))
@@ -240,10 +239,10 @@ def gen_template_working_state(sngl_inspiral_table, f_low = 30., sampleRate = 20
 
 def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
 
-    """    
+    """
     This function can be called to calculate a whitened waveform using lalwhiten.
     This is for comparison of whitening the waveform using lalwhiten in frequency domain
-    and our own whitening in time domain. 
+    and our own whitening in time domain.
     and use this waveform to calculate a autocorrelation function.
 
 
@@ -293,7 +292,7 @@ def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
     # need to devide the time domain whitened waveform by \sqrt{2 \Delta f}
     data /= numpy.sqrt(2./working_state["working_duration"])
 
-    #pdb.set_trace()    
+    #pdb.set_trace()
     return data
 
 # a modification from the cbc_template_fir.generate_templates
@@ -438,7 +437,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     # normalize so that inner product of template with itself
     # is 2
     #
-    
+
     #norm = abs(numpy.dot(data, numpy.conj(data)))
     #data *= cmath.sqrt(2 / norm)
     print "template length %d" % len(data)
@@ -446,18 +445,18 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
 
 
 def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, approximant, irow, psd, sampleRate = 4096, waveform_domain = "TD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, verbose = False):
-    
+
     working_state = gen_template_working_state(sngl_inspiral_table, flower, sampleRate = sampleRate)
     # Smooth the PSD and interpolate to required resolution
     if psd is not None:
         psd = cbc_template_fir.condition_psd(
-                            psd, 
-                            1.0 / working_state["working_duration"], 
-                            minfs = (working_state["working_f_low"], flower), 
+                            psd,
+                            1.0 / working_state["working_duration"],
+                            minfs = (working_state["working_f_low"], flower),
                             maxfs = (sampleRate / 2.0 * 0.90, sampleRate / 2.0)
                             )
- 
-    # This is to avoid nan amp when whitening the amp 
+
+    # This is to avoid nan amp when whitening the amp
     #tmppsd = psd.data
     #tmppsd[numpy.isinf(tmppsd)] = 1.0
     #psd.data = tmppsd
@@ -499,28 +498,28 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     while(spiir_match < req_min_match and epsilon > epsilon_min and n_filters < 2000):
         #a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, epsilon = epsilon)
         a1, b0, delay, u_rev_pad, h_pad = gen_spiir_coeffs(amp, phase, len(data_full), epsilon = epsilon)
-            
+
         # compute the SNR
         # deprecated: spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad_real)))
-        # the following definition is more close to the reality         
+        # the following definition is more close to the reality
         norm_u = abs(numpy.dot(u_rev_pad, numpy.conj(u_rev_pad)))
         norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
 
-    	data_full_pad = numpy.zeros(len(u_rev_pad), dtype='cdouble')
-	data_full_pad[-len(data_full):] = data_full
-	norm_data_full = abs(numpy.dot(data_full_pad, numpy.conj(data_full_pad)))
-	# overlap of spiir reconstructed waveform with cut template (spiir_template)
+        data_full_pad = numpy.zeros(len(u_rev_pad), dtype='cdouble')
+        data_full_pad[-len(data_full):] = data_full
+        norm_data_full = abs(numpy.dot(data_full_pad, numpy.conj(data_full_pad)))
+        # overlap of spiir reconstructed waveform with cut template (spiir_template)
         spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad))/numpy.sqrt(norm_u * norm_h))
-	# overlap of spiir reconstructed waveform with full template (data_full)
-	u_full_match = abs(numpy.dot(u_rev_pad, numpy.conj(data_full_pad))/numpy.sqrt(norm_u * norm_data_full))
-    	# normalize so that the SNR would match the expected SNR
-    	b0 *= numpy.sqrt(norm_data_full / norm_u) * u_full_match
+        # overlap of spiir reconstructed waveform with full template (data_full)
+        u_full_match = abs(numpy.dot(u_rev_pad, numpy.conj(data_full_pad))/numpy.sqrt(norm_u * norm_data_full))
+        # normalize so that the SNR would match the expected SNR
+        b0 *= numpy.sqrt(norm_data_full / norm_u) * u_full_match
         n_filters = len(delay)
 
         if verbose:
             logging.info("number of rounds %d, epsilon %f, spiir overlap with cut template %f, spiir overlap with original template %f, number of filters %d" % (nround, epsilon, spiir_match, u_full_match, n_filters))
 
-               
+
         if(abs(original_epsilon - epsilon) < 1e-5):
             original_match = spiir_match
             original_filters = len(a1)
@@ -528,7 +527,7 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
         if(spiir_match < req_min_match):
             epsilon -= epsilon_increment
 
-	nround += 1
+        nround += 1
     if verbose:
         logging.info("norm of the original template %f, norm of spiir template h_pad %f, norm of spiir response u_rev_pad %f" % (norm_data_full, norm_h, norm_u))
 
@@ -579,7 +578,7 @@ def gen_lalsim_waveform(row, flower, sampleRate):
 
 def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, snr_cut = 0.998, is_frequency_whiten = 1, verbose = False):
     """ Generates whitened waveform from given parameters and PSD, then returns the amplitude and the phase.
-    
+
     Parameters
     ----------
     psd :
@@ -609,7 +608,7 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
 
     Returns
     -------
-    Amplitude : 
+    Amplitude :
     The amplitude of the whitened template
     Phase :
     The phase of the whitened template
@@ -633,21 +632,21 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
         # waveform is generated for a canonical distance of 1 Mpc.
         #
         fseries = cbc_template_fir.generate_template(row, approximant, sampleRate, working_state["working_duration"], flower, sampleRate / 2., fwdplan = fwdplan, fworkspace = fworkspace)
-    
-        # whiten the FD waveform and transform it back to TD 
+
+        # whiten the FD waveform and transform it back to TD
         data_full = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
         if verbose:
             logging.info("waveform chose from FD")
 
     elif waveform_domain == "TD" and is_frequency_whiten == 1:
-	logging.error("TD waveform here not conditioned, caution to use.")
-	# get the TD waveform
+        logging.error("TD waveform here not conditioned, caution to use.")
+        # get the TD waveform
         hplus, hcross = gen_lalsim_waveform(row, flower, sampleRate)
         # transfomr the TD waveform to FD
         tmptdata = numpy.zeros(working_state["working_length"],)
         tmptdata[-hplus.data.length:] = hplus.data.data
-    
-    
+
+
         tmptseries = lal.CreateREAL8TimeSeries(
             name = "template",
             epoch = lal.LIGOTimeGPS(0),
@@ -657,10 +656,10 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
             length = len(tmptdata)
         )
         tmptseries.data.data = tmptdata
-            
+
         lal.CreateREAL8TimeFreqFFT(fworkspace, tmptseries, fwdplan)
         tmpfseries = numpy.copy(fworkspace.data)
-    
+
         fseries = lal.CreateCOMPLEX16FrequencySeries(
             name = "template",
             epoch = lal.LIGOTimeGPS(0),
@@ -671,12 +670,12 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
         )
         fseries.data.data = tmpfseries
 
-        # whiten the FD waveform and transform it back to TD 
+        # whiten the FD waveform and transform it back to TD
         data_full = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
         if verbose:
             logging.info("waveform chose from TD")
     else:
-        # FIXME: the hp, hc are now in frequency domain. 
+        # FIXME: the hp, hc are now in frequency domain.
         # Need to transform them first into time domain to perform following whitening
         print >> sys.stderr, "Time domain whitening not supported"
         sys.exit()
@@ -697,7 +696,7 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
 def gen_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
         # make the iir filter coeffs
         a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
-    
+
         # get the chirptime (nearest power of two)
         length = templates.ceil_pow_2(data_full_len+autocorrelation_length)
 
@@ -717,13 +716,13 @@ def gen_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, a
         h_pad[-len(h):] = h
 
         return a1, b0, delay, u_rev_pad, h_pad
-            
+
 
 def gen_norm_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
         # make the iir filter coeffs
         a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
-    
-	# pad the iir response to be nearest power of 2 of:
+
+        # pad the iir response to be nearest power of 2 of:
         length = templates.ceil_pow_2(data_full_len + autocorrelation_length)
 
         # get the IIR response
@@ -752,10 +751,10 @@ def gen_norm_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.
         # normalize the original waveform so its inner-product is 2
         norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
         h_pad *= cmath.sqrt(2 / norm_h)
-	#pdb.set_trace()
+        #pdb.set_trace()
         return a1, b0, delay, u_rev_pad, h_pad
-            
-    
+
+
 
 class Bank(object):
     def __init__(self, logname = None):
@@ -764,8 +763,8 @@ class Bank(object):
         self.logname = logname
         self.sngl_inspiral_table = None
         self.sample_rates = []
-        self.A = {} 
-        self.B = {} 
+        self.A = {}
+        self.B = {}
         self.D = {}
         self.autocorrelation_bank = None
         self.autocorrelation_mask = None
@@ -778,7 +777,7 @@ class Bank(object):
         """
             Build SPIIR template bank from physical parameters, e.g. mass, spin.
             """
-        
+
         # Open template bank file
         self.template_bank_filename = filename
         tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
@@ -793,7 +792,7 @@ class Bank(object):
         if sampleRate is None:
             sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 
-        if verbose: 
+        if verbose:
             logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
             logging.info("fmin = %f,f_fin = %f, samplerate = %f" % (flower, fFinal, sampleRate))
 
@@ -807,7 +806,7 @@ class Bank(object):
         else:
             self.autocorrelation_bank = None
             self.autocorrelation_mask = None
-        
+
         #This occasionally breaks with certain template banks
         #Can just specify a certain instrument as a hack fix
         psd = all_psd[sngl_inspiral_table[0].ifo]
@@ -820,12 +819,12 @@ class Bank(object):
         # Smooth the PSD and interpolate to required resolution
         if psd is not None:
             psd = cbc_template_fir.condition_psd(
-                                psd, 
-                                1.0 / working_state["working_duration"], 
-                                minfs = (working_state["working_f_low"], flower), 
+                                psd,
+                                1.0 / working_state["working_duration"],
+                                minfs = (working_state["working_f_low"], flower),
                                 maxfs = (sampleRate / 2.0 * 0.90, sampleRate / 2.0)
                                 )
-            # This is to avoid nan amp when whitening the amp 
+            # This is to avoid nan amp when whitening the amp
             #tmppsd = psd.data
             #tmppsd[numpy.isinf(tmppsd)] = 1.0
             #psd.data = tmppsd
@@ -848,34 +847,34 @@ class Bank(object):
             spiir_match = -1
             epsilon = original_epsilon
             n_filters = 0
-                
+
             fFinal = row.f_final
 
             amp, phase, data, data_full = gen_whitened_amp_phase(psd, 'IMRPhenomB', waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
-            
+
             iir_type_flag = 1
-	    nround = 1
+            nround = 1
 
             while(spiir_match < req_min_match and epsilon > epsilon_min and n_filters < 2000):
-                
+
                 a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, len(data_full), epsilon = epsilon, alpha = alpha, beta = beta, padding = padding, iir_type_flag = iir_type_flag, autocorrelation_length = autocorrelation_length)
-                    
+
                 # compute the SNR
                 # deprecated: spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad_real)))
-                # the following definition is more close to the reality         
+                # the following definition is more close to the reality
                 spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0 # still need to use the spiir template
 
-		# compute the expected SNR ratio compared to given the original template
-		data_full_pad = numpy.zeros(len(u_rev_pad), dtype='cdouble')
-		data_full_pad[-len(data_full):] = data_full
-        	# normalize the original waveform so its inner-product is 2
-        	norm_data_full = abs(numpy.dot(data_full_pad, numpy.conj(data_full_pad)))
-        	data_full_pad *= cmath.sqrt(2 / norm_data_full)
-		# overlap of spiir constructed waveform with original template
+                # compute the expected SNR ratio compared to given the original template
+                data_full_pad = numpy.zeros(len(u_rev_pad), dtype='cdouble')
+                data_full_pad[-len(data_full):] = data_full
+                # normalize the original waveform so its inner-product is 2
+                norm_data_full = abs(numpy.dot(data_full_pad, numpy.conj(data_full_pad)))
+                data_full_pad *= cmath.sqrt(2 / norm_data_full)
+                # overlap of spiir constructed waveform with original template
                 u_full_match = abs(numpy.dot(u_rev_pad, numpy.conj(data_full_pad)))/2.0
-	    	# normalize b0 so that the SNR would match the expected SNR
-	    	b0 *= u_full_match
- 
+                # normalize b0 so that the SNR would match the expected SNR
+                b0 *= u_full_match
+
                 if(abs(original_epsilon - epsilon) < 1e-5):
                     original_match = spiir_match
                     original_filters = len(a1)
@@ -885,8 +884,8 @@ class Bank(object):
 
                 n_filters = len(delay)
                 if verbose:
-            	    logging.info("number of rounds %d, epsilon %f, spiir overlap with cut template %f, spiir overlap with original template %f, number of filters %d" % (nround, epsilon, spiir_match, u_full_match, n_filters))
-		nround += 1
+                    logging.info("number of rounds %d, epsilon %f, spiir overlap with cut template %f, spiir overlap with original template %f, number of filters %d" % (nround, epsilon, spiir_match, u_full_match, n_filters))
+                nround += 1
 
 
             #if(spiir_match < req_min_match):
@@ -933,16 +932,16 @@ class Bank(object):
             norm_data = abs(numpy.dot(data, numpy.conj(data)))
             self.sigmasq.append(norm_data * spiir_match * spiir_match * working_state["working_length"] / sampleRate**2. )
 
-            
+
             # This is actually the cross correlation between the original waveform and this approximation
             # FIXME: also update the h_pad to be the original data_full_pad
             self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
-           
-	    # save the overlap of spiir reconstructed waveform with the original data_full_pad
+
+            # save the overlap of spiir reconstructed waveform with the original data_full_pad
             self.matches.append(u_full_match)
 
             if verbose:
-                logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), row.mass1,row.mass2, epsilon, n_filters, spiir_match, original_epsilon, original_filters, original_match))    
+                logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), row.mass1,row.mass2, epsilon, n_filters, spiir_match, original_epsilon, original_filters, original_match))
 
             # get the filter frequencies
             fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
@@ -1123,7 +1122,5 @@ def get_maxrate_from_xml(filename, contenthandler = DefaultContentHandler, verbo
     for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_iir_bank_Bank"):
 
         sample_rates = [int(float(r)) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
-    
+
     return max(sample_rates)
-
-
