@@ -13,24 +13,24 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AUTOMAKE_OPTIONS="${AUTOMAKE_OPTIONS} --add-missing --copy"
 AC_CONFIG_FILES([ \
-	Makefile \
-	gstlal-inspiral.spec \
+	bin/Makefile \
 	debian/control \
 	debian/Makefile \
-	lib/gstlal-inspiral.pc \
-	lib/Makefile \
-	lib/skymap/Makefile \
-	python/Makefile \
-	python/emcee/Makefile \
-	python/stats/Makefile \
+	doc/Doxyfile \
+	doc/Makefile \
+	gstlal-inspiral.spec \
 	gst/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
-	bin/Makefile \
+	lib/gstlal-inspiral.pc \
+	lib/Makefile \
+	lib/skymap/Makefile \
+	Makefile \
+	python/emcee/Makefile \
+	python/Makefile \
+	python/stats/Makefile \
 	share/Makefile \
 	tests/Makefile
-	doc/Doxyfile \
-	doc/Makefile
 ])
 
 
