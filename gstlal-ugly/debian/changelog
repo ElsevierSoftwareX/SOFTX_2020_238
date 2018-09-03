@@ -1,3 +1,10 @@
+gstlal-ugly (1.5.0-1) unstable; urgency=low
+
+  * first pre-O2 release
+  * update for an API change in framecpp
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Mon, 03 Sep 2018 16:56:53 +0900
+
 gstlal-ugly (1.4.1-1) unstable; urgency=low
 
   * gds-dev --> gds-devel in .spec
