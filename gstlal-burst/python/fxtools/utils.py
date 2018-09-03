@@ -324,7 +324,7 @@ class TimeseriesFeatureQueue(object):
 		>>> # create the queue
 		>>> columns = ['trigger_time', 'snr']
 		>>> channels = ['channel1']
-		>>> queue = TimeseriesFeatureQueue(channels, columns, sample_rate=1)
+		>>> queue = TimeseriesFeatureQueue(channels, columns, sample_rate=1, buffer_size=1)
 		>>> # add features
 		>>> queue.append(123450, 'channel1', {'trigger_time': 123450.3, 'snr': 3.0})
 		>>> queue.append(123451, 'channel1', {'trigger_time': 123451.7, 'snr': 6.5})
