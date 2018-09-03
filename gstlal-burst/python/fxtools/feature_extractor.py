@@ -115,13 +115,6 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.feature_end_time = options.feature_end_time
 		self.columns = ['trigger_time', 'frequency', 'q', 'snr', 'phase']
 
-		### set up queue to cache features depending on pipeline mode
-		self.feature_mode = options.feature_mode
-		if self.feature_mode == 'timeseries':
-			self.feature_queue = utils.TimeseriesFeatureQueue(self.keys, self.columns, sample_rate = self.sample_rate)
-		elif self.feature_mode == 'etg':
-			self.feature_queue = utils.ETGFeatureQueue(self.keys, self.columns)
-
 		# set whether data source is live
 		self.is_live = data_source_info.data_source in data_source_info.live_sources
 
@@ -131,8 +124,22 @@ class MultiChannelHandler(simplehandler.Handler):
 		else:
 			self.tmp_dir = os.environ['TMPDIR']
 
-		# feature saving properties
+		### feature saving properties
 		self.save_format = options.save_format
+
+		# set queue buffer size based on file format
+		if self.save_format == 'hdf5':
+			self.buffer_size = 1 ### 1 second buffers for file-based formats
+		else:
+			self.buffer_size = 1. / self.sample_rate
+
+		# set up queue to cache features depending on pipeline mode
+		self.feature_mode = options.feature_mode
+		if self.feature_mode == 'timeseries':
+			self.feature_queue = utils.TimeseriesFeatureQueue(self.keys, self.columns, sample_rate = self.sample_rate, buffer_size = self.buffer_size)
+		elif self.feature_mode == 'etg':
+			self.feature_queue = utils.ETGFeatureQueue(self.keys, self.columns)
+
 		if self.save_format == 'hdf5':
 			if self.feature_mode == 'timeseries':
 				self.fdata = utils.HDF5TimeseriesFeatureData(self.columns, keys = self.keys, cadence = self.cadence, sample_rate = self.sample_rate, waveform = self.waveform_type)
@@ -279,7 +286,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			trigger_time = row.end_time + row.end_time_ns * 1e-9
 
 			# append row for data transfer/saving
-			timestamp = int(numpy.floor(trigger_time))
+			timestamp = utils.floor_div(trigger_time, self.buffer_size)
 			feature_row = {'channel':channel, 'snr':row.snr, 'trigger_time':trigger_time, 'frequency':waveform['frequency'], 'q':waveform['q'], 'phase':row.phase}
 			self.feature_queue.append(timestamp, channel, feature_row)
 

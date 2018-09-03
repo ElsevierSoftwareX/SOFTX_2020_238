@@ -118,7 +118,7 @@ def in_new_epoch(new_gps_time, prev_gps_time, gps_epoch):
 def floor_div(x, n):
 	"""
 	Floor an integer by removing its remainder
-	from integer division by another integer n.
+	from the nearest value n.
 
 	>>> floor_div(163, 10)
 	160
@@ -127,7 +127,7 @@ def floor_div(x, n):
 
 	"""
 	assert n > 0
-	return (x / n) * n
+	return (x // n) * n
 
 def gps2latency(gps_time):
 	"""
@@ -341,11 +341,12 @@ class TimeseriesFeatureQueue(object):
 		self.channels = channels
 		self.columns = columns
 		self.sample_rate = kwargs.pop('sample_rate')
+		self.buffer_size = kwargs.pop('buffer_size')
 		self.out_queue = deque(maxlen = 5)
 		self.in_queue = {}
 		self.counter = Counter()
 		self.last_timestamp = 0
-		self.effective_latency = 2
+		self.effective_latency = 2 # NOTE: set so that late features are not dropped
 
 	def append(self, timestamp, channel, row):
 		if timestamp > self.last_timestamp:
@@ -377,10 +378,10 @@ class TimeseriesFeatureQueue(object):
 			self.out_queue.append({'timestamp': oldest_timestamp, 'features': self.in_queue.pop(oldest_timestamp)})
 
 	def _create_buffer(self):
-		return defaultdict(lambda: [None for ii in range(self.sample_rate)])
+		return defaultdict(lambda: [None for ii in range(int(self.sample_rate * self.buffer_size))])
 
 	def _idx(self, timestamp):
-		return int(numpy.floor((timestamp % 1) * self.sample_rate))
+		return int(numpy.floor(((timestamp / self.buffer_size) % 1) * self.buffer_size *self.sample_rate))
 
 	def __len__(self):
 		return len(self.out_queue)
