@@ -274,7 +274,8 @@ class CoincDatabase(object):
 		self.zerolag_livetime = {}
 		self.background_livetime = {}
 		for on_instruments in self.on_instruments_combos:
-			self.zerolag_livetime[on_instruments] = float(abs(self.seglists.intersection(on_instruments) - self.seglists.union(self.instruments - on_instruments)))
+			tmpsegs = self.seglists.intersection(on_instruments) - self.seglists.union(self.instruments - on_instruments)
+			self.zerolag_livetime[on_instruments] = float(abs(sum(abs(seg) for seg in tmpsegs if numpy.isfinite(float(seg[0])) and numpy.isfinite(float(seg[1])))))
 		# FIXME:  background livetime hard-coded to be same
 		# as zero-lag livetime.  figure out what to do
 		self.background_livetime.update(self.zerolag_livetime)
