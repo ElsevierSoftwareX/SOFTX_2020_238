@@ -95,6 +95,7 @@ from gstlal import pipemodules
 from gstlal import simplehandler
 from gstlal import httpinterface
 from gstlal import datasource
+from gstlal.pipemodules import pipe_macro
 from gstlal.pipemodules import postcoh_finalsink
 from gstlal.pipemodules import spiirparts
 from gstlal.spiirbank import spiir_utils
@@ -155,21 +156,6 @@ def set_rlimit():
 def now():
     return XLALUTCToGPS(time.gmtime())
 
-# This IFO_MAP be reflect the same order of ifos of the IFO_COMBO_MAP in background_stats_utils.c
-IFO_MAP = ["H1", "L1", "V1"]
-
-def get_ifo_combos(ifos):
-    # make sure ifo_list is ordered the same ways as the postcoh code: L1, H1, V1, xx
-    ifo_idx_sorted = sorted([IFO_MAP.index(ifo) for ifo in ifos])
-    ordered_ifo_list = [IFO_MAP[ifo_idx] for ifo_idx in ifo_idx_sorted]
-    ifo_combos = []
-    for combo_len in range(2, len(ordered_ifo_list)+1):
-        this_combo_list = list(itertools.combinations(ordered_ifo_list, combo_len))
-        combo_str_list = ["".join(list(i_combo_list)) for i_combo_list in this_combo_list]
-        ifo_combos.extend(combo_str_list)
-
-    return ifo_combos
-
 
 #
 # =============================================================================
@@ -201,8 +187,9 @@ def parse_command_line():
     parser.add_option("--cohfar-accumbackground-output-name", metavar = "filename", action = "append", help = "Set the filename name in which to save the stats (optional)")
     parser.add_option("--cohfar-assignfar-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
     parser.add_option("--cohfar-assignfar-silent-time", type = "int", metavar = "seconds", default = 2147483647, help = "Do not assign FAP during this silent time. (optional)")
-    parser.add_option("--finalsink-fapupdater-collect-walltime", metavar = "seconds,seconds,seconds", default = "604800,86400,7200", help = "Update the marginalized stats files using the information of the collection time. (optional)")
+    parser.add_option("--finalsink-fapupdater-collect-walltime", metavar = "seconds,seconds,seconds", default = None, help = "Update the marginalized stats files using the information of the collection time. (optional)")
     parser.add_option("--cohfar-assignfar-input-fname", metavar = "filename,filename,filename", default = "marginalized_stats_1w.xml.gz,marginalized_stats_1d.xml.gz,marginalized_2h.xml.gz", help = "Set the filename to read the FAP (optional)")
+    parser.add_option("--finalsink-fapupdater-output-fname", metavar = "filename,filename,filename", default = None, help = "Set the filename to read the FAP (optional)")
     parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (optional).")
     parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
     parser.add_option("--iir-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
@@ -331,7 +318,7 @@ def parse_command_line():
     # create skymap dump directory if not exists
     ifo_list = detectors.channel_dict.keys()
     if options.cuda_postcoh_output_skymap == 1:
-        ifo_combos = get_ifo_combos(ifo_list)
+        ifo_combos = pipe_macro.get_ifo_combos(ifo_list)
         for i_ifo_combo in ifo_combos:
             skymap_path = "%s_skymap" % i_ifo_combo
             if not os.path.exists(skymap_path):
@@ -483,10 +470,10 @@ finalsink = postcoh_finalsink.FinalSink(
             far_factor = options.finalsink_far_factor,
             cluster_window = options.finalsink_cluster_window,
             snapshot_interval = options.finalsink_snapshot_interval,
-            fapupdater_interval = options.finalsink_fapupdater_interval,
             cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
             cohfar_accumbackground_output_name = options.cohfar_accumbackground_output_name,
-            cohfar_assignfar_input_fname = options.cohfar_assignfar_input_fname,
+            fapupdater_interval = options.finalsink_fapupdater_interval,
+            fapupdater_output_fname = options.finalsink_fapupdater_output_fname,
             fapupdater_collect_walltime_string = options.finalsink_fapupdater_collect_walltime,
             gracedb_far_threshold = options.finalsink_gracedb_far_threshold,
             gracedb_group = options.finalsink_gracedb_group,
