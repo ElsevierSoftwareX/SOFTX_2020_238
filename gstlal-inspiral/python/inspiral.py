@@ -82,7 +82,6 @@ from ligo import gracedb
 
 from gstlal import bottle
 from gstlal import cbc_template_iir
-from gstlal import streamthinca
 from gstlal import svd_bank
 
 
@@ -497,11 +496,11 @@ class GracedBWrapper(object):
 		self.__upload_aux_data(message, filename, tag, fobj.getvalue(), gracedb_ids)
 		del fobj
 
-	def __do_alerts(self, last_coincs, psddict, rankingstat_xmldoc_func):
+	def do_alerts(self, last_coincs, psddict, rankingstat_xmldoc_func):
 		gracedb_ids = []
 
 		# no-op short circuit
-		if self.far_threshold is None or not self.stream_thinca.last_coincs:
+		if self.far_threshold is None or not last_coincs:
 			return gracedb_ids
 
 		coinc_inspiral_index = last_coincs.coinc_inspiral_index
