@@ -107,6 +107,7 @@ if __name__ == '__main__':
 	# FIXME assume that the correct low latency cluster file is in the working
 	# directory. Perhaps this should be a command line argument.
 	cluster_file = os.path.join(options.directory, "ll_simplify_and_cluster.sql")
+	# FIXME presently not used, should it be?
 	simplify_file = os.path.join(options.directory, "ll_simplify.sql")
 
 	#
@@ -170,7 +171,7 @@ if __name__ == '__main__':
 		subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % noninjdb, "%s" % f])
 		# Do not cluster! the online analysis doesn't do a global clustering stage!!
 		try:
-			subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", simplify_file,  "%s" % noninjdb])
+			subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", cluster_file,  "%s" % noninjdb])
 		except subprocess.CalledProcessError as runsqlite_error:
 			print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, noninjdb, f)
 		progressbar.increment()
@@ -182,7 +183,7 @@ if __name__ == '__main__':
 			subprocess.check_call(["ligolw_sqlite", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "%s" % f])
 			# Do not cluster! the online analysis doesn't do a global clustering stage!!
 			try:
-				subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", simplify_file,  "%s" % injdb[injection_file]])
+				subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", cluster_file,  "%s" % injdb[injection_file]])
 			except subprocess.CalledProcessError as runsqlite_error:
 				print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, injdb[injection_file], f)
 			progressbar.increment()
@@ -203,9 +204,10 @@ if __name__ == '__main__':
 	# Make plots and such
 	#
 
-	if os.path.exists(os.path.join(options.directory, "plots")):
-		os.rename(os.path.join(options.directory, "plots"), "%s.%s" % (os.path.join(options.directory, "plots"), str(now())))
-	os.mkdir(os.path.join(options.directory, "plots"))
+	plot_dir = os.path.join(options.directory, "plots")
+	if os.path.exists(plot_dir):
+		os.rename(plot_dir, "%s.%s" % (plot_dir, str(now())))
+	os.mkdir(plot_dir)
 
 	pattern = re.compile("(?P<id>[0-9]{4})_prior.xml.gz")
 	#for d in os.listdir(options.directory):
@@ -260,7 +262,7 @@ if __name__ == '__main__':
 			except IOError:
 				pass
 
-		subprocess.check_call(["gstlal_inspiral_summary_page", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", os.path.join("plots", os.path.basename(plot_dir)), "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
+		subprocess.check_call(["gstlal_inspiral_summary_page_lite", "--no-navigation", "--open-box", "--output-user-tag", "ALL_LLOID_COMBINED",  "--glob-path", plot_dir, "--webserver-dir", options.web_dir, "--title", "gstlal-online"])
 	except subprocess.CalledProcessError as plot_error:
 		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
