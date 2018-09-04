@@ -266,6 +266,7 @@ static void gstlal_latency_class_init(GSTLALLatencyClass *klass)
 static void gstlal_latency_init(GSTLALLatency *element)
 {
 	gst_base_transform_set_passthrough(GST_BASE_TRANSFORM(element), TRUE);
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 
 	element->silent = DEFAULT_SILENT;
 }
