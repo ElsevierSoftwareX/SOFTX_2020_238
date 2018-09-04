@@ -374,7 +374,11 @@ def T050017_filename(instruments, description, seg, extension, path = None):
 		instruments = "".join(sorted(instruments))
 	start, end = seg
 	start = int(math.floor(start))
-	duration = int(math.ceil(end)) - start
+	try:
+		duration = int(math.ceil(end)) - start
+	# FIXME this is not a good way of handling this...
+	except OverflowError:
+		duration = 2000000000
 	extension = extension.strip('.')
 	if path is not None:
 		return '%s/%s-%s-%d-%d.%s' % (path, instruments, description, start, duration, extension)
