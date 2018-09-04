@@ -49,6 +49,7 @@ For a full list of example command lines that were used to create the O2 h(t) fr
 Type gstlal_compute_strain --help to see the full list of command line options.
 """
 
+import os
 import sys
 import numpy
 import time
@@ -366,7 +367,29 @@ if (not factors_from_filters_file) and (compute_fs or compute_srcq) and ((InputC
 # Load in the filters file that contains filter coefficients, etc.
 #
 
-filters = numpy.load(InputConfigs["filtersfilename"])
+# Search the directory tree for files with names matching the one we want.
+filters_name = InputConfigs["filtersfilename"]
+filters_paths = []
+# Check the user's home directory
+for dirpath, dirs, files in os.walk(os.environ['HOME']):
+	if filters_name in files:
+		# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+		if dirpath.count("GDSFilters") > 0:
+			filters_paths.insert(0, os.path.join(dirpath, filters_name))
+		else:
+			filters_paths.append(os.path.join(dirpath, filters_name))
+# Check if there is a checkout of the entire calibration SVN
+for dirpath, dirs, files in os.walk('/ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/'):
+	if filters_name in files:
+		# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+		if dirpath.count("GDSFilters") > 0:
+			filters_paths.insert(0, os.path.join(dirpath, filters_name))
+		else:
+			filters_paths.append(os.path.join(dirpath, filters_name))
+if not len(filters_paths):
+	raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
+print "\nLoading calibration filters from %s\n" % filters_paths[0]
+filters = numpy.load(filters_paths[0])
 
 # If we're reading the reference model factors from the filters file, load them
 if factors_from_filters_file or compute_calib_statevector:
