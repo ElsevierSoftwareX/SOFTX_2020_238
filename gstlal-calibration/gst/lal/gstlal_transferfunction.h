@@ -144,6 +144,7 @@ struct _GSTLALTransferFunction {
 	gint64 fft_length;
 	gint64 fft_overlap;
 	gint64 num_ffts;
+	gint64 min_ffts;
 	gboolean use_median;
 	gint64 update_samples;
 	gboolean update_after_gap;

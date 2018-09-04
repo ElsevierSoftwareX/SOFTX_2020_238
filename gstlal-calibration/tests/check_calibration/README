@@ -1,0 +1,12 @@
+As of now, this subdirectory contains three tests of the calibration. Other tests will be added soon.
+
+How to use:
+1. The user will open the Makefile for the test they are interested in running (e.g. vi Makefile.response_function)
+2. The user will enter the desired inputs at the top of the Makefile for that test (e.g. START = 1183905388)
+3. The user will run the makefile (e.g. make -f Makefile.response_function)
+4. The user will look at the plots to check the calibration
+
+NOTE: Filters in the Filters subdirectory might not be up-to-date. Checkout the filters from the SVN if desired.
+Example: svn co --username=albert.einstein https://svn.ligo.caltech.edu/svn/aligocalibration/trunk/Runs/O1/GDSFilters/
+
+ANOTHER NOTE: Make sure that the cluster you are using has the raw frames for whichever interferometer you choose. For example, IFO = H in Makefile.response_function would not work on the Livingston cluster. Also make sure that the detector is in lock for whichever start and end times you choose as the inputs. To see where lock stretches are, look at the summary pages (e.g. https://ldas-jobs.ligo.caltech.edu/~alexander.urban/O2/calibration/C02/L1/day/20170808/).

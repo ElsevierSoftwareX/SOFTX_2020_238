@@ -758,7 +758,7 @@ def update_filters(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_
 	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
 
-def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, notch_frequencies = [], obsready = None, chop_time = 0.0, wait_time = 0.0, filename = None):
+def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, min_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, use_median = False, notch_frequencies = [], obsready = None, chop_time = 0.0, wait_time = 0.0, filename = None):
 
 	#
 	# Use witness channels that monitor the environment to remove environmental noise
@@ -781,8 +781,8 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	if obsready is not None:
 		transfer_functions = mkgate(pipeline, transfer_functions, obsready, 1, attack_length = -witness_rate * chop_time)
 	if(chop_time):
-		transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_insertgap", chop_length = int(1000000000 * chop_time))
-	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = 15, update_after_gap = True, notch_frequencies = notch_frequencies, filename = filename)
+		transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_insertgap", chop_length = int(1000000000 * 10))
+	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, min_ffts = min_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = 15, update_after_gap = True, use_median = use_median, notch_frequencies = notch_frequencies, filename = filename)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
 		minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, witness_tees[i], min_length = wait_time), "lal_tdwhiten", kernel = default_fir_filter, latency = fir_length / 2, taper_length = filter_taper_length)

@@ -253,6 +253,7 @@ powerlines_tf_averaging_time = float(DataCleaningConfigs["powerlinestfaveragingt
 powerlines_freq_var = float(DataCleaningConfigs["powerlinesfreqvar"])
 witness_channel_fft_time = float(DataCleaningConfigs["witnesschannelffttime"])
 num_witness_ffts = int(DataCleaningConfigs["numwitnessffts"])
+min_witness_ffts = int(DataCleaningConfigs["minwitnessffts"])
 witness_fir_length = float(DataCleaningConfigs["witnessfirlength"])
 witness_frequency_resolution = float(DataCleaningConfigs["witnessfrequencyresolution"])
 witness_tf_update_time = float(DataCleaningConfigs["witnesstfupdatetime"])
@@ -326,10 +327,11 @@ tdcf_default_to_median = Config.getboolean("TDCFConfigurations", "tdcfdefaulttom
 compute_calib_statevector = Config.getboolean("CalibrationConfigurations", "computecalibstatevector")
 # Boolean for computing factors from filters file
 factors_from_filters_file = Config.getboolean("TDCFConfigurations", "factorsfromfiltersfile")
-# Boolean for removing calibration lines, power lines, DC component
+# Boolean for removing calibration lines, power lines, DC component, using median in witness transfer functions
 remove_cal_lines = Config.getboolean("DataCleaningConfigurations", "removecallines")
 remove_power_lines = Config.getboolean("DataCleaningConfigurations", "removepowerlines")
 remove_dc = Config.getboolean("DataCleaningConfigurations", "removedc")
+witness_tf_use_median = Config.getboolean("DataCleaningConfigurations", "witnesstfusemedian")
 # If td is true we will perform filtering in the time domain (direct convolution) in all FIR filtering routines below
 td = not Config.getboolean("PipelineConfigurations", "frequencydomainfiltering")
 # Boolean for dewhitening
@@ -746,8 +748,7 @@ if compute_kappac or compute_fcc or compute_kappatst or compute_kappapu or compu
 	if dewhitening:
 		# dewhiten DARM_ERR at the DARM actuation line frequency
 		derr_at_darm_act_freq = calibration_parts.complex_audioamplify(pipeline, derr_at_darm_act_freq, derr_dewhiten_at_darm_act_freq_real, derr_dewhiten_at_darm_act_freq_imag)
-	if compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs:
-		derr_at_darm_act_freq = pipeparts.mktee(pipeline, derr_at_darm_act_freq)
+	derr_at_darm_act_freq = pipeparts.mktee(pipeline, derr_at_darm_act_freq)
 
 	# demodulate the TST excitation channel at the ESD actuation line frequency
 	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor)
@@ -940,14 +941,20 @@ if compute_fs or compute_srcq:
 	Xi_imag_ok_var = float(fs_var / (srcQ_default * src_pcal_line_freq))
 
 	# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
-	pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_corr_at_src_freq_real, prefactor_imag = pcal_corr_at_src_freq_imag)
+	if src_pcal_line_freq == darm_act_line_freq:
+		pcal_at_src_freq = pcal_at_darm_act_freq
+	else:
+		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_corr_at_src_freq_real, prefactor_imag = pcal_corr_at_src_freq_imag)
+		pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
 	if "pcal4" in pcal_line_removal_dict:
 		# This will save having to demodulate it again
-		pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
 		pcal_line_removal_dict["pcal4"][3] = pcal_at_src_freq
 
 	# demodulate DARM_ERR at SRC detuning line frequency
-	derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor)
+	if src_pcal_line_freq == darm_act_line_freq:
+		derr_at_src_freq = derr_at_darm_act_freq
+	else:
+		derr_at_src_freq = calibration_parts.demodulate(pipeline, derrtee, src_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor)
 
 	# Compute the factor Xi which will be used for the f_s and src_Q calculations
 	# \kappa_tst and \kappa_pu need to be evaluated at the SRC pcal line frequency
@@ -1854,7 +1861,7 @@ if witness_channel_list is not None:
 				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 		if len(witnesses) != len(witness_channel_list[i]):
 			print "WARNING: Not all requested witness channels are being used"
-		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, notch_frequencies = witness_notch_frequencies[i], obsready = obsreadytee, chop_time = witness_chop_time, wait_time = witness_wait_time, filename = "transfer_functions_%d.txt" % i)
+		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, notch_frequencies = witness_notch_frequencies[i], obsready = obsreadytee, chop_time = witness_chop_time, wait_time = witness_wait_time, filename = "transfer_functions_%d.txt" % i)
 		witness_chop_time += witness_chop_increment
 		witness_wait_time += witness_wait_increment
 
