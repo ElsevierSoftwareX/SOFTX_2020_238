@@ -255,7 +255,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	#
 
 	latency = -int(round(bank_fragment.start * bank_fragment.rate))
-	block_stride = fir_stride * bank_fragment.rate
+	block_stride = int(fir_stride * bank_fragment.rate)
 
 	# we figure an fft costs ~5 logN flops where N is duration + block
 	# stride.  Time domain costs N * block_stride. So if block stride is
@@ -401,7 +401,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, block_durat
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * fir_stride + int(math.ceil(bank.filter_length))) * Gst.SECOND),
+			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = int((1 * fir_stride + int(math.ceil(bank.filter_length))) * Gst.SECOND)),
 			bank,
 			bank_fragment,
 			control_snksrc,

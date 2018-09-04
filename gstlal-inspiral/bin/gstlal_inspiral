@@ -148,6 +148,7 @@ import StringIO
 import sys
 import tempfile
 import uuid
+import warnings
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -276,7 +277,7 @@ def parse_command_line():
 	group.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral_table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data.  --injections must not be specified in this case")
 	group.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
 	group.add_option("--comment", metavar = "message", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
-	group.add_option("--fir-stride", metavar = "seconds", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
+	group.add_option("--fir-stride", metavar = "seconds", type = "float", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
 	group.add_option("--job-tag", metavar = "tag", help = "Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc.;  may not contain \".\" nor \"-\".")
 	group.add_option("--local-frame-caching", action = "store_true", help = "Pre-reads frame data, performs downsampling, and stores to local filespace. ")
 	group.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
