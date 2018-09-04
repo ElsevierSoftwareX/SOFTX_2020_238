@@ -69,6 +69,7 @@ from gstlal import bottle
 from gstlal import reference_psd
 from gstlal.pipemodules.postcohtable import postcoh_table_def 
 from gstlal.pipemodules.postcohtable import postcohtable
+from gstlal.pipemodules import pipe_macro
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -102,8 +103,7 @@ class SegmentDocument(object):
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
 
 		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, "gstlal_inspiral_postcohspiir_online", {})
-		# FIXME: hard-coded segtype name
-		self.segtype = "postcohprocessed"
+		self.segtype = pipe_macro.ONLINE_SEG_TYPE_NAME
 		self.seglistdict = {self.segtype: segments.segmentlistdict((instrument, segments.segmentlist()) for instrument in re.findall('..', ifos))}
 
 
@@ -173,6 +173,7 @@ class FAPUpdater(object):
 		self.ifos = ifos
 		self.procs_combine_stats = []
 		self.procs_update_fap_stats = []
+		self.output = []
 		if output_list_string is not None:
 			self.output = output_list_string.split(",")
 
@@ -183,7 +184,7 @@ class FAPUpdater(object):
 			for itime in times:
 				self.collect_walltime.append(int(itime))
 
-		if len(self.output) != len(self.collect_walltime):
+		if self.output and len(self.output) != len(self.collect_walltime):
 			raise ValueError("number of input walltimes does match the number of input filenames: %s does not match %s" % (collect_walltime_string, output_list_string))
 
 		self.verbose = verbose
@@ -303,7 +304,7 @@ class FAPUpdater(object):
 					collected_fnames.append("%s/%s" % (self.path, one_bank_fname))
 
 class FinalSink(object):
-	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, cohfar_assignfar_input_fname = "marginalized_stats_1w.xml.gz,marginalized_stats_1d.xml.gz,marginalized_2h.xml.gz", fapupdater_collect_walltime_string = "604800,86400,7200", gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, verbose = False):
+	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, fapupdater_output_fname = None, fapupdater_collect_walltime_string = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, superevent_thresh = 3.8e-7, verbose = False):
 		#
 		# initialize
 		#
@@ -322,6 +323,7 @@ class FinalSink(object):
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
 		# FIXME: hard-coded chisq_ratio_thresh to veto 
 		self.chisq_ratio_thresh = 100
+		self.superevent_thresh = superevent_thresh
 		self.nevent_clustered = 0
 
 		# gracedb parameters
@@ -364,7 +366,7 @@ class FinalSink(object):
 		self.t_start = None
 		self.t_fapupdater_start = None
 		self.fapupdater_interval = fapupdater_interval
-		self.fapupdater = FAPUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output_list_string = cohfar_assignfar_input_fname, collect_walltime_string = fapupdater_collect_walltime_string, ifos = ifos, verbose = self.verbose)
+		self.fapupdater = FAPUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output_list_string = fapupdater_output_fname, collect_walltime_string = fapupdater_collect_walltime_string, ifos = ifos, verbose = self.verbose)
 
 		# online information performer
 		self.need_online_perform = need_online_perform
@@ -381,6 +383,23 @@ class FinalSink(object):
 
 		# skymap
 		self.output_skymap = output_skymap
+
+	def __pass_test(self, candidate):
+		if self.candidate.far <= 0.0:
+			return False
+
+		# just submit it if is a low-significance trigger
+		if self.candidate.far < self.gracedb_far_threshold and self.candidate.far > self.superevent_threshold:
+			return True
+
+		# FIXME: any two of the sngl fars need to be < 1e-2
+		# single far veto for high-significance trigger
+		ifo_active=[self.candidate.snglsnr_H!=0,self.candidate.snglsnr_L!=0,self.candidate.snglsnr_V!=0]
+		ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
+		ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
+		if self.candidate.far < self.superevent_threshold:
+			return sum([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v])>=2 and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v]))
+
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
@@ -435,15 +454,13 @@ class FinalSink(object):
 				if self.need_candidate_check:
 					self.nevent_clustered += 1
 					self.__set_far(self.candidate)
-					# FIXME: hard-coded detector list and snglsnr_X fields...
+					# FIXME: need to remove when ifos are correctly populated, hard-coded and snglsnr_X fields...
 					ifo_active=[self.candidate.snglsnr_H!=0,self.candidate.snglsnr_L!=0,self.candidate.snglsnr_V!=0]
-					ifo_names=['H1','L1','V1']
 					ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
 					ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
-					self.candidate.ifos = ''.join([i for (i,v) in zip(ifo_names,ifo_active) if v])
+					self.candidate.ifos = ''.join([i for (i,v) in zip(pipe_macro.IFO_MAP,ifo_active) if v])
 					self.postcoh_table.append(self.candidate)
-					if self.gracedb_far_threshold and self.candidate.far > 0 and self.candidate.far < self.gracedb_far_threshold and sum([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v])>=2 and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v])):
-						# self.__lookback_far(self.candidate)
+					if self.gracedb_far_threshold and self.__pass_test(self.candidate):
 						self.__do_gracedb_alert(self.candidate)
 					if self.need_online_perform:
 						self.onperformer.update_eye_candy(self.candidate)
@@ -868,23 +885,23 @@ class CoincsDocFromPostcoh(object):
 	def assemble_coinc_map_table(self, trigger):
 
 		coinc_map_table = lsctables.CoincMapTable.get_table(self.xmldoc)
+		iifo = 0
 		# FIXME: hard-coded ifo length
-		nifo = len(trigger.ifos)/2
-		for iifo in range(0, nifo):
+		for ifo in re.findall('..', trigger.ifos):
 			row = coinc_map_table.RowType()
 			row.event_id = "sngl_inspiral:event_id:%d" % iifo
 			row.table_name = "sngl_inspiral"
 			row.coinc_event_id = "coinc_event:coinc_event_id:1"
 			coinc_map_table.append(row)
+			iifo += 1
 
 	def assemble_time_slide_table(self, trigger):
 
 		time_slide_table = lsctables.TimeSlideTable.get_table(self.xmldoc)
 		# FIXME: hard-coded ifo length
-		nifo = len(trigger.ifos)/2
-		for iifo in range(0, nifo):
+		for ifo in re.findall('..', trigger.ifos):
 			row = time_slide_table.RowType()
-			row.instrument = trigger.ifos[2*iifo:2*iifo+2]
+			row.instrument = ifo
 			row.time_slide_id = "time_slide:time_slide_id:6"
 			row.process_id = self.process.process_id
 			row.offset = 0
@@ -900,11 +917,9 @@ class CoincsDocFromPostcoh(object):
 				# already has it
 				pass
 
-		# FIXME: hard-coded ifo length
-		nifo = len(trigger.ifos)/2
-		for iifo in range(0, nifo):
+		# FIXME: hard-coded ifo len == 2
+		for ifo in re.findall('..', trigger.ifos):
 			row = sngl_inspiral_table.RowType()
-			ifo = trigger.ifos[2*iifo:2*iifo+2]
 			# Setting the individual row
 			row.process_id = self.process.process_id
 			row.ifo =  ifo
