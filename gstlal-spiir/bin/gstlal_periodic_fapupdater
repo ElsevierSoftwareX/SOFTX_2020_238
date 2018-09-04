@@ -1,0 +1,85 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018 Qi Chu,
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA	02110-1301, USA.
+
+#
+# =============================================================================
+#
+#																 Command Line
+#
+# =============================================================================
+#
+from optparse import OptionParser
+import os, re
+import time
+import subprocess
+
+def call_calcfap(fout, fin, ifos, verbose = False):
+	cmd = []
+	cmd += ["gstlal_cohfar_calc_fap"]
+	cmd += ["--input", fin]
+	cmd += ["--input-format", "stats"]
+	cmd += ["--output", fout]
+	cmd += ["--ifos", ifos]
+	if verbose:
+		print cmd
+	proc = subprocess.Popen(cmd)
+	proc.wait()
+
+
+def parse_command_line():
+	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog summary web page")
+	parser.add_option("--margi-loc", metavar = "path", help = "Marginalized stats location (required)")
+	parser.add_option("--margi-fname", metavar = "filename,filename,filename", default = "marginalized_stats_1w.xml.gz,marginalized_stats_1d.xml.gz,marginalized_2h.xml.gz", help = "Set the filename to read the FAP (optional)")
+	parser.add_option("--period", metavar = "N", help = "Update interval (required).")
+	parser.add_option("--ifos", metavar = "name", help = "set the ifos to calc pdf and fap")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	options, tmp = parser.parse_args()
+
+	required_options = ["margi_loc", "margi_fname", "period", "ifos"]
+	missing_options = []
+	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+	return options
+
+options = parse_command_line()
+allfolder = options.margi_loc.split(',')
+while True:
+	for imargi in options.margi_fname.split(','):
+		margi_input=''
+		# list all margi files in folders
+		for ifolder in allfolder:
+			ls_proc = subprocess.Popen(["ls", ifolder], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			try:
+				ls_out = subprocess.check_output(["grep", imargi], stdin = ls_proc.stdout)
+				ls_proc.wait()
+			except:
+				print "no margi file yet in %s" % ifolder
+				continue
+			ls_fnames = ls_out.split("\n")
+			this_margi_name = '/'.join([ifolder, ls_fnames[-2]]) # [-1] could be ""
+			margi_input = this_margi_name if margi_input == '' else ','.join([margi_input, this_margi_name])
+
+		if options.verbose:
+			print "generating margi stats %s using %s" % (imargi, margi_input)
+		call_calcfap(imargi, margi_input, options.ifos, verbose = options.verbose)
+	time.sleep(int(options.period))
+
+
