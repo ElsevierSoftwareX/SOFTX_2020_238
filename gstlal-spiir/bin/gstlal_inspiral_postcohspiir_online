@@ -324,6 +324,9 @@ def parse_command_line():
             if not os.path.exists(skymap_path):
                 os.mkdir(skymap_path)
 
+	if options.finalsink_fapupdater_output_fname is None:
+		options.finaksink_fapupdater_output_fname = options.cohfar_assignfar_input_fname
+
     return options, filenames, process_params, iir_banks, detectors
 ################################################################
 # end parse_command_line
@@ -347,6 +350,8 @@ set_rlimit()
 #
 
 options, filenames, process_params, iir_banks, detectors = parse_command_line()
+
+print options.cohfar_assignfar_input_fname
 
 if not options.check_time_stamps:
     pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
@@ -460,10 +465,10 @@ postcohsrcs = spiirparts.mkPostcohSPIIROnline(
         )
 
 finalsink = postcoh_finalsink.FinalSink(
+			channel_dict = detectors.channel_dict,
             process_params = process_params,
             pipeline = pipeline,
             need_online_perform = options.finalsink_need_online_perform,
-            ifos = lsctables.ifos_from_instrument_set(detectors.channel_dict.keys()).replace(",", ""),
             path = options.job_tag,
             output_prefix = options.finalsink_output_prefix,
             output_name = options.finalsink_output_name,

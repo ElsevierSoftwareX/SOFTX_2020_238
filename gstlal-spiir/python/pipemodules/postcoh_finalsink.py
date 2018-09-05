@@ -304,7 +304,7 @@ class FAPUpdater(object):
 					collected_fnames.append("%s/%s" % (self.path, one_bank_fname))
 
 class FinalSink(object):
-	def __init__(self, process_params, pipeline, need_online_perform, ifos, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, fapupdater_output_fname = None, fapupdater_collect_walltime_string = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, superevent_thresh = 3.8e-7, verbose = False):
+	def __init__(self, channel_dict, process_params, pipeline, need_online_perform, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, fapupdater_output_fname = None, fapupdater_collect_walltime_string = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, superevent_thresh = 3.8e-7, verbose = False):
 		#
 		# initialize
 		#
@@ -313,7 +313,8 @@ class FinalSink(object):
 		self.pipeline = pipeline
 		self.is_first_buf = True
 		self.is_first_event = True
-		self.ifos = ifos # format: "H1L1V1"
+		self.channel_dict = channel_dict
+		self.ifos = lsctables.ifos_from_instrument_set(channel_dict.keys()).replace(",", "") # format: "H1L1V1"
 
 		# cluster parameters
 		self.cluster_window = cluster_window
@@ -338,7 +339,7 @@ class FinalSink(object):
 
 		# keep a record of segments and is snapshotted
 		# our segments is determined by if incoming buf is GAP
-		self.seg_document = SegmentDocument(ifos)
+		self.seg_document = SegmentDocument(self.ifos)
 
 		# the postcoh doc stores clustered postcoh triggers and is snapshotted
 		self.postcoh_document = PostcohDocument()
@@ -350,7 +351,7 @@ class FinalSink(object):
 		# self.lookback_window = 30
 		# self.lookback_boundary = None
 		# coinc doc to be uploaded to gracedb
-		self.coincs_document = CoincsDocFromPostcoh(path, process_params, instruments = re.findall('..', ifos))
+		self.coincs_document = CoincsDocFromPostcoh(path, process_params, channel_dict)
 		# snapshot parameters
 		self.path = path
 		self.output_prefix = output_prefix
@@ -366,7 +367,7 @@ class FinalSink(object):
 		self.t_start = None
 		self.t_fapupdater_start = None
 		self.fapupdater_interval = fapupdater_interval
-		self.fapupdater = FAPUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output_list_string = fapupdater_output_fname, collect_walltime_string = fapupdater_collect_walltime_string, ifos = ifos, verbose = self.verbose)
+		self.fapupdater = FAPUpdater(path = path, input_prefix_list = cohfar_accumbackground_output_prefix, output_list_string = fapupdater_output_fname, collect_walltime_string = fapupdater_collect_walltime_string, ifos = self.ifos, verbose = self.verbose)
 
 		# online information performer
 		self.need_online_perform = need_online_perform
@@ -389,7 +390,7 @@ class FinalSink(object):
 			return False
 
 		# just submit it if is a low-significance trigger
-		if self.candidate.far < self.gracedb_far_threshold and self.candidate.far > self.superevent_threshold:
+		if self.candidate.far < self.gracedb_far_threshold and self.candidate.far > self.superevent_thresh:
 			return True
 
 		# FIXME: any two of the sngl fars need to be < 1e-2
@@ -397,7 +398,7 @@ class FinalSink(object):
 		ifo_active=[self.candidate.snglsnr_H!=0,self.candidate.snglsnr_L!=0,self.candidate.snglsnr_V!=0]
 		ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
 		ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
-		if self.candidate.far < self.superevent_threshold:
+		if self.candidate.far < self.superevent_thresh:
 			return sum([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v])>=2 and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v]))
 
 
@@ -820,16 +821,17 @@ class FinalSink(object):
 class CoincsDocFromPostcoh(object):
 	sngl_inspiral_columns = ("process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id", "Gamma0", "Gamma1")
 
-	def __init__(self, url, process_params, instruments = ['H1', 'L1'], comment = None, verbose = False):
+	def __init__(self, url, process_params, channel_dict, comment = None, verbose = False):
 		#
 		# build the XML document
 		#
-		self.get_another = lambda: CoincsDocFromPostcoh(url = url, process_params = process_params, instruments = instruments, comment = comment, verbose = verbose)
+		self.get_another = lambda: CoincsDocFromPostcoh(url = url, process_params = process_params, channel_dict = channel_dict, comment = comment, verbose = verbose)
 	
+		self.channel_dict = channel_dict
 		self.url = url
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
-		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"gstlal_inspiral_postcohspiir_online", process_params, comment = comment, ifos = instruments)
+		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"gstlal_inspiral_postcohspiir_online", process_params, comment = comment, ifos = channel_dict.keys())
 	
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = self.sngl_inspiral_columns))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
@@ -918,17 +920,14 @@ class CoincsDocFromPostcoh(object):
 				pass
 
 		# FIXME: hard-coded ifo len == 2
+		iifo = 0
 		for ifo in re.findall('..', trigger.ifos):
 			row = sngl_inspiral_table.RowType()
 			# Setting the individual row
 			row.process_id = self.process.process_id
 			row.ifo =  ifo
 			row.search = self.url
-			# FIXME: hard-coded channel name
-			if ifo in ("H1", "L1"):
-				row.channel = "GDS-CALIB_STRAIN" 
-			else:
-				row.channel = "Hrec_hoft_16384Hz" 
+			row.channel = self.channel_dict[ifo]
 			row.end_time = getattr(trigger, "end_time_%s" % ifo[0])
 			row.end_time_ns = getattr(trigger, "end_time_ns_%s" % ifo[0])
 			row.end_time_gmst = 0 
@@ -990,4 +989,4 @@ class CoincsDocFromPostcoh(object):
 			row.spin2z = trigger.spin2z
 			row.event_id = "sngl_inspiral:event_id:%d" % iifo
 			sngl_inspiral_table.append(row)
-				
+			iifo +=  1
