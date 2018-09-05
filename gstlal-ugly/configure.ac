@@ -29,7 +29,6 @@ AC_CONFIG_FILES([ \
 	gst/python/Makefile \
 	gst/framecpp/Makefile \
 	gst/gds/Makefile \
-	gst/cuda/Makefile \
 	bin/Makefile \
 	tests/Makefile \
 	examples/Makefile
@@ -442,38 +441,6 @@ PKG_CHECK_MODULES([ORC], [orc-0.4 >= ${MIN_ORC_VERSION}], , [
 ])
 AC_SUBST([ORC_CFLAGS])
 AC_SUBST([ORC_LIBS])
-
-
-#
-# Check for CUDA
-#
-
-
-AC_ARG_WITH(
-	[cuda],
-	[AS_HELP_STRING([--with-cuda], [specify location of CUDA [/usr/local/cuda]])],
-	[],
-	[with_cuda=no]
-)
-AS_IF([test "x$with_cuda" != "xno"], [
-	AS_IF([test "x$build_cpu" = "xx86_64"], [
-		CLIBS="lib64"
-	], [
-		CLIBS="lib"
-	])
-	AC_SUBST([NVCC], ["${with_cuda}/bin/nvcc"])
-	AC_SUBST([NVCC_CFLAGS], ["-I${with_cuda}/include"])
-	PKG_CHECK_MODULES([GLIB], [glib-2.0])
-	AC_SUBST([NVCC_GSTLAL_CFLAGS], [$GLIB_CFLAGS])
-	AC_SUBST([NVCC_gstreamer_CFLAGS], ["$($PKG_CONFIG --cflags-only-I gstreamer-0.10)"])
-	AC_SUBST([NVCC_LIBS], ["-L${with_cuda}/$CLIBS -lcudart"])
-	HAVE_CUDA="yes"
-], [
-	AC_MSG_WARN([check for cuda disabled])
-	HAVE_CUDA="no"
-])
-AC_DEFINE([HAVE_CUDA], [test "x${HAVE_CUDA}" == "xyes"], [Defined if you have cuda])
-AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
 
 
 #

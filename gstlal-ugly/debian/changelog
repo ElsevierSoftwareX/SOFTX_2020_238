@@ -1,6 +1,7 @@
 gstlal-ugly (1.5.1-1) unstable; urgency=low
 
   * packaging fixes for removal of libgstlalugly.so
+  * remove cuda plugin
 
  -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 05 Sep 2018 17:10:59 +0900
 
