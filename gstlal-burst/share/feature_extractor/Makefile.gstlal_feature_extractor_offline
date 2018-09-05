@@ -119,7 +119,7 @@ LEVEL = standard
 
 CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
 
-# if not specified, use all sections
+# if not specified, use all sections (replace spaces with underscores'_')
 SECTION_INCLUDE =
 
 # if not specified, use defaults
@@ -130,10 +130,10 @@ FIDELITY_EXCLUDE =
 UNSAFE_CHANNEL_INCLUDE = $(IFO):CAL-DELTAL_EXTERNAL_DQ
 
 # parse include/excludes into command line options
-SECTION_INCLUDE_COMMANDS := $(addprefix --section-include= ,$(SECTION_INCLUDE))
-SAFETY_INCLUDE_COMMANDS := $(addprefix --safety-include= ,$(SAFETY_INCLUDE))
-FIDELITY_EXCLUDE_COMMANDS := $(addprefix --fidelity-exclude= ,$(FIDELITY_EXCLUDE))
-UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include= ,$(UNSAFE_CHANNEL_INCLUDE))
+SECTION_INCLUDE_COMMANDS := $(addprefix --section-include ,$(SECTION_INCLUDE))
+SAFETY_INCLUDE_COMMANDS := $(addprefix --safety-include ,$(SAFETY_INCLUDE))
+FIDELITY_EXCLUDE_COMMANDS := $(addprefix --fidelity-exclude ,$(FIDELITY_EXCLUDE))
+UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include ,$(UNSAFE_CHANNEL_INCLUDE))
 
 ################
 # Segment info #

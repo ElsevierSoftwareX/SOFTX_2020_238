@@ -143,7 +143,7 @@ def channel_dict_from_channel_ini(options):
 	for name in sections:
 		
 		# ensure only channels whose sections aren't excluded are added to the dict
-		if not options.section_include or name in options.section_include:
+		if not options.section_include or name.replace(' ','_') in options.section_include:
 
 			# extract low frequency, high Q
 			flow = config.getfloat(name, 'flow')
@@ -533,7 +533,7 @@ def append_options(parser):
 		Required iff --frame-segments-file is given
 
 -	--section-include [string]
-		Set the channel sections to be included from the INI file. Can be given multiple times. If not specified, assumed to include all sections.
+		Set the channel sections to be included from the INI file. Can be given multiple times. Pass in spaces as underscores instead. If not specified, assumed to include all sections.
 
 -	--safety-include [string]
 		Set the safety values for channels to be included from the INI file. Can be given multiple times. Default = "safe".
@@ -582,7 +582,7 @@ def append_options(parser):
 	group.add_option("--frame-type", type="string", metavar = "name", help = "Include only those channels with the frame type given.")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")	
-	group.add_option("--section-include", default=[], type="string", action="append", help="Set the channel sections to be included from the INI file. Can be given multiple times. If not specified, assumed to include all sections")
+	group.add_option("--section-include", default=[], type="string", action="append", help="Set the channel sections to be included from the INI file. Can be given multiple times. Pass in spaces as underscores instead. If not specified, assumed to include all sections")
 	group.add_option("--safety-include", default=["safe"], type="string", action="append", help="Set the safety values for channels to be included from the INI file. Can be given multiple times. Default = 'safe'.")
 	group.add_option("--fidelity-exclude", default=[], type="string", action="append", help="Set the fidelity values for channels to be excluded from the INI file. Can supply multiple values by repeating this argument. Each must be on of (add here)")
 	group.add_option("--safe-channel-include", default=[], action="append", type="string", help="Include this channel when reading the INI file (requires exact match). Can be repeated. If not specified, assume to include all channels.")
