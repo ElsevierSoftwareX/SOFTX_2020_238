@@ -113,6 +113,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 						"feature-start-time":feature_start_time,
 						"feature-end-time":feature_end_time,
 						"data-source":"frames",
+						"sample-rate": options.sample_rate,
 						"mismatch":options.mismatch,
 						"waveform":options.waveform,
 						"qhigh":options.qhigh,

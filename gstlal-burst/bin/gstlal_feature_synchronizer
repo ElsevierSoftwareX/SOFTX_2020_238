@@ -29,6 +29,8 @@ import json
 import signal
 import sys
 import time
+import timeit
+
 from collections import deque
 from Queue import PriorityQueue
 from multiprocessing.dummy import Pool as ThreadPool
@@ -163,7 +165,7 @@ class StreamSynchronizer(object):
 
                 ### remove data with oldest timestamp and process
                 subsets = [self.feature_queue.get() for i in range(num_subsets)]
-                logger.info('combining %d / %d feature subsets for timestamp %d' % (len(subsets),self.num_topics,timestamps[0]))
+                logger.info('combining %d / %d feature subsets for timestamp %f' % (len(subsets),self.num_topics,timestamps[0]))
                 features = self.combine_subsets(subsets)
                 self.feature_buffer.appendleft((timestamps[0], features))
                 self.last_timestamp = timestamps[0]
@@ -182,7 +184,7 @@ class StreamSynchronizer(object):
         # push full feature vector to producer if buffer isn't empty
         if self.feature_buffer:
             timestamp, features = self.feature_buffer.pop()
-            logger.info('pushing features with timestamp %d downstream' % timestamp)
+            logger.info('pushing features with timestamp %f downstream' % timestamp)
             feature_packet = {'timestamp': timestamp, 'features': features}
             self.producer.produce(timestamp = timestamp, topic = self.producer_name, value = json.dumps(feature_packet))
 
@@ -190,7 +192,7 @@ class StreamSynchronizer(object):
         """
         calculates the oldest timestamp allowed for incoming data
         """
-        return int(gpstime.tconvert('now')) - self.latency_timeout
+        return float(gpstime.tconvert('now')) + (timeit.default_timer() % 1) - self.latency_timeout
 
     def synchronize(self):
         """

@@ -71,6 +71,7 @@ def generate_options(options):
 		save_options = {
 			"save-format": options.save_format,
 			"data-transfer": options.data_transfer,
+			"sample-rate": options.sample_rate,
 			"kafka-partition": options.kafka_partition,
 			"kafka-topic": options.kafka_topic,
 			"kafka-server": options.kafka_server
@@ -78,6 +79,7 @@ def generate_options(options):
 	elif options.save_format == 'hdf5':
 		save_options = {
 			"save-format": options.save_format,
+			"sample-rate": options.sample_rate,
 			"cadence": options.cadence,
 			"persist-cadence": options.persist_cadence
 		}
@@ -229,6 +231,7 @@ if options.save_format == 'kafka':
 		"instrument": ifo,
 		"channel-list": options.channel_list,
 		"waveform": options.waveform,
+		"sample-rate": options.sample_rate,
 		"write-cadence": options.cadence,
 		"persist-cadence": options.persist_cadence,
 		"input-topic-basename": '_'.join(['synchronizer', options.tag])

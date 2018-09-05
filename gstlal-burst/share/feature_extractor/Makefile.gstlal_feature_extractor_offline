@@ -12,7 +12,7 @@ SHELL := /bin/bash # Use bash syntax
 #
 #  * User/Accounting tags: GROUP_USER, ACCOUNTING_TAG
 #  * Analysis times: START, STOP
-#  * Data ingestion: IFO, CHANNEL_LIST
+#  * Data ingestion: all options
 #  * Waveform parameters: WAVEFORM, MISMATCH, QHIGH
 #
 # Configuration options:
@@ -21,10 +21,28 @@ SHELL := /bin/bash # Use bash syntax
 #     * START: set the analysis gps start time
 #     * STOP: set the analysis gps stop time
 #
-#   Data ingestion:
+#   Data ingestion (using detchar channel list INI):
 #     * IFO: select the IFO for auxiliary channels to be ingested (H1/L1).
-#     * CHANNEL_LIST: a list of channels for the feature extractor to process. Provided
-#         lists for O1/O2 and H1/L1 lists are in gstlal/gstlal-burst/share/feature_extractor.
+#     * EPOCH: set epoch (O1/O2/etc).
+#     * LEVEL: set types of channels to look over (standard/reduced).
+#     * SECTION_INCLUDE: specify sections to include (no sections imply all sections).
+#     * SAFETY_INCLUDE: specify safety types to include (default: safe).
+#     * FIDELITY_EXCLUDE: specify fidelity types to exclude (default: none).
+#     * UNSAFE_CHANNEL_INCLUDE: specify unsafe channels to include, ignoring safety information.
+#
+#   Waveform parameters:
+#     * WAVEFORM: type of waveform used to perform matched filtering (sine_gaussian/half_sine_gaussian).
+#     * MISMATCH: maximum mismatch between templates (corresponding to Omicron's mismatch definition).
+#     * QHIGH: maximum value of Q
+#
+#   Data transfer/saving:
+#     * OUTPATH: directory in which to save features.
+#     * SAMPLE_RATE: rate at which to aggregate features for a given channel. Can be sampled at 1 Hz or higher (powers of 2).
+#     * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
+#     * PERSIST_CADENCE: span of a typical hdf5 file.
+#
+# Setting the number of streams (ADVANCED USAGE):
+#
 #     * MAX_SERIAL_STREAMS: Maximum # of streams that a single gstlal_feature_extractor job will
 #         process at once. This is determined by sum_i(channel_i * # rates_i). Number of rates for a
 #         given channels is determined by log2(max_rate/min_rate) + 1.
@@ -34,18 +52,6 @@ SHELL := /bin/bash # Use bash syntax
 #         each channel subset sequentially determined by the serial streams. This is to save on input I/O.
 #     * CONCURRENCY: determines the maximum # of concurrent reads from the same frame file. For most
 #         purposes, it will be set to 1. Use this at your own risk.
-#
-#   Waveform parameters:
-#     * WAVEFORM: type of waveform used to perform matched filtering (sine_gaussian/half_sine_gaussian).
-#     * MISMATCH: maximum mismatch between templates (corresponding to Omicron's mismatch definition).
-#     * QHIGH: maximum value of Q
-#
-#   Data transfer/saving:
-#     * OUTPATH: directory in which to save features.
-#     * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
-#     * PERSIST_CADENCE: span of a typical hdf5 file.
-#
-# Setting the number of streams (ADVANCED USAGE):
 #
 #   NOTE: This won't have to be changed for almost all use cases, and the current configuration has been
 #     optimized to aim for short run times.
@@ -87,37 +93,51 @@ CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-co
 START = 1187000000
 STOP  = 1187100000
 
-# IFO for auxiliary features
-IFO = H1
-#IFO = L1
-
-# channel list for analysis
-CHANNEL_LIST = H1_O2_standard_channel_list.txt
-
 # save preferences
+OUTPATH = $(PWD)
+SAMPLE_RATE = 1
 SAVE_CADENCE = 20
 PERSIST_CADENCE = 200
-OUTPATH = $(PWD)
 
 # Parameter space config of waveforms
 WAVEFORM = sine_gaussian
 MISMATCH = 0.03
 QHIGH = 40
 
-# DAG layout settings
-MAX_PARALLEL_STREAMS = 600
-MAX_SERIAL_STREAMS = 210
-CONCURRENCY = 1
-
-# length of time to process for a given job
-SEGMENT_LENGTH = 4000
-
 # Detector
 CLUSTER:=$(shell hostname -d)
 
-###############################
-# Segment and frame type info #
-###############################
+##########################
+# Auxiliary channel info #
+##########################
+
+IFO = H1
+#IFO = L1
+
+EPOCH = O2
+LEVEL = standard
+
+CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
+
+# if not specified, use all sections
+SECTION_INCLUDE =
+
+# if not specified, use defaults
+SAFETY_INCLUDE =
+FIDELITY_EXCLUDE =
+
+# if specified, override safety checks for these channels
+UNSAFE_CHANNEL_INCLUDE = $(IFO):CAL-DELTAL_EXTERNAL_DQ
+
+# parse include/excludes into command line options
+SECTION_INCLUDE_COMMANDS := $(addprefix --section-include= ,$(SECTION_INCLUDE))
+SAFETY_INCLUDE_COMMANDS := $(addprefix --safety-include= ,$(SAFETY_INCLUDE))
+FIDELITY_EXCLUDE_COMMANDS := $(addprefix --fidelity-exclude= ,$(FIDELITY_EXCLUDE))
+UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include= ,$(UNSAFE_CHANNEL_INCLUDE))
+
+################
+# Segment info #
+################
 
 # Info from https://wiki.ligo.org/viewauth/LSC/JRPComm/ObsRun2
 # Select correct calibration type
@@ -130,15 +150,23 @@ LIGO_SEGMENTS="$(IFO):DMT-ANALYSIS_READY:1"
 # C02
 #LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C02:1"
 
-SEGMENT_TRIM = 0
-SEGMENT_MIN_LENGTH = 512
-
-FRAME_TYPE=R
+# length of time to process for a given job
+SEGMENT_LENGTH = 4000
 
 # don't generally have to mess with this, provides padding
 # to account for PSD estimation
-FSTART=$(shell echo $$((${START}-${SEG_PAD})))
 SEG_PAD = 1000
+SEGMENT_TRIM = 0
+SEGMENT_MIN_LENGTH = 512
+FSTART=$(shell echo $$((${START}-${SEG_PAD})))
+
+#########################
+# DAG architecture info #
+#########################
+
+MAX_PARALLEL_STREAMS = 600
+MAX_SERIAL_STREAMS = 210
+CONCURRENCY = 1
 
 #################
 # Web directory #
@@ -151,19 +179,16 @@ SEG_PAD = 1000
 # A web directory for output (note difference between cit+uwm and Atlas)
 # cit & uwm
 #WEBDIR = ~/public_html/observing/$(TAG)/$(START)-$(STOP)-$(RUN)
-# Atlas
-#WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
 
 ############
 # Workflow #
 ############
 
 all : dag
-	sed -i '/gstlal_feature_extractor / s/$$/ |& grep -v '\''XLAL\|GSL\|Generic'\''/' feature_extractor_pipe.sh
 	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
 
 # Run etg pipe to produce dag
-dag : frame.cache plots $(CHANNEL_LIST) segments.xml.gz
+dag : frame.cache $(CHANNEL_LIST) segments.xml.gz
 	gstlal_feature_extractor_pipe \
 		--data-source frames \
 		--gps-start-time $(START) \
@@ -172,6 +197,7 @@ dag : frame.cache plots $(CHANNEL_LIST) segments.xml.gz
 		--frame-segments-file segments.xml.gz \
 		--frame-segments-name datasegments \
 		--local-frame-caching \
+		--sample-rate $(SAMPLE_RATE) \
 		--cadence $(SAVE_CADENCE) \
 		--persist-cadence $(PERSIST_CADENCE) \
 		--channel-list $(CHANNEL_LIST) \
@@ -184,17 +210,20 @@ dag : frame.cache plots $(CHANNEL_LIST) segments.xml.gz
 		--mismatch $(MISMATCH) \
 		--qhigh $(QHIGH) \
 		$(CONDOR_COMMANDS) \
+		$(SECTION_INCLUDE_COMMANDS) \
+		$(SAFETY_INCLUDE_COMMANDS) \
+		$(FIDELITY_EXCLUDE_COMMANDS) \
+		$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 		--request-cpu 2 \
 		--request-memory 15GB \
 		--request-disk 12GB \
 		--verbose \
 		--disable-web-service
-
 #		--web-dir $(WEBDIR) \
 
-# FIXME Determine channel list automatically.
-#full_channel_list.txt : frame.cache
-#	FrChannels $$(head -n 1 $^ | awk '{ print $$5}' | sed -e "s@file://localhost@@g") > $@
+# Pull latest channel list
+$(CHANNEL_LIST) : frame.cache
+	wget https://git.ligo.org/detchar/ligo-channel-lists/raw/master/$(EPOCH)/$(CHANNEL_LIST)
 
 # Produce segments file
 segments.xml.gz : frame.cache
@@ -204,9 +233,9 @@ segments.xml.gz : frame.cache
 
 frame.cache :
 	if [[ $(IFO) == H1 ]] ; then \
-		gw_data_find -o H -t H1_$(FRAME_TYPE) -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
+		gw_data_find -o H -t H1_R -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
 	elif [[ $(IFO) == L1 ]] ; then \
-		gw_data_find -o L -t L1_$(FRAME_TYPE) -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
+		gw_data_find -o L -t L1_R -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
 	fi
 
 # FIXME Add webpages once we have output
@@ -215,10 +244,5 @@ frame.cache :
 #	mkdir -p $(WEBDIR)/OPEN-BOX
 #	cp $(MAKEFILE_LIST) $@
 
-# Makes local plots directory
-plots :
-	mkdir plots
-
 clean :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
-
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite *.html Images *.css *.js segments.xml.gz *.ini

@@ -37,11 +37,14 @@ SHELL := /bin/bash # Use bash syntax
 #   General:
 #     * TAG: sets the name used for logging purposes, Kafka topic naming, etc.
 #
-#   Data ingestion:
-#     * IFO: select the IFO for auxiliary channels to be ingested.
-#     * CHANNEL_LIST: a list of channels for the feature extractor to process. Provided
-#         lists for O1/O2 and H1/L1 lists are in gstlal/gstlal-burst/share/feature_extractor.
-#     * DATA_SOURCE: Protocol for reading in auxiliary channels (framexmit/lvshm).
+#   Data ingestion (using detchar channel list INI):
+#     * IFO: select the IFO for auxiliary channels to be ingested (H1/L1).
+#     * EPOCH: set epoch (O1/O2/etc).
+#     * LEVEL: set types of channels to look over (standard/reduced).
+#     * SECTION_INCLUDE: specify sections to include (no sections imply all sections).
+#     * SAFETY_INCLUDE: specify safety types to include (default: safe).
+#     * FIDELITY_EXCLUDE: specify fidelity types to exclude (default: none).
+#     * UNSAFE_CHANNEL_INCLUDE: specify unsafe channels to include, ignoring safety information.
 #     * MAX_STREAMS: Maximum # of streams that a single gstlal_feature_extractor process will
 #         process. This is determined by sum_i(channel_i * # rates_i). Number of rates for a
 #         given channels is determined by log2(max_rate/min_rate) + 1.
@@ -53,6 +56,7 @@ SHELL := /bin/bash # Use bash syntax
 #
 #   Data transfer/saving:
 #     * OUTPATH: directory in which to save features.
+#     * SAMPLE_RATE: rate at which to aggregate features for a given channel. Can be sampled at 1 Hz or higher (powers of 2).
 #     * SAVE_FORMAT: determines whether to transfer features downstream or save directly (kafka/hdf5).
 #     * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
 #     * PERSIST_CADENCE: span of a typical hdf5 file.
@@ -96,14 +100,9 @@ CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-co
 
 TAG = online_test
 
-IFO = H1
-#IFO = L1
-
-# channel list for analysis
-CHANNEL_LIST = channel_list.txt 
-
 DATA_SOURCE = lvshm
 MAX_STREAMS = 200
+SAMPLE_RATE = 1
 
 # Parameter space config of waveform
 WAVEFORM = sine_gaussian
@@ -112,6 +111,7 @@ QHIGH = 40
 
 # data transfer options
 OUTPATH = $(PWD)
+SAMPLE_RATE = 1
 SAVE_FORMAT = kafka
 #SAVE_FORMAT = hdf5
 
@@ -121,7 +121,7 @@ PERSIST_CADENCE = 200
 
 # kafka options
 KAFKA_TOPIC = gstlal_features
-KAFKA_SERVER = localhost:9092
+KAFKA_SERVER = localhost:9182
 KAFKA_GROUP = group_1
 
 # synchronizer/file sink options (kafka only)
@@ -132,12 +132,38 @@ LATENCY_TIMEOUT = 12
 # cluster where analysis is run
 CLUSTER:=$(shell hostname -d)
 
+##########################
+# Auxiliary channel info #
+##########################
+
+IFO = H1
+#IFO = L1
+
+EPOCH = O2
+LEVEL = standard
+
+CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
+
+# if not specified, use all sections
+SECTION_INCLUDE =
+
+# if not specified, use defaults
+SAFETY_INCLUDE =
+FIDELITY_EXCLUDE =
+
+# if specified, override safety checks for these channels
+UNSAFE_CHANNEL_INCLUDE = $(IFO):CAL-DELTAL_EXTERNAL_DQ
+
+# parse include/excludes into command line options
+SECTION_INCLUDE_COMMANDS := $(addprefix --section-include= ,$(SECTION_INCLUDE))
+SAFETY_INCLUDE_COMMANDS := $(addprefix --safety-include= ,$(SAFETY_INCLUDE))
+FIDELITY_EXCLUDE_COMMANDS := $(addprefix --fidelity-exclude= ,$(FIDELITY_EXCLUDE))
+UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include= ,$(UNSAFE_CHANNEL_INCLUDE))
+
 #################
 # Web directory #
 #################
 
-# A user tag for the run
-#TAG = O2_C00
 # Run number
 #RUN = run_1
 # A web directory for output (note difference between cit+uwm and Atlas)
@@ -161,6 +187,7 @@ dag : plots $(CHANNEL_LIST)
 			--shared-memory-partition H1=LHO_RedDtchr \
 			--shared-memory-assumed-duration 1 \
 			--save-format $(SAVE_FORMAT) \
+			--sample-rate $(SAMPLE_RATE) \
 			--cadence $(SAVE_CADENCE) \
 			--persist-cadence $(PERSIST_CADENCE) \
 			--channel-list $(CHANNEL_LIST) \
@@ -170,6 +197,10 @@ dag : plots $(CHANNEL_LIST)
 			--mismatch $(MISMATCH) \
 			--qhigh $(QHIGH) \
 			$(CONDOR_COMMANDS) \
+			$(SECTION_INCLUDE_COMMANDS) \
+			$(SAFETY_INCLUDE_COMMANDS) \
+			$(FIDELITY_EXCLUDE_COMMANDS) \
+			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
@@ -178,6 +209,7 @@ dag : plots $(CHANNEL_LIST)
 		gstlal_ll_feature_extractor_pipe \
 			--data-source $(DATA_SOURCE) \
 			--save-format $(SAVE_FORMAT) \
+			--sample-rate $(SAMPLE_RATE) \
 			--cadence $(SAVE_CADENCE) \
 			--persist-cadence $(PERSIST_CADENCE) \
 			--channel-list $(CHANNEL_LIST) \
@@ -187,6 +219,10 @@ dag : plots $(CHANNEL_LIST)
 			--mismatch $(MISMATCH) \
 			--qhigh $(QHIGH) \
 			$(CONDOR_COMMANDS) \
+			$(SECTION_INCLUDE_COMMANDS) \
+			$(SAFETY_INCLUDE_COMMANDS) \
+			$(FIDELITY_EXCLUDE_COMMANDS) \
+			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
@@ -196,6 +232,7 @@ dag : plots $(CHANNEL_LIST)
 			--data-source $(DATA_SOURCE) \
 			--shared-memory-partition H1=LHO_RedDtchr \
 			--shared-memory-assumed-duration 1 \
+			--sample-rate $(SAMPLE_RATE) \
 			--save-format $(SAVE_FORMAT) \
 			--kafka-topic $(KAFKA_TOPIC) \
 			--kafka-server $(KAFKA_SERVER) \
@@ -211,6 +248,10 @@ dag : plots $(CHANNEL_LIST)
 			--request-timeout $(REQUEST_TIMEOUT) \
 			--latency-timeout $(LATENCY_TIMEOUT) \
 			$(CONDOR_COMMANDS) \
+			$(SECTION_INCLUDE_COMMANDS) \
+			$(SAFETY_INCLUDE_COMMANDS) \
+			$(FIDELITY_EXCLUDE_COMMANDS) \
+			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
@@ -219,6 +260,7 @@ dag : plots $(CHANNEL_LIST)
 		gstlal_ll_feature_extractor_pipe \
 			--data-source $(DATA_SOURCE) \
 			--save-format $(SAVE_FORMAT) \
+			--sample-rate $(SAMPLE_RATE) \
 			--kafka-topic $(KAFKA_TOPIC) \
 			--kafka-server $(KAFKA_SERVER) \
 			--kafka-partition $(KAFKA_GROUP) \
@@ -233,15 +275,19 @@ dag : plots $(CHANNEL_LIST)
 			--request-timeout $(REQUEST_TIMEOUT) \
 			--latency-timeout $(LATENCY_TIMEOUT) \
 			$(CONDOR_COMMANDS) \
+			$(SECTION_INCLUDE_COMMANDS) \
+			$(SAFETY_INCLUDE_COMMANDS) \
+			$(FIDELITY_EXCLUDE_COMMANDS) \
+			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
 			--disable-web-service ; \
 	fi ;
 
-# FIXME Determine channel list automatically.
-#full_channel_list.txt : frame.cache
-#	FrChannels $$(head -n 1 $^ | awk '{ print $$5}' | sed -e "s@file://localhost@@g") > $@
+# Pull latest channel list
+$(CHANNEL_LIST) : plots
+	wget https://git.ligo.org/detchar/ligo-channel-lists/raw/master/$(EPOCH)/$(CHANNEL_LIST)
 
 # FIXME Add webpages once we have output
 # Make webpage directory and copy files across
@@ -254,4 +300,4 @@ plots :
 	mkdir plots
 
 clean :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.ini

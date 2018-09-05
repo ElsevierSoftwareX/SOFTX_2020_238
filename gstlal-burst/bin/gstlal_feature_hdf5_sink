@@ -169,7 +169,7 @@ class HDF5StreamSink(object):
         while self.feature_queue:
             ### remove data with oldest timestamp and process
             self.timestamp, features = self.feature_queue.pop()
-            logger.info('processing features for timestamp %d' % self.timestamp)
+            logger.info('processing features for timestamp %f' % self.timestamp)
 
             # set save times and initialize specific saving properties if not already set
             if self.last_save_time is None:
@@ -180,13 +180,13 @@ class HDF5StreamSink(object):
 
             # Save triggers once per cadence if saving to disk
             if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_save_time, self.write_cadence):
-                logger.info("saving features to disk at timestamp = %d" % self.timestamp)
+                logger.info("saving features to disk at timestamp = %f" % self.timestamp)
                 self.feature_data.dump(self.tmp_path, self.feature_name, utils.floor_div(self.last_save_time, self.write_cadence), tmp = True)
                 self.last_save_time = self.timestamp
 
             # persist triggers once per persist cadence if using hdf5 format
             if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_persist_time, self.persist_cadence):
-                logger.info("persisting features to disk for gps range %d - %d" % (self.timestamp-self.persist_cadence, self.timestamp))
+                logger.info("persisting features to disk for gps range %f - %f" % (self.timestamp-self.persist_cadence, self.timestamp))
                 self.persist_to_disk()
                 self.last_persist_time = self.timestamp
                 self.set_hdf_file_properties(self.timestamp, self.persist_cadence)
