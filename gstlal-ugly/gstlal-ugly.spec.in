@@ -123,8 +123,8 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 
 %files devel
 %defattr(-,root,root)
-%{_includedir}/gstlal-ugly
-%{_libdir}/*.a
-%{_libdir}/*.so
+#%{_includedir}/gstlal-ugly
+#%{_libdir}/*.a
+#%{_libdir}/*.so
 %{_libdir}/gstreamer-@GSTREAMER_RELEASE@/*.a
-%{_libdir}/pkgconfig/*
+#%{_libdir}/pkgconfig/*

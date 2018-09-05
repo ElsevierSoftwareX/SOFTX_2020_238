@@ -1,5 +1,3 @@
-noinst_HEADERS = multiratefirdecim.h multiratefirinterp.h
-
 plugin_LTLIBRARIES = libgstmultirate.la
 
 libgstmultirate_la_SOURCES = multirate.c \

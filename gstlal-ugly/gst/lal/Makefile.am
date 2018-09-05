@@ -17,5 +17,5 @@ lib@GSTPLUGINPREFIX@gstlalugly_la_SOURCES = \
 	#gstlal_trim.h gstlal_trim.c
 
 lib@GSTPLUGINPREFIX@gstlalugly_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS)
-lib@GSTPLUGINPREFIX@gstlalugly_la_LIBADD = $(top_builddir)/lib/libgstlalugly.la
+#lib@GSTPLUGINPREFIX@gstlalugly_la_LIBADD = $(top_builddir)/lib/libgstlalugly.la
 lib@GSTPLUGINPREFIX@gstlalugly_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
