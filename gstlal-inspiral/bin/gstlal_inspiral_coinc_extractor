@@ -25,6 +25,10 @@ from optparse import OptionParser
 
 def snglrow(connection):
 	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.SnglInspiralTable.tableName).row_from_cols
+def procrow(connection):
+	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.ProcessTable.tableName).row_from_cols
+def procparamrow(connection):
+	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.ProcessParamsTable.tableName).row_from_cols
 def coincrow(connection):
 	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.CoincInspiralTable.tableName).row_from_cols
 def coinceventrow(connection):
@@ -63,6 +67,24 @@ else:
 for (cid, time, ifos) in cids:
 	xmldocmain = ligolw.Document()
 	xmldoc = xmldocmain.appendChild(ligolw.LIGO_LW())
+
+	# process table
+	process = lsctables.New(lsctables.ProcessTable)
+	xmldoc.appendChild(process)
+	rowfunc = procrow(db)
+	# FIXME Can probably take less process information
+	# FIXME Add process information about this program
+	for val in db.cursor().execute('SELECT * FROM process'):
+		process.append(rowfunc(val))
+
+	# process params table
+	process = lsctables.New(lsctables.ProcessParamsTable)
+	xmldoc.appendChild(process)
+	rowfunc = procparamrow(db)
+	# FIXME Can probably take less param information
+	# FIXME Add process param information about this program
+	for val in db.cursor().execute('SELECT * FROM process_params'):
+		process.append(rowfunc(val))
 	
 	# coinc inspiral table
 	coincinspiral = lsctables.New(lsctables.CoincInspiralTable)
