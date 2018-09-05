@@ -14,4 +14,5 @@ pipemodules_PYTHON = \
 	snglrate_datasource.py \
 	postcoh_finalsink.py \
 	spiirparts.py \
-	pipe_macro.py
+	pipe_macro.py \
+	stats.py

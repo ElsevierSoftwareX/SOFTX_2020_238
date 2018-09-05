@@ -461,28 +461,21 @@ trigger_stats_feature_rate_to_pdf_hist(FeatureStats *feature, Bins2D *pdf)
 
 void
 trigger_stats_feature_rate_to_pdf(FeatureStats *feature)
-{
-
+{	
 	gsl_vector_long *snr = feature->lgsnr_rate->data;
-	gsl_vector_long *chisq = feature->lgchisq_rate->data;
-	Bins2D *pdf = feature->lgsnr_lgchisq_pdf;
-
 	long nevent = gsl_vector_long_sum(snr);
+
 	if (nevent == 0)
 		return;
-	gsl_vector *snr_double = gsl_vector_alloc(snr->size);
-	gsl_vector *chisq_double = gsl_vector_alloc(chisq->size);
-	gsl_vector_long_to_double(snr, snr_double);
-	gsl_vector_long_to_double(chisq, chisq_double);
 
+	Bins2D *pdf = feature->lgsnr_lgchisq_pdf;
 	gsl_vector *tin_snr = gsl_vector_alloc(pdf->nbin_x);
 	gsl_vector *tin_chisq = gsl_vector_alloc(pdf->nbin_y);
 	gsl_vector_linspace(pdf->cmin_x, pdf->cmax_x, pdf->nbin_x, tin_snr);
 	gsl_vector_linspace(pdf->cmin_y, pdf->cmax_y, pdf->nbin_y, tin_chisq);
 
 	knn_kde(tin_snr, tin_chisq, (gsl_matrix_long *)feature->lgsnr_lgchisq_rate->data, (gsl_matrix *)pdf->data);
-	gsl_vector_free(snr_double);
-	gsl_vector_free(chisq_double);
+
 	gsl_vector_free(tin_snr);
 	gsl_vector_free(tin_chisq);
 }
@@ -1231,9 +1224,9 @@ construct_table_content(XmlTable *table, XmlHashVal *vals, GString *name, float 
 }
 
 gboolean
-trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *filename, int write_status, xmlTextWriterPtr *pwriter)
+trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *filename, int write_type, xmlTextWriterPtr *pwriter)
 {
-  if (write_status == STATS_XML_WRITE_START) {
+  if (write_type == STATS_XML_WRITE_START || write_type == STATS_XML_WRITE_FULL) {
 	  gboolean rt = write_stats_xmlheader(pwriter, filename, STATS_XML_ID_NAME);
 	  if (rt == FALSE) {
 		  printf("not able to write stats header\n");
@@ -1305,6 +1298,8 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
 	memcpy(array_rank_fap[icombo].data, ((gsl_vector *)rank->rank_fap->data)->data, x_size);
   }
 
+  /* write a table*/
+
   XmlTable *rank_range_table, *feature_range_table;
   rank_range_table = (XmlTable *)malloc(sizeof(XmlTable));
   GString *name = g_string_new(NULL);
@@ -1320,7 +1315,8 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
   XmlHashVal *vals = (XmlHashVal*)malloc(sizeof(XmlHashVal)*3);
   construct_table_content(rank_range_table, vals, name, LOGRANK_CMIN, LOGRANK_CMAX, LOGRANK_NBIN);
   int rt = ligoxml_write_Table(writer, rank_range_table);
-  /* free memory used by construct a XmlTable */
+
+  /* free memory used by constructing a XmlTable */
   for (int ival = 0; ival< 3; ival++) {
 	  g_array_free(vals[ival].data, TRUE);
 	  g_string_free(vals[ival].name, TRUE);
@@ -1379,7 +1375,7 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
   g_string_free(param_name, TRUE);
   g_string_free(array_name, TRUE);
 
-  if (write_status == STATS_XML_WRITE_END) {
+  if (write_type == STATS_XML_WRITE_END || write_type == STATS_XML_WRITE_FULL) {
 	/* Since we do not want to
 	 * write any other elements, we simply call xmlTextWriterEndDocument,
 	 * which will do all the work. */

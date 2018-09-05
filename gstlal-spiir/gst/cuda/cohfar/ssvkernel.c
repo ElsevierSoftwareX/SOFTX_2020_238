@@ -181,6 +181,15 @@ double gsl_matrix_sum(gsl_matrix * x){
 	}
 	return result;
 }
+long gsl_matrix_long_sum(gsl_matrix_long * x){
+	long result =0 ;
+	size_t i,j;
+	for(i=0;i<x->size1;i++){
+		for(j=0;j<x->size2;j++)
+			result+=gsl_matrix_long_get(x,i,j);
+	}
+	return result;
+}
 double gsl_vector_sum(gsl_vector * x) {
 	double result = 0;
 	size_t i = 0;

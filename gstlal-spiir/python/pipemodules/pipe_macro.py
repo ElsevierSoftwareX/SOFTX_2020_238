@@ -22,6 +22,19 @@ STATS_XML_ID_NAME = "gstlal_postcohspiir_stats"
 DETRSP_XML_ID_NAME = "gstlal_postcoh_detrsp_map"
 DETRSP_XML_PARAM_NAME_GPS_START = "gps_start"
 DETRSP_XML_PARAM_NAME_GPS_STEP = "gps_step"
+SNR_RATE_SUFFIX	= "lgsnr_rate"
+CHISQ_RATE_SUFFIX = "lgchisq_rate"
+SNR_CHISQ_RATE_SUFFIX = "lgsnr_lgchisq_rate"	
+SNR_CHISQ_PDF_SUFFIX = "lgsnr_lgchisq_pdf"	
+BACKGROUND_XML_RANK_NAME = "background_rank"	
+RANK_MAP_SUFFIX = "rank_map"	
+RANK_RATE_SUFFIX = "rank_rate"	
+RANK_PDF_SUFFIX = "rank_pdf"	
+RANK_FAP_SUFFIX = "rank_fap"	
+SIGNAL_XML_FEATURE_NAME = "signal_feature"
+SIGNAL_XML_RANK_NAME = "signal_rank"	
+
+
 
 # This IFO_MAP be reflect the same order of ifos of the IFO_COMBO_MAP in background_stats_utils.c
 IFO_MAP = ["H1", "L1", "V1"]

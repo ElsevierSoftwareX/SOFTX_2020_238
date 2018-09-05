@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018 Qi Chu
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+### Used to generate signal stats distribution
+###
+### Usage:
+### ------
+###
+###
+
+"""
+This program calculates characteristic SNRs given an injection xml and a cache of reference PSDs.
+"""
+
+__author__ = 'Qi Chu <qi.chu@ligo.org>'
+
+import math
+import numpy
+from optparse import OptionParser
+from gstlal.pipemodules import stats
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("--output", metavar = "filename", help = "Set the output filename.")
+	parser.add_option("--ifos", metavar = "name", help = "set the ifos to plot pdf and cdf")
+	parser.add_option("--ncx2-dof", default = 2, type = "int", help = "set degree of freedom for non-central chi-square distribution.")
+	parser.add_option("--ncx2-mean-factor", default = 0.045, type = "float", help = "set mean factor that will be multiplied to the given coherent SNR value for non-central chi-square distribution.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+ 
+	options, tmp = parser.parse_args()
+
+	if options.output is None or options.ifos is None:
+		raise ValueError("Must specify --output and --ifos")
+
+	return options, 
+
+options, = parse_command_line()
+stats.signal_stats_to_xml(options.output, options.ifos, ncx2_dof = options.ncx2_dof, ncx2_mean_factor = options.ncx2_mean_factor, verbose = options.verbose)
