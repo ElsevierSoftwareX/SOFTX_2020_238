@@ -116,6 +116,7 @@ struct _CudaMultirateSPIIR {
   /* <private> */
 
   GstAdapter *adapter;
+  GArray *flag_segments; /* book keeping the flag details, inspired by control_segments in gstlal_gate.c */
 
   gboolean need_discont;
   guint num_depths;

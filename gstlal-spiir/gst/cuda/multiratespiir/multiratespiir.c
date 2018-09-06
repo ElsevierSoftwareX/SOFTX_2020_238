@@ -52,6 +52,108 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
 
 
+/*
+ * add a segment to the control segment array.  note they are appended, and
+ * the code assumes they are in order and do not overlap
+ */
+
+
+typedef struct flag_segment {
+	GstClockTime start, stop;
+	gboolean is_gap; // GAP true, non-GAP, false
+}FlagSegment;
+
+static gboolean need_flag_gap(CudaMultirateSPIIR *element, GstClockTime start, GstClockTime stop)
+{
+	GstClockTime dur_gap = 0, dur_buf = stop - start;
+	gboolean need_flush = FALSE;
+	GArray *flag_segments = element->flag_segments;
+	int i, flush_len;
+	for (i=0; i<flag_segments->len; i++) {
+		FlagSegment *this_segment = &((FlagSegment *)flag_segments->data)[i];
+		/*		| start				| stop
+		 *									| this_start (1)
+		 * | s | e (2)
+		 * | s							| e
+		 * | s		| e
+		 *            |s | e
+		 *            |s				| e
+		 */
+		if (this_segment-> start > stop)
+			break;
+		if (this_segment->stop < start) {
+			need_flush = TRUE;
+			flush_len = i+1;
+			continue;
+		}
+		if (this_segment->start <= start && this_segment->stop >= stop) {
+			dur_gap += this_segment->is_gap ? dur_buf: 0;
+			continue;
+		}
+
+		if (this_segment->start <= start && this_segment->stop < stop) {
+			dur_gap += this_segment->is_gap ? this_segment->stop - start: 0;
+			continue;
+		}
+		if (this_segment->start > start && this_segment->stop <= stop) {
+			dur_gap += this_segment->is_gap ? this_segment->stop - this_segment->start: 0;
+			continue;
+		}
+		if (this_segment->start > start && this_segment->stop > stop) {
+			dur_gap += this_segment->is_gap ? stop - this_segment->start: 0;
+			continue;
+		}
+	}
+	if (need_flush)
+		g_array_remove_range(flag_segments, 0, flush_len);
+
+	if (dur_gap > dur_buf/2 - 1e-6)
+		return TRUE;
+	else
+		return FALSE;
+
+
+}
+
+static void add_flag_segment(CudaMultirateSPIIR *element, GstClockTime start, GstClockTime stop, gboolean is_gap)
+{
+	FlagSegment new_segment = {
+		.start = start,
+		.stop = stop,
+		.is_gap = is_gap
+	};
+
+	g_assert_cmpuint(start, <=, stop);
+	GST_DEBUG_OBJECT(element, "found control segment [%" GST_TIME_FORMAT ", %" GST_TIME_FORMAT ") in state %d", GST_TIME_ARGS(new_segment.start), GST_TIME_ARGS(new_segment.stop), new_segment.is_gap);
+
+
+
+	/* try coalescing the new segment with the most recent one */
+	if(element->flag_segments->len) {
+		FlagSegment *final_segment = &((FlagSegment *) element->flag_segments->data)[element->flag_segments->len - 1];
+		/* if the most recent segment and the new segment have the
+		 * same state and they touch, merge them */
+		if(final_segment->is_gap == new_segment.is_gap && final_segment->stop >= new_segment.start) {
+			g_assert_cmpuint(new_segment.stop, >=, final_segment->stop);
+			final_segment->stop = new_segment.stop;
+			return;
+		}
+		/* otherwise, if the most recent segment had 0 length,
+		 * replace it entirely with the new one.  note that the
+		 * state carried by a zero-length segment is meaningless,
+		 * zero-length segments are merely interpreted as a
+		 * heart-beat indicating how far the control stream has
+		 * advanced */
+		if(final_segment->stop == final_segment->start) {
+			*final_segment = new_segment;
+			return;
+		}
+	}
+	/* otherwise append a new segment */
+	g_array_append_val(element->flag_segments, new_segment);
+}
+
+
 static void additional_initializations(GType type)
 {
 	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cuda_multirate_spiir", 0, "cuda_multirate_spiir element");
@@ -233,6 +335,8 @@ cuda_multirate_spiir_start (GstBaseTransform * base)
   CudaMultirateSPIIR *element = CUDA_MULTIRATE_SPIIR (base);
 
   element->adapter = gst_adapter_new();
+  element->flag_segments = g_array_new(FALSE, FALSE, sizeof(FlagSegment));
+	
   element->need_discont = TRUE;
   element->num_gap_samples = 0;
   element->need_tail_drain = FALSE;
@@ -258,6 +362,8 @@ cuda_multirate_spiir_stop (GstBaseTransform * base)
 
   g_object_unref (element->adapter);
   element->adapter = NULL;
+  g_array_unref (element->flag_segments);
+  element->flag_segments = NULL;
 
   return TRUE;
 }
@@ -574,35 +680,6 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
   }
 
   outdata = (float *) GST_BUFFER_DATA(outbuf);
-#if 0  
-  while (num_in_multidown > 0) {
-    
-    g_assert (gst_adapter_available (element->adapter) >= num_in_multidown * sizeof(float));
-    in_multidown = (float *) gst_adapter_peek (element->adapter, num_in_multidown * sizeof(float));
-
-    num_out_multidown = multi_downsample (element->spstate, in_multidown, (gint) num_in_multidown, element->num_depths, element->stream);
-    num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
-    cudaStreamSynchronize(element->stream);
-
-
-    for (i=0; i<num_out_spiirup; i++)
-      for (j=0; j<element->outchannels; j++)
-	      outdata[element->outchannels * (i + last_num_out_spiirup) + j] = tmp_out[tmp_out_len * j + i + upfilt_len - 1];
-
- 
-     /* move along */
-    gst_adapter_flush (element->adapter, num_in_multidown * sizeof(float));
-    in_len -= num_in_multidown;
-    /* after the first filtering, update the exe_samples to the rate */
-    cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->rate);
-    num_in_multidown = MIN (in_len, element->num_exe_samples);
-    last_num_out_spiirup += num_out_spiirup;
- }
-
-    g_assert(last_num_out_spiirup <= out_len);
-    free(tmp_out);
-#endif
-
   while (num_in_multidown > 0) {
     
     g_assert (gst_adapter_available (element->adapter) >= num_in_multidown * sizeof(float));
@@ -611,7 +688,6 @@ cuda_multirate_spiir_push_drain (CudaMultirateSPIIR *element, gint in_len)
     num_out_multidown = multi_downsample (element->spstate, in_multidown, (gint) num_in_multidown, element->num_depths, element->stream);
     pos_out = outdata + last_num_out_spiirup * (element->outchannels);
     num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, pos_out, element->stream);
-    //num_out_spiirup = spiirup (element->spstate, num_out_multidown, element->num_depths, tmp_out, element->stream);
 
 
 #if 0
@@ -832,6 +908,9 @@ cuda_multirate_spiir_process (CudaMultirateSPIIR *element, gint in_len, GstBuffe
       return GST_BASE_TRANSFORM_FLOW_DROPPED;
     }
 
+	if (need_flag_gap(element, GST_BUFFER_TIMESTAMP(outbuf), GST_BUFFER_TIMESTAMP(outbuf) + GST_BUFFER_DURATION(outbuf)) == TRUE)
+		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+
     /* after the first filtering, update the exe_samples to the rate */
     cuda_multirate_spiir_update_exe_samples (&element->num_exe_samples, element->rate);
 
@@ -954,7 +1033,7 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   num_tail_cover_samples = element->num_tail_cover_samples;
   guint64 history_gap_samples, gap_buffer_len;
   gint num_zeros, adapter_len, num_filt_samples;
-
+    gboolean is_gap;
 
   switch (element->gap_handle) {
 
@@ -980,12 +1059,12 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
          * one gap buffer
          */
         gap_buffer_len = in_samples;
-	res = cuda_multirate_spiir_assemble_gap_buffer (element, gap_buffer_len, outbuf);
+		res = cuda_multirate_spiir_assemble_gap_buffer (element, gap_buffer_len, outbuf);
  
-	if (res != GST_FLOW_OK)
-          return res;
-	else 
-	  return GST_FLOW_OK;
+		if (res != GST_FLOW_OK)
+			return res;
+		else 
+			return GST_FLOW_OK;
     }
 
     /*
@@ -1021,17 +1100,17 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
          */
         num_zeros = num_tail_cover_samples - history_gap_samples;
         adapter_push_zeros (element, num_zeros);
-	adapter_len = cuda_multirate_spiir_get_available_samples(element);
+		adapter_len = cuda_multirate_spiir_get_available_samples(element);
         res = cuda_multirate_spiir_push_drain (element, adapter_len);
-   	if (res != GST_FLOW_OK)
-          return res;
+		if (res != GST_FLOW_OK)
+			return res;
 
         /*
          * one gap buffer
          */
         gap_buffer_len = in_samples - num_zeros;
-	res = cuda_multirate_spiir_assemble_gap_buffer (element, gap_buffer_len, outbuf);
-	if (res != GST_FLOW_OK)
+		res = cuda_multirate_spiir_assemble_gap_buffer (element, gap_buffer_len, outbuf);
+		if (res != GST_FLOW_OK)
           return res;
 
       } else {
@@ -1106,6 +1185,8 @@ cuda_multirate_spiir_transform (GstBaseTransform * base, GstBuffer * inbuf,
   break;
 
   case 0: // gap is treated as 0; 
+	is_gap = GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? TRUE : FALSE;
+	add_flag_segment(element, GST_BUFFER_TIMESTAMP(inbuf), GST_BUFFER_TIMESTAMP(inbuf) + GST_BUFFER_DURATION(inbuf), is_gap);
 
     if (GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) 
         adapter_push_zeros (element, in_samples);
