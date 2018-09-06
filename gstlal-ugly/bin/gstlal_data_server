@@ -118,12 +118,9 @@ def read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs 
 			try:
 				fname = "%s/%s/%s/%s/%s/%s.hdf5" % (base_path, rootdir, partial_path, jobdir, datatype, route)
 				f = h5py.File(fname, "r")
-				#this_data = numpy.hstack((this_data, numpy.array(f["data"])))
-				#this_time = numpy.hstack((this_time, numpy.array(f["time"])))
 				this_data = numpy.hstack((numpy.array(f["data"]), this_data))
 				this_time = numpy.hstack((numpy.array(f["time"]), this_time))
 				f.close()
-				#print fname, len(this_data), len(this_time)
 			except IOError:
 				pass
 			# refuse to look back more than 100 directories and stop once you have enough data
@@ -144,55 +141,111 @@ def read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs 
 # latency, SNR, FAR, likelihood
 #
 
+
+def stats_by_node(routes, query_time, duration, base_path, jobdirs, thisdatatype):
+	data = {}
+	for ifo, thisroute in routes:
+		# get the max time and the stats on the data
+		data[ifo] = [(max(x[1]), x[0].split("/")[-1], stats_on_data(x[2])) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = thisdatatype)]
+
+	description = [("job", "string")]
+	for ifo in routes:
+		if ifo == "":
+			ifo = "combined"
+		thisdesc = [
+			("%s %d" % (ifo, float(max(data["%s_" % ifo])[0]), "number")),
+			("", "number"),
+			("", "number"),
+			("", "number")
+			]
+		description.extend(thisdesc)
+	
+	data_table = gviz_api.DataTable(description)
+	thisdata = []
+	for tup in zip(*[data[k] for k in routes]):
+		row = [tup[0][1]]
+		for t in tup[1:]:
+			row += list(t[2])
+		thisdata.append(row)
+	data_table.LoadData(thisdata)
+	print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+	sys.exit()
+
+
+def status_by_node(routes, query_time, duration, base_path, jobdirs, thisdatatype):
+	data = {}
+	description = [("job", "string")]
+	ifostrs = [x[0] for x in routes]
+	for (ifo, thisroute) in routes:
+		thisroute = "%s%s" % (ifo, route)
+		# get the max time and the stats on the data
+		data[ifo] = [(float(x[1][-1]), x[0].split("/")[-1], float(x[2][-1])) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = thisdatatype)]
+		description.append(("%s %d" % (ifo, float(max(data[ifo])[0])), "number"))
+	data_table = gviz_api.DataTable(description)
+	thisdata = []
+	for tup in zip(*[data[k] for (k,_) in routes]):
+		row = [tup[0][1]]
+		for t in tup:
+			row += [t[2]]
+		thisdata.append(row)
+	data_table.LoadData(thisdata)
+	print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+	sys.exit()
+
+
+def node_is_all(route, query_time, duration, base_path, jobdirs, thisdatatype):
+	_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = thisdatatype).next()
+	out_data = [[float(t),float(d)] for t,d in zip(this_time, this_data)]
+	description = [("time", "number"), ("%d" % float(this_time[-1]), "number")]
+	data_table = gviz_api.DataTable(description)
+	data_table.LoadData(out_data)
+	print data_table.ToJSonResponse(order_by = "time", req_id = reqId)
+	sys.exit()
+
+def nodes_now(route, query_time, duration, base_path, jobdirs, thisdatatype):
+	_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = thisdatatype).next()
+	description = [(label, "number")]
+	data_table = gviz_api.DataTable(description)
+	data_table.LoadData([[float(this_data[-1])]])
+	print data_table.ToJSonResponse(req_id = reqId)
+	sys.exit()
+
+
+def scatter_by_node(routes, query_time, duration, base_path, jobdirs, thisdatatype):
+	data = {}
+	description = [("time", "number")]
+	ifostrs = [x[0] for x in routes]
+	for (ifo, thisroute) in routes:
+		# get the max time and the stats on the data
+		data[ifo] = [(x[1], x[0].split("/")[-1], x[2], x[1][-1]) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = thisdatatype)]
+		description.append((ifo, "number"))
+	
+	data_table = gviz_api.DataTable(description)
+	thisdata = []
+	#FIXME make tootips bin number
+	tmp = []
+	for ifo in ifostrs:
+		tmp += [data[ifo][0][0],data[ifo][0][2]]
+	for tup in zip(*tmp):
+		row = [float(tup[0])]
+		for n in range(len(tup) / 2):
+			row += [float(tup[1+2*n])]
+		thisdata.append(row)
+	data_table.LoadData(thisdata)
+	print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
+	sys.exit()
+
 for route, label, thisdatatype in (("latency_history", "Latency (s)", "max"), ("far_history", "FAR (Hz)", "min"), ("likelihood_history", "L", "max")):
 	if route in query:
 		if "stats by node" in query:
-			# get the max time and the stats on the data
-			data = [(max(x[1]), x[0].split("/")[-1], stats_on_data(x[2])) for x in read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs, datatype = thisdatatype)]
-			description = [
-				("job", "string"),
-				("%d" % float(max(data)[0]), "number"),
-				("j", "number"),
-				("", "number"),
-				("", "number")
-				]
-			
-			data_table = gviz_api.DataTable(description)
-			data_table.LoadData([[x[1]]+list(x[2]) for x in data])
-			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
-			sys.exit()
-
+			stats_by_node([("", route)], query_time, duration, base_path, jobdirs, thisdatatype)
 		if "status by node" in query:
-			# get the max time and the stats on the data
-			data = [(float(x[1][-1]), x[0].split("/")[-1], float(x[2][-1])) for x in read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs, datatype = thisdatatype)]
-			description = [
-				("job", "string"),
-				("%d" % float(max(data)[0]), "number")
-				]
-			
-			data_table = gviz_api.DataTable(description)
-			data_table.LoadData([[x[1], x[2]] for x in data])
-			print [[x[1], x[2]] for x in data]
-			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
-			sys.exit()
+			status_by_node([("", route)], query_time, duration, base_path, jobdirs, thisdatatype)
 
 		if "where node is all" in query:
-			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = thisdatatype).next()
-			out_data = [[float(t),float(d)] for t,d in zip(this_time, this_data)]
-			description = [("time", "number"), ("%d" % float(this_time[-1]), "number")]
-			data_table = gviz_api.DataTable(description)
-			data_table.LoadData(out_data)
-			print data_table.ToJSonResponse(order_by = "time", req_id = reqId)
-			sys.exit()
-
+			node_is_all(route, query_time, duration, base_path, jobdirs, thisdatatype)
 		if "now" in query:
-			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = thisdatatype).next()
-			description = [(label, "number")]
-			data_table = gviz_api.DataTable(description)
-			data_table.LoadData([[float(this_data[-1])]])
-			print data_table.ToJSonResponse(req_id = reqId)
-			sys.exit()
-
+			nodes_now(route, query_time, duration, base_path, jobdirs, thisdatatype)
 
 #
 # SNR history is special
@@ -202,104 +255,21 @@ for route, label, thisdatatype in (("latency_history", "Latency (s)", "max"), ("
 for route, label in (("snr_history", "SNR"),):
 	if route in query:
 		ifostrs = ["%s_" % ifo for ifo in ifos] + [""]
+		routes = [(ifo, "%s%s" %(ifo, route)) for ifo in ifostrs]
 		if "stats by node" in query:
-			data = {}
-			for ifo in ifostrs:
-				thisroute = "%s%s" % (ifo, route)
-				# get the max time and the stats on the data
-				data[ifo] = [(max(x[1]), x[0].split("/")[-1], stats_on_data(x[2])) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "max")]
-			description = [("job", "string")]
-			for ifo in ifos:
-				thisdesc = [
-					("%s %d" % (ifo, float(max(data["%s_" % ifo])[0]), "number")),
-					("", "number"),
-					("", "number"),
-					("", "number")
-					]
-				description.extend(thisdesc)
-			description.extend([
-				("combined %d" % float(max(data[""])[0]), "number"),
-				("", "number"),
-				("", "number"),
-				("", "number")
-				])
-			
-			data_table = gviz_api.DataTable(description)
-			thisdata = []
-			for tup in zip(*[data[k] for k in ifostrs]):
-				row = [tup[0][1]]
-				for t in tup[1:]:
-					row += list(t[2])
-				thisdata.append(row)
-			data_table.LoadData(thisdata)
-			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
-			sys.exit()
+			stats_by_node(routes, query_time, duration, base_path, jobdirs, "max")
 
 		if "status by node" in query:
-			data = {}
-			for ifo in ifostrs:
-				thisroute = "%s%s" % (ifo, route)
-				# get the max time and the stats on the data
-				data[ifo] = [(float(x[1][-1]), x[0].split("/")[-1], float(x[2][-1])) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "max")]
-			description = [("job", "string")]
-			for ifo in ifos:
-				tmp = "%s %d" % (ifo, float(max(data["%s_" % ifo])[0]))
-				description.append((tmp, "number"))
-			description.append(("combined %d" % float(max(data[""])[0]), "number"))
-			
-			data_table = gviz_api.DataTable(description)
-			thisdata = []
-			for tup in zip(*[data[k] for k in ifostrs]):
-				row = [tup[0][1]]
-				for t in tup[1:]:
-					row += [t[2]]
-				thisdata.append(row)
-			data_table.LoadData(thisdata)
-			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
-			sys.exit()
+			status_by_node(routes, query_time, duration, base_path, jobdirs, "max")
 
 		if "scatter by node" in query:
-			data = {}
-			for ifo in ifostrs:
-				thisroute = "%s%s" % (ifo, route)
-				# get the max time and the stats on the data
-				#data[ifo] = [(x[1], x[0].split("/")[-1], x[2], x[1][-1]) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, jobdirs, datatype = "max")]
-				data[ifo] = [(x[1], x[0].split("/")[-1], x[2], x[1][-1]) for x in read_aggregated_data_by_job(thisroute, query_time, duration, base_path, [""], datatype = "max")]
-			description = [("time", "number")]
-			for ifo in ifos:
-				description.append((ifo, "number"))
-			
-			data_table = gviz_api.DataTable(description)
-			thisdata = []
-			#FIXME make tootips bin number
-			tmp = []
-			for ifo in ifostrs[:-1]:
-				tmp += [data[ifo][0][0],data[ifo][0][2]]
-			for tup in zip(*tmp):
-				row = [float(tup[0])]
-				for n in range(len(tup) / 2):
-					row += [float(tup[1+2*n])]
-				thisdata.append(row)
-			data_table.LoadData(thisdata)
-			print data_table.ToJSonResponse(order_by = "job", req_id = reqId)
-			sys.exit()
+			scatter_by_node(routes, query_time, duration, base_path, [""], "max")
 
 		if "where node is all" in query:
-			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = "max").next()
-			out_data = [[float(t),float(d)] for t,d in zip(this_time, this_data)]
-			description = [("time", "number"), ("%d" % float(this_time[-1]), "number")]
-			data_table = gviz_api.DataTable(description)
-			data_table.LoadData(out_data)
-			print data_table.ToJSonResponse(order_by = "time", req_id = reqId)
-			sys.exit()
+			node_is_all(route, query_time, duration, base_path, [""], "max")
 
 		if "now" in query:
-			_, this_time, this_data = read_aggregated_data_by_job(route, query_time, duration, base_path, jobdirs = [""], datatype = "max").next()
-			description = [(label, "number")]
-			data_table = gviz_api.DataTable(description)
-			data_table.LoadData([[float(this_data[-1])]])
-			print data_table.ToJSonResponse(req_id = reqId)
-			sys.exit()
+			nodes_now(route, query_time, duration, base_path, [""], "max")
 
 
 #
