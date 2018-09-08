@@ -554,7 +554,7 @@ def compute_kappatst_from_filters_file(pipeline, derrfesd, tstexcfesd, pcalfdarm
 
 	#	       
 	# \kappa_TST = ktstfac * (derrfesd/tstexcfesd) * (pcalfdarm/derrfdarm)
-	# ktstfac = -(1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
+	# ktstfac = EP1 = (1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
 	#
 
 	derrfdarminv = complex_inverse(pipeline, derrfdarm)
@@ -568,7 +568,7 @@ def compute_kappatst(pipeline, derrfesd, tstexcfesd, pcalfdarm, derrfdarm, ktstf
 
 	#	       
 	# \kappa_TST = ktstfac * (derrfesd/tstexcfesd) * (pcalfdarm/derrfdarm)
-	# ktstfac = -(1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
+	# ktstfac = EP1 = (1/A0fesd) * (C0fdarm/(1+G0fdarm)) * ((1+G0fesd)/C0fesd)
 	#
 
 	derrfdarminv = complex_inverse(pipeline, derrfdarm)
@@ -577,34 +577,111 @@ def compute_kappatst(pipeline, derrfesd, tstexcfesd, pcalfdarm, derrfdarm, ktstf
 
 	return ktst
 
-def compute_afctrl_from_filters_file(pipeline, derrfpu, excfpu, pcalfdarm, derrfdarm, afctrlfacR, afctrlfacI):
+def compute_kappapum_from_filters_file(pipeline, derrfpum, pumexcfpum, pcalfpcal, derrfpcal, kpumfacR, kpumfacI):
 
 	#
-	# A(f_ctrl) = -afctrlfac * (derrfpu/excfpu) * (pcalfdarm/derrfdarm)
-	# afctrlfac = C0fpcal/(1+G0fpcal) * (1+G0fctrl)/C0fctrl
+	# \kappa_PUM = kpumfac * [derr(fpum) / pumexc(fpum)] * [pcal(fpcal) / derr(fpcal)]
+	# kpumfac = EP15 = [1 / A_PUM0(fpum)] * [C0(fpcal) / (1 + G0(fpcal))] * [(1 + G0(fpum)) / C0(fpum)]
 	#
 
-	derrfdarminv = complex_inverse(pipeline, derrfdarm)
-	excfpuinv = complex_inverse(pipeline, excfpu)
-	afctrl = mkmultiplier(pipeline, list_srcs(pipeline, pcalfdarm, derrfdarminv, excfpuinv, derrfpu))
-	afctrl = complex_audioamplify(pipeline, afctrl, -1.0*afctrlfacR, -1.0*afctrlfacI)
+	pumexcfpuminv = complex_inverse(pipeline, pumexcfpum)
+	derrfpcalinv = complex_inverse(pipeline, derrfpcal)
+	kpum = mkmultiplier(pipeline, list_srcs(pipeline, derrfpum, pumexcfpuminv, pcalfpcal, derrfpcalinv))
+	kpum = complex_audioamplify(pipeline, kpum, kpumfacR, kpumfacI)
+
+	return kpum
+
+def compute_kappapum(pipeline, derrfpum, pumexcfpum, pcalfpcal, derrfpcal, kpumfac):
+
+	#
+	# \kappa_PUM = kpumfac * [derr(fpum) / pumexc(fpum)] * [pcal(fpcal) / derr(fpcal)]
+	# kpumfac = EP15 = [1 / A_PUM0(fpum)] * [C0(fpcal) / (1 + G0(fpcal))] * [(1 + G0(fpum)) / C0(fpum)]
+	#
+
+	pumexcfpuminv = complex_inverse(pipeline, pumexcfpum)
+	derrfpcalinv = complex_inverse(pipeline, derrfpcal)
+	kpum = mkmultiplier(pipeline, list_srcs(pipeline, kpumfac, derrfpum, pumexcfpuminv, pcalfpcal, derrfpcalinv))
+
+	return kpum
+
+def compute_afctrl_from_filters_file(pipeline, derrfdarm, excfdarm, pcalfpcal, derrfpcal, afctrlfacR, afctrlfacI):
+
+	#
+	# A(f_ctrl) = -afctrlfac * (derrfdarm/excfdarm) * (pcalfpcal/derrfpcal)
+	# afctrlfac = EP2 = C0fpcal/(1+G0fpcal) * (1+G0fctrl)/C0fctrl
+	#
+
+	derrfpcalinv = complex_inverse(pipeline, derrfpcal)
+	excfdarminv = complex_inverse(pipeline, excfdarm)
+	afctrl = mkmultiplier(pipeline, list_srcs(pipeline, pcalfpcal, derrfpcalinv, excfdarminv, derrfdarm))
+	afctrl = complex_audioamplify(pipeline, afctrl, -1.0 * afctrlfacR, -1.0 * afctrlfacI)
 
 	return afctrl
 	
 
-def compute_afctrl(pipeline, derrfpu, excfpu, pcalfdarm, derrfdarm, afctrlfac):
+def compute_afctrl(pipeline, derrfdarm, excfdarm, pcalfpcal, derrfpcal, afctrlfac):
 
 	#
-	# A(f_ctrl) = -afctrlfac * (derrfpu/excfpu) * (pcalfdarm/derrfdarm)
+	# A(f_ctrl) = -afctrlfac * (derrfdarm/excfdarm) * (pcalfpcal/derrfpcal)
 	# afctrlfac = EP2 = C0fpcal/(1+G0fpcal) * (1+G0fctrl)/C0fctrl
 	#
 
-	derrfdarminv = complex_inverse(pipeline, derrfdarm)
-	excfpuinv = complex_inverse(pipeline, excfpu)
-	afctrl = mkmultiplier(pipeline, list_srcs(pipeline, afctrlfac, pcalfdarm, derrfdarminv, excfpuinv, derrfpu))
+	derrfpcalinv = complex_inverse(pipeline, derrfpcal)
+	excfdarminv = complex_inverse(pipeline, excfdarm)
+	afctrl = mkmultiplier(pipeline, list_srcs(pipeline, afctrlfac, pcalfpcal, derrfpcalinv, excfdarminv, derrfdarm))
 	afctrl = complex_audioamplify(pipeline, afctrl, -1.0, 0.0)
 
 	return afctrl
+
+def compute_kappauim_from_filters_file(pipeline, EP16R, EP16I, afctrl, ktst, EP4R, EP4I, kpum, EP17R, EP17I):
+
+	#
+	# \kappa_uim = EP16 * (afctrl - ktst * EP4 - kpum * EP17)
+	#
+
+	kuim = complex_audioamplify(pipeline, mkadder(pipeline, list_srcs(pipeline, afctrl, complex_audioamplify(pipeline, ktst, -1.0 * EP4R, -1.0 * EP4I), complex_audioamplify(pipeline, kpum, -1.0 * EP17R, -1.0 * EP17I))), EP16R, EP16I)
+
+	return kuim
+
+def compute_kappauim(pipeline, EP16, afctrl, ktst, EP4, kpum, EP17):
+
+	#
+	# \kappa_uim = EP16 * (afctrl - ktst * EP4 - kpum * EP17)
+	#
+
+	ep4_kappatst = mkmultiplier(pipeline, list_srcs(pipeline, ktst, complex_audioamplify(pipeline, EP4, -1.0, 0.0)))
+	ep17_kappapum = mkmultiplier(pipeline, list_srcs(pipeline, kpum, complex_audioamplify(pipeline, EP17, -1.0, 0.0)))
+	kuim = mkadder(pipeline, list_srcs(pipeline, afctrl, ep4_kappatst, ep17_kappapum))
+	kuim = mkmultiplier(pipeline, list_srcs(pipeline, EP16, kuim))
+
+	return kuim
+
+def compute_kappauim_from_filters_file_uim_line(pipeline, derrfuim, uimexcfuim, pcalfpcal, derrfpcal, kuimfacR, kuimfacI):
+
+	#
+	# \kappa_UIM = kuimfac * [derr(fuim) / uimexc(fuim)] * [pcal(fpcal) / derr(fpcal)]
+	# kuimfac = EP22 = [1 / A_UIM0(fuim)] * [C0(fpcal) / (1 + G0(fpcal))] * [(1 + G0(fuim)) / C0(fuim)]
+	#
+
+	uimexcfuiminv = complex_inverse(pipeline, uimexcfuim)
+	derrfpcalinv = complex_inverse(pipeline, derrfpcal)
+	kuim = mkmultiplier(pipeline, list_srcs(pipeline, derrfuim, uimexcfuiminv, pcalfpcal, derrfpcalinv))
+	kuim = complex_audioamplify(pipeline, kuim, kuimfacR, kuimfacI)
+
+	return kuim
+
+def compute_kappauim_uim_line(pipeline, derrfuim, uimexcfuim, pcalfpcal, derrfpcal, kuimfac):
+
+	#
+	# \kappa_UIM = kuimfac * [derr(fuim) / uimexc(fuim)] * [pcal(fpcal) / derr(fpcal)]
+	# kuimfac = EP22 = [1 / A_UIM0(fuim)] * [C0(fpcal) / (1 + G0(fpcal))] * [(1 + G0(fuim)) / C0(fuim)]
+	#
+
+	uimexcfuiminv = complex_inverse(pipeline, uimexcfuim)
+	derrfpcalinv = complex_inverse(pipeline, derrfpcal)
+	kuim = mkmultiplier(pipeline, list_srcs(pipeline, kuimfac, derrfuim, uimexcfuiminv, pcalfpcal, derrfpcalinv))
+
+	return kuim
 
 def compute_kappapu_from_filters_file(pipeline, EP3R, EP3I, afctrl, ktst, EP4R, EP4I):
 
@@ -669,10 +746,28 @@ def compute_S_from_filters_file(pipeline, EP6R, EP6I, pcalfpcal2, derrfpcal2, EP
 	
 	return S
 
+def compute_S_from_filters_file_split_act(pipeline, EP6R, EP6I, pcalfpcal2, derrfpcal2, EP7R, EP7I, ktst, EP8R, EP8I, kpum, EP18R, EP18I, kuim, EP19R, EP19I):
+
+	#       
+	# S = (1 / EP6) * (pcalfpcal2 / derrfpcal2 - EP7 * (ktst * EP8 + kpum * EP18 + kuim * EP19))^(-1)
+	#
+
+	pcal_over_derr = complex_division(pipeline, pcalfpcal2, derrfpcal2)
+	ep8_ktst = complex_audioamplify(pipeline, ktst, EP8R, EP8I)
+	ep18_kpum = complex_audioamplify(pipeline, kpum, EP18R, EP18I)
+	ep19_kuim = complex_audioamplify(pipeline, kuim, EP19R, EP19I)
+	A_at_fpcal2 = mkadder(pipeline, list_srcs(pipeline, ep8_ktst, ep18_kpum, ep19_kuim))
+	DA_at_fpcal2 = complex_audioamplify(pipeline, A_at_fpcal2,  -1.0 * EP7R, -1.0 * EP7I)
+	Sinv = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, DA_at_fpcal2))
+	Sinv = complex_audioamplify(pipeline, Sinv, EP6R, EP6I)
+	S = complex_inverse(pipeline, Sinv)
+
+	return S
+
 def compute_S(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpu, EP9):
 
 	#	
-	# S = 1/EP6 * ( pcalfpcal2/derrfpcal2 - EP7*(ktst*EP8 + kpu*EP9) ) ^ (-1)
+	# S = 1/EP6 * ( pcalfpcal2/derrfpcal2 - EP7*(ktst*EP8 + kpum*EP9) ) ^ (-1)
 	#
 
 	pcal_over_derr = complex_division(pipeline, pcalfpcal2, derrfpcal2)
@@ -681,6 +776,24 @@ def compute_S(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpu, EP9):
 	kappatst_kappapu = mkadder(pipeline, list_srcs(pipeline, ep8_kappatst, ep9_kappapu))
 	kappatst_kappapu = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, EP7, -1.0, 0.0), kappatst_kappapu))
 	Sinv = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, kappatst_kappapu))
+	Sinv = mkmultiplier(pipeline, list_srcs(pipeline, EP6, Sinv))
+	S = complex_inverse(pipeline, Sinv)
+
+	return S
+
+def compute_S_split_act(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpum, EP18, kuim, EP19):
+
+	#       
+	# S = (1 / EP6) * (pcalfpcal2 / derrfpcal2 - EP7 * (ktst * EP8 + kpu * EP18 + kuim * EP19))^(-1)
+	#
+
+	pcal_over_derr = complex_division(pipeline, pcalfpcal2, derrfpcal2)
+	ep8_ktst = mkmultiplier(pipeline, list_srcs(pipeline, ktst, EP8))
+	ep18_kpum = mkmultiplier(pipeline, list_srcs(pipeline, kpum, EP18))
+	ep19_kuim = mkmultiplier(pipeline, list_srcs(pipeline, kuim, EP19))
+	A_at_fpcal2 = mkadder(pipeline, list_srcs(pipeline, ep8_ktst, ep18_kpum, ep19_puim))
+	DA_at_fpcal2 = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, EP7, -1.0, 0.0), A_at_fpcal2))
+	Sinv = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, DA_at_fpcal2))
 	Sinv = mkmultiplier(pipeline, list_srcs(pipeline, EP6, Sinv))
 	S = complex_inverse(pipeline, Sinv)
 
@@ -728,6 +841,29 @@ def compute_Xi_from_filters_file(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11_
 
 	return Xi
 
+def compute_Xi_from_filters_file_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11R, EP11I, EP12R, EP12I, EP13R, EP13I, EP20R, EP20I, EP21R, EP21I, ktst, kpum, kuim, kc, fcc):
+
+	#
+	# Xi = -1 + ((EP11 * kc) / (1 + i * f_src / f_cc)) * (pcalfpcal4 / derrfpcal4 - EP12 * (ktst * EP13 + kpum * EP20 + kuim * EP21))
+	#
+
+	Atst = complex_audioamplify(pipeline, ktst, EP13R, EP13I)
+	Apum = complex_audioamplify(pipeline, kpum, EP20R, EP20I)
+	Auim = complex_audioamplify(pipeline, kuim, EP21R, EP21I)
+	A = mkadder(pipeline, list_srcs(pipeline, Atst, Apum, Auim))
+	minusAD = complex_audioamplify(pipeline, A, -1.0 * EP12R, -1.0 * EP12I)
+	pcal_over_derr = complex_division(pipeline, pcalfpcal4, darmfpcal4)
+	pcal_over_derr_res = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, minusAD))
+	fpcal4_over_fcc = pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, fcc, exponent = -1.0), fpcal4)
+	i_fpcal4_over_fcc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fpcal4_over_fcc, matrix = [[0, 1]]))
+	i_fpcal4_over_fcc_plus_one = pipeparts.mkgeneric(pipeline, i_fpcal4_over_fcc, "lal_add_constant", value = 1.0)
+	i_fpcal4_over_fcc_plus_one_inv = complex_inverse(pipeline, i_fpcal4_over_fcc_plus_one)
+	kc_EP11 = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kc, matrix = [[EP11R, EP11I]]))
+	Xi_plus_one = mkmultiplier(pipeline, list_srcs(pipeline, kc_EP11, i_fpcal4_over_fcc_plus_one_inv, pcal_over_derr_res))
+	Xi = pipeparts.mkgeneric(pipeline, Xi_plus_one, "lal_add_constant", value = -1.0)
+
+	return Xi
+
 def compute_Xi(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP14, ktst, kpu, kc, fcc):
 
 	#
@@ -738,6 +874,29 @@ def compute_Xi(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP14,
 	Atst = mkmultiplier(pipeline, list_srcs(pipeline, EP13, ktst))
 	Apu = mkmultiplier(pipeline, list_srcs(pipeline, EP14, kpu))
 	A = mkadder(pipeline, list_srcs(pipeline, Atst, Apu))
+	minusAD = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, EP12, -1.0, 0.0), A))
+	pcal_over_derr = complex_division(pipeline, pcalfpcal4, darmfpcal4)
+	pcal_over_derr_res = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, minusAD))
+	fpcal4_over_fcc = pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, fcc, exponent = -1.0), fpcal4)
+	i_fpcal4_over_fcc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fpcal4_over_fcc, matrix = [[0, 1]]))
+	i_fpcal4_over_fcc_plus_one = pipeparts.mkgeneric(pipeline, i_fpcal4_over_fcc, "lal_add_constant", value = 1.0)
+	i_fpcal4_over_fcc_plus_one_inv = complex_inverse(pipeline, i_fpcal4_over_fcc_plus_one)
+	Xi_plus_one = mkmultiplier(pipeline, list_srcs(pipeline, EP11, complex_kc, i_fpcal4_over_fcc_plus_one_inv, pcal_over_derr_res))
+	Xi = pipeparts.mkgeneric(pipeline, Xi_plus_one, "lal_add_constant", value = -1.0)
+
+	return Xi
+
+def compute_Xi_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP20, EP21, ktst, kpum, kuim, kc, fcc):
+
+	#
+	# Xi = -1 + ((EP11 * kc) / (1 + i * f_src / f_cc)) * (pcalfpcal4 / derrfpcal4 - EP12 * (ktst * EP13 + kpum * EP20 + kuim * EP21))
+	#
+
+	complex_kc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kc, matrix=[[1,0]]))
+	Atst = mkmultiplier(pipeline, list_srcs(pipeline, EP13, ktst))
+	Apum = mkmultiplier(pipeline, list_srcs(pipeline, EP20, kpum))
+	Auim = mkmultiplier(pipeline, list_srcs(pipeline, EP21, kuim))
+	A = mkadder(pipeline, list_srcs(pipeline, Atst, Apum, Auim))
 	minusAD = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, EP12, -1.0, 0.0), A))
 	pcal_over_derr = complex_division(pipeline, pcalfpcal4, darmfpcal4)
 	pcal_over_derr_res = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, minusAD))
