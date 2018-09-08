@@ -845,15 +845,15 @@ D_epics_dict = {}
 C_epics_dict = {}
 misc_epics_dict = {}
 for key in headkeys:
-	if key.startswith("EP6") or key.startswith("EP11"):
+	if key.startswith("EP6_") or key.startswith("EP11_"):
 		C_epics_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		C_epics_dict[key] = calibration_parts.mkresample(pipeline, C_epics_dict[key], 0, False, compute_calib_factors_caps)
 		C_epics_dict[key] = (pipeparts.mktee(pipeline, C_epics_dict[key]), float(filters[key]))
-	elif key.startswith("EP7") or key.startswith("EP12"):
+	elif key.startswith("EP7_") or key.startswith("EP12_"):
 		D_epics_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		D_epics_dict[key] = calibration_parts.mkresample(pipeline, D_epics_dict[key], 0, False, compute_calib_factors_caps)
 		D_epics_dict[key] = (pipeparts.mktee(pipeline, D_epics_dict[key]), float(filters[key]))
-	elif key.startswith("EP1") or key.startswith("EP2") or key.startswith("EP15") or key.startswith("EP22"):
+	elif key.startswith("EP1_") or key.startswith("EP2_") or key.startswith("EP15_") or key.startswith("EP22_"):
 		misc_epics_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		misc_epics_dict[key] = calibration_parts.mkresample(pipeline, misc_epics_dict[key], 0, False, compute_calib_factors_caps)
 		misc_epics_dict[key] = (pipeparts.mktee(pipeline, misc_epics_dict[key]), float(filters[key]))
@@ -2080,7 +2080,7 @@ if remove_cal_lines:
 			esd_act_line = calibration_parts.complex_audioamplify(pipeline, tstexc_at_esd_act_freq, EP10_real, EP10_imag)
 		else:
 			# EP10 was read from the frames
-			EP10 = calibration_parts.merge_into_complex(pipeline, A_epics_dict["EP10_real"], A_epics_dict["EP10_imag"])
+			EP10 = calibration_parts.merge_into_complex(pipeline, A_epics_dict["EP10_real"][0], A_epics_dict["EP10_imag"][0])
 			esd_act_line = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, tstexc_at_esd_act_freq, EP10))
 		# Reconstruct a calibrated ESD injection at the ~30 Hz ESD line
 		if apply_complex_kappatst:

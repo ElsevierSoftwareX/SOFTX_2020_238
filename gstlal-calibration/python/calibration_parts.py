@@ -791,7 +791,7 @@ def compute_S_split_act(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, k
 	ep8_ktst = mkmultiplier(pipeline, list_srcs(pipeline, ktst, EP8))
 	ep18_kpum = mkmultiplier(pipeline, list_srcs(pipeline, kpum, EP18))
 	ep19_kuim = mkmultiplier(pipeline, list_srcs(pipeline, kuim, EP19))
-	A_at_fpcal2 = mkadder(pipeline, list_srcs(pipeline, ep8_ktst, ep18_kpum, ep19_puim))
+	A_at_fpcal2 = mkadder(pipeline, list_srcs(pipeline, ep8_ktst, ep18_kpum, ep19_kuim))
 	DA_at_fpcal2 = mkmultiplier(pipeline, list_srcs(pipeline, complex_audioamplify(pipeline, EP7, -1.0, 0.0), A_at_fpcal2))
 	Sinv = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, DA_at_fpcal2))
 	Sinv = mkmultiplier(pipeline, list_srcs(pipeline, EP6, Sinv))
