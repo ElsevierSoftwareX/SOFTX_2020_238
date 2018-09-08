@@ -739,7 +739,7 @@ if use_coherence:
 if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or remove_esd_act_line:
 	channel_list.append((instrument, ChannelNames["tstexcchannel"]))
 	headkeys.append("tstexc")
-#if compute_kappapum or (compute_kappauim and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
+if compute_kappapum or (compute_kappauim and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
 	channel_list.append((instrument, ChannelNames["pumexcchannel"]))
 	headkeys.append("pumexc")
 if use_uim_line and (compute_kappauim or compute_kappapum and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
