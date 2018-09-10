@@ -365,19 +365,6 @@ else:
 	remove_pum_act_line = False
 	remove_uim_act_line = False
 
-# How many EPICS will we for the CALIB_STATE_VECTOR calculation? It depends on the IFO and the time we are calibrating
-if not compute_calib_statevector:
-	num_dq_epics = 0
-elif InputConfigs["datasource"] == "lvshm":
-	num_dq_epics = 21
-elif gps_start_time > 1220000000:
-	num_dq_epics = 21
-elif instrument == "H1" and gps_start_time > 1175976256:
-	num_dq_epics = 14
-elif instrument == "L1" and gps_start_time > 1179588864:
-	num_dq_epics = 10
-else:
-	num_dq_epics = 9
 if (not factors_from_filters_file) and (compute_fs or compute_srcq) and ((InputConfigs["datasource"] is "frames" and gps_start_time < 1175954418)):
 	raise ValueError("Cannot compute SRC detuning parameters as the needed EPICS channels are not in the frames until GPS time 1175954418. Set ComputeFs: No and ComputeSRCQ: No.")
 
@@ -434,8 +421,6 @@ if factors_from_filters_file or compute_calib_statevector:
 	except:
 		if factors_from_filters_file:
 			raise ValueError("Cannot compute time-dependent correction factors, as the needed EPICS are not contained in the specified filters file.")
-		if num_dq_epics > 0:
-			num_dq_epics = 0
 	try:
 		EP10_real = float(filters["EP10_real"])
 		EP10_imag = float(filters["EP10_imag"])
@@ -444,8 +429,6 @@ if factors_from_filters_file or compute_calib_statevector:
 	except:
 		if factors_from_filters_file and remove_cal_lines:
 			remove_esd_act_line = False
-		if num_dq_epics > 9:
-			num_dq_epics = 9
 	try:
 		EP11_real = float(filters["EP11_real"])
 		EP11_imag = float(filters["EP11_imag"])
@@ -458,8 +441,6 @@ if factors_from_filters_file or compute_calib_statevector:
 	except:
 		if factors_from_filters_file and (compute_srcq or compute_fs):
 			raise ValueError("Cannot compute SRC spring frequency or Q, as the needed EPICS are not contained in the specified filters file.")
-		if num_dq_epics > 10:
-			num_dq_epics = 10
 
 	try:
 		EP15_real = float(filters["EP15_real"])
@@ -491,8 +472,6 @@ if factors_from_filters_file or compute_calib_statevector:
 			remove_uim_act_line = False
 		if factors_from_filters_file and (compute_kappapum or compute_kappauim):
 			raise ValueError("Cannot compute kappa_P or kappa_U, as the needed EPICS are not contained in the specified filters file.")
-		if num_dq_epics > 14:
-			num_dq_epics = 14
 
 # Load all of the kappa dewhitening and correction factors
 act_pcal_line_freq = float(filters["ka_pcal_line_freq"])

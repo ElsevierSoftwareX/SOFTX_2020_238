@@ -40,6 +40,7 @@ GObject.threads_init()
 Gst.init(None)
 
 import lal
+from lal import LIGOTimeGPS
 
 from gstlal import pipeparts
 from gstlal import calibration_parts
@@ -54,9 +55,11 @@ from glue.ligolw.utils import segments as ligolw_segments
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
-from glue import segments
+from ligo import segments
 
 parser = OptionParser()
+parser.add_option("--gps-start-time", metavar = "seconds", type = int, help = "GPS time at which to start processing data")
+parser.add_option("--gps-end-time", metavar = "seconds", type = int, help = "GPS time at which to stop processing data")
 parser.add_option("--ifo", metavar = "name", help = "Name of the interferometer (IFO), e.g., H1, L1")
 parser.add_option("--raw-frame-cache", metavar = "name", help = "Raw frame cache file")
 parser.add_option("--calibrated-frame-cache", metavar = "name", help = "Calibrated frame cache file")
@@ -85,7 +88,26 @@ Config = ConfigParser.ConfigParser()
 Config.read(options.config_file)
 
 InputConfigs = ConfigSectionMap("InputConfigurations")
-filters = numpy.load(InputConfigs["filtersfilename"])
+
+#
+# Load in the filters file that contains filter coefficients, etc.
+#
+
+# Search the directory tree for files with names matching the one we want.
+filters_name = InputConfigs["filtersfilename"]
+filters_paths = []
+# Check the user's home directory
+for dirpath, dirs, files in os.walk(os.environ['HOME']):
+	if filters_name in files:
+		# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+		if dirpath.count("GDSFilters") > 0:
+			filters_paths.insert(0, os.path.join(dirpath, filters_name))
+		else:
+			filters_paths.append(os.path.join(dirpath, filters_name))
+if not len(filters_paths):
+	raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
+print "\nLoading calibration filters from %s\n" % filters_paths[0]
+filters = numpy.load(filters_paths[0])
 
 ifo = options.ifo
 
@@ -194,6 +216,6 @@ def pcal2darm(pipeline, name):
 #
 
 
-test_common.build_and_run(pcal2darm, "pcal2darm")
+test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
 

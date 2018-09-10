@@ -36,6 +36,7 @@ from gi.repository import Gst
 from gstlal import pipeparts
 from gstlal import pipeio
 from gstlal import simplehandler
+from gstlal import datasource
 
 
 GObject.threads_init()
@@ -133,9 +134,9 @@ def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
 	pipeline = pipelinefunc(Gst.Pipeline(name = name), name, **pipelinefunc_kwargs)
 	handler = simplehandler.Handler(mainloop, pipeline)
 	if segment is not None:
-		if pipeline.set_state(Gst.State.PAUSED) == Gst.StateChangeReturn.FAILURE:
-			raise RuntimeError("pipeline failed to enter PLAYING state")
-		pipeline.seek(1.0, Gst.Format(Gst.Format.TIME), Gst.SeekFlags.FLUSH, Gst.SeekType.SET, segment[0].ns(), Gst.SeekType.SET, segment[1].ns())
+		if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+			raise RuntimeError("pipeline failed to enter READY state")
+		datasource.pipeline_seek_for_gps(pipeline, segment[0].ns() / 1000000000, segment[1].ns() / 1000000000)
 	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter PLAYING state")
 	pipeparts.write_dump_dot(pipeline, "test_%s" % name, verbose = True)

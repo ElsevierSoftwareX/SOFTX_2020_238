@@ -3,47 +3,65 @@
 ### Inputs for user to modify ###
 #################################
 
-# which interferometer
-IFO = H1
+# which interferometer (H or L)
+IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O2
 
-START = 1186159035
-END = 1186159557
+START = 1186159040
+END = 1186160064
+# How much time does the calibration need to settle at the start and end?
+PLOT_WARMUP_TIME = 220
+PLOT_COOLDOWN_TIME = 64
+
 GDSCONFIGS = ../../config_files/H1GDS_LowLatency_AllCorrections_Cleaning.ini
 DCSCONFIGS = ../../config_files/H1DCS_AllCorrections_Cleaning.ini
+GDSTESTCONFIGS = ../../config_files/H1GDS_LowLatency_AllCorrections_Cleaning.ini
+DCSTESTCONFIGS = ../../config_files/H1DCS_AllCorrections_Cleaning.ini
 
 all: DCS_pcal2darm_plots
 
 ################################################
-### These commands should changes less often ###
+### These commands should change less often ###
 ################################################
 
-$(IFO)_raw_frames.cache:
-	gw_data_find -o H -t H1_R -s $(START) -e $(END) -l --url-type file > $@
+PLOT_START = $(shell echo $(START) + $(PLOT_WARMUP_TIME) | bc)
+PLOT_END = $(shell echo $(END) - $(PLOT_COOLDOWN_TIME) | bc)
 
-$(IFO)_C00_frames.cache:
-	gw_data_find -o H -t H1_HOFT_C00 -s $(START) -e $(END) -l --url-type file > $@
+$(IFO)1_raw_frames.cache:
+	gw_data_find -o $(IFO) -t $(IFO)1_R -s $(START) -e $(END) -l --url-type file > $@
 
-$(IFO)_C01_frames.cache:
-	gw_data_find -o H -t H1_HOFT_C01 -s $(START) -e $(END) -l --url-type file > $@
+$(IFO)1_C00_frames.cache:
+	gw_data_find -o $(IFO) -t $(IFO)1_HOFT_C00 -s $(START) -e $(END) -l --url-type file > $@
 
-$(IFO)_C02_frames.cache:
-	gw_data_find -o H -t H1_HOFT_C02 -s $(START) -e $(END) -l --url-type file > $@
+$(IFO)1_C01_frames.cache:
+	gw_data_find -o $(IFO) -t $(IFO)1_HOFT_C01 -s $(START) -e $(END) -l --url-type file > $@
 
-$(IFO)_hoft_GDS_frames.cache: $(IFO)_raw_frames.cache filters framesdir
+$(IFO)1_C02_frames.cache:
+	gw_data_find -o $(IFO) -t $(IFO)1_HOFT_C02 -s $(START) -e $(END) -l --url-type file > $@
+
+$(IFO)1_hoft_GDS_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGS)
-	ls H-H1GDS_TEST*.gwf | lalapps_path2cache > $@
+	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_TEST*.gwf | lalapps_path2cache > $@
 
-$(IFO)_hoft_DCS_frames.cache: $(IFO)_raw_frames.cache filters framesdir
-	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
-	ls H-H1DCS_TEST*.gwf | lalapps_path2cache > $@
+$(IFO)1_hoft_DCS_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
+	#GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TEST*.gwf | lalapps_path2cache > $@
 
-GDS_pcal2darm_plots: $(IFO)_raw_frames.cache $(IFO)_hoft_GDS_frames.cache
-	python pcal2darm_timeseries.py --ifo=$(IFO) --raw-frame-cache $(IFO)_raw_frames.cache --calibrated-frame-cache $(IFO)_hoft_GDS_frames.cache --config-file $(GDSCONFIGS) --calibrated-channel-list='GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
+# In case we want to compare one calibration to another...
+$(IFO)1_hoft_GDS_TEST_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSTESTCONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_TEST*.gwf | lalapps_path2cache > $@
 
-DCS_pcal2darm_plots: $(IFO)_raw_frames.cache $(IFO)_hoft_DCS_frames.cache
-	python pcal2darm_timeseries.py --ifo=$(IFO) --raw-frame-cache $(IFO)_raw_frames.cache --calibrated-frame-cache $(IFO)_hoft_DCS_frames.cache --config-file $(DCSCONFIGS) --calibrated-channel-list='DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN'
+$(IFO)1_hoft_DCS_TEST_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSTESTCONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS$(IFO)-$(IFO)1DCS_TEST*.gwf | lalapps_path2cache > $@
+
+GDS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
+	python pcal2darm_timeseries.py --gps-start-time=$(PLOT_START) --gps-end-time=$(PLOT_END) --ifo=$(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)_hoft_GDS_frames.cache --config-file $(GDSCONFIGS) --calibrated-channel-list='GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
+
+DCS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache
+	python pcal2darm_timeseries.py --gps-start-time=$(PLOT_START) --gps-end-time=$(PLOT_END) --ifo=$(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)1_hoft_DCS_frames.cache --config-file $(DCSCONFIGS) --calibrated-channel-list='DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN'
 
 filters:
 	if [ -d Filters/$(OBSRUN)/GDSFilters ]; then \
@@ -55,9 +73,9 @@ filters:
 	fi
 
 framesdir:
-	mkdir -p Frames/$(OBSRUN)/$(IFO)/easy_raw
-	mkdir -p Frames/$(OBSRUN)/$(IFO)/GDS
-	mkdir -p Frames/$(OBSRUN)/$(IFO)/DCS
+	mkdir -p Frames/$(OBSRUN)/$(IFO)1/easy_raw
+	mkdir -p Frames/$(OBSRUN)/$(IFO)1/GDS
+	mkdir -p Frames/$(OBSRUN)/$(IFO)1/DCS
 
 clean:
 	rm *.gwf *.cache *.png
