@@ -167,6 +167,9 @@ Bitmasks = ConfigSectionMap("Bitmasks")
 PipelineConfigs = ConfigSectionMap("PipelineConfigurations")
 DataCleaningConfigs = ConfigSectionMap("DataCleaningConfigurations")
 
+# Track the "version" of the config file, which tells us what variables are contained
+config_version = int(InputConfigs["configversion"])
+
 
 # Sanity checks for command line options
 data_sources = set(("frames", "lvshm"))

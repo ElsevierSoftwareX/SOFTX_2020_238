@@ -1,1 +1,3 @@
 gstlal-calibration.spec
+tests/check_calibration/Filters/**
+tests/check_calibration/Frames/**
