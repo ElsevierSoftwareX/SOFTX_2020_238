@@ -562,17 +562,15 @@ def append_options(parser):
 
 	-# Many other combinations possible, please add some!
 	"""
-	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
+	group = optparse.OptionGroup(parser, "Data Source Options", "Use these options to set up the appropriate data source")
 	group.add_option("--data-source", metavar = "source", help = "Set the data source from [framexmit|lvshm|frames|silence|white|white_live].  Required.")
 	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is only used if --data-source is one of white, silence.")
 	group.add_option("--gps-start-time", type="int", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--gps-end-time", type="int", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
 	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
-	group.add_option("--channel-list", type="string", metavar = "name", help = "Set the list of the channels to process. Command given as --channel-list=location/to/file")
-	group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO:AUX-CHANNEL-NAME:RATE")
 	group.add_option("--max-streams", type = "int", default = 50, help = "Maximum number of streams to process for a given pipeline at once. Used to split up channel lists into subsets that can then be processed in serial. Default = 50.")
 	group.add_option("--equal-subsets", action = "store_true", help = "If set, forces an equal number of channels processed per channel subset.")
-	group.add_option("--max-sample-rate", type = "int", default = 4096, help = "Maximum sampling rate for a given channel. If a given channel has a higher native sampling rate, it will be downsampled to this target rate. Default = 2048.")
+	group.add_option("--max-sample-rate", type = "int", default = 4096, help = "Maximum sampling rate for a given channel. If a given channel has a higher native sampling rate, it will be downsampled to this target rate. Default = 4096.")
 	group.add_option("--min-sample-rate", type = "int", default = 32, help = "Minimum sampling rate for a given channel when splitting a given channel into multiple frequency bands. If a channel has a lower sampling rate than this minimum, however, it will not be upsampled to this sampling rate. Default = 32.")
 	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
 	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
@@ -582,12 +580,17 @@ def append_options(parser):
 	group.add_option("--frame-type", type="string", metavar = "name", help = "Include only those channels with the frame type given.")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")	
+	group.add_option("--latency-output", action = "store_true", help = "Print out latency output (s) at different stages of the pipeline (measured as current time - buffer time).")
+	parser.add_option_group(group)
+
+	group = optparse.OptionGroup(parser, "Channel Options", "Settings used for deciding which auxiliary channels to process.")
+	group.add_option("--channel-list", type="string", metavar = "name", help = "Set the list of the channels to process. Command given as --channel-list=location/to/file")
+	group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO:AUX-CHANNEL-NAME:RATE")
 	group.add_option("--section-include", default=[], type="string", action="append", help="Set the channel sections to be included from the INI file. Can be given multiple times. Pass in spaces as underscores instead. If not specified, assumed to include all sections")
 	group.add_option("--safety-include", default=["safe"], type="string", action="append", help="Set the safety values for channels to be included from the INI file. Can be given multiple times. Default = 'safe'.")
 	group.add_option("--fidelity-exclude", default=[], type="string", action="append", help="Set the fidelity values for channels to be excluded from the INI file. Can supply multiple values by repeating this argument. Each must be on of (add here)")
 	group.add_option("--safe-channel-include", default=[], action="append", type="string", help="Include this channel when reading the INI file (requires exact match). Can be repeated. If not specified, assume to include all channels.")
 	group.add_option("--unsafe-channel-include", default=[], action="append", type="string", help="Include this channel when reading the INI file, disregarding safety information (requires exact match). Can be repeated.")
-	group.add_option("--latency-output", action = "store_true", help = "Print out latency output (s) at different stages of the pipeline (measured as current time - buffer time).")
 	parser.add_option_group(group)
 
 ##

@@ -111,7 +111,6 @@ QHIGH = 40
 
 # data transfer options
 OUTPATH = $(PWD)
-SAMPLE_RATE = 1
 SAVE_FORMAT = kafka
 #SAVE_FORMAT = hdf5
 
@@ -142,8 +141,11 @@ IFO = H1
 EPOCH = O2
 LEVEL = standard
 
+# if not using standard .ini file, comment and supply custom channel list instead
 CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
+#CHANNEL_LIST = custom_channel_list.txt
 
+### used for channel list .ini file
 # if not specified, use all sections (replace spaces with underscores'_')
 SECTION_INCLUDE =
 

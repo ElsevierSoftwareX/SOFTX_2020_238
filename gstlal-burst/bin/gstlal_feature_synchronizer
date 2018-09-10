@@ -101,9 +101,11 @@ class StreamSynchronizer(object):
         self.producer = Producer(self.kafka_settings)
 
         ### initialize queues
-        self.feature_queue = PriorityQueue()
-        self.feature_buffer = deque(maxlen = 300)
         self.last_timestamp = 0
+        # 1 minute queue for incoming buffers
+        self.feature_queue = PriorityQueue(maxsize = 60 * self.num_topics)
+        # 5 minute queue for outgoing buffers
+        self.feature_buffer = deque(maxlen = 300)
 
     def fetch_data(self, consumer):
         """

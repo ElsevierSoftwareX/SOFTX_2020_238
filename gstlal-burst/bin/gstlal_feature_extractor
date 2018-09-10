@@ -392,12 +392,14 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 		# choose range of basis parameters
 		# NOTE: scale down frequency range by downsample_factor to deal with rolloff from downsampler
 		downsample_factor = 0.8
-		flow = min_rate/4.
-		fhigh = max_rate/2.
 		qlow = 3.3166
 		if data_source_info.extension == 'ini':
-			qhigh = data_source_info.channel_dict[channel]['qhigh']
+			flow = max(data_source_info.channel_dict[channel]['flow'], min_rate/4.)
+			fhigh = min(data_source_info.channel_dict[channel]['fhigh'], max_rate/2.)
+			qhigh = min(data_source_info.channel_dict[channel]['qhigh'], options.qhigh)
 		else:
+			flow = min_rate/4.
+			fhigh = max_rate/2.
 			qhigh = options.qhigh
 
 		# generate templates

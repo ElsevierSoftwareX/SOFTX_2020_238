@@ -120,7 +120,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 
 		# create specific options for each channel subset
 		subset_options = {
-			"max-streams": options.max_streams,
+			"max-streams": options.max_streams * 2, # FIXME: done to force all channels to be processed in parallel, but should be handled upstream more gracefully
 			"job-id": str(ii + 1).zfill(4),
 			"channel-name":' '.join(channels)
 		}
@@ -236,6 +236,19 @@ if options.save_format == 'kafka':
 		"persist-cadence": options.persist_cadence,
 		"input-topic-basename": '_'.join(['synchronizer', options.tag])
 	}
+
+	extra_hdf5_channel_options = {
+		"section-include": options.section_include,
+		"safety-include": list(options.safety_include),
+		"fidelity-exclude": list(options.fidelity_exclude),
+		"safe-channel-include": options.safe_channel_include,
+		"unsafe-channel-include": options.unsafe_channel_include,
+	}
+
+	### FIXME: hack to deal with condor DAG utilities not playing nice with empty settings
+	for option_name, option in extra_hdf5_channel_options.items():
+		if option:
+			hdf5_sink_options[option_name] = option
 
 	synchronizer_options.update(common_options)
 	hdf5_sink_options.update(common_options)
