@@ -186,7 +186,7 @@ class StreamSynchronizer(object):
         # push full feature vector to producer if buffer isn't empty
         if self.feature_buffer:
             timestamp, features = self.feature_buffer.pop()
-            logger.info('pushing features with timestamp %f downstream' % timestamp)
+            logger.info('pushing features with timestamp %f downstream, latency is %.3f' % (timestamp, utils.gps2latency(timestamp)))
             feature_packet = {'timestamp': timestamp, 'features': features}
             self.producer.produce(timestamp = timestamp, topic = self.producer_name, value = json.dumps(feature_packet))
             self.producer.poll(0)
