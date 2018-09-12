@@ -189,6 +189,7 @@ class StreamSynchronizer(object):
             logger.info('pushing features with timestamp %f downstream' % timestamp)
             feature_packet = {'timestamp': timestamp, 'features': features}
             self.producer.produce(timestamp = timestamp, topic = self.producer_name, value = json.dumps(feature_packet))
+            self.producer.poll(0)
 
     def max_timeout(self):
         """

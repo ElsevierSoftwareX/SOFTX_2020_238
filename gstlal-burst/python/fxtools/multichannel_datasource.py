@@ -139,58 +139,63 @@ def channel_dict_from_channel_ini(options):
 		if config.get(name, 'frametype') in included_frame_types:
 			sections.append(name)
 
+	# specify which channels are considered
+	if options.section_include:
+		section_include = [section.replace('_', ' ') for section in options.section_include]
+	else:
+		section_include = sections
+
+	channel_include = options.safe_channel_include + options.unsafe_channel_include
+
 	# generate dictionary of channels
 	for name in sections:
-		
-		# ensure only channels whose sections aren't excluded are added to the dict
-		if not options.section_include or name.replace(' ','_') in options.section_include:
 
-			# extract low frequency, high Q
-			flow = config.getfloat(name, 'flow')
-			qhigh = config.getfloat(name, 'qhigh')
+		# extract low frequency, high Q
+		flow = config.getfloat(name, 'flow')
+		qhigh = config.getfloat(name, 'qhigh')
 
-			# figure out whether to use Nyquist for each channel or a specific limit
-			fhigh  = config.get(name, 'fhigh')
-			use_nyquist = fhigh == "Nyquist"
-			if not use_nyquist:
-				fhigh = float(fhigh)
-				
-			# set up each channel
-			for channel in config.get(name, 'channels').strip().split('\n'):
+		# figure out whether to use Nyquist for each channel or a specific limit
+		fhigh  = config.get(name, 'fhigh')
+		use_nyquist = fhigh == "Nyquist"
+		if not use_nyquist:
+			fhigh = float(fhigh)
 
-				# parse out expected format for each channel
-				channel = channel.split()
+		# set up each channel
+		for channel in config.get(name, 'channels').strip().split('\n'):
 
-				if len(channel)==2: # backward compatibility with old format
-					channel, fsamp = channel
-					fsamp = int(fsamp)
-					safety = "unknown"
-					fidelity = "unknown"
+			# parse out expected format for each channel
+			channel = channel.split()
 
-				elif len(channel)==4: # expected format
-					channel, fsamp, safety, fidelity = channel
-					fsamp = int(fsamp)
+			if len(channel)==2: # backward compatibility with old format
+				channel, fsamp = channel
+				fsamp = int(fsamp)
+				safety = "unknown"
+				fidelity = "unknown"
 
-				else:
-					raise SyntaxError( 'could not parse channel : %s'%(''.join(channel)) )
+			elif len(channel)==4: # expected format
+				channel, fsamp, safety, fidelity = channel
+				fsamp = int(fsamp)
 
-			    #-----------------------------------------
+			else:
+				raise SyntaxError( 'could not parse channel : %s'%(''.join(channel)) )
 
-				### check that safety and fidelity are permissible values
-				assert safety   in known_safety,   'safety=%s is not understood. Must be one of %s'%(safety, ", ".join(known_safety))
-				assert fidelity in known_fidelity, 'fidelity=%s is not understood. Must be one of %s'%(fidelity, ", ".join(known_fidelity))
+		    #-----------------------------------------
 
-				# conditions on whether or now we want to exclude this channel
-				if options.unsafe_channel_include or (safety in options.safety_include and fidelity not in options.fidelity_exclude):
-					if not options.safe_channel_include or channel in options.safe_channel_include or channel in options.unsafe_channel_include:
+			### check that safety and fidelity are permissible values
+			assert safety   in known_safety,   'safety=%s is not understood. Must be one of %s'%(safety, ", ".join(known_safety))
+			assert fidelity in known_fidelity, 'fidelity=%s is not understood. Must be one of %s'%(fidelity, ", ".join(known_fidelity))
 
-						# add ifo, channel name & omicron parameters to dict
-						channel_name = channel
-						ifo,_  = channel.split(':')
-						if use_nyquist:
-							fhigh = fsamp/2.
+			# conditions on whether or not we want to include this channel
+			if name in section_include or channel in channel_include:
+				if (safety in options.safety_include and fidelity not in options.fidelity_exclude) or channel in options.unsafe_channel_include:
 
-						channel_dict[channel_name] = {'fsamp': fsamp, 'ifo': ifo, 'flow': flow, 'fhigh': fhigh, 'qhigh' : qhigh}
+					# add ifo, channel name & omicron parameters to dict
+					channel_name = channel
+					ifo,_  = channel.split(':')
+					if use_nyquist:
+						fhigh = fsamp/2.
+
+					channel_dict[channel_name] = {'fsamp': fsamp, 'ifo': ifo, 'flow': flow, 'fhigh': fhigh, 'qhigh' : qhigh}
 
 	return channel_dict				
 
