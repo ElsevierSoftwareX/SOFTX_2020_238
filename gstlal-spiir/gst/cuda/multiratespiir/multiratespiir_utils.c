@@ -839,7 +839,7 @@ spiir_state_flush_queue (SpiirState **spstate, gint depth, gint
 #endif
 
 void
-cuda_multirate_spiir_read_bank_id(const char *fname, gint *bank_id)
+cuda_multiratespiir_read_bank_id(const char *fname, gint *bank_id)
 {
 	XmlNodeStruct	xns;
 	XmlParam	xparam = {0, NULL};
@@ -856,7 +856,7 @@ cuda_multirate_spiir_read_bank_id(const char *fname, gint *bank_id)
 
 }
 void
-cuda_multirate_spiir_read_ndepth_and_rate(const char *fname, guint *num_depths, gint *rate)
+cuda_multiratespiir_read_ndepth_and_rate(const char *fname, guint *num_depths, gint *rate)
 {
 	XmlNodeStruct	xns;
 	XmlParam	xparam = {0, NULL};
@@ -891,7 +891,7 @@ cuda_multirate_spiir_read_ndepth_and_rate(const char *fname, guint *num_depths, 
 }
 
 
-void cuda_multirate_spiir_init_cover_samples (guint *num_head_cover_samples, guint *num_tail_cover_samples, gint rate, guint num_depths, gint down_filtlen, gint up_filtlen)
+void cuda_multiratespiir_init_cover_samples (guint *num_head_cover_samples, guint *num_tail_cover_samples, gint rate, guint num_depths, gint down_filtlen, gint up_filtlen)
 {
 	guint i = num_depths;
 	gint rate_start = 0;
@@ -911,12 +911,12 @@ void cuda_multirate_spiir_init_cover_samples (guint *num_head_cover_samples, gui
 	}
 }
 
-void cuda_multirate_spiir_update_exe_samples (gint *num_exe_samples, gint new_value)
+void cuda_multiratespiir_update_exe_samples (gint *num_exe_samples, gint new_value)
 {
 	*num_exe_samples = new_value;
 }
 
-gboolean cuda_multirate_spiir_parse_bank (gdouble *bank, guint *num_depths, gint *
+gboolean cuda_multiratespiir_parse_bank (gdouble *bank, guint *num_depths, gint *
 		outchannels)
 {
 	// FIXME: do some check?
@@ -925,24 +925,24 @@ gboolean cuda_multirate_spiir_parse_bank (gdouble *bank, guint *num_depths, gint
 	return TRUE;
 }
 
-guint cuda_multirate_spiir_get_outchannels(CudaMultirateSPIIR *element)
+guint cuda_multiratespiir_get_outchannels(CudaMultirateSPIIR *element)
 {
 		return element->outchannels;
 }
 
-guint cuda_multirate_spiir_get_num_head_cover_samples(CudaMultirateSPIIR *element)
+guint cuda_multiratespiir_get_num_head_cover_samples(CudaMultirateSPIIR *element)
 {
 	return element->num_head_cover_samples;
 }
 
-void cuda_multirate_spiir_add_two_data(float *data1, float *data2, gint len)
+void cuda_multiratespiir_add_two_data(float *data1, float *data2, gint len)
 {
 	int i;
 	for(i=0; i<len; i++)
 		data1[i] = data1[i] + data2[i];
 }
 
-guint64 cuda_multirate_spiir_get_available_samples(CudaMultirateSPIIR *element)
+guint64 cuda_multiratespiir_get_available_samples(CudaMultirateSPIIR *element)
 {
 	return gst_adapter_available(element->adapter) / ( element->width / 8 );
 }

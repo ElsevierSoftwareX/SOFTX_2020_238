@@ -76,30 +76,30 @@ spiir_state_get_outlen (SpiirState **spstate, gint in_len, guint num_depths);
 
 
 void
-cuda_multirate_spiir_read_bank_id(const char *fname, gint *bank_id);
+cuda_multiratespiir_read_bank_id(const char *fname, gint *bank_id);
 
 void
-cuda_multirate_spiir_read_ndepth_and_rate(const char *fname, guint *num_depths, gint *rate);
+cuda_multiratespiir_read_ndepth_and_rate(const char *fname, guint *num_depths, gint *rate);
 
 void 
-cuda_multirate_spiir_init_cover_samples (guint *num_head_cover_samples, 
+cuda_multiratespiir_init_cover_samples (guint *num_head_cover_samples, 
 		guint *num_tail_cover_samples, gint rate, guint num_depths, 
 		gint down_filtlen, gint up_filtlen);
 
 void 
-cuda_multirate_spiir_update_exe_samples (gint *num_exe_samples, gint new_value);
+cuda_multiratespiir_update_exe_samples (gint *num_exe_samples, gint new_value);
 
 gboolean 
-cuda_multirate_spiir_parse_bank (gdouble *bank, guint *num_depths, gint *
+cuda_multiratespiir_parse_bank (gdouble *bank, guint *num_depths, gint *
 		outchannels);
 
 guint 
-cuda_multirate_spiir_get_outchannels (CudaMultirateSPIIR *element);
+cuda_multiratespiir_get_outchannels (CudaMultirateSPIIR *element);
 
 guint 
-cuda_multirate_spiir_get_num_head_cover_samples (CudaMultirateSPIIR *element);
+cuda_multiratespiir_get_num_head_cover_samples (CudaMultirateSPIIR *element);
 
 guint64 
-cuda_multirate_spiir_get_available_samples (CudaMultirateSPIIR *element);
+cuda_multiratespiir_get_available_samples (CudaMultirateSPIIR *element);
 
 #endif

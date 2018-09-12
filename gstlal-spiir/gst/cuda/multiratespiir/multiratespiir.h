@@ -31,16 +31,16 @@
 
 G_BEGIN_DECLS
 
-#define CUDA_TYPE_MULTIRATE_SPIIR \
-  (cuda_multirate_spiir_get_type())
-#define CUDA_MULTIRATE_SPIIR(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),CUDA_TYPE_MULTIRATE_SPIIR,CudaMultirateSPIIR))
-#define CUDA_MULTIRATE_SPIIR_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),CUDA_TYPE_MULTIRATE_SPIIR,CudaMultirateSPIIRClass))
-#define GST_IS_CUDA_MULTIRATE_SPIIR(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),CUDA_TYPE_MULTIRATE_SPIIR))
-#define GST_IS_CUDA_MULTIRATE_SPIIR_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),CUDA_TYPE_MULTIRATE_SPIIR))
+#define CUDA_TYPE_MULTIRATESPIIR \
+  (cuda_multiratespiir_get_type())
+#define CUDA_MULTIRATESPIIR(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),CUDA_TYPE_MULTIRATESPIIR,CudaMultirateSPIIR))
+#define CUDA_MULTIRATESPIIR_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_CAST((klass),CUDA_TYPE_MULTIRATESPIIR,CudaMultirateSPIIRClass))
+#define GST_IS_CUDA_MULTIRATESPIIR(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),CUDA_TYPE_MULTIRATESPIIR))
+#define GST_IS_CUDA_MULTIRATESPIIR_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_TYPE((klass),CUDA_TYPE_MULTIRATESPIIR))
 
 typedef struct _CudaMultirateSPIIR CudaMultirateSPIIR;
 typedef struct _CudaMultirateSPIIRClass CudaMultirateSPIIRClass;
@@ -115,6 +115,7 @@ struct _CudaMultirateSPIIR {
 
   /* <private> */
 
+  GstPad *srcpad;
   GstAdapter *adapter;
   GArray *flag_segments; /* book keeping the flag details, inspired by control_segments in gstlal_gate.c */
 
@@ -129,6 +130,7 @@ struct _CudaMultirateSPIIR {
   guint64 samples_in;
   guint64 samples_out;
   guint64 next_in_offset;
+  gint	bps;
   
   guint64 num_gap_samples;
   gboolean need_tail_drain;
@@ -151,16 +153,17 @@ struct _CudaMultirateSPIIR {
 
   gint gap_handle;
 
-  // for ACCELERATE_MULTIRATE_SPIIR_MEMORY_COPY
+  // for ACCELERATE_MULTIRATESPIIR_MEMORY_COPY
   float* h_snglsnr_buffer;
   int len_snglsnr_buffer;
+  double offset_per_nanosecond;
 };
 
 struct _CudaMultirateSPIIRClass {
   GstBaseTransformClass parent_class;
 };
 
-GType cuda_multirate_spiir_get_type(void);
+GType cuda_multiratespiir_get_type(void);
 
 G_END_DECLS
 

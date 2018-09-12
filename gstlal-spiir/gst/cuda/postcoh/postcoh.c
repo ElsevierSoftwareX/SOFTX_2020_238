@@ -35,19 +35,127 @@
 #include <postcoh/postcohtable_utils.h>
 #include <cuda_debug.h>
 
-#define GST_CAT_DEFAULT gstlal_postcoh_debug
-GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
-
 #define DEFAULT_DETRSP_FNAME "H1L1V1_detrsp.xml"
 #define EPSILON 5
 #define PEAKFINDER_CLUSTER_WINDOW 5
 #define RAD2DEG 57.2957795
 #define ACCELERATE_POSTCOH_MEMORY_COPY
 
+#define GST_CAT_DEFAULT cuda_postcoh_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
 static void additional_initializations(GType type)
 {
 	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "cuda_postcoh", 0, "cuda_postcoh element");
 }
+
+
+/*
+ * add a segment to the control segment array.  note they are appended, and
+ * the code assumes they are in order and do not overlap, see gstlal_gate.c control_segment
+ */
+
+
+typedef struct flag_segment {
+	GstClockTime start, stop;
+	gboolean is_gap; // GAP true, non-GAP, false
+}FlagSegment;
+
+static gboolean need_flag_gap(GstPostcohCollectData *data, GstClockTime start, GstClockTime stop)
+{
+	GstClockTime dur_gap = 0, dur_buf = stop - start;
+	gboolean need_flush = FALSE;
+	GArray *flag_segments = data->flag_segments;
+	int i, flush_len;
+	FlagSegment *this_segment = &((FlagSegment *)flag_segments->data)[flag_segments->len - 1];
+	/* make sure the last segment always later than the outbuf */
+	g_assert(this_segment-> stop >= stop);
+
+	for (i=0; i<flag_segments->len; i++) {
+		this_segment = &((FlagSegment *)flag_segments->data)[i];
+		/*		| start				| stop
+		 *									| this_start (1)
+		 * | s | e (2)
+		 * | s							| e
+		 * | s		| e
+		 *            |s | e
+		 *            |s				| e
+		 */
+		if (this_segment-> start > stop)
+			break;
+		if (this_segment->stop < start) {
+			need_flush = TRUE;
+			flush_len = i-1;
+			continue;
+		}
+		if (this_segment->start <= start && this_segment->stop >= stop) {
+			dur_gap += this_segment->is_gap ? dur_buf: 0;
+			continue;
+		}
+
+		if (this_segment->start <= start && this_segment->stop < stop) {
+			dur_gap += this_segment->is_gap ? this_segment->stop - start: 0;
+			continue;
+		}
+		if (this_segment->start > start && this_segment->stop <= stop) {
+			dur_gap += this_segment->is_gap ? this_segment->stop - this_segment->start: 0;
+			continue;
+		}
+		if (this_segment->start > start && this_segment->stop > stop) {
+			dur_gap += this_segment->is_gap ? stop - this_segment->start: 0;
+			continue;
+		}
+	}
+	if (need_flush && flush_len > 0)
+		g_array_remove_range(flag_segments, 0, flush_len);
+
+	if (dur_gap > dur_buf/2 - 1e-6)
+		return TRUE;
+	else
+		return FALSE;
+
+
+}
+
+static void add_flag_segment(GstPostcohCollectData *data, GstClockTime start, GstClockTime stop, gboolean is_gap)
+{
+	FlagSegment new_segment = {
+		.start = start,
+		.stop = stop,
+		.is_gap = is_gap
+	};
+
+	g_assert_cmpuint(start, <=, stop);
+	GST_DEBUG_OBJECT(data, "found control segment [%" GST_TIME_FORMAT ", %" GST_TIME_FORMAT ") in state %d", GST_TIME_ARGS(new_segment.start), GST_TIME_ARGS(new_segment.stop), new_segment.is_gap);
+
+
+
+	/* try coalescing the new segment with the most recent one */
+	if(data->flag_segments->len) {
+		FlagSegment *final_segment = &((FlagSegment *) data->flag_segments->data)[data->flag_segments->len - 1];
+		/* if the most recent segment and the new segment have the
+		 * same state and they touch, merge them */
+		if(final_segment->is_gap == new_segment.is_gap && final_segment->stop >= new_segment.start) {
+			g_assert_cmpuint(new_segment.stop, >=, final_segment->stop);
+			final_segment->stop = new_segment.stop;
+			return;
+		}
+		/* otherwise, if the most recent segment had 0 length,
+		 * replace it entirely with the new one.  note that the
+		 * state carried by a zero-length segment is meaningless,
+		 * zero-length segments are merely interpreted as a
+		 * heart-beat indicating how far the control stream has
+		 * advanced */
+		if(final_segment->stop == final_segment->start) {
+			*final_segment = new_segment;
+			return;
+		}
+	}
+	/* otherwise append a new segment */
+	g_array_append_val(data->flag_segments, new_segment);
+}
+
+
 
 #ifdef ACCELERATE_POSTCOH_MEMORY_COPY
 // This function is just copy from gst_adapter_peek and change malloc to cudaMallocHost
@@ -506,7 +614,6 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	 * if any. */
 	GST_OBJECT_LOCK(postcoh);
 	sinkpads = GST_ELEMENT(postcoh)->sinkpads;
-//	sinkpads = GST_ELEMENT(postcoh)->pads;
 
 	GST_LOG_OBJECT(postcoh, "setting caps on pad %p,%s to %" GST_PTR_FORMAT, pad,
 			GST_PAD_NAME(pad), caps);
@@ -531,7 +638,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	postcoh->bps = (postcoh->width/8) * postcoh->channels;	
 	postcoh->offset_per_nanosecond = postcoh->bps / 1e9 * (postcoh->rate);	
 
-	GST_DEBUG_OBJECT(postcoh, "setting GstPostcohCollectData offset_per_nanosecond %f and channels", postcoh->offset_per_nanosecond);
+	GST_DEBUG_OBJECT(postcoh, "setting GstPostcohCollectData width %d, rate %d, offset_per_nanosecond %f, bps %d, channels %d", postcoh->width, postcoh->rate, postcoh->offset_per_nanosecond, postcoh->bps, postcoh->channels);
 
 	state->nifo = GST_ELEMENT(postcoh)->numsinkpads;
 	state->input_ifo_mapping = (gint *)malloc(sizeof(gint) * state->nifo);
@@ -543,6 +650,10 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	/* need to cover head and tail */
 	postcoh->preserved_len = state->autochisq_len + 160; 
 	postcoh->exe_len = postcoh->rate;
+	postcoh->exe_size = postcoh->exe_len * postcoh->bps;
+
+	postcoh->one_take_len = postcoh->preserved_len/2  + postcoh->exe_len;
+	postcoh->one_take_size = postcoh->one_take_len * postcoh->bps;
 
 	state->exe_len = postcoh->rate;
 	state->tmp_maxsnr = (float *) malloc(sizeof(float) * state->exe_len);
@@ -554,8 +665,8 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
 	state->snglsnr_start_load = postcoh->hist_trials * state->trial_sample_inv;
 	state->snglsnr_start_exe = state->snglsnr_start_load;
 
-	GST_DEBUG_OBJECT(postcoh, "hist_trials %d, autochisq_len %d, preserved_len %d, sngl_len %d, start_load %d, start_exe %d, max_npeak %d", 
-			state->hist_trials, state->autochisq_len, postcoh->preserved_len, state->snglsnr_len, state->snglsnr_start_load, state->snglsnr_start_exe, state->max_npeak);
+	GST_DEBUG_OBJECT(postcoh, "hist_trials %d, autochisq_len %d, preserved_len %d, sngl_len %d, bps %d, exe_len %d, one_take_len %d, one_take_size %d, start_load %d, start_exe %d, max_npeak %d", 
+			state->hist_trials, state->autochisq_len, postcoh->preserved_len, state->snglsnr_len, postcoh->bps, postcoh->exe_len, postcoh->one_take_len, postcoh->one_take_size, state->snglsnr_start_load, state->snglsnr_start_exe, state->max_npeak);
 
 	state->ntmplt = postcoh->channels/2;
 	CUDA_CHECK(cudaMemGetInfo(&freemem, &totalmem));
@@ -650,7 +761,7 @@ static GstPad *cuda_postcoh_request_new_pad(GstElement *element, GstPadTemplate 
 	}
 
 	GstPostcohCollectData* data;
-       	data = (GstPostcohCollectData*) gst_collect_pads_add_pad_full(postcoh->collect, newpad, sizeof(GstPostcohCollectData), (GstCollectDataDestroyNotify) GST_DEBUG_FUNCPTR(destroy_notify));
+    data = (GstPostcohCollectData*) gst_collect_pads_add_pad_full(postcoh->collect, newpad, sizeof(GstPostcohCollectData), (GstCollectDataDestroyNotify) GST_DEBUG_FUNCPTR(destroy_notify));
 	postcoh->collect_event = (GstPadEventFunction) GST_PAD_EVENTFUNC(newpad);
 	gst_pad_set_event_function(newpad, sink_event);
 
@@ -663,6 +774,7 @@ static GstPad *cuda_postcoh_request_new_pad(GstElement *element, GstPadTemplate 
 	data->ifo_name = (gchar *)malloc(IFO_LEN*sizeof(gchar));
 	g_strlcpy(data->ifo_name, name, sizeof(data->ifo_name));
 	data->adapter = gst_adapter_new();
+	data->flag_segments = g_array_new(FALSE, FALSE, sizeof(FlagSegment));
 	data->is_aligned = FALSE;
 	data->aligned_offset0 = 0;
 	data->next_offset = 0;
@@ -676,7 +788,7 @@ static GstPad *cuda_postcoh_request_new_pad(GstElement *element, GstPadTemplate 
 static void cuda_postcoh_release_pad(GstElement *element, GstPad *pad)
 {
 	CudaPostcoh* postcoh = CUDA_POSTCOH(element);
-
+	/* FIXME: free adapter and flag_segments */
 	gst_collect_pads_remove_pad(postcoh->collect, pad);
 	gst_element_remove_pad(element, pad);
 }
@@ -803,17 +915,15 @@ cuda_postcoh_fillin_discont(GstCollectPads *pads, CudaPostcoh *postcoh)
 static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPostcoh *postcoh)
 {
 
-	/* first fill in any discontinuity */
-	cuda_postcoh_fillin_discont(pads, postcoh);
 
 	PostcohState *state = postcoh->state;
 	GSList *collectlist;
 	GstPostcohCollectData *data;
 	GstBuffer *buf = NULL;
 
-	gint i = 0, min_size = 0, size_cur;
-	gboolean min_size_init = FALSE;
-	state->cur_nifo = 0;
+	gint i = 0, min_size = 0, size_cur, cur_ifo_has_data = 0;
+	gboolean min_size_init = FALSE, is_gap;
+	GstClockTime buf_end;
 
 	/* The logic to find common size:
 	 * if one detector has no data, we obtain the data size in the adapter
@@ -836,7 +946,11 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 				continue;
 			}
 
+			buf_end = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf); 
+			is_gap = GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) ? TRUE : FALSE;
+			add_flag_segment(data, GST_BUFFER_TIMESTAMP(buf), buf_end, is_gap);
 			gst_adapter_push(data->adapter, buf);
+
 			size_cur = gst_adapter_available(data->adapter);
 			if(!min_size_init) {
 				min_size = size_cur;
@@ -844,50 +958,67 @@ static gint cuda_postcoh_push_and_get_common_size(GstCollectPads *pads, CudaPost
 			} else {
 				min_size = min_size > size_cur ? size_cur : min_size;
 			}
-			strncpy(state->cur_ifos + IFO_LEN*state->cur_nifo, data->ifo_name, sizeof(data->ifo_name));
-			state->cur_nifo++;
+			cur_ifo_has_data++;
 			/* should not unref the buf insce adapter is using it */
 	}
 	/* If all pads returns NULL buffers, this means all pads at EOS,
 	 * we flag min_size as -1 to indicate we need to send an EOS event */ 
-	if (state->cur_nifo == 0)
+	if (cur_ifo_has_data == 0)
 		min_size = -1;
 
 	GST_LOG_OBJECT(postcoh, "get common size %d", min_size);
-
 	return min_size;
 }
 
-static gboolean cuda_postcoh_find_and_remove_zerobuf(GstCollectPads *pads, CudaPostcoh *postcoh)
+static gboolean cuda_postcoh_need_recollect(GstCollectPads *pads, CudaPostcoh *postcoh)
 {
 
 	GSList *collectlist;
 	GstPostcohCollectData *data;
 	GstBuffer *buf = NULL;
-	gboolean find_zerobuf = FALSE;
+	gboolean need_recollect = FALSE, is_gap;
 
-	GST_DEBUG_OBJECT(pads, "begin to check zerobufs from any pads");
+    /* expected end time for the run */
+	GstClockTime ts_expect = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out + postcoh->one_take_len, GST_SECOND,
+		       	postcoh->rate), buf_end;
+
 
 	for (collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist)) {
 		data = collectlist->data;
 		buf = gst_collect_pads_peek(pads, (GstCollectData *)data);
 		if (buf != NULL) {  // != if(buf)
-			if (GST_BUFFER_SIZE(buf) == 0) { // gap buffer
-			GST_DEBUG_OBJECT(data, "bufsize is zero");
-			gst_buffer_unref(buf);
-			/* discard this buffer in collectpads so it can collect new one */
-			buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
-			gst_buffer_unref(buf);
-			find_zerobuf = TRUE;
+			/* zerobuf remove it */
+			if (GST_BUFFER_SIZE(buf) == 0) {
+				GST_DEBUG_OBJECT(postcoh, "bufsize is zero");
+				gst_buffer_unref(buf);
+				/* discard this buffer in collectpads so it can collect new one */
+				buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
+				gst_buffer_unref(buf);
+				need_recollect = TRUE;
+				continue;
 			}
-			else { // normal buffer pass it
-			GST_DEBUG_OBJECT(data, "bufsize is not zero");
-			gst_buffer_unref(buf);
+			/* accumulate not enough data */
+			buf_end = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf); 
+
+			if (buf_end < ts_expect) {
+				gst_buffer_unref(buf);
+				/* dump this buffer in collectpads adaptor so it can collect new one */
+				buf = gst_collect_pads_pop(pads, (GstCollectData *)data);
+				is_gap = GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) ? TRUE : FALSE;
+				add_flag_segment(data, GST_BUFFER_TIMESTAMP(buf), buf_end, is_gap);
+				gst_adapter_push(data->adapter, buf);
+				need_recollect = TRUE;
+				continue;
 			}
+
+			// normal buffer and ready to be postcoh processed
+			gst_buffer_unref(buf);
+	
+			// GST_DEBUG_OBJECT(postcoh, "bufsize is not zero  %" GST_TIME_FORMAT ",end %" GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buf)), GST_TIME_ARGS(buf_end));
 		}
 		/* do nothing if it is null buffer */
 	}
-	return find_zerobuf;
+	return need_recollect;
 }
 
 static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *postcoh)
@@ -897,7 +1028,7 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 	GstPostcohCollectData *data;
 	GstBuffer *buf, *subbuf;
 	GstClockTime t_start_cur, t_end_cur;
-	gboolean all_aligned = TRUE;
+	gboolean all_aligned = TRUE, is_gap;
 	guint64 offset_cur, offset_end_cur, buf_aligned_offset0;
 	GstClockTime t0 = postcoh->t0;
 
@@ -918,8 +1049,11 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 		offset_cur = GST_BUFFER_OFFSET(buf);
 		offset_end_cur = GST_BUFFER_OFFSET_END(buf);
 		if (t_end_cur > t0) {
+			is_gap = GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) ? TRUE : FALSE;
+			add_flag_segment(data, t_start_cur, t_end_cur, is_gap);
+
 			buf_aligned_offset0 = (gint) (postcoh->offset0 - offset_cur);
-			GST_DEBUG_OBJECT(data, "buffer aligned offset0 %u", buf_aligned_offset0);
+			GST_DEBUG_OBJECT(data, "buffer aligned offset0 %u, size %u offset0 %" G_GUINT64_FORMAT " offset_cur %" G_GUINT64_FORMAT, buf_aligned_offset0, (offset_end_cur - offset_cur - buf_aligned_offset0) * data->channels * sizeof(float), postcoh->offset0, offset_cur);
 			g_assert(buf_aligned_offset0 >= 0);
 			subbuf = gst_buffer_create_sub(buf, buf_aligned_offset0, (offset_end_cur - offset_cur - buf_aligned_offset0) * data->channels * sizeof(float));
 			g_assert(subbuf);
@@ -930,9 +1064,10 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 				GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (subbuf)),
 				GST_TIME_ARGS (GST_BUFFER_DURATION (subbuf)),
 				GST_BUFFER_OFFSET (subbuf), GST_BUFFER_OFFSET_END (subbuf));
+
 			gst_adapter_push(data->adapter, subbuf);
+
 			data->is_aligned = TRUE;
-			set_aligned_offset0(data, buf_aligned_offset0 + offset_cur);
 			/* from the first buffer in the adapter, we initiate the next offset */
 			data->next_offset = GST_BUFFER_OFFSET_END(buf);
 			gst_buffer_unref(buf);
@@ -943,8 +1078,6 @@ static gboolean cuda_postcoh_align_collected(GstCollectPads *pads, CudaPostcoh *
 	}
 
 	return all_aligned;
-		
-	
 
 }
 static void cuda_postcoh_flush(GstCollectPads *pads, guint64 common_size)
@@ -999,7 +1132,7 @@ static int cuda_postcoh_select_foreground(PostcohState *state, float cohsnr_thre
 	int *peak_pos;
 	int left_entries = 0;
 
-	for(iifo=0; iifo<nifo && is_cur_ifo_has_data(state, iifo); iifo++) {
+	for(iifo=0; iifo<nifo && !state->cur_ifo_flags[iifo]; iifo++) {
 		final_peaks = 0;
 		bubbled_peaks = 0;
 		pklist= state->peak_list[iifo];
@@ -1076,7 +1209,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 
 	SnglInspiralTable *sngl_table = postcoh->sngl_table;
 
-	for(iifo=0; iifo<nifo && is_cur_ifo_has_data(state, iifo); iifo++) {
+	for(iifo=0; iifo<nifo && !state->cur_ifo_flags[iifo]; iifo++) {
 		PeakList *pklist = state->peak_list[iifo];
 		npeak = pklist->npeak[0];
 		LIGOTimeGPS end_time;
@@ -1274,18 +1407,14 @@ static GstBuffer* cuda_postcoh_new_buffer(CudaPostcoh *postcoh, gint out_len)
 	GstClockTime ts = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
 		       	postcoh->rate);
 
-        GST_BUFFER_TIMESTAMP(outbuf) = ts;
+    GST_BUFFER_TIMESTAMP(outbuf) = ts;
 	GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, out_len, postcoh->rate);
 
 	/* set the offset */
-        GST_BUFFER_OFFSET(outbuf) = postcoh->offset0 + postcoh->samples_out;
-        GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
+    GST_BUFFER_OFFSET(outbuf) = postcoh->offset0 + postcoh->samples_out;
+    GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
 
 	GST_BUFFER_SIZE(outbuf) = out_size;
-
-	/* approximate indicator that if the detector is operating, used to evaluate FAR later */
-	if (postcoh->state->snglsnr_max < 1e-3)
-		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 
 	cuda_postcoh_write_table_to_buf(postcoh, outbuf);
 
@@ -1407,19 +1536,19 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 	return npeak;
 }
 
-static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint one_take_size, gint exe_size, CudaPostcoh *postcoh)
+static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPostcoh *postcoh)
 {
 	GSList *collectlist;
 	GstPostcohCollectData *data;
 	COMPLEX_F *snglsnr, *pos_dd_snglsnr, *pos_in_snglsnr;
-	gint one_take_len = one_take_size / postcoh->bps;
 
 	int i = 0, cur_ifo = 0;
 	PostcohState *state = postcoh->state;
+	gint one_take_size = postcoh->one_take_size, exe_size = postcoh->exe_size;
 
 	GstFlowReturn ret;
 
-	int c_npeak;
+	int c_npeak = 0;
 	GstClockTime ts = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out, GST_SECOND,
 		       	postcoh->rate);
 
@@ -1435,26 +1564,39 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 
 	LIGOTimeGPS ligo_time;
 	XLALINT8NSToGPS(&ligo_time, ts);
+	GstClockTime ts_exe_end ;
 	while (common_size >= one_take_size) {
+		GST_DEBUG_OBJECT(postcoh, "cur time %" GST_TIME_FORMAT ", gps %d, common_size %d, one_take_size %d, exe_size %d\n", GST_TIME_ARGS(ts), ligo_time.gpsSeconds, common_size, one_take_size, exe_size);
 		state->snglsnr_max = 0;
+		/* expected end time for the run */
+		ts_exe_end = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out + postcoh->exe_len, GST_SECOND,
+		       	postcoh->rate);
+
 		int gps_idx = timestamp_to_gps_idx(state->gps_start, state->gps_step, postcoh->next_exe_t);
 		/* copy the snr data to the right location for all detectors */ 
+		state->cur_ifo_bits = 0;
+		state->cur_nifo = 0;
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
 			cur_ifo = state->input_ifo_mapping[i];
+			state->cur_ifo_flags[cur_ifo] = need_flag_gap(data, postcoh->next_exe_t, ts_exe_end);
 			PeakList *pklist = state->peak_list[cur_ifo];
 
-			if (is_cur_ifo_has_data(state, cur_ifo)) {
+			if (!state->cur_ifo_flags[cur_ifo]) {
+				state->cur_ifo_bits += 1 << cur_ifo;
+				strncpy(state->cur_ifos + IFO_LEN* state->cur_nifo, data->ifo_name, sizeof(data->ifo_name));
+				state->cur_nifo += 1;
+			}
+
 #ifdef ACCELERATE_POSTCOH_MEMORY_COPY
 			// temporal solution for low memory copy speed
 			snglsnr = (COMPLEX_F *) gst_adapter_peek_cuda(data->adapter, one_take_size);
 #else 
 			snglsnr = (COMPLEX_F *) gst_adapter_peek(data->adapter, one_take_size);
 #endif
-//			printf("auto_len %d, npix %d\n", state->autochisq_len, state->npix);
 			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo, postcoh->stream);
 
-			GST_LOG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d, max_snglsnr %f\n", ligo_time.gpsSeconds, cur_ifo, c_npeak, state->snglsnr_max);
+			GST_DEBUG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d, max_snglsnr %f\n", ligo_time.gpsSeconds, cur_ifo, c_npeak, state->snglsnr_max);
 
 			/* 
 			// because you use new postcoh kernel optimized by Xiaoyang Guo now, you cannot use 
@@ -1492,46 +1634,34 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, gint on
 			// 2. copy snglsnr to temporal gpu memory d_snglsnr_buffer
 			CUDA_CHECK(cudaMemcpyAsync(pklist->d_snglsnr_buffer, snglsnr, one_take_size, cudaMemcpyHostToDevice, postcoh->stream));
 			// 3. do transpose, at the same time, snr data will be moved to proper positions in state->d_snglsnr[cur_ifo]
-			transpose_snglsnr(pklist->d_snglsnr_buffer, state->d_snglsnr[cur_ifo], state->snglsnr_start_load, one_take_len, state->snglsnr_len, state->ntmplt, postcoh->stream);
-			}
+			transpose_snglsnr(pklist->d_snglsnr_buffer, state->d_snglsnr[cur_ifo], state->snglsnr_start_load, postcoh->one_take_len, state->snglsnr_len, state->ntmplt, postcoh->stream);
 
-		}
 		cudaStreamSynchronize(postcoh->stream);
+		}
+
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 
 			data = collectlist->data;
 			cur_ifo = state->input_ifo_mapping[i];
 
-			if (is_cur_ifo_has_data(state, cur_ifo)) {
-				// FIXME: GPU peakfinder produces much less peaks than peaks_over_thresh function
-#if 0
-				GST_LOG("peak finder for ifo %d", cur_ifo);
-				peakfinder(state, cur_ifo, postcoh->stream);
-				CUDA_CHECK(cudaMemcpyAsync(	state->peak_list[cur_ifo]->npeak, 
-						state->peak_list[cur_ifo]->d_npeak, 
-						sizeof(int), 
-						cudaMemcpyDeviceToHost,
-						postcoh->stream));
-
-				cudaStreamSynchronize(postcoh->stream);
-
-				printf("gps %d, ifo %d, gpu peak %d\n", ligo_time.gpsSeconds, cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
-#endif
-				if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo == state->nifo) {
+			if (!state->cur_ifo_flags[cur_ifo]) {
+				if (state->peak_list[cur_ifo]->npeak[0] > 0 && state->cur_nifo >= 2) {
 					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR, postcoh->stream);
 					GST_LOG("after coherent analysis for ifo %d, npeak %d", cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
 				}
 
-				/* move along */
-				gst_adapter_flush(data->adapter, exe_size);
 			}
+			/* move along */
+			GST_DEBUG_OBJECT(postcoh, "flush adapter %d, size %d\n", cur_ifo, exe_size);
+			gst_adapter_flush(data->adapter, exe_size);
+
 		}
 		common_size -= exe_size;
 		int exe_len = state->exe_len;
 		state->snglsnr_start_load = (state->snglsnr_start_load + exe_len) % state->snglsnr_len;
 		state->snglsnr_start_exe = (state->snglsnr_start_exe + exe_len) % state->snglsnr_len;
 		postcoh->next_exe_t += exe_len / postcoh->rate * GST_SECOND;
-
+	
 		/* make a buffer and send it out */
 
 		GstBuffer *outbuf;
@@ -1584,34 +1714,33 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		postcoh->t_roll_start = t_latest_start;
 		postcoh->next_exe_t = postcoh->t0;
 		postcoh->offset0 = offset_latest_start;
-		GST_DEBUG_OBJECT(postcoh, "set the aligned time to %" GST_TIME_FORMAT 
-				", start offset to %" G_GUINT64_FORMAT,
+		GST_DEBUG_OBJECT(postcoh, "set the aligned time t0 to %" GST_TIME_FORMAT 
+				", start offset0 to %" G_GUINT64_FORMAT,
 			       	GST_TIME_ARGS(postcoh->t0),
 				postcoh->offset0);
-		postcoh->is_all_aligned = cuda_postcoh_align_collected(pads, postcoh);
 		postcoh->set_starttime = TRUE;
-		return GST_FLOW_OK;
 	}
-
-	/* if buf in any of pads is 0 size, discard this buf.
-	 * this means this element starts to work only when
-	 * there are non-zero buffers in all pads */
-	if (cuda_postcoh_find_and_remove_zerobuf(pads, postcoh))
-		return GST_FLOW_OK;
-
 	
 	if (postcoh->is_all_aligned) {
+		/* first fill in any discontinuity */
+		cuda_postcoh_fillin_discont(pads, postcoh);
+
+		/* if buf in any of pads is 0 size, discard this buf.
+		 * push the buf in adapter if it is too small
+		 * this means this element starts to work only when
+		 * there are non-zero buffers in all pads */
+		if (cuda_postcoh_need_recollect(pads, postcoh))
+			return GST_FLOW_OK;
+
 		common_size = cuda_postcoh_push_and_get_common_size(pads, postcoh);
-		GST_DEBUG_OBJECT(postcoh, "get spanned size %d, get spanned samples %f", common_size, common_size/ postcoh->bps);
+		GST_DEBUG_OBJECT(postcoh, "get spanned size %d, get spanned samples %f", common_size, (float)common_size/ postcoh->bps);
 
 		if (common_size == -1) {
 			res = gst_pad_push_event(postcoh->srcpad, gst_event_new_eos());
 			return res;
 		}
 
-		gint exe_size = postcoh->exe_len * postcoh->bps;
-		gint one_take_size = postcoh->preserved_len/2 * postcoh->bps + exe_size;
-		cuda_postcoh_process(pads, common_size, one_take_size, exe_size, postcoh);
+		cuda_postcoh_process(pads, common_size, postcoh);
 
 	} else {
 		postcoh->is_all_aligned = cuda_postcoh_align_collected(pads, postcoh);
@@ -1837,6 +1966,8 @@ static void cuda_postcoh_init(CudaPostcoh *postcoh, CudaPostcohClass *klass)
 	gst_pad_set_event_function(postcoh->srcpad, GST_DEBUG_FUNCPTR(src_event));
 	postcoh->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(postcoh->collect, GST_DEBUG_FUNCPTR(collected), postcoh);
+	
+ 
 
 	postcoh->t0 = GST_CLOCK_TIME_NONE;
 	postcoh->next_exe_t = GST_CLOCK_TIME_NONE;

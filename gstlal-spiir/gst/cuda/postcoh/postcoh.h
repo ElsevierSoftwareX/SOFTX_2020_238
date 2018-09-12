@@ -81,6 +81,7 @@ struct _GstPostcohCollectData {
 	guint64 aligned_offset0;
   	guint64 next_offset;
 	GstCollectDataDestroyNotify destroy_notify;
+	GArray *flag_segments;
 };
 
 // FIXME: consider more flxible structure for PeakList
@@ -227,6 +228,8 @@ typedef struct _PostcohState {
   gint trial_sample_inv;
   char cur_ifos[MAX_ALLIFO_LEN];
   gint cur_nifo;
+  gboolean cur_ifo_flags[MAX_NIFO];
+  gint cur_ifo_bits;
   char *all_ifos;
   gint ifo_combo_idx;
   gint is_member_init;
@@ -255,6 +258,9 @@ struct _CudaPostcoh {
   char *detrsp_fname;
   char *spiir_bank_fname;
   gint exe_len;
+  gint exe_size;
+  gint one_take_len;
+  gint one_take_size;
   gint preserved_len;
   float max_dt;
   gboolean set_starttime;

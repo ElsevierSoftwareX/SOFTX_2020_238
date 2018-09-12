@@ -2,13 +2,13 @@
 #define __PIPE_MACRO_H__
 /* FIXME: upgrade to include more detectors like KAGRA */
 #define IFO_LEN 2
-#define MAX_IFOS 3
+#define MAX_NIFO 3
 typedef struct _IFOType {
 	const char* name;
 	int index;
 } IFOType;
 
-static const IFOType IFOMap[MAX_IFOS] = {
+static const IFOType IFOMap[MAX_NIFO] = {
 	{"H1", 0},
 	{"L1", 1},
 	{"V1", 2},
