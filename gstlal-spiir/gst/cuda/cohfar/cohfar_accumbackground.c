@@ -186,13 +186,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		return result;
 	}
 	int icombo=0;
-	/* increment livetime if the data is not flaged gap, estimated by snglsnr_max of any ifo has value > 0*/
-	if (!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)){
-		for (icombo=0; icombo<element->ncombo; icombo++) {
-			trigger_stats_livetime_inc(bgstats->multistats, icombo);
-			trigger_stats_livetime_inc(zlstats->multistats, icombo);
-        }
-	}
+
 	/*
 	 * update background rate
 	 */
@@ -201,8 +195,8 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 	int isingle, nifo;
 	for (; intable<intable_end; intable++) {
+		icombo = get_icombo(intable->ifos);
 		if (intable->is_background == FLAG_BACKGROUND) {
-			icombo = get_icombo(intable->ifos);
 			if (icombo > -1) {
 				trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, bgstats->multistats[icombo]->feature, bgstats->multistats[icombo]);
 			}	
@@ -216,7 +210,6 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 				trigger_stats_feature_rate_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), bgstats->multistats[write_isingle]->feature, bgstats->multistats[write_isingle]);
 			}
 		} else if (intable->is_background == FLAG_FOREGROUND){ /* coherent trigger entry */
-			icombo = get_icombo(intable->ifos);
 			if (icombo > -1) {
 				trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, zlstats->multistats[icombo]->feature, zlstats->multistats[icombo]);
 			}	
@@ -234,6 +227,13 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 		} else {
+			/* increment livetime if participating nifo >= 2 */
+			if (icombo > 2) {
+				for (icombo=0; icombo<element->ncombo; icombo++) {
+					trigger_stats_livetime_inc(bgstats->multistats, icombo);
+					trigger_stats_livetime_inc(zlstats->multistats, icombo);
+				}
+			}
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 		}
