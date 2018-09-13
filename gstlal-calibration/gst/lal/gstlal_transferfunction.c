@@ -116,6 +116,7 @@ enum property {
 	ARG_UPDATE_SAMPLES,
 	ARG_UPDATE_AFTER_GAP,
 	ARG_USE_FIRST_AFTER_GAP,
+	ARG_UPDATE_DELAY_SAMPLES,
 	ARG_WRITE_TO_SCREEN,
 	ARG_FILENAME,
 	ARG_MAKE_FIR_FILTERS,
@@ -854,7 +855,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Trying again."); \
  \
 		if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
-			element->sample_count = (gint64) (gst_util_uint64_scale_int_round(pts, element->rate, GST_SECOND) + src_size) % (element->update_samples + element->num_ffts * stride + element->fft_overlap); \
+			element->sample_count = (gint64) (gst_util_uint64_scale_int_round(pts, element->rate, GST_SECOND) + src_size - element->update_delay_samples) % (element->update_samples + element->num_ffts * stride + element->fft_overlap); \
 			if(element->sample_count > element->update_samples) \
 				element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
 			element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg = 0; \
@@ -912,7 +913,9 @@ static gboolean start(GstBaseSink *sink) {
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
 
 	/* At start of stream, we want the element to compute a transfer function as soon as possible */
-	element->sample_count = element->update_samples;
+	gint64 long_samples = element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+	gint64 short_samples = element->min_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+	element->sample_count = element->update_samples - (short_samples * element->update_delay_samples + long_samples - 1) / long_samples;
 
 	/* If we are writing output to file, and a file already exists with the same name, remove it */
 	if(element->filename)
@@ -1545,8 +1548,17 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_OFFSET(buffer) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
 		element->t0 = GST_BUFFER_PTS(buffer);
 		element->offset0 = GST_BUFFER_OFFSET(buffer);
-		if(element->sample_count > element->update_samples) 
-			element->sample_count = element->update_samples;
+		if(element->sample_count > element->update_samples) {
+			if(*element->transfer_functions == 0.0) {
+				/* Transfer functions have not been computed, so scale the delay samples down appropriately to compute them asap */
+				gint64 long_samples = element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+				gint64 short_samples = element->min_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+				element->sample_count = element->update_samples - (short_samples * element->update_delay_samples + long_samples - 1) / long_samples;
+			} else {
+				/* Transfer functions have been computed, so apply the usual number of delay samples */
+				element->sample_count = element->update_samples - element->update_delay_samples;
+			}
+		}
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			element->workspace.wspf.num_ffts_in_avg = 0;
 			element->workspace.wspf.num_ffts_dropped = 0;
@@ -1594,9 +1606,17 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		/* Track the number of samples since the last non-gap data */
 		element->gap_samples += (mapinfo.size / element->unit_size);
 		/* Trick it into updating things after the gap ends, if we want */
-		if(element->update_after_gap || element->sample_count > element->update_samples)
-			element->sample_count = element->update_samples;
-		else
+		if(element->update_after_gap) {
+			if(*element->transfer_functions == 0.0) {
+				/* Transfer functions have not been computed, so scale the delay samples down appropriately to compute them asap */
+				gint64 long_samples = element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+				gint64 short_samples = element->min_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+				element->sample_count = element->update_samples - (short_samples * element->update_delay_samples + long_samples - 1) / long_samples;
+			} else {
+				/* Transfer functions have been computed, so apply the usual number of delay samples */
+				element->sample_count = element->update_samples - element->update_delay_samples;
+			}
+		} else
 			element->sample_count = minimum64(element->sample_count + mapinfo.size / element->unit_size, element->update_samples);
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			element->workspace.wspf.num_ffts_in_avg = 0;
@@ -1808,6 +1828,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->use_first_after_gap = g_value_get_int64(value);
 		break;
 
+	case ARG_UPDATE_DELAY_SAMPLES:
+		element->update_delay_samples = g_value_get_int64(value);
+		break;
+
 	case ARG_WRITE_TO_SCREEN:
 		element->write_to_screen = g_value_get_boolean(value);
 		break;
@@ -1911,6 +1935,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_USE_FIRST_AFTER_GAP:
 		g_value_set_int64(value, element->use_first_after_gap);
+		break;
+
+	case ARG_UPDATE_DELAY_SAMPLES:
+		g_value_set_int64(value, element->update_delay_samples);
 		break;
 
 	case ARG_WRITE_TO_SCREEN:
@@ -2133,6 +2161,14 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		0, G_MAXINT64, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_UPDATE_DELAY_SAMPLES] = g_param_spec_int64(
+		"update-delay-samples",
+		"Update Delay Samples",
+		"How many extra samples to wait for after a would-be update of transfer\n\t\t\t"
+		"functions.",
+		0, G_MAXINT64, 0,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 	properties[ARG_WRITE_TO_SCREEN] = g_param_spec_boolean(
 		"write-to-screen",
 		"Write to Screen",
@@ -2290,6 +2326,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_USE_FIRST_AFTER_GAP,
 		properties[ARG_USE_FIRST_AFTER_GAP]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_UPDATE_DELAY_SAMPLES,
+		properties[ARG_UPDATE_DELAY_SAMPLES]
 	);
 	g_object_class_install_property(
 		gobject_class,
