@@ -167,7 +167,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	PostcohInspiralTable *intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *intable_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf));
 	for (; intable<intable_end; intable++) 
-		if (intable->is_background == 0) 
+		if (intable->is_background == FLAG_FOREGROUND || intable->is_background == FLAG_EMPTY) 
 			outentries++;
 
 	/*
@@ -201,7 +201,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
 	int isingle, nifo;
 	for (; intable<intable_end; intable++) {
-		if (intable->is_background == 1) {
+		if (intable->is_background == FLAG_BACKGROUND) {
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1) {
 				trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, bgstats->multistats[icombo]->feature, bgstats->multistats[icombo]);
@@ -215,7 +215,7 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 				int write_isingle = element->write_ifo_mapping[isingle];
 				trigger_stats_feature_rate_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), bgstats->multistats[write_isingle]->feature, bgstats->multistats[write_isingle]);
 			}
-		} else { /* coherent trigger entry */
+		} else if (intable->is_background == FLAG_FOREGROUND){ /* coherent trigger entry */
 			icombo = get_icombo(intable->ifos);
 			if (icombo > -1) {
 				trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, zlstats->multistats[icombo]->feature, zlstats->multistats[icombo]);
@@ -233,7 +233,11 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
             }
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
-		} 
+		} else {
+			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
+			outtable++;
+		}
+	
 	}
 	/*
 	 * calculate immediate PDF using stats_prompt from stats_list

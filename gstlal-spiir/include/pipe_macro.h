@@ -30,6 +30,10 @@ int get_icombo(char *ifos);
 #define MAX_ALLIFO_LEN 14
 #endif
 
+#define FLAG_FOREGROUND 0
+#define FLAG_BACKGROUND 1
+#define FLAG_EMPTY 2
+
 /* definition of array for background statistics */
 #define LOGSNR_CMIN	0.54 // center of the first bin
 #define LOGSNR_CMAX	3.0 // center of the last bin

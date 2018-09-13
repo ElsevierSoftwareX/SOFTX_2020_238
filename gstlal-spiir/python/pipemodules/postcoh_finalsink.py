@@ -409,8 +409,22 @@ class FinalSink(object):
 			newevents = postcohtable.GSTLALPostcohInspiral.from_buffer(buf)
 			self.need_candidate_check = False
 
+			# NOTE: the first entry is used to add to the segments, not a really event
+			participating_ifos = re.findall('..', newevents[0].ifos)
+			buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
+			for segtype, one_type_dict in self.seg_document.seglistdict.items():
+				for ifo in one_type_dict.keys():
+					if ifo in participating_ifos:
+						this_seglist = one_type_dict[ifo]
+						this_seglist = this_seglist + segments.segmentlist([buf_seg])
+						this_seglist.coalesce()
+						one_type_dict[ifo] = this_seglist
+
+			# remove the first event entry
+			newevents = newevents[1:]
 			nevent = len(newevents)
-			#print >> sys.stderr, "%f nevent %d" % (buf_timestamp, nevent)
+
+			# print >> sys.stderr, "%f nevent %d" % (buf_timestamp, nevent)
 			# initialization
 			if self.is_first_buf:
 				self.t_snapshot_start = buf_timestamp
@@ -428,26 +442,13 @@ class FinalSink(object):
 			# self.lookback_event_table.extend(newevents)
 			# iterutils.inplace_filter(lambda row: row.end > self.lookback_boundary, self.lookback_event_table)
 
-
-			# add to the segments:
-			if not buf.flag_is_set(gst.BUFFER_FLAG_GAP):
-				buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
-				for segtype, one_type_dict in self.seg_document.seglistdict.items():
-					for ifo in one_type_dict.keys():
-						this_seglist = one_type_dict[ifo]
-						this_seglist = this_seglist + segments.segmentlist([buf_seg])
-						this_seglist.coalesce()
-						one_type_dict[ifo] = this_seglist
-
 			if self.cluster_window == 0:
 				self.postcoh_table.extend(newevents)
 				del self.cur_event_table[:]
 
-			# the logic of clustering here is quite complicated, fresh up
-			# yourself before reading the code
+			# NOTE: only consider clustered trigger for uploading to gracedb 
 			# check if the newevents is over boundary
 			# this loop will exit when the cluster_boundary is incremented to be > the buf_timestamp, see plot in self.cluster()
-
 
 			while self.cluster_window > 0 and self.cluster_boundary and buf_timestamp > self.cluster_boundary:
 				self.cluster(self.cluster_window)
@@ -455,11 +456,6 @@ class FinalSink(object):
 				if self.need_candidate_check:
 					self.nevent_clustered += 1
 					self.__set_far(self.candidate)
-					# FIXME: need to remove when ifos are correctly populated, hard-coded and snglsnr_X fields...
-					ifo_active=[self.candidate.snglsnr_H!=0,self.candidate.snglsnr_L!=0,self.candidate.snglsnr_V!=0]
-					ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
-					ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
-					self.candidate.ifos = ''.join([i for (i,v) in zip(pipe_macro.IFO_MAP,ifo_active) if v])
 					self.postcoh_table.append(self.candidate)
 					if self.gracedb_far_threshold and self.__pass_test(self.candidate):
 						self.__do_gracedb_alert(self.candidate)
