@@ -258,8 +258,6 @@ __global__ void ker_coh_skymap
 	int		ntmplt		/* INPUT, number of templates */
 )
 {
-    int wn  = blockDim.x >> LOG_WARP_SIZE;
-    int wID = threadIdx.x >> LOG_WARP_SIZE;     
 
     int     peak_cur, tmplt_cur, len_cur;
     COMPLEX_F   dk[MAXIFOS];
@@ -730,7 +728,7 @@ __global__ void ker_coh_max_and_chisq_versatile
     volatile float *ipeak_shared = &smem[blockDim.x];
 	float cohsnr_max = 0.0, cohsnr_cur;
 
-	if (bid == 0 && npeak > 0) {
+	if (bid == 0 && npeak > 1) {
 		/* clean up smem history */
 		cohsnr_shared[threadIdx.x] = 0.0;
 		ipeak_shared[threadIdx.x] = 0;
@@ -745,7 +743,7 @@ __global__ void ker_coh_max_and_chisq_versatile
 			}
 		}
 		__syncthreads();
-	    for (i = wn >> 1; i > 0; i = i >> 1)
+	    for (i = blockDim.x >> 1; i > 0; i = i >> 1)
 	    {
 	        if (threadIdx.x < i)
 	        {
@@ -773,6 +771,7 @@ __global__ void ker_coh_max_and_chisq_versatile
 	    }
 
 	} 
+
 }
 
 
@@ -1167,7 +1166,7 @@ __global__ void ker_coh_max_and_chisq
     volatile float *ipeak_shared = &smem[blockDim.x];
 	float cohsnr_max = 0.0, cohsnr_cur;
 
-	if (bid == 0 && npeak > 0) {
+	if (bid == 0 && npeak > 1) {
 		/* clean up smem history */
 		cohsnr_shared[threadIdx.x] = 0.0;
 		ipeak_shared[threadIdx.x] = 0;
@@ -1182,7 +1181,7 @@ __global__ void ker_coh_max_and_chisq
 			}
 		}
 		__syncthreads();
-	    for (i = wn >> 1; i > 0; i = i >> 1)
+	    for (i = blockDim.x >> 1; i > 0; i = i >> 1)
 	    {
 	        if (threadIdx.x < i)
 	        {
