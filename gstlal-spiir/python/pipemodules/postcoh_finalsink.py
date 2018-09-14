@@ -253,7 +253,6 @@ class FAPUpdater(object):
 		cmd += ["--input-format", "stats"]
 		cmd += ["--output", fout]
 		cmd += ["--ifos", ifos]
-		cmd += ["--walltime", str(walltime)]
 		if verbose:
 			print cmd
 		proc = subprocess.Popen(cmd)
