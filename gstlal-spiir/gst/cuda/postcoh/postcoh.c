@@ -1225,6 +1225,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 	write_entries++;
 	/* end of the first entry */
 
+	/* only output multi-detector events */
 	for(iifo=0; iifo<nifo && !state->cur_ifo_flags[iifo] && state->cur_nifo >=2; iifo++) {
 		PeakList *pklist = state->peak_list[iifo];
 		npeak = pklist->npeak[0];
