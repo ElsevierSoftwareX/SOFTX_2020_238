@@ -10,6 +10,7 @@ OBSRUN = O2
 
 START = 1186159040
 END = 1186160064
+SHMRUNTIME = 200
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 220
 PLOT_COOLDOWN_TIME = 64
@@ -18,8 +19,9 @@ GDSCONFIGS = ../../config_files/H1GDS_LowLatency_AllCorrections_Cleaning.ini
 DCSCONFIGS = ../../config_files/H1DCS_AllCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/H1GDS_LowLatency_AllCorrections_Cleaning.ini
 DCSTESTCONFIGS = ../../config_files/H1DCS_AllCorrections_Cleaning.ini
+GDSSHMCONFIGS = ../../config_files/H1GDS_TestLatency_AllCorrections_Cleaning.ini
 
-all: DCS_pcal2darm_plots
+all: latency_test
 
 ################################################
 ### These commands should change less often ###
@@ -45,7 +47,7 @@ $(IFO)1_hoft_GDS_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_TEST*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_hoft_DCS_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
-	#GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TEST*.gwf | lalapps_path2cache > $@
 
 # In case we want to compare one calibration to another...
@@ -55,13 +57,20 @@ $(IFO)1_hoft_GDS_TEST_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
 
 $(IFO)1_hoft_DCS_TEST_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSTESTCONFIGS)
-	ls Frames/$(OBSRUN)/$(IFO)1/DCS$(IFO)-$(IFO)1DCS_TEST*.gwf | lalapps_path2cache > $@
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TEST*.gwf | lalapps_path2cache > $@
+
+$(IFO)1_hoft_GDS_SHM_frames.cache: filters framesdir
+	GST_DEBUG=3 timeout $(SHMRUNTIME) gstlal_compute_strain --frame-duration=1 --frames-per-file=1 --wings=0 --config-file $(GDSSHMCONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_SHM*.gwf | lalapps_path2cache > $@
 
 GDS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 	python pcal2darm_timeseries.py --gps-start-time=$(PLOT_START) --gps-end-time=$(PLOT_END) --ifo=$(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)_hoft_GDS_frames.cache --config-file $(GDSCONFIGS) --calibrated-channel-list='GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
 
 DCS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache
 	python pcal2darm_timeseries.py --gps-start-time=$(PLOT_START) --gps-end-time=$(PLOT_END) --ifo=$(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)1_hoft_DCS_frames.cache --config-file $(DCSCONFIGS) --calibrated-channel-list='DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN'
+
+latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
+	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
 
 filters:
 	if [ -d Filters/$(OBSRUN)/GDSFilters ]; then \

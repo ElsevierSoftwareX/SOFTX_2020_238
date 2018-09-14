@@ -804,6 +804,9 @@ if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memor
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
 	src = pipeparts.mklalcachesrc(pipeline, location = InputConfigs["framecache"], cache_dsc_regex = instrument)
 
+if Config.getboolean("DebuggingConfigurations", "testlatency"):
+	src = pipeparts.mkgeneric(pipeline, src, "splitcounter", filename = "gstlal_compute_strain_timestamps_in.txt")
+
 #
 # Hook up the relevant channels to the demuxer
 #
@@ -2446,6 +2449,9 @@ else:
 	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), None, None))
 
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
+
+if Config.getboolean("DebuggingConfigurations", "testlatency"):
+	mux = pipeparts.mkgeneric(pipeline, mux, "splitcounter", filename = "gstlal_compute_strain_timestamps_out.txt")
 
 if OutputConfigs["datasink"] == "lvshm":
 	pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", sync=False, async=False, shm_name = OutputConfigs["outputshmpartition"], num_buffers = int(OutputConfigs["numbuffers"]), blocksize = int(OutputConfigs["framesize"])*options.frame_duration*options.frames_per_file, buffer_mode = int(OutputConfigs["buffermode"]))
