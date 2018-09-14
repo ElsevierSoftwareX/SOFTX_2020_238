@@ -492,33 +492,13 @@ __global__ void ker_coh_max_and_chisq_versatile
         }
         __syncthreads();
 
+		/* chisq calculation */
+        cmbchisq[peak_cur] = 0.0;
         COMPLEX_F data, tmp_snr, tmp_autocorr, tmp_maxsnr;
         float laneChi2 = 0.0f;
         int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
-
-		/* store the snglsnr and phase for each detector even the detector does not participate */
-        for (int j = 0; j < nifo; ++j)
-        {
-            /* this is a simplified algorithm to get map_idx */
-            map_idx = iifo * nifo + j;
-            NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
-            peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff + len);
-
-            tmp_maxsnr = snr[j][len * tmplt_cur + ((peak_pos_tmp + len) % len)];
-            /* set the ntoff; snglsnr; and coa_phase for each detector */
-            /* set the ntoff; this is actually d_ntoff_*  */
-            peak_pos[peak_cur + (4 + hist_trials + write_ifo_mapping[j]) * max_npeak] = NtOff;
-            /* set the d_snglsnr_* */
-            snglsnr_H[peak_cur + write_ifo_mapping[j] * max_npeak] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
-            /* set the d_coa_phase_* */
-            snglsnr_H[peak_cur + (3 + write_ifo_mapping[j]) * max_npeak] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
-		}
- 
-		/* chisq calculation */
-
-        cmbchisq[peak_cur] = 0.0;
        
-        for (int j = 0; j < nifo; (1<< (j+1)) &cur_ifo_bits ? ++j: j=j+2)
+        for (int j = 0; j < nifo; ++j)
         {
             laneChi2 = 0.0f;
             /* this is a simplified algorithm to get map_idx */
@@ -526,6 +506,15 @@ __global__ void ker_coh_max_and_chisq_versatile
             NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
             peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff + len);
             tmp_maxsnr = snr[j][len * tmplt_cur + ((peak_pos_tmp + len) % len)];
+
+			/* store the snglsnr and phase for each detector even the detector does not participate */
+            /* set the ntoff; snglsnr; and coa_phase for each detector */
+            /* set the ntoff; this is actually d_ntoff_*  */
+            peak_pos[peak_cur + (4 + hist_trials + write_ifo_mapping[j]) * max_npeak] = NtOff;
+            /* set the d_snglsnr_* */
+            snglsnr_H[peak_cur + write_ifo_mapping[j] * max_npeak] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
+            /* set the d_coa_phase_* */
+            snglsnr_H[peak_cur + (3 + write_ifo_mapping[j]) * max_npeak] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
 
             for (int ishift = threadIdx.x - autochisq_half_len; ishift <= autochisq_half_len; ishift += blockDim.x)
             {
@@ -554,7 +543,8 @@ __global__ void ker_coh_max_and_chisq_versatile
                     // the location of chisq_* is indexed from maxsnglsnr
                     snglsnr_H[peak_cur + (6 + write_ifo_mapping[j]) * max_npeak] = chisq_cur;
 
-                    cmbchisq[peak_cur] += chisq_cur;
+					if (((1<<j) & cur_ifo_bits) > 0)
+						cmbchisq[peak_cur] += chisq_cur;
                     //printf("peak %d, itrial %d, cohsnr %f, nullstream %f, ipix %d, chisq %f\n", ipeak, itrial, cohsnr[peak_cur], nullsnr[peak_cur], pix_idx[peak_cur], cmbchisq[peak_cur]);
                 }
             }
@@ -677,8 +667,9 @@ __global__ void ker_coh_max_and_chisq_versatile
         int autochisq_half_len = autochisq_len /2, peak_pos_tmp;
 
         cmbchisq_bg[output_offset] = 0.0;
-        
-        for (int j = 0; j < nifo; (1<<(j+1)) &cur_ifo_bits? ++j: j = j+2)
+
+        // sometimes skipping too much for (int j = 0; j < nifo; (1<<(j+1)) &cur_ifo_bits? ++j: j = j+2)
+        for (int j = 0; j < nifo; ++j)
         {
             laneChi2 = 0.0f;
             /* this is a simplified algorithm to get map_idx */
@@ -713,9 +704,9 @@ __global__ void ker_coh_max_and_chisq_versatile
                 chisq_cur = laneChi2/ autocorr_norm[j][tmplt_cur];
                 // set d_chisq_bg_* from snglsnr_bg_H
                 snglsnr_bg_H[output_offset + (6 + write_ifo_mapping[j]) * hist_trials * max_npeak] = chisq_cur;
-
-
-                cmbchisq_bg[output_offset] += chisq_cur;
+				cmbchisq_bg[output_offset] += chisq_cur;
+				if (((1<<(j+1)) & cur_ifo_bits) == 0)
+					j++;
             }
             __syncthreads();
         }
@@ -1413,8 +1404,9 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 			cudaMemcpyDeviceToHost,
 			stream));
 
+	CUDA_CHECK(cudaStreamSynchronize(stream));
+	CUDA_CHECK(cudaPeekAtLastError());
 
-	cudaStreamSynchronize(stream);
 }
 
 

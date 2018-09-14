@@ -727,6 +727,7 @@ cuda_postcoh_sink_setcaps(GstPad *pad, GstCaps *caps)
     CUDA_CHECK(cudaMalloc((void**) &state->d_write_ifo_mapping, sizeof(int) * state->nifo));
 	CUDA_CHECK(cudaMemsetAsync(state->d_write_ifo_mapping, 0, sizeof(int) * state->nifo, postcoh->stream));
 	CUDA_CHECK(cudaMemcpyAsync(state->d_write_ifo_mapping, state->write_ifo_mapping, sizeof(int)* state->nifo, cudaMemcpyHostToDevice, postcoh->stream));
+	CUDA_CHECK(cudaStreamSynchronize(postcoh->stream));
 
 	state->is_member_init = POSTCOH_PARAMS_INIT;
 	GST_OBJECT_UNLOCK(postcoh->collect);
@@ -1143,6 +1144,7 @@ static int cuda_postcoh_select_foreground(PostcohState *state, float cohsnr_thre
 		pklist= state->peak_list[iifo];
 		npeak = pklist->npeak[0];
 		peak_pos = pklist->peak_pos;
+		state->skymap_peakcur[iifo] = peak_pos[0];
 
 		/*
 		 * select background that satisfy the criteria: cohsnr > triggersnr + coh_thresh
@@ -1295,7 +1297,7 @@ static void cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *out
 			output->ra = phi*RAD2DEG;
 			output->dec = (M_PI_2 - theta)*RAD2DEG;
 			output->event_id = postcoh->cur_event_id++;
-			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR && ipeak == 0) {
+			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR && state->skymap_peakcur[iifo] == peak_cur) {
 				GString *filename = NULL;
 				FILE *file = NULL;
 				filename = g_string_new(IFOComboMap[get_icombo(output->ifos)].name);

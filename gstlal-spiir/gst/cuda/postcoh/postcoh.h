@@ -229,6 +229,7 @@ typedef struct _PostcohState {
   char cur_ifos[MAX_ALLIFO_LEN];
   gint cur_nifo;
   gboolean cur_ifo_flags[MAX_NIFO];
+  int skymap_peakcur[MAX_NIFO];
   gint cur_ifo_bits;
   char *all_ifos;
   gint ifo_combo_idx;
