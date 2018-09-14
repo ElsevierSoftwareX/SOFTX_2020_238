@@ -81,9 +81,9 @@ static gboolean need_flag_gap(GstPostcohCollectData *data, GstClockTime start, G
 		 *            |s | e
 		 *            |s				| e
 		 */
-		if (this_segment-> start > stop)
+		if (this_segment-> start >= stop)
 			break;
-		if (this_segment->stop < start) {
+		if (this_segment->stop <= start) {
 			need_flush = TRUE;
 			flush_len = i-1;
 			continue;
@@ -742,6 +742,11 @@ static void destroy_notify(GstPostcohCollectData *data)
 			g_object_unref(data->adapter);
 			data->adapter = NULL;
 		}
+		if (data->flag_segments) {
+			g_array_unref(data->flag_segments);
+			data->flag_segments = NULL;
+		}
+
 	}
 
 }
@@ -1681,6 +1686,10 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPos
 
 		// g_assert(GST_BUFFER_CAPS(outbuf) != NULL);
 		ret = gst_pad_push(postcoh->srcpad, outbuf);
+		if (ret != GST_FLOW_OK) {
+			fprintf(stderr, "failed to push buffer to next element, cohfar_accumbackground");
+			exit(0);
+		}
 		GST_LOG_OBJECT(postcoh, "pushed buffer, result = %s", gst_flow_get_name(ret));
 		/* move along */
 		postcoh->samples_out += exe_len;
