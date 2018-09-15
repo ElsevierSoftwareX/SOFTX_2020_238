@@ -7,4 +7,5 @@
 dataserverdir = $(DATASRVDEST)
 
 dataserver_SCRIPTS = \
-	gstlal_data_server_latest_by_job
+	gstlal_data_server \
+	gstlal

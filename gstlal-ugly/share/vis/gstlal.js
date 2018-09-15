@@ -56,12 +56,12 @@ var far_inj_history_wrapper;
 
 var charts = [];
 
-var H1="#e74c3c";
-var L1="#2ecc71";
-var white="#ecf0f1";
+var H1="#F5B7B1";
+var L1="#A9CCE3";
+var V1="#D2B4DE";
+var ALL="#A2D9CE";
+var white="#FBFCFC";
 var darkblue="#2c3e50";
-/* FIXME hack for infs in segments */
-var inf = 2000000000;
 
 default_options = {
 	title: 'Figure', 
@@ -70,20 +70,23 @@ default_options = {
 	chartArea: {left:50, top:15, width:'95%', height:'70%', backgroundColor:white},
 	titlePosition: 'in',
 	titleTextStyle: {color: darkblue},
-	series: {0: {color: H1}, 1: {color:L1}},
+	series: {0: {color: H1}, 1: {color: L1}, 2:{color: V1}, 3:{color: ALL}},
 	legend: {position: "in", textStyle: {color: darkblue}},
 	explorer: {actions: ['dragToZoom', 'rightClickToReset']},
 	dataOpacity: "0.9",
 	curveType: "none",
-	fontName: "Times",
-	fontSize: 14,
+	fontName: "M PLUS Rounded 1c",
+	fontSize: 12,
 	lineWidth: 2,
 	backgroundColor: {stroke: darkblue, fill: white, strokeWidth: '1'},
 	width: "90%",
 	bar: {
 	    groupWidth: '70%',
 	},
-	allowHtml: true
+	allowHtml: true,
+	tooltip: {
+		isHtml: true
+	}
 };
 
 
@@ -306,6 +309,7 @@ function ChartWrapper(obj) {
 
 function drawLatencyStatusByNodes(gps, duration, refresh, analysis_path, job_ids, ifos) {
 	var these_options = clone(default_options);
+	//these_options.series = {0: {color: darkblue}}
 	these_options.vAxis = {textStyle: {color: darkblue}, scaleType: 'log', minValue:5, maxValue:75, textPosition: 'out', ticks: [8,16,32,64] };
 	these_options.title = 'Latency';
 
