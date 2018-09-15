@@ -66,6 +66,7 @@ import sys
 import threading
 import time
 import shutil
+import json
 
 
 import gi
@@ -142,7 +143,9 @@ def lower_bound_in_seglist(seglist, x):
 
 
 class EyeCandy(object):
-	def __init__(self, instruments):
+	def __init__(self, instruments, kafka_server, tag, pipeline):
+		self.kafka_server = kafka_server
+		self.tag = tag
 		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
 		# NOTE most of this data is collected at 1Hz, thus a 300
 		# element deque should hold about 5 minutes of history.
@@ -156,6 +159,15 @@ class EyeCandy(object):
 		self.far_history = deque(maxlen = 300)
 		self.ram_history = deque(maxlen = 2)
 		self.ifo_snr_history = dict((instrument, deque(maxlen = 300)) for instrument in instruments)
+		self.dqvectors = {}
+		self.statevectors = {}
+		for instrument in instruments:
+			name = "%s_state_vector" % instrument
+			elem = pipeline.get_by_name(name)
+			self.statevectors[instrument] = elem
+			name = "%s_dq_vector" % instrument
+			elem = pipeline.get_by_name(name)
+			self.dqvectors[instrument] = elem
 
 		#
 		# setup bottle routes
@@ -164,17 +176,33 @@ class EyeCandy(object):
 		bottle.route("/latency_histogram.txt")(self.web_get_latency_histogram)
 		bottle.route("/latency_history.txt")(self.web_get_latency_history)
 		bottle.route("/snr_history.txt")(self.web_get_snr_history)
-		for instrument in instruments:
-			bottle.route("/%s_snr_history.txt" % instrument)(lambda : self.web_get_sngl_snr_history(ifo = instrument))
+		if "H1" in instruments:
+			bottle.route("/H1_snr_history.txt")(self.web_get_H1_snr_history)
+		if "L1" in instruments:
+			bottle.route("/L1_snr_history.txt")(self.web_get_L1_snr_history)
+		if "V1" in instruments:
+			bottle.route("/V1_snr_history.txt")(self.web_get_V1_snr_history)
 		bottle.route("/likelihood_history.txt")(self.web_get_likelihood_history)
 		bottle.route("/far_history.txt")(self.web_get_far_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
+
+		#
+		# Setup kafka producer
+		#
+
+		if self.kafka_server is not None:
+			from kafka import KafkaProducer
+			self.producer = KafkaProducer(bootstrap_servers=[self.kafka_server], value_serializer=lambda m: json.dumps(m).encode('ascii'))
+		else:
+			self.producer = None
 
 	def update(self, events, last_coincs):
 		self.ram_history.append((float(lal.UTCToGPS(time.gmtime())), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
 		if events:
 			max_snr_event = max(events, key = lambda event: event.snr)
 			self.ifo_snr_history[max_snr_event.ifo].append((float(max_snr_event.end), max_snr_event.snr))
+			if self.producer is not None:
+				self.producer.send(self.tag, {"%s_snr_history" % max_snr_event.ifo: "%s\t%s" % (self.ifo_snr_history[max_snr_event.ifo][-1][0], self.ifo_snr_history[max_snr_event.ifo][-1][1])})
 		if last_coincs:
 			latency_val = None
 			snr_val = (0,0)
@@ -201,12 +229,36 @@ class EyeCandy(object):
 					far_val = (t, coinc_inspiral_index[coinc_event_id].combined_far)
 			if latency_val is not None:
 				self.latency_history.append(latency_val)
+				if self.producer is not None:
+					self.producer.send(self.tag, {"latency_history": "%s\t%s" % (self.latency_history[-1][0], self.latency_history[-1][1])})
 			if snr_val != (0,0):
 				self.snr_history.append(snr_val)
+				if self.producer is not None:
+					self.producer.send(self.tag, {"snr_history": "%s\t%s" % (self.snr_history[-1][0], self.snr_history[-1][1])})
 			if like_val != (0,0):
 				self.likelihood_history.append(like_val)
+				if self.producer is not None:
+					self.producer.send(self.tag, {"likelihood_history": "%s\t%s" % (self.likelihood_history[-1][0], self.likelihood_history[-1][1])})
 			if far_val != (0,0):
 				self.far_history.append(far_val)
+				if self.producer is not None:
+					self.producer.send(self.tag, {"far_history": "%s\t%s" % (self.far_history[-1][0], self.far_history[-1][1])})
+
+		if self.producer is not None:
+			self.producer.send(self.tag, {"ram_history": "%s\t%s" % (self.ram_history[-1][0], self.ram_history[-1][1])})
+			# send the state vector and dq vector information to kafka
+			t = inspiral.now()
+			for instrument, elem in self.dqvectors.items():
+				self.producer.send(self.tag, {"%s/dqvector_on" % instrument: "%s\t%s" % (t, elem.get_property("on-samples"))})
+				self.producer.send(self.tag, {"%s/dqvector_off" % instrument: "%s\t%s" % (t, elem.get_property("off-samples"))})
+				self.producer.send(self.tag, {"%s/dqvector_gap" % instrument: "%s\t%s" % (t, elem.get_property("gap-samples"))})
+			for instrument, elem in self.statevectors.items():
+				self.producer.send(self.tag, {"%s/statevector_on" % instrument: "%s\t%s" % (t, elem.get_property("on-samples"))})
+				self.producer.send(self.tag, {"%s/statevector_off" % instrument: "%s\t%s" % (t, elem.get_property("off-samples"))})
+				self.producer.send(self.tag, {"%s/statevector_gap" % instrument: "%s\t%s" % (t, elem.get_property("gap-samples"))})
+
+			# Actually flush all of the kafka messages
+			self.producer.flush()
 
 	def web_get_latency_histogram(self):
 		with self.lock:
@@ -225,10 +277,22 @@ class EyeCandy(object):
 			for time, snr in self.snr_history:
 				yield "%f %e\n" % (time, snr)
 
-	def web_get_sngl_snr_history(self, ifo):
+	def web_get_H1_snr_history(self):
 		with self.lock:
 			# first one in the list is sacrificed for a time stamp
-			for time, snr in self.ifo_snr_history[ifo]:
+			for time, snr in self.ifo_snr_history["H1"]:
+				yield "%f %e\n" % (time, snr)
+
+	def web_get_L1_snr_history(self):
+		with self.lock:
+			# first one in the list is sacrificed for a time stamp
+			for time, snr in self.ifo_snr_history["L1"]:
+				yield "%f %e\n" % (time, snr)
+
+	def web_get_V1_snr_history(self):
+		with self.lock:
+			# first one in the list is sacrificed for a time stamp
+			for time, snr in self.ifo_snr_history["V1"]:
 				yield "%f %e\n" % (time, snr)
 
 	def web_get_likelihood_history(self):
@@ -525,7 +589,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, tag = "", verbose = False):
+	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being
@@ -554,7 +618,8 @@ class Handler(simplehandler.Handler):
 		# FIXME:   detangle this
 		self.gracedbwrapper.lock = self.lock
 
-		self.eye_candy = EyeCandy(rankingstat.instruments)
+		self.kafka_server = kafka_server
+		self.eye_candy = EyeCandy(rankingstat.instruments, self.kafka_server, self.tag, pipeline)
 		# FIXME:   detangle this
 		self.eye_candy.lock = self.lock
 
@@ -1326,7 +1391,7 @@ class Handler(simplehandler.Handler):
 		assert self.fapfar is not None
 
 		# do alerts
-		self.gracedbwrapper.__do_alerts(self.stream_thinca.last_coincs, self.psds, self.__get_rankingstat_xmldoc)
+		self.gracedbwrapper.do_alerts(self.stream_thinca.last_coincs, self.psds, self.__get_rankingstat_xmldoc)
 
 
 	def web_get_sngls_snr_threshold(self):
