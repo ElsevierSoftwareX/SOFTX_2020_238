@@ -837,20 +837,36 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		dqvector = pipeparts.mkstatevector(pipeline, None, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits, name = "%s_dq_vector" % instrument)
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
-		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
+		@bottle.route("/%s/statevector_on.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			on = elem.get_property("on-samples")
+			return "%.9f %d" % (t, on)
+		@bottle.route("/%s/statevector_off.txt" % instrument)
+		def state_vector_state(elem = statevector):
+			t = float(lal.UTCToGPS(time.gmtime()))
 			off = elem.get_property("off-samples")
+			return "%.9f %d" % (t, off)
+		@bottle.route("/%s/statevector_gap.txt" % instrument)
+		def state_vector_state(elem = statevector):
+			t = float(lal.UTCToGPS(time.gmtime()))
 			gap = elem.get_property("gap-samples")
-			return "%.9f %d %d %d" % (t, on, off, gap)
-		@bottle.route("/%s/dq_vector_on_off_gap.txt" % instrument)
+			return "%.9f %d" % (t, gap)
+		@bottle.route("/%s/dqvector_on.txt" % instrument)
 		def dq_vector_state(elem = dqvector):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			on = elem.get_property("on-samples")
+			return "%.9f %d" % (t, on)
+		@bottle.route("/%s/dqvector_off.txt" % instrument)
+		def dq_vector_state(elem = dqvector):
+			t = float(lal.UTCToGPS(time.gmtime()))
 			off = elem.get_property("off-samples")
+			return "%.9f %d" % (t, off)
+		@bottle.route("/%s/dqvector_gap.txt" % instrument)
+		def dq_vector_state(elem = dqvector):
+			t = float(lal.UTCToGPS(time.gmtime()))
 			gap = elem.get_property("gap-samples")
-			return "%.9f %d %d %d" % (t, on, off, gap)
+			return "%.9f %d" % (t, gap)
 
 		# extract strain with 1 buffer of buffering
 		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
