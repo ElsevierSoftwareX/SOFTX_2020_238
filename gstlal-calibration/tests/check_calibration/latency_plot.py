@@ -2,6 +2,8 @@
 
 import numpy
 from math import pi
+import datetime
+import time
 import matplotlib
 matplotlib.use('Agg')
 import glob
@@ -62,11 +64,27 @@ for i in range(0, 1 + (last_index_in - first_index_in) / in_step):
 	gps_time.append(intimes[first_index_in + i * in_step][0] - t_start)
 	latency.append(outtimes[first_index_out + i * out_step][1] - intimes[first_index_in + i * in_step][1])
 
+t_unit = 'seconds'
+if gps_time[len(gps_time) - 1] > 100:
+	for i in range(0, len(gps_time)):
+		gps_time[i] = gps_time[i] / 60.0
+	t_unit = 'minutes'
+	if gps_time[len(gps_time) - 1] > 100:
+		for i in range(0, len(gps_time)):
+			gps_time[i] = gps_time[i] / 60.0
+		t_unit = 'hours'
+		if gps_time[len(gps_time) - 1] > 100:
+			for i in range(0, len(gps_time)):
+				gps_time[i] = gps_time[i] / 24.0
+			t_unit = 'days'
+
 plt.figure(figsize = (10, 5))
 plt.plot(gps_time, latency, 'r.')
 plt.title(options.plot_title)
 plt.ylabel('Latency [s]')
-plt.xlabel('Time [s] since GPS %d' % t_start)
+plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
+plt.ylim(0, 8)
+plt.grid(True)
 plt.savefig('%s_%d-%d.pdf' % (options.plot_filename_prefix, int(t_start), int(dur)))
 
 

@@ -10,7 +10,7 @@ OBSRUN = O2
 
 START = 1186159040
 END = 1186160064
-SHMRUNTIME = 200
+SHMRUNTIME = 28800
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 220
 PLOT_COOLDOWN_TIME = 64
@@ -60,7 +60,7 @@ $(IFO)1_hoft_DCS_TEST_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TEST*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_hoft_GDS_SHM_frames.cache: filters framesdir
-	GST_DEBUG=3 timeout $(SHMRUNTIME) gstlal_compute_strain --frame-duration=1 --frames-per-file=1 --wings=0 --config-file $(GDSSHMCONFIGS)
+	-GST_DEBUG=3 timeout $(SHMRUNTIME) gstlal_compute_strain --frame-duration=1 --frames-per-file=1 --wings=0 --config-file $(GDSSHMCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_SHM*.gwf | lalapps_path2cache > $@
 
 GDS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
