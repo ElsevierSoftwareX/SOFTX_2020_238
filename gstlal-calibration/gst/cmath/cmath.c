@@ -62,6 +62,7 @@ GType cmath_clog_get_type(void);
 GType cmath_clog10_get_type(void);
 GType cmath_cpow_get_type(void);
 GType cmath_lpshiftfreq_get_type(void);
+GType cmath_catan_get_type(void);
 
 
 static gboolean
@@ -84,6 +85,7 @@ plugin_init (GstPlugin *plugin)
 		"clog10", cmath_clog10_get_type()}, {
 		"cpow", cmath_cpow_get_type()}, {
 		"lpshiftfreq", cmath_lpshiftfreq_get_type()}, {
+		"catan", cmath_catan_get_type()}, {
 		NULL, 0},};
 
 	/*

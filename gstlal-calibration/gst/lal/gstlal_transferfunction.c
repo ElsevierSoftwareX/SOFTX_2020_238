@@ -2121,9 +2121,8 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	properties[ARG_MIN_FFTS] = g_param_spec_int64(
 		"min-ffts",
 		"Minimum number of FFTs",
-		"If EOS is reached before transfer functions are computed, this sets the\n\t\t\t"
-		"minimum number of FFTs necessary to produce transfer function at EOS.",
-		1, G_MAXINT64, 16,
+		"Number of FFTs necessary to compute the first set of transfer functions.",
+		1, G_MAXINT64, G_MAXINT64,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_USE_MEDIAN] = g_param_spec_boolean(
