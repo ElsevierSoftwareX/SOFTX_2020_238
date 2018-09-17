@@ -6,7 +6,7 @@ xstep = 0.0082
 xbin = 300
 # chisq
 ymin = -1.2
-ymax = 4.0
+ymax = 3.5
 ystep = 0.0173
 ybin = 300
 

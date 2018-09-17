@@ -39,7 +39,7 @@ int get_icombo(char *ifos);
 #define LOGSNR_CMAX	3.0 // center of the last bin
 #define LOGSNR_NBIN	300 // step is 0.01
 #define LOGCHISQ_CMIN	-1.2
-#define LOGCHISQ_CMAX	4.0
+#define LOGCHISQ_CMAX	3.5
 #define LOGCHISQ_NBIN	300
 
 #define LOGRANK_CMIN	-30 // 10^-30, minimum cdf, extrapolating if less than this min
