@@ -76,6 +76,9 @@ struct _GSTLALTransferFunction {
 	guint64 offset0;
 	guint64 next_in_offset;
 
+	/* Internal state */
+	gboolean computed_full_tfs;
+
 	/* transfer function work space */
 	union {
 		struct {
