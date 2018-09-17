@@ -303,7 +303,7 @@ class FAPUpdater(object):
 					collected_fnames.append("%s/%s" % (self.path, one_bank_fname))
 
 class FinalSink(object):
-	def __init__(self, channel_dict, process_params, pipeline, need_online_perform, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, fapupdater_output_fname = None, fapupdater_collect_walltime_string = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "gstlal-spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, superevent_thresh = 3.8e-7, verbose = False):
+	def __init__(self, channel_dict, process_params, pipeline, need_online_perform, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, fapupdater_output_fname = None, fapupdater_collect_walltime_string = None, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, superevent_thresh = 3.8e-7, verbose = False):
 		#
 		# initialize
 		#
@@ -389,21 +389,23 @@ class FinalSink(object):
 			return False
 
 		# just submit it if is a low-significance trigger
-		if self.candidate.far < self.gracedb_far_threshold and self.candidate.far > self.superevent_thresh:
+		if self.candidate.far < self.gracedb_far_threshold and self.candidate.far > self.superevent_thresh * 10:
 			return True
 
 		# FIXME: any two of the sngl fars need to be < 1e-2
 		# single far veto for high-significance trigger
-		ifo_active=[self.candidate.snglsnr_H!=0,self.candidate.snglsnr_L!=0,self.candidate.snglsnr_V!=0]
+		ifo_active=[self.candidate.chisq_H!=0,self.candidate.chisq_L!=0,self.candidate.chisq_V!=0]
 		ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
 		ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
-		if self.candidate.far < self.superevent_thresh:
+		if self.candidate.far < self.superevent_thresh * 10:
 			return sum([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v])>=2 and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v]))
 
 
 	def appsink_new_buffer(self, elem):
 		with self.lock:
 			buf = elem.emit("pull-buffer")
+			if buf.flag_is_set(gst.BUFFER_FLAG_GAP):
+				return
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			newevents = postcohtable.GSTLALPostcohInspiral.from_buffer(buf)
 			self.need_candidate_check = False

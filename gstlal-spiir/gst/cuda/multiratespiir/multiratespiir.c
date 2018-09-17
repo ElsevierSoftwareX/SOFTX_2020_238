@@ -80,7 +80,7 @@ static GstFlowReturn push_with_flag(CudaMultirateSPIIR *element, GstBuffer *outb
 	gint is_buf_intact = 1;
 	GstFlowReturn ret;
 	GstBuffer *subbuf;
-	int i, flush_len;
+	int i, flush_len = 0;
 	FlagSegment *this_segment = &((FlagSegment *)flag_segments->data)[flag_segments->len - 1];
 	/* make sure the last segment always later than the outbuf */
 	g_assert(this_segment-> stop >= stop);

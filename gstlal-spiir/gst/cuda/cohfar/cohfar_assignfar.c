@@ -103,6 +103,43 @@ static GstFlowReturn cohfar_assignfar_transform_ip (GstBaseTransform * base,
     GstBuffer * buf);
 static void cohfar_assignfar_dispose (GObject *object);
 
+static void update_trigger_fars(PostcohInspiralTable *table, int icombo, CohfarAssignfar *element)
+{
+	TriggerStats *cur_stats = element->bgstats_1w->multistats[icombo];
+	int hist_trials = element->hist_trials;
+    double rank_1w, rank_2h, rank_1d;
+	double stat = (double) table->cohsnr; // - table->nullsnr 
+	table->far_1w = gen_fap_from_feature(stat, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+    rank_1w = trigger_stats_get_val_from_map(stat, (double)table->cmbchisq, cur_stats->rank->rank_map);
+	cur_stats = element->bgstats_1d->multistats[icombo];
+	table->far_1d = gen_fap_from_feature(stat, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+    rank_1d = trigger_stats_get_val_from_map(stat, (double)table->cmbchisq, cur_stats->rank->rank_map);
+	cur_stats = element->bgstats_2h->multistats[icombo];
+	table->far_2h = gen_fap_from_feature(stat, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+    rank_2h = trigger_stats_get_val_from_map(stat, (double)table->cmbchisq, cur_stats->rank->rank_map);
+    table->rank = MAX(MAX(rank_1w, rank_1d), rank_2h);
+
+	/* FIXME: currently hardcoded for single detectors FAR */
+	cur_stats = element->bgstats_1w->multistats[0];
+	table->far_h_1w = gen_fap_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+	cur_stats = element->bgstats_1w->multistats[1];
+	table->far_l_1w = gen_fap_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+	cur_stats = element->bgstats_1w->multistats[2];
+	table->far_v_1w = gen_fap_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+	cur_stats = element->bgstats_1d->multistats[0];
+	table->far_h_1d = gen_fap_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+	cur_stats = element->bgstats_1d->multistats[1];
+	table->far_l_1d = gen_fap_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+	cur_stats = element->bgstats_1d->multistats[2];
+	table->far_v_1d = gen_fap_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+	cur_stats = element->bgstats_2h->multistats[0];
+	table->far_h_2h = gen_fap_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+	cur_stats = element->bgstats_2h->multistats[1];
+	table->far_l_2h = gen_fap_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+	cur_stats = element->bgstats_2h->multistats[2];
+	table->far_v_2h = gen_fap_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
+}
+
 /*
  * ============================================================================
  *
@@ -151,50 +188,22 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 	}
 
 	TriggerStats *cur_stats;
-	int hist_trials = element->hist_trials;
-    double rank_1w, rank_2h, rank_1d;
 	if (element->pass_silent_time) {
 		int icombo;
 		PostcohInspiralTable *table = (PostcohInspiralTable *) GST_BUFFER_DATA(buf);
 		PostcohInspiralTable *table_end = (PostcohInspiralTable *) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 		for (; table<table_end; table++) {
+			if (table->is_background == FLAG_EMPTY)
+				continue;
 			icombo = get_icombo(table->ifos);
-			if (icombo < 0)
+			if (icombo < 0) {
+				fprintf(stderr, "icombo not found, cohfar_assignfar\n");
 				exit(0);
-			cur_stats = element->bgstats_1w->multistats[icombo];
+			}
+			cur_stats = element->bgstats_1w->multistats[element->ncombo-1];
 			if (icombo > -1 && cur_stats->nevent > MIN_BACKGROUND_NEVENT)
 			{
-				double stat = (double) table->cohsnr; // - table->nullsnr 
-				table->far_1w = gen_fap_from_feature(stat, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-                rank_1w = trigger_stats_get_val_from_map(stat, (double)table->cmbchisq, cur_stats->rank->rank_map);
-				cur_stats = element->bgstats_1d->multistats[icombo];
-				table->far_1d = gen_fap_from_feature(stat, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-                rank_1d = trigger_stats_get_val_from_map(stat, (double)table->cmbchisq, cur_stats->rank->rank_map);
-				cur_stats = element->bgstats_2h->multistats[icombo];
-				table->far_2h = gen_fap_from_feature(stat, (double)table->cmbchisq, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-                rank_2h = trigger_stats_get_val_from_map(stat, (double)table->cmbchisq, cur_stats->rank->rank_map);
-                table->rank = MAX(MAX(rank_1w, rank_1d), rank_2h);
-
-				/* FIXME: currently hardcoded for single detectors FAR */
-				cur_stats = element->bgstats_1w->multistats[0];
-				table->far_h_1w = gen_fap_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-				cur_stats = element->bgstats_1w->multistats[1];
-				table->far_l_1w = gen_fap_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-				cur_stats = element->bgstats_1w->multistats[2];
-				table->far_v_1w = gen_fap_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-				cur_stats = element->bgstats_1d->multistats[0];
-				table->far_h_1d = gen_fap_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-				cur_stats = element->bgstats_1d->multistats[1];
-				table->far_l_1d = gen_fap_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-				cur_stats = element->bgstats_1d->multistats[2];
-				table->far_v_1d = gen_fap_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-				cur_stats = element->bgstats_2h->multistats[0];
-				table->far_h_2h = gen_fap_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-				cur_stats = element->bgstats_2h->multistats[1];
-				table->far_l_2h = gen_fap_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-				cur_stats = element->bgstats_2h->multistats[2];
-				table->far_v_2h = gen_fap_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->nevent/ (cur_stats->livetime * hist_trials);
-	
+				update_trigger_fars(table, element->ncombo-1, element);
 			}
 		}
 	}
