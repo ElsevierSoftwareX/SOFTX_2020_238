@@ -205,7 +205,7 @@ for i in range(0, len(freq_list)):
 	plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
 	plt.subplot(212)
 	plt.plot(times, phases[0], '.', markersize = markersize)
-	plt.ylabel('Phase')
+	plt.ylabel('Phase [deg]')
 	plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
 	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))

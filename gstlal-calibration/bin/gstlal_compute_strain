@@ -360,6 +360,7 @@ skip_bad_files = Config.getboolean("InputConfigurations", "skipbadfiles")
 # Search the directory tree for files with names matching the one we want.
 filters_name = InputConfigs["filtersfilename"]
 filters_paths = []
+print "\nSearching for %s ..." % filters_name
 # Check the user's home directory
 for dirpath, dirs, files in os.walk(os.environ['HOME']):
 	if filters_name in files:
@@ -378,7 +379,7 @@ for dirpath, dirs, files in os.walk('/ligo/svncommon/CalSVN/aligocalibration/tru
 			filters_paths.append(os.path.join(dirpath, filters_name))
 if not len(filters_paths):
 	raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
-print "\nLoading calibration filters from %s\n" % filters_paths[0]
+print "Loading calibration filters from %s\n" % filters_paths[0]
 filters = numpy.load(filters_paths[0])
 
 # In case we want to remove calibration lines, we will fill these dictionaries
