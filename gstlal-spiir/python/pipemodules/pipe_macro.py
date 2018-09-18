@@ -7,7 +7,7 @@ xbin = 300
 # chisq
 ymin = -1.2
 ymax = 3.5
-ystep = 0.0173
+ystep = 0.0157
 ybin = 300
 
 # rank
@@ -27,6 +27,7 @@ CHISQ_RATE_SUFFIX = "lgchisq_rate"
 SNR_CHISQ_RATE_SUFFIX = "lgsnr_lgchisq_rate"	
 SNR_CHISQ_PDF_SUFFIX = "lgsnr_lgchisq_pdf"	
 BACKGROUND_XML_RANK_NAME = "background_rank"	
+BACKGROUND_XML_FEATURE_NAME = "background_feature"	
 RANK_MAP_SUFFIX = "rank_map"	
 RANK_RATE_SUFFIX = "rank_rate"	
 RANK_PDF_SUFFIX = "rank_pdf"	
@@ -36,20 +37,27 @@ SIGNAL_XML_RANK_NAME = "signal_rank"
 
 
 
-# This IFO_MAP be reflect the same order of ifos of the IFO_COMBO_MAP in background_stats_utils.c
+# This IFO_MAP should reflect the same order of ifos in include/pipe_macro.h
 IFO_MAP = ["H1", "L1", "V1"]
 
 import itertools
-def get_ifo_combos(ifos):
-    # make sure ifo_list is ordered the same ways as the postcoh code: L1, H1, V1, xx
-    ifo_idx_sorted = sorted([IFO_MAP.index(ifo) for ifo in ifos])
-    ordered_ifo_list = [IFO_MAP[ifo_idx] for ifo_idx in ifo_idx_sorted]
-    ifo_combos = []
-    for combo_len in range(2, len(ordered_ifo_list)+1):
-        this_combo_list = list(itertools.combinations(ordered_ifo_list, combo_len))
-        combo_str_list = ["".join(list(i_combo_list)) for i_combo_list in this_combo_list]
-        ifo_combos.extend(combo_str_list)
+import re
+def get_sorted_ifo_string(ifos_string):
+	ifos = re.findall('..', ifos_string)
+	ifo_idx_sorted = sorted([IFO_MAP.index(ifo) for ifo in ifos])
+	sorted_ifo_list = [IFO_MAP[ifo_idx] for ifo_idx in ifo_idx_sorted]
+	return ''.join(sorted_ifo_list)
 
-    return ifo_combos
+def get_ifo_combos(ifos):
+	""" return ifo combinations given a ifo list, e.g.:['H1','L1'] """
+	# first make sure ifo_list is ordered the same ways as IFO_MAP
+	ifo_idx_sorted = sorted([IFO_MAP.index(ifo) for ifo in ifos])
+	sorted_ifo_list = [IFO_MAP[ifo_idx] for ifo_idx in ifo_idx_sorted]
+	ifo_combos = []
+	for combo_len in range(2, len(sorted_ifo_list)+1):
+		this_combo_list = list(itertools.combinations(sorted_ifo_list, combo_len))
+		combo_str_list = ["".join(list(i_combo_list)) for i_combo_list in this_combo_list]
+		ifo_combos.extend(combo_str_list)
+	return ifo_combos
 
 
