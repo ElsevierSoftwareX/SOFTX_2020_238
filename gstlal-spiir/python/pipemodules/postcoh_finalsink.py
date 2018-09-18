@@ -389,7 +389,7 @@ class FinalSink(object):
 			return False
 
 		# just submit it if is a low-significance trigger
-		if self.candidate.far < self.gracedb_far_threshold and self.candidate.far > self.superevent_thresh * 10:
+		if self.candidate.far < self.gracedb_far_threshold and self.candidate.far > self.superevent_thresh:
 			return True
 
 		# FIXME: any two of the sngl fars need to be < 1e-2
@@ -397,7 +397,7 @@ class FinalSink(object):
 		ifo_active=[self.candidate.chisq_H!=0,self.candidate.chisq_L!=0,self.candidate.chisq_V!=0]
 		ifo_fars_ok=[self.candidate.far_h < 1E-2, self.candidate.far_l < 1E-2, self.candidate.far_v < 1E-2]
 		ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
-		if self.candidate.far < self.superevent_thresh * 10:
+		if self.candidate.far < self.superevent_thresh:
 			return sum([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v])>=2 and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v]))
 
 
