@@ -12,7 +12,6 @@ Requires: gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: glue-segments >= @MIN_GLUE_VERSION@
-Requires: python-pylal >= @MIN_PYLAL_VERSION@
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
