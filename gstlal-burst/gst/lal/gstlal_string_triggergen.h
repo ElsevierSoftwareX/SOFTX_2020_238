@@ -50,7 +50,6 @@ typedef struct {
 	gchar *channel_name;
 	SnglBurst *bank;
 	gint num_templates;
-	SnglBurst *last_event;
 	LIGOTimeGPS *last_time;
 } GSTLALStringTriggergen;
 

@@ -12,8 +12,9 @@
  */
 
 
+#include <math.h>
 #include <string.h>
-
+#include <stdio.h>
 
 /*
  * stuff from gobject/gstreamer
@@ -31,6 +32,7 @@
  */
 
 
+#include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOLwXMLBurstRead.h>
 #include <lal/SnglBurstUtils.h>
@@ -91,8 +93,6 @@ static void free_bankfile(GSTLALStringTriggergen *element)
 	element->bank_filename = NULL;
 	free(element->bank);
 	element->bank = NULL;
-	free(element->last_event);
-	element->last_event = NULL;
 	free(element->last_time);
 	element->last_time = NULL;
 	element->num_templates = 0;
@@ -110,14 +110,11 @@ static int setup_bankfile_input(GSTLALStringTriggergen *element, char *bank_file
 	bank = XLALSnglBurstTableFromLIGOLw(element->bank_filename);
 	element->num_templates = XLALSnglBurstTableLength(bank);
 	element->bank = calloc(element->num_templates, sizeof(*element->bank));
-	element->last_event = calloc(element->num_templates, sizeof(*element->last_event));
 	element->last_time = calloc(element->num_templates, sizeof(*element->last_time));
-	if(!bank || !element->bank || !element->last_event || !element->last_time) {
+	if(!bank || !element->bank || !element->last_time) {
 		XLALDestroySnglBurstTable(bank);
 		free(element->bank);
 		element->bank = NULL;
-		free(element->last_event);
-		element->last_event = NULL;
 		free(element->last_time);
 		element->last_time = NULL;
 		return -1;
@@ -131,39 +128,9 @@ static int setup_bankfile_input(GSTLALStringTriggergen *element, char *bank_file
 		element->bank[i].next = NULL;
 		free(bank);
 		bank = next;
-		/*
-		 * initialize data in template. the snr is o'ed so that when the templates are used to initialize the last event info that field is set properly.
-		*/
-		element->bank[i].snr = 0;
-
-		/* initialize the last time array, too
-		*/
-		element->last_time[i] = (LIGOTimeGPS) {0,0};
 	}
 	return element->num_templates;
 
-}
-
-static SnglBurst *record_string_event(SnglBurst *dest, LIGOTimeGPS peak_time, float snr, int channel, GSTLALStringTriggergen *element)
-{
-	/*
-	 * copy the template whole
-	 */
-
-	*dest = element->bank[channel];
-
-	/*
-	 * fill in the rest of the information.
-	 */
-
-	dest->snr = snr;
-	dest->peak_time = peak_time;
-
-	/*
-	 * done
-	 */
-
-	return dest;
 }
 
 
@@ -175,7 +142,7 @@ static SnglBurst *record_string_event(SnglBurst *dest, LIGOTimeGPS peak_time, fl
  *======================================================
  */
 
-/*FIXME now it assumes it has 32768 triggers, the largest amount possible, and we need to fix it so that the amount of memory allocated corresponds to the actual number of triggers*/
+
 static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	/*
@@ -183,89 +150,61 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 	 */
 
 	GstMapInfo inmap;
-	GstMapInfo outmap;
 	float *snrdata;
-	SnglBurst *head = NULL;
+	SnglBurst *triggers = NULL;
+	guint ntriggers = 0;
 	guint64 t0;
 	guint64 length;
 	guint sample;
 	gint channel;
-	guint nevents = 0;
 
 	g_mutex_lock(&element->bank_lock);
 	gst_buffer_map(inbuf, &inmap, GST_MAP_WRITE);
-	gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
 
 	snrdata = (float *) inmap.data;
-	head = (SnglBurst *) outmap.data;
-
-	length = GST_BUFFER_PTS(inbuf) + GST_BUFFER_DURATION(inbuf);
 
 	t0 = GST_BUFFER_PTS(inbuf);
-	length = gst_util_uint64_scale_int_round(length > t0 ? length - t0 : 0, GST_AUDIO_INFO_RATE(&element->audio_info), GST_SECOND);
+	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 
-	GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
+	GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events with SNR greater than %f", length, GST_TIME_SECONDS_ARGS(t0),element->threshold);
 	for(sample = 0; sample < length; sample++){
 		LIGOTimeGPS t;
 		XLALINT8NSToGPS(&t, t0);
 		XLALGPSAdd(&t, (float) sample / GST_AUDIO_INFO_RATE(&element->audio_info));
 
 		for(channel = 0; channel < element->num_templates; channel++) {
-			if(*snrdata >= element->threshold){
-				if(XLALGPSDiff(&t, &element->last_time[channel]) > element->cluster) {
-					/*
-					 * New event. Prepend last event to
-					 * event list and start a new one.
-					 */
-					if(element->last_event[channel].snr != 0){
-						SnglBurst *new = calloc(1, sizeof(*new));
-						*new = element->last_event[channel];
-						new->next = head;
-						head = new;
-						nevents++;
-						free(new);
-					}
-					record_string_event(&element->last_event[channel], t, *snrdata, channel, element);
-				} else if(*snrdata > element->last_event[channel].snr) {
-					/*
-					 * Same event, higher SNR. Update.
-					 */
-					record_string_event(&element->last_event[channel], t, *snrdata, channel, element);
-				} else {
-					/*
-					 * Same event, not higher SNR. Do nothing
-					 */
-				}
+			float snr = fabsf(*snrdata++);
+			if(snr >= element->threshold) {
 				element->last_time[channel] = t;
-			} else {
-				/* FIXME: if more than cluster samples elapse, we should flush the triggers */
+				if(snr > element->bank[channel].snr) {
+					/*
+					 * Higher SNR than the "current winner". Update.
+					 */
+					element->bank[channel].snr = snr;
+					element->bank[channel].peak_time = t;
 				}
-			snrdata++;
+			} else if(element->bank[channel].snr != 0. && XLALGPSDiff(&t, &element->last_time[channel]) > element->cluster) {
+				/*
+				 * Trigger is ready to be passed.
+				 * Push trigger to buffer, and reset it.
+				 */
+				triggers = g_renew(SnglBurst, triggers, ntriggers + 1);
+				triggers[ntriggers++] = element->bank[channel];
+				element->bank[channel].snr = 0.0;
+			}
 		}
 	}
 	g_mutex_unlock(&element->bank_lock);
 
-	/*
-	 * Push buffer downstream
-	 */
-
-/*	GST_DEBUG_OBJECT(element, "found %d events", nevents);
-        }
-        g_assert(GST_BUFFER_CAPS(outbuf) != NULL);
-        g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(outbuf));
-        GST_BUFFER_OFFSET(outbuf) = element->next_output_offset;
-        element->next_output_offset += nevents;
-        GST_BUFFER_OFFSET_END(outbuf) = element->next_output_offset
-
-	element->next_output_timestamp = MAX(GST_BUFER_DURATION(outbuf),GST_BUFFER_PTS(outbuf))
-*/
 	gst_buffer_unmap(inbuf,&inmap);
-	gst_buffer_unmap(outbuf,&outmap);
 
-/*
-	GST_DEBUG_OBJECT(element->srcpad, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
-	return gst_pad_push(element->srcpad, outbuf);
-*/
+	if(ntriggers)
+		gst_buffer_replace_all_memory(outbuf, gst_memory_new_wrapped(GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS, triggers, ntriggers * sizeof(*triggers), 0, ntriggers * sizeof(*triggers), triggers, g_free));
+	else
+		gst_buffer_remove_all_memory(outbuf);
+
+	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + ntriggers;
+
 	return GST_FLOW_OK;
 }
 
@@ -308,7 +247,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
  * transform caps()
  */
 
-static GstCaps *transform_caps(GstBaseTransform * trans, GstPadDirection direction, GstCaps * caps, GstCaps *filter)
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
   /*
    * always return the template caps of the other pad
@@ -362,18 +301,37 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(trans);
+	gint i;
+
+	for(i=0; i < element->num_templates; i++) {
+		/*
+		 * initialize data in template. the snr is 0'ed so that
+		 * when the templates are used to initialize the last event
+		 * info that field is set properly.
+		 */
+
+		XLALINT8NSToGPS(&element->bank[i].peak_time, 0);
+		element->bank[i].snr = 0;
+
+		/* initialize the last time array, too */
+
+		XLALINT8NSToGPS(&element->last_time[i], 0);
+	}
+
 	return TRUE;
 }
 
 
 /*
- * stop()
+ * prepare_output_buffer()
  */
 
-static gboolean stop(GstBaseTransform *trans)
+
+static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer **outbuf)
 {
-	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(trans);
-	return TRUE;
+	*outbuf = gst_buffer_new();
+
+	return GST_FLOW_OK;
 }
 
 
@@ -481,6 +439,10 @@ static void finalize(GObject *object)
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(object);
 	g_mutex_clear(&element->bank_lock);
 	free_bankfile(element);
+	g_free(element->instrument);
+	element->instrument = NULL;
+	g_free(element->channel_name);
+	element->channel_name = NULL;
 	G_OBJECT_CLASS(gstlal_string_triggergen_parent_class)->finalize(object);
 }
 
@@ -536,7 +498,7 @@ static void gstlal_string_triggergen_class_init(GSTLALStringTriggergenClass *kla
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 	transform_class->start = GST_DEBUG_FUNCPTR(start);
-	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
+	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -586,7 +548,6 @@ static void gstlal_string_triggergen_init(GSTLALStringTriggergen *element)
 	element->instrument = NULL;
 	element->channel_name = NULL;
 	element->num_templates = 0;
-	element->last_event = NULL;
 	element->last_time = NULL;
 	element->audio_info.bpf = 0;	/* impossible value */
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
