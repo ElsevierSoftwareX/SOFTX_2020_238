@@ -20,6 +20,7 @@ from optparse import OptionParser
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
 
 import lalsimulation
 
@@ -37,12 +38,18 @@ def parse_command_line():
 		description = "GstLAL-based cosmic string search pipeline."
 	)
 
-	parser.add_option("--sample-rate", metavar = "rate", type = "float", help = "Desired sample rate (Hz)")
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the cache file to load as input data")
-        parser.add_option("--channel", metavar = "channel", help = "Name of channel")
-	parser.add_option("--template-bank", metavar = "filename", help = "Name of template file")
-	parser.add_option("--gps-start-time", metavar = "start_time", help = "GPS start time")
-	parser.add_option("--gps-end-time", metavar = "end_time", help = "GPS end time")
+	parser.add_option("--sample-rate", metavar = "rate", type = "float", help = "Desired sample rate (Hz).")
+	parser.add_option("--frame-cache", metavar = "filename", help = "The frame cache file to load as input data.")
+	parser.add_option("--output", metavar = "filename", help = "Name of output xml file.")
+	parser.add_option("--injection-file", metavar = "filename", help = "Name of xml injection file.")
+        parser.add_option("--channel", metavar = "channel", type = "string",help = "Name of channel.")
+	parser.add_option("--template-bank", metavar = "filename", help = "Name of template file.")
+	parser.add_option("--gps-start-time", metavar = "start_time", type = "int",  help = "GPS start time.")
+	parser.add_option("--gps-end-time", metavar = "end_time", type = "int", help = "GPS end time.")
+	parser.add_option("--threshold", metavar = "snr_threshold", type = "float", help = "SNR threshold.")
+	parser.add_option("--cluster-events", metavar = "cluster_events", type = "float", help = "Cluster events with input timescale.")
+	parser.add_option("--user-tag", metavar = "user_tag", type = "string", help = "User tag set in the search summary and process tables")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 
@@ -61,12 +68,10 @@ def parse_command_line():
 #
 
 options, filenames = parse_command_line()
-options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
-options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
 
 
 #
-# get data
+# get data and insert injections if injection file is given
 #
 
 pipeline = Gst.Pipeline(name="pipeline")
@@ -75,15 +80,25 @@ handler = simplehandler.Handler(mainloop, pipeline)
 
 head = pipeparts.mklalcachesrc(pipeline, options.frame_cache)
 head = pipeparts.mkframecppchanneldemux(pipeline, head)
+pipeparts.framecpp_channeldemux_set_units(head, {options.channel:"strain"})
 
+elem = pipeparts.mkaudioconvert(pipeline, None)
+pipeparts.src_deferred_link(head, options.channel, elem.get_static_pad("sink"))
+head = elem
+
+
+#
+# injections
+#
+
+if options.injection_file is not None:
+	head = pipeparts.mkinjections(pipeline, head, options.injection_file)
 
 #
 # whiten
 #
 
-elem = pipeparts.mkwhiten(pipeline, None)
-pipeparts.src_deferred_link(head, options.channel, elem.get_static_pad("sink"))
-head = elem
+head = pipeparts.mkwhiten(pipeline, head)
 
 
 #
@@ -122,10 +137,23 @@ head = pipeparts.mkfirbank(pipeline, head, latency = -(len(template_bank[0]) - 1
 
 
 #
+# format output xml file for putting triggers
+#
+
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_stringsearch", options.__dict__)
+
+sngl_burst_table = lsctables.New(lsctables.SnglBurstTable, ["process_id", "event_id","ifo","search","channel","start_time","start_time_ns","peak_time","peak_time_ns","duration","central_freq","bandwidth","amplitude","snr","confidence","chisq","chisq_dof"])
+xmldoc.childNodes[-1].appendChild(sngl_burst_table)
+
+
+#
 # trigger generator
 #
 
-head = pipeparts.mkgeneric(pipeline, head, "lal_string_triggergen", threshold = 5.5, cluster = 0.1, bank_filename = options.template_bank)
+
+head = pipeparts.mkgeneric(pipeline, head, "lal_string_triggergen", threshold = options.threshold, cluster = options.cluster_events, bank_filename = options.template_bank)
 
 
 #
@@ -142,7 +170,10 @@ def appsink_new_buffer(elem):
 		if mapinfo.data:
 			events.extend(snglbursttable.GSTLALSnglBurst.from_buffer(mapinfo.data))
 		memory.unmap(mapinfo)
-	print(len(events))
+	for event in events:
+		event.process_id = process.process_id
+		event.event_id = sngl_burst_table.get_next_id()
+		sngl_burst_table.append(event)
 
 appsync = pipeparts.AppSync(appsink_new_buffer = appsink_new_buffer)
 appsync.add_sink(pipeline, head, caps = Gst.Caps.from_string("application/x-lal-snglburst"))
@@ -156,11 +187,19 @@ if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
 # seek
 #
 
+options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
+options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
 datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time);
+
 
 if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 	raise RuntimeError("pipeline did not enter playing state")
 
 
 mainloop.run()
-sys.exit()
+
+#
+# write output to disk
+#
+
+ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
