@@ -126,9 +126,11 @@ parser = OptionParser(description = __doc__)
 # Append program specific options
 
 # These options should be used whether the pipeline runs in full calibration mode or partial calibration mode
-parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
-parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds. This is required iff --data-source=frames")
-parser.add_option("--wings", metavar = "seconds", default = 0, type = "int", help = "Number of seconds to trim off of the beginning and end of the output. Should only be used if --data-source=frames.")
+parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. This is required iff DataSource is frames")
+parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds. This is required iff DataSource is =frames")
+parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO .gwf frame files (optional).  This is required iff DataSource is frames")
+parser.add_option("--output-path", metavar = "name", default = ".", help = "Set the output path for writing frame files. (Default=Current)")
+parser.add_option("--wings", metavar = "seconds", default = 0, type = "int", help = "Number of seconds to trim off of the beginning and end of the output. Should only be used if DataSource is frames.")
 parser.add_option("--frame-duration", metavar = "seconds", type = "int", default = 4, help = "Set the number of seconds for each frame. (Default = 4)")
 parser.add_option("--frames-per-file", metavar = "count", type = "int", default = 1, help = "Set the number of frames per frame file. (Default = 1)")
 parser.add_option("--config-file", metavar = "name", help = "Full path to configuration file for running.")
@@ -177,7 +179,7 @@ data_sources = set(("frames", "lvshm"))
 if InputConfigs["datasource"] not in data_sources:
 	raise ValueError("DataSource must be one of %s" % ",".join(data_sources))
 
-if InputConfigs["datasource"] == "frames" and InputConfigs["framecache"] is None:
+if InputConfigs["datasource"] == "frames" and options.frame_cache is None:
 	raise ValueError("FrameCache must be specified when using DataSource: frames")
 
 if int(options.wings != 0) and InputConfigs["datasource"] != "frames":
@@ -359,28 +361,33 @@ skip_bad_files = Config.getboolean("InputConfigurations", "skipbadfiles")
 
 # Search the directory tree for files with names matching the one we want.
 filters_name = InputConfigs["filtersfilename"]
-filters_paths = []
-print "\nSearching for %s ..." % filters_name
-# Check the user's home directory
-for dirpath, dirs, files in os.walk(os.environ['HOME']):
-	if filters_name in files:
-		# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
-		if dirpath.count("GDSFilters") > 0:
-			filters_paths.insert(0, os.path.join(dirpath, filters_name))
-		else:
-			filters_paths.append(os.path.join(dirpath, filters_name))
-# Check if there is a checkout of the entire calibration SVN
-for dirpath, dirs, files in os.walk('/ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/'):
-	if filters_name in files:
-		# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
-		if dirpath.count("GDSFilters") > 0:
-			filters_paths.insert(0, os.path.join(dirpath, filters_name))
-		else:
-			filters_paths.append(os.path.join(dirpath, filters_name))
-if not len(filters_paths):
-	raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
-print "Loading calibration filters from %s\n" % filters_paths[0]
-filters = numpy.load(filters_paths[0])
+if filters_name.count('/') > 0:
+	# Then the path to the filters file was given
+	filters = numpy.load(filters_name)
+else:
+	# We need to search for the filters file
+	filters_paths = []
+	print "\nSearching for %s ..." % filters_name
+	# Check the user's home directory
+	for dirpath, dirs, files in os.walk(os.environ['HOME']):
+		if filters_name in files:
+			# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+			if dirpath.count("GDSFilters") > 0:
+				filters_paths.insert(0, os.path.join(dirpath, filters_name))
+			else:
+				filters_paths.append(os.path.join(dirpath, filters_name))
+	# Check if there is a checkout of the entire calibration SVN
+	for dirpath, dirs, files in os.walk('/ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/'):
+		if filters_name in files:
+			# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+			if dirpath.count("GDSFilters") > 0:
+				filters_paths.insert(0, os.path.join(dirpath, filters_name))
+			else:
+				filters_paths.append(os.path.join(dirpath, filters_name))
+	if not len(filters_paths):
+		raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
+	print "Loading calibration filters from %s\n" % filters_paths[0]
+	filters = numpy.load(filters_paths[0])
 
 # In case we want to remove calibration lines, we will fill these dictionaries
 pcal_line_removal_dict = {}
@@ -803,7 +810,7 @@ if not verbose:
 if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memory; "low-latency" mode
 	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = int(InputConfigs["inputframeduration"]))
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
-	src = pipeparts.mklalcachesrc(pipeline, location = InputConfigs["framecache"], cache_dsc_regex = instrument)
+	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument)
 
 if Config.getboolean("DebuggingConfigurations", "testlatency"):
 	src = pipeparts.mkgeneric(pipeline, src, "splitcounter", filename = "gstlal_compute_strain_timestamps_in.txt")
@@ -2457,7 +2464,7 @@ if Config.getboolean("DebuggingConfigurations", "testlatency"):
 if OutputConfigs["datasink"] == "lvshm":
 	pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", sync=False, async=False, shm_name = OutputConfigs["outputshmpartition"], num_buffers = int(OutputConfigs["numbuffers"]), blocksize = int(OutputConfigs["framesize"])*options.frame_duration*options.frames_per_file, buffer_mode = int(OutputConfigs["buffermode"]))
 elif OutputConfigs["datasink"] == "frames":
-	pipeparts.mkframecppfilesink(pipeline, mux, frame_type = OutputConfigs["frametype"], path = OutputConfigs["outputpath"], instrument = instrument) 
+	pipeparts.mkframecppfilesink(pipeline, mux, frame_type = OutputConfigs["frametype"], path = options.output_path, instrument = instrument) 
 
 # Run pipeline
 
