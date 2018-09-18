@@ -28,7 +28,14 @@ import sys
 import os
 import numpy
 import time
+from math import pi
 import resource
+import datetime
+import time
+import matplotlib
+matplotlib.use('Agg')
+import glob
+import matplotlib.pyplot as plt
 
 from optparse import OptionParser, Option
 import ConfigParser
@@ -44,7 +51,6 @@ from lal import LIGOTimeGPS
 
 from gstlal import pipeparts
 from gstlal import calibration_parts
-from gstlal import test_common
 from gstlal import simplehandler
 from gstlal import datasource
 
@@ -56,6 +62,7 @@ array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from ligo import segments
+from gstlal import test_common
 
 parser = OptionParser()
 parser.add_option("--gps-start-time", metavar = "seconds", type = int, help = "GPS time at which to start processing data")
@@ -65,8 +72,10 @@ parser.add_option("--raw-frame-cache", metavar = "name", help = "Raw frame cache
 parser.add_option("--calibrated-frame-cache", metavar = "name", help = "Calibrated frame cache file")
 parser.add_option("--config-file", metavar = "name", help = "Configurations file used to produce GDS/DCS calibrated frames, needed to get pcal line frequencies and correction factors")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_TX_PD_OUT_DQ", help = "Name of the pcal channel you wish to use")
-parser.add_option("--calibrated-channel-list", metavar = "list", default = None, help = "Comma-separated list of calibrated channels to compare to pcal")
-parser.add_option("--calcs-channel-list", metavar = "list", default = None, help = "Comma-separated list of calibrated channels in the raw frames to compare to pcal")
+parser.add_option("--calibrated-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of calibrated channels to compare to pcal")
+parser.add_option("--calcs-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of calibrated channels in the raw frames to compare to pcal")
+parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.97,1.03;0.95,1.05;0.8,1.2", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
+parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-1.0,1.0;-3.0,3.0;-10.0,10.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
 
 options, filenames = parser.parse_args()
 
@@ -96,6 +105,7 @@ InputConfigs = ConfigSectionMap("InputConfigurations")
 # Search the directory tree for files with names matching the one we want.
 filters_name = InputConfigs["filtersfilename"]
 filters_paths = []
+print "\nSearching for %s ..." % filters_name
 # Check the user's home directory
 for dirpath, dirs, files in os.walk(os.environ['HOME']):
 	if filters_name in files:
@@ -106,15 +116,13 @@ for dirpath, dirs, files in os.walk(os.environ['HOME']):
 			filters_paths.append(os.path.join(dirpath, filters_name))
 if not len(filters_paths):
 	raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
-print "\nLoading calibration filters from %s\n" % filters_paths[0]
+print "Loading calibration filters from %s\n" % filters_paths[0]
 filters = numpy.load(filters_paths[0])
 
 ifo = options.ifo
 
 # Set up channel lists
 channel_list = []
-calibrated_channel_list = []
-calcs_channel_list = []
 channel_list.append((ifo, options.pcal_channel_name))
 if options.calibrated_channel_list is not None:
 	calibrated_channels = options.calibrated_channel_list.split(',')
@@ -132,6 +140,13 @@ else:
 # Read stuff we need from the filters file
 frequencies = [float(filters['ka_pcal_line_freq']), float(filters['kc_pcal_line_freq']), float(filters['high_pcal_line_freq'])]
 pcal_corrections= [float(filters['ka_pcal_corr_re']), float(filters['ka_pcal_corr_im']), float(filters['kc_pcal_corr_re']), float(filters['kc_pcal_corr_im']), float(filters['high_pcal_corr_re']), float(filters['high_pcal_corr_im'])]
+
+if not len(options.magnitude_ranges.split(';')) == len(frequencies):
+	raise ValueError("Number of magnitude ranges given is not equal to number of pcal line frequencies (%d != %d)." % (len(options.magnitude_ranges.split(';')), len(frequencies)))
+if not len(options.phase_ranges.split(';')) == len(frequencies):
+	raise ValueError("Number of phase ranges given is not equal to number of pcal line frequencies (%d != %d)." % (len(options.phase_ranges.split(';')), len(frequencies)))
+
+
 demodulated_pcal_list = []
 try:
 	arm_length = float(filters['arm_length'])
@@ -198,8 +213,21 @@ def pcal2darm(pipeline, name):
 			deltaL_over_pcal = calibration_parts.complex_division(pipeline, demodulated_deltal, demodulated_pcal_list[i])
 			# Take a running average
 			deltaL_over_pcal = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "lal_smoothkappas", array_size = 1, avg_array_size = int(rate_out * average_time))
+			# Find the magnitude
+			deltaL_over_pcal = pipeparts.mktee(pipeline, deltaL_over_pcal)
+			magnitude = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "cabs")
+			# Find the phase
+			phase = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "carg")
+			phase = pipeparts.mkaudioamplify(pipeline, phase, 180.0 / numpy.pi)
+			# Interleave
+			magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
 			# Write to file
-			pipeparts.mknxydumpsink(pipeline, deltaL_over_pcal, "%s_%s_over_%s_at_line%d.txt" % (ifo, channel, options.pcal_channel_name, i + 1))
+			print 'IFO = %s' % ifo
+			print 'channel = %s' % channel
+			print 'options.pcal_channel_name = %s' % options.pcal_channel_name
+			print 'frequencies[i] = %0.1f' % frequencies[i]
+			print "%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channel, options.pcal_channel_name, frequencies[i])
+			pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channel, options.pcal_channel_name, frequencies[i]))
 
 	#
 	# done
@@ -217,5 +245,66 @@ def pcal2darm(pipeline, name):
 
 
 test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
+
+# Read data from files and plot it
+channels = calcs_channels
+channels.extend(calibrated_channels)
+for i in range(0, len(frequencies)):
+	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channels[0], options.pcal_channel_name, frequencies[i]))
+	t_start = data[0][0]
+	dur = data[len(data) - 1][0] - t_start
+	t_unit = 'seconds'
+	sec_per_t_unit = 1.0
+	if dur > 60 * 60 * 100:
+		t_unit = 'days'
+		sec_per_t_unit = 60.0 * 60.0 * 24.0
+	elif dur > 60 * 100:
+		t_unit = 'hours'
+		sec_per_t_unit = 60.0 * 60.0
+	elif dur > 100:
+		t_unit = 'minutes'
+		sec_per_t_unit = 60.0
+	times = []
+	magnitudes = [[]]
+	phases = [[]]
+	for k in range(0, len(data)):
+		times.append((data[k][0] - t_start) / sec_per_t_unit)
+		magnitudes[0].append(data[k][1])
+		phases[0].append(data[k][2])
+	markersize = 5000.0 / dur
+	markersize = min(markersize, 2.0)
+	markersize = max(markersize, 0.2)
+	# Make plots
+	plt.figure(figsize = (10, 10))
+	plt.subplot(211)
+	plt.plot(times, magnitudes[0], '.', markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	plt.title(r'%s Delta $L_{\rm free}$ / Pcal at %0.1f Hz' % ( ifo, frequencies[i]))
+	plt.ylabel('Magnitude')
+	magnitude_range = options.magnitude_ranges.split(';')[i]
+	plt.ylim(float(magnitude_range.split(',')[0]), float(magnitude_range.split(',')[1]))
+	plt.grid(True)
+	plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+	plt.subplot(212)
+	plt.plot(times, phases[0], '.', markersize = markersize, label = 'avg = %0.5f, std = %0.5f' % (numpy.mean(phases[0]), numpy.std(phases[0],)))
+	plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+	plt.ylabel('Phase [deg]')
+	plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
+	phase_range = options.phase_ranges.split(';')[i]
+	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
+	plt.grid(True)
+	for j in range(1, len(channels)):
+		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channels[j], options.pcal_channel_name, frequencies[i]))
+		magnitudes.append([])
+		phases.append([])
+		for k in range(0, len(data)):
+			magnitudes[j].append(data[k][1])
+			phases[j].append(data[k][2])
+		plt.subplot(211)
+		plt.plot(times, magnitudes[j], '.', markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+		plt.subplot(212)
+		plt.plot(times, phases[j], '.', markersize = markersize, label = 'avg = %0.5f, std = %0.5f' % (numpy.mean(phases[j]), numpy.std(phases[j],)))
+		plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+	plt.savefig("deltal_over_pcal_at_%0.1fHz.png" % frequencies[i])
 
 

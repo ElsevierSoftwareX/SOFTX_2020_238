@@ -21,7 +21,7 @@ GDSTESTCONFIGS = ../../config_files/H1GDS_LowLatency_AllCorrections_Cleaning.ini
 DCSTESTCONFIGS = ../../config_files/H1DCS_AllCorrections_Cleaning.ini
 GDSSHMCONFIGS = ../../config_files/H1GDS_TestLatency_AllCorrections_Cleaning.ini
 
-all: latency_test
+all: DCS_pcal2darm_plots
 
 ################################################
 ### These commands should change less often ###
@@ -64,10 +64,10 @@ $(IFO)1_hoft_GDS_SHM_frames.cache: filters framesdir
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_SHM*.gwf | lalapps_path2cache > $@
 
 GDS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
-	python pcal2darm_timeseries.py --gps-start-time=$(PLOT_START) --gps-end-time=$(PLOT_END) --ifo=$(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)_hoft_GDS_frames.cache --config-file $(GDSCONFIGS) --calibrated-channel-list='GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
+	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)1_hoft_GDS_frames.cache --config-file '$(GDSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --calibrated-channel-list='GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
 
 DCS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache
-	python pcal2darm_timeseries.py --gps-start-time=$(PLOT_START) --gps-end-time=$(PLOT_END) --ifo=$(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)1_hoft_DCS_frames.cache --config-file $(DCSCONFIGS) --calibrated-channel-list='DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN'
+	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)1_hoft_DCS_frames.cache --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --calibrated-channel-list='DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN'
 
 lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 	python demod_ratio_timeseries.py --ifo $(IFO)1 --gps-end-time $(PLOT_END) --gps-start-time $(PLOT_START) --denominator-frame-cache $(IFO)1_hoft_DCS_frames.cache --numerator-frame-cache $(IFO)1_hoft_DCS_frames.cache --denominator-channel-name 'DCS-CALIB_STRAIN' --numerator-channel-name 'DCS-CALIB_STRAIN_CLEAN' --frequencies '35.9,36.7,331.9,1083.7;60,120,180' --magnitude-ranges '0.0,0.1;0.0,1.0' --phase-ranges '-180.0,180.0;-180.0,180.0' --plot-titles '$(IFO)1 Calibration Line Subtraction;$(IFO)1 Power Mains Line Subtraction'
