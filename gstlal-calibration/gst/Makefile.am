@@ -1,1 +1,1 @@
-SUBDIRS = lal cmath
+SUBDIRS = lal cmath splitcounter
