@@ -222,11 +222,6 @@ def pcal2darm(pipeline, name):
 			# Interleave
 			magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
 			# Write to file
-			print 'IFO = %s' % ifo
-			print 'channel = %s' % channel
-			print 'options.pcal_channel_name = %s' % options.pcal_channel_name
-			print 'frequencies[i] = %0.1f' % frequencies[i]
-			print "%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channel, options.pcal_channel_name, frequencies[i])
 			pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channel, options.pcal_channel_name, frequencies[i]))
 
 	#
