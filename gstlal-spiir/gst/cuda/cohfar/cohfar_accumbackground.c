@@ -216,14 +216,14 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		if (icombo < 0) {
 			LIGOTimeGPS ligo_time;
 			XLALINT8NSToGPS(&ligo_time, GST_BUFFER_TIMESTAMP(inbuf));
-			fprintf(stderr, "invalid ifo combo in cohfar_accumbackground at GPS %d, outentries %d, cohsnr %f\n", ligo_time.gpsSeconds, outentries, intable->cohsnr);
+			fprintf(stderr, "invalid ifo combo in cohfar_accumbackground at GPS %d, outentries %d, table flag %d, cohsnr %f\n", ligo_time.gpsSeconds, outentries, intable->is_background, intable->cohsnr);
 		}
 		if (intable->is_background == FLAG_BACKGROUND) {
 			// update the icombo stats, update_stats_icombo(intable, icombo, bgstats);
-			update_stats_icombo(intable, element->ncombo-1, bgstats); //update the last icmobo
+			update_stats_icombo(intable, element->ncombo-1, bgstats); //update the last icombo and single IFO stats
 		} else if (intable->is_background == FLAG_FOREGROUND){ /* coherent trigger entry */
 			// update the icombo stats, update_stats_icombo(intable, icombo, bgstats);
-			update_stats_icombo(intable, element->ncombo-1, zlstats); //update the last icmobo
+			update_stats_icombo(intable, element->ncombo-1, zlstats); //update the last icombo and single IFO stats
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 		} else {

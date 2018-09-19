@@ -57,7 +57,7 @@ int get_icombo(char *ifos) {
 		if (nifo_in == nifo_map)
 			return IFOComboMap[icombo].index;
 	}
-	fprintf(stderr,"get_icombo: failed to get index for %s, ifos need to end with null terminator\n",ifos);
+	fprintf(stderr,"get_icombo: failed to get index for %s, strlen %u, ifos need to end with null terminator\n",ifos, len_in);
 	return -1;
 }
 
