@@ -137,9 +137,12 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		self.zerolag = inspiral_lr.LnLRDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 
 	def __call__(self, **kwargs):
+		# FIXME FIXME FIXME This fast path should be reenabled when we
+		# know it scales well.  It is currently implemented in the
+		# streamthinca ntuple compare func
 		# fast-path:  network SNR cut
-		if sum(snr**2. for snr in kwargs["snrs"].values()) < self.network_snrsq_threshold:
-			return NegInf
+		#if sum(snr**2. for snr in kwargs["snrs"].values()) < self.network_snrsq_threshold:
+		#	return NegInf
 		# full ln L ranking stat.  we define the ranking statistic
 		# to be the largest ln L from all allowed subsets of
 		# triggers
