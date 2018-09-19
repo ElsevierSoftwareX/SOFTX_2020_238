@@ -1208,6 +1208,7 @@ static int cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outb
 
 	SnglInspiralTable *sngl_table = postcoh->sngl_table;
 	/* the first entry is reserved to be used to indicate participating IFOs */
+	g_assert(state->cur_nifo >= 1);
 	XLALINT8NSToGPS(&end_time, ts);
 	output->end_time = end_time;
 	output->is_background = FLAG_EMPTY;
@@ -1669,16 +1670,18 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPos
 		}
 		cur_ifo = 0;
 		for (int iifo = 0; iifo < state->nifo; ++iifo)
-			if (!state->cur_ifo_is_gap[cur_ifo]) {
+			if (!state->cur_ifo_is_gap[iifo]) {
 				strncpy(state->cur_ifos + IFO_LEN* cur_ifo, IFOMap[iifo].name, sizeof(char) *IFO_LEN);
 				cur_ifo ++;
 			}
+
+		g_assert(cur_ifo == state->cur_nifo);
 
 		for (i=0, collectlist = pads->data; collectlist; collectlist = g_slist_next(collectlist), i++) {
 			data = collectlist->data;
 			cur_ifo = state->input_ifo_mapping[i];
 
-			if ( state->cur_nifo >= 2 && !state->cur_ifo_is_gap[cur_ifo]) {
+			if ( state->cur_nifo >= 2 && (!state->cur_ifo_is_gap[cur_ifo])) {
 				if (state->peak_list[cur_ifo]->npeak[0] > 0) {
 					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR, postcoh->stream);
 					GST_LOG("after coherent analysis for ifo %d, npeak %d", cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
@@ -1774,15 +1777,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	} else {
 		postcoh->is_all_aligned = cuda_postcoh_align_collected(pads, postcoh);
 	}
-#if 0
-	if (!GST_CLOCK_TIME_IS_VALID(t_start)) {
-		/* eos */
-		GST_DEBUG_OBJECT(postcoh, "no data available, must be EOS");
-		res = gst_pad_push_event(postcoh->srcpad, gst_event_new_eos());
-		return res;
-	}
-	GST_LOG_OBJECT(postcoh, "t end %", GST_TIME_FORMAT, t_end);
-#endif
 	return GST_FLOW_OK;
 }
 
