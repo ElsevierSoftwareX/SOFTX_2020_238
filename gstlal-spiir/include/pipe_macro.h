@@ -1,7 +1,11 @@
 #ifndef __PIPE_MACRO_H__
 #define __PIPE_MACRO_H__
 /* FIXME: upgrade to include more detectors like KAGRA */
+#ifndef IFO_LEN
 #define IFO_LEN 2
+#define MAX_IFO_LEN 4 
+#endif
+
 #define MAX_NIFO 3
 typedef struct _IFOType {
 	const char* name;
@@ -30,6 +34,7 @@ int get_icombo(char *ifos);
 #define MAX_ALLIFO_LEN 14
 #endif
 
+#define MAX_SKYMAP_FNAME_LEN 50
 #define FLAG_FOREGROUND 0
 #define FLAG_BACKGROUND 1
 #define FLAG_EMPTY 2

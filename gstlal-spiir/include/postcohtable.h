@@ -27,15 +27,7 @@
 
 #include <lal/LALStdlib.h> // for the datatypes
 #include <lal/Date.h> // for the LIGOTimeGPS
-
-#define MAX_IFO_LEN 4 
-#define MAX_ALLIFO_LEN 14 
-#define MAX_SKYMAP_FNAME_LEN 50
-#define MAX_NIFO 3
-#ifndef IFO_LEN
-#define IFO_LEN 2
-#endif
-
+#include <pipe_macro.h> // for MAX_IFO_LEN and macros
 
 typedef struct
 tagPostcohInspiralTable
