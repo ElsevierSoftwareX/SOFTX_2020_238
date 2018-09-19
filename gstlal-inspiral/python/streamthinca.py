@@ -252,6 +252,11 @@ class StreamThinca(object):
 		# safely discard them.
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary - self.coincidence_back_off, boundary - self.coincidence_back_off)):
 			# False/0 = keep, True/non-0 = discard
+			# FIXME FIXME FIXME. Hardcodes a network SNR threshold
+			# of 7.  This will be removed and a more permanent
+			# solution will be sought in the likelihood code
+			if sum(e.snr**2 for e in events) < 49.:
+				return True
 			return min(event.end for event in events) not in seg
 
 		# find coincs.
