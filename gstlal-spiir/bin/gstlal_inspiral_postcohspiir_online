@@ -208,7 +208,8 @@ def parse_command_line():
 
     #FIXME: do not consider online paramters yet
     parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should be 4 digits of the form 0001, 0002, etc.    required")
-    parser.add_option("--finalsink-far-factor", type = "float", default = 1.0, help = "normalization factor for false alarm rate threshold. = number of detectors * number of nodes. ")
+    parser.add_option("--finalsink-far-factor", type = "float", default = 1.0, help = "normalization factor for false alarm rate threshold. = number of nodes. ")
+    parser.add_option("--finalsink-singlefar-veto-thresh", type = "float", default = 0.01, help = "the single far veto threshold applied on superevent candidates. ")
     parser.add_option("--finalsink-gracedb-far-threshold", type = "float", default = None, help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
     parser.add_option("--finalsink-gracedb-group", default = "Test", help = "gracedb group, default is Test")
     parser.add_option("--finalsink-gracedb-search", default = "LowMass", help = "gracedb type, default is LowMass")
@@ -480,6 +481,7 @@ finalsink = postcoh_finalsink.FinalSink(
             fapupdater_interval = options.finalsink_fapupdater_interval,
             fapupdater_output_fname = options.finalsink_fapupdater_output_fname,
             fapupdater_collect_walltime_string = options.finalsink_fapupdater_collect_walltime,
+			singlefar_veto_thresh = options.finalsink_singlefar_veto_thresh,
             gracedb_far_threshold = options.finalsink_gracedb_far_threshold,
             gracedb_group = options.finalsink_gracedb_group,
             gracedb_search = options.finalsink_gracedb_search,
