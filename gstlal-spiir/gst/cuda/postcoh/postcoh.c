@@ -1428,6 +1428,7 @@ static GstFlowReturn cuda_postcoh_new_buffer_and_push(CudaPostcoh *postcoh, gint
     GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + out_len;
 	
 	GST_BUFFER_SIZE(outbuf) = out_size;
+	memset(GST_BUFFER_DATA(outbuf), 0, out_size);
 
 	int write_entries = 0;
 	if (left_entries >= 1)
