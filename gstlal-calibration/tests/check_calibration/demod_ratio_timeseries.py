@@ -84,7 +84,7 @@ options, filenames = parser.parse_args()
 ifo = options.ifo
 
 # Set up channel list
-channel_list = [(options.ifo, options.denominator_channel_name), (options.ifo, options.numerator_channel_name)]
+channel_list = [(ifo, options.denominator_channel_name), (ifo, options.numerator_channel_name)]
 
 # Convert the list of frequencies to a list of floats
 freq_list = options.frequencies.split(';')
@@ -168,6 +168,7 @@ def demod_ratio(pipeline, name):
 test_common.build_and_run(demod_ratio, "demod_ratio", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
 # Read data from files and plot it
+colors = ['b.', 'y.', 'r.', 'c.', 'm.', 'g.'] # Hopefully the user will not want to plot more than six datasets on one plot.
 for i in range(0, len(freq_list)):
 	data = numpy.loadtxt("%s_%s_over_%s_%0.1fHz.txt" % (ifo, options.numerator_channel_name, options.denominator_channel_name, freq_list[i][0]))
 	t_start = data[0][0]
@@ -196,20 +197,23 @@ for i in range(0, len(freq_list)):
 	# Make plots
 	plt.figure(figsize = (10, 10))
 	plt.subplot(211)
-	plt.plot(times, magnitudes[0], '.', markersize = markersize, label = '%0.1f Hz' % freq_list[i][0])
+	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = '%0.1f Hz [avg = %0.5f, std = %0.5f]' % (freq_list[i][0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
 	plt.title(options.plot_titles.split(';')[i])
 	plt.ylabel('Magnitude')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
 	plt.ylim(float(magnitude_range.split(',')[0]), float(magnitude_range.split(',')[1]))
 	plt.grid(True)
-	plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+	leg.get_frame().set_alpha(0.5)
 	plt.subplot(212)
-	plt.plot(times, phases[0], '.', markersize = markersize)
+	plt.plot(times, phases[0], colors[0], markersize = markersize, label = '%0.1f Hz [avg = %0.5f, std = %0.5f]' % (freq_list[i][0], numpy.mean(phases[0]), numpy.std(phases[0])))
 	plt.ylabel('Phase [deg]')
 	plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
 	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
 	plt.grid(True)
+	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+	leg.get_frame().set_alpha(0.5)
 	for j in range(1, len(freq_list[i])):
 		data = numpy.loadtxt("%s_%s_over_%s_%0.1fHz.txt" % (ifo, options.numerator_channel_name, options.denominator_channel_name, freq_list[i][j]))
 		magnitudes.append([])
@@ -218,9 +222,12 @@ for i in range(0, len(freq_list)):
 			magnitudes[j].append(data[k][1])
 			phases[j].append(data[k][2])
 		plt.subplot(211)
-		plt.plot(times, magnitudes[j], '.', markersize = markersize, label = '%0.1f Hz' % freq_list[i][j])
-		plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+		plt.plot(times, magnitudes[j], colors[j], markersize = markersize, label = '%0.1f Hz [avg = %0.5f, std = %0.5f]' % (freq_list[i][j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+		leg.get_frame().set_alpha(0.5)
 		plt.subplot(212)
-		plt.plot(times, phases[j], '.', markersize = markersize)
+		plt.plot(times, phases[j], colors[j], markersize = markersize, label = '%0.1f Hz [avg = %0.5f, std = %0.5f]' % (freq_list[i][j], numpy.mean(phases[j]), numpy.std(phases[j])))
+		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+		leg.get_frame().set_alpha(0.5)
 	plt.savefig('%s_%d-%d.png' % (options.plot_titles.split(';')[i].replace(' ', '_'), int(t_start), int(dur)))
 

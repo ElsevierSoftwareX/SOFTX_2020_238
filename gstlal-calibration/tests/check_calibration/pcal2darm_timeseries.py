@@ -238,10 +238,10 @@ def pcal2darm(pipeline, name):
 # =============================================================================
 #
 
-
 test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
 # Read data from files and plot it
+colors = ['r.', 'g.', 'y.', 'c.', 'm.', 'b.'] # Hopefully the user will not want to plot more than six datasets on one plot.
 channels = calcs_channels
 channels.extend(calibrated_channels)
 for i in range(0, len(frequencies)):
@@ -272,16 +272,18 @@ for i in range(0, len(frequencies)):
 	# Make plots
 	plt.figure(figsize = (10, 10))
 	plt.subplot(211)
-	plt.plot(times, magnitudes[0], '.', markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
 	plt.title(r'%s Delta $L_{\rm free}$ / Pcal at %0.1f Hz' % ( ifo, frequencies[i]))
 	plt.ylabel('Magnitude')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
 	plt.ylim(float(magnitude_range.split(',')[0]), float(magnitude_range.split(',')[1]))
 	plt.grid(True)
-	plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+	leg.get_frame().set_alpha(0.5)
 	plt.subplot(212)
-	plt.plot(times, phases[0], '.', markersize = markersize, label = 'avg = %0.5f, std = %0.5f' % (numpy.mean(phases[0]), numpy.std(phases[0],)))
-	plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+	plt.plot(times, phases[0], colors[0], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
+	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+	leg.get_frame().set_alpha(0.5)
 	plt.ylabel('Phase [deg]')
 	plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
@@ -295,11 +297,13 @@ for i in range(0, len(frequencies)):
 			magnitudes[j].append(data[k][1])
 			phases[j].append(data[k][2])
 		plt.subplot(211)
-		plt.plot(times, magnitudes[j], '.', markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
-		plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+		plt.plot(times, magnitudes[j], colors[j], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+		leg.get_frame().set_alpha(0.5)
 		plt.subplot(212)
-		plt.plot(times, phases[j], '.', markersize = markersize, label = 'avg = %0.5f, std = %0.5f' % (numpy.mean(phases[j]), numpy.std(phases[j],)))
-		plt.legend(markerscale = 4.0 / markersize, numpoints = 3)
+		plt.plot(times, phases[j], colors[j], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
+		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+		leg.get_frame().set_alpha(0.5)
 	plt.savefig("deltal_over_pcal_at_%0.1fHz.png" % frequencies[i])
 
 
