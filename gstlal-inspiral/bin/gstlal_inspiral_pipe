@@ -593,7 +593,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				db = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite') 
 				db = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(db).description[:4]]), db)
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
-					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 					input_cache_files = {"input-cache":inputs},
 					output_files = {"database":db},
 					input_cache_file_name = os.path.basename(db).replace('.sqlite','.cache')
@@ -620,7 +620,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
 				injdb = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(injdb).description[:4]]), injdb)
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
-					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 					input_cache_files = {"input-cache":inputs},
 					output_files = {"database":injdb},
 					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
@@ -868,7 +868,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 		# merge
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes + ligolw_add_nodes,
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 			input_files = {"": (vetoes + [options.frame_segments_file, injections])},
 			input_cache_files = {"input-cache": [node.input_files[""] for node in chunk_nodes]},
 			output_files = {"database":injdb},
@@ -883,7 +883,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 
 		clusternode = inspiral_pipe.generic_node(toXMLJob, dag, parent_nodes = [clusternode],
-			opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+			opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 			output_files = {"extract":injxml},
 			input_files = {"database":injdb}
 		)
@@ -894,7 +894,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		)
 
 		sqlitenode = inspiral_pipe.generic_node(toSqliteNoCacheJob, dag, parent_nodes = [inspinjnode],
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 			output_files = {"database":injdb},
 			input_files = {"":xml_input}
 		)

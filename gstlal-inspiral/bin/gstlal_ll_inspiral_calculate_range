@@ -257,7 +257,7 @@ while true; do
 		# Try to generate the sqlite database, but if something goes
 		# wrong then delete the database and try again. This should fix
 		# issues with the database locking
-		ligolw_sqlite --verbose --database ${LIGOLW_SQLITE} --replace ${TMP_LIGOLW_XML_GZ} || { rm ${LIGOLW_SQLITE} && ligolw_sqlite --verbose --database ${LIGOLW_SQLITE} ${TMP_LIGOLW_XML_GZ}; }
+		ligolw_sqlite --ilwdchar-compat --verbose --database ${LIGOLW_SQLITE} --replace ${TMP_LIGOLW_XML_GZ} || { rm ${LIGOLW_SQLITE} && ligolw_sqlite --ilwdchar-compat --verbose --database ${LIGOLW_SQLITE} ${TMP_LIGOLW_XML_GZ}; }
 
 		gstlal_inspiral_plot_sensitivity --data-segments-name=statevectorsegments --bin-by-chirp-mass --verbose ${LIGOLW_SQLITE}
 		echo plotting...
