@@ -117,7 +117,7 @@ frame.cache: $(FRAME_CACHE_FILES)
 
 segments.xml: $(SEGMENTS_FILES)
 	ligolw_add --ilwdchar-compat --output segments.xml $(SEGMENTS_FILES)
-	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
+	ligolw_cut --ilwdchar-compat --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 sql :
 	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql

@@ -228,7 +228,7 @@ $(CHANNEL_LIST) : frame.cache
 # Produce segments file
 segments.xml.gz : frame.cache
 	ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${FSTART} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
-	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
+	ligolw_cut --ilwdchar-compat --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
 	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(FSTART) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
 
 frame.cache :

@@ -252,7 +252,7 @@ inj_tisi.xml :
 # Produce veto file
 vetoes.xml.gz : $(VETOES_FILES)
 	ligolw_add --ilwdchar-compat --output $@ $(VETOES_FILES)
-	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
+	ligolw_cut --ilwdchar-compat --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
 
 %_vetoes.xml : $(VETODEF)
 	gstlal_segments_operations --union --segment-name VETO_CAT3_CUMULATIVE --output-file $@ --output-segment-name vetoes $*-VETOTIME_CAT3-*.xml $*-VETOTIME_CAT3-*.xml
@@ -260,14 +260,14 @@ vetoes.xml.gz : $(VETOES_FILES)
 # Produce segments file
 segments.xml.gz : $(SEGMENTS_FILES) frame.cache CAT1_vetoes.xml.gz
 	ligolw_add --ilwdchar-compat --output segdb.xml $(SEGMENTS_FILES)
-	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
+	ligolw_cut --ilwdchar-compat --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
 	gstlal_segments_operations --diff --output-file $@ segdb.xml CAT1_vetoes.xml.gz
 	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
 
 # Produce CAT1 veto file
 CAT1_vetoes.xml.gz : $(CAT1_VETOES_FILES)
 	ligolw_add --ilwdchar-compat --output $@ $(CAT1_VETOES_FILES)
-	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
+	ligolw_cut --ilwdchar-compat --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
 
 %_CAT1_vetoes.xml : $(VETODEF)
 	ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
