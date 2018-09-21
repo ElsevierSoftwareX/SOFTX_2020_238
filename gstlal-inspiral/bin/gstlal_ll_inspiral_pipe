@@ -205,6 +205,9 @@ def parse_command_line():
 	parser.add_option("--inj-dq-channel-name", metavar = "name", default=[], action = "append", help = "Set the name of the injection DQ channel to process (required if --inj-channel-name set).")
 	parser.add_option("--inj-framexmit-addr", metavar = "name", default=[], action = "append", help = "Set the framexmit address to process for the injection stream (required if --inj-channel-name set). IFO=ADDR:port can be given multiple times.")
 	parser.add_option("--inj-framexmit-iface", metavar = "name", action = "append", help = "Set the interface address to process for injections (required if --inj-channel-name set).")
+	parser.add_option("--inj-shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --inj-shared-memory-partition=IFO=PARTITION-NAME")
+	parser.add_option("--inj-shared-memory-assumed-duration", type = "int", default = 4, help = "Set the assumed span of files in seconds. Default = 4.")
+	parser.add_option("--inj-shared-memory-block-size", type = "int", default = 4096, help = "Set the byte size to read per buffer. Default = 4096.")
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
 	parser.add_option("--ht-gate-threshold-linear", metavar = "mchirp_min:ht_gate_threshold_min-mchirp_max:ht_gate_threshold_max", type="string", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal) with a linear scale of mchirp")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs to limit what is submitted to the HTCondor pool")
@@ -271,11 +274,15 @@ def parse_command_line():
 	state_channel_dict = datasourceinfo.state_channel_dict
 	dq_channel_dict = datasourceinfo.dq_channel_dict
 	framexmit_dict = datasourceinfo.framexmit_addr
-	shared_memory_partition_dict = datasourceinfo.shm_part_dict
+	shm_part_dict = datasourceinfo.shm_part_dict
 	inj_channel_dict = datasource.channel_dict_from_channel_list_with_node_range(options.inj_channel_name)
 	inj_state_channel_dict = datasource.channel_dict_from_channel_list(options.inj_state_channel_name)
 	inj_dq_channel_dict = datasource.channel_dict_from_channel_list(options.inj_dq_channel_name)
 	inj_framexmit_dict = datasource.framexmit_dict_from_framexmit_list(options.inj_framexmit_addr)
+	## A dictionary for injection shared memory partition
+	inj_shm_part_dict = {"H1": "LHO_InjData", "L1": "LLO_InjData", "V1": "VIRGO_InjData"}
+	if options.inj_shared_memory_partition is not None:
+		inj_shm_part_dict.update( datasource.channel_dict_from_channel_list(options.inj_shared_memory_partition) )
 
 	inj_range_dict = {}
 	for tag, channel in inj_name_dict.items():
@@ -294,7 +301,7 @@ def parse_command_line():
 	options.likelihood_files = [CacheEntry(line).url for line in open(options.likelihood_cache)]
 	options.zerolag_likelihood_files = [CacheEntry(line).url for line in open(options.zerolag_likelihood_cache)]
 
-	return options, filenames, bankcache, channel_dict, dq_channel_dict, state_channel_dict, framexmit_dict, shared_memory_partition_dict, inj_channel_dict, inj_dq_channel_dict, inj_state_channel_dict, inj_framexmit_dict, inj_name_dict, inj_range_dict
+	return options, filenames, bankcache, channel_dict, dq_channel_dict, state_channel_dict, framexmit_dict, shm_part_dict, inj_channel_dict, inj_dq_channel_dict, inj_state_channel_dict, inj_framexmit_dict, inj_name_dict, inj_range_dict, inj_shm_part_dict
 
 
 #
@@ -302,7 +309,7 @@ def parse_command_line():
 #
 
 
-options, filenames, bank_cache, channel_dict, dq_channel_dict, state_channel_dict, framexmit_dict, shared_memory_partition_dict, inj_channel_dict, inj_dq_channel_dict, inj_state_channel_dict, inj_framexmit_dict, inj_name_dict, inj_range_dict = parse_command_line()
+options, filenames, bank_cache, channel_dict, dq_channel_dict, state_channel_dict, framexmit_dict, shm_part_dict, inj_channel_dict, inj_dq_channel_dict, inj_state_channel_dict, inj_framexmit_dict, inj_name_dict, inj_range_dict, inj_shm_part_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -367,7 +374,7 @@ for ifo in channel_dict:
 			"framexmit-iface":options.framexmit_iface
 			}
 	else :
-		datasource_opts = {"shared-memory-partition":datasource.pipeline_channel_list_from_channel_dict({ifo: shared_memory_partition_dict[ifo]}),
+		datasource_opts = {"shared-memory-partition":datasource.pipeline_channel_list_from_channel_dict({ifo: shm_part_dict[ifo]}),
 			"shared-memory-block-size":options.shared_memory_block_size,
 			"shared-memory-assumed-duration":options.shared_memory_assumed_duration
 			}
@@ -423,7 +430,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"framexmit-iface":options.framexmit_iface
 			}
 	else :
-		datasource_opts = {"shared-memory-partition":datasource.pipeline_channel_list_from_channel_dict(shared_memory_partition_dict, opt = "shared-memory-partition"),
+		datasource_opts = {"shared-memory-partition":datasource.pipeline_channel_list_from_channel_dict(shm_part_dict, opt = "shared-memory-partition"),
 			"shared-memory-block-size":options.shared_memory_block_size,
 			"shared-memory-assumed-duration":options.shared_memory_assumed_duration
 			}
@@ -483,13 +490,13 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 
 		# Data source dag options
 		if (options.data_source == "framexmit"):
-			datasource_opts = {"framexmit-addr":datasource.framexmit_list_from_framexmit_dict({ifo: framexmit_dict[ifo]}),
+			datasource_opts = {"framexmit-addr":datasource.framexmit_list_from_framexmit_dict(framexmit_dict),
 				"framexmit-iface":options.framexmit_iface
 				}
 		else :
-			datasource_opts = {"shared-memory-partition":datasource.pipeline_channel_list_from_channel_dict({ifo: shared_memory_partition_dict[ifo]}),
-				"shared-memory-block-size":options.shared_memory_block_size,
-				"shared-memory-assumed-duration":options.shared_memory_assumed_duration
+			datasource_opts = {"shared-memory-partition":datasource.pipeline_channel_list_from_channel_dict(inj_shm_part_dict, opt = "shared-memory-partition"),
+				"shared-memory-block-size":options.inj_shared_memory_block_size,
+				"shared-memory-assumed-duration":options.inj_shared_memory_assumed_duration
 				}
 
 		common_opts = {"psd-fft-length":options.psd_fft_length,
