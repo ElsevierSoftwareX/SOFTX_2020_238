@@ -64,7 +64,7 @@ dag : vetoes.xml tisi.xml plots $(INJECTIONS)
 	ligolw_segments_compat $@
 
 vetoes.xml: $(VETOES_FILES)
-	ligolw_add $(VETOES_FILES) > vetoes.xml
+	ligolw_add --ilwdchar-compat $(VETOES_FILES) > vetoes.xml
 
 %_injections.xml: 
 	lalapps_inspinj \

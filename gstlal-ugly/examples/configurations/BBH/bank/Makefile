@@ -36,7 +36,7 @@ mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz :
 	gstlal_psd_xml_from_asd_txt --instrument L1 --output mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.txt
 
 reference_psd.xml.gz: mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz
-	ligolw_add mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz | gzip > reference_psd.xml.gz
+	ligolw_add --ilwdchar-compat mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz | gzip > reference_psd.xml.gz
 
 sql :
 	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql

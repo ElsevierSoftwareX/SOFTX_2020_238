@@ -74,7 +74,7 @@ dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
 	gstlal_segments_trim $*segments.xml --trim $(TRIM) --output $@
 
 vetoes.xml: $(VETOES_FILES)
-	ligolw_add $(VETOES_FILES) > vetoes.xml
+	ligolw_add --ilwdchar-compat $(VETOES_FILES) > vetoes.xml
 
 %_frame.cache:
 	#FIXME horrible hack to get the observatory, not guaranteed to work
@@ -87,7 +87,7 @@ frame.cache: $(FRAME_CACHE_FILES)
 	cat $(FRAME_CACHE_FILES) > frame.cache
 
 segments.xml: $(SEGMENTS_FILES)
-	ligolw_add --output segments.xml $(SEGMENTS_FILES)
+	ligolw_add --ilwdchar-compat --output segments.xml $(SEGMENTS_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 %_injections.xml: 

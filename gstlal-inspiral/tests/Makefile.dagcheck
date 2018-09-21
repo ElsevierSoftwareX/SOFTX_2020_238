@@ -177,7 +177,7 @@ $(WEBDIR) :
 tisi.xml :
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
-	ligolw_add --output $@ tisi0.xml tisi1.xml
+	ligolw_add --ilwdchar-compat --output $@ tisi0.xml tisi1.xml
 
 ## The dag generator and the whole point of this makefile. The result is a file: trigger_pipe.dag that can be submitted to HTCondor
 trigger_pipe.sh : segments.xml frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)

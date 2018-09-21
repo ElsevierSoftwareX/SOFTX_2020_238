@@ -38,7 +38,7 @@ frame.L1.cache:
 	./cache_to_segments frame.L1.cache segments.L1.xml
 
 segments.xml: frame.H1.cache frame.H2.cache frame.L1.cache
-	ligolw_add --output segments.xml segments.H1.xml segments.H2.xml segments.L1.xml
+	ligolw_add --ilwdchar-compat --output segments.xml segments.H1.xml segments.H2.xml segments.L1.xml
 
 injections.xml:
 	lalapps_inspinj \

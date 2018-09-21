@@ -4,12 +4,12 @@ end=$(shell python -c "print ${etime} + 50")
 output=$(shell pwd)/triggers/
 
 triggers: v1_ep h1_ep l1_ep
-	ligolw_add H1-*.xml L1-*.xml V1-*.xml -o HLV_triggers_all.xml.gz
+	ligolw_add --ilwdchar-compat H1-*.xml L1-*.xml V1-*.xml -o HLV_triggers_all.xml.gz
 	rm *.xml
 
 package: ${output}
 	find ${output} -name "*.xml" | lalapps_path2cache -a > triggers.cache
-	ligolw_add --input-cache triggers.cache --output HLV_triggers_${start}_$(( ${end} - ${start} )).xml.gz --verbose --remove-input
+	ligolw_add --ilwdchar-compat --input-cache triggers.cache --output HLV_triggers_${start}_$(( ${end} - ${start} )).xml.gz --verbose --remove-input
 	rm -rf ${output}
 
 caches: l1.cache h1.cache v1.cache

@@ -191,5 +191,5 @@ lalapps_binj  \
 
 #outf=$er1_start-`echo $er1_end - $er1_start | bc`-all-burstinj.xml
 outf=burst_injections.xml
-ligolw_add *-burstinj.xml -o $outf
+ligolw_add --ilwdchar-compat -o $outf *-burstinj.xml
 rm *-burstinj.xml

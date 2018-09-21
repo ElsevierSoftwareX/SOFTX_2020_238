@@ -45,7 +45,7 @@ frames.cache : H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN V1-FAKE-STRAIN
 	cat frame.H1.cache frame.H2.cache frame.L1.cache frame.V1.cache > frames.cache
 
 injections.xml: cbc_injections.xml burst_injections.xml
-	ligolw_add cbc_injections.xml burst_injections.xml -o injections.xml
+	ligolw_add --ilwdchar-compat cbc_injections.xml burst_injections.xml -o injections.xml
 
 burst_injections.xml:
 	gstlal_burst_injections_by_rate $(START) $(STOP) $(SG_RATE) $(WNB_RATE) $(SC_RATE)

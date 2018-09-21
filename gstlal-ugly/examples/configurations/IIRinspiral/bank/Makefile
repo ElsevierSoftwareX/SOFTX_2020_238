@@ -116,7 +116,7 @@ frame.cache: $(FRAME_CACHE_FILES)
 	cat $(FRAME_CACHE_FILES) > frame.cache
 
 segments.xml: $(SEGMENTS_FILES)
-	ligolw_add --output segments.xml $(SEGMENTS_FILES)
+	ligolw_add --ilwdchar-compat --output segments.xml $(SEGMENTS_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 sql :

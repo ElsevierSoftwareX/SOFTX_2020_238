@@ -40,7 +40,7 @@ L1segmentspadded.xml:
 	gstlal_segments_trim --trim $(TRIM) --output L1segmentspadded.xml L1segments.xml
 
 vetoes.xml: H1vetoes.xml L1vetoes.xml
-	ligolw_add H1vetoes.xml L1vetoes.xml > vetoes.xml
+	ligolw_add --ilwdchar-compat H1vetoes.xml L1vetoes.xml > vetoes.xml
 
 frame.H1.cache:
 	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H1.cache
@@ -53,7 +53,7 @@ frame.cache: frame.H1.cache frame.L1.cache
 	./cache_to_segments frame.cache recolored_segments.xml.gz
 
 segments.xml: H1segmentspadded.xml  L1segmentspadded.xml
-	ligolw_add --output segments.xml H1segmentspadded.xml L1segmentspadded.xml
+	ligolw_add --ilwdchar-compat --output segments.xml H1segmentspadded.xml L1segmentspadded.xml
 
 injections.xml:
 	gstlal_injections_by_local_rate \
@@ -82,7 +82,7 @@ L1psd.xml.gz :
 	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ZERO_DET_high_P.txt
 
 psd.xml.gz: H1psd.xml.gz L1psd.xml.gz
-	ligolw_add H1psd.xml.gz L1psd.xml.gz | gzip > recolor_psd.xml.gz
+	ligolw_add --ilwdchar-compat H1psd.xml.gz L1psd.xml.gz | gzip > recolor_psd.xml.gz
 
 H1recolorpsd.xml.gz : 
 	gstlal_psd_xml_from_asd_txt --instrument H1 --output H1recolorpsd.xml.gz --invert ZERO_DET_high_P.txt
@@ -91,7 +91,7 @@ L1recolorpsd.xml.gz :
 	gstlal_psd_xml_from_asd_txt --instrument L1 --output L1recolorpsd.xml.gz --invert ZERO_DET_high_P.txt
 
 recolor_psd.xml.gz: H1recolorpsd.xml.gz L1recolorpsd.xml.gz
-	ligolw_add H1recolorpsd.xml.gz L1recolorpsd.xml.gz | gzip > recolor_psd.xml.gz
+	ligolw_add --ilwdchar-compat H1recolorpsd.xml.gz L1recolorpsd.xml.gz | gzip > recolor_psd.xml.gz
 
 dag : vetoes.xml segments.xml frame.cache injections.xml recolor_psd.xml.gz
 	./recolor_pipe --recolor-psd recolor_psd.xml.gz --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache H1=frame.H1.cache,L1=frame.L1.cache --injections injections.xml

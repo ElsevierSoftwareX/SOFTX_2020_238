@@ -5,7 +5,7 @@ ep_start=$(shell python -c "print ${trigtime} - 100")
 ep_end=$(shell python -c "print ${trigtime} + 10")
 
 triggers: l1_darm_ep l1_omc_ep l1_omc2_ep
-	ligolw_add *triggers* -o L_triggers_all.xml.gz
+	ligolw_add --ilwdchar-compat *triggers* -o L_triggers_all.xml.gz
 	rm *.xml
 
 L1_flip.cache:

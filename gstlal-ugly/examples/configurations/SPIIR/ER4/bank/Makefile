@@ -63,14 +63,14 @@ H1-TMPLTBANK-871147516-2048.xml: frame.cache
 		--spectrum-type median \
 		--verbose \
 		&& gstlal_bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
-		&& gstlal_bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ 
+		&& gstlal_bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@
 
 
-H1psd.xml.gz : 
+H1psd.xml.gz :
 	gstlal_psd_xml_from_asd_txt --instrument H1 --output H1psd.xml.gz ZERO_DET_high_P.txt
 
-reference_psd.xml: H1psd.xml.gz 
-	ligolw_add --output reference_psd.xml H1psd.xml.gz 
+reference_psd.xml: H1psd.xml.gz
+	ligolw_add --ilwdchar-compat --output reference_psd.xml H1psd.xml.gz
 
 dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml
 	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H1_split_bank.cache

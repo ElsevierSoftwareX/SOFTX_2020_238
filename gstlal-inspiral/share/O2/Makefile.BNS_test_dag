@@ -312,13 +312,13 @@ plots :
 
 tisi.xml : inj_tisi.xml
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 bg_tisi.xml
-	ligolw_add --output $@ bg_tisi.xml $<
+	ligolw_add --ilwdchar-compat --output $@ bg_tisi.xml $<
 
 inj_tisi.xml :
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
 
 vetoes.xml.gz: $(VETOES_FILES)
-	ligolw_add --output $@ $(VETOES_FILES)
+	ligolw_add --ilwdchar-compat --output $@ $(VETOES_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
 
 %_vetoes.xml: $(VETODEF)
@@ -326,13 +326,13 @@ vetoes.xml.gz: $(VETOES_FILES)
 	gstlal_segments_operations --union --segment-name VETO_CAT3_CUMULATIVE --output-file $@ --output-segment-name vetoes $*-VETOTIME_CAT3-*.xml $*-VETOTIME_CAT3-*.xml
 
 segments.xml.gz: $(SEGMENTS_FILES) frame.cache CAT1_vetoes.xml.gz
-	ligolw_add --output segdb.xml $(SEGMENTS_FILES)
+	ligolw_add --ilwdchar-compat --output segdb.xml $(SEGMENTS_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
 	gstlal_segments_operations --diff --output-file $@ segdb.xml CAT1_vetoes.xml.gz
 	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
 
 CAT1_vetoes.xml.gz: $(CAT1_VETOES_FILES)
-	ligolw_add --output $@ $(CAT1_VETOES_FILES)
+	ligolw_add --ilwdchar-compat --output $@ $(CAT1_VETOES_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
 
 %_CAT1_vetoes.xml : $(VETODEF)

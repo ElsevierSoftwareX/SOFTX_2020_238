@@ -5,7 +5,7 @@ ep_start=$(shell python -c "print ${trigtime} - 200")
 ep_end=$(shell python -c "print ${trigtime} + 200")
 
 triggers: h1_darm_ep h1_accel_ep h1_seis_lvea_ep h1_seis_ey_ep
-	ligolw_add *triggers* -o H_triggers_all.xml.gz
+	ligolw_add --ilwdchar-compat *triggers* -o H_triggers_all.xml.gz
 	rm *.xml
 
 H1_seismic.cache:

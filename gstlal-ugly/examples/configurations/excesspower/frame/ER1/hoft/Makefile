@@ -7,7 +7,7 @@ blocksize=$(shell echo "512*8*16384" | bc)
 
 coincidence: cluster
 	lalapps_gen_timeslides -i H1=0:0:1 -i L1=0:0:1 -i V1=0:0:1 >| HLV_ZERO_LAG_SLIDES.xml.gz
-	ligolw_add HLV_ZERO_LAG_SLIDES.xml.gz ${outfile} -o ${outfile}
+	ligolw_add --ilwdchar-compat HLV_ZERO_LAG_SLIDES.xml.gz ${outfile} -o ${outfile}
 	ligolw_burca --coincidence-algorithm excesspower -t H1,L1=0 -t H1,V1=0 -t V1,L1=0 --verbose ${outfile}
 
 cluster: ${outfile}
@@ -17,7 +17,7 @@ ${outfile}: v1_ep h1_ep l1_ep
 	find H1_FAKE_STRAIN -name "*.xml" | lalapps_path2cache -a > triggers.cache
 	find L1_FAKE_STRAIN -name "*.xml" | lalapps_path2cache -a >> triggers.cache
 	find V1_FAKE_STRAIN -name "*.xml" | lalapps_path2cache -a >> triggers.cache
-	ligolw_add --input-cache triggers.cache --output ${outfile} --verbose 
+	ligolw_add --ilwdchar-compat --input-cache triggers.cache --output ${outfile} --verbose
 	rm -rf triggers.cache
 
 caches: l1.cache h2.cache v1.cache
@@ -45,7 +45,7 @@ v1_ep: v1.cache
 		--gps-start-time 1012071068 \
 		--gps-end-time 1012071268 \
 		--block-size ${blocksize} \
-		--sample-rate 2048  
+		--sample-rate 2048
 	mv V1-*xml  V1_FAKE_STRAIN/
 
 h1_ep: h1.cache
@@ -59,7 +59,7 @@ h1_ep: h1.cache
 		--gps-start-time ${start} \
 		--gps-end-time ${end} \
 		--block-size ${blocksize} \
-		--sample-rate 2048  
+		--sample-rate 2048
 	mv H1-*xml H1_FAKE_STRAIN/
 
 l1_ep: l1.cache
@@ -72,7 +72,7 @@ l1_ep: l1.cache
 		--gps-start-time ${start} \
 		--gps-end-time ${end} \
 		--block-size ${blocksize} \
-		--sample-rate 2048  
+		--sample-rate 2048
 	mv L1-*xml L1_FAKE_STRAIN/
 
 clean:

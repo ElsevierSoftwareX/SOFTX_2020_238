@@ -7,7 +7,7 @@ end=1017001000
 
 
 triggers: ISS_PDA_OUT_DQ ISS_PDB_OUT_DQ PMC_HV_MON_OUT_DQ PMC_MIXER_OUT_DQ FSS_FAST_MON_OUT_DQ FSS_MIXER_OUT_DQ FSS_PC_MON_OUT_DQ
-	ligolw_add *triggers*.xml -o L_PSL_triggers.xml.gz
+	ligolw_add --ilwdchar-compat *triggers*.xml -o L_PSL_triggers.xml.gz
 
 L1_PSL_channels.cache:
 	ligo_data_find -o L -t R -s ${start} -e ${end} -u file -l > L1_PSL_channels.cache

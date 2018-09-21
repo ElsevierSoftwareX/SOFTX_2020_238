@@ -93,7 +93,7 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 		&& gstlal_bank_splitter --overlap $(OVERLAP) --instrument L1 --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz
 
 reference_psd.xml.gz : $(PSD_FILES)
-	ligolw_add $(PSD_FILES) --output reference_psd.xml.gz
+	ligolw_add --ilwdchar-compat $(PSD_FILES) --output reference_psd.xml.gz
 
 %_psd.xml.gz : frame.cache segments.xml
 	gstlal_reference_psd --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument $* --write-psd $@ --verbose
@@ -115,7 +115,7 @@ frame.cache: $(FRAME_CACHE_FILES)
 	cat $(FRAME_CACHE_FILES) > frame.cache
 
 segments.xml: $(SEGMENTS_FILES)
-	ligolw_add --output segments.xml $(SEGMENTS_FILES)
+	ligolw_add --ilwdchar-compat --output segments.xml $(SEGMENTS_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 sql :

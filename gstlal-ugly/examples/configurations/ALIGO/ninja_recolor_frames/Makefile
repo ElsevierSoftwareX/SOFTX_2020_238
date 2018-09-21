@@ -19,7 +19,7 @@ segments.xml:
 	ligolw_segment_query --segment-url=https://segdb.ligo.caltech.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=${IFO}:${SCIENCE}  --result-name=datasegments > ${IFO}segments.xml
 	ligolw_segments_compat ${IFO}segments.xml
 	gstlal_segments_trim --trim $(TRIM) --output ${IFO}segmentspadded.xml ${IFO}segments.xml
-	ligolw_add --output segments.xml ${IFO}segmentspadded.xml
+	ligolw_add --ilwdchar-compat --output segments.xml ${IFO}segmentspadded.xml
 
 frame.cache:
 	ligo_data_find -o ${OBSERVATORY} -t ${FRAME} -l  -s $(START) -e $(STOP) --url-type file > frame.cache

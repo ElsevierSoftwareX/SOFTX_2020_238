@@ -22,7 +22,7 @@ ${IN_SPEC}: ZERO_DET_high_P.txt
 	gstlal_psd_xml_from_asd_txt --invert --instrument H1 --output H1.xml ZERO_DET_high_P.txt
 	gstlal_psd_xml_from_asd_txt --invert --instrument H2 --output H2.xml ZERO_DET_high_P.txt
 	gstlal_psd_xml_from_asd_txt --invert --instrument L1 --output L1.xml ZERO_DET_high_P.txt
-	ligolw_add --output ${IN_SPEC} {H1,H2,L1}.xml
+	ligolw_add --ilwdchar-compat --output ${IN_SPEC} {H1,H2,L1}.xml
 	rm {H1,H2,L1}.xml
 
 recolor: H2_PSL_channels.cache ${IN_SPEC}
@@ -71,7 +71,7 @@ analyze: recolored.cache
 		--channel-name "${CHANNEL}" \
 		--channel-width 32 \
 		--verbose
-	ligolw_add *triggers*.xml -o H2_${CHANNEL}_triggers.xml.gz
+	ligolw_add --ilwdchar-compat *triggers*.xml -o H2_${CHANNEL}_triggers.xml.gz
 	rm *triggers*.xml
 
 recolored_psd.xml: recolored.cache 

@@ -76,7 +76,7 @@ V1psd.xml.gz :
 	gstlal_psd_xml_from_asd_txt --instrument V1 --output V1psd.xml.gz ZERO_DET_high_P.txt
 
 reference_psd.xml: H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
-	ligolw_add --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
+	ligolw_add --ilwdchar-compat --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 
 sql :
 	cat fix_coinc_instruments.sql uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql

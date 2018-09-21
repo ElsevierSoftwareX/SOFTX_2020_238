@@ -278,7 +278,7 @@ segments.xml.gz:
 	echo $(START) $(STOP) > segs.txt
 	ligolw_segments --insert-from-segwizard=H1=segs.txt --output H1_segs.xml.gz --name=datasegments
 	ligolw_segments --insert-from-segwizard=L1=segs.txt --output L1_segs.xml.gz --name=datasegments
-	ligolw_add --output $@ H1_segs.xml.gz L1_segs.xml.gz
+	ligolw_add --ilwdchar-compat --output $@ H1_segs.xml.gz L1_segs.xml.gz
 	@echo ""
 
 vetoes.xml.gz:
@@ -287,13 +287,13 @@ vetoes.xml.gz:
 	echo 999999997 999999998 > vetoes.txt
 	ligolw_segments --insert-from-segwizard=H1=vetoes.txt --output H1_vetoes.xml.gz --name=vetoes
 	ligolw_segments --insert-from-segwizard=L1=vetoes.txt --output L1_vetoes.xml.gz --name=vetoes
-	ligolw_add --output $@ H1_vetoes.xml.gz L1_vetoes.xml.gz
+	ligolw_add --ilwdchar-compat --output $@ H1_vetoes.xml.gz L1_vetoes.xml.gz
 	@echo ""
 
 tisi.xml:
 	# Produce time slides file
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:25.13274:25.13274 bg_tisi.xml
-	ligolw_add --output $@ bg_tisi.xml $<
+	ligolw_add --ilwdchar-compat --output $@ bg_tisi.xml $<
 	@echo ""
 
 measured_psd.xml.gz: frames.cache

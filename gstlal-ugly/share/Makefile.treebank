@@ -26,7 +26,7 @@ S1f = 0
 # user	54m0.220s
 # sys	0m10.480s
 all: BNS_treebank.xml.gz NSBH1_treebank.xml.gz NSBH2_treebank.xml.gz BBH1_treebank.xml.gz BBH2_treebank.xml.gz
-	ligolw_add --output spin_treebank.xml.gz $^ --verbose
+	ligolw_add --ilwdchar-compat --output spin_treebank.xml.gz $^ --verbose
 
 
 ###

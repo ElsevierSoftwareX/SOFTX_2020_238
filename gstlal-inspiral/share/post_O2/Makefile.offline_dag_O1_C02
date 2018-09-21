@@ -234,7 +234,7 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 # Copy acrross and produce template bank file
 gstlal_bank.xml.gz : bank_mtotal80split_00.xml.gz bank_mtotal80split_01.xml.gz
 	# Useing original online bank from cit:/home/gstlalcbc/observing/2/online/Makefile.bank
-	ligolw_add --output gstlal_bank.xml.gz bank_mtotal80split_00.xml.gz bank_mtotal80split_01.xml.gz
+	ligolw_add --ilwdchar-compat --output gstlal_bank.xml.gz bank_mtotal80split_00.xml.gz bank_mtotal80split_01.xml.gz
 
 bank_mtotal80split_00.xml.gz :
 	# On UWM:
@@ -249,7 +249,7 @@ bank_mtotal80split_01.xml.gz :
 # Produce time slides file
 tisi.xml : inj_tisi.xml
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=25.13274:25.13274:25.13274 bg_tisi.xml
-	ligolw_add --output $@ bg_tisi.xml $<
+	ligolw_add --ilwdchar-compat --output $@ bg_tisi.xml $<
 
 # Produce injection time slide file
 inj_tisi.xml :
@@ -257,7 +257,7 @@ inj_tisi.xml :
 
 # Produce veto file
 vetoes.xml.gz : $(VETOES_FILES)
-	ligolw_add --output $@ $(VETOES_FILES)
+	ligolw_add --ilwdchar-compat --output $@ $(VETOES_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
 	gzip $@
 
@@ -266,14 +266,14 @@ vetoes.xml.gz : $(VETOES_FILES)
 
 # Produce segments file
 segments.xml.gz : $(SEGMENTS_FILES) frame.cache CAT1_vetoes.xml.gz
-	ligolw_add --output segdb.xml $(SEGMENTS_FILES)
+	ligolw_add --ilwdchar-compat --output segdb.xml $(SEGMENTS_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segdb.xml
 	gstlal_segments_operations --diff --output-file $@ segdb.xml CAT1_vetoes.xml.gz
 	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
 
 # Produce CAT1 veto file
 CAT1_vetoes.xml.gz : $(CAT1_VETOES_FILES)
-	ligolw_add --output $@ $(CAT1_VETOES_FILES)
+	ligolw_add --ilwdchar-compat --output $@ $(CAT1_VETOES_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
 	gzip $@
 

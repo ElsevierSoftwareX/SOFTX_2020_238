@@ -86,7 +86,7 @@ V1psd.xml.gz :
 	cp virgo_online_psd.xml.gz V1psd.xml.gz 
 
 reference_psd.xml: H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
-	ligolw_add --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
+	ligolw_add --ilwdchar-compat --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 
 dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml lalapps_path2cache
 	ls *H2_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H2_split_bank.cache

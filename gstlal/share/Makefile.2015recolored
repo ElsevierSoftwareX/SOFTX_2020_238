@@ -44,7 +44,7 @@ frame.cache: frame.H1.cache frame.L1.cache frame.V1.cache
 	cat frame.H1.cache frame.L1.cache frame.V1.cache > $@
 
 segments.xml: H1segmentspadded.xml  L1segmentspadded.xml V1segmentspadded.xml
-	ligolw_add --output $@ H1segmentspadded.xml L1segmentspadded.xml V1segmentspadded.xml
+	ligolw_add --ilwdchar-compat --output $@ H1segmentspadded.xml L1segmentspadded.xml V1segmentspadded.xml
 
 $(LIGODESIGNPSD) :
 	wget http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/share/$@
@@ -59,7 +59,7 @@ V1recolorpsd.xml.gz : $(VIRGODESIGNPSD)
 	gstlal_psd_xml_from_asd_txt --instrument V1 --output $@ $(VIRGODESIGNPSD)
 
 recolor_psd.xml.gz: H1recolorpsd.xml.gz L1recolorpsd.xml.gz V1recolorpsd.xml.gz
-	ligolw_add H1recolorpsd.xml.gz L1recolorpsd.xml.gz V1recolorpsd.xml.gz | gzip > $@
+	ligolw_add --ilwdchar-compat H1recolorpsd.xml.gz L1recolorpsd.xml.gz V1recolorpsd.xml.gz | gzip > $@
 
 dag : segments.xml frame.cache recolor_psd.xml.gz
 	gstlal_fake_frames_pipe  --color-psd recolor_psd.xml.gz --frame-segments-file segments.xml --frame-segments-name datasegments --min-segment-length $(MIN_SEG_LENGTH) --frame-cache frame.cache --channel-name=H1=$(LIGOINCHANNEL) --channel-name=L1=$(LIGOINCHANNEL) --channel-name=V1=$(VIRGOINCHANNEL) --output-channel-name=H1=$(LIGOOUTCHANNEL) --output-channel-name=L1=$(LIGOOUTCHANNEL) --output-channel-name=V1=$(VIRGOOUTCHANNEL) --output-path=H1=$(LIGOOUTPATH) --output-path=L1=$(LIGOOUTPATH) --output-path=V1=$(VIRGOOUTPATH) --frame-type=H1=$(LIGOFRAMETYPE) --frame-type=L1=$(LIGOFRAMETYPE) --frame-type=V1=$(VIRGOFRAMETYPE) --whiten-type medianofpsdperseg --frame-duration 16 --frames-per-file 256

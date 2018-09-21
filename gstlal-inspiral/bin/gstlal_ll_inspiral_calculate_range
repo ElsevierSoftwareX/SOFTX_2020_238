@@ -158,7 +158,7 @@ while true; do
 				SEG_FILES="${SEG_FILE} ${SEG_FILES}"
 			fi
 		done
-		ligolw_add ${SEG_FILES} --verbose --output ${TMP_TOTAL_SEG_XML_GZ}
+		ligolw_add --ilwdchar-compat ${SEG_FILES} --verbose --output ${TMP_TOTAL_SEG_XML_GZ}
 		rm ${STATEVECTOR_SEG_XML} ${WHITEHT_SEG_XML} ${TRIGGER_SEG_XML} ${TMP_CUMULATIVE_SEG_XML}.gz
 	fi
 
@@ -209,7 +209,7 @@ while true; do
 	gracedb --ligolw --service-url=${SIMDB_SERVICE_URL} search ${QUERYSTART}..${QUERYSTOP} ${PIPELINE} ${GROUP} ${SEARCH} > ${TMP_QUERY_XML}
 
 	if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_QUERY_XML} | wc -l) -gt 0 ]; then
-		ligolw_add ${TMP_LIGOLW_XML_GZ} ${TMP_QUERY_XML} --verbose --output ${TMP_LIGOLW_XML_GZ}
+		ligolw_add --ilwdchar-compat ${TMP_LIGOLW_XML_GZ} ${TMP_QUERY_XML} --verbose --output ${TMP_LIGOLW_XML_GZ}
 	fi
 
 	rm ${TMP_QUERY_XML}
@@ -228,7 +228,7 @@ while true; do
 		if [ $(ligolw_print --table segment ${TMP_LIGOLW_XML_GZ} | wc -l) -gt 0 ]; then
 			lalapps_run_sqlite --verbose --sql='DELETE FROM segment; DELETE FROM segment_definer' ${TMP_LIGOLW_XML_GZ}
 		fi
-		ligolw_add --verbose ${TMP_LIGOLW_XML_GZ} ${TMP_TOTAL_SEG_XML_GZ} --output ${TMP_LIGOLW_XML_GZ}
+		ligolw_add --ilwdchar-compat --verbose ${TMP_LIGOLW_XML_GZ} ${TMP_TOTAL_SEG_XML_GZ} --output ${TMP_LIGOLW_XML_GZ}
 
 		# FIXME Find a better way to get the location of simplify_and_cluster.sql
 		lalapps_run_sqlite --verbose --sql-file=$(dirname $(dirname $(which gstlal_inspiral)))/share/gstlal/simplify_and_cluster.sql ${TMP_LIGOLW_XML_GZ}

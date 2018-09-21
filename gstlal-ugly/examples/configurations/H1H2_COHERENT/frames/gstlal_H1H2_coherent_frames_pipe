@@ -127,6 +127,7 @@ class ligolw_add_node(inspiral_pipe.InspiralNode):
 	"""
 	def __init__(self, job, dag, input_list, output, p_node=[]):
 		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		self.add_opt("ilwdchar-compat", "")
 		self.add_var_opt("output", output)
 		for f in input_list:
 			self.add_file_arg(f)

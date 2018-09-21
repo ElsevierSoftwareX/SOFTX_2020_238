@@ -58,7 +58,7 @@ V1_psd.xml.gz : frame.cache segments.xml
 	gstlal_reference_psd --channel LDAS-STRAIN --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument $* --write-psd $@ --verbose
 
 reference_psd.xml.gz : $(PSD_FILES)
-	ligolw_add $(PSD_FILES) --output reference_psd.xml.gz
+	ligolw_add --ilwdchar-compat $(PSD_FILES) --output reference_psd.xml.gz
 
 V1_segmentspadded.xml:
 	ligolw_segment_query --segment-url=https://segdb.ligo.caltech.edu -q --gps-start-time ${PSDSTART} --gps-end-time ${PSDSTOP} --include-segments=V1:ITF_SCIENCEMODE --result-name=datasegments > V1segments.xml
@@ -71,7 +71,7 @@ V1_segmentspadded.xml:
 	gstlal_segments_trim $*segments.xml --trim $(TRIM) --output $@
 
 segments.xml: $(SEGMENTS_FILES)
-	ligolw_add --output segments.xml $(SEGMENTS_FILES)
+	ligolw_add --ilwdchar-compat --output segments.xml $(SEGMENTS_FILES)
 	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 sql :

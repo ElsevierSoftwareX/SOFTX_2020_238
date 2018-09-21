@@ -25,14 +25,14 @@ frame.cache: frame.H1.cache frame.H2.cache
 	cat $^ > frame.cache
 
 segments.xml: H1segmentspadded.xml H2segmentspadded.xml
-	ligolw_add --output segments.xml $^
+	ligolw_add --ilwdchar-compat --output segments.xml $^
 
 dag : segments.xml frame.cache
 	./gstlal_H1H2_coherent_frames_pipe --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache frame.cache
 
 finish :
 	ls H-LHO_COHERENT*.gwf | lalapps_path2cache > H1H2_coherent_frames.cache
-	ligolw_add --output H1H2_null_vetoes.xml.gz H1H2-NULL_VETOES-*.xml.gz
+	ligolw_add --ilwdchar-compat --output H1H2_null_vetoes.xml.gz H1H2-NULL_VETOES-*.xml.gz
 	sed '0,/H/s/H/datasegments/' H1H2_coherent_frames.cache > tmp.cache
 	ligolw_segments --insert-from-lal-cache tmp.cache > H1H2_coherent_frames_segments.xml
 

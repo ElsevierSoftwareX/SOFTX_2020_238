@@ -123,7 +123,7 @@ The following makefile was used to produce the results
 	tisi.xml :
 		lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 tisi0.xml
 		lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=3.14159:3.14159:3.14159 --instrument=V1=7.892:7.892:7.892 tisi1.xml
-		ligolw_add --output $@ tisi0.xml tisi1.xml
+		ligolw_add --ilwdchar-compat --output $@ tisi0.xml tisi1.xml
 
 	dag : segments.xml.gz vetoes.xml.gz frame.cache tisi.xml plots $(WEBDIR) $(INJECTIONS) $(BANK_CACHE_FILES)
 		gstlal_inspiral_pipe --data-source frames --gps-start-time $(START) --gps-end-time $(STOP) --frame-cache frame.cache --frame-segments-file segments.xml.gz --vetoes vetoes.xml.gz --frame-segments-name datasegments  --control-peak-time $(PEAK) --num-banks $(NUMBANKS) --fir-stride 4 --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --tolerance 0.9999 --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) $(CHANNEL_NAMES) --autocorrelation-length $(AC_LENGTH) --samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256) $(ADDITIONAL_DAG_OPTIONS)

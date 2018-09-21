@@ -12,7 +12,7 @@ segments.%.xml :
 	ligolw_segments_compat $@
 
 segments.xml : $(IFOS:%=segments.%.xml)
-	ligolw_add $^ > $@
+	ligolw_add --ilwdchar-compat $^ > $@
 
 dag : segments.xml
 	mkdir noninjections
