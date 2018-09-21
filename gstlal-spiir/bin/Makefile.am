@@ -24,4 +24,5 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_injection_snr \
 	gstlal_inspiral_postcohspiir_combo_plotsummary \
 	gstlal_periodic_get_urls \
-	gstlal_periodic_fapupdater
+	gstlal_periodic_fapupdater \
+	gstlal_plot_segments
