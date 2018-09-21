@@ -83,15 +83,19 @@ class page(object):
 		return self
 
 
-	def write(self, f):
-		gstlal_css_file = open(webvis_dir + 'gstlal.css')
-		gstlal_js_file = open(webvis_dir + 'gstlal.js')
-		gstlal_css = """<style>""" + gstlal_css_file.read() + """</style>"""
-		gstlal_js = """<script>""" + gstlal_js_file.read()  + """</script>"""
-		gstlal_list = [elem("head", [gstlal_css, gstlal_js])]
+	def write(self, f, write_gstlal_css = True):
 		css_list = [elem("link", [], """ rel="stylesheet" type="text/css" href="%s" """ % c) for c in self.css]
 		script_list = [elem("script", [], """ type="text/javascript" src="%s" """ % s) for s in self.script]
+		if write_gstlal_css:
+			gstlal_css_file = open(webvis_dir + 'gstlal.css')
+			gstlal_js_file = open(webvis_dir + 'gstlal.js')
+			gstlal_css = """<style>""" + gstlal_css_file.read() + """</style>"""
+			gstlal_js = """<script>""" + gstlal_js_file.read()  + """</script>"""
+			gstlal_list = [elem("head", [gstlal_css, gstlal_js])]
+		else:
+			gstlal_list = []
 		self.full_content = [elem("html",  gstlal_list + css_list + script_list + self.header_content + [elem("title", [self.title]), elem("body", self.content, "")])]
+
 		for c in self.full_content:
 			print >>f, c
 
@@ -140,7 +144,7 @@ def googleTimelineFromJson(fname, div_id = 'timeline_div'):
 			%s_wrapper = new google.visualization.ChartWrapper({
 				chartType: 'Timeline',
 				dataTable: data,
-				options: {width:'95%%', height:400, textStyle: {color: '#ecf0f1'}},
+				options: {width:'100%%', height:400, textStyle: {color: '#ecf0f1'}},
 				containerId: '%s'
 			});
 			%s_wrapper.draw();
