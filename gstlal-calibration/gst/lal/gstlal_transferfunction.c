@@ -183,11 +183,11 @@ DEFINE_MAXIMUM(32);
 DEFINE_MAXIMUM(64);
 
 
-static void write_transfer_functions(complex double *tfs, char *element_name, double df, gint64 rows, int columns, gboolean write_to_screen, char *filename, gboolean free_name) {
+static void write_transfer_functions(complex double *tfs, char *element_name, double df, gint64 rows, int columns, double t_start, double t_finish, gboolean write_to_screen, char *filename, gboolean free_name) {
 	gint64 i;
 	int j, j_stop;
 	if(write_to_screen) {
-		g_print("\n\n==================== Transfer functions computed by %s ====================\nfrequency\t\t  ", element_name);
+		g_print("\n\n==================== Transfer functions computed by %s from %f until %f ====================\nfrequency\t\t  ", element_name, t_start, t_finish);
 		for(j = 1; j < columns; j++)
 			g_print("ch%d -> ch0\t\t\t\t  ", j);
 		g_print("ch%d -> ch0\n\n", columns);
@@ -212,7 +212,7 @@ static void write_transfer_functions(complex double *tfs, char *element_name, do
 	if(filename) {
 		FILE *fp;
 		fp = fopen(filename, "a");
-		g_fprintf(fp, "==================== Transfer functions computed by %s ====================\nfrequency\t\t  ", element_name);
+		g_fprintf(fp, "==================== Transfer functions computed by %s from %f until %f ====================\nfrequency\t\t  ", element_name, t_start, t_finish);
 		for(j = 1; j < columns; j++)
 			g_fprintf(fp, "ch%d -> ch0\t\t\t\t  ", j);
 		g_fprintf(fp, "ch%d -> ch0\n\n", columns);
@@ -239,11 +239,11 @@ static void write_transfer_functions(complex double *tfs, char *element_name, do
 }
 
 
-static void write_fir_filters(double *filters, char *element_name, gint64 rows, int columns, gboolean write_to_screen, char *filename, gboolean free_name) {
+static void write_fir_filters(double *filters, char *element_name, gint64 rows, int columns, double t_start, double t_finish, gboolean write_to_screen, char *filename, gboolean free_name) {
 	gint64 i;
 	int j, j_stop;
 	if(write_to_screen) {
-		g_print("================== FIR filters computed by %s ==================\n", element_name);
+		g_print("================== FIR filters computed by %s from %f until %f ==================\n", element_name, t_start, t_finish);
 		for(j = 1; j < columns; j++)
 			g_print("ch%d -> ch0\t", j);
 		g_print("ch%d -> ch0\n\n", columns);
@@ -260,7 +260,7 @@ static void write_fir_filters(double *filters, char *element_name, gint64 rows, 
 	if(filename) {
 		FILE *fp;
 		fp = fopen(filename, "a");
-		g_fprintf(fp, "================== FIR filters computed by %s ==================\n", element_name);
+		g_fprintf(fp, "================== FIR filters computed by %s from %f until %f ==================\n", element_name, t_start, t_finish);
 		for(j = 1; j < columns; j++)
 			g_fprintf(fp, "ch%d -> ch0\t", j);
 		g_fprintf(fp, "ch%d -> ch0\n\n", columns);
@@ -837,14 +837,14 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 				} \
 			} \
 		} \
-		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->use_median ? 1 : element->num_ffts - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
+		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->use_median ? 1 : element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
 		if(success) { \
 			GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
 			/* Let other elements know about the update */ \
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 			/* Write transfer functions to the screen or a file if we want */ \
 			if(element->write_to_screen || element->filename) \
-				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
+				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg * stride + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE); \
 			/* If this is this first transfer function after a gap, we may wish to store it */ \
 			if(element->use_first_after_gap && !element->num_tfs_since_gap) { \
 				for(i = 0; i < num_tfs * fd_tf_length; i++) \
@@ -871,7 +871,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
 				/* Write FIR filters to the screen or a file if we want */ \
 				if(element->write_to_screen || element->filename) \
-					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->write_to_screen, element->filename, TRUE); \
+					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg * stride + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE); \
 				/* If this is this first FIR filter after a gap, we may wish to store it */ \
 				if(element->use_first_after_gap && element->num_tfs_since_gap == 1) { \
 					for(i = 0; i < num_tfs * element->fir_length; i++) \
@@ -1018,7 +1018,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 					g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
 					/* Write transfer functions to the screen or a file if we want */
 					if(element->write_to_screen || element->filename)
-						write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->write_to_screen, element->filename, TRUE);
+						write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (element->workspace.wspf.num_ffts_in_avg * (element->fft_length - element->fft_overlap) + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE);
 				} else
 					GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. No transfer functions will be produced.");
 				/* Update FIR filters if we want */
@@ -1030,7 +1030,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 						g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
 						/* Write FIR filters to the screen or a file if we want */
 						if(element->write_to_screen || element->filename)
-							write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->write_to_screen, element->filename, TRUE);
+							write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (element->workspace.wspf.num_ffts_in_avg * (element->fft_length - element->fft_overlap) + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE);
 					} else
 						GST_WARNING_OBJECT(element, "FIR filter(s) computation failed. No FIR filters will be produced.");
 				}
@@ -1093,7 +1093,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 					g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
 					/* Write transfer functions to the screen or a file if we want */
 					if(element->write_to_screen || element->filename)
-						write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->write_to_screen, element->filename, TRUE);
+						write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (element->workspace.wdpf.num_ffts_in_avg * (element->fft_length - element->fft_overlap) + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE);
 				} else
 					GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. No transfer functions will be produced.");
 				/* Update FIR filters if we want */
@@ -1105,7 +1105,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 						g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
 						/* Write FIR filters to the screen or a file if we want */
 						if(element->write_to_screen || element->filename)
-							write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->write_to_screen, element->filename, TRUE);
+							write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (element->workspace.wdpf.num_ffts_in_avg * (element->fft_length - element->fft_overlap) + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE);
 					} else
 						GST_WARNING_OBJECT(element, "FIR filter(s) computation failed. No FIR filters will be produced.");
 				}
@@ -1763,7 +1763,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
 			/* Write transfer functions to the screen or a file if we want */
 			if(element->write_to_screen || element->filename)
-				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), (double) element->rate / element->fir_length, element->fir_length / 2 + 1, element->channels - 1, element->write_to_screen, element->filename, TRUE);
+				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), (double) element->rate / element->fir_length, element->fir_length / 2 + 1, element->channels - 1, 0, 0, element->write_to_screen, element->filename, TRUE);
 			if(element->make_fir_filters) {
 				for(i = 0; i < (element->channels - 1) * element->fir_length; i++)
 					element->fir_filters[i] = element->post_gap_fir_filters[i];
@@ -1772,7 +1772,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
 				/* Write FIR filters to the screen or a file if we want */
 				if(element->write_to_screen || element->filename)
-					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, element->channels - 1, element->write_to_screen, element->filename, TRUE);
+					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, element->channels - 1, 0, 0, element->write_to_screen, element->filename, TRUE);
 			}
 			
 		}
@@ -1812,16 +1812,18 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		gboolean success;
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
-			if(!element->workspace.wspf.num_ffts_in_avg)
+			if(!element->workspace.wspf.num_ffts_in_avg) {
 				memset(element->workspace.wspf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * (element->fft_length / 2 + 1) * sizeof(*element->workspace.wspf.autocorrelation_matrix));
-
+				element->t_start_tf = (double) (gst_util_uint64_scale_int_round(GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer), element->rate, GST_SECOND) - element->sample_count + element->update_samples) / element->rate;
+			}
 			/* Send the data to a function to compute fft's and transfer functions */
 			success = find_transfer_functions_float(element, (float *) mapinfo.data, mapinfo.size, GST_BUFFER_PTS(buffer));
 		} else {
 			/* If we are just beginning to compute new transfer functions with this data, initialize memory that we will fill to zero */
-			if(!element->workspace.wdpf.num_ffts_in_avg)
+			if(!element->workspace.wdpf.num_ffts_in_avg) {
 				memset(element->workspace.wdpf.autocorrelation_matrix, 0, element->channels * (element->channels - 1) * (element->fft_length / 2 + 1) * sizeof(*element->workspace.wdpf.autocorrelation_matrix));
-
+				element->t_start_tf = (double) (gst_util_uint64_scale_int_round(GST_BUFFER_PTS(buffer) + GST_BUFFER_DURATION(buffer), element->rate, GST_SECOND) - element->sample_count + element->update_samples) / element->rate;
+			}
 			/* Send the data to a function to compute fft's and transfer functions */
 			success = find_transfer_functions_double(element, (double *) mapinfo.data, mapinfo.size, GST_BUFFER_PTS(buffer));
 		}

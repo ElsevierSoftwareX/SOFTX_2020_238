@@ -2194,8 +2194,8 @@ if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
 #
 
 if compute_calib_statevector and (remove_cal_lines or remove_power_lines or witness_channel_list is not None):
-	low_rms_rate = pow(2, int(numpy.log(cleaning_check_range_low_max) / numpy.log(2) + 1.1))
-	mid_rms_rate = pow(2, int(numpy.log(cleaning_check_range_mid_max) / numpy.log(2) + 1.1))
+	low_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_low_max) / numpy.log(2) + 1.01))
+	mid_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_mid_max) / numpy.log(2) + 1.01))
 
 	# Compute the RMS of the uncleaned strain in a low-frequency range to test subtraction of actuation lines
 	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = filter_latency_factor, rate_out = calibstate_sr, td = td)

@@ -379,9 +379,9 @@ def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, 
 	if (f_min is not None) and (f_max is not None):
 		head = bandpass(pipeline, head, rate, f_low = f_min, f_high = f_max, filter_latency = filter_latency, td = td)
 	elif f_min is not None:
-		head = highpass(pipeline, head, fcut = f_min, filter_latency = filter_latency, td = td)
+		head = highpass(pipeline, head, rate, fcut = f_min, filter_latency = filter_latency, td = td)
 	elif f_max is not None:
-		head = lowpass(pipeline, head, fcut = f_max, filter_latency = filter_latency, td = td)
+		head = lowpass(pipeline, head, rate, fcut = f_max, filter_latency = filter_latency, td = td)
 
 	# Square it
 	head = mkpow(pipeline, head, exponent = 2.0)
@@ -391,6 +391,9 @@ def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, 
 
 	# Compute running average
 	head = pipeparts.mkgeneric(pipeline, head, "lal_smoothkappas", default_kappa_re = 0.0, array_size = 1, avg_array_size = average_time * rate_out, filter_latency = filter_latency)
+
+	# Take the square root
+	head = mkpow(pipeline, head, exponent = 0.5)
 
 	return head
 

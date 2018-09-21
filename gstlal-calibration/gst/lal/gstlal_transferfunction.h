@@ -78,6 +78,7 @@ struct _GSTLALTransferFunction {
 
 	/* Internal state */
 	gboolean computed_full_tfs;
+	double t_start_tf;
 
 	/* transfer function work space */
 	union {
