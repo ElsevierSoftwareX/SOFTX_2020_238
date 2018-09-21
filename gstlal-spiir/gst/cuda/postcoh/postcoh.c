@@ -1448,7 +1448,6 @@ static GstFlowReturn cuda_postcoh_new_buffer_and_push(CudaPostcoh *postcoh, gint
 	if (left_entries == 0) 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 
-	// g_assert(GST_BUFFER_CAPS(outbuf) != NULL);
 	ret = gst_pad_push(postcoh->srcpad, outbuf);
 	if (ret != GST_FLOW_OK) {
 		fprintf(stderr, "failed to push buffer to next element, cohfar_accumbackground");

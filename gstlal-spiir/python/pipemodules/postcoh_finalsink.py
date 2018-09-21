@@ -406,10 +406,15 @@ class FinalSink(object):
 		with self.lock:
 			buf = elem.emit("pull-buffer")
 			if buf.flag_is_set(gst.BUFFER_FLAG_GAP):
+				print "buf gap at %d" % buf.timestamp
 				return
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			newevents = postcohtable.GSTLALPostcohInspiral.from_buffer(buf)
 			self.need_candidate_check = False
+
+			if len(newevents) == 0:
+				print "no event at %d" % buf.timestamp
+				return
 
 			# NOTE: the first entry is used to add to the segments, not a really event
 			participating_ifos = re.findall('..', newevents[0].ifos)
@@ -438,11 +443,8 @@ class FinalSink(object):
 				self.cluster_boundary = buf_timestamp + self.cluster_window
 				self.is_first_event = False
 
-			# extend newevents to cur_event_table and event_table_30s
+			# extend newevents to cur_event_table
 			self.cur_event_table.extend(newevents)
-			# self.lookback_boundary = buf_timestamp - self.lookback_window
-			# self.lookback_event_table.extend(newevents)
-			# iterutils.inplace_filter(lambda row: row.end > self.lookback_boundary, self.lookback_event_table)
 
 			if self.cluster_window == 0:
 				self.postcoh_table.extend(newevents)
@@ -603,6 +605,7 @@ class FinalSink(object):
 		# suppress the trigger 
 		# if it is not one order of magnitude more significant than the last trigger 
 		# or if it not more significant the last submitted trigger
+		# FIXME: what if there are two adjacent significant events
 		if ((abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.5)) or (abs(float(trigger.end) - float(last_submitted_time)) < 3600 and trigger.far > last_submitted_far*0.5) :
 			print >> sys.stderr, "trigger controled, time %f, FAR %f, last_far %f, last_submitted time %f, last_submitted far %f" % (float(trigger.end), trigger.far, last_far, last_submitted_time, last_submitted_far)
 			self.last_trigger.append((trigger.end, trigger.far))

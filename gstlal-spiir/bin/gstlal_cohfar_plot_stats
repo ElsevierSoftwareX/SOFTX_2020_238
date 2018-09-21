@@ -167,12 +167,13 @@ X, Y = np.meshgrid(x, y)
 levels = np.arange(-13, -2, 2)
 CS = pyplot.contour(lgfarmap, levels, origin = 'lower', extent = (pipe_macro.xmin, pipe_macro.xmax, pipe_macro.ymin, pipe_macro.ymax))
 CB = pyplot.colorbar(CS, shrink = 0.8, extend = 'both')
-CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
 
 if options.input_zerolag is not None:
 	CM = pyplot.scatter(all_cohsnr, all_chisq, color = 'k', marker = 'o', s = 6, facecolors = 'none')
+	CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
 	pyplot.legend((CM, CM2), ('spiir zerolags', 'this spiir event'), loc='lower right')
 else:
+	CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
 	pyplot.legend((CM2), 'this spiir event', loc='lower right')
 
 pyplot.ylim(-1,3)
