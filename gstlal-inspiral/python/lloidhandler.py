@@ -86,7 +86,6 @@ from gstlal import bottle
 from gstlal import far
 from gstlal import inspiral
 from gstlal import pipeio
-from gstlal import reference_psd
 from gstlal import simplehandler
 from gstlal import streamthinca
 import lal
@@ -589,7 +588,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", verbose = False):
+	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, thinca_interval = 50.0, min_log_L = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being
@@ -618,7 +617,6 @@ class Handler(simplehandler.Handler):
 		# FIXME:   detangle this
 		self.gracedbwrapper.lock = self.lock
 
-		self.kafka_server = kafka_server
 		self.eye_candy = EyeCandy(rankingstat.instruments, self.kafka_server, self.tag, pipeline)
 		# FIXME:   detangle this
 		self.eye_candy.lock = self.lock
@@ -745,6 +743,12 @@ class Handler(simplehandler.Handler):
 		self.zerolag_rankingstatpdf_url = zerolag_rankingstatpdf_url
 
 		#
+		# set horizon distance calculator
+		#
+
+		self.horizon_distance_func = horizon_distance_func
+
+		#
 		# rankingstatpdf contains the RankingStatPDF object (loaded
 		# from rankingstatpdf_url) used to initialize the FAPFAR
 		# object for on-the-fly FAP and FAR assignment.  except to
@@ -826,10 +830,7 @@ class Handler(simplehandler.Handler):
 				# effect of vetoing candidates from these
 				# times.
 				if stability > 0.3:
-					# FIXME:  get canonical masses from
-					# the template bank bin that we're
-					# analyzing
-					horizon_distance = reference_psd.HorizonDistance(10.0, 0.85 * (psd.f0 + (len(psd.data.data) - 1) * psd.deltaF), psd.deltaF, 1.4, 1.4)(psd, 8.0)[0]
+					horizon_distance = self.horizon_distance_func(psd, 8.0)[0]
 					assert not (math.isnan(horizon_distance) or math.isinf(horizon_distance))
 				else:
 					horizon_distance = 0.

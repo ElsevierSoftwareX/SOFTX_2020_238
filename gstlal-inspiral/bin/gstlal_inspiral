@@ -177,6 +177,7 @@ from gstlal import inspiral_pipe
 from gstlal import lloidhandler
 from gstlal import lloidparts
 from gstlal import pipeparts
+from gstlal import reference_psd
 from gstlal import servicediscovery
 from gstlal import simulation
 
@@ -527,6 +528,34 @@ class OneTimeSignalHandler(object):
 #
 # =============================================================================
 #
+#                              Horizon Distances
+#
+# =============================================================================
+#
+
+
+def make_horizon_distance_func(banks, sngl_inspiral_table):
+	# span is [10 Hz, 0.85 * Nyquist frequency]
+	# find the Nyquist frequency for the PSD to be used for each
+	# instrument.  require them to all match
+	nyquists = set(max(rate for bank in banklist for rate in bank.get_rates()) // 2 for instrument, banklist in banks.items())
+	assert len(nyquists) == 1
+	# assume default 32 s PSD.  this is not required to be correct, but
+	# for best accuracy it should not be larger than the true value and
+	# for best performance it should not be smaller than the true
+	# value.
+	deltaF = 1. / 32.
+	# pick (m1, m2) from the median template ranked by horizon distance
+	# to provide the canonical waveform model
+	# FIXME:  look up the mass function on which the horizon distance
+	# depends
+	median_row = sorted(sngl_inspiral_table, key = lambda row: row.mtotal)[len(sngl_inspiral_table) // 2]
+	return reference_psd.HorizonDistance(10.0, 0.85 * max(nyquists), deltaF, median_row.mass1, median_row.mass2)
+
+
+#
+# =============================================================================
+#
 #                                     Main
 #
 # =============================================================================
@@ -795,6 +824,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			verbose = options.verbose
 		),
 		rankingstat = rankingstat,
+		horizon_distance_func = make_horizon_distance_func(banks, sngl_inspiral_table),
 		gracedbwrapper = inspiral.GracedBWrapper(
 			instruments = rankingstat.instruments,
 			far_threshold = options.gracedb_far_threshold,
